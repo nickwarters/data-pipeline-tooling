@@ -112,14 +112,14 @@ test('case search: results render the standard, framework-owned Case columns', (
 
   const view = viewOf(slice, loaded);
   assert.deepEqual(tableHeaders(view), [
-    ['Reference', 'cora-col-reference', 'none', true],
-    ['Case Type', 'cora-col-caseType', 'none', true],
-    ['Related Date', 'cora-col-relatedDate', 'none', true],
-    ['Due Date', 'cora-col-dueDate', 'none', true],
-    ['Status', 'cora-col-status', 'none', true],
-    ['Assigned', 'cora-col-assigned', 'none', true],
-    ['Responsible Party', 'cora-col-responsibleParty', 'none', true],
-    ['Actions', 'cora-col-actions', 'none', false],
+    ['Reference', 'none', true],
+    ['Case Type', 'none', true],
+    ['Related Date', 'none', true],
+    ['Due Date', 'none', true],
+    ['Status', 'none', true],
+    ['Assigned', 'none', true],
+    ['Responsible Party', 'none', true],
+    ['Actions', 'none', false],
   ]);
   assert.deepEqual(
     [...(view.querySelector('tbody')?.querySelectorAll('tr') ?? [])].map(

@@ -2,55 +2,37 @@
 import './_register-example-review.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CaseLoader } from '../src/lib/case-loader.js';
 import {
   CASE_TYPE_IMPORTERS,
   registerCaseType,
 } from '../case-types/manifest.js';
 import { isolateBrowserGlobals } from './helpers/browser-globals.js';
+import { makeLoader } from './helpers/case-loader.js';
 import { caps } from './helpers/section-access.js';
 import { makeCaseRow } from './helpers/fixtures.js';
 
 isolateBrowserGlobals();
 
-test('the loader holds its loading state as plain fields, not signals', () => {
-  const loader = new CaseLoader({
-    client: /** @type {any} */ ({}),
-    saveQueue: /** @type {any} */ ({ enqueue() {} }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: caps(),
+let fixtureSequence = 0;
+
+/**
+ * @param {import('node:test').TestContext} t
+ * @param {string} prefix
+ * @param {() => Promise<any>} importer
+ */
+function registerFixtureCaseType(t, prefix, importer) {
+  const slug = `${prefix}-${++fixtureSequence}`;
+  const previous = CASE_TYPE_IMPORTERS[slug];
+  CASE_TYPE_IMPORTERS[slug] = importer;
+  t.after(() => {
+    if (previous === undefined) delete CASE_TYPE_IMPORTERS[slug];
+    else CASE_TYPE_IMPORTERS[slug] = previous;
   });
-
-  const snapshot = loader.toStoreSnapshot();
-  assert.equal(snapshot.loaded, false);
-  assert.equal(snapshot.error, null);
-  assert.equal(snapshot.accessDenied, false);
-
-  // The snapshot is the public seam and proves the handover is unchanged, but
-  // it cannot on its own prove the conversion: `toStoreSnapshot()` read the
-  // same values through `.get()` before. One structural assertion carries the
-  // ticket's actual claim — the loading state is no longer a notifier.
-  for (const field of ['loaded', 'error', 'accessDenied', 'versionWarning']) {
-    const value = /** @type {Record<string, any>} */ (
-      /** @type {unknown} */ (loader)
-    )[field];
-    assert.equal(
-      typeof (value ?? {}).get,
-      'undefined',
-      `${field} must be a plain field, not a signal`
-    );
-  }
-});
+  return slug;
+}
 
 test('toStoreSnapshot: an empty multi-choice Answer is unanswered on load', () => {
-  const loader = new CaseLoader({
-    client: /** @type {any} */ ({}),
-    saveQueue: /** @type {any} */ ({ enqueue() {} }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: caps(),
-  });
+  const loader = makeLoader();
   loader.catalogue = [
     {
       id: 'q1',
@@ -66,13 +48,7 @@ test('toStoreSnapshot: an empty multi-choice Answer is unanswered on load', () =
 });
 
 test('toStoreSnapshot: the loader hands over Answers and the derived applicable set', () => {
-  const loader = new CaseLoader({
-    client: /** @type {any} */ ({}),
-    saveQueue: /** @type {any} */ ({ enqueue() {} }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: caps(),
-  });
+  const loader = makeLoader();
   loader.catalogue = [
     { id: 'q1', text: 'One', responseType: 'yes-no-na', deprecated: false },
     {
@@ -93,57 +69,14 @@ test('toStoreSnapshot: the loader hands over Answers and the derived applicable 
   );
 });
 
-test('CaseLoader exposes no Answer mutation surface', () => {
-  // The store is the single Answer owner: the loader loads, and the route's
-  // answer-actions are the only writers.
-  const loader = new CaseLoader({
-    client: /** @type {any} */ ({}),
-    saveQueue: /** @type {any} */ ({ enqueue() {} }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: caps(),
-  });
-  for (const name of [
-    'handleAnswer',
-    'handleCapture',
-    'handleAttribute',
-    'handleRemediationAction',
-    'handleRemediationFreeForm',
-    'handleRemediationStatus',
-    'setAnswerChangeHandler',
-  ]) {
-    assert.equal(
-      typeof (/** @type {any} */ (loader)[name]),
-      'undefined',
-      `${name} must not exist on the loader`
-    );
-  }
-  assert.equal('answersSignal' in loader, false);
-});
-
 // --- exportHash loading ---
 
 test('CaseLoader.load() calls getExportHash with the case type slug and stores it as exportHash', async () => {
-  const loader = new CaseLoader({
-    client: /** @type {any} */ ({
-      getCase: async () =>
-        makeCaseRow({
-          id: 'c1',
-          caseType: 'example-review',
-          title: 'T',
-          assignedReviewer: 'u1',
-          responsibleParty: 'u2',
-          etag: 'e1',
-        }),
-      getCurrentUser: async () => ({ id: 'u1', displayName: 'User 1' }),
+  const loader = makeLoader({
+    client: {
       getExportHash: async (/** @type {string} */ slug) =>
         slug === 'example-review' ? 'sha256:testHash' : null,
-      resolveUsers: async () => ({}),
-    }),
-    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: caps(),
+    },
   });
 
   await loader.load();
@@ -168,8 +101,8 @@ test('CaseLoader.load() resolves route caseType to listName for getCase and Save
     responsibleParty: 'u2',
     etag: 'e1',
   });
-  const loader = new CaseLoader({
-    client: /** @type {any} */ ({
+  const loader = makeLoader({
+    client: {
       getCase: async (
         /** @type {string} */ id,
         /** @type {import('../src/sharepoint-client.js').CaseListOptions | undefined} */ opts
@@ -177,20 +110,13 @@ test('CaseLoader.load() resolves route caseType to listName for getCase and Save
         getCaseCalls.push({ id, opts });
         return row;
       },
-      getCurrentUser: async () => ({ id: 'u1', displayName: 'User 1' }),
-      getExportHash: async () => null,
-      resolveUsers: async () => ({}),
-    }),
-    saveQueue: /** @type {any} */ ({
+    },
+    saveQueue: {
       loadCase: (
         /** @type {import('../src/sharepoint-client.js').CaseRow} */ row,
         /** @type {import('../src/sharepoint-client.js').CaseListOptions | undefined} */ opts
       ) => loadCaseCalls.push([row, opts]),
-      enqueue: () => {},
-    }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: caps(),
+    },
     caseType: 'example-review',
   });
 
@@ -208,26 +134,7 @@ test('CaseLoader.load() resolves route caseType to listName for getCase and Save
 });
 
 test('CaseLoader.load() stores null exportHash when getExportHash returns null', async () => {
-  const loader = new CaseLoader({
-    client: /** @type {any} */ ({
-      getCase: async () =>
-        makeCaseRow({
-          id: 'c1',
-          caseType: 'example-review',
-          title: 'T',
-          assignedReviewer: 'u1',
-          responsibleParty: 'u2',
-          etag: 'e1',
-        }),
-      getCurrentUser: async () => ({ id: 'u1', displayName: 'User 1' }),
-      getExportHash: async () => null,
-      resolveUsers: async () => ({}),
-    }),
-    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: caps(),
-  });
+  const loader = makeLoader();
 
   await loader.load();
 
@@ -235,45 +142,6 @@ test('CaseLoader.load() stores null exportHash when getExportHash returns null',
 });
 
 // --- versioned catalogue loading ---
-
-/** Minimal stub client for Step 4 tests. */
-function makeStep4Client({
-  status = /** @type {import('../src/lib/case-statuses.js').CaseStatus} */ (
-    'In-progress'
-  ),
-  questionBankVersion = /** @type {string|undefined} */ (undefined),
-  reportableAt = /** @type {string|undefined} */ (undefined),
-  versionedExport = /** @type {any} */ (null),
-  versionedExportCalls = /** @type {any[]} */ ([]),
-} = {}) {
-  return /** @type {any} */ ({
-    getCase: async () =>
-      makeCaseRow({
-        id: 'c1',
-        caseType: 'example-review',
-        title: 'T',
-        status,
-        assignedReviewer: 'u1',
-        responsibleParty: 'u2',
-        answers: { 'q-welcome': { value: 'Yes' } },
-        completedAt: status === 'Completed' ? '2026-01-01T00:00:00Z' : null,
-        reportableAt,
-        questionBankVersion,
-        etag: 'e1',
-      }),
-    getCurrentUser: async () => ({ id: 'u1', displayName: 'User 1' }),
-    getExportHash: async () => null,
-    /**
-     * @param {string} slug
-     * @param {string} hash
-     */
-    getVersionedExport: async (slug, hash) => {
-      versionedExportCalls.push([slug, hash]);
-      return versionedExport;
-    },
-    resolveUsers: async () => ({}),
-  });
-}
 
 const versionedCatalogue = [
   {
@@ -298,19 +166,19 @@ const versionedCatalogue = [
 ];
 
 test('CaseLoader.load() uses versioned catalogue for Completed Case with questionBankVersion', async () => {
-  const loader = new CaseLoader({
-    client: makeStep4Client({
+  const loader = makeLoader({
+    row: {
       status: 'Completed',
+      completedAt: '2026-01-01T00:00:00Z',
       questionBankVersion: 'sha256:abc123',
-      versionedExport: {
+      answers: { 'q-welcome': { value: 'Yes' } },
+    },
+    client: {
+      getVersionedExport: async () => ({
         slug: 'example-review',
         questions: versionedCatalogue,
-      },
-    }),
-    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: caps(),
+      }),
+    },
   });
 
   await loader.load();
@@ -329,19 +197,18 @@ test('CaseLoader.load() uses versioned catalogue for Completed Case with questio
 });
 
 test('CaseLoader.load(): Actions In Progress Case freezes on the versioned catalogue — no reopen once reportable', async () => {
-  const loader = new CaseLoader({
-    client: makeStep4Client({
+  const loader = makeLoader({
+    row: {
       status: 'Actions In Progress',
       questionBankVersion: 'sha256:abc123',
-      versionedExport: {
+      answers: { 'q-welcome': { value: 'Yes' } },
+    },
+    client: {
+      getVersionedExport: async () => ({
         slug: 'example-review',
         questions: versionedCatalogue,
-      },
-    }),
-    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: caps(),
+      }),
+    },
   });
 
   await loader.load();
@@ -368,21 +235,22 @@ test('CaseLoader.load(): a Case voided after the reportable milestone keeps its 
   // Answers against Questions that have since moved.
   /** @type {any[]} */
   const versionedExportCalls = [];
-  const loader = new CaseLoader({
-    client: makeStep4Client({
+  const loader = makeLoader({
+    row: {
       status: 'Void',
       reportableAt: '2026-01-01T00:00:00Z',
       questionBankVersion: 'sha256:abc123',
-      versionedExport: {
-        slug: 'example-review',
-        questions: versionedCatalogue,
+      answers: { 'q-welcome': { value: 'Yes' } },
+    },
+    client: {
+      getVersionedExport: async (
+        /** @type {string} */ slug,
+        /** @type {string} */ hash
+      ) => {
+        versionedExportCalls.push([slug, hash]);
+        return { slug: 'example-review', questions: versionedCatalogue };
       },
-      versionedExportCalls,
-    }),
-    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: caps(),
+    },
   });
 
   await loader.load();
@@ -397,20 +265,21 @@ test('CaseLoader.load(): a Case voided after the reportable milestone keeps its 
 test('CaseLoader.load(): a Case voided before the reportable milestone reads the live bank', async () => {
   /** @type {any[]} */
   const versionedExportCalls = [];
-  const loader = new CaseLoader({
-    client: makeStep4Client({
+  const loader = makeLoader({
+    row: {
       status: 'Void',
       questionBankVersion: 'sha256:abc123',
-      versionedExport: {
-        slug: 'example-review',
-        questions: versionedCatalogue,
+      answers: { 'q-welcome': { value: 'Yes' } },
+    },
+    client: {
+      getVersionedExport: async (
+        /** @type {string} */ slug,
+        /** @type {string} */ hash
+      ) => {
+        versionedExportCalls.push([slug, hash]);
+        return { slug: 'example-review', questions: versionedCatalogue };
       },
-      versionedExportCalls,
-    }),
-    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: caps(),
+    },
   });
 
   await loader.load();
@@ -419,11 +288,15 @@ test('CaseLoader.load(): a Case voided before the reportable milestone reads the
 });
 
 test('CaseLoader.load(): versioned catalogue mapping normalises null optional fields to undefined', async () => {
-  const loader = new CaseLoader({
-    client: makeStep4Client({
+  const loader = makeLoader({
+    row: {
       status: 'Completed',
+      completedAt: '2026-01-01T00:00:00Z',
       questionBankVersion: 'sha256:abc123',
-      versionedExport: {
+      answers: { 'q-welcome': { value: 'Yes' } },
+    },
+    client: {
+      getVersionedExport: async () => ({
         slug: 'example-review',
         questions: [
           {
@@ -436,12 +309,8 @@ test('CaseLoader.load(): versioned catalogue mapping normalises null optional fi
             deprecated: false,
           },
         ],
-      },
-    }),
-    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: caps(),
+      }),
+    },
   });
 
   await loader.load();
@@ -454,12 +323,8 @@ test('CaseLoader.load(): versioned catalogue mapping normalises null optional fi
 });
 
 test('CaseLoader.load(): live catalogue derives failureValues from the config outcome mapping', async () => {
-  const loader = new CaseLoader({
-    client: makeStep4Client(),
-    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: caps(),
+  const loader = makeLoader({
+    row: { answers: { 'q-welcome': { value: 'Yes' } } },
   });
 
   await loader.load();
@@ -469,11 +334,15 @@ test('CaseLoader.load(): live catalogue derives failureValues from the config ou
 });
 
 test('CaseLoader.load(): frozen catalogue derives failureValues against the snapshot default Outcome', async () => {
-  const loader = new CaseLoader({
-    client: makeStep4Client({
+  const loader = makeLoader({
+    row: {
       status: 'Completed',
+      completedAt: '2026-01-01T00:00:00Z',
       questionBankVersion: 'sha256:abc123',
-      versionedExport: {
+      answers: { 'q-welcome': { value: 'Yes' } },
+    },
+    client: {
+      getVersionedExport: async () => ({
         slug: 'example-review',
         questions: [
           {
@@ -494,12 +363,8 @@ test('CaseLoader.load(): frozen catalogue derives failureValues against the snap
         // The snapshot carries its own vocabulary, and that vocabulary — not
         // the live Case Type's — governs the as-reviewed failure semantics.
         defaultOutcomeId: 'good',
-      },
-    }),
-    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: caps(),
+      }),
+    },
   });
 
   await loader.load();
@@ -508,11 +373,15 @@ test('CaseLoader.load(): frozen catalogue derives failureValues against the snap
 });
 
 test('CaseLoader.load(): versioned catalogue carries labelIds when present', async () => {
-  const loader = new CaseLoader({
-    client: makeStep4Client({
+  const loader = makeLoader({
+    row: {
       status: 'Completed',
+      completedAt: '2026-01-01T00:00:00Z',
       questionBankVersion: 'sha256:abc123',
-      versionedExport: {
+      answers: { 'q-welcome': { value: 'Yes' } },
+    },
+    client: {
+      getVersionedExport: async () => ({
         slug: 'example-review',
         questions: [
           {
@@ -526,12 +395,8 @@ test('CaseLoader.load(): versioned catalogue carries labelIds when present', asy
             labelIds: ['lbl-a'],
           },
         ],
-      },
-    }),
-    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: caps(),
+      }),
+    },
   });
 
   await loader.load();
@@ -540,16 +405,13 @@ test('CaseLoader.load(): versioned catalogue carries labelIds when present', asy
 });
 
 test('CaseLoader.load(): missing versioned file falls back to live catalogue + versionWarning', async () => {
-  const loader = new CaseLoader({
-    client: makeStep4Client({
+  const loader = makeLoader({
+    row: {
       status: 'Completed',
+      completedAt: '2026-01-01T00:00:00Z',
       questionBankVersion: 'sha256:abc123',
-      versionedExport: null,
-    }),
-    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: caps(),
+      answers: { 'q-welcome': { value: 'Yes' } },
+    },
   });
 
   // A stamped-but-unpublished version is a broken publish, and the banner only
@@ -578,12 +440,11 @@ test('CaseLoader.load(): missing versioned file falls back to live catalogue + v
 });
 
 test('CaseLoader.load(): In-progress Case loads live catalogue; versionWarning stays null', async () => {
-  const loader = new CaseLoader({
-    client: makeStep4Client({ status: 'In-progress' }),
-    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: caps(),
+  const loader = makeLoader({
+    row: {
+      status: 'In-progress',
+      answers: { 'q-welcome': { value: 'Yes' } },
+    },
   });
 
   await loader.load();
@@ -598,15 +459,13 @@ test('CaseLoader.load(): In-progress Case loads live catalogue; versionWarning s
 });
 
 test('CaseLoader.load(): Completed Case without questionBankVersion falls back to live (backward compat)', async () => {
-  const loader = new CaseLoader({
-    client: makeStep4Client({
+  const loader = makeLoader({
+    row: {
       status: 'Completed',
+      completedAt: '2026-01-01T00:00:00Z',
       questionBankVersion: undefined,
-    }),
-    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: caps(),
+      answers: { 'q-welcome': { value: 'Yes' } },
+    },
   });
 
   await loader.load();
@@ -622,32 +481,8 @@ test('CaseLoader.load(): Completed Case without questionBankVersion falls back t
 
 // --- Case Type sectionLabels resolution ---
 
-/** @param {string} caseType */
-function makeLabelsLoader(caseType) {
-  return new CaseLoader({
-    client: /** @type {any} */ ({
-      getCase: async () =>
-        makeCaseRow({
-          id: 'c1',
-          caseType,
-          title: 'T',
-          assignedReviewer: 'u1',
-          responsibleParty: 'u2',
-          etag: 'e1',
-        }),
-      getCurrentUser: async () => ({ id: 'u1', displayName: 'User 1' }),
-      getExportHash: async () => null,
-      resolveUsers: async () => ({}),
-    }),
-    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: caps(),
-  });
-}
-
 test('CaseLoader: sectionLabels default before load()', () => {
-  const loader = makeLabelsLoader('example-review');
+  const loader = makeLoader();
   assert.equal(loader.sectionLabels.questions.tab, 'Review');
   assert.equal(loader.sectionLabels.questions.heading, 'Questions');
   assert.equal(loader.sectionLabels.details.heading, 'Case Details');
@@ -655,7 +490,7 @@ test('CaseLoader: sectionLabels default before load()', () => {
 });
 
 test('CaseLoader.load(): a Case Type without sectionLabels keeps the defaults', async () => {
-  const loader = makeLabelsLoader('example-review');
+  const loader = makeLoader();
   await loader.load();
   assert.equal(loader.sectionLabels.questions.tab, 'Review');
   assert.equal(loader.sectionLabels.questions.heading, 'Questions');
@@ -668,33 +503,33 @@ test('CaseLoader.load(): a Case Type without sectionLabels keeps the defaults', 
  * hand the resolved copy back. No live Case Type declares an override
  * (stress-review, which did, has been retired).
  *
+ * @param {import('node:test').TestContext} t
  * @param {any} sectionLabels
  */
-async function loadWithSectionLabels(sectionLabels) {
-  const slug = 'section-labels-fixture';
-  CASE_TYPE_IMPORTERS[slug] = async () => ({
-    default: /** @type {any} */ ({
-      displayName: 'Section Labels Fixture',
-      listName: 'Cases-SectionLabelsFixture',
-      sectionLabels,
-      questions: [],
-      computeOutcome: () => ({ outcome: 'pass' }),
-      outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
-      defaultOutcomeId: 'pass',
-    }),
-  });
+async function loadWithSectionLabels(t, sectionLabels) {
+  const slug = registerFixtureCaseType(
+    t,
+    'section-labels-fixture',
+    async () => ({
+      default: /** @type {any} */ ({
+        displayName: 'Section Labels Fixture',
+        listName: 'Cases-SectionLabelsFixture',
+        sectionLabels,
+        questions: [],
+        computeOutcome: () => ({ outcome: 'pass' }),
+        outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
+        defaultOutcomeId: 'pass',
+      }),
+    })
+  );
 
-  try {
-    const loader = makeLabelsLoader(slug);
-    await loader.load();
-    return loader.sectionLabels;
-  } finally {
-    delete CASE_TYPE_IMPORTERS[slug];
-  }
+  const loader = makeLoader({ row: { caseType: slug } });
+  await loader.load();
+  return loader.sectionLabels;
 }
 
-test('CaseLoader.load(): a string override renames both the tab and the heading', async () => {
-  const labels = await loadWithSectionLabels({ questions: 'Assessment' });
+test('CaseLoader.load(): a string override renames both the tab and the heading', async (t) => {
+  const labels = await loadWithSectionLabels(t, { questions: 'Assessment' });
 
   assert.equal(labels.questions.tab, 'Assessment');
   assert.equal(labels.questions.heading, 'Assessment');
@@ -703,84 +538,91 @@ test('CaseLoader.load(): a string override renames both the tab and the heading'
   assert.equal(labels.remediation.heading, 'Remediation');
 });
 
-test('CaseLoader.load(): an object override renames only the axis it names', async () => {
-  const labels = await loadWithSectionLabels({ questions: { tab: 'Assess' } });
+test('CaseLoader.load(): an object override renames only the axis it names', async (t) => {
+  const labels = await loadWithSectionLabels(t, {
+    questions: { tab: 'Assess' },
+  });
 
   assert.equal(labels.questions.tab, 'Assess');
   assert.equal(labels.questions.heading, 'Questions');
 });
 
-test('CaseLoader.load(): a Summary role list narrows the blocks, and access still bounds it', async () => {
+test('CaseLoader.load(): a Summary role list narrows the blocks, and access still bounds it', async (t) => {
   // No live Case Type scopes a Summary block to fewer roles than can see the
   // Section, so register a fixture that does: Issues is composed for the
   // reviewer side plus Controls, and Questions names the Responsible Party —
   // who the access matrix hides Questions from entirely.
-  const slug = 'summary-roles-fixture';
-  CASE_TYPE_IMPORTERS[slug] = async () => ({
-    default: /** @type {any} */ ({
-      displayName: 'Summary Roles Fixture',
-      listName: 'Cases-SummaryRolesFixture',
-      sections: {
-        details: {},
-        questions: { showInSummary: ['responsibleParty'] },
-        issues: {
-          showInSummary: [
-            'assignedReviewer',
-            'otherReviewer',
-            'reviewerManager',
-            'caseTypeOwner',
-            'journeyOwner',
-            'controls',
-          ],
+  const slug = registerFixtureCaseType(
+    t,
+    'summary-roles-fixture',
+    async () => ({
+      default: /** @type {any} */ ({
+        displayName: 'Summary Roles Fixture',
+        listName: 'Cases-SummaryRolesFixture',
+        sections: {
+          details: {},
+          questions: { showInSummary: ['responsibleParty'] },
+          issues: {
+            showInSummary: [
+              'assignedReviewer',
+              'otherReviewer',
+              'reviewerManager',
+              'caseTypeOwner',
+              'journeyOwner',
+              'controls',
+            ],
+          },
+          summary: {},
+          // Keeps the Responsible Party out of the whole-page access-denied path,
+          // so their empty Summary is a resolved answer and not an early return.
+          conversation: {},
         },
-        summary: {},
-        // Keeps the Responsible Party out of the whole-page access-denied path,
-        // so their empty Summary is a resolved answer and not an early return.
-        conversation: {},
-      },
-      questions: [],
-      computeOutcome: () => ({ outcome: 'pass' }),
-      outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
-      defaultOutcomeId: 'pass',
-    }),
-  });
+        questions: [],
+        computeOutcome: () => ({ outcome: 'pass' }),
+        outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
+        defaultOutcomeId: 'pass',
+      }),
+    })
+  );
 
   /**
    * @param {string} userId
    * @param {import('../src/services/permissions.js').Capabilities} capabilities
    */
   const loadAs = async (userId, capabilities) => {
-    const loader = makeLabelsLoader(slug);
-    loader.currentUserId = userId;
-    loader.capabilities = capabilities;
+    const loader = makeLoader({
+      row: { caseType: slug },
+      currentUserId: userId,
+      capabilities,
+    });
     await loader.load();
     return loader;
   };
 
-  try {
-    // Controls holds a role the Issues list names, so that block is composed;
-    // Questions, which names only the Responsible Party, is not.
-    const controls = await loadAs('u9', caps({ isControls: true }));
-    assert.deepEqual(controls.summarySections, ['details', 'issues']);
+  // Controls holds a role the Issues list names, so that block is composed;
+  // Questions, which names only the Responsible Party, is not.
+  const controls = await loadAs('u9', caps({ isControls: true }));
+  assert.deepEqual(controls.summarySections, ['details', 'issues']);
 
-    // The Responsible Party is named on the Questions list, but the matrix
-    // hides Questions from them — the list narrows and never widens.
-    const responsibleParty = await loadAs('u2', caps());
-    assert.equal(responsibleParty.accessDenied, false);
-    assert.deepEqual(responsibleParty.summarySections, []);
-  } finally {
-    delete CASE_TYPE_IMPORTERS[slug];
-  }
+  // The Responsible Party is named on the Questions list, but the matrix
+  // hides Questions from them — the list narrows and never widens.
+  const responsibleParty = await loadAs('u2', caps());
+  assert.equal(responsibleParty.accessDenied, false);
+  assert.deepEqual(responsibleParty.summarySections, []);
 });
 
 test('CaseLoader.load(): a pre-rename versioned export maps its category to questionGroup', async () => {
   // Exports published before the two-level grouping rename carry no
   // `questionGroup` key, and their `category` meant the inner grouping.
-  const loader = new CaseLoader({
-    client: makeStep4Client({
+  const loader = makeLoader({
+    row: {
       status: 'Completed',
+      completedAt: '2026-01-01T00:00:00Z',
       questionBankVersion: 'sha256:abc123',
-      versionedExport: {
+      answers: { 'q-welcome': { value: 'Yes' } },
+    },
+    client: {
+      getVersionedExport: async () => ({
         slug: 'example-review',
         questions: [
           {
@@ -793,12 +635,8 @@ test('CaseLoader.load(): a pre-rename versioned export maps its category to ques
             deprecated: false,
           },
         ],
-      },
-    }),
-    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: caps(),
+      }),
+    },
   });
 
   await loader.load();
@@ -808,11 +646,15 @@ test('CaseLoader.load(): a pre-rename versioned export maps its category to ques
 });
 
 test('CaseLoader.load(): a post-rename versioned export keeps category and questionGroup distinct', async () => {
-  const loader = new CaseLoader({
-    client: makeStep4Client({
+  const loader = makeLoader({
+    row: {
       status: 'Completed',
+      completedAt: '2026-01-01T00:00:00Z',
       questionBankVersion: 'sha256:abc123',
-      versionedExport: {
+      answers: { 'q-welcome': { value: 'Yes' } },
+    },
+    client: {
+      getVersionedExport: async () => ({
         slug: 'example-review',
         questions: [
           {
@@ -836,12 +678,8 @@ test('CaseLoader.load(): a post-rename versioned export keeps category and quest
             deprecated: false,
           },
         ],
-      },
-    }),
-    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: caps(),
+      }),
+    },
   });
 
   await loader.load();
@@ -903,20 +741,9 @@ test('CaseLoader.load() refreshes person capture display names in one directory 
       },
     },
   };
-  const loader = new CaseLoader({
-    client: /** @type {any} */ ({
-      getCase: async () =>
-        makeCaseRow({
-          id: 'c1',
-          caseType: 'person-capture-review',
-          title: 'T',
-          assignedReviewer: 'u1',
-          responsibleParty: 'u2',
-          answers,
-          etag: 'e1',
-        }),
-      getCurrentUser: async () => ({ id: 'u1', displayName: 'User 1' }),
-      getExportHash: async () => null,
+  const loader = makeLoader({
+    row: { caseType: 'person-capture-review', answers },
+    client: {
       resolveUsers: async (/** @type {string[]} */ accounts) => {
         resolveCalls.push(accounts);
         return { jsmith: 'Jane Smith', bjones: 'Bob Jones' };
@@ -925,11 +752,7 @@ test('CaseLoader.load() refreshes person capture display names in one directory 
         patches.push(args);
         return { ok: true, status: 200 };
       },
-    }),
-    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    caseId: 'c1',
-    currentUserId: 'u1',
-    capabilities: caps(),
+    },
     caseType: 'person-capture-review',
   });
 

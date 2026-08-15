@@ -22,7 +22,45 @@ const { createMemo } = await import('../src/core/memo.js');
 const { loadQuestionBanks } =
   await import('../src/pages/question-bank/question-bank-source.js');
 
-const { banks: liveBanks } = await loadQuestionBanks();
+/** @type {Record<string, import('../src/pages/question-bank/question-bank-source.js').QuestionBank>} */
+const fixtureBanks = {
+  alpha: {
+    slug: 'alpha',
+    label: 'Alpha',
+    questions: [
+      {
+        id: 'alpha-q1',
+        text: 'Alpha question one?',
+        responseType: 'yes-no-na',
+        deprecated: false,
+      },
+      {
+        id: 'alpha-q2',
+        text: 'Alpha question two?',
+        responseType: 'yes-no-na',
+        deprecated: false,
+      },
+    ],
+  },
+  beta: {
+    slug: 'beta',
+    label: 'Beta',
+    questions: [
+      {
+        id: 'beta-q1',
+        text: 'Beta question one?',
+        responseType: 'yes-no-na',
+        deprecated: false,
+      },
+      {
+        id: 'beta-q2',
+        text: 'Beta question two?',
+        responseType: 'yes-no-na',
+        deprecated: false,
+      },
+    ],
+  },
+};
 
 /**
  * The banks now arrive through `start()` rather than at import. Tests
@@ -33,13 +71,13 @@ const { banks: liveBanks } = await loadQuestionBanks();
  */
 function loadedSlice(ctx = context()) {
   const slice = createRouteSlice({}, ctx, {
-    loadBanks: async () => ({ banks: liveBanks, failures: [] }),
+    loadBanks: async () => ({ banks: fixtureBanks, failures: [] }),
   });
   return {
     ...slice,
     initialState: slice.reducer(slice.initialState, {
       type: 'bank/loaded',
-      banks: liveBanks,
+      banks: fixtureBanks,
       failures: [],
     }),
   };
@@ -107,7 +145,7 @@ test('question bank slice deprecates and restores definitions without deleting t
   );
 });
 
-test('editing one of 500 questions rebuilds one card, not the bank', (t) => {
+test('editing one of 500 questions rebuilds one card, not the bank', () => {
   const questions = Array.from({ length: 500 }, (_, index) => ({
     id: `q-${index}`,
     text: `Question ${index}`,
@@ -143,7 +181,7 @@ test('editing one of 500 questions rebuilds one card, not the bank', (t) => {
     addQuestion() {},
     memo,
   };
-  BankList(props);
+  const before = Array.from(BankList(props).querySelectorAll('.card'));
 
   const edited = questionBankReducer(state, {
     type: 'question/field-changed',
@@ -154,57 +192,16 @@ test('editing one of 500 questions rebuilds one card, not the bank', (t) => {
   assert.notEqual(edited.cases.synthetic.questions[250], questions[250]);
   assert.equal(edited.cases.synthetic.questions[249], questions[249]);
   assert.equal(edited.cases.synthetic.questions[251], questions[251]);
-
-  // The gate is a *ratio*, not a wall-clock budget. What memoisation buys is
-  // that a one-question edit rebuilds one card instead of 500, so the honest
-  // regression signal is "an edit costs a fraction of a cold render" — and a
-  // fraction is the same number on a fast laptop and a loaded CI box. The
-  // absolute 5 ms budget this replaced measured the hardware as much as the
-  // code: it left ~6x headroom on a quiet machine and went red on a busy one,
-  // which made the middle of a stacked branch series a coin toss.
-  //
-  // A cold render — fresh memo, every card built — is the cost of no
-  // memoisation at all, i.e. exactly what a regression here would look like.
-  const coldSamples = [];
-  for (let index = 0; index < 20; index += 1) {
-    const coldMemo = createMemo();
-    const started = performance.now();
-    BankList({ ...props, memo: coldMemo });
-    if (index >= 5) coldSamples.push(performance.now() - started);
-  }
-
-  let sampleState = edited;
-  const samples = [];
-  for (let index = 0; index < 60; index += 1) {
-    sampleState = questionBankReducer(sampleState, {
-      type: 'question/field-changed',
-      questionId: 'q-250',
-      field: 'text',
-      value: `Edited question ${index}`,
-    });
-    const started = performance.now();
-    BankList({ ...props, bank: sampleState.cases.synthetic });
-    if (index >= 10) samples.push(performance.now() - started);
-  }
-
-  /** @param {number[]} values */
-  const p95 = (values) => {
-    const sorted = [...values].sort((a, b) => a - b);
-    return sorted[Math.ceil(sorted.length * 0.95) - 1];
-  };
-  const editP95 = p95(samples);
-  const coldP95 = p95(coldSamples);
-  const ratio = editP95 / coldP95;
-  t.diagnostic(
-    `500-question edit p95 ${editP95.toFixed(2)} ms vs cold ${coldP95.toFixed(2)} ms (${(ratio * 100).toFixed(2)}%)`
+  const after = Array.from(
+    BankList({ ...props, bank: edited.cases.synthetic }).querySelectorAll(
+      '.card'
+    )
   );
-  // Memoised, an edit measures well under 1% of a cold render; unmemoised it
-  // would be ~100%. 10% is therefore two orders of magnitude clear of the
-  // observed value and still nowhere near the failure it exists to catch.
-  assert.ok(
-    ratio <= 0.1,
-    `a single edit cost ${(ratio * 100).toFixed(2)}% of a full rebuild (${editP95.toFixed(2)} ms vs ${coldP95.toFixed(2)} ms) — memoisation is not holding`
-  );
+  assert.equal(before.length, 500);
+  assert.equal(after.length, 500);
+  assert.notEqual(after[250], before[250], 'the edited card is rebuilt');
+  const reused = after.filter((card, index) => card === before[index]);
+  assert.equal(reused.length, 499, 'every untouched card keeps its node');
 });
 
 test('editing a Question ID refreshes condition targets in memoised neighbouring cards', () => {
@@ -785,7 +782,7 @@ test('the bank editor renders a loading state before its banks arrive', async ()
   const loadingView = mounted.view();
   assert.match(loadingView.textContent ?? '', /Loading Question Banks/);
 
-  release({ banks: liveBanks, failures: [] });
+  release({ banks: fixtureBanks, failures: [] });
   await flush();
   assert.equal(mounted.route.loading, false);
   assert.doesNotMatch(
@@ -802,7 +799,7 @@ test('a bank load that resolves after unmount is discarded', async () => {
   });
   const mounted = mountSlice({ loadBanks: () => pending });
   mounted.unmount();
-  release({ banks: liveBanks, failures: [] });
+  release({ banks: fixtureBanks, failures: [] });
   await flush();
 
   assert.equal(mounted.route.loading, true);
@@ -850,7 +847,7 @@ test('a load that reports no banks at all still renders the error shell', async 
 test('one unloadable bank still names itself while the others stay editable', async () => {
   const mounted = mountSlice({
     loadBanks: async () => ({
-      banks: liveBanks,
+      banks: fixtureBanks,
       failures: [{ slug: 'broken', message: '404' }],
     }),
   });
@@ -858,13 +855,13 @@ test('one unloadable bank still names itself while the others stay editable', as
 
   const text = mounted.view().textContent ?? '';
   assert.match(text, /Some Question Banks could not be loaded: broken \(404\)/);
-  assert.equal(mounted.route.activeSlug, Object.keys(liveBanks)[0]);
+  assert.equal(mounted.route.activeSlug, Object.keys(fixtureBanks)[0]);
   mounted.unmount();
 });
 
 test('the loaded draft and baseline are separate clones, so diffing still sees edits', async () => {
   const mounted = mountSlice({
-    loadBanks: async () => ({ banks: liveBanks, failures: [] }),
+    loadBanks: async () => ({ banks: fixtureBanks, failures: [] }),
   });
   await flush();
   const route = mounted.route;
@@ -883,9 +880,9 @@ test('the loaded draft and baseline are separate clones, so diffing still sees e
     baselineBank(edited).questions[0].text,
     'Changed by the curator'
   );
-  // The live bank map handed to the slice is never mutated by editing.
+  // The bank fixture handed to the slice is never mutated by editing.
   assert.notEqual(
-    liveBanks[route.activeSlug].questions[0].text,
+    fixtureBanks[route.activeSlug].questions[0].text,
     'Changed by the curator'
   );
   mounted.unmount();
@@ -901,7 +898,7 @@ test('a sample load that resolves after unmount is discarded', async () => {
   let mounted;
   try {
     mounted = mountSlice(
-      { loadBanks: async () => ({ banks: liveBanks, failures: [] }) },
+      { loadBanks: async () => ({ banks: fixtureBanks, failures: [] }) },
       /** @type {any} */ ({
         ...context(),
         loadQuestionBankSamples: () => pending,
@@ -1384,7 +1381,7 @@ test('nothing loaded at all is still recoverable in place', async () => {
 
 test('a retry is offered only where a bank actually failed', async () => {
   const clean = mountSlice({
-    loadBanks: async () => ({ banks: liveBanks, failures: [] }),
+    loadBanks: async () => ({ banks: fixtureBanks, failures: [] }),
   });
   await flush();
   assert.equal(queryByRole(clean.view(), 'button', { name: /Retry/ }), null);
@@ -1928,7 +1925,7 @@ test(
         ],
       });
       const slice = createRouteSlice({}, ctx, {
-        loadBanks: async () => ({ banks: liveBanks, failures: [] }),
+        loadBanks: async () => ({ banks: fixtureBanks, failures: [] }),
       });
       let state = slice.initialState;
       slice.start(

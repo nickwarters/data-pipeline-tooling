@@ -95,69 +95,6 @@ test('conversation Send reads and clears the live textarea after a rerender', ()
   assert.equal(liveTextarea.value, '');
 });
 
-test('conversation Send warns when its compose selector is missing', () => {
-  /** @type {string[]} */
-  const sent = [];
-  const view = conversationView({
-    messages: [],
-    access: 'edit',
-    heading: 'Conversation',
-    onSend: (/** @type {string} */ body) => {
-      sent.push(body);
-    },
-  });
-  const send = getByRole(view, 'button', { name: 'Send message' });
-  assert.ok(send.parentNode);
-  send.parentNode.className = 'cora-conversation-compose-renamed';
-
-  const originalWarn = console.warn;
-  /** @type {string[]} */
-  const warnings = [];
-  console.warn = (message) => warnings.push(String(message));
-  try {
-    fireEvent(send, 'click');
-    assert.deepEqual(warnings, [
-      '[CORA] Conversation Send: missing .cora-conversation-compose',
-    ]);
-    assert.deepEqual(sent, []);
-  } finally {
-    console.warn = originalWarn;
-  }
-});
-
-test('conversation Send warns when its input selector is missing', () => {
-  /** @type {string[]} */
-  const sent = [];
-  const view = conversationView({
-    messages: [],
-    access: 'edit',
-    heading: 'Conversation',
-    onSend: (/** @type {string} */ body) => {
-      sent.push(body);
-    },
-  });
-  const textarea = getByRole(view, 'textbox', {
-    name: 'Message to Responsible Party',
-  });
-  textarea.className = 'cora-conversation-input-renamed';
-  textarea.value = 'A message';
-  const send = getByRole(view, 'button', { name: 'Send message' });
-
-  const originalWarn = console.warn;
-  /** @type {string[]} */
-  const warnings = [];
-  console.warn = (message) => warnings.push(String(message));
-  try {
-    fireEvent(send, 'click');
-    assert.deepEqual(warnings, [
-      '[CORA] Conversation Send: missing .cora-conversation-input',
-    ]);
-    assert.deepEqual(sent, []);
-  } finally {
-    console.warn = originalWarn;
-  }
-});
-
 test('conversation Send ignores whitespace and trims valid messages without warnings', () => {
   /** @type {string[]} */
   const sent = [];

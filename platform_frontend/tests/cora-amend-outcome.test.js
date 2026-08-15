@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom, findByClass, walk } from './_dom-stub.js';
 import { makeCaseRow } from './helpers/fixtures.js';
+import { fireEvent, getByRole, queryAllByTag } from './helpers/semantic-dom.js';
 
 installDom();
 
@@ -108,14 +109,6 @@ function makeEditable(caseOverrides = {}) {
 
 // --- Rendering ---
 
-test('CORAAmendOutcome: renders an Amend Outcome heading first', () => {
-  const { el } = renderAmendOutcome();
-  assert.equal(
-    /** @type {any} */ (el)._children[0].textContent,
-    'Amend Outcome'
-  );
-});
-
 test('CORAAmendOutcome: shows the Current Outcome (the frozen snapshot) with configured wording', () => {
   const { el } = renderAmendOutcome({
     caseRow: makeCase({ outcomeAtCompletion: 'fail' }),
@@ -169,12 +162,18 @@ test('CORAAmendOutcome: Current Outcome falls back to the raw value when no opti
 test('CORAAmendOutcome: edit access on a Completed Case shows the amend form', () => {
   const { el } = makeEditable();
   assert.ok(findByClass(el, 'cora-amend-outcome-form'), 'form rendered');
-  assert.ok(findByClass(el, 'cora-amend-outcome-select'), 'outcome select');
   assert.ok(
-    findByClass(el, 'cora-amend-outcome-justification'),
+    getByRole(el, 'combobox', { name: 'Amended outcome' }),
+    'outcome select'
+  );
+  assert.ok(
+    getByRole(el, 'textbox', { name: 'Amendment justification' }),
     'justification input'
   );
-  assert.ok(findByClass(el, 'cora-amend-outcome-submit'), 'submit button');
+  assert.ok(
+    getByRole(el, 'button', { name: 'Amend Outcome' }),
+    'submit button'
+  );
 });
 
 test('CORAAmendOutcome: read-only access shows a placeholder when nothing has been amended', () => {
@@ -215,11 +214,11 @@ test('CORAAmendOutcome: read-only access renders the existing amendment record',
 
 test('CORAAmendOutcome: amending writes the record and re-stamps the effective columns in one field set', () => {
   const { el, queue } = makeEditable();
-  findByClass(el, 'cora-amend-outcome-select').value = 'pass';
-  findByClass(el, 'cora-amend-outcome-reason').value = 'appeal';
-  findByClass(el, 'cora-amend-outcome-justification').value =
+  getByRole(el, 'combobox', { name: 'Amended outcome' }).value = 'pass';
+  getByRole(el, 'combobox', { name: 'Amendment reason' }).value = 'appeal';
+  getByRole(el, 'textbox', { name: 'Amendment justification' }).value =
     '  Corrected after appeal.  ';
-  findByClass(el, 'cora-amend-outcome-submit')._listeners['click'][0]();
+  fireEvent(getByRole(el, 'button', { name: 'Amend Outcome' }), 'click');
 
   assert.equal(queue.enqueued.length, 1, 'a single ETag-guarded write');
   assert.equal(queue.enqueued[0].id, 'c1');
@@ -240,10 +239,11 @@ test('CORAAmendOutcome: amending writes the record and re-stamps the effective c
 
 test('CORAAmendOutcome: amending mutates the Case row locally so the view reflects it', () => {
   const { el, props } = makeEditable();
-  findByClass(el, 'cora-amend-outcome-select').value = 'refer';
-  findByClass(el, 'cora-amend-outcome-reason').value = 'tm-check';
-  findByClass(el, 'cora-amend-outcome-justification').value = 'Borderline';
-  findByClass(el, 'cora-amend-outcome-submit')._listeners['click'][0]();
+  getByRole(el, 'combobox', { name: 'Amended outcome' }).value = 'refer';
+  getByRole(el, 'combobox', { name: 'Amendment reason' }).value = 'tm-check';
+  getByRole(el, 'textbox', { name: 'Amendment justification' }).value =
+    'Borderline';
+  fireEvent(getByRole(el, 'button', { name: 'Amend Outcome' }), 'click');
 
   assert.equal(props.caseRow?.amendedOutcome?.outcome, 'refer');
   assert.equal(props.caseRow?.effectiveOutcome, 'refer');
@@ -261,42 +261,43 @@ test('CORAAmendOutcome: amending mutates the Case row locally so the view reflec
 
 test('CORAAmendOutcome: a missing justification blocks the write and reveals an error', () => {
   const { el, queue } = makeEditable();
-  findByClass(el, 'cora-amend-outcome-select').value = 'pass';
-  findByClass(el, 'cora-amend-outcome-reason').value = 'qa-check';
-  findByClass(el, 'cora-amend-outcome-justification').value = '   ';
-  findByClass(el, 'cora-amend-outcome-submit')._listeners['click'][0]();
+  getByRole(el, 'combobox', { name: 'Amended outcome' }).value = 'pass';
+  getByRole(el, 'combobox', { name: 'Amendment reason' }).value = 'qa-check';
+  getByRole(el, 'textbox', { name: 'Amendment justification' }).value = '   ';
+  fireEvent(getByRole(el, 'button', { name: 'Amend Outcome' }), 'click');
   assert.equal(queue.enqueued.length, 0, 'nothing persisted');
   assert.equal(findByClass(el, 'cora-amend-outcome-error').hidden, false);
 });
 
 test('CORAAmendOutcome: a missing outcome blocks the write and reveals an error', () => {
   const { el, queue } = makeEditable();
-  findByClass(el, 'cora-amend-outcome-select').value = '';
-  findByClass(el, 'cora-amend-outcome-reason').value = 'qa-check';
-  findByClass(el, 'cora-amend-outcome-justification').value = 'has a reason';
-  findByClass(el, 'cora-amend-outcome-submit')._listeners['click'][0]();
+  getByRole(el, 'combobox', { name: 'Amended outcome' }).value = '';
+  getByRole(el, 'combobox', { name: 'Amendment reason' }).value = 'qa-check';
+  getByRole(el, 'textbox', { name: 'Amendment justification' }).value =
+    'has a reason';
+  fireEvent(getByRole(el, 'button', { name: 'Amend Outcome' }), 'click');
   assert.equal(queue.enqueued.length, 0);
   assert.equal(findByClass(el, 'cora-amend-outcome-error').hidden, false);
 });
 
 test('CORAAmendOutcome: a null outcome selection is treated as empty', () => {
   const { el, queue } = makeEditable();
-  findByClass(el, 'cora-amend-outcome-select').value = /** @type {any} */ (
-    null
-  );
-  findByClass(el, 'cora-amend-outcome-reason').value = 'qa-check';
-  findByClass(el, 'cora-amend-outcome-justification').value = 'has a reason';
-  findByClass(el, 'cora-amend-outcome-submit')._listeners['click'][0]();
+  getByRole(el, 'combobox', { name: 'Amended outcome' }).value =
+    /** @type {any} */ (null);
+  getByRole(el, 'combobox', { name: 'Amendment reason' }).value = 'qa-check';
+  getByRole(el, 'textbox', { name: 'Amendment justification' }).value =
+    'has a reason';
+  fireEvent(getByRole(el, 'button', { name: 'Amend Outcome' }), 'click');
   assert.equal(queue.enqueued.length, 0);
 });
 
 test('CORAAmendOutcome: a null justification value is treated as empty', () => {
   const { el, queue } = makeEditable();
-  findByClass(el, 'cora-amend-outcome-select').value = 'pass';
-  findByClass(el, 'cora-amend-outcome-reason').value = 'qa-check';
-  findByClass(el, 'cora-amend-outcome-justification').value =
+  getByRole(el, 'combobox', { name: 'Amended outcome' }).value = 'pass';
+  getByRole(el, 'combobox', { name: 'Amendment reason' }).value = 'qa-check';
+  getByRole(el, 'textbox', { name: 'Amendment justification' }).value =
     /** @type {any} */ (null);
-  findByClass(el, 'cora-amend-outcome-submit')._listeners['click'][0]();
+  fireEvent(getByRole(el, 'button', { name: 'Amend Outcome' }), 'click');
   assert.equal(queue.enqueued.length, 0);
 });
 
@@ -309,9 +310,12 @@ test('CORAAmendOutcome: the edit form pre-fills from an existing amendment (re-a
       amendedAt: '2026-06-11T00:00:00Z',
     },
   });
-  assert.equal(findByClass(el, 'cora-amend-outcome-select').value, 'refer');
   assert.equal(
-    findByClass(el, 'cora-amend-outcome-justification').value,
+    getByRole(el, 'combobox', { name: 'Amended outcome' }).value,
+    'refer'
+  );
+  assert.equal(
+    getByRole(el, 'textbox', { name: 'Amendment justification' }).value,
     'first pass'
   );
 });
@@ -321,11 +325,12 @@ test('CORAAmendOutcome: amending with no Case row does not throw', () => {
     access: 'edit',
     outcomeOptions: OUTCOME_OPTIONS,
   });
-  findByClass(el, 'cora-amend-outcome-select').value = 'pass';
-  findByClass(el, 'cora-amend-outcome-reason').value = 'qa-check';
-  findByClass(el, 'cora-amend-outcome-justification').value = 'orphan';
+  getByRole(el, 'combobox', { name: 'Amended outcome' }).value = 'pass';
+  getByRole(el, 'combobox', { name: 'Amendment reason' }).value = 'qa-check';
+  getByRole(el, 'textbox', { name: 'Amendment justification' }).value =
+    'orphan';
   assert.doesNotThrow(() => {
-    findByClass(el, 'cora-amend-outcome-submit')._listeners['click'][0]();
+    fireEvent(getByRole(el, 'button', { name: 'Amend Outcome' }), 'click');
   });
 });
 
@@ -333,14 +338,14 @@ test('CORAAmendOutcome: amending with no Case row does not throw', () => {
 
 test('CORAAmendOutcome: the form offers the Case Type reasons', () => {
   const { el } = makeEditable();
-  const reason = findByClass(el, 'cora-amend-outcome-reason');
+  const reason = getByRole(el, 'combobox', { name: 'Amendment reason' });
   assert.ok(reason, 'reason select rendered');
   assert.deepEqual(
-    reason._children.map((/** @type {any} */ option) => option.value),
+    queryAllByTag(reason, 'option').map((option) => option.value),
     ['', 'qa-check', 'tm-check', 'appeal']
   );
   assert.deepEqual(
-    reason._children.map((/** @type {any} */ option) => option.textContent),
+    queryAllByTag(reason, 'option').map((option) => option.textContent),
     ['Select a reason…', 'QA Check', 'TM Check', 'Appeal']
   );
 });
@@ -353,9 +358,10 @@ test('CORAAmendOutcome: a Case Type extension is offered after the shared reason
     reasons: [...REASONS, { key: 'data-correction', label: 'Data correction' }],
   });
   assert.deepEqual(
-    findByClass(el, 'cora-amend-outcome-reason')._children.map(
-      (/** @type {any} */ option) => option.value
-    ),
+    queryAllByTag(
+      getByRole(el, 'combobox', { name: 'Amendment reason' }),
+      'option'
+    ).map((option) => option.value),
     ['', 'qa-check', 'tm-check', 'appeal', 'data-correction']
   );
 });
@@ -373,22 +379,23 @@ test('CORAAmendOutcome: the justification box is labelled Justification', () => 
 
 test('CORAAmendOutcome: a missing reason blocks the write and reveals an error', () => {
   const { el, queue } = makeEditable();
-  findByClass(el, 'cora-amend-outcome-select').value = 'pass';
-  findByClass(el, 'cora-amend-outcome-reason').value = '';
-  findByClass(el, 'cora-amend-outcome-justification').value = 'Corrected';
-  findByClass(el, 'cora-amend-outcome-submit')._listeners['click'][0]();
+  getByRole(el, 'combobox', { name: 'Amended outcome' }).value = 'pass';
+  getByRole(el, 'combobox', { name: 'Amendment reason' }).value = '';
+  getByRole(el, 'textbox', { name: 'Amendment justification' }).value =
+    'Corrected';
+  fireEvent(getByRole(el, 'button', { name: 'Amend Outcome' }), 'click');
   assert.equal(queue.enqueued.length, 0, 'nothing persisted');
   assert.equal(findByClass(el, 'cora-amend-outcome-error').hidden, false);
 });
 
 test('CORAAmendOutcome: a null reason value is treated as empty', () => {
   const { el, queue } = makeEditable();
-  findByClass(el, 'cora-amend-outcome-select').value = 'pass';
-  findByClass(el, 'cora-amend-outcome-reason').value = /** @type {any} */ (
-    null
-  );
-  findByClass(el, 'cora-amend-outcome-justification').value = 'Corrected';
-  findByClass(el, 'cora-amend-outcome-submit')._listeners['click'][0]();
+  getByRole(el, 'combobox', { name: 'Amended outcome' }).value = 'pass';
+  getByRole(el, 'combobox', { name: 'Amendment reason' }).value =
+    /** @type {any} */ (null);
+  getByRole(el, 'textbox', { name: 'Amendment justification' }).value =
+    'Corrected';
+  fireEvent(getByRole(el, 'button', { name: 'Amend Outcome' }), 'click');
   assert.equal(queue.enqueued.length, 0);
 });
 
@@ -402,7 +409,10 @@ test('CORAAmendOutcome: the edit form pre-fills the reason from an existing amen
       amendedAt: '2026-06-11T00:00:00Z',
     },
   });
-  assert.equal(findByClass(el, 'cora-amend-outcome-reason').value, 'tm-check');
+  assert.equal(
+    getByRole(el, 'combobox', { name: 'Amendment reason' }).value,
+    'tm-check'
+  );
 });
 
 test('CORAAmendOutcome: the record names the reason by its label', () => {

@@ -15,6 +15,7 @@ import { DEFAULT_SECTION_LABELS } from '../../lib/section-labels.js';
 import { CaptureGroups } from '../../components/sections/cora-capture-groups.js';
 import { generalAnswerKey } from '../../evaluators/general-questions.js';
 import { GENERAL_QUESTIONS_TITLE } from './general-questions-view.js';
+import { COPY as REMEDIATION_COPY } from './remediation-tracking-view.js';
 
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../../sharepoint-client.js').OutcomeResult} OutcomeResult */
@@ -200,9 +201,15 @@ function renderRemediationTracking(props) {
     'section',
     { className: 'cora-summary-remediation-tracking' },
     h('h3', {}, labelsOf(props).remediation.heading),
-    h('p', {}, `Remediation due: ${dueDate ? dueDate : '—'}`),
+    h(
+      'p',
+      {},
+      dueDate
+        ? `Remediation due: ${dueDate}`
+        : REMEDIATION_COPY.remediationDueNone
+    ),
     rows.length === 0
-      ? h('p', {}, 'No remediation actions sent.')
+      ? h('p', {}, REMEDIATION_COPY.noActionsSent)
       : h('ul', {}, ...rows.map((row) => renderTrackedRow(row, reviewerSide)))
   );
 }
@@ -237,7 +244,7 @@ function renderTrackedRow(row, reviewerSide) {
       {},
       row.status
         ? `Status: ${REMEDIATION_STATUS_LABELS[row.status]}`
-        : 'Status: Awaiting the Reviewer'
+        : REMEDIATION_COPY.awaitingReviewer
     ),
     detailed
       ? h(

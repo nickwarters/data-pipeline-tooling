@@ -1,6 +1,6 @@
 // @ts-check
 import { h } from '../lib/html.js';
-import { EmptyState, LoadingState } from '../lib/empty-state.js';
+import { EmptyState, LoadingState, NO_DATA_YET } from '../lib/empty-state.js';
 import { patchRoute } from '../core/route-state.js';
 import { isAbortError } from '../lib/abort.js';
 import { loadReportFeed } from '../services/report-feed-loader.js';
@@ -20,6 +20,12 @@ import { mountGroupedBarChartTooltip } from '../lib/chart-tooltip.js';
 import { headlineStripView } from './my-stats/headline-strip-view.js';
 import { statsChartView } from './my-stats/stats-chart-view.js';
 import { statsBreakdownTableView } from './my-stats/stats-breakdown-table-view.js';
+
+export const COPY = Object.freeze({
+  loadingSubject: 'Loading your report',
+  noReport: 'No report has been published for you yet.',
+  noDataYet: NO_DATA_YET,
+});
 
 /** @typedef {import('../core/chrome-state.js').ChromeState} ChromeState */
 /** @typedef {import('../services/report-feed-loader.js').ReportFeedEnvelope} ReportFeedEnvelope */
@@ -127,8 +133,7 @@ function rangeControlsView(route, dispatch) {
  * @returns {HTMLElement | (HTMLElement | null)[]}
  */
 function bodyView(route, dispatch) {
-  if (route.feedStatus === 'loading')
-    return LoadingState('Loading your report');
+  if (route.feedStatus === 'loading') return LoadingState(COPY.loadingSubject);
   if (route.feedStatus === 'failed') {
     return h(
       'p',
@@ -139,14 +144,14 @@ function bodyView(route, dispatch) {
 
   const range = route.ranges.find(({ key }) => key === route.selectedRange);
   if (!range) {
-    return EmptyState('No data yet.', { className: 'cora-my-stats-empty' });
+    return EmptyState(COPY.noDataYet, { className: 'cora-my-stats-empty' });
   }
   // A report that was never published is not an empty one. Saying "no data"
   // here would tell a Reviewer they did nothing, when what happened is that
   // nothing has been written for them yet — and with nothing published there is
   // no boundary to compute a live tail from, so none is read.
   if (route.reportFeed === null) {
-    return EmptyState('No report has been published for you yet.', {
+    return EmptyState(COPY.noReport, {
       className: 'cora-my-stats-no-report',
     });
   }

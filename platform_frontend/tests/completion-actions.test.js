@@ -5,6 +5,7 @@ import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 import { installDom, findByClass } from './_dom-stub.js';
 import { fireEvent } from './helpers/semantic-dom.js';
 import { CaseMachine } from '../src/lib/case-machine.js';
+import { CASE_STATUS } from '../src/lib/case-statuses.js';
 import {
   completeCase,
   completionControl,
@@ -140,7 +141,7 @@ test('completionPatch freezes outcome and effective columns in the lifecycle PAT
     exportHash: 'sha256:v1',
   });
 
-  assert.equal(patch?.status, 'Actions In Progress');
+  assert.equal(patch?.status, CASE_STATUS.ACTIONS_IN_PROGRESS);
   assert.equal(patch?.outcomeAtCompletion, 'fail');
   assert.equal(patch?.hadRemediation, true);
   assert.equal(patch?.effectiveOutcome, 'fail');
@@ -214,7 +215,7 @@ test('completionPatch atomically clears hold fields when either transition leave
       },
     },
   });
-  assert.equal(sendActions?.status, 'Actions In Progress');
+  assert.equal(sendActions?.status, CASE_STATUS.ACTIONS_IN_PROGRESS);
   assert.equal(sendActions?.onHold, false);
   assert.equal(sendActions?.placedOnHoldAt, null);
 
@@ -578,7 +579,7 @@ test('completionControl: no Responsible Party names the gate instead of hiding i
   assert.equal(named.label, 'Send Actions');
   assert.equal(
     completionPatch({ ...base, caseRow: CASE_ROW, ...patchInput })?.status,
-    'Actions In Progress'
+    CASE_STATUS.ACTIONS_IN_PROGRESS
   );
 });
 
@@ -645,7 +646,7 @@ test('free-form remediation alone sends the Case down the actions path', () => {
     exportHash: null,
   });
 
-  assert.equal(patch?.status, 'Actions In Progress');
+  assert.equal(patch?.status, CASE_STATUS.ACTIONS_IN_PROGRESS);
   assert.equal(patch?.hadRemediation, true);
   assert.equal(typeof patch?.remediationDueDate, 'string');
 

@@ -129,14 +129,6 @@ function clickSubmit(/** @type {any} */ el) {
 
 // --- Rendering ---
 
-test('CORAAppealReview: renders an Appeal Review heading first', () => {
-  const { el } = renderAppealReview();
-  assert.equal(
-    /** @type {any} */ (el)._children[0].textContent,
-    'Appeal Review'
-  );
-});
-
 test('CORAAppealReview: edit access with an open Appeal renders the resolve form', () => {
   const { el } = makeEditable();
   assert.ok(findByClass(el, 'cora-appeal-review-form'), 'resolve form present');

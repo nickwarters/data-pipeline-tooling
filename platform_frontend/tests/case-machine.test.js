@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CaseMachine, isReportable } from '../src/lib/case-machine.js';
+import { CASE_STATUS } from '../src/lib/case-statuses.js';
 import { addWorkingDays } from '../src/lib/add-working-days.js';
 import {
   ENGLAND_WALES_HOLIDAYS,
@@ -239,7 +240,7 @@ test('CaseMachine Send Actions stamps the reportable snapshot without completedA
     'sha256:v1'
   );
 
-  assert.equal(fields.status, 'Actions In Progress');
+  assert.equal(fields.status, CASE_STATUS.ACTIONS_IN_PROGRESS);
   assert.equal(typeof fields.reportableAt, 'string');
   assert.equal(
     fields.remediationDueDate,

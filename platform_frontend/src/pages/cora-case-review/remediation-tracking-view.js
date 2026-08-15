@@ -11,6 +11,12 @@ import {
   remediationRows,
 } from '../../evaluators/remediation-status.js';
 
+export const COPY = Object.freeze({
+  noActionsSent: 'No remediation actions sent.',
+  remediationDueNone: 'Remediation due: —',
+  awaitingReviewer: 'Status: Awaiting the Reviewer',
+});
+
 /** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../../sharepoint-client.js').RemediationStatusValue} RemediationStatusValue */
@@ -68,7 +74,7 @@ export function RemediationTracking(props) {
   const sla = h(
     'p',
     { className: 'cora-remediation-due-date' },
-    `Remediation due: ${dueDate ?? '—'}`
+    dueDate !== null ? `Remediation due: ${dueDate}` : COPY.remediationDueNone
   );
   const overdueBadge = overdue
     ? h('p', { className: 'cora-badge cora-badge-overdue' }, 'Overdue')
@@ -80,7 +86,7 @@ export function RemediationTracking(props) {
   if (rows.length === 0) {
     return [
       ...head,
-      EmptyState('No remediation actions sent.', {
+      EmptyState(COPY.noActionsSent, {
         className: 'cora-remediation-tracking-empty',
       }),
     ];
@@ -180,7 +186,7 @@ function renderStatusLine(row) {
     { className: 'cora-tracking-status' },
     row.status
       ? `Status: ${REMEDIATION_STATUS_LABELS[row.status]}`
-      : 'Status: Awaiting the Reviewer'
+      : COPY.awaitingReviewer
   );
 }
 

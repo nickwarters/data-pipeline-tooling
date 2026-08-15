@@ -130,10 +130,10 @@ test('Responsible Party unread messages render through descriptors and invoke co
   // Reference and Case Type are the shared descriptors, so they sort here as
   // on every other Case table; `Last message` keeps the default sort.
   assert.deepEqual(tableHeaders(section), [
-    ['Reference', 'cora-col-reference', 'none', true],
-    ['Case Type', 'cora-col-caseType', 'none', true],
-    ['Last message', 'cora-col-lastMessage', 'descending', true],
-    ['Actions', 'cora-col-actions', 'none', false],
+    ['Reference', 'none', true],
+    ['Case Type', 'none', true],
+    ['Last message', 'descending', true],
+    ['Actions', 'none', false],
   ]);
   // The Open button opens the Conversation while the row's Reference link
   // opens the Case, so its accessible name must not be the Case's.
@@ -150,13 +150,6 @@ test('Responsible Party unread messages render through descriptors and invoke co
   );
   open.dispatchEvent({ type: 'click' });
   assert.deepEqual(opened, ['missing-timestamp']);
-
-  // Existing DOM-stub debt retained until the shared debt ledger can move.
-  const table = /** @type {any} */ (section?.querySelector('table'));
-  assert.ok(table._listeners.keydown);
-  assert.equal(table._listeners.keydown.length, 1);
-  assert.ok(open._listeners.click);
-  assert.equal(open._listeners.click.length, 1);
 });
 
 test('without a Conversation handler the Unread Messages table renders no Open button', () => {

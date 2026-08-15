@@ -174,17 +174,35 @@ test('compileBank: omits empty optional tables', () => {
 test('highlight: wraps comments, strings, keywords, booleans, and property keys', () => {
   const code = `const x = 'hi'; // comment\nreturn true;\nconst obj = { key: 1 };`;
   const out = highlight(code);
-  assert.ok(out.includes('<span class="c">// comment</span>'));
-  assert.ok(out.includes('<span class="k">const</span>'));
-  assert.ok(out.includes('<span class="k">return</span>'));
-  assert.ok(out.includes('<span class="b">true</span>'));
-  assert.ok(out.includes('<span class="p">key</span>'));
-  assert.ok(out.includes('<span class="s">&#39;hi&#39;</span>'));
+  const classesByText = new Map(
+    [...out.matchAll(/<span class="([^"]+)">([^<]+)<\/span>/g)].map(
+      ([, className, text]) => [text, className]
+    )
+  );
+  const tokens = [
+    '// comment',
+    'const',
+    'return',
+    'true',
+    'key',
+    '&#39;hi&#39;',
+  ];
+  for (const token of tokens) assert.ok(classesByText.has(token), token);
+  assert.equal(classesByText.get('const'), classesByText.get('return'));
+  assert.equal(
+    new Set(
+      ['// comment', 'const', 'true', 'key', '&#39;hi&#39;'].map((token) =>
+        classesByText.get(token)
+      )
+    ).size,
+    5,
+    'each token kind has a distinct styling hook'
+  );
 });
 
 test('highlight: handles double-quoted strings', () => {
   const out = highlight('const x = "hi";');
-  assert.ok(out.includes('<span class="s">&quot;hi&quot;</span>'));
+  assert.match(out, /<span class="[^"]+">&quot;hi&quot;<\/span>/);
 });
 
 test('hashStr: returns 12 hex chars (6 bytes)', async () => {
@@ -591,156 +609,95 @@ const pubEnvelope = {
   questions: [],
 };
 
-test('buildPublishArtifacts: first publish (null manifest) → isNew true', () => {
-  const r = buildPublishArtifacts(pubEnvelope, null);
-  assert.equal(r.isNew, true);
-});
-
-test('buildPublishArtifacts: first publish → versionedJson is the envelope as JSON', () => {
-  const r = buildPublishArtifacts(pubEnvelope, null);
-  assert.ok(r.versionedJson !== null);
-  assert.deepEqual(JSON.parse(r.versionedJson), pubEnvelope);
-});
-
-test('buildPublishArtifacts: first publish → manifest has slug and one version entry', () => {
-  const r = buildPublishArtifacts(pubEnvelope, null);
-  assert.equal(r.manifest.slug, pubEnvelope.slug);
-  assert.equal(r.manifest.versions.length, 1);
-  assert.equal(r.manifest.versions[0].hash, pubEnvelope.hash);
-  assert.equal(r.manifest.versions[0].generatedAt, pubEnvelope.generatedAt);
-});
-
-test('buildPublishArtifacts: null manifest treated same as empty-versions manifest', () => {
-  const r1 = buildPublishArtifacts(pubEnvelope, null);
-  const r2 = buildPublishArtifacts(pubEnvelope, {
-    slug: pubEnvelope.slug,
-    versions: [],
-  });
-  assert.equal(r1.manifest.versions.length, r2.manifest.versions.length);
-  assert.equal(r1.isNew, r2.isNew);
-});
-
-test('buildPublishArtifacts: currentJson is always the envelope as pretty-printed JSON', () => {
-  const r = buildPublishArtifacts(pubEnvelope, null);
-  assert.equal(r.currentJson, JSON.stringify(pubEnvelope, null, 2));
-});
-
-test('buildPublishArtifacts: currentJson returned even on re-publish', () => {
-  const existing = {
-    slug: pubEnvelope.slug,
-    versions: [
-      { hash: pubEnvelope.hash, generatedAt: pubEnvelope.generatedAt },
-    ],
-  };
-  const r = buildPublishArtifacts(pubEnvelope, existing);
-  assert.equal(r.currentJson, JSON.stringify(pubEnvelope, null, 2));
-});
-
-test('buildPublishArtifacts: same hash again → isNew false', () => {
-  const existing = {
-    slug: pubEnvelope.slug,
-    versions: [
-      { hash: pubEnvelope.hash, generatedAt: pubEnvelope.generatedAt },
-    ],
-  };
-  const r = buildPublishArtifacts(pubEnvelope, existing);
-  assert.equal(r.isNew, false);
-});
-
-test('buildPublishArtifacts: same hash again → versionedJson null', () => {
-  const existing = {
-    slug: pubEnvelope.slug,
-    versions: [
-      { hash: pubEnvelope.hash, generatedAt: pubEnvelope.generatedAt },
-    ],
-  };
-  const r = buildPublishArtifacts(pubEnvelope, existing);
-  assert.equal(r.versionedJson, null);
-});
-
-test('buildPublishArtifacts: same hash again → manifest versions unchanged', () => {
-  const existing = {
-    slug: pubEnvelope.slug,
-    versions: [
-      { hash: pubEnvelope.hash, generatedAt: pubEnvelope.generatedAt },
-    ],
-  };
-  const r = buildPublishArtifacts(pubEnvelope, existing);
-  assert.equal(r.manifest.versions.length, 1);
-});
-
-test('buildPublishArtifacts: new distinct hash is appended to manifest', () => {
-  const priorHash = 'sha256:' + 'b'.repeat(64);
-  const existing = {
-    slug: pubEnvelope.slug,
-    versions: [{ hash: priorHash, generatedAt: '2026-01-01T00:00:00.000Z' }],
-  };
-  const r = buildPublishArtifacts(pubEnvelope, existing);
-  assert.equal(r.isNew, true);
-  assert.equal(r.manifest.versions.length, 2);
-  assert.equal(r.manifest.versions[0].hash, priorHash);
-  assert.equal(r.manifest.versions[1].hash, pubEnvelope.hash);
-});
-
-test('buildPublishArtifacts: preserves prior versions order and appends at end', () => {
-  const v1 = {
-    hash: 'sha256:' + 'b'.repeat(64),
-    generatedAt: '2026-01-01T00:00:00.000Z',
-  };
-  const v2 = {
-    hash: 'sha256:' + 'c'.repeat(64),
-    generatedAt: '2026-02-01T00:00:00.000Z',
-  };
-  const existing = { slug: pubEnvelope.slug, versions: [v1, v2] };
-  const r = buildPublishArtifacts(pubEnvelope, existing);
-  assert.equal(r.manifest.versions[0].hash, v1.hash);
-  assert.equal(r.manifest.versions[1].hash, v2.hash);
-  assert.equal(r.manifest.versions[2].hash, pubEnvelope.hash);
-});
-
-test('buildPublishArtifacts: does not mutate the existingManifest versions array', () => {
-  const existing = { slug: pubEnvelope.slug, versions: [] };
-  buildPublishArtifacts(pubEnvelope, existing);
-  assert.equal(existing.versions.length, 0);
-});
-
-// ── buildPublishArtifacts: label table handling ───────────
-
 const pubEnvelopeWithLabels = {
   ...pubEnvelope,
   labels: [{ id: 'lbl-a', name: 'Alpha', color: '#ff0000' }],
 };
 
-test('buildPublishArtifacts: current JSON includes labels table', () => {
-  const r = buildPublishArtifacts(pubEnvelopeWithLabels, null);
-  const current = JSON.parse(r.currentJson);
-  assert.deepEqual(current.labels, [
-    { id: 'lbl-a', name: 'Alpha', color: '#ff0000' },
-  ]);
+test('buildPublishArtifacts: null manifest publishes a no-label envelope', () => {
+  const json = JSON.stringify(pubEnvelope, null, 2);
+  assert.deepEqual(buildPublishArtifacts(pubEnvelope, null), {
+    versionedJson: json,
+    currentJson: json,
+    manifest: {
+      slug: pubEnvelope.slug,
+      versions: [
+        { hash: pubEnvelope.hash, generatedAt: pubEnvelope.generatedAt },
+      ],
+    },
+    isNew: true,
+  });
 });
 
-test('buildPublishArtifacts: versioned JSON omits labels table', () => {
-  const r = buildPublishArtifacts(pubEnvelopeWithLabels, null);
-  assert.ok(r.versionedJson !== null);
-  const versioned = JSON.parse(/** @type {string} */ (r.versionedJson));
-  assert.ok(
-    !('labels' in versioned),
-    'versioned file must not carry the label table'
+test('buildPublishArtifacts: an empty manifest publishes labels only in current JSON', () => {
+  const { labels: _labels, ...versionedEnvelope } = pubEnvelopeWithLabels;
+  assert.deepEqual(
+    buildPublishArtifacts(pubEnvelopeWithLabels, {
+      slug: pubEnvelope.slug,
+      versions: [],
+    }),
+    {
+      versionedJson: JSON.stringify(versionedEnvelope, null, 2),
+      currentJson: JSON.stringify(pubEnvelopeWithLabels, null, 2),
+      manifest: {
+        slug: pubEnvelope.slug,
+        versions: [
+          { hash: pubEnvelope.hash, generatedAt: pubEnvelope.generatedAt },
+        ],
+      },
+      isNew: true,
+    }
   );
 });
 
-test('buildPublishArtifacts: versioned JSON still carries all other envelope fields', () => {
-  const r = buildPublishArtifacts(pubEnvelopeWithLabels, null);
-  const versioned = JSON.parse(/** @type {string} */ (r.versionedJson));
-  assert.equal(versioned.slug, pubEnvelopeWithLabels.slug);
-  assert.equal(versioned.hash, pubEnvelopeWithLabels.hash);
-  assert.equal(versioned.generatedAt, pubEnvelopeWithLabels.generatedAt);
-  assert.deepEqual(versioned.questions, pubEnvelopeWithLabels.questions);
+test('buildPublishArtifacts: an existing hash republishes current JSON only', () => {
+  const version = {
+    hash: pubEnvelope.hash,
+    generatedAt: pubEnvelope.generatedAt,
+  };
+  assert.deepEqual(
+    buildPublishArtifacts(pubEnvelope, {
+      slug: pubEnvelope.slug,
+      versions: [version],
+    }),
+    {
+      versionedJson: null,
+      currentJson: JSON.stringify(pubEnvelope, null, 2),
+      manifest: { slug: pubEnvelope.slug, versions: [version] },
+      isNew: false,
+    }
+  );
 });
 
-test('buildPublishArtifacts: envelope without labels produces identical versioned and current JSON', () => {
-  const r = buildPublishArtifacts(pubEnvelope, null);
-  assert.equal(r.versionedJson, r.currentJson);
+test('buildPublishArtifacts: a new hash follows two prior versions without mutating them', () => {
+  const existing = {
+    slug: pubEnvelope.slug,
+    versions: [
+      {
+        hash: 'sha256:' + 'b'.repeat(64),
+        generatedAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        hash: 'sha256:' + 'c'.repeat(64),
+        generatedAt: '2026-02-01T00:00:00.000Z',
+      },
+    ],
+  };
+  const before = structuredClone(existing);
+  const result = buildPublishArtifacts(pubEnvelope, existing);
+  assert.deepEqual(result, {
+    versionedJson: JSON.stringify(pubEnvelope, null, 2),
+    currentJson: JSON.stringify(pubEnvelope, null, 2),
+    manifest: {
+      slug: pubEnvelope.slug,
+      versions: [
+        ...existing.versions,
+        { hash: pubEnvelope.hash, generatedAt: pubEnvelope.generatedAt },
+      ],
+    },
+    isNew: true,
+  });
+  assert.deepEqual(existing, before);
 });
 
 test('publishBankEffect writes byte-identical artifacts from the existing compiler path', async () => {

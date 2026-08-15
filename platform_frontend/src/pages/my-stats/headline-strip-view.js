@@ -2,6 +2,8 @@
 import { h } from '../../lib/html.js';
 import { SHORT_MONTH_NAMES } from '../../evaluators/stats-range-model.js';
 
+export const COPY = Object.freeze({ heading: 'Headline figures' });
+
 /** @typedef {import('../../evaluators/stats-report-model.js').StatsHeadline} StatsHeadline */
 
 /**
@@ -71,7 +73,7 @@ export function headlineStripView(headline) {
         id: 'cora-my-stats-headline-heading',
         className: 'cora-my-stats-headline__heading',
       },
-      'Headline figures'
+      COPY.heading
     ),
     h(
       'div',

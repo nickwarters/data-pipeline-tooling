@@ -1,8 +1,16 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom, findByClass, findAllByClass } from './_dom-stub.js';
-import { fireEvent } from './helpers/semantic-dom.js';
+import { installDom, findByClass } from './_dom-stub.js';
+import {
+  fireEvent,
+  getByRole,
+  getByText,
+  queryAllByRole,
+  queryAllByText,
+  queryByRole,
+  textContent,
+} from './helpers/semantic-dom.js';
 
 installDom();
 
@@ -93,25 +101,23 @@ const REMEDIATED = {
   q2: { value: 'No' },
 };
 
-/** @param {any} el */
-function allText(el) {
-  let out = el.textContent ? el.textContent + ' ' : '';
-  for (const c of el._children ?? []) out += allText(c);
-  return out;
-}
-
 test('RemediationTracking: no remediation on the Case → empty state', () => {
   const el = new CORARemediationTracking();
   el.update(CATALOGUE, { q1: { value: 'No' } });
-  assert.ok(findByClass(el, 'cora-empty cora-remediation-tracking-empty'));
-  assert.match(allText(el), /no remediation actions sent/i);
+  assert.ok(getByText(el, /no remediation actions sent/i));
 });
 
 test('RemediationTracking: one row per Question carrying remediation, listing its actions', () => {
   const el = new CORARemediationTracking();
   el.update(CATALOGUE, REMEDIATED);
 
-  const items = findAllByClass(el, 'cora-remediation-tracking-item');
+  const list = queryAllByRole(el, 'list').find(
+    (node) => node.parentNode === el
+  );
+  assert.ok(list, 'the remediation list is rendered');
+  const items = queryAllByRole(list, 'listitem').filter(
+    (node) => node.parentNode === list
+  );
   assert.equal(
     items.length,
     1,
@@ -119,11 +125,18 @@ test('RemediationTracking: one row per Question carrying remediation, listing it
   );
   assert.equal(items[0].getAttribute('key'), 'q1');
 
-  const text = allText(el);
-  assert.match(text, /Greeted the customer\?/);
-  assert.match(text, /Call the customer back/);
-  assert.match(text, /Apologise in writing/);
-  assert.doesNotMatch(text, /Explained the outcome\?/);
+  assert.ok(getByText(items[0], 'Greeted the customer?'));
+  const actions = queryAllByRole(items[0], 'list').find(
+    (node) => node.parentNode === items[0]
+  );
+  assert.ok(actions, 'the selected actions are a nested list');
+  const actionItems = queryAllByRole(actions, 'listitem').filter(
+    (node) => node.parentNode === actions
+  );
+  assert.equal(actionItems.length, 1);
+  assert.equal(textContent(actionItems[0]), 'Call the customer back');
+  assert.ok(getByText(items[0], 'Apologise in writing'));
+  assert.equal(queryAllByText(el, 'Explained the outcome?').length, 0);
 });
 
 test('RemediationTracking: free-form remediation alone is a row, to both audiences', () => {
@@ -143,15 +156,17 @@ test('RemediationTracking: free-form remediation alone is a row, to both audienc
     el.canResolve = audience === 'reviewer';
     el.update(CATALOGUE, answers);
 
-    assert.equal(
-      findAllByClass(el, 'cora-remediation-tracking-item').length,
-      1,
-      audience
+    const list = queryAllByRole(el, 'list').find(
+      (node) => node.parentNode === el
     );
-    assert.match(allText(el), /Write to the customer/, audience);
+    assert.ok(list, audience);
+    const items = queryAllByRole(list, 'listitem').filter(
+      (node) => node.parentNode === list
+    );
+    assert.equal(items.length, 1, audience);
+    assert.ok(getByText(items[0], 'Write to the customer'), audience);
     // No actions list is rendered when there are none to list.
-    assert.equal(findAllByClass(el, 'cora-tracking-actions').length, 0);
-    assert.equal(findAllByClass(el, 'cora-tracking-action').length, 1);
+    assert.equal(queryAllByRole(items[0], 'list').length, 0);
   }
 });
 
@@ -163,7 +178,7 @@ test('RemediationTracking: a passed Question with remediation attached is not a 
       remediationActions: [{ id: 'a1', text: 'Stale' }],
     },
   });
-  assert.ok(findByClass(el, 'cora-empty cora-remediation-tracking-empty'));
+  assert.ok(getByText(el, /no remediation actions sent/i));
 });
 
 // --- The reviewing side ---
@@ -179,16 +194,16 @@ test('RemediationTracking: an observer sees the resolution but no controls', () 
     },
   });
 
-  assert.equal(findByClass(el, 'cora-tracking-status-select'), null);
-  assert.match(allText(el), /Status: Cancelled/);
-  assert.match(allText(el), /Justification: Customer declined/);
+  assert.equal(queryByRole(el, 'combobox'), null);
+  assert.ok(getByText(el, 'Status: Cancelled'));
+  assert.ok(getByText(el, 'Justification: Customer declined'));
 });
 
 test('RemediationTracking: an unresolved row reads as awaiting the Reviewer', () => {
   const el = new CORARemediationTracking();
   el.canResolve = false;
   el.update(CATALOGUE, REMEDIATED);
-  assert.match(allText(el), /Status: Awaiting the Reviewer/);
+  assert.ok(getByText(el, 'Status: Awaiting the Reviewer'));
 });
 
 test('RemediationTracking: the Reviewer gets a three-value select per Question', () => {
@@ -196,11 +211,13 @@ test('RemediationTracking: the Reviewer gets a three-value select per Question',
   el.canResolve = true;
   el.update(CATALOGUE, REMEDIATED);
 
-  const select = findByClass(el, 'cora-tracking-status-select');
+  const select = getByRole(el, 'combobox', {
+    name: 'Remediation outcome for "Greeted the customer?"',
+  });
   assert.deepEqual(
-    select._children.map((/** @type {any} */ option) => [
+    queryAllByRole(select, 'option').map((option) => [
       option.value,
-      option.textContent,
+      textContent(option),
     ]),
     [
       ['', 'Not yet resolved'],
@@ -222,7 +239,9 @@ test('RemediationTracking: choosing a resolution dispatches it for the Question'
     events.push(e.detail)
   );
 
-  const select = findByClass(el, 'cora-tracking-status-select');
+  const select = getByRole(el, 'combobox', {
+    name: 'Remediation outcome for "Greeted the customer?"',
+  });
   select.value = 'complete';
   fireEvent(select, 'change');
 
@@ -235,12 +254,22 @@ test('RemediationTracking: the details box stays hidden for complete', () => {
   const el = new CORARemediationTracking();
   el.canResolve = true;
   el.update(CATALOGUE, REMEDIATED);
-  assert.equal(findByClass(el, 'cora-tracking-details-input').hidden, true);
+  assert.equal(
+    getByRole(el, 'textbox', {
+      name: 'Details for "Greeted the customer?"',
+    }).hidden,
+    true
+  );
 
   el.update(CATALOGUE, {
     q1: { ...REMEDIATED.q1, remediationStatus: { status: 'complete' } },
   });
-  assert.equal(findByClass(el, 'cora-tracking-details-input').hidden, true);
+  assert.equal(
+    getByRole(el, 'textbox', {
+      name: 'Details for "Greeted the customer?"',
+    }).hidden,
+    true
+  );
 });
 
 test('RemediationTracking: partially complete asks for details and flags them as required', () => {
@@ -250,14 +279,15 @@ test('RemediationTracking: partially complete asks for details and flags them as
     q1: { ...REMEDIATED.q1, remediationStatus: { status: 'partial' } },
   });
 
-  const details = findByClass(el, 'cora-tracking-details-input');
+  const details = getByRole(el, 'textbox', {
+    name: 'Details for "Greeted the customer?"',
+  });
   assert.equal(details.hidden, false);
   assert.equal(details.getAttribute('placeholder'), 'Details (required)');
-  assert.match(allText(el), /Details is required\./);
-  assert.match(
-    allText(el),
-    /Record an outcome for every remediation above/,
-    'and the panel says the Case cannot be completed yet'
+  assert.ok(getByText(el, /Details is required\./));
+  assert.ok(
+    getByText(el, /Record an outcome for every remediation above/),
+    'the panel says the Case cannot be completed yet'
   );
 });
 
@@ -268,9 +298,11 @@ test('RemediationTracking: cancelled asks for a justification instead', () => {
     q1: { ...REMEDIATED.q1, remediationStatus: { status: 'cancelled' } },
   });
 
-  const details = findByClass(el, 'cora-tracking-details-input');
+  const details = getByRole(el, 'textbox', {
+    name: 'Justification for "Greeted the customer?"',
+  });
   assert.equal(details.getAttribute('placeholder'), 'Justification (required)');
-  assert.match(allText(el), /Justification is required\./);
+  assert.ok(getByText(el, /Justification is required\./));
 });
 
 test('RemediationTracking: typing details dispatches them against the current status', () => {
@@ -286,7 +318,9 @@ test('RemediationTracking: typing details dispatches them against the current st
     events.push(e.detail)
   );
 
-  const details = findByClass(el, 'cora-tracking-details-input');
+  const details = getByRole(el, 'textbox', {
+    name: 'Details for "Greeted the customer?"',
+  });
   details.value = 'Two of three actions done';
   fireEvent(details, 'input');
 
@@ -305,7 +339,10 @@ test('RemediationTracking: a fully resolved Case drops the completion warning', 
   el.update(CATALOGUE, {
     q1: { ...REMEDIATED.q1, remediationStatus: { status: 'complete' } },
   });
-  assert.equal(findByClass(el, 'cora-remediation-gate'), null);
+  assert.equal(
+    queryAllByText(el, /Record an outcome for every remediation above/).length,
+    0
+  );
 });
 
 // --- The responsible-party side ---
@@ -321,15 +358,23 @@ test('RemediationTracking: the Responsible Party sees the breakdown but none of 
     },
   });
 
-  assert.match(allText(el), /Call the customer back/);
-  assert.equal(findByClass(el, 'cora-tracking-status-select'), null);
-  assert.equal(findByClass(el, 'cora-tracking-details-input'), null);
-  assert.doesNotMatch(
-    allText(el),
-    /Reviewer-only note/,
+  const list = queryAllByRole(el, 'list').find(
+    (node) => node.parentNode === el
+  );
+  assert.ok(list);
+  const row = queryAllByRole(list, 'listitem').find(
+    (node) => node.parentNode === list
+  );
+  assert.ok(row);
+  assert.ok(getByText(row, 'Call the customer back'));
+  assert.equal(queryByRole(row, 'combobox'), null);
+  assert.equal(queryByRole(row, 'textbox'), null);
+  assert.equal(
+    queryAllByText(row, /Reviewer-only note/).length,
+    0,
     "the Reviewer's details are not shown to the Responsible Party"
   );
-  assert.match(allText(el), /Status: Partially complete/);
+  assert.ok(getByText(row, 'Status: Partially complete'));
 });
 
 test('RemediationTracking: the Responsible Party is pointed at the Conversation', () => {
@@ -337,16 +382,11 @@ test('RemediationTracking: the Responsible Party is pointed at the Conversation'
   el.audience = 'responsibleParty';
   el.update(CATALOGUE, REMEDIATED);
 
-  const prompt = findByClass(el, 'cora-remediation-conversation-prompt');
-  assert.ok(prompt);
-  assert.match(allText(prompt), /Conversation/);
+  assert.ok(getByText(el, /Discuss this remediation.*Conversation/));
 
   let opened = 0;
   el.addEventListener('cora-open-conversation', () => (opened += 1));
-  fireEvent(
-    findByClass(el, 'cora-btn cora-remediation-conversation-btn'),
-    'click'
-  );
+  fireEvent(getByRole(el, 'button', { name: 'Open conversation' }), 'click');
   assert.equal(opened, 1);
 });
 
@@ -356,18 +396,16 @@ test('RemediationTracking: a viewer without the Conversation gets guidance, not 
   el.conversationAvailable = false;
   el.update(CATALOGUE, REMEDIATED);
 
-  assert.equal(
-    findByClass(el, 'cora-btn cora-remediation-conversation-btn'),
-    null
-  );
-  assert.ok(findByClass(el, 'cora-remediation-conversation-unavailable'));
+  assert.equal(queryByRole(el, 'button', { name: 'Open conversation' }), null);
+  assert.ok(getByText(el, /Conversation is not open to you/));
 });
 
 test('RemediationTracking: the reviewing side never gets the Conversation prompt', () => {
   const el = new CORARemediationTracking();
   el.audience = 'reviewer';
   el.update(CATALOGUE, REMEDIATED);
-  assert.equal(findByClass(el, 'cora-remediation-conversation-prompt'), null);
+  assert.equal(queryByRole(el, 'button', { name: 'Open conversation' }), null);
+  assert.equal(queryAllByText(el, /Discuss this remediation/).length, 0);
 });
 
 test('RemediationTracking: usable standalone — no dispatchers wired is a no-op, not a crash', () => {
@@ -382,11 +420,15 @@ test('RemediationTracking: usable standalone — no dispatchers wired is a no-op
   const host = document.createElement('div');
   host.replaceChildren(...nodes);
 
-  const select = findByClass(host, 'cora-tracking-status-select');
+  const select = getByRole(host, 'combobox', {
+    name: 'Remediation outcome for "Greeted the customer?"',
+  });
   select.value = 'complete';
   fireEvent(select, 'change');
 
-  const details = findByClass(host, 'cora-tracking-details-input');
+  const details = getByRole(host, 'textbox', {
+    name: 'Details for "Greeted the customer?"',
+  });
   details.value = 'x';
   fireEvent(details, 'input');
 
@@ -400,7 +442,7 @@ test('RemediationTracking: usable standalone — no dispatchers wired is a no-op
   const partyHost = document.createElement('div');
   partyHost.replaceChildren(...party);
   fireEvent(
-    findByClass(partyHost, 'cora-btn cora-remediation-conversation-btn'),
+    getByRole(partyHost, 'button', { name: 'Open conversation' }),
     'click'
   );
 });
@@ -413,7 +455,7 @@ test('RemediationTracking: the Case Type may override the Remediation heading', 
   const headingText = (heading) => {
     el.heading = heading;
     el.update(CATALOGUE, {});
-    return /** @type {any} */ (el)._children[0].textContent;
+    return getByRole(el, 'heading').textContent;
   };
   assert.equal(headingText('Fix-up'), 'Fix-up');
   assert.equal(headingText(undefined), 'Remediation');
@@ -427,16 +469,16 @@ test('RemediationTracking: displays the stored SLA date and overdue evaluator re
   };
   el.update(CATALOGUE, {});
 
-  assert.match(allText(el), /Remediation due: 2000-01-03/);
-  assert.match(allText(el), /Overdue/);
+  assert.ok(getByText(el, 'Remediation due: 2000-01-03'));
+  assert.ok(getByText(el, 'Overdue'));
 
   el.caseRow = { status: 'Completed', remediationDueDate: '2000-01-03' };
   el.update(CATALOGUE, {});
-  assert.doesNotMatch(allText(el), /Overdue/);
+  assert.equal(queryAllByText(el, 'Overdue').length, 0);
 
   el.caseRow = null;
   el.update(CATALOGUE, {});
-  assert.match(allText(el), /Remediation due: —/);
+  assert.ok(getByText(el, 'Remediation due: —'));
 });
 
 test('RemediationTracking: render() returns nodes', () => {

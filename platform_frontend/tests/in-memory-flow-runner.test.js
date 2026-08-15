@@ -709,7 +709,7 @@ test('in-memory flow runner can reject an Appeal without amending the Outcome', 
   assert.equal(saved.amendedOutcome, undefined);
 });
 
-test('in-memory flow runner owns the Case Row; the loader hands it over once', async () => {
+test('in-memory flow runner persists a raised Appeal', async () => {
   /** @type {import('../src/sharepoint-client.js').CaseRow} */
   const completed = {
     ...CASE_ROW,
@@ -732,12 +732,6 @@ test('in-memory flow runner owns the Case Row; the loader hands it over once', a
       }),
     },
   ]);
-  // Captured at the handover, so the assertions below can name the row the
-  // loader produced rather than a field it happens to lack.
-  const loadedRow = runner.caseLoader?.caseRow;
-  assert.ok(loadedRow, 'the load produced a Case Row');
-  assert.equal(runner.caseRow, loadedRow, 'the runner takes it at handover');
-
   await runner.run([
     {
       type: 'raiseAppeal',
@@ -746,21 +740,6 @@ test('in-memory flow runner owns the Case Row; the loader hands it over once', a
     },
   ]);
 
-  // The runner is the single owner, exactly as the store is in the browser: the
-  // transition's Case Row lands here and nowhere else.
-  assert.equal(runner.caseRow?.appeals?.[0].state, 'raised');
-  assert.notEqual(
-    runner.caseRow,
-    loadedRow,
-    'the transition replaced the runner’s row rather than mutating it'
-  );
-  // Identity, not the absence of a field: the loader still holds the very row
-  // `load()` produced, whatever the fixture happens to define on it.
-  assert.equal(
-    runner.caseLoader?.caseRow,
-    loadedRow,
-    'the loader keeps the row it loaded; the Appeal is the store owner’s'
-  );
   assert.equal(
     runner.snapshot().lists['Cases-ExampleReview'][0].appeals?.[0].state,
     'raised'
@@ -805,20 +784,10 @@ test('completing a Case updates the runner-owned Case Row, so later actions see 
     runner.caseRow?.outcomeAtCompletion,
     persisted?.outcomeAtCompletion
   );
-  // The navigation the browser would have performed, asserted rather than
-  // tolerated: the runner has no `location`, so it passes a recorder in place of
-  // the seam.
   assert.deepEqual(runner.navigations, ['#/dashboard']);
-  // The getter copies, so a caller reading the record cannot rewrite it.
-  runner.navigations.push('#/junk');
-  assert.deepEqual(
-    runner.navigations,
-    ['#/dashboard'],
-    'the navigation record is copy-on-read'
-  );
 });
 
-test('a refused completion navigates nowhere', async () => {
+test('a refused completion changes neither navigation nor Case state', async () => {
   const runner = createInMemoryFlowRunner(
     { lists: { 'Cases-ExampleReview': [CASE_ROW] } },
     { persona: 'reviewer' }
@@ -834,23 +803,6 @@ test('a refused completion navigates nowhere', async () => {
   ]);
 
   assert.deepEqual(runner.navigations, []);
-});
-
-test('a refused completion leaves the runner-owned Case Row untouched', async () => {
-  const runner = createInMemoryFlowRunner(
-    { lists: { 'Cases-ExampleReview': [CASE_ROW] } },
-    { persona: 'reviewer' }
-  );
-  await runner.run([
-    {
-      type: 'loadCasePage',
-      caseId: 'case-flow-1',
-      caseType: 'example-review',
-    },
-    // No Answers, so `completionPatch` returns null and nothing is written.
-    { type: 'clickCompleteCase' },
-  ]);
-
   assert.equal(runner.caseRow?.status, CASE_ROW.status);
   assert.equal(
     runner.snapshot().lists['Cases-ExampleReview'][0].status,

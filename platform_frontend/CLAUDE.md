@@ -214,6 +214,67 @@ prefer public behaviour over child positions, private listener registries, or
 private methods; do not add white-box assertions solely to cover a syntactic
 line.
 
+### Name the behaviour that reaches the code, not the code
+
+A test name may not contain a private method name (`_handle412`, `_request`,
+`_predicate`), an operator or expression from the source (`?? {}`,
+`p?.userId ?? persona`), or a coverage-region description ("covers the
+defensive branches"). If the only honest name for a test is the line it covers,
+reach that branch through a public seam and name the observable outcome instead.
+
+Rejected:
+
+```js
+test('_handle412 with null baselineAnswers uses {} for comparison', …)
+assert.deepEqual(
+  groups,
+  [],
+  'unknown persona: personas[p] is undefined → ?. returns undefined → ?? [] returns []',
+)
+```
+
+Accepted:
+
+```js
+test('a Case with no Answers round-trips a 412 without a false conflict', …)
+test('an unknown persona is treated as a member of no groups', …)
+```
+
+If deleting a test drops coverage below the 95% floor, reach the branch with a
+behavioural input; do not restore a test named after the syntax. The coverage
+floor remains unchanged.
+
+### Assert the rule, not the inventory
+
+Tests over configuration or authored content must loop over whatever exists and
+assert its invariants. Do not hardcode lists of ids, counts ("there are seven
+Groups"), or exact authored wording. Values persisted or sent on the wire are
+the exception: SharePoint list names, `CASE_STATUS` members, export paths, and
+PATCH columns must remain exact because the wire is exact.
+
+Rejected:
+
+```js
+assert.deepEqual(
+  config.questions.map((q) => q.id),
+  ['q-cmp-0001' /* …49… */]
+);
+assert.equal(present.length, 7);
+```
+
+Accepted:
+
+```js
+for (const q of config.questions) assert.match(q.id, /^q-cmp-\d{4}$/, q.id);
+assert.deepEqual(permissionSlugs, Object.keys(CASE_TYPE_IMPORTERS).sort());
+```
+
+For examples, see
+[`verify-config.test.js`](./tests/verify-config.test.js) for invariant-shaped
+configuration tests and
+[`list-cases-filter-parity.test.js`](./tests/list-cases-filter-parity.test.js)
+for behavioural triangulation.
+
 ## Git: linear history
 
 **Keep branch history linear. Rebase onto `main`; do not merge `main` into a

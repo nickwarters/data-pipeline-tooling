@@ -78,14 +78,6 @@ test('Responsible Party remediation uses the generic table, filtering, and overd
   select.value = 'conduct';
   select.dispatchEvent({ type: 'change', target: select });
   assert.deepEqual(actions[0], ['filter', 'conduct']);
-
-  // Existing DOM-stub debt retained until the shared debt ledger can move.
-  const table = /** @type {any} */ (section?.querySelector('table'));
-  assert.ok(table._children);
-  assert.ok(table._children.length > 0);
-  assert.ok(table._children[0]);
-  assert.ok(table._listeners.keydown);
-  assert.equal(table._listeners.keydown.length, 1);
 });
 
 test('the Outstanding Remediation Actions table renders the columns it renders today', () => {
@@ -117,10 +109,10 @@ test('the Outstanding Remediation Actions table renders the columns it renders t
   //     data-table.js derives `aria-sort` and interactivity independently.
   //   - Action required stays plain text, as it has no sortable meaning.
   assert.deepEqual(tableHeaders(section), [
-    ['Reference', 'cora-col-reference', 'none', true],
-    ['Case Type', 'cora-col-caseType', 'none', true],
-    ['Remediation due', 'cora-col-remediationDueDate', 'ascending', true],
-    ['Action required', 'cora-col-action', 'none', false],
+    ['Reference', 'none', true],
+    ['Case Type', 'none', true],
+    ['Remediation due', 'ascending', true],
+    ['Action required', 'none', false],
   ]);
 
   // No column renders a link: the Reference column carries no `href`, unlike

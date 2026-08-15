@@ -1,6 +1,8 @@
 // @ts-check
 import { h } from '../../lib/html.js';
 
+export const COPY = Object.freeze({ awaitingAnswers: 'Awaiting answers…' });
+
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../../sharepoint-client.js').OutcomeResult} OutcomeResult */
 /** @typedef {import('../../sharepoint-client.js').OutcomeOption} OutcomeOption */
@@ -42,7 +44,7 @@ export function Outcome({
   let marker = null;
   if (!allAnswered || !computeOutcome) {
     className = 'cora-outcome-indeterminate';
-    textContent = 'Awaiting answers…';
+    textContent = COPY.awaitingAnswers;
   } else {
     const result = computeOutcome(answers);
     const option = outcomeOptions.find((o) => o.id === result.outcome);

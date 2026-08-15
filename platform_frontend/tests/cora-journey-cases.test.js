@@ -122,9 +122,9 @@ test('journey cases descriptors and pure view preserve links, empty state, and s
     { dispatch: () => {} }
   );
   assert.deepEqual(tableHeaders(sorted), [
-    ['Reference', 'cora-col-reference', 'none', true],
-    ['Case Type', 'cora-col-caseType', 'none', true],
-    ['Status', 'cora-col-status', 'descending', true],
+    ['Reference', 'none', true],
+    ['Case Type', 'none', true],
+    ['Status', 'descending', true],
   ]);
 
   const slice = createRouteSlice({}, context());
@@ -167,9 +167,6 @@ test('journey cases descriptors and pure view preserve links, empty state, and s
   assert.deepEqual(actions, [
     { type: 'journey-table/sort-requested', key: 'reference' },
   ]);
-  // Existing DOM-stub debt retained until the shared debt ledger can move.
-  assert.ok(/** @type {any} */ (loaded)._children);
-  assert.ok(/** @type {any} */ (loaded)._children.length > 0);
 });
 
 test('journey cases: an overdue Case carries the overdue row class, like every other Case table', () => {

@@ -48,6 +48,8 @@ const { default: complaintsConfig } =
 const { evaluateAccess, SECTIONS } =
   await import('../src/services/section-access.js');
 const { resolveSectionLabels } = await import('../src/lib/section-labels.js');
+const { COPY: OUTCOME_COPY } =
+  await import('../src/pages/cora-case-review/outcome-view.js');
 // Appeals are switched off in this build, so `evaluateAccess` answers `hidden`
 // for both Appeal Sections. The panels themselves are not gated — they are pure
 // views of whatever `access` they are handed — so the tests below that are about
@@ -2185,7 +2187,10 @@ test('view: Summary is rendered from store state and configured sections', () =>
   assert.ok(panel);
   assert.equal(panel.hidden, false);
   assert.match(panel.textContent, /Summary/);
-  assert.match(panel.textContent, /Awaiting answers/);
+  assert.ok(
+    panel.textContent.includes(OUTCOME_COPY.awaitingAnswers),
+    "the Summary panel renders the Outcome view's awaiting-answer copy"
+  );
   assert.match(panel.textContent, /Case Details/);
   assert.match(panel.textContent, /Questions/);
   assert.match(panel.textContent, /Issues/);
@@ -2253,7 +2258,10 @@ test('view: Summary shows the live Outcome after every Outcome question is answe
   const panel = view.querySelector('#case-panel-summary');
   assert.equal(state.routes.caseReview.snapshot?.allAnswered, true);
   assert.match(panel?.textContent ?? '', /Non-compliant/);
-  assert.doesNotMatch(panel?.textContent ?? '', /Awaiting answers/);
+  assert.ok(
+    !(panel?.textContent ?? '').includes(OUTCOME_COPY.awaitingAnswers),
+    "the Summary panel removes the Outcome view's awaiting-answer copy once answered"
+  );
 });
 
 test('view: Summary applies empty config defaults and incomplete snapshots stay inert', () => {
@@ -2273,7 +2281,10 @@ test('view: Summary applies empty config defaults and incomplete snapshots stay 
     id: 'summary',
   });
   const view = renderShippedState(state).container;
-  assert.match(view.textContent, /Awaiting answers/);
+  assert.ok(
+    view.textContent.includes(OUTCOME_COPY.awaitingAnswers),
+    "the Summary uses the Outcome view's awaiting-answer copy with default config"
+  );
 
   const incomplete = {
     ...minimalSummarySnapshot,

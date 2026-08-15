@@ -8,8 +8,13 @@ import { makeCaseRow } from './helpers/fixtures.js';
 installDom();
 /** @type {any} */ (globalThis).location = { hash: '' };
 
-const { PAGE_SIZE, appealColumns, controlsAppealsView, fetchOpenAppeals } =
-  await import('../src/pages/dashboard/controls-view.js');
+const {
+  COPY,
+  PAGE_SIZE,
+  appealColumns,
+  controlsAppealsView,
+  fetchOpenAppeals,
+} = await import('../src/pages/dashboard/controls-view.js');
 
 /** @param {string} id @param {string} at */
 function row(id, at) {
@@ -79,7 +84,7 @@ test('Controls appeal descriptors render through the generic table and keep navi
     { key: 'raised', dir: 'asc' },
     (key) => sorts.push(key)
   );
-  assert.equal(view.querySelector('h2')?.textContent, 'Outstanding Appeals');
+  assert.equal(view.querySelector('h2')?.textContent, COPY.heading);
   assert.equal(view.querySelector('table')?.getAttribute('role'), 'grid');
   assert.deepEqual(
     appealColumns().map((column) => column.key),
@@ -97,13 +102,13 @@ test('Controls appeal descriptors render through the generic table and keep navi
   // Reference and Case Type are interactive here as on every other Case table;
   // `Raised` keeps the table's default sort, unmoved.
   assert.deepEqual(tableHeaders(view), [
-    ['Reference', 'cora-col-reference', 'none', true],
-    ['Case Type', 'cora-col-caseType', 'none', true],
-    ['Responsible Party', 'cora-col-responsibleParty', 'none', false],
-    ['Appellant', 'cora-col-appellant', 'none', false],
-    ['Raised', 'cora-col-raised', 'ascending', true],
-    ['Appellant rationale', 'cora-col-rationale', 'none', false],
-    ['Actions', 'cora-col-actions', 'none', false],
+    ['Reference', 'none', true],
+    ['Case Type', 'none', true],
+    ['Responsible Party', 'none', false],
+    ['Appellant', 'none', false],
+    ['Raised', 'ascending', true],
+    ['Appellant rationale', 'none', false],
+    ['Actions', 'none', false],
   ]);
 
   fireEvent(getByRole(view, 'button', { name: 'Raised' }), 'click');
@@ -114,15 +119,6 @@ test('Controls appeal descriptors render through the generic table and keep navi
   assert.equal(open.className, 'cora-case-open-btn');
   open.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
   assert.equal(location.hash, '#/case/complaints/c1');
-
-  // Existing DOM-stub debt retained until the shared debt ledger can move.
-  const table = /** @type {any} */ (view.querySelector('table'));
-  assert.ok(table._children);
-  assert.ok(table._children.length > 0);
-  assert.ok(table._listeners.keydown);
-  assert.ok(table._listeners.keydown.length === 1);
-  assert.ok(/** @type {any} */ (open)._listeners.click);
-  assert.ok(/** @type {any} */ (open)._listeners.click.length === 1);
 });
 
 test('Controls appeals: Reference and Case Type sort for real — click, report, sorted render', () => {

@@ -8,6 +8,7 @@ installDom();
 
 const {
   ActionCentreView,
+  COPY,
   PAGE_SIZE,
   initialActionCentreState,
   loadActionCentreCounts,
@@ -132,7 +133,7 @@ test('Action Centre pure view renders descriptor rows and exposes store callback
     onShowMore: (item) => actions.push(`more:${item.id}`),
     onOpenCase: (item) => actions.push(`open:${item.id}`),
   });
-  assert.equal(view.querySelector('h2')?.textContent, 'Action Centre');
+  assert.equal(view.querySelector('h2')?.textContent, COPY.heading);
   assert.match(view.textContent, /2 cases · grouped by reason/);
   assert.equal(
     view.querySelector('a')?.getAttribute('href'),
@@ -172,11 +173,6 @@ test('Action Centre pure view renders descriptor rows and exposes store callback
   more?._fire('click', {});
   assert.equal(actions.length, 15);
   assert.ok(actions.includes(`group:${reason.id}`));
-
-  // Existing DOM-stub debt retained until the shared debt ledger can move.
-  assert.ok(/** @type {any} */ (view)._children);
-  assert.ok(/** @type {any} */ (view)._children.length > 0);
-  assert.ok(/** @type {any} */ (view)._children[0]);
 });
 
 test('Action Centre pure view renders collapsed peeks and the true empty state', () => {

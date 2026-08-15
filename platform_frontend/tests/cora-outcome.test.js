@@ -5,7 +5,7 @@ import { findByClass, installDom } from './_dom-stub.js';
 
 installDom();
 
-const { Outcome } =
+const { COPY, Outcome } =
   await import('../src/pages/cora-case-review/outcome-view.js');
 
 /** @type {import('../src/sharepoint-client.js').OutcomeOption[]} */
@@ -26,7 +26,7 @@ test('Outcome waits until all answers and an evaluator are available', () => {
       outcomeOptions: OPTIONS,
     });
     assert.equal(nodes[0].textContent, 'Outcome');
-    assert.equal(nodes[1].textContent, 'Awaiting answers…');
+    assert.equal(nodes[1].textContent, COPY.awaitingAnswers);
     assert.equal(
       /** @type {HTMLElement} */ (nodes[1]).className,
       'cora-outcome-indeterminate'

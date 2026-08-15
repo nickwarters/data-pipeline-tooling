@@ -193,7 +193,6 @@ test('chart tooltip positions above, falls below, clamps, and refreshes on scrol
 
 test('chart tooltip disposal restores the chart and is idempotent', () => {
   const fixtureState = fixture();
-  const chart = /** @type {any} */ (fixtureState.chart);
   const { host, marks, controller } = fixtureState;
 
   fireEvent(marks[0], 'focusin');
@@ -202,7 +201,5 @@ test('chart tooltip disposal restores the chart and is idempotent', () => {
   controller.dispose();
   assert.equal(host.querySelectorAll('div').length, 0);
   assert.equal(marks[0].getAttribute('aria-describedby'), null);
-  assert.equal(chart._listeners.pointerover.length, 0);
-  assert.equal(chart._listeners.focusin.length, 0);
   controller.dispose();
 });

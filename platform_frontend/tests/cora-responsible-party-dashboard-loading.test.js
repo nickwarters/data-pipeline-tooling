@@ -88,12 +88,6 @@ test('Responsible Party slice cleanup suppresses a late fetch result', async () 
   resolveRows([]);
   await Promise.resolve();
   assert.deepEqual(actions, []);
-
-  const view = slice.view(slice.initialState, { dispatch: () => {} });
-  // Existing DOM-stub debt retained until the shared debt ledger can move.
-  assert.ok(/** @type {any} */ (view)._children);
-  assert.ok(/** @type {any} */ (view)._children.length > 0);
-  assert.ok(/** @type {any} */ (view)._children[0]);
 });
 
 test('Responsible Party reducer owns loaded rows, filters, and both table sorts', () => {

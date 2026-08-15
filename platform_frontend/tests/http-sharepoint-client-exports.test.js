@@ -119,12 +119,6 @@ test('HttpSharePointClient: getExportHash returns null when the artifact is not 
   assert.equal(hash, null);
 });
 
-test('HttpSharePointClient: assignable to SharePointClient interface (includes getExportHash)', () => {
-  /** @type {import('../src/sharepoint-client.js').SharePointClient} */
-  const c = new HttpSharePointClient({ webUrl: WEB_URL });
-  assert.equal(typeof c.getExportHash, 'function');
-});
-
 // --- getVersionedExport ---
 
 test('HttpSharePointClient: getVersionedExport reads the hash-named artifact and returns its parsed body', async () => {
@@ -195,12 +189,6 @@ test('HttpSharePointClient: getVersionedExport returns null on network error', a
   });
   const result = await client.getVersionedExport('example-review', 'abc');
   assert.equal(result, null);
-});
-
-test('HttpSharePointClient: assignable to SharePointClient interface (includes getVersionedExport)', () => {
-  /** @type {import('../src/sharepoint-client.js').SharePointClient} */
-  const c = new HttpSharePointClient({ webUrl: WEB_URL });
-  assert.equal(typeof c.getVersionedExport, 'function');
 });
 
 // --- strictness: listName is mandatory (no default Case list) ---

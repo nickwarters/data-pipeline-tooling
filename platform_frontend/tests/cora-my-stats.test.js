@@ -1,9 +1,16 @@
 // @ts-check
-import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
 import { makeChrome } from './helpers/fixtures.js';
+import {
+  fireEvent,
+  getByRole,
+  getByText,
+  queryAllByRole,
+  queryAllByText,
+  queryByRole,
+} from './helpers/semantic-dom.js';
 
 installDom();
 
@@ -19,10 +26,6 @@ const { toLocalDateKey } = await import('../src/lib/local-calendar.js');
  * browser-calendar snapshot is the same date wherever the suite runs.
  */
 const FIXED_NOW = new Date(2026, 7, 10, 12);
-const CORA_STYLES = readFileSync(
-  new URL('../src/styles/cora-styles.css', import.meta.url),
-  'utf8'
-);
 const RANGES = buildStatsRanges(FIXED_NOW);
 
 /** @param {Record<string, unknown>} [overrides] */
@@ -88,33 +91,16 @@ function viewState(overrides = {}) {
   });
 }
 
-/** @param {any} root @param {(node: any) => void} visit */
-function walk(root, visit) {
-  visit(root);
-  for (const child of root.childNodes ?? []) walk(child, visit);
-}
-
-/**
- * SVG marks carry their class as an attribute, so they are found by walking
- * rather than through the DOM stub's HTML class selectors.
- *
- * @param {any} view
- * @returns {string[]}
- */
+/** @param {any} view @returns {string[]} */
 function markLabels(view) {
-  /** @type {string[]} */
-  const labels = [];
-  walk(view, (node) => {
-    if (
-      node
-        .getAttribute?.('class')
-        ?.split(/\s+/)
-        .includes('cora-grouped-bar-chart__bar')
-    ) {
-      labels.push(node.getAttribute('aria-label'));
-    }
+  const chart = getByRole(view, 'group', {
+    name: /reportable cases by .*week/i,
   });
-  return labels;
+  return queryAllByRole(chart, 'img', {
+    name: /Settled|Provisional/,
+  })
+    .map((mark) => mark.getAttribute('aria-label'))
+    .filter((label) => label !== 'Settled' && label !== 'Provisional');
 }
 
 /** @param {any} view @returns {Record<string, string>} */
@@ -139,52 +125,46 @@ test('my stats view: the first paint says the report is being fetched', () => {
     viewState({ feedStatus: 'loading', reportFeed: null })
   );
 
-  assert.equal(view.tagName, 'MAIN');
-  assert.equal(view.querySelector('h1')?.textContent, 'My Stats');
   assert.equal(view.getAttribute('aria-busy'), 'true');
-  assert.equal(
-    view.querySelector('.cora-loading')?.textContent,
-    'Loading your report…'
-  );
+  assert.ok(getByText(view, /loading/i));
 });
 
 test('my stats view: an unpublished report is not an empty one', () => {
   const view = myStatsView(viewState({ reportFeed: null }));
 
-  assert.equal(
-    view.querySelector('.cora-my-stats-no-report')?.textContent,
-    'No report has been published for you yet.'
-  );
+  assert.ok(getByText(view, /no report/i));
   // Distinguishable from a published report with nothing in the range.
-  assert.equal(view.querySelector('.cora-my-stats-breakdown-table'), null);
-  assert.equal(markLabels(view).length, 0);
+  assert.equal(queryByRole(view, 'table'), null);
+  assert.equal(
+    queryByRole(view, 'group', { name: /reportable cases by/i }),
+    null
+  );
   assert.equal(view.getAttribute('aria-busy'), 'false');
 });
 
 test('my stats view: a published report with nothing in range keeps the table', () => {
   const view = myStatsView(viewState({ reportFeed: envelope }));
 
-  assert.equal(view.querySelector('.cora-my-stats-no-report'), null);
-  const table = view.querySelector('.cora-my-stats-breakdown-table');
-  assert.ok(table);
-  assert.equal(table.querySelector('tbody')?.childNodes.length, 8);
+  const table = getByRole(view, 'table', {
+    name: /week case type breakdown/i,
+  });
+  assert.ok(
+    queryAllByRole(table, 'row').length > 1,
+    'an empty range still renders Case Type rows, not an empty table'
+  );
+  assert.ok(getByRole(view, 'group', { name: /reportable cases by .*week/i }));
 });
 
 test('my stats view: a report that could not be read says so', () => {
   const view = myStatsView(viewState({ feedStatus: 'failed' }));
 
-  const error = view.querySelector('.cora-my-stats-error');
-  assert.equal(error?.getAttribute('role'), 'alert');
-  assert.match(error?.textContent, /could not be loaded/);
+  assert.match(getByRole(view, 'alert').textContent, /could not be loaded/i);
 });
 
 test('my stats view: a selection with no matching range falls back rather than throwing', () => {
   const view = myStatsView(viewState({ selectedRange: 'decade' }));
 
-  assert.equal(
-    view.querySelector('.cora-my-stats-empty')?.textContent,
-    'No data yet.'
-  );
+  assert.ok(getByText(view, /no data/i));
 });
 
 // ── The page with a report ────────────────────────────────────────────────
@@ -192,44 +172,26 @@ test('my stats view: a selection with no matching range falls back rather than t
 test('my stats view: the table, chart and figures are all rendered', () => {
   const view = myStatsView(viewState());
 
-  const topRow = view.querySelector('.cora-my-stats-top-row');
-  assert.ok(topRow);
-  const topRowChildren = /** @type {any[]} */ (Array.from(topRow.childNodes));
-  assert.equal(topRowChildren[0]?.className, 'cora-my-stats-controls-column');
-  assert.equal(
-    topRowChildren[0]?.querySelector('.cora-my-stats-breakdown-table'),
-    null
-  );
-  assert.equal(topRowChildren[1]?.tagName, 'svg');
-  assert.ok(view.querySelector('.cora-my-stats-headline'));
-  assert.ok(view.querySelector('.cora-my-stats-breakdown-table'));
-  const mainChildren = /** @type {any[]} */ (Array.from(view.childNodes));
-  const headlineIndex = mainChildren.findIndex((node) =>
-    node.className?.includes('cora-my-stats-headline')
-  );
-  const tableIndex = mainChildren.findIndex((node) =>
-    node.className?.includes('cora-my-stats-breakdown')
-  );
-  assert.equal(tableIndex, headlineIndex + 1);
+  assert.ok(getByRole(view, 'group', { name: 'Stats range' }));
+  assert.ok(getByRole(view, 'group', { name: /reportable cases by .*week/i }));
+  assert.ok(getByRole(view, 'table', { name: /week case type breakdown/i }));
+  assert.ok(getByText(view, 'Headline figures'));
 });
 
 test('my stats view: range controls expose selection and dispatch changes', () => {
   /** @type {any[]} */
   const actions = [];
   const view = myStatsView(viewState(), (action) => actions.push(action));
-  const controls = view.querySelector('.cora-my-stats-range-controls');
-  const buttons = controls?.querySelectorAll('button') ?? [];
+  const controls = getByRole(view, 'group', { name: 'Stats range' });
+  const week = getByRole(controls, 'button', { name: 'Week' });
+  const month = getByRole(controls, 'button', { name: 'Month' });
+  const threeMonths = getByRole(controls, 'button', { name: '3 months' });
+  assert.ok(getByRole(controls, 'button', { name: '12 months' }));
 
-  assert.equal(controls?.getAttribute('role'), 'group');
-  assert.equal(controls?.getAttribute('aria-label'), 'Stats range');
-  assert.deepEqual(
-    Array.from(buttons, (button) => button.textContent),
-    ['Week', 'Month', '3 months', '12 months']
-  );
-  assert.equal(buttons[0]?.getAttribute('aria-pressed'), 'true');
-  assert.equal(buttons[1]?.getAttribute('aria-pressed'), 'false');
+  assert.equal(week.getAttribute('aria-pressed'), 'true');
+  assert.equal(month.getAttribute('aria-pressed'), 'false');
 
-  buttons[2]?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
+  fireEvent(threeMonths, 'click');
   assert.deepEqual(actions, [
     { type: 'my-stats/range-selected', range: '3-months' },
   ]);
@@ -297,11 +259,8 @@ test('my stats view: a failed live read is noted without hiding the published ha
     viewState({ tail: { status: 'failed', from: null, typedCounts: {} } })
   );
 
-  assert.match(
-    view.querySelector('.cora-my-stats-tail-note')?.textContent ?? '',
-    /could not be counted just now/
-  );
-  assert.ok(view.querySelector('.cora-my-stats-headline'));
+  assert.ok(getByText(view, /could not be counted just now/i));
+  assert.ok(getByRole(view, 'group', { name: /reportable cases by .*week/i }));
   assert.ok(markLabels(view).some((label) => label.includes('Settled')));
   assert.equal(figureValues(view)['Total *'], '10');
 });
@@ -314,16 +273,18 @@ test('my stats view: a report older than the clamp says which days are missing',
     })
   );
 
-  assert.match(
-    view.querySelector('.cora-my-stats-tail-note')?.textContent ?? '',
-    /Only the last 10 days of unpublished work are counted here/
+  assert.ok(
+    getByText(view, /only the last 10 days of unpublished work are counted/i)
   );
 });
 
 test('my stats view: a live read that reached the report leaves no note', () => {
   const view = myStatsView(viewState());
 
-  assert.equal(view.querySelector('.cora-my-stats-tail-note'), null);
+  assert.equal(
+    queryAllByText(view, /unpublished work are counted here/i).length,
+    0
+  );
 });
 
 test('my stats view: the page is busy while the live read is in flight', () => {
@@ -332,36 +293,6 @@ test('my stats view: the page is busy while the live read is in flight', () => {
   );
 
   assert.equal(view.getAttribute('aria-busy'), 'true');
-});
-
-test('my stats layout: the composed row and the figures both stack responsively', () => {
-  const desktopRule = CORA_STYLES.match(
-    /\[data-cora-root\]\s+\.cora-my-stats-top-row\s*\{([^}]*)\}/
-  )?.[1];
-
-  assert.ok(desktopRule);
-  assert.match(desktopRule, /display:\s*grid/);
-  assert.match(
-    desktopRule,
-    /grid-template-columns:\s*max-content\s+minmax\(0,\s*1fr\)/
-  );
-  assert.match(
-    CORA_STYLES,
-    /\.cora-my-stats-range-button\[aria-pressed='true'\]/
-  );
-  assert.match(CORA_STYLES, /\.cora-my-stats-controls-column\s*\{/);
-  assert.match(
-    CORA_STYLES,
-    /\[data-cora-root\]\s+\.cora-my-stats-headline__figures\s*\{[^}]*grid-template-columns:\s*repeat\(4,/
-  );
-  assert.match(
-    CORA_STYLES,
-    /@media\s*\(max-width:\s*52rem\)[\s\S]*?\.cora-my-stats-top-row\s*\{[\s\S]*?grid-template-columns:\s*1fr/
-  );
-  assert.match(
-    CORA_STYLES,
-    /@media\s*\(max-width:\s*52rem\)[\s\S]*?\.cora-my-stats-headline__figures\s*\{[\s\S]*?repeat\(2,/
-  );
 });
 
 // ── The slice ─────────────────────────────────────────────────────────────
@@ -927,6 +858,8 @@ test('my stats route render owns the chart tooltip lifecycle', () => {
   slice.render(container, withReport, tools);
   const firstChart = container.querySelector('svg.cora-grouped-bar-chart');
   assert.ok(firstChart);
+  const staleMark = firstChart.querySelector('[data-cora-chart-mark="true"]');
+  assert.ok(staleMark);
   assert.ok(container.querySelector('.cora-my-stats-top-row'));
   assert.equal(routeContext.appEl.querySelectorAll('div').length, 1);
 
@@ -938,10 +871,8 @@ test('my stats route render owns the chart tooltip lifecycle', () => {
   const secondChart = container.querySelector('svg.cora-grouped-bar-chart');
   assert.ok(secondChart);
   assert.notEqual(secondChart, firstChart);
-  assert.equal(
-    /** @type {any} */ (firstChart)._listeners.pointerover.length,
-    0
-  );
+  fireEvent(staleMark, 'pointerover');
+  assert.equal(staleMark.getAttribute('aria-describedby'), null);
   assert.equal(routeContext.appEl.querySelectorAll('div').length, 1);
 
   const dispose = slice.start(

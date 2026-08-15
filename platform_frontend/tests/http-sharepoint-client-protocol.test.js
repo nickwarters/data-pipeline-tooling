@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { HttpSharePointClient } from '../src/services/http-sharepoint-client.js';
 import {
   WEB_URL,
+  caseRowResponse,
   digestResponse,
   makeFetch,
   makeSleep,
@@ -28,21 +29,10 @@ test('HttpSharePointClient: form digest is fetched lazily and reused across writ
     {
       when: (c) => c.method === 'GET',
       respond: () =>
-        new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'X',
-            Status: 'In-progress',
-            AssignedReviewerId: 'u1',
-            ResponsiblePartyId: 'u2',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: '',
-            CompletedAt: null,
-            CaseType: 'example-review',
-          }),
-          { status: 200, headers: { ETag: '"new-etag"' } }
-        ),
+        new Response(JSON.stringify(caseRowResponse({ Title: 'X' })), {
+          status: 200,
+          headers: { ETag: '"new-etag"' },
+        }),
     },
   ]);
   const client = new HttpSharePointClient({
@@ -91,18 +81,7 @@ test('HttpSharePointClient: 403 on write triggers digest refresh and one retry',
       when: (c) => c.method === 'GET',
       respond: () =>
         new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'X',
-            Status: 'In-progress',
-            AssignedReviewerId: 'u1',
-            ResponsiblePartyId: 'u2',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: 'done',
-            CompletedAt: null,
-            CaseType: 'example-review',
-          }),
+          JSON.stringify(caseRowResponse({ Title: 'X', Notes: 'done' })),
           { status: 200, headers: { ETag: '"after-refresh"' } }
         ),
     },
@@ -203,21 +182,10 @@ test('HttpSharePointClient: 429 with Retry-After waits the indicated seconds bef
             headers: { 'Retry-After': '3' },
           });
         }
-        return new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'OK',
-            Status: 'In-progress',
-            AssignedReviewerId: 'u1',
-            ResponsiblePartyId: 'u2',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: '',
-            CompletedAt: null,
-            CaseType: 'example-review',
-          }),
-          { status: 200, headers: { ETag: '"ok"' } }
-        );
+        return new Response(JSON.stringify(caseRowResponse({ Title: 'OK' })), {
+          status: 200,
+          headers: { ETag: '"ok"' },
+        });
       },
     },
   ]);
@@ -245,21 +213,10 @@ test('HttpSharePointClient: 429 without Retry-After falls back to a default dela
       respond: () => {
         getCount++;
         if (getCount === 1) return new Response('throttled', { status: 429 });
-        return new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'OK',
-            Status: 'In-progress',
-            AssignedReviewerId: 'u1',
-            ResponsiblePartyId: 'u2',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: '',
-            CompletedAt: null,
-            CaseType: 'example-review',
-          }),
-          { status: 200, headers: { ETag: '"ok"' } }
-        );
+        return new Response(JSON.stringify(caseRowResponse({ Title: 'OK' })), {
+          status: 200,
+          headers: { ETag: '"ok"' },
+        });
       },
     },
   ]);
@@ -284,27 +241,15 @@ test('HttpSharePointClient: 429 with garbage Retry-After string falls back to de
       respond: () => {
         getCount++;
         if (getCount === 1) {
-          // Non-numeric, non-date Retry-After → parseRetryAfter returns DEFAULT_THROTTLE_MS (line 286)
           return new Response('throttled', {
             status: 429,
             headers: { 'Retry-After': 'not-a-number-or-date' },
           });
         }
-        return new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'OK',
-            Status: 'In-progress',
-            AssignedReviewerId: 'u1',
-            ResponsiblePartyId: 'u2',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: '',
-            CompletedAt: null,
-            CaseType: 'example-review',
-          }),
-          { status: 200, headers: { ETag: '"ok"' } }
-        );
+        return new Response(JSON.stringify(caseRowResponse({ Title: 'OK' })), {
+          status: 200,
+          headers: { ETag: '"ok"' },
+        });
       },
     },
   ]);
@@ -341,21 +286,10 @@ test('HttpSharePointClient: 429 with HTTP-date Retry-After waits until that time
             headers: { 'Retry-After': httpDate },
           });
         }
-        return new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'OK',
-            Status: 'In-progress',
-            AssignedReviewerId: 'u1',
-            ResponsiblePartyId: 'u2',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: '',
-            CompletedAt: null,
-            CaseType: 'example-review',
-          }),
-          { status: 200, headers: { ETag: '"ok"' } }
-        );
+        return new Response(JSON.stringify(caseRowResponse({ Title: 'OK' })), {
+          status: 200,
+          headers: { ETag: '"ok"' },
+        });
       },
     },
   ]);
@@ -443,40 +377,7 @@ test('HttpSharePointClient: defaults to a real setTimeout-backed sleep when slee
   }
 });
 
-// --- type-shape compile-time check ---
-
-test('HttpSharePointClient: assignable to SharePointClient interface', () => {
-  /** @type {import('../src/sharepoint-client.js').SharePointClient} */
-  const c = new HttpSharePointClient({ webUrl: WEB_URL });
-  assert.equal(typeof c.getCase, 'function');
-  assert.equal(typeof c.patchCase, 'function');
-  assert.equal(typeof c.listCases, 'function');
-  assert.equal(typeof c.getCurrentUserGroups, 'function');
-  assert.equal(typeof c.getCurrentUser, 'function');
-  assert.equal(typeof c.searchPeople, 'function');
-});
-
-// --- listCases overdue OData filter ---
-
-test('HttpSharePointClient: _request defaults to an empty init object when none is supplied', async () => {
-  const { fetch, calls } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(JSON.stringify({ value: [] }), { status: 200 }),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
-
-  const body = await client._request(WEB_URL + '/_api/web/lists');
-  assert.deepEqual(body, { value: [] });
-  assert.equal(calls.length, 1);
-});
-
-test('HttpSharePointClient: _refreshDigest reads the verbose d.GetContextWebInformation.FormDigestValue envelope', async () => {
+test('HttpSharePointClient: patchCase accepts a digest from the verbose contextinfo envelope', async () => {
   const { fetch, calls } = makeFetch([
     {
       when: (c) => c.url.endsWith('/_api/contextinfo'),
@@ -499,16 +400,7 @@ test('HttpSharePointClient: _refreshDigest reads the verbose d.GetContextWebInfo
       when: (c) => c.method === 'GET',
       respond: () =>
         new Response(
-          JSON.stringify({
-            Id: 'case-1',
-            Title: 'T',
-            Status: 'In-progress',
-            Answers: '{}',
-            Conversation: '[]',
-            Notes: 'n',
-            CompletedAt: null,
-            CaseType: 'example-review',
-          }),
+          JSON.stringify(caseRowResponse({ Title: 'T', Notes: 'n' })),
           { status: 200, headers: { ETag: '"v2"' } }
         ),
     },
@@ -526,8 +418,8 @@ test('HttpSharePointClient: _refreshDigest reads the verbose d.GetContextWebInfo
   assert.equal(patch?.headers['x-requestdigest'], 'verbose-digest');
 });
 
-test('HttpSharePointClient: _refreshDigest throws when the contextinfo response carries no FormDigestValue', async () => {
-  const { fetch } = makeFetch([
+test('HttpSharePointClient: patchCase fails before PATCH when contextinfo carries no FormDigestValue', async () => {
+  const { fetch, calls } = makeFetch([
     {
       when: (c) => c.url.endsWith('/_api/contextinfo'),
       respond: () => new Response(JSON.stringify({}), { status: 200 }),
@@ -538,12 +430,18 @@ test('HttpSharePointClient: _refreshDigest throws when the contextinfo response 
     fetchImpl: fetch,
   });
 
-  // patchCase's own try/catch would swallow the throw into {ok:false}, so
-  // exercise the digest refresh directly to assert the throw itself.
-  await assert.rejects(
-    () => client._refreshDigest(),
-    /FormDigestValue missing/
+  const result = await client.patchCase('case-1', { notes: 'x' }, '"v1"', {
+    listName: 'Cases-ExampleReview',
+  });
+
+  assert.deepEqual(result, { ok: false, status: 500 });
+  assert.equal(
+    calls.filter(
+      (c) => c.method === 'POST' && c.url.endsWith('/_api/contextinfo')
+    ).length,
+    1
   );
+  assert.equal(calls.filter((c) => c.method === 'PATCH').length, 0);
 });
 
 test('HttpSharePointClient: _absolute prefixes a relative path that does not start with a slash', async () => {
