@@ -80,6 +80,11 @@ test('complaints: Case Type descriptors declare no table or dashboard compositio
   assert.equal('caseTableColumns' in config, false);
 });
 
+test('complaints: offers Group Outcome without naming authored group exceptions', () => {
+  assert.equal(config.allowBulkOutcome, true);
+  assert.deepEqual(Object.keys(config.questionGroups ?? {}), []);
+});
+
 // --- fixtures ---
 
 test('complaints fixtures: an outstanding and a completed Complaints Case exist', () => {
