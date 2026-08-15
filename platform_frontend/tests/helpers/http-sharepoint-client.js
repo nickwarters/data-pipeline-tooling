@@ -8,45 +8,48 @@ import { HttpSharePointClient } from '../../src/services/http-sharepoint-client.
  * @property {string} field
  * @property {string} column
  * @property {string} idColumn
- * @property {''|null} clearValue
+ * @property {Array<''|null>} clearValues
  * @property {''|undefined} emptyValue
  */
 
+// Account-valued fields use their public empty-string spelling. Nullable
+// manager fields accept both spellings of nobody and must normalize either to
+// a SharePoint null lookup id; voidedBy is nullable but has no empty-string UI.
 /** @type {PersonColumn[]} */
 export const PERSON_COLUMNS = [
   {
     field: 'assignedReviewer',
     column: 'AssignedReviewer',
     idColumn: 'AssignedReviewerId',
-    clearValue: '',
+    clearValues: [''],
     emptyValue: '',
   },
   {
     field: 'responsibleParty',
     column: 'ResponsibleParty',
     idColumn: 'ResponsiblePartyId',
-    clearValue: '',
+    clearValues: [''],
     emptyValue: '',
   },
   {
     field: 'assignedReviewerManager',
     column: 'AssignedReviewerManager',
     idColumn: 'AssignedReviewerManagerId',
-    clearValue: null,
+    clearValues: [null, ''],
     emptyValue: undefined,
   },
   {
     field: 'responsiblePartyManager',
     column: 'ResponsiblePartyManager',
     idColumn: 'ResponsiblePartyManagerId',
-    clearValue: null,
+    clearValues: [null, ''],
     emptyValue: undefined,
   },
   {
     field: 'voidedBy',
     column: 'VoidedBy',
     idColumn: 'VoidedById',
-    clearValue: null,
+    clearValues: [null],
     emptyValue: undefined,
   },
 ];

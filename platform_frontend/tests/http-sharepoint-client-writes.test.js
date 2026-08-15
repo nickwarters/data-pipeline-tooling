@@ -349,7 +349,7 @@ test('HttpSharePointClient: patchCase can target a supplied SharePoint list', as
   );
 });
 
-for (const { field, column, idColumn, clearValue } of PERSON_COLUMNS) {
+for (const { field, column, idColumn, clearValues } of PERSON_COLUMNS) {
   test(`HttpSharePointClient: patchCase resolves ${field} to its numeric id`, async () => {
     const { client, calls } = personWriteClient();
 
@@ -377,27 +377,30 @@ for (const { field, column, idColumn, clearValue } of PERSON_COLUMNS) {
     assert.equal(column in body, false, 'the account string is never written');
   });
 
-  test(`HttpSharePointClient: patchCase clears ${field} with null`, async () => {
-    const { client, calls } = personWriteClient();
+  for (const clearValue of clearValues) {
+    const spelling = clearValue === null ? 'null' : 'an empty string';
+    test(`HttpSharePointClient: patchCase clears ${field} with ${spelling}`, async () => {
+      const { client, calls } = personWriteClient();
 
-    await client.patchCase(
-      'case-1',
-      /** @type {any} */ ({ [field]: clearValue }),
-      '"v1"',
-      { listName: 'Cases-ExampleReview' }
-    );
+      await client.patchCase(
+        'case-1',
+        /** @type {any} */ ({ [field]: clearValue }),
+        '"v1"',
+        { listName: 'Cases-ExampleReview' }
+      );
 
-    assert.equal(
-      calls.find((call) => call.url.endsWith('/_api/web/ensureuser')),
-      undefined,
-      'there is no account to resolve'
-    );
-    const body = JSON.parse(
-      String(calls.find((call) => call.method === 'PATCH')?.body)
-    );
-    assert.equal(body[idColumn], null);
-    assert.equal(idColumn in body, true, 'the clear is not omitted');
-  });
+      assert.equal(
+        calls.find((call) => call.url.endsWith('/_api/web/ensureuser')),
+        undefined,
+        'there is no account to resolve'
+      );
+      const body = JSON.parse(
+        String(calls.find((call) => call.method === 'PATCH')?.body)
+      );
+      assert.equal(body[idColumn], null);
+      assert.equal(idColumn in body, true, 'the clear is not omitted');
+    });
+  }
 }
 
 test('HttpSharePointClient: patchCase throws when called without a listName', async () => {
