@@ -5,21 +5,22 @@ of this one encoding is ``platform_frontend/src/services/account-name.js``; keep
 the two in step.
 """
 
-import pandas as pd
-
 CLAIMS_PREFIX = "i:0#.w|"
-AD_DOMAIN = "CONTOSO"
 
-__all__ = ["CLAIMS_PREFIX", "AD_DOMAIN", "to_bare_account"]
+__all__ = ["CLAIMS_PREFIX", "to_bare_account"]
 
 
 def to_bare_account(value: object) -> str:
     """Reduce a login to its bare account name, lower-cased.
 
+    Any ``DOMAIN\\`` segment is stripped, not just this farm's: the segment
+    after the last backslash is the account name whatever precedes it.
+
     Blank, ``None`` and NaN all reduce to ``""`` — never a match, because two
-    people with no login are not the same person.
+    people with no login are not the same person. ``value != value`` is the
+    NaN test, so nothing here reaches behind the ``Dataset`` seam for one.
     """
-    if value is None or (not isinstance(value, str) and pd.isna(value)):
+    if value is None or value != value:
         return ""
     text = str(value).strip()
     if text.startswith(CLAIMS_PREFIX):

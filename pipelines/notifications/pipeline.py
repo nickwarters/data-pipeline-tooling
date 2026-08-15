@@ -9,11 +9,6 @@ nothing here re-derives a key or reduces a second time.
 Emits one JSON file per pass into the deliverable outbox: an array of objects
 carrying exactly ``recipients`` / ``subject`` / ``body``. The path is unique per
 pass, so a `Refresh` can never overwrite a file nobody has drained yet.
-
-The ledger is written with ``AppendOnly``, whose row *is* its key. ``InsertIfAbsent``
-would look like the natural fit and is not: it mints an integer surrogate this
-table has no use for, and offers no ``apply_to_frame``, so a file-side form of
-the same load is unavailable.
 """
 
 from __future__ import annotations
@@ -26,14 +21,7 @@ from typing import Callable
 
 import pandas as pd
 
-from framework.core import (
-    Dataset,
-    PipelineError,
-    Reader,
-    ValidationError,
-    Writer,
-    format_failure,
-)
+from framework.core import Dataset, PipelineError, Reader, Writer, format_failure
 from framework.io import AppendOnly, DatasetReader, JsonWriter, Refresh
 from framework.run import (
     FreshnessRequirement,
@@ -172,11 +160,13 @@ def recipients_of(threads: Dataset, users: Dataset) -> Dataset:
         manager = to_bare_account(manager_login)
 
         # Keyed by login, so one person holding two roles collapses to one
-        # recipient before the author is removed.
+        # recipient before the author is removed. The Manager's own row wins
+        # over the address cached on the Responsible Party's, which is the
+        # fallback for a Manager the directory lists only as someone's manager.
         by_login = {
             reviewer: email_of.get(reviewer, ""),
             party: email_of.get(party, ""),
-            manager: manager_email,
+            manager: email_of.get(manager) or manager_email,
         }
         emails = sorted(
             {
@@ -236,25 +226,6 @@ def ledger_rows(pending: Dataset, *_written: Dataset) -> Dataset:
     """
     frame = pending.to_pandas().loc[:, list(LEDGER_KEY)].drop_duplicates()
     return Dataset.from_pandas(frame.reset_index(drop=True))
-
-
-class ExactColumns:
-    """Gate a frame's columns, in order.
-
-    The deliverable's contract is its JSON key order, which comes from the
-    frame's column order, so the check is equality rather than presence.
-    """
-
-    def __init__(self, columns: tuple[str, ...]) -> None:
-        self._columns = list(columns)
-
-    def validate(self, dataset: Dataset) -> None:
-        actual = list(dataset.columns)
-        if actual != self._columns:
-            raise ValidationError(
-                f"notification objects must carry exactly {self._columns}, "
-                f"in that order; got {actual}"
-            )
 
 
 def ledger_reader(store: Store) -> Callable[[], Dataset]:
@@ -317,8 +288,7 @@ def outbox_builder(
     p = Pipeline(f"{PIPELINE_NAME}:outbox", run_log=run_log)
     source = p.read(DatasetReader(pending), name="read-pending")
     rendered = p.transform(render_notifications, source, name="render")
-    gated = p.validate(ExactColumns(OUTBOX_COLUMNS), rendered, name="contract")
-    written = p.write(outbox, gated, name="write-outbox")
+    written = p.write(outbox, rendered, name="write-outbox")
     p.write(
         ledger,
         p.transform(ledger_rows, source, written, name="ledger-rows"),

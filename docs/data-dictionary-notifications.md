@@ -99,7 +99,16 @@ append-only comparison spans every non-provenance column, so a non-key value
 would turn a legitimate re-present into an `AppendOnlyConflictError`. The
 reserved run-provenance column is excluded from that comparison and already
 answers *"which run first told them"*. With no non-key columns the conflict
-branch is unreachable by construction.
+branch is unreachable by construction, and re-presenting a row a previous pass
+already wrote is a no-op.
+
+`InsertIfAbsent` looks like the natural strategy for this table and is not: it
+mints an integer surrogate the ledger has no use for, and offers no
+`apply_to_frame`, so no file-side form of the same load exists.
+
+### Part C — Row checks
+
+None. The row is its key; there are no other fields for a rule to relate.
 
 ### Part D — quality notes
 
@@ -135,7 +144,11 @@ The directory extract behind every recipient. Read-only; nothing writes it.
 | `login` | `str` | No | The person's account name. Normalised through `shared/account_names.py` to the **lower-cased bare account**, so a claims-form or `DOMAIN\user` extract keys the same as a bare one. | `b.okafor` | Internal | A blank login drops the row: blank must never match blank. |
 | `email` | `str` | No | Where a notification to this person is addressed. Lower-cased. | `b.okafor@example.invalid` | PII | A blank email drops the row — an unreachable person is skipped, not substituted. |
 | `manager_login` | `str` | Yes | Who manages this person, normalised the same way. Read for the **Responsible Party's** row, to find the Responsible Party Manager. | `e.novak` | Internal | Blank is legitimate (the top of a tree); the Manager is then simply not a recipient. |
-| `manager_email` | `str` | Yes | The manager's address, so the Manager is resolvable from the Responsible Party's row alone. | `e.novak@example.invalid` | PII | Blank means the Manager cannot be told and is skipped. |
+| `manager_email` | `str` | Yes | The manager's address, so the Manager is resolvable from the Responsible Party's row alone. | `e.novak@example.invalid` | PII | The **fallback**: the Manager's own `email`, where they have a row of their own, wins. Blank on both means the Manager cannot be told and is skipped. |
+
+### Part C — Row checks
+
+None. The four fields are two independent `login`/`email` pairs.
 
 ### Part D — quality notes
 
