@@ -99,6 +99,85 @@ function state() {
   });
 }
 
+const NOOP = () => {};
+// prettier-ignore
+const EMPTY_BANK = { slug: 'empty', label: 'Empty', labels: [], outcomeOptions: [], questions: [] };
+
+/** @param {any} current @param {any} [overrides] */
+function renderBankList(current, overrides = {}) {
+  return BankList({
+    bank: current,
+    baselineQuestions: structuredClone(current.questions),
+    filters: state().filters,
+    dirty: false,
+    conditionalQuestionIds: [],
+    dispatch: NOOP,
+    addQuestion: NOOP,
+    ...overrides,
+  });
+}
+
+/** @param {string} promptValue */
+function optionPromptAlertCount(promptValue) {
+  const list = renderBankList(/** @type {any} */ (bank()));
+  const add = getByRole(list, 'button', { name: '+ option' });
+  const originalPrompt = /** @type {any} */ (globalThis).prompt;
+  const originalAlert = /** @type {any} */ (globalThis).alert;
+  let alerts = 0;
+  try {
+    /** @type {any} */ (globalThis).alert = () => alerts++;
+    /** @type {any} */ (globalThis).prompt = () => promptValue;
+    fireEvent(add, 'click');
+  } finally {
+    /** @type {any} */ (globalThis).prompt = originalPrompt;
+    /** @type {any} */ (globalThis).alert = originalAlert;
+  }
+  return alerts;
+}
+
+/** @param {any} current @param {any} [overrides] */
+function showwhenProps(current, overrides = {}) {
+  return {
+    question: current.questions[0],
+    path: [0],
+    bankQuestions: current.questions,
+    dispatch: NOOP,
+    ...overrides,
+  };
+}
+
+/** @param {any} current @param {any} overrides */
+const renderShowwhenEditor = (current, overrides) =>
+  ShowwhenEditor(showwhenProps(current, overrides));
+/** @param {any} current @param {any} leaf @param {any} [overrides] */
+const renderShowwhenLeaf = (current, leaf, overrides = {}) =>
+  ShowwhenLeaf({ ...showwhenProps(current, overrides), leaf });
+/** @param {any} current @param {any} group @param {any} [overrides] */
+const renderShowwhenGroup = (current, group, overrides = {}) =>
+  ShowwhenGroup({ ...showwhenProps(current, overrides), group });
+
+const questionAction = (/** @type {string} */ type, detail = {}) => ({
+  type: `question/${type}`,
+  questionId: 'q-1',
+  ...detail,
+});
+const outcomeAction = (/** @type {string} */ type, detail = {}) => ({
+  type: `outcome/${type}`,
+  ...detail,
+});
+
+/** @param {any} current @param {...any} actions */
+function reduce(current, ...actions) {
+  return actions.reduce(
+    (next, action) => questionBankReducer(next, action),
+    current
+  );
+}
+
+/** @param {any} current */
+const questionIds = (current) =>
+  current.cases.example.questions.map((/** @type {any} */ q) => q.id);
+
 test('QuestionCard is a pure view that emits plain actions for edits and deprecation', () => {
   /** @type {any[]} */
   const actions = [];
@@ -298,18 +377,9 @@ test('pure bank views expose every editor operation as a serialisable action', (
   };
   /** @type {any[]} */
   const actions = [];
-  const view = BankList({
-    bank: current,
-    baselineQuestions: structuredClone(current.questions),
-    filters: {
-      category: null,
-      questionGroup: null,
-      showDeprecated: true,
-      conditionalOnly: false,
-    },
+  const view = renderBankList(current, {
     dirty: true,
-    conditionalQuestionIds: [],
-    dispatch: (action) => actions.push(action),
+    dispatch: (/** @type {any} */ action) => actions.push(action),
     addQuestion: () => actions.push({ type: 'question/added' }),
   });
 
@@ -434,467 +504,319 @@ test('bank rail and dock preserve filters, grouping reorder, and drawer actions'
   assert.equal(calls.drawer, 2);
 });
 
-test('bank reducer handles every editor action without mutating prior snapshots', () => {
+test('bank reducer: editor actions do not mutate prior snapshots', async (t) => {
+  // prettier-ignore
+  const actions = [
+    ['adding a question', questionAction('added')],
+    ['moving a question within its group', questionAction('moved', { direction: 1, withinGroup: true }), ['q-2', 'q-1', 'q-3', 'q-new-4']],
+    ['changing a question group', questionAction('field-changed', { field: 'questionGroup', value: 'Changed' })],
+    ['moving a question group', { type: 'group/moved', category: 'Opening', group: 'Changed', direction: -1 }, ['q-1', 'q-2', 'q-3', 'q-new-4']],
+    ['moving a category', { type: 'category/moved', category: 'Opening', direction: 1 }],
+    ['clearing a category', questionAction('field-changed', { field: 'category', value: '' })],
+    ['changing a response type', questionAction('field-changed', { field: 'responseType', value: 'outcome' })],
+    ['toggling deprecation', questionAction('deprecation-toggled')],
+    ['duplicating a question', questionAction('duplicated'), undefined, 5],
+    ['adding a response option', questionAction('option-added', { option: 'A' })],
+    ['mapping a response option to an outcome', questionAction('option-outcome-changed', { option: 'A', outcomeId: 'fail' })],
+    ['removing a response option', questionAction('option-removed', { index: 0, option: 'A' })],
+    ['creating and assigning a label', { type: 'label/created', questionId: 'q-1', label: { id: 'lbl-a', name: 'A', color: '#000000' } }],
+    ['changing a label colour', { type: 'label/colour-changed', labelId: 'lbl-a', colour: '#ffffff' }],
+    ['unassigning a label', questionAction('label-unassigned', { labelId: 'lbl-a' })],
+    ['reassigning a label', questionAction('label-assigned', { labelId: 'lbl-a' })],
+    ['toggling free-form remediation', questionAction('free-form-remediation-toggled')],
+    ['adding a remediation action', questionAction('remediation-action-added', { action: { id: 'ra-1', text: 'Act' } })],
+    ['editing a remediation action', questionAction('remediation-action-changed', { index: 0, text: 'Changed' })],
+    ['removing a remediation action', questionAction('remediation-action-removed', { index: 0 })],
+    ['making a question conditional', questionAction('showwhen-mode-changed', { mode: 'conditional' })],
+    ['adding a show-when condition', questionAction('showwhen-condition-added', { path: [], target: 'q-2' })],
+    ['changing a show-when operator', questionAction('showwhen-leaf-changed', { path: [0], patch: { op: 'in' } })],
+    ['changing a show-when value and target', questionAction('showwhen-leaf-changed', { path: [0], patch: { value: 'Yes, No', qId: 'q-3' } })],
+    ['toggling a show-when group operator', questionAction('showwhen-group-toggled', { path: [] })],
+    ['adding a nested show-when group', questionAction('showwhen-group-added', { path: [] })],
+    ['removing a show-when node', questionAction('showwhen-node-removed', { path: [1] })],
+    ['adding an outcome', outcomeAction('added')],
+    ['changing the default outcome', outcomeAction('default-changed', { id: 'fail' })],
+    ['changing outcome wording', outcomeAction('wording-changed', { outcomeId: 'fail', wording: 'Needs work' })],
+    ['normalising an invalid outcome severity', outcomeAction('severity-changed', { outcomeId: 'fail', severity: 'not-a-number' })],
+    ['renaming an outcome', outcomeAction('renamed', { outcomeId: 'fail', id: 'needs-work' })],
+    ['removing an outcome', outcomeAction('removed', { outcomeId: 'needs-work' })],
+  ];
+
   let current = state();
-  const reduce = (/** @type {any} */ action) => {
-    const previous = current;
-    current = questionBankReducer(current, action);
-    assert.notEqual(current, previous, action.type);
-  };
-  reduce({ type: 'question/added' });
-  reduce({
-    type: 'question/field-changed',
-    questionId: 'q-1',
-    field: 'category',
-    value: '',
-  });
-  reduce({
-    type: 'question/field-changed',
-    questionId: 'q-1',
-    field: 'questionGroup',
-    value: 'Changed',
-  });
-  reduce({
-    type: 'question/field-changed',
-    questionId: 'q-1',
-    field: 'responseType',
-    value: 'outcome',
-  });
-  reduce({ type: 'question/deprecation-toggled', questionId: 'q-1' });
-  reduce({
-    type: 'question/moved',
-    questionId: 'q-1',
-    direction: 1,
-    withinGroup: true,
-  });
-  reduce({ type: 'question/duplicated', questionId: 'q-1' });
-  reduce({ type: 'category/moved', category: 'Opening', direction: 1 });
-  reduce({
-    type: 'group/moved',
-    category: 'Opening',
-    group: 'Changed',
-    direction: 1,
-  });
-  reduce({ type: 'question/option-added', questionId: 'q-1', option: 'A' });
-  reduce({
-    type: 'question/option-outcome-changed',
-    questionId: 'q-1',
-    option: 'A',
-    outcomeId: 'fail',
-  });
-  reduce({
-    type: 'question/option-removed',
-    questionId: 'q-1',
-    index: 0,
-    option: 'A',
-  });
-  reduce({
-    type: 'label/created',
-    questionId: 'q-1',
-    label: { id: 'lbl-a', name: 'A', color: '#000000' },
-  });
-  reduce({
-    type: 'label/colour-changed',
-    labelId: 'lbl-a',
-    colour: '#ffffff',
-  });
-  reduce({
-    type: 'question/label-unassigned',
-    questionId: 'q-1',
-    labelId: 'lbl-a',
-  });
-  reduce({
-    type: 'question/label-assigned',
-    questionId: 'q-1',
-    labelId: 'lbl-a',
-  });
-  reduce({
-    type: 'question/free-form-remediation-toggled',
-    questionId: 'q-1',
-  });
-  reduce({
-    type: 'question/remediation-action-added',
-    questionId: 'q-1',
-    action: { id: 'ra-1', text: 'Act' },
-  });
-  reduce({
-    type: 'question/remediation-action-changed',
-    questionId: 'q-1',
-    index: 0,
-    text: 'Changed',
-  });
-  reduce({
-    type: 'question/remediation-action-removed',
-    questionId: 'q-1',
-    index: 0,
-  });
-  reduce({
-    type: 'question/showwhen-mode-changed',
-    questionId: 'q-1',
-    mode: 'conditional',
-  });
-  reduce({
-    type: 'question/showwhen-condition-added',
-    questionId: 'q-1',
-    path: [],
-    target: 'q-2',
-  });
-  reduce({
-    type: 'question/showwhen-leaf-changed',
-    questionId: 'q-1',
-    path: [0],
-    patch: { op: 'in' },
-  });
-  reduce({
-    type: 'question/showwhen-leaf-changed',
-    questionId: 'q-1',
-    path: [0],
-    patch: { value: 'Yes, No', qId: 'q-3' },
-  });
-  reduce({
-    type: 'question/showwhen-group-toggled',
-    questionId: 'q-1',
-    path: [],
-  });
-  reduce({
-    type: 'question/showwhen-group-added',
-    questionId: 'q-1',
-    path: [],
-  });
-  reduce({
-    type: 'question/showwhen-node-removed',
-    questionId: 'q-1',
-    path: [1],
-  });
-  reduce({ type: 'outcome/added' });
-  reduce({ type: 'outcome/default-changed', id: 'fail' });
-  reduce({
-    type: 'outcome/wording-changed',
-    outcomeId: 'fail',
-    wording: 'Needs work',
-  });
-  reduce({
-    type: 'outcome/severity-changed',
-    outcomeId: 'fail',
-    severity: 'not-a-number',
-  });
-  reduce({
-    type: 'outcome/renamed',
-    outcomeId: 'fail',
-    id: 'needs-work',
-  });
-  reduce({ type: 'outcome/removed', outcomeId: 'needs-work' });
-  assert.equal(current.cases.example.questions.length, 5);
+  for (const [description, action, expectedOrder, expectedCount] of actions) {
+    await t.test(`${description} leaves its input snapshot untouched`, () => {
+      const previous = current;
+      const snapshot = structuredClone(previous);
+      current = questionBankReducer(previous, /** @type {any} */ (action));
+      assert.notEqual(current, previous);
+      assert.deepEqual(previous, snapshot);
+      if (expectedOrder) assert.deepEqual(questionIds(current), expectedOrder);
+      if (expectedCount)
+        assert.equal(current.cases.example.questions.length, expectedCount);
+    });
+  }
 });
 
-test('pure editor variants preserve empty, fixed, outcome, and conditional states', () => {
+test('pure editor variants', async (t) => {
   const current = /** @type {any} */ (bank());
-  const dispatch = () => {};
-  assert.deepEqual(
-    effectiveOptions(current.questions[0], current.outcomeOptions).options,
-    ['Yes', 'No']
-  );
-  assert.deepEqual(
-    effectiveOptions(
-      { responseType: 'yes-no-na', optionOutcomes: { No: 'fail' } },
-      current.outcomeOptions
-    ).options,
-    ['Yes', 'No']
-  );
-  assert.deepEqual(
-    effectiveOptions({ responseType: 'outcome' }, current.outcomeOptions)
-      .options,
-    ['Pass', 'Fail']
-  );
-  const optionView = /** @type {HTMLElement} */ (
-    OptionsEditor({
-      question: { id: 'q-empty', responseType: 'single-choice' },
-      outcomeOptions: [],
-      onRemoveOption() {},
-      onAddOption() {},
-      onSetOptionOutcome() {},
-    })
-  );
-  assert.equal(
-    /** @type {HTMLElement} */ (
-      optionView.querySelector('.opt-na-note')
-    ).textContent.includes('N/A'),
-    true
-  );
+  const optionsFor = (/** @type {any} */ question) =>
+    effectiveOptions(question, current.outcomeOptions).options;
+  // These three cases share only option derivation; the DOM cases stay direct.
+  // prettier-ignore
+  const optionCases = [
+    ['authored response options keep their order', current.questions[0], ['Yes', 'No']],
+    ['fixed yes-no options ignore authored mappings', { responseType: 'yes-no-na', optionOutcomes: { No: 'fail' } }, ['Yes', 'No']],
+    ['outcome questions use configured wording', { responseType: 'outcome' }, ['Pass', 'Fail']],
+  ];
+  for (const [name, question, expected] of optionCases) {
+    await t.test(name, () => assert.deepEqual(optionsFor(question), expected));
+  }
 
-  const emptyBank = {
-    slug: 'empty',
-    label: 'Empty',
-    labels: [],
-    outcomeOptions: [],
-    questions: [],
-  };
-  const emptyList = BankList({
-    bank: emptyBank,
-    baselineQuestions: [],
-    filters: {
-      category: 'Missing',
-      questionGroup: 'Missing',
-      showDeprecated: false,
-      conditionalOnly: true,
-    },
-    dirty: false,
-    dispatch,
-    addQuestion() {},
+  await t.test('an empty single-choice editor explains the N/A option', () => {
+    const view = /** @type {HTMLElement} */ (
+      OptionsEditor({
+        question: { id: 'q-empty', responseType: 'single-choice' },
+        outcomeOptions: [],
+        onRemoveOption: NOOP,
+        onAddOption: NOOP,
+        onSetOptionOutcome: NOOP,
+      })
+    );
+    assert.ok(view.querySelector('.opt-na-note')?.textContent.includes('N/A'));
   });
-  assert.equal(
-    emptyList.querySelector('.empty')?.textContent.includes('No questions'),
-    true
-  );
-  assert.equal(
-    OutcomeOptionsEditor({
-      bank: emptyBank,
-      addOutcome() {},
-      setDefaultOutcome() {},
-      renameOutcome() {},
-      setWording() {},
-      setSeverity() {},
-      removeOutcome() {},
-    })
-      .querySelector('.outcome-empty')
-      ?.textContent.includes('No configured'),
-    true
-  );
-  assert.equal(
-    QuestionLabels({
-      question: current.questions[0],
-      bank: emptyBank,
-      dispatch,
-    })?.querySelector('.label-empty')?.textContent,
-    'No labels assigned'
-  );
-  assert.equal(makeLabelId('Risk!', ['lbl-risk']), 'lbl-risk-2');
-  assert.equal(makeLabelId('---', []), 'lbl-label');
 
-  const emptyRemediation = /** @type {HTMLElement} */ (
-    RemediationActionsEditor({
-      question: {
-        ...current.questions[1],
-        disallowFreeFormRemediation: true,
-      },
-      dispatch,
-    })
-  );
-  assert.ok(emptyRemediation.querySelector('.rem-empty'));
-  assert.equal(
-    queryAllByRole(
-      /** @type {HTMLElement} */ (
-        RemediationActionsEditor({ question: current.questions[1], dispatch })
-      ),
-      'switch'
-    )[0].getAttribute('aria-checked'),
-    'true',
-    'a Question with no free-form key renders the switch on'
-  );
-  assert.equal(
-    queryAllByRole(emptyRemediation, 'switch')[0].getAttribute('aria-checked'),
-    'false',
-    'a Question that disallows free-form renders the switch off'
-  );
-  assert.equal(
-    nextRemediationActionId({
-      id: 'q-1',
-      remediationActions: [
-        { id: 'q-1-ra-0', text: 'One' },
-        { id: 'q-1-ra-1', text: 'Two' },
-      ],
-    }),
-    'q-1-ra-2'
-  );
-
-  assert.ok(
-    ShowwhenEditor({
-      question: current.questions[1],
-      conditional: false,
-      bankQuestions: current.questions,
-      dispatch,
-    })?.querySelector('.showwhen-mode')
-  );
-  assert.ok(
-    ShowwhenEditor({
-      question: current.questions[1],
-      conditional: true,
-      bankQuestions: current.questions,
-      dispatch,
-    })?.querySelector('.showwhen-empty')
-  );
-  const answeredLeaf = /** @type {HTMLElement} */ (
-    ShowwhenLeaf({
-      question: current.questions[0],
-      leaf: { type: 'leaf', qId: 'q-2', op: 'answered', value: true },
-      path: [0],
-      bankQuestions: current.questions,
-      dispatch,
-    })
-  );
-  assert.ok(answeredLeaf.querySelector('.leaf-answered-hint'));
-  const arrayLeaf = /** @type {HTMLElement} */ (
-    ShowwhenLeaf({
-      question: current.questions[0],
-      leaf: { type: 'leaf', qId: 'q-2', op: 'in', value: ['Yes', 'No'] },
-      path: [0],
-      bankQuestions: current.questions,
-      dispatch,
-    })
-  );
-  assert.equal(
-    getByRole(arrayLeaf, 'textbox', { name: 'Condition value' }).value,
-    'Yes, No'
-  );
-
-  const noGroups = /** @type {any} */ (document.createElement('div'));
-  noGroups.replaceChildren(
-    ...BankRail({
-      bank: {
-        slug: 'flat',
-        label: 'Flat',
-        questions: [
-          { id: 'q', text: 'Q', responseType: 'yes-no-na', deprecated: true },
-        ],
-      },
+  await t.test('a filtered empty bank reports that it has no questions', () => {
+    const view = renderBankList(EMPTY_BANK, {
       filters: {
-        category: null,
-        questionGroup: null,
+        category: 'Missing',
+        questionGroup: 'Missing',
         showDeprecated: false,
         conditionalOnly: true,
       },
-      railOpen: false,
-      setFilters() {},
-      moveCategory() {},
-      moveGroup() {},
-      onToggleRail() {},
-      onCloseRail() {},
-    })
-  );
-  assert.equal(noGroups.querySelector('.rail').className, 'rail');
-  assert.equal(
-    BankDock({
-      bank: emptyBank,
-      diffCounts: { added: 0, changed: 0, deprecated: 0 },
-      openDrawer() {},
-    }).textContent.includes('0 changes'),
-    true
-  );
+    });
+    assert.ok(
+      view.querySelector('.empty')?.textContent.includes('No questions')
+    );
+  });
+
+  await t.test('an empty outcome editor reports no configured outcomes', () => {
+    const view = OutcomeOptionsEditor({
+      bank: EMPTY_BANK,
+      addOutcome: NOOP,
+      setDefaultOutcome: NOOP,
+      renameOutcome: NOOP,
+      setWording: NOOP,
+      setSeverity: NOOP,
+      removeOutcome: NOOP,
+    });
+    assert.ok(
+      view
+        .querySelector('.outcome-empty')
+        ?.textContent.includes('No configured')
+    );
+  });
+
+  await t.test('labels: empty copy and collision-safe ids', () => {
+    const labels = QuestionLabels({
+      question: current.questions[0],
+      bank: EMPTY_BANK,
+      dispatch: NOOP,
+    });
+    assert.equal(
+      labels?.querySelector('.label-empty')?.textContent,
+      'No labels assigned'
+    );
+    assert.equal(makeLabelId('Risk!', ['lbl-risk']), 'lbl-risk-2');
+    assert.equal(makeLabelId('---', []), 'lbl-label');
+  });
+
+  await t.test('remediation: implicit and explicit free-form policy', () => {
+    const disallowed = /** @type {HTMLElement} */ (
+      RemediationActionsEditor({
+        question: {
+          ...current.questions[1],
+          disallowFreeFormRemediation: true,
+        },
+        dispatch: NOOP,
+      })
+    );
+    const allowed = /** @type {HTMLElement} */ (
+      RemediationActionsEditor({
+        question: current.questions[1],
+        dispatch: NOOP,
+      })
+    );
+    assert.ok(disallowed.querySelector('.rem-empty'));
+    assert.equal(
+      queryAllByRole(allowed, 'switch')[0].getAttribute('aria-checked'),
+      'true'
+    );
+    assert.equal(
+      queryAllByRole(disallowed, 'switch')[0].getAttribute('aria-checked'),
+      'false'
+    );
+  });
+
+  await t.test('remediation: next id follows the highest suffix', () => {
+    // prettier-ignore
+    const question = { id: 'q-1', remediationActions: [{ id: 'q-1-ra-0', text: 'One' }, { id: 'q-1-ra-1', text: 'Two' }] };
+    assert.equal(nextRemediationActionId(question), 'q-1-ra-2');
+  });
+
+  await t.test('show-when: always and empty conditional modes', () => {
+    const common = {
+      question: current.questions[1],
+    };
+    const always = renderShowwhenEditor(current, {
+      ...common,
+      conditional: false,
+    });
+    const conditional = renderShowwhenEditor(current, {
+      ...common,
+      conditional: true,
+    });
+    assert.ok(always?.querySelector('.showwhen-mode'));
+    assert.ok(conditional?.querySelector('.showwhen-empty'));
+  });
+
+  await t.test('show-when leaves render answered and array values', () => {
+    // prettier-ignore
+    const answered = /** @type {HTMLElement} */ (renderShowwhenLeaf(current, { type: 'leaf', qId: 'q-2', op: 'answered', value: true }));
+    // prettier-ignore
+    const choices = /** @type {HTMLElement} */ (renderShowwhenLeaf(current, { type: 'leaf', qId: 'q-2', op: 'in', value: ['Yes', 'No'] }));
+    assert.ok(answered.querySelector('.leaf-answered-hint'));
+    assert.equal(
+      getByRole(choices, 'textbox', { name: 'Condition value' }).value,
+      'Yes, No'
+    );
+  });
+
+  await t.test('flat navigation stays closed and reports zero changes', () => {
+    const root = /** @type {HTMLElement} */ (document.createElement('div'));
+    // prettier-ignore
+    const flatBank = { slug: 'flat', label: 'Flat', questions: [{ id: 'q', text: 'Q', responseType: 'yes-no-na', deprecated: true }] };
+    // prettier-ignore
+    const filters = { category: null, questionGroup: null, showDeprecated: false, conditionalOnly: true };
+    root.replaceChildren(
+      ...BankRail({
+        bank: flatBank,
+        filters,
+        railOpen: false,
+        setFilters: NOOP,
+        moveCategory: NOOP,
+        moveGroup: NOOP,
+        onToggleRail: NOOP,
+        onCloseRail: NOOP,
+      }),
+      BankDock({
+        bank: EMPTY_BANK,
+        diffCounts: { added: 0, changed: 0, deprecated: 0 },
+        openDrawer: NOOP,
+      })
+    );
+    assert.equal(root.querySelector('.rail')?.className, 'rail');
+    assert.ok(root.textContent.includes('0 changes'));
+  });
 });
 
-test('pure views cover filtered, memoised, guarded, and validation variants', () => {
-  const current = /** @type {any} */ (bank());
-  delete current.questions[0].category;
-  delete current.questions[0].questionGroup;
-  current.questions[0].showWhen = { 'q-2': { equals: 'Yes' } };
-  const list = BankList({
-    bank: current,
-    baselineQuestions: structuredClone(current.questions),
-    filters: {
-      category: 'Uncategorised',
-      questionGroup: 'Uncategorised',
-      showDeprecated: true,
-      conditionalOnly: true,
-    },
-    dirty: false,
-    conditionalQuestionIds: ['q-1'],
-    dispatch() {},
-    addQuestion() {},
-    memo: (_key, _deps, render) => render(),
+test('pure view edge cases', async (t) => {
+  await t.test('uncategorised conditional filters show a card', () => {
+    const current = /** @type {any} */ (bank());
+    delete current.questions[0].category;
+    delete current.questions[0].questionGroup;
+    current.questions[0].showWhen = { 'q-2': { equals: 'Yes' } };
+    const list = renderBankList(current, {
+      filters: {
+        category: 'Uncategorised',
+        questionGroup: 'Uncategorised',
+        showDeprecated: true,
+        conditionalOnly: true,
+      },
+      conditionalQuestionIds: ['q-1'],
+      memo: (
+        /** @type {any} */ _key,
+        /** @type {any} */ _deps,
+        /** @type {() => any} */ render
+      ) => render(),
+    });
+    assert.equal(list.querySelectorAll('.card').length, 1);
   });
-  assert.equal(list.querySelectorAll('.card').length, 1);
 
-  const add = getByRole(list, 'button', { name: '+ option' });
-  const originalPrompt = /** @type {any} */ (globalThis).prompt;
-  const originalAlert = /** @type {any} */ (globalThis).alert;
-  let alerts = 0;
-  try {
-    /** @type {any} */ (globalThis).alert = () => alerts++;
-    /** @type {any} */ (globalThis).prompt = () => '   ';
-    fireEvent(add, 'click');
-    /** @type {any} */ (globalThis).prompt = () => 'x'.repeat(1000);
-    fireEvent(add, 'click');
-  } finally {
-    /** @type {any} */ (globalThis).prompt = originalPrompt;
-    /** @type {any} */ (globalThis).alert = originalAlert;
-  }
-  assert.equal(alerts, 1);
+  await t.test('a blank option prompt is ignored without an alert', () => {
+    assert.equal(optionPromptAlertCount('   '), 0);
+  });
 
-  assert.equal(
-    ShowwhenGroup({
-      question: current.questions[0],
-      group: null,
-      path: [],
-      bankQuestions: current.questions,
-      dispatch() {},
-    }),
-    undefined
-  );
-  const onlyQuestion = /** @type {HTMLElement} */ (
-    ShowwhenGroup({
-      question: current.questions[0],
-      group: { type: 'group', op: 'or', children: [] },
-      path: [],
-      isRoot: true,
-      bankQuestions: [current.questions[0]],
-      dispatch() {},
-    })
-  );
-  fireEvent(
-    getByRole(onlyQuestion, 'button', { name: '+ condition' }),
-    'click'
-  );
-  assert.equal(onlyQuestion.querySelector('.danger'), null);
+  await t.test('an over-long option prompt is rejected with an alert', () => {
+    assert.equal(optionPromptAlertCount('x'.repeat(1000)), 1);
+  });
 
-  assert.equal(
-    QuestionLabels({ question: null, bank: current, dispatch() {} }),
-    undefined
-  );
-  assert.equal(
-    ShowwhenLeaf({
-      question: null,
-      leaf: null,
-      path: [],
-      bankQuestions: [],
-      dispatch() {},
-    }),
-    undefined
-  );
-  assert.equal(
-    ShowwhenEditor({
-      question: null,
-      conditional: false,
-      bankQuestions: [],
-      dispatch() {},
-    }),
-    undefined
-  );
+  await t.test('a missing show-when group renders nothing', () => {
+    const current = /** @type {any} */ (bank());
+    assert.equal(renderShowwhenGroup(current, null), undefined);
+  });
 
-  const labels = /** @type {HTMLElement} */ (
-    QuestionLabels({
-      question: { id: 'q-label', labelIds: ['missing'] },
-      bank: undefined,
-      dispatch() {},
-    })
-  );
-  fireEvent(labels.querySelector('.label-new-add'), 'click');
-  assert.ok(labels.querySelector('.label-empty'));
+  await t.test('a lone question cannot self-reference', () => {
+    const current = /** @type {any} */ (bank());
+    const group = /** @type {HTMLElement} */ (
+      renderShowwhenGroup(
+        current,
+        { type: 'group', op: 'or', children: [] },
+        {
+          isRoot: true,
+          bankQuestions: [current.questions[0]],
+        }
+      )
+    );
+    fireEvent(getByRole(group, 'button', { name: '+ condition' }), 'click');
+    assert.equal(group.querySelector('.danger'), null);
+  });
 
-  current.questions[1].deprecated = true;
-  const leaf = /** @type {HTMLElement} */ (
-    ShowwhenLeaf({
-      question: current.questions[0],
-      leaf: { type: 'leaf', qId: 'q-2', op: 'equals', value: null },
-      path: [0],
-      bankQuestions: current.questions,
-      dispatch() {},
-    })
-  );
-  assert.ok(leaf.textContent.includes('(deprecated)'));
-  assert.equal(
-    getByRole(leaf, 'textbox', { name: 'Condition value' }).value,
-    ''
-  );
+  await t.test('null editor inputs render nothing', () => {
+    const current = /** @type {any} */ (bank());
+    assert.equal(
+      QuestionLabels({ question: null, bank: current, dispatch: NOOP }),
+      undefined
+    );
+    assert.equal(
+      renderShowwhenLeaf(current, null, {
+        question: null,
+        bankQuestions: [],
+      }),
+      undefined
+    );
+    assert.equal(
+      renderShowwhenEditor(current, {
+        question: null,
+        bankQuestions: [],
+        conditional: false,
+      }),
+      undefined
+    );
+  });
+
+  await t.test('missing label data falls back to an empty label editor', () => {
+    const labels = /** @type {HTMLElement} */ (
+      QuestionLabels({
+        question: { id: 'q-label', labelIds: ['missing'] },
+        bank: undefined,
+        dispatch: NOOP,
+      })
+    );
+    fireEvent(labels.querySelector('.label-new-add'), 'click');
+    assert.ok(labels.querySelector('.label-empty'));
+  });
+
+  await t.test('deprecated targets show a label and empty value', () => {
+    const current = /** @type {any} */ (bank());
+    current.questions[1].deprecated = true;
+    // prettier-ignore
+    const leaf = /** @type {HTMLElement} */ (renderShowwhenLeaf(current, { type: 'leaf', qId: 'q-2', op: 'equals', value: null }));
+    assert.ok(leaf.textContent.includes('(deprecated)'));
+    assert.equal(
+      getByRole(leaf, 'textbox', { name: 'Condition value' }).value,
+      ''
+    );
+  });
 });
 
 test('wording editor reports new, unchanged, edited, long, and focus states', () => {
@@ -946,215 +868,233 @@ test('wording editor reports new, unchanged, edited, long, and focus states', ()
   );
 });
 
-test('bank reducer covers defensive and clearing branches for plain actions', () => {
-  let current = state();
-  assert.equal(
-    questionBankReducer(current, {
-      type: 'question/field-changed',
-      questionId: 'missing',
-      field: 'text',
-      value: 'No-op',
-    }),
-    current
-  );
-  assert.equal(
-    questionBankReducer(current, {
-      type: 'question/field-changed',
-      questionId: 'q-1',
-      field: 'unsupported',
-      value: 'No-op',
-    }),
-    current
-  );
-  /** @param {any} action */
-  const apply = (action) => {
-    current = questionBankReducer(current, action);
-  };
-  apply({
-    type: 'question/field-changed',
-    questionId: 'q-1',
-    field: 'id',
-    value: '   ',
-  });
-  apply({
-    type: 'question/field-changed',
-    questionId: 'q-1',
-    field: 'text',
-    value: null,
-  });
-  apply({
-    type: 'question/field-changed',
-    questionId: 'q-1',
-    field: 'category',
-    value: 'Changed',
-  });
-  apply({
-    type: 'question/field-changed',
-    questionId: 'q-1',
-    field: 'questionGroup',
-    value: '',
-  });
-  apply({
-    type: 'question/field-changed',
-    questionId: 'q-2',
-    field: 'responseType',
-    value: 'single-choice',
-  });
-  apply({
-    type: 'question/field-changed',
-    questionId: 'q-2',
-    field: 'responseType',
-    value: 'yes-no-na',
-  });
-  apply({
-    type: 'question/option-outcome-changed',
-    questionId: 'q-1',
-    option: 'No',
-    outcomeId: '',
-  });
-  apply({
-    type: 'question/label-assigned',
-    questionId: 'q-1',
-    labelId: 'lbl-a',
-  });
-  apply({
-    type: 'question/label-assigned',
-    questionId: 'q-1',
-    labelId: 'lbl-b',
-  });
-  apply({
-    type: 'question/label-unassigned',
-    questionId: 'q-1',
-    labelId: 'lbl-a',
-  });
-  apply({
-    type: 'question/remediation-action-added',
-    questionId: 'q-1',
-    action: { id: 'ra-1', text: 'One' },
-  });
-  apply({
-    type: 'question/remediation-action-added',
-    questionId: 'q-1',
-    action: { id: 'ra-2', text: 'Two' },
-  });
-  apply({
-    type: 'question/remediation-action-changed',
-    questionId: 'q-1',
-    index: 9,
-    text: 'Missing',
-  });
-  apply({
-    type: 'question/remediation-action-removed',
-    questionId: 'q-1',
-    index: 0,
-  });
-  apply({
-    type: 'question/showwhen-condition-added',
-    questionId: 'q-1',
-    path: [],
-    target: 'q-2',
-  });
-  apply({
-    type: 'question/showwhen-leaf-changed',
-    questionId: 'q-1',
-    path: [0],
-    patch: { op: 'answered' },
-  });
-  apply({
-    type: 'question/showwhen-leaf-changed',
-    questionId: 'q-1',
-    path: [0],
-    patch: { op: 'equals', value: 'Yes' },
-  });
-  apply({
-    type: 'question/showwhen-node-removed',
-    questionId: 'q-1',
-    path: [0],
-  });
-  apply({
-    type: 'outcome/default-changed',
-    id: '',
-  });
-  apply({
-    type: 'outcome/wording-changed',
-    outcomeId: 'missing',
-    wording: 'x',
-  });
-  current.cases.example.outcomeOptions.push({
-    id: 'outcome-3',
-    wording: 'Existing',
-    severity: 3,
-  });
-  apply({ type: 'outcome/added' });
-  apply({ type: 'bank/selected', slug: 'example' });
-  apply({
-    type: 'question/moved',
-    questionId: 'missing',
-    direction: 1,
-    withinGroup: true,
-  });
-  apply({ type: 'question/duplicated', questionId: 'missing' });
-  apply({
-    type: 'question/option-removed',
-    questionId: 'q-2',
-    index: 0,
-    option: 'Missing',
-  });
-  apply({
-    type: 'question/option-removed',
-    questionId: 'q-1',
-    index: 0,
-    option: 'Yes',
-  });
-  apply({
-    type: 'question/option-outcome-changed',
-    questionId: 'q-2',
-    option: 'Yes',
-    outcomeId: 'pass',
-  });
-  apply({
-    type: 'question/option-outcome-changed',
-    questionId: 'q-2',
-    option: 'Yes',
-    outcomeId: '',
-  });
-  apply({
-    type: 'question/label-assigned',
-    questionId: 'q-1',
-    labelId: 'lbl-b',
-  });
-  apply({
-    type: 'question/label-unassigned',
-    questionId: 'q-1',
-    labelId: 'lbl-b',
-  });
-  apply({
-    type: 'label/created',
-    questionId: 'missing',
-    label: { id: 'lbl-c', name: 'C', color: '#000000' },
-  });
-  apply({
-    type: 'label/colour-changed',
-    labelId: 'missing',
-    colour: '#ffffff',
-  });
-  apply({
-    type: 'question/showwhen-group-toggled',
-    questionId: 'q-1',
-    path: [99],
-  });
-  apply({
-    type: 'outcome/renamed',
-    outcomeId: 'pass',
-    id: '',
+test('bank reducer: defensive and clearing actions', async (t) => {
+  await t.test('missing questions and unsupported fields are no-ops', () => {
+    const current = state();
+    assert.equal(
+      questionBankReducer(current, {
+        type: 'question/field-changed',
+        questionId: 'missing',
+        field: 'text',
+        value: 'No-op',
+      }),
+      current
+    );
+    assert.equal(
+      questionBankReducer(current, {
+        type: 'question/field-changed',
+        questionId: 'q-1',
+        field: 'unsupported',
+        value: 'No-op',
+      }),
+      current
+    );
   });
 
-  assert.equal(current.cases.example.questions[0].id, 'q-1');
-  assert.equal(current.cases.example.questions[0].labelIds, undefined);
-  assert.equal(current.cases.example.questions[0].showWhen, undefined);
-  assert.ok(
-    current.cases.example.outcomeOptions.some(
-      (/** @type {{ id: string }} */ option) => option.id === 'outcome-4'
-    )
+  await t.test('blank ids are ignored while null wording becomes empty', () => {
+    const current = reduce(
+      state(),
+      questionAction('field-changed', { field: 'id', value: '   ' }),
+      questionAction('field-changed', { field: 'text', value: null })
+    );
+    assert.equal(current.cases.example.questions[0].id, 'q-1');
+    assert.equal(current.cases.example.questions[0].text, '');
+  });
+
+  await t.test('category values set and empty groups clear', () => {
+    const current = reduce(
+      state(),
+      questionAction('field-changed', {
+        field: 'category',
+        value: 'Changed',
+      }),
+      questionAction('field-changed', { field: 'questionGroup', value: '' })
+    );
+    assert.equal(current.cases.example.questions[0].category, 'Changed');
+    assert.equal('questionGroup' in current.cases.example.questions[0], false);
+  });
+
+  await t.test('fixed response types clear generated choice options', () => {
+    const singleChoice = reduce(
+      state(),
+      questionAction('field-changed', {
+        questionId: 'q-2',
+        field: 'responseType',
+        value: 'single-choice',
+      })
+    );
+    assert.deepEqual(singleChoice.cases.example.questions[1].options, [
+      'Option A',
+      'Option B',
+    ]);
+    const current = reduce(
+      singleChoice,
+      questionAction('field-changed', {
+        questionId: 'q-2',
+        field: 'responseType',
+        value: 'yes-no-na',
+      })
+    );
+    assert.equal(current.cases.example.questions[1].options, undefined);
+  });
+
+  await t.test('clearing the last option outcome removes the mapping', () => {
+    const current = reduce(
+      state(),
+      questionAction('option-outcome-changed', { option: 'No', outcomeId: '' })
+    );
+    assert.equal(current.cases.example.questions[0].optionOutcomes, undefined);
+  });
+
+  await t.test('labels stay unique and final removal clears', () => {
+    const current = reduce(
+      state(),
+      questionAction('label-assigned', { labelId: 'lbl-a' }),
+      questionAction('label-assigned', { labelId: 'lbl-b' }),
+      questionAction('label-assigned', { labelId: 'lbl-b' }),
+      questionAction('label-unassigned', { labelId: 'lbl-a' }),
+      questionAction('label-unassigned', { labelId: 'lbl-b' })
+    );
+    assert.equal(current.cases.example.questions[0].labelIds, undefined);
+  });
+
+  await t.test('invalid remediation edits are ignored before removal', () => {
+    const current = reduce(
+      state(),
+      questionAction('remediation-action-added', {
+        action: { id: 'ra-1', text: 'One' },
+      }),
+      questionAction('remediation-action-added', {
+        action: { id: 'ra-2', text: 'Two' },
+      }),
+      questionAction('remediation-action-changed', {
+        index: 9,
+        text: 'Missing',
+      }),
+      questionAction('remediation-action-removed', { index: 0 })
+    );
+    assert.deepEqual(current.cases.example.questions[0].remediationActions, [
+      { id: 'ra-2', text: 'Two' },
+    ]);
+  });
+
+  await t.test('removing the only show-when leaf clears the condition', () => {
+    const current = reduce(
+      state(),
+      questionAction('showwhen-condition-added', {
+        path: [],
+        target: 'q-2',
+      }),
+      questionAction('showwhen-leaf-changed', {
+        path: [0],
+        patch: { op: 'answered' },
+      }),
+      questionAction('showwhen-leaf-changed', {
+        path: [0],
+        patch: { op: 'equals', value: 'Yes' },
+      }),
+      questionAction('showwhen-node-removed', { path: [0] })
+    );
+    assert.equal(current.cases.example.questions[0].showWhen, undefined);
+  });
+
+  await t.test('invalid outcomes preserve ids and clear defaults', () => {
+    const current = reduce(
+      state(),
+      outcomeAction('default-changed', { id: '' }),
+      outcomeAction('wording-changed', {
+        outcomeId: 'missing',
+        wording: 'x',
+      }),
+      outcomeAction('renamed', { outcomeId: 'pass', id: '' })
+    );
+    assert.equal(current.cases.example.defaultOutcomeId, undefined);
+    assert.equal(current.cases.example.outcomeOptions?.[0]?.id, 'pass');
+  });
+
+  await t.test('new outcome ids skip existing numeric suffixes', () => {
+    const current = state();
+    current.cases.example.outcomeOptions.push({
+      id: 'outcome-3',
+      wording: 'Existing',
+      severity: 3,
+    });
+    const added = questionBankReducer(current, { type: 'outcome/added' });
+    assert.ok(
+      added.cases.example.outcomeOptions?.some(
+        (/** @type {{ id: string }} */ option) => option.id === 'outcome-4'
+      ) === true
+    );
+  });
+
+  await t.test('selection resets filters; missing moves are no-ops', () => {
+    const selected = reduce(state(), {
+      type: 'bank/selected',
+      slug: 'example',
+    });
+    const before = structuredClone(selected.cases.example.questions);
+    const current = reduce(
+      selected,
+      questionAction('moved', {
+        questionId: 'missing',
+        direction: 1,
+        withinGroup: true,
+      }),
+      questionAction('duplicated', { questionId: 'missing' })
+    );
+    assert.equal(current.filters.category, null);
+    assert.equal(current.filters.questionGroup, null);
+    assert.deepEqual(current.cases.example.questions, before);
+  });
+
+  await t.test(
+    'option actions tolerate absent arrays and clear mappings',
+    () => {
+      const current = reduce(
+        state(),
+        questionAction('option-removed', {
+          questionId: 'q-2',
+          index: 0,
+          option: 'Missing',
+        }),
+        questionAction('option-removed', { index: 0, option: 'Yes' }),
+        questionAction('option-outcome-changed', {
+          questionId: 'q-2',
+          option: 'Yes',
+          outcomeId: 'pass',
+        }),
+        questionAction('option-outcome-changed', {
+          questionId: 'q-2',
+          option: 'Yes',
+          outcomeId: '',
+        })
+      );
+      assert.deepEqual(current.cases.example.questions[0].options, ['No']);
+      assert.equal(
+        current.cases.example.questions[1].optionOutcomes,
+        undefined
+      );
+    }
   );
+
+  await t.test('missing label targets and show-when paths are safe', () => {
+    const current = reduce(
+      state(),
+      {
+        type: 'label/created',
+        questionId: 'missing',
+        label: { id: 'lbl-c', name: 'C', color: '#000000' },
+      },
+      {
+        type: 'label/colour-changed',
+        labelId: 'missing',
+        colour: '#ffffff',
+      },
+      questionAction('showwhen-group-toggled', { path: [99] })
+    );
+    assert.deepEqual(current.cases.example.labels, [
+      { id: 'lbl-c', name: 'C', color: '#000000' },
+    ]);
+    assert.equal(current.cases.example.questions[0].showWhen, undefined);
+  });
 });
