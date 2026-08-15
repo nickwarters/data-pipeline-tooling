@@ -83,6 +83,7 @@ from tests.framework_testing import (
     RecordingRunLog,
     RecordingWriter,
     given_rows,
+    migrated_base_dir,
     read_rows,
     read_run_log,
     rows_of,
@@ -1995,12 +1996,25 @@ def test_the_gold_hops_plan_exactly_the_steps_they_always_have():
 # --- end to end ------------------------------------------------------------
 
 
-def test_the_bundled_sample_lands_every_item_across_both_pages(tmp_path, capsys):
+@pytest.fixture
+def base_dir(tmp_path):
+    """A base directory with this feed's checked-in migrations applied.
+
+    ``sharepoint_cases`` is under migration control, so its tables are declared
+    by ``migrations/sharepoint_cases/`` rather than created by the first write.
+    An end-to-end test against a bare ``tmp_path`` would exercise the branch the
+    feed no longer takes — and would not notice a baseline that forgot a table,
+    which is exactly what these tests are here to catch.
+    """
+    return migrated_base_dir(tmp_path, FEED_NAME)
+
+
+def test_the_bundled_sample_lands_every_item_across_both_pages(base_dir, capsys):
     [poll] = run(
-        RunContext(base_dir=tmp_path, pipeline=FEED_NAME), client=LocalJsonListClient()
+        RunContext(base_dir=base_dir, pipeline=FEED_NAME), client=LocalJsonListClient()
     )
 
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
     landed_raw = read_rows(med.raw, "case_observation")
     assert [row["source_item_id"] for row in landed_raw] == [
         "101",
@@ -2041,7 +2055,7 @@ def test_the_bundled_sample_lands_every_item_across_both_pages(tmp_path, capsys)
     # main()'s per-poll line is derived from detail_rows and otherwise
     # unpinned; exercise the CLI path once, against a separate base dir, to
     # lock its shape down.
-    exit_code = main(["prog", "--base-dir", str(tmp_path / "via-cli"), "--sample"])
+    exit_code = main(["prog", "--base-dir", str(base_dir / "via-cli"), "--sample"])
     assert exit_code == 0
     assert (
         "5 observation(s) -> 5 case version(s), 6 answer row(s), "
@@ -2051,40 +2065,40 @@ def test_the_bundled_sample_lands_every_item_across_both_pages(tmp_path, capsys)
     ) in capsys.readouterr().out
 
 
-def test_a_repeated_observation_is_a_no_op_in_raw_and_silver(tmp_path):
+def test_a_repeated_observation_is_a_no_op_in_raw_and_silver(base_dir):
     client = FakeListClient(advance=NEXT_POLL)
-    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+    context = RunContext(base_dir=base_dir, pipeline=FEED_NAME)
 
     run(context, client=client)
     run(context, client=client)
 
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
     assert len(read_rows(med.raw, "case_observation")) == 1
     assert len(read_rows(med.silver, "case_version")) == 1
 
 
-def test_a_later_source_version_appends_a_second_case_version(tmp_path):
+def test_a_later_source_version_appends_a_second_case_version(base_dir):
     later = item(Status="Completed")
     later.update({"Modified": "2026-08-05T08:45:00Z", "odata.etag": '"4"'})
     client = FakeListClient(items(item()), items(later), advance=NEXT_POLL)
-    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+    context = RunContext(base_dir=base_dir, pipeline=FEED_NAME)
 
     run(context, client=client)
     run(context, client=client)
 
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
     assert [
         (row["status"], row["source_version"])
         for row in read_rows(med.silver, "case_version")
     ] == [("In-progress", '"3"'), ("Completed", '"4"')]
 
 
-def test_the_same_observation_carrying_a_different_payload_is_refused(tmp_path):
+def test_the_same_observation_carrying_a_different_payload_is_refused(base_dir):
     # Same Id and same etag, so the same observation id -- but the row moved.
     client = FakeListClient(
         items(item()), items(item(Status="Completed")), advance=NEXT_POLL
     )
-    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+    context = RunContext(base_dir=base_dir, pipeline=FEED_NAME)
 
     run(context, client=client)
 
@@ -2092,22 +2106,22 @@ def test_the_same_observation_carrying_a_different_payload_is_refused(tmp_path):
         run(context, client=client)
 
 
-def test_a_quiet_window_writes_cleanly_and_a_later_one_still_appends(tmp_path):
+def test_a_quiet_window_writes_cleanly_and_a_later_one_still_appends(base_dir):
     # The common steady-state poll: nothing changed in the window.
     client = FakeListClient(pd.DataFrame(), items(item()), advance=NEXT_POLL)
-    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+    context = RunContext(base_dir=base_dir, pipeline=FEED_NAME)
 
     [quiet] = run(context, client=client)
     [busy] = run(context, client=client)
 
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
     assert (quiet.raw_rows, quiet.silver_rows) == (0, 0)
     assert (busy.raw_rows, busy.silver_rows) == (1, 1)
     assert len(read_rows(med.raw, "case_observation")) == 1
     assert len(read_rows(med.silver, "case_version")) == 1
 
 
-def test_a_quiet_first_window_still_types_the_columns_it_creates(tmp_path):
+def test_a_quiet_first_window_still_types_the_columns_it_creates(base_dir):
     # The steady-state poll is a quiet one, so a feed's *first* run is quite
     # likely to be empty -- and an empty write is what creates the silver table,
     # fixing each column's SQLite affinity for the life of the feed. A zero-row
@@ -2119,7 +2133,7 @@ def test_a_quiet_first_window_still_types_the_columns_it_creates(tmp_path):
 
     landed = []
     for order, client in (("quiet", quiet_first), ("busy", busy_first)):
-        base = tmp_path / order
+        base = base_dir / order
         context = RunContext(base_dir=base, pipeline=FEED_NAME)
         run(context, client=client)
         run(context, client=client)
@@ -2130,12 +2144,12 @@ def test_a_quiet_first_window_still_types_the_columns_it_creates(tmp_path):
     assert isinstance(landed[0], int)
 
 
-def test_a_quiet_window_still_runs_and_records_every_hop(tmp_path):
+def test_a_quiet_window_still_runs_and_records_every_hop(base_dir):
     # A quiet poll is not a different pipeline: an operator reading the run log
     # still sees every hop, against every table, with zero rows.
-    log_path = tmp_path / "runs.log"
+    log_path = base_dir / "runs.log"
     context = RunContext(
-        base_dir=tmp_path, pipeline=FEED_NAME, run_log=RunLog(log_path)
+        base_dir=base_dir, pipeline=FEED_NAME, run_log=RunLog(log_path)
     )
 
     run(context, client=FakeListClient(pd.DataFrame()))
@@ -2171,8 +2185,8 @@ def test_a_quiet_window_still_runs_and_records_every_hop(tmp_path):
     ]
 
 
-def test_nothing_safe_to_poll_returns_nothing_and_writes_nothing(tmp_path):
-    SharePointCheckpointStore(tmp_path).commit(
+def test_nothing_safe_to_poll_returns_nothing_and_writes_nothing(base_dir):
+    SharePointCheckpointStore(base_dir).commit(
         SOURCE,
         window_end=SERVER_NOW,
         ingestion_batch_id="earlier",
@@ -2180,16 +2194,16 @@ def test_nothing_safe_to_poll_returns_nothing_and_writes_nothing(tmp_path):
     )
 
     assert (
-        run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME), client=FakeListClient())
+        run(RunContext(base_dir=base_dir, pipeline=FEED_NAME), client=FakeListClient())
         == []
     )
-    assert not (tmp_path / FEED_NAME).exists()
+    assert nothing_landed(base_dir)
 
 
-def test_the_run_log_identifies_the_list_and_every_table(tmp_path):
-    log_path = tmp_path / "runs.log"
+def test_the_run_log_identifies_the_list_and_every_table(base_dir):
+    log_path = base_dir / "runs.log"
     context = RunContext(
-        base_dir=tmp_path, pipeline=FEED_NAME, run_log=RunLog(log_path)
+        base_dir=base_dir, pipeline=FEED_NAME, run_log=RunLog(log_path)
     )
 
     run(context, client=FakeListClient())
@@ -2208,26 +2222,26 @@ def test_the_run_log_identifies_the_list_and_every_table(tmp_path):
     }
 
 
-def test_running_with_no_client_refuses_as_an_operator_failure(tmp_path, capsys):
+def test_running_with_no_client_refuses_as_an_operator_failure(base_dir, capsys):
     # The documented default invocation without --sample. Forgetting the client
     # is an operator's mistake, and the message names the fix, so it is worth
     # more to print it than a stack trace.
-    exit_code = main(["prog", "--base-dir", str(tmp_path)])
+    exit_code = main(["prog", "--base-dir", str(base_dir)])
 
     assert exit_code == 1
     assert "--sample" in capsys.readouterr().err
-    assert not (tmp_path / FEED_NAME).exists()
+    assert nothing_landed(base_dir)
 
 
-def test_run_with_no_client_refuses_as_a_wiring_failure(tmp_path):
+def test_run_with_no_client_refuses_as_a_wiring_failure(base_dir):
     # How the operator CLI and the orchestrator both reach a feed: run(context),
     # with no way to pass a client. That must abort as a caught, categorised
     # failure rather than as a stack trace the operator has to read.
     with pytest.raises(NoClientError) as refused:
-        run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
+        run(RunContext(base_dir=base_dir, pipeline=FEED_NAME))
 
     assert refused.value.category == ErrorCategory.CONFIG
-    assert not (tmp_path / FEED_NAME).exists()
+    assert nothing_landed(base_dir)
 
 
 def test_the_sample_client_replays_both_pages_as_one_first_load():
@@ -2244,50 +2258,78 @@ def test_the_sample_client_names_a_list_it_has_no_pages_for():
 # --- end to end: gold, and the checkpoint last -------------------------------
 
 
-def landed_gold(tmp_path) -> set[str]:
-    """Which tables actually exist in the gold database under ``tmp_path``.
+def nothing_landed(base_dir) -> bool:
+    """Whether the subject's databases are all still empty.
 
-    Reads ``sqlite_master`` directly rather than iterating ``GOLD_TABLES`` and
-    probing each: probing the registry can only ever confirm the registry, and
-    would never catch a table published without also being added to it. Empty
-    when the database itself is absent (nothing published yet).
+    "The run wrote nothing" used to be "the subject's directory does not exist":
+    nothing created it because nothing wrote. Under migration control the
+    databases exist before the run does anything, so the claim has to be made
+    about their contents instead — which is the thing those tests meant all
+    along.
     """
-    db_path = tmp_path / FEED_NAME / "gold.db"
-    if not db_path.exists():
-        return set()
-    connection = sqlite3.connect(db_path)
-    try:
-        rows = connection.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' "
-            "AND name NOT LIKE 'sqlite_%'"
-        ).fetchall()
-    finally:
-        connection.close()
-    return {row[0] for row in rows}
+    for db_path in sorted((base_dir / FEED_NAME).glob("*.db")):
+        connection = sqlite3.connect(db_path)
+        try:
+            tables = [
+                row[0]
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' "
+                    "AND name NOT LIKE 'sqlite_%' AND name != 'schema_migrations'"
+                )
+            ]
+            for table in tables:
+                if connection.execute(f'SELECT 1 FROM "{table}" LIMIT 1').fetchone():
+                    return False
+        finally:
+            connection.close()
+    return True
+
+
+def published_gold(run_log: RecordingRunLog) -> set[str]:
+    """Which gold tables a run actually published into, per its own record.
+
+    This used to read ``sqlite_master``: a gold table existed exactly when a
+    run had created it by writing, so presence answered "was gold published?".
+    Under migration control every gold table exists before the run does
+    anything — the migration created it — so presence answers nothing, and the
+    question has to be put to the run instead. A committed write record naming
+    a gold location is the publication, whether it carried rows or not, which
+    also makes the quiet-window case say what it means rather than relying on
+    an empty table having been created as a side effect.
+    """
+    return {
+        location["name"]
+        for record in run_log.records
+        if record.get("committed")
+        and record["pipeline"].startswith(f"{FEED_NAME}:gold:")
+        for location in record.get("data_locations") or []
+    }
 
 
 def explode(*args: object, **kwargs: object):
     raise RuntimeError("boom")
 
 
-def test_a_poll_publishes_every_gold_table_and_then_commits_the_watermark(tmp_path):
+def test_a_poll_publishes_every_gold_table_and_then_commits_the_watermark(base_dir):
+    run_log = RecordingRunLog()
     [poll] = run(
-        RunContext(base_dir=tmp_path, pipeline=FEED_NAME), client=FakeListClient()
+        RunContext(base_dir=base_dir, pipeline=FEED_NAME, run_log=run_log),
+        client=FakeListClient(),
     )
 
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
     assert poll.window.end == SERVER_NOW - SAFETY_LAG
     assert poll.ingestion_batch_id == f"{COMPLAINTS.list_id}:first-load"
-    assert landed_gold(tmp_path) == set(GOLD_TABLES)
+    assert published_gold(run_log) == set(GOLD_TABLES)
     [case] = read_rows(med.gold, "case_current")
     assert (case["source_item_id"], case["status"]) == ("101", "In-progress")
     assert case["as_of_utc"] == (SERVER_NOW - SAFETY_LAG).isoformat()
-    assert SharePointCheckpointStore(tmp_path).committed_watermark(SOURCE) == (
+    assert SharePointCheckpointStore(base_dir).committed_watermark(SOURCE) == (
         SERVER_NOW - SAFETY_LAG
     )
 
 
-def test_the_winning_observation_settles_gold_answer_and_drops_the_others(tmp_path):
+def test_the_winning_observation_settles_gold_answer_and_drops_the_others(base_dir):
     early = item(Answers=json.dumps({"q1": {"value": "A"}, "q2": {"value": "X"}}))
     later = item(
         Answers=json.dumps({"q1": {"value": "B"}, "q3": {"value": "Y"}}),
@@ -2295,12 +2337,12 @@ def test_the_winning_observation_settles_gold_answer_and_drops_the_others(tmp_pa
     )
     later.update({"Modified": "2026-08-05T08:45:00Z", "odata.etag": '"4"'})
     client = FakeListClient(items(early), items(later), advance=NEXT_POLL)
-    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+    context = RunContext(base_dir=base_dir, pipeline=FEED_NAME)
 
     run(context, client=client)
     run(context, client=client)
 
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
     # Silver is append-only: it keeps both observations, not just the winner.
     assert len(read_rows(med.silver, "answer")) == 4
 
@@ -2313,7 +2355,7 @@ def test_the_winning_observation_settles_gold_answer_and_drops_the_others(tmp_pa
 
 
 def test_the_winning_observation_settles_gold_general_answer_and_drops_the_others(
-    tmp_path,
+    base_dir,
 ):
     early = item(
         Answers=json.dumps(
@@ -2328,12 +2370,12 @@ def test_the_winning_observation_settles_gold_general_answer_and_drops_the_other
     )
     later.update({"Modified": "2026-08-05T08:45:00Z", "odata.etag": '"4"'})
     client = FakeListClient(items(early), items(later), advance=NEXT_POLL)
-    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+    context = RunContext(base_dir=base_dir, pipeline=FEED_NAME)
 
     run(context, client=client)
     run(context, client=client)
 
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
     # Silver is append-only: it keeps both observations, not just the winner.
     assert len(read_rows(med.silver, "general_answer")) == 4
 
@@ -2346,7 +2388,7 @@ def test_the_winning_observation_settles_gold_general_answer_and_drops_the_other
 
 
 def test_the_winning_observation_settles_gold_capture_and_action_and_drops_the_others(
-    tmp_path,
+    base_dir,
 ):
     # Poll 2 sets remediationRequired to "no", the app's trigger for deleting
     # both -- the exact deletion a child-keyed reduce is structurally blind to.
@@ -2397,12 +2439,12 @@ def test_the_winning_observation_settles_gold_capture_and_action_and_drops_the_o
         items(stripped_later, grown_later),
         advance=NEXT_POLL,
     )
-    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+    context = RunContext(base_dir=base_dir, pipeline=FEED_NAME)
 
     run(context, client=client)
     run(context, client=client)
 
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
     assert len(read_rows(med.silver, "answer_capture")) == 2
     assert len(read_rows(med.silver, "answer_action")) == 1
 
@@ -2419,7 +2461,7 @@ def test_the_winning_observation_settles_gold_capture_and_action_and_drops_the_o
 
 
 def test_the_winning_observation_settles_gold_conversation_message_and_appeal(
-    tmp_path,
+    base_dir,
 ):
     # conversation_message's key is positional (seq), not a JSON map key or a
     # minted id, so an observation-spanning superset collides on the grain
@@ -2477,12 +2519,12 @@ def test_the_winning_observation_settles_gold_conversation_message_and_appeal(
         ]
     )
     client = FakeListClient(items(early), items(later), advance=NEXT_POLL)
-    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+    context = RunContext(base_dir=base_dir, pipeline=FEED_NAME)
 
     run(context, client=client)
     run(context, client=client)
 
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
     assert len(read_rows(med.silver, "conversation_message")) == 5
     [winner] = read_rows(med.gold, "case_current")
 
@@ -2502,7 +2544,7 @@ def test_the_winning_observation_settles_gold_conversation_message_and_appeal(
 
 
 def test_the_winning_observation_settles_gold_case_detail_and_drops_the_others(
-    tmp_path,
+    base_dir,
 ):
     # The composite AppendOnly key (source_observation_id, field_key) is under
     # test -- no other end-to-end test exercises this table otherwise, since
@@ -2518,12 +2560,12 @@ def test_the_winning_observation_settles_gold_case_detail_and_drops_the_others(
     )
     later.update({"Modified": "2026-08-05T08:45:00Z", "odata.etag": '"4"'})
     client = FakeListClient(items(early), items(later), advance=NEXT_POLL)
-    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+    context = RunContext(base_dir=base_dir, pipeline=FEED_NAME)
 
     run(context, client=client)
     run(context, client=client)
 
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
     assert len(read_rows(med.silver, "case_detail")) == 4
 
     gold_case_detail = read_rows(med.gold, "case_detail")
@@ -2538,18 +2580,18 @@ def test_the_winning_observation_settles_gold_case_detail_and_drops_the_others(
 
 
 @pytest.mark.parametrize("cell", [None, "misfiled", "complaints"])
-def test_gold_answer_derives_the_same_case_id_as_the_settled_case_type(tmp_path, cell):
+def test_gold_answer_derives_the_same_case_id_as_the_settled_case_type(base_dir, cell):
     # Mirrors test_silver_settles_the_case_type_to_the_polled_lists_declared_one:
     # OTHER's declared case_type is "other", never whatever this raw cell says.
     client = FakeListClient(items(item(CaseType=cell)))
 
     run(
-        RunContext(base_dir=tmp_path, pipeline=FEED_NAME),
+        RunContext(base_dir=base_dir, pipeline=FEED_NAME),
         client=client,
         case_lists=(OTHER,),
     )
 
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
     [case] = read_rows(med.gold, "case_current")
     [row] = read_rows(med.gold, "answer")
     # Fails with zero rows (the semi-join matches nothing) or an IdentityError
@@ -2559,31 +2601,33 @@ def test_gold_answer_derives_the_same_case_id_as_the_settled_case_type(tmp_path,
     assert row["case_type"] == OTHER.case_type
 
 
-def test_a_malformed_answers_blob_raises_and_case_version_still_lands(tmp_path):
+def test_a_malformed_answers_blob_raises_and_case_version_still_lands(base_dir):
+    run_log = RecordingRunLog()
     client = FakeListClient(items(item(Answers="not json")))
-    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+    context = RunContext(base_dir=base_dir, pipeline=FEED_NAME, run_log=run_log)
 
     with pytest.raises(JsonShapeError):
         run(context, client=client)
 
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
     assert len(read_rows(med.silver, "case_version")) == 1
-    assert landed_gold(tmp_path) == set()
-    assert SharePointCheckpointStore(tmp_path).committed_watermark(SOURCE) is None
+    assert published_gold(run_log) == set()
+    assert SharePointCheckpointStore(base_dir).committed_watermark(SOURCE) is None
 
 
 def test_a_malformed_details_blob_raises_and_case_version_details_still_holds_it(
-    tmp_path,
+    base_dir,
 ):
+    run_log = RecordingRunLog()
     client = FakeListClient(items(item(Details="not json")))
-    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+    context = RunContext(base_dir=base_dir, pipeline=FEED_NAME, run_log=run_log)
 
     with pytest.raises(JsonShapeError):
         run(context, client=client)
 
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
-    assert landed_gold(tmp_path) == set()
-    assert SharePointCheckpointStore(tmp_path).committed_watermark(SOURCE) is None
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
+    assert published_gold(run_log) == set()
+    assert SharePointCheckpointStore(base_dir).committed_watermark(SOURCE) is None
     # The frontend's Details parse fallback is undefined, so absent and
     # unparseable are indistinguishable downstream -- silver is the only place
     # the raw text survives.
@@ -2592,27 +2636,28 @@ def test_a_malformed_details_blob_raises_and_case_version_details_still_holds_it
 
 
 def test_a_quiet_first_window_commits_and_publishes_thirteen_empty_gold_tables(
-    tmp_path,
+    base_dir,
 ):
     # Nothing to reduce is not nothing to publish: a consumer reading gold must
     # find the tables, empty, rather than a missing one it has to special-case.
+    run_log = RecordingRunLog()
     run(
-        RunContext(base_dir=tmp_path, pipeline=FEED_NAME),
+        RunContext(base_dir=base_dir, pipeline=FEED_NAME, run_log=run_log),
         client=FakeListClient(pd.DataFrame()),
     )
 
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
-    assert landed_gold(tmp_path) == set(GOLD_TABLES)
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
+    assert published_gold(run_log) == set(GOLD_TABLES)
     assert all(read_rows(med.gold, table) == [] for table in GOLD_TABLES)
-    assert SharePointCheckpointStore(tmp_path).committed_watermark(SOURCE) == (
+    assert SharePointCheckpointStore(base_dir).committed_watermark(SOURCE) == (
         SERVER_NOW - SAFETY_LAG
     )
 
 
-def test_an_overlap_reread_does_not_double_count_gold(tmp_path):
+def test_an_overlap_reread_does_not_double_count_gold(base_dir):
     # The overlap re-presents rows that did not change. Silver no-ops them; gold
     # must not count the Case twice either.
-    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+    context = RunContext(base_dir=base_dir, pipeline=FEED_NAME)
     client = FakeListClient(
         items(
             item(
@@ -2627,7 +2672,7 @@ def test_an_overlap_reread_does_not_double_count_gold(tmp_path):
     run(context, client=client)
     run(context, client=client)
 
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
     assert len(read_rows(med.gold, "case_current")) == 1
     assert [
         row["case_count"] for row in read_rows(med.gold, "case_counts_current")
@@ -2640,33 +2685,41 @@ def test_an_overlap_reread_does_not_double_count_gold(tmp_path):
 
 
 def test_a_failure_in_current_gold_leaves_no_gold_and_no_checkpoint(
-    tmp_path, monkeypatch
+    base_dir, monkeypatch
 ):
+    run_log = RecordingRunLog()
     monkeypatch.setattr(gold, "case_current_builder", explode)
 
     with pytest.raises(RuntimeError, match="boom"):
-        run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME), client=FakeListClient())
+        run(
+            RunContext(base_dir=base_dir, pipeline=FEED_NAME, run_log=run_log),
+            client=FakeListClient(),
+        )
 
-    checkpoints = SharePointCheckpointStore(tmp_path)
-    assert landed_gold(tmp_path) == set()
+    checkpoints = SharePointCheckpointStore(base_dir)
+    assert published_gold(run_log) == set()
     assert checkpoints.committed_watermark(SOURCE) is None
     assert not checkpoints.path.exists()
 
 
 def test_a_failure_in_the_last_aggregate_leaves_the_earlier_gold_and_no_checkpoint(
-    tmp_path, monkeypatch
+    base_dir, monkeypatch
 ):
     # Gold Writers commit independently, so an earlier table stays refreshed.
     # That is acceptable evidence: the watermark did not move, so the next run
     # rebuilds everything from the same history and converges. appeal_outcomes
     # is the last table GOLD_TABLES declares.
+    run_log = RecordingRunLog()
     monkeypatch.setattr(gold, "appeal_outcomes", explode)
 
     with pytest.raises(RuntimeError, match="boom"):
-        run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME), client=FakeListClient())
+        run(
+            RunContext(base_dir=base_dir, pipeline=FEED_NAME, run_log=run_log),
+            client=FakeListClient(),
+        )
 
-    checkpoints = SharePointCheckpointStore(tmp_path)
-    assert landed_gold(tmp_path) == {
+    checkpoints = SharePointCheckpointStore(base_dir)
+    assert published_gold(run_log) == {
         "case_current",
         "answer",
         "answer_capture",
@@ -2685,11 +2738,12 @@ def test_a_failure_in_the_last_aggregate_leaves_the_earlier_gold_and_no_checkpoi
 
 
 def test_a_retry_after_a_partial_failure_converges_and_advances_once(
-    tmp_path, monkeypatch
+    base_dir, monkeypatch
 ):
-    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+    run_log = RecordingRunLog()
+    context = RunContext(base_dir=base_dir, pipeline=FEED_NAME, run_log=run_log)
     client = FakeListClient(advance=NEXT_POLL)
-    checkpoints = SharePointCheckpointStore(tmp_path)
+    checkpoints = SharePointCheckpointStore(base_dir)
     monkeypatch.setattr(gold, "throughput", explode)
 
     with pytest.raises(RuntimeError, match="boom"):
@@ -2699,8 +2753,8 @@ def test_a_retry_after_a_partial_failure_converges_and_advances_once(
     monkeypatch.undo()
     run(context, client=client)
 
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
-    assert landed_gold(tmp_path) == set(GOLD_TABLES)
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
+    assert published_gold(run_log) == set(GOLD_TABLES)
     assert len(read_rows(med.gold, "case_current")) == 1
     # The first attempt left the watermark alone, so exactly one advance has
     # happened: to the *retry's* candidate end.
@@ -2723,16 +2777,16 @@ def two_list_client(**kwargs) -> FakeListClient:
     )
 
 
-def test_two_lists_land_in_one_observation_table_and_one_version_table(tmp_path):
+def test_two_lists_land_in_one_observation_table_and_one_version_table(base_dir):
     # All Case Types share one list template, so every list refines into the
     # same two tables and is told apart by the Case Type on the row.
     polls = run(
-        RunContext(base_dir=tmp_path, pipeline=FEED_NAME),
+        RunContext(base_dir=base_dir, pipeline=FEED_NAME),
         client=two_list_client(),
         case_lists=TWO_LISTS,
     )
 
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
     assert [poll.case_list for poll in polls] == list(TWO_LISTS)
     assert {
         row["source_list_name"] for row in read_rows(med.raw, "case_observation")
@@ -2746,53 +2800,54 @@ def test_two_lists_land_in_one_observation_table_and_one_version_table(tmp_path)
     ]
 
 
-def test_the_same_item_id_in_two_lists_is_two_cases(tmp_path):
+def test_the_same_item_id_in_two_lists_is_two_cases(base_dir):
     # Item 101 exists in every list, so neither the observation id nor the
     # case_id may be derived from it alone.
     run(
-        RunContext(base_dir=tmp_path, pipeline=FEED_NAME),
+        RunContext(base_dir=base_dir, pipeline=FEED_NAME),
         client=two_list_client(),
         case_lists=TWO_LISTS,
     )
 
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
     current_cases = read_rows(med.gold, "case_current")
     assert {row["source_item_id"] for row in current_cases} == {"101"}
     assert len({row["case_id"] for row in current_cases}) == 2
     assert len({row["source_observation_id"] for row in current_cases}) == 2
 
 
-def test_gold_counts_across_every_list(tmp_path):
+def test_gold_counts_across_every_list(base_dir):
     # A Reviewer holds Cases across Case Types, so the aggregates are one count
     # over the union rather than one table per list.
     run(
-        RunContext(base_dir=tmp_path, pipeline=FEED_NAME),
+        RunContext(base_dir=base_dir, pipeline=FEED_NAME),
         client=two_list_client(),
         case_lists=TWO_LISTS,
     )
 
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
     assert [
         row["case_count"] for row in read_rows(med.gold, "case_counts_current")
     ] == [2]
 
 
-def test_each_list_keeps_its_own_watermark(tmp_path):
+def test_each_list_keeps_its_own_watermark(base_dir):
     run(
-        RunContext(base_dir=tmp_path, pipeline=FEED_NAME),
+        RunContext(base_dir=base_dir, pipeline=FEED_NAME),
         client=two_list_client(),
         case_lists=TWO_LISTS,
     )
 
-    checkpoints = SharePointCheckpointStore(tmp_path)
+    checkpoints = SharePointCheckpointStore(base_dir)
     assert checkpoints.committed_watermark(SOURCE) == SERVER_NOW - SAFETY_LAG
     assert checkpoints.committed_watermark(OTHER_SOURCE) == SERVER_NOW - SAFETY_LAG
 
 
-def test_a_list_with_nothing_safe_to_poll_is_skipped_and_the_others_still_run(tmp_path):
+def test_a_list_with_nothing_safe_to_poll_is_skipped_and_the_others_still_run(base_dir):
     # One list polled again inside the safety lag is ordinary operation, not a
     # failure: it is skipped and its watermark stands.
-    SharePointCheckpointStore(tmp_path).commit(
+    run_log = RecordingRunLog()
+    SharePointCheckpointStore(base_dir).commit(
         SOURCE,
         window_end=SERVER_NOW,
         ingestion_batch_id="earlier",
@@ -2800,25 +2855,26 @@ def test_a_list_with_nothing_safe_to_poll_is_skipped_and_the_others_still_run(tm
     )
 
     polls = run(
-        RunContext(base_dir=tmp_path, pipeline=FEED_NAME),
+        RunContext(base_dir=base_dir, pipeline=FEED_NAME, run_log=run_log),
         client=two_list_client(),
         case_lists=TWO_LISTS,
     )
 
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
     assert [poll.case_list for poll in polls] == [OTHER]
     assert [row["case_type"] for row in read_rows(med.silver, "case_version")] == [
         "other"
     ]
-    assert landed_gold(tmp_path) == set(GOLD_TABLES)
-    checkpoints = SharePointCheckpointStore(tmp_path)
+    assert published_gold(run_log) == set(GOLD_TABLES)
+    checkpoints = SharePointCheckpointStore(base_dir)
     assert checkpoints.committed_watermark(SOURCE) == SERVER_NOW
     assert checkpoints.committed_watermark(OTHER_SOURCE) == SERVER_NOW - SAFETY_LAG
 
 
-def test_a_failure_polling_the_second_list_leaves_no_gold_and_no_watermark(tmp_path):
+def test_a_failure_polling_the_second_list_leaves_no_gold_and_no_watermark(base_dir):
     # Fail fast: the first list's observations are committed (append-only, per
     # hop), but nothing is published and no watermark moves.
+    run_log = RecordingRunLog()
     broken = FakeListClient(
         by_list={
             COMPLAINTS.list_name: [items(item())],
@@ -2828,34 +2884,34 @@ def test_a_failure_polling_the_second_list_leaves_no_gold_and_no_watermark(tmp_p
 
     with pytest.raises(SharePointFeedError):
         run(
-            RunContext(base_dir=tmp_path, pipeline=FEED_NAME),
+            RunContext(base_dir=base_dir, pipeline=FEED_NAME, run_log=run_log),
             client=broken,
             case_lists=TWO_LISTS,
         )
 
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
-    checkpoints = SharePointCheckpointStore(tmp_path)
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
+    checkpoints = SharePointCheckpointStore(base_dir)
     assert len(read_rows(med.silver, "case_version")) == 1
-    assert landed_gold(tmp_path) == set()
+    assert published_gold(run_log) == set()
     assert checkpoints.committed_watermark(SOURCE) is None
     assert checkpoints.committed_watermark(OTHER_SOURCE) is None
 
 
-def test_a_retry_after_a_partial_failure_converges_and_advances_both_lists(tmp_path):
+def test_a_retry_after_a_partial_failure_converges_and_advances_both_lists(base_dir):
     broken = FakeListClient(
         by_list={
             COMPLAINTS.list_name: [items(item())],
             OTHER.list_name: [items(item(ResponsibleParty="not an object"))],
         }
     )
-    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+    context = RunContext(base_dir=base_dir, pipeline=FEED_NAME)
 
     with pytest.raises(SharePointFeedError):
         run(context, client=broken, case_lists=TWO_LISTS)
     run(context, client=two_list_client(), case_lists=TWO_LISTS)
 
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
-    checkpoints = SharePointCheckpointStore(tmp_path)
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
+    checkpoints = SharePointCheckpointStore(base_dir)
     # The first list's re-read is a no-op against append-only silver.
     assert len(read_rows(med.silver, "case_version")) == 2
     assert len(read_rows(med.gold, "case_current")) == 2
@@ -2863,25 +2919,25 @@ def test_a_retry_after_a_partial_failure_converges_and_advances_both_lists(tmp_p
     assert checkpoints.committed_watermark(OTHER_SOURCE) == SERVER_NOW - SAFETY_LAG
 
 
-def test_a_dry_run_on_a_fresh_base_dir_writes_no_gold_and_commits_nothing(tmp_path):
+def test_a_dry_run_on_a_fresh_base_dir_writes_no_gold_and_commits_nothing(base_dir):
     # The silver write is previewed rather than performed, so there is no table
     # for gold to reduce. Previewing no gold steps is the honest answer.
     report = dry_run_pipeline(
-        lambda ctx: run(ctx, client=FakeListClient()), FEED_NAME, tmp_path
+        lambda ctx: run(ctx, client=FakeListClient()), FEED_NAME, base_dir
     )
 
     assert not report.failed
-    assert landed_gold(tmp_path) == set()
-    assert not SharePointCheckpointStore(tmp_path).path.exists()
+    assert nothing_landed(base_dir)
+    assert not SharePointCheckpointStore(base_dir).path.exists()
 
 
-def test_a_dry_run_previews_every_write_and_commits_none_of_them(tmp_path):
+def test_a_dry_run_previews_every_write_and_commits_none_of_them(base_dir):
     client = FakeListClient(advance=NEXT_POLL)
-    run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME), client=client)
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    run(RunContext(base_dir=base_dir, pipeline=FEED_NAME), client=client)
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
     before = read_rows(med.gold, "case_current")
 
-    report = dry_run_pipeline(lambda ctx: run(ctx, client=client), FEED_NAME, tmp_path)
+    report = dry_run_pipeline(lambda ctx: run(ctx, client=client), FEED_NAME, base_dir)
 
     # The fixture item carries no capture map, remediationActions, general
     # answer, Conversation, Appeals or Details, so these six preview empty.
@@ -2914,6 +2970,6 @@ def test_a_dry_run_previews_every_write_and_commits_none_of_them(tmp_path):
     ]
     assert read_rows(med.gold, "case_current") == before
     # The real run's watermark stands; the preview did not move it on.
-    assert SharePointCheckpointStore(tmp_path).committed_watermark(SOURCE) == (
+    assert SharePointCheckpointStore(base_dir).committed_watermark(SOURCE) == (
         SERVER_NOW - SAFETY_LAG
     )
