@@ -813,9 +813,9 @@ CREATE_CASES = "CREATE TABLE cases (case_id TEXT PRIMARY KEY);\n"
 CREATE_EVENTS = "CREATE TABLE events (event_id TEXT PRIMARY KEY);\n"
 
 
-def _migration(root, subject, layer, name, sql):
+def _migration(root, subject, database, name, sql):
     """Write one migration file into a throwaway migrations tree."""
-    directory = root / subject / layer
+    directory = root / subject / database
     directory.mkdir(parents=True, exist_ok=True)
     (directory / name).write_text(sql, encoding="utf-8")
     return directory / name
@@ -834,9 +834,9 @@ def _tables(db_path):
         con.close()
 
 
-def test_migrate_applies_every_subject_layer_the_tree_names(tmp_path):
+def test_migrate_applies_every_database_the_tree_names(tmp_path):
     # The tree is the registry of which databases exist: two subjects, three
-    # databases, all brought up to date in one command.
+    # databases between them, all brought up to date in one command.
     tree = tmp_path / "migrations"
     _migration(tree, "cases", "raw", "0001_create_cases.sql", CREATE_CASES)
     _migration(tree, "cases", "silver", "0001_create_cases.sql", CREATE_CASES)
@@ -948,9 +948,9 @@ def test_migrate_explicit_base_dir_overrides_the_environment(tmp_path):
 
 
 def test_migrate_isolates_one_broken_subject_from_the_rest(tmp_path):
-    # Each subject-layer is an independent database with its own ledger, so a
-    # bad set in one must not decide whether the others get migrated — but the
-    # command still exits non-zero.
+    # Each database is independent, with its own ledger, so a bad set in one
+    # must not decide whether the others get migrated — but the command still
+    # exits non-zero.
     tree = tmp_path / "migrations"
     _migration(tree, "broken", "raw", "0001_bad.sql", "CRATE TABLE oops (x INT);\n")
     _migration(tree, "cases", "raw", "0001_create_cases.sql", CREATE_CASES)
@@ -979,16 +979,16 @@ def test_migrate_reports_an_empty_tree_without_failing(tmp_path):
     assert "no migrations under" in result.stdout
 
 
-def test_migrate_rejects_a_directory_that_is_not_a_medallion_layer(tmp_path):
-    # A mistyped layer would otherwise migrate a brand-new database file that
-    # no pipeline ever writes to.
+def test_migrate_does_not_judge_what_a_database_is_called(tmp_path):
+    # The tree names a subject and a database within it. raw/silver/gold is the
+    # tools.medallion profile's reading of those names, not the migrate
+    # command's, so a subject whose databases are named otherwise migrates the
+    # same way.
     tree = tmp_path / "migrations"
-    _migration(tree, "cases", "sliver", "0001_create_cases.sql", CREATE_CASES)
+    _migration(tree, "reference", "lookups", "0001_create_cases.sql", CREATE_CASES)
+    base = tmp_path / "data"
 
-    result = _cli(
-        "migrate", "--base-dir", str(tmp_path / "data"), "--migrations-root", str(tree)
-    )
+    result = _cli("migrate", "--base-dir", str(base), "--migrations-root", str(tree))
 
-    assert result.returncode == 1
-    assert "Not a medallion layer" in result.stderr
-    assert "Traceback" not in result.stderr
+    assert result.returncode == 0, result.stderr
+    assert "cases" in _tables(base / "reference" / "lookups.db")

@@ -80,7 +80,7 @@ def test_fresh_database_gets_every_migration_and_a_ledger_row_each(tmp_path):
 
 def test_apply_creates_the_database_and_its_parent_directory(tmp_path):
     # The subject's directory need not exist yet — the first migration of a new
-    # medallion layer is what brings the file into being.
+    # database is what brings the file into being.
     db_path = tmp_path / "cases" / "silver.db"
     migrations = tmp_path / "migrations"
     _write(migrations, "0001_create_cases.sql", CREATE_CASES)
@@ -216,7 +216,7 @@ def test_non_sql_entries_are_ignored_rather_than_rejected(tmp_path):
     migrations = tmp_path / "migrations"
     _write(migrations, "0001_create_cases.sql", CREATE_CASES)
     (migrations / ".DS_Store").write_bytes(b"\x00")
-    (migrations / "README.md").write_text("Notes on this layer.\n", encoding="utf-8")
+    (migrations / "README.md").write_text("Notes on this database.\n", encoding="utf-8")
     (migrations / "scratch").mkdir()
 
     assert [m.name for m in _runner(tmp_path).discover()] == ["0001_create_cases.sql"]
@@ -323,7 +323,7 @@ def test_is_under_migration_control_does_not_create_the_database(tmp_path):
     assert not db_path.exists()
 
 
-def test_migrations_directory_mirrors_the_medallion_layout(tmp_path):
+def test_migrations_directory_mirrors_the_on_disk_database_layout(tmp_path):
     assert migrations_directory("cases", "silver", root=tmp_path) == (
         tmp_path / "cases" / "silver"
     )
@@ -331,27 +331,34 @@ def test_migrations_directory_mirrors_the_medallion_layout(tmp_path):
     assert MIGRATIONS_ROOT.name == "migrations"
 
 
-def test_discover_targets_walks_the_tree_in_subject_then_medallion_order(tmp_path):
-    # The tree is the registry of which databases are under migration control,
-    # and it is read in the data's direction of travel: raw, silver, gold.
-    for subject, layer in [
+def test_discover_targets_walks_the_tree_in_subject_then_database_order(tmp_path):
+    # The tree is the registry of which databases are under migration control.
+    for subject, database in [
         ("cases", "gold"),
         ("cases", "raw"),
         ("cases", "silver"),
         ("activity", "gold"),
     ]:
-        (tmp_path / subject / layer).mkdir(parents=True)
+        (tmp_path / subject / database).mkdir(parents=True)
 
     targets = discover_targets(tmp_path)
 
-    assert [(t.subject, t.layer) for t in targets] == [
+    assert [(t.subject, t.database) for t in targets] == [
         ("activity", "gold"),
+        ("cases", "gold"),
         ("cases", "raw"),
         ("cases", "silver"),
-        ("cases", "gold"),
     ]
-    assert targets[1].namespace == "cases/raw"
-    assert targets[1].directory == tmp_path / "cases" / "raw"
+    assert targets[2].namespace == "cases/raw"
+    assert targets[2].directory == tmp_path / "cases" / "raw"
+
+
+def test_discover_targets_does_not_judge_what_a_database_is_called(tmp_path):
+    # A subject's databases are just names here. raw/silver/gold is the
+    # tools.medallion profile's reading of them, not this module's.
+    (tmp_path / "reference" / "lookups").mkdir(parents=True)
+
+    assert [t.namespace for t in discover_targets(tmp_path)] == ["reference/lookups"]
 
 
 def test_discover_targets_on_a_tree_that_does_not_exist_yet_is_empty(tmp_path):
@@ -365,12 +372,3 @@ def test_discover_targets_ignores_files_beside_the_subjects(tmp_path):
     (tmp_path / "cases" / "notes.txt").write_text("scratch\n", encoding="utf-8")
 
     assert [t.namespace for t in discover_targets(tmp_path)] == ["cases/raw"]
-
-
-def test_a_subject_directory_that_is_not_a_medallion_layer_is_an_error(tmp_path):
-    # A mistyped layer would otherwise migrate a brand-new database file that no
-    # pipeline will ever write to.
-    (tmp_path / "cases" / "sliver").mkdir(parents=True)
-
-    with pytest.raises(MigrationError, match="Not a medallion layer"):
-        discover_targets(tmp_path)

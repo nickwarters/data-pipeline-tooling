@@ -71,9 +71,9 @@ toolchain, a domain language, or a release. Two rules follow:
   `StoreRegistry`, which owns where the *data* lands — and the UTC-instant /
   local-calendar-date rule every freshness check reads is settled once in
   `tools/observability/timestamps.py`. That run metadata self-migrates from
-  `RUN_RECORD_FIELDS` and stays that way; the physical shape of a *medallion*
+  `RUN_RECORD_FIELDS` and stays that way; the physical shape of a *data*
   database is instead declared by the numbered SQL files under
-  `migrations/<subject>/<layer>/` and applied by `tools/migrations.py`, which
+  `migrations/<subject>/<database>/` and applied by `tools/migrations.py`, which
   records what it applied in a `schema_migrations` ledger inside that database —
   a ledger whose presence is what marks the database as under migration control
   ([`docs/migrations.md`](docs/migrations.md)). Then `case_review/` (the
@@ -234,7 +234,7 @@ calendar file (`holidays` + `weekend`) that seeds the `WorkingDayCalendar` every
 schedule judges against (omitted, it is weekends-only). `migrate` applies the
 SQL migrations that own those databases' *shape*: it walks the `migrations/`
 tree — the only registry of which databases are under migration control, since a
-subject opts in by having a directory there — and brings each subject-layer under
+database opts in by having a directory there — and brings each one under
 the resolved base directory up to date, with `--check` reporting what is pending
 and exiting non-zero without writing (a CI gate, deliberately **not** wired into
 `run`/`orchestrate`).

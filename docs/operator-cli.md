@@ -593,19 +593,20 @@ planned per-file runs.
 python -m cli migrate [--base-dir DIR] [--env ENV] [--check] [--migrations-root DIR]
 ```
 
-`run` fills the medallion databases; `migrate` decides what shape they are in.
-It walks the repository's `migrations/` tree and brings every subject-layer
-database under the resolved base directory up to date, recording what it applied
-in a `schema_migrations` ledger inside each one. The full rules — the file naming,
-the ledger, the checksum, the one-transaction-per-file guarantee — are in
+`run` fills the databases; `migrate` decides what shape they are in. It walks
+the repository's `migrations/` tree and brings every database it names, under the
+resolved base directory, up to date — recording what it applied in a
+`schema_migrations` ledger inside each one. The full rules — the file naming, the
+ledger, the checksum, the one-transaction-per-file guarantee — are in
 [migrations.md](migrations.md).
 
-**The tree is the registry.** There is no list of subjects anywhere else: a
-subject is under migration control exactly when it has a
-`migrations/<subject>/<layer>/` directory, so adding one is the whole opt-in and
-this command needs no configuration to find it. A directory that is not a
-medallion layer (a mistyped `sliver`) is refused rather than quietly migrating a
-brand-new database file no pipeline will ever write to.
+**The tree is the registry.** There is no list of databases anywhere else: one is
+under migration control exactly when it has a `migrations/<subject>/<database>/`
+directory, so adding one is the whole opt-in and this command needs no
+configuration to find it. Each directory names a subject and a database within
+it — the same `<subject>/<name>` namespace the Store maps to
+`<base_dir>/<subject>/<name>.db`. The raw/silver/gold below is what that looks
+like for a subject following the medallion, not a shape this command requires.
 
 ```console
 $ python -m cli migrate --base-dir /data
@@ -615,7 +616,7 @@ sharepoint_cases/gold    /data/sharepoint_cases/gold.db    up to date
 migrated 3 database(s): 2 applied, 1 up to date, 0 failed
 ```
 
-Each subject-layer is an independent database with its own ledger, so a failure
+Each database is independent, with its own ledger, so a failure
 in one is reported to stderr and the walk continues to the rest — the same
 per-item failure isolation `orchestrate` applies to scheduled work. The command
 exits non-zero if anything failed.
