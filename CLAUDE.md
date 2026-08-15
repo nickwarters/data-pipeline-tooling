@@ -49,7 +49,8 @@ toolchain, a domain language, or a release. Two rules follow:
   run; its `freshness` module holds the **one** upstream-freshness rule, which
   the runner's `FreshnessGuard` wraps and `tools.orchestration`'s plan preview
   reads); plus the private
-  `framework/_internal` (`connection`, `describe`, `identity`, `locations`, `schema`: cross-cutting
+  `framework/_internal` (`connection`, `describe`, `identity`, `locations`, `schema`,
+  `schema_control`: cross-cutting
   helpers with no public name)). The `python -m cli` entry point (`scaffold`
   plus the operator commands; see below) lives in the top-level `cli/` package,
   and the cross-cutting `retry` / `calendar` / `medallion` /
@@ -76,6 +77,9 @@ toolchain, a domain language, or a release. Two rules follow:
   `migrations/<subject>/<database>/` and applied by `tools/migrations.py`, which
   records what it applied in a `schema_migrations` ledger inside that database —
   a ledger whose presence is what marks the database as under migration control
+  and is what the Writers read (via `framework/_internal/schema_control.py`, the
+  one place that fact is defined, imported *up* into `tools` rather than the
+  framework reaching down into it) before refusing to create a table
   ([`docs/migrations.md`](docs/migrations.md)). Then `case_review/` (the
   case-review *application* — domain types
   Case Type declarations, `CasePool`, and its gold helpers, which live outside
@@ -131,7 +135,11 @@ toolchain, a domain language, or a release. Two rules follow:
   `writer_for(db_path, table, busy_timeout_ms=...)` plus the optional file-side
   `apply_to_frame(frame, read_existing)`, so nothing outside
   `framework/io/strategy.py` branches on which strategy it was handed and a new
-  strategy is one class plus one export line), `Store` (namespace → file
+  strategy is one class plus one export line; against a database carrying a
+  `schema_migrations` ledger no table-backed Writer creates a missing table —
+  it raises `MissingTableError` — and `Refresh` deletes-then-appends rather than
+  dropping the table its migration declared, while a database without the ledger
+  is unaffected), `Store` (namespace → file
   factory minting `writer(table, strategy)` — a one-line delegation to
   `strategy.writer_for(...)` — / `reader(table)` over one logical database; **lives in the sibling
   `tools.store`, not `framework.io`** — where a feed lands is application

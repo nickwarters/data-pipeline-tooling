@@ -51,6 +51,7 @@ from framework.io.writers import (
     CsvWriter,
     ExcelWriter,
     JsonWriter,
+    MissingTableError,
     QuarantineWriter,
     SqliteAppendOnlyWriter,
     SqliteInsertIfAbsentWriter,
@@ -103,4 +104,5 @@ __all__ = [
     "AppendOnly",
     "SqliteAppendOnlyWriter",
     "AppendOnlyConflictError",
+    "MissingTableError",
 ]

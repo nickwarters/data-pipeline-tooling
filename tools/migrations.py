@@ -60,6 +60,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from framework._internal.connection import connect
+from framework._internal.schema_control import LEDGER_TABLE, under_migration_control
 from framework.core.errors import ErrorCategory, PipelineError
 from tools.observability.timestamps import utc_now_iso
 
@@ -76,9 +77,12 @@ __all__ = [
     "migrations_directory",
 ]
 
-# The ledger table. Its presence is what marks a database as under migration
-# control, so the name is a published constant rather than an inline literal.
-LEDGER_TABLE = "schema_migrations"
+# ``LEDGER_TABLE`` and the probe for it are re-exported from
+# ``framework._internal.schema_control`` rather than restated here: the Writers
+# read the same ledger to decide whether they may create a missing table, and
+# they sit below this module, so the shared fact is settled down there and
+# imported upward. Two definitions would be a silent disagreement between what
+# this runner writes and what the Writers look for.
 
 # The repository's migrations tree. ``tools`` is a top-level package of the
 # import-only checkout, so its parent is the repository root.
@@ -269,7 +273,7 @@ class MigrationRunner:
         if not self._db_path.exists():
             return None
         con = connect(self._db_path, self._busy_timeout_ms)
-        if _has_ledger(con):
+        if under_migration_control(con):
             return con
         con.close()
         return None
@@ -291,7 +295,7 @@ def is_under_migration_control(
         return False
     con = connect(path, busy_timeout_ms)
     try:
-        return _has_ledger(con)
+        return under_migration_control(con)
     finally:
         con.close()
 
@@ -375,11 +379,3 @@ def _apply_one(con: sqlite3.Connection, migration: Migration) -> None:
     except sqlite3.Error as exc:
         con.rollback()
         raise MigrationError(f"Migration failed: {migration.path}: {exc}") from exc
-
-
-def _has_ledger(con: sqlite3.Connection) -> bool:
-    row = con.execute(
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
-        (LEDGER_TABLE,),
-    ).fetchone()
-    return row is not None

@@ -530,8 +530,10 @@ When an upstream source changes its shape (e.g. adding a new column) and you wan
 
 1. **Identify**: The `SchemaDriftValidator` at the raw boundary will perform a soft check and surface a warning (visible in `runs_that_warned()`) when the columns differ from the prior run. Raw continues to land the data faithfully. When that data reaches the silver boundary, the `SchemaValidator` will intentionally fail-fast with a `ValidationError` (Schema Breach) to protect downstream logic.
 2. **Update Schema**: Modify the Python row-schema dataclass for that feed to include the new column or changed type. This updates the hard contract so the `SchemaValidator` expects the new shape.
-3. **Migrate the Database**: Because accumulating writers (`AccumulateByRunWriter`, `SqliteUpsertWriter`) rely on `pandas.to_sql(if_exists="append")`, and SQLite does not automatically evolve table schemas, you **must manually run an `ALTER TABLE` migration** against the target database (e.g. `silver.db`) before re-running:
+3. **Migrate the Database**: Because accumulating writers (`AccumulateByRunWriter`, `SqliteUpsertWriter`) rely on `pandas.to_sql(if_exists="append")`, and SQLite does not automatically evolve table schemas, the target database (e.g. `silver.db`) needs the column adding before you re-run. Where the database is **under migration control** ([migrations.md](migrations.md)) that is a numbered migration file applied with `python -m cli migrate` — the only way to change it, since the writers will not evolve a declared table for you:
    ```sql
+   -- migrations/<subject>/silver/0002_add_new_column.sql
    ALTER TABLE cases ADD COLUMN new_column_name TEXT;
    ```
+   Where it is not, run the same `ALTER TABLE` by hand against the file.
 4. **Re-run**: Because the pipelines are idempotent by logical run ID, simply re-run the pipeline. It will clear the partial/failed rows for that run and cleanly insert the new data under the updated schema. Historical rows will automatically receive `NULL` for the new column.

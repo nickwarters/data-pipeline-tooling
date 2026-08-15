@@ -34,6 +34,7 @@ import pandas as pd
 from framework._internal.connection import connect
 from framework._internal.describe import render
 from framework._internal.locations import file_location, table_location
+from framework._internal.schema_control import under_migration_control
 from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError
 from framework.core.protocols import RUN_PROVENANCE_COLUMN, ChunkWritable, Writer
@@ -60,6 +61,7 @@ __all__ = [
     "SqliteInsertIfAbsentWriter",
     "SqliteAppendOnlyWriter",
     "AppendOnlyConflictError",
+    "MissingTableError",
 ]
 
 
@@ -74,6 +76,19 @@ class AppendOnlyConflictError(PipelineError):
     """
 
     category = ErrorCategory.DATA
+
+
+class MissingTableError(PipelineError):
+    """A migrated database was asked for a table no migration declares.
+
+    Where a database carries the ``schema_migrations`` ledger, its shape is
+    owned by SQL and a Writer will not conjure a missing table with whatever
+    dtypes the frame happened to carry. Categorised as **config**, not data: the
+    rows are fine and the run conditions are fine — what is missing is a
+    migration, and the fix is in ``migrations/``.
+    """
+
+    category = ErrorCategory.CONFIG
 
 
 def _frame_for_strategy(
@@ -209,11 +224,15 @@ class _AppendingChunkWriter:
         db_path: Path,
         table: str,
         busy_timeout_ms: int,
+        guard: "_MigrationGuard",
         prepare: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
     ) -> None:
         self._db_path = db_path
         self._table = table
         self._busy_timeout_ms = busy_timeout_ms
+        # The opening Writer's guard, not a fresh one: the whole drive shares
+        # its one cached answer rather than re-asking per chunk.
+        self._guard = guard
         self._prepare = prepare
         self.data_locations: list[dict[str, str]] = []
 
@@ -223,6 +242,7 @@ class _AppendingChunkWriter:
         if self._prepare is not None:
             frame = self._prepare(frame)
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
+            self._guard.require_target(con)
             frame.to_sql(self._table, con, if_exists="append", index=False)
 
 
@@ -271,14 +291,17 @@ def _staged_merge(
     frame: pd.DataFrame,
     *,
     busy_timeout_ms: int,
+    guard: "_MigrationGuard",
 ) -> Iterator[_StagedMerge]:
     """Own a merge's whole shape: staging, target, commit boundary, teardown.
 
     The incoming rows are landed in a scratch staging table so the merge is one
     set-based statement rather than a row-by-row loop, and the target is created
-    if it does not exist yet so the statement always has something to merge into.
-    The caller supplies only its merge statement — the commit boundary and the
-    cleanup are not theirs to get wrong.
+    if it does not exist yet so the statement always has something to merge into
+    — unless the database declares its own shape, where a missing target is a
+    missing migration and the guard says so by name. The caller supplies only its
+    merge statement — the commit boundary and the cleanup are not theirs to get
+    wrong.
 
     Staging is dropped *after* the commit, as it was when each Writer did this
     for itself: a failed merge leaves the scratch table behind rather than
@@ -294,8 +317,12 @@ def _staged_merge(
 
         # Ensure the target exists before the merge references it: appending an
         # empty frame creates the table when it is absent and is a no-op when it
-        # is already there.
-        frame.iloc[:0].to_sql(table, con, if_exists="append", index=False)
+        # is already there. Where the database owns its own DDL that shortcut is
+        # exactly what must not happen — a table a migration forgot would be
+        # conjured with drifted types and no keys — so the guard refuses first.
+        guard.require_target(con)
+        if not guard.under_control(con):
+            frame.iloc[:0].to_sql(table, con, if_exists="append", index=False)
 
         # A target that predates the provenance column would refuse an INSERT
         # naming it; widen it in place instead. Only when this write actually
@@ -326,6 +353,52 @@ def _table_exists(con: sqlite3.Connection, table: str) -> bool:
     """
     rows = con.execute(f"PRAGMA table_info({quote_identifier(table)})").fetchall()
     return bool(rows)
+
+
+class _MigrationGuard:
+    """One target's answer to "does this database declare its own shape?".
+
+    A database carrying the ``schema_migrations`` ledger is under migration
+    control: its tables are declared by SQL and applied by ``python -m cli
+    migrate``, so a Writer must not conjure a missing one — a table a migration
+    forgot has to fail loudly rather than reappear with drifted types and no
+    keys. A database *without* the ledger is untouched by any of this and keeps
+    the behaviour it has always had, which is what lets databases convert one at
+    a time.
+
+    The answer is resolved **once per Writer instance** and cached. It cannot
+    change underneath a running pipeline — applying a migration is an operator
+    action against a database nothing else is writing to — and the alternative is
+    a ``sqlite_master`` lookup on every chunk of a streamed load.
+    """
+
+    def __init__(self, db_path: Path, table: str) -> None:
+        self._db_path = db_path
+        self._table = table
+        self._under_control: bool | None = None
+
+    def under_control(self, con: sqlite3.Connection) -> bool:
+        """Whether this target's database owns its own DDL (cached)."""
+        if self._under_control is None:
+            self._under_control = under_migration_control(con)
+        return self._under_control
+
+    def require_target(self, con: sqlite3.Connection) -> None:
+        """Refuse to create the target implicitly when its database is migrated.
+
+        A no-op against an unmigrated database, where creating the table on
+        first write is the behaviour every existing feed relies on.
+        """
+        if not self.under_control(con) or _table_exists(con, self._table):
+            return
+        raise MissingTableError(
+            f"table {self._table!r} does not exist in {self._db_path}, and that "
+            "database is under migration control: its shape is declared by SQL, "
+            "so a missing table is a missing migration rather than something to "
+            "create on the fly. Declare it in a migration under "
+            "migrations/<subject>/<database>/ and apply it with "
+            "'python -m cli migrate'."
+        )
 
 
 def _replace_logical_run(
@@ -505,6 +578,15 @@ class SqliteTruncateReloadWriter:
     writes. Because the table is replaced wholesale, the value is uniform: the
     run named on any row of the table is the run that wrote **all** of it. A
     write outside a run context leaves the column off rather than failing.
+
+    **How the table is emptied depends on who owns its shape.** Against an
+    ordinary database it is ``if_exists="replace"`` — the table is dropped and
+    recreated from the frame, as it always has been. Against one under migration
+    control that would drop the very DDL a migration created: the primary key,
+    the indexes, the ``NOT NULL``s would all be gone after the next nightly run,
+    silently. So there the rows are deleted and the new ones appended, leaving
+    the declared shape exactly as the migration left it. Both paths land the same
+    rows; only what survives underneath them differs.
     """
 
     def __init__(
@@ -516,13 +598,22 @@ class SqliteTruncateReloadWriter:
         self._db_path = Path(db_path)
         self._table = table
         self._busy_timeout_ms = busy_timeout_ms
+        self._guard = _MigrationGuard(self._db_path, table)
         self.data_locations: list[dict[str, str]] = []
 
     def write(self, dataset: Dataset) -> None:
         self.data_locations = [table_location(self._db_path, self._table)]
         frame = _stamp_run_provenance(dataset.to_pandas(), _current_run_id())
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
-            frame.to_sql(self._table, con, if_exists="replace", index=False)
+            if not self._guard.under_control(con):
+                frame.to_sql(self._table, con, if_exists="replace", index=False)
+                return
+            # Both statements are in the one transaction the connection opened,
+            # so a failing append rolls the delete back: a refresh never empties
+            # the table without refilling it.
+            self._guard.require_target(con)
+            con.execute(f"DELETE FROM {quote_identifier(self._table)}")
+            frame.to_sql(self._table, con, if_exists="append", index=False)
 
     def describe(self) -> str:
         return render(self, db_path=str(self._db_path), table=self._table)
@@ -557,6 +648,7 @@ class QuarantineWriter:
         self._db_path = Path(db_path)
         self._table = table
         self._busy_timeout_ms = busy_timeout_ms
+        self._guard = _MigrationGuard(self._db_path, table)
         self.data_locations: list[dict[str, str]] = []
 
     def write(self, dataset: Dataset) -> None:
@@ -571,6 +663,7 @@ class QuarantineWriter:
         """
         self.data_locations = [table_location(self._db_path, self._table)]
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
+            self._guard.require_target(con)
             if RUN_PROVENANCE_COLUMN in frame.columns:
                 _ensure_provenance_column(con, self._table)
             if "logical_run_id" in frame.columns:
@@ -602,6 +695,7 @@ class QuarantineWriter:
 
     def _append(self, frame: pd.DataFrame) -> None:
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
+            self._guard.require_target(con)
             if RUN_PROVENANCE_COLUMN in frame.columns:
                 _ensure_provenance_column(con, self._table)
             frame.to_sql(self._table, con, if_exists="append", index=False)
@@ -673,6 +767,7 @@ class SqliteUpsertWriter:
         self._table = table
         self._key_columns = key_columns
         self._busy_timeout_ms = busy_timeout_ms
+        self._guard = _MigrationGuard(self._db_path, table)
         self.data_locations: list[dict[str, str]] = []
 
     def write(self, dataset: Dataset) -> None:
@@ -688,6 +783,7 @@ class SqliteUpsertWriter:
             self._table,
             frame,
             busy_timeout_ms=self._busy_timeout_ms,
+            guard=self._guard,
         ) as merge:
             # Delete the matching rows, then insert all incoming ones. The
             # EXISTS join handles composite keys without row-value syntax.
@@ -754,6 +850,7 @@ class SqliteInsertOrIgnoreWriter:
         self._db_path = Path(db_path)
         self._table = table
         self._busy_timeout_ms = busy_timeout_ms
+        self._guard = _MigrationGuard(self._db_path, table)
         self.data_locations: list[dict[str, str]] = []
 
     def write(self, dataset: Dataset) -> None:
@@ -764,6 +861,7 @@ class SqliteInsertOrIgnoreWriter:
             self._table,
             frame,
             busy_timeout_ms=self._busy_timeout_ms,
+            guard=self._guard,
         ) as merge:
             merge.con.execute(
                 f"INSERT OR IGNORE INTO {merge.target} ({merge.columns}) "
@@ -819,6 +917,7 @@ class SqliteInsertIfAbsentWriter:
         self._key_columns = key_columns
         self._surrogate_column = surrogate_column
         self._busy_timeout_ms = busy_timeout_ms
+        self._guard = _MigrationGuard(self._db_path, table)
         self.data_locations: list[dict[str, str]] = []
 
     def write(self, dataset: Dataset) -> None:
@@ -831,6 +930,7 @@ class SqliteInsertIfAbsentWriter:
             )
 
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
+            self._guard.require_target(con)
             # Read the existing key→surrogate mapping. A table that is not there
             # yet (the first run for this reference set) means no mapping;
             # anything else that goes wrong reading it is a real failure and is
@@ -964,6 +1064,7 @@ class SqliteAppendOnlyWriter:
         self._table = table
         self._key_columns = key_columns
         self._busy_timeout_ms = busy_timeout_ms
+        self._guard = _MigrationGuard(self._db_path, table)
         self.data_locations: list[dict[str, str]] = []
 
     def write(self, dataset: Dataset) -> None:
@@ -979,6 +1080,7 @@ class SqliteAppendOnlyWriter:
             self._table,
             frame,
             busy_timeout_ms=self._busy_timeout_ms,
+            guard=self._guard,
         ) as merge:
             key_match = " AND ".join(
                 f"{merge.staging}.{quote_identifier(k)} = "
@@ -1174,12 +1276,14 @@ class AccumulateByRunWriter:
         self._logical_run_id = logical_run_id
         self._load_date = load_date
         self._busy_timeout_ms = busy_timeout_ms
+        self._guard = _MigrationGuard(self._db_path, table)
         self.data_locations: list[dict[str, str]] = []
 
     def write(self, dataset: Dataset) -> None:
         self.data_locations = [table_location(self._db_path, self._table)]
         frame = self._stamp(dataset.to_pandas(), _current_run_id())
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
+            self._guard.require_target(con)
             if RUN_PROVENANCE_COLUMN in frame.columns:
                 _ensure_provenance_column(con, self._table)
             _replace_logical_run(con, self._table, self._logical_run_id, frame)
@@ -1203,6 +1307,10 @@ class AccumulateByRunWriter:
         of the same logical run replaces wholesale.
         """
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
+            # Refused here rather than on the first chunk: a stream that has
+            # already read half a source before learning its target does not
+            # exist has spent that work for nothing.
+            self._guard.require_target(con)
             if _table_exists(con, self._table):
                 con.execute(
                     f"DELETE FROM {quote_identifier(self._table)} "
@@ -1216,6 +1324,7 @@ class AccumulateByRunWriter:
             self._db_path,
             self._table,
             self._busy_timeout_ms,
+            self._guard,
             prepare=lambda frame: self._stamp(frame, run_id),
         )
 
