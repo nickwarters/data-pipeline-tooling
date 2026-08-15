@@ -117,6 +117,24 @@ function renderBankList(current, overrides = {}) {
   });
 }
 
+/** @param {string} promptValue */
+function optionPromptAlertCount(promptValue) {
+  const list = renderBankList(/** @type {any} */ (bank()));
+  const add = getByRole(list, 'button', { name: '+ option' });
+  const originalPrompt = /** @type {any} */ (globalThis).prompt;
+  const originalAlert = /** @type {any} */ (globalThis).alert;
+  let alerts = 0;
+  try {
+    /** @type {any} */ (globalThis).alert = () => alerts++;
+    /** @type {any} */ (globalThis).prompt = () => promptValue;
+    fireEvent(add, 'click');
+  } finally {
+    /** @type {any} */ (globalThis).prompt = originalPrompt;
+    /** @type {any} */ (globalThis).alert = originalAlert;
+  }
+  return alerts;
+}
+
 /** @param {any} current @param {any} [overrides] */
 function showwhenProps(current, overrides = {}) {
   return {
@@ -724,24 +742,12 @@ test('pure view edge cases', async (t) => {
     assert.equal(list.querySelectorAll('.card').length, 1);
   });
 
-  await t.test('option prompts reject blanks and excessive length', () => {
-    const current = /** @type {any} */ (bank());
-    const list = renderBankList(current);
-    const add = getByRole(list, 'button', { name: '+ option' });
-    const originalPrompt = /** @type {any} */ (globalThis).prompt;
-    const originalAlert = /** @type {any} */ (globalThis).alert;
-    let alerts = 0;
-    try {
-      /** @type {any} */ (globalThis).alert = () => alerts++;
-      /** @type {any} */ (globalThis).prompt = () => '   ';
-      fireEvent(add, 'click');
-      /** @type {any} */ (globalThis).prompt = () => 'x'.repeat(1000);
-      fireEvent(add, 'click');
-    } finally {
-      /** @type {any} */ (globalThis).prompt = originalPrompt;
-      /** @type {any} */ (globalThis).alert = originalAlert;
-    }
-    assert.equal(alerts, 1);
+  await t.test('a blank option prompt is ignored without an alert', () => {
+    assert.equal(optionPromptAlertCount('   '), 0);
+  });
+
+  await t.test('an over-long option prompt is rejected with an alert', () => {
+    assert.equal(optionPromptAlertCount('x'.repeat(1000)), 1);
   });
 
   await t.test('a missing show-when group renders nothing', () => {

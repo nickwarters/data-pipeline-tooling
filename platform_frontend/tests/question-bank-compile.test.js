@@ -174,12 +174,30 @@ test('compileBank: omits empty optional tables', () => {
 test('highlight: wraps comments, strings, keywords, booleans, and property keys', () => {
   const code = `const x = 'hi'; // comment\nreturn true;\nconst obj = { key: 1 };`;
   const out = highlight(code);
-  assert.match(out, /<span class="[^"]+">\/\/ comment<\/span>/);
-  assert.match(out, /<span class="[^"]+">const<\/span>/);
-  assert.match(out, /<span class="[^"]+">return<\/span>/);
-  assert.match(out, /<span class="[^"]+">true<\/span>/);
-  assert.match(out, /<span class="[^"]+">key<\/span>/);
-  assert.match(out, /<span class="[^"]+">&#39;hi&#39;<\/span>/);
+  const classesByText = new Map(
+    [...out.matchAll(/<span class="([^"]+)">([^<]+)<\/span>/g)].map(
+      ([, className, text]) => [text, className]
+    )
+  );
+  const tokens = [
+    '// comment',
+    'const',
+    'return',
+    'true',
+    'key',
+    '&#39;hi&#39;',
+  ];
+  for (const token of tokens) assert.ok(classesByText.has(token), token);
+  assert.equal(classesByText.get('const'), classesByText.get('return'));
+  assert.equal(
+    new Set(
+      ['// comment', 'const', 'true', 'key', '&#39;hi&#39;'].map((token) =>
+        classesByText.get(token)
+      )
+    ).size,
+    5,
+    'each token kind has a distinct styling hook'
+  );
 });
 
 test('highlight: handles double-quoted strings', () => {
