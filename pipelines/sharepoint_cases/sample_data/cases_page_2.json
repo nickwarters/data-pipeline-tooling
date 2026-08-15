@@ -41,9 +41,9 @@
     "Notes": "Appeal raised by the Responsible Party's manager.",
     "Answers": "{\"q-outcome\":{\"value\":\"Not upheld\"},\"q-timeliness\":{\"value\":\"No\"}}",
     "Conversation": "[{\"author\":{\"loginName\":\"e.novak\",\"displayName\":\"Eva Novak\"},\"timestamp\":\"2026-08-05T08:29:00Z\",\"body\":\"Raising an appeal.\"}]",
-    "Appeals": "[{\"raisedBy\":\"e.novak\",\"raisedAt\":\"2026-08-05T08:30:00Z\",\"status\":\"open\"}]",
+    "Appeals": "[{\"id\":\"appeal-1754040000000\",\"appellant\":\"e.novak\",\"at\":\"2026-08-01T09:00:00.000Z\",\"rationale\":\"The outcome was reached before the amended statement was on file.\",\"citedAnswerKeys\":[\"q-outcome\",\"q-timeliness\"],\"state\":\"resolved\",\"resolution\":{\"verdict\":\"agreed\",\"rationale\":\"The amended statement changes the timeliness answer.\",\"resolver\":\"d.reid\",\"at\":\"2026-08-02T10:15:00Z\"}},{\"id\":\"appeal-1754382600000\",\"appellant\":\"e.novak\",\"at\":\"2026-08-05T08:30:00Z\",\"rationale\":\"Raising an appeal on behalf of the Responsible Party's manager.\",\"state\":\"raised\"}]",
     "AmendedOutcome": "{\"outcome\":\"Upheld\",\"hadRemediation\":true}",
-    "Details": "{\"product\":\"Credit card\",\"channel\":\"Online\"}"
+    "Details": "{\"complaintRef\":\"CMP-000104\",\"customerName\":\"Grace Liu\",\"complaintDate\":\"2026-05-30\",\"sourceSystem\":\"legacy-crm\"}"
   },
   {
     "Id": 105,
@@ -89,6 +89,6 @@
     "Conversation": "[]",
     "Appeals": "[]",
     "AmendedOutcome": null,
-    "Details": "{\"product\":\"Current account\",\"channel\":\"Branch\"}"
+    "Details": "{\"complaintRef\":\"CMP-000105\",\"customerName\":\"Marcus Webb\",\"complaintDate\":\"2026-06-02\"}"
   }
 ]

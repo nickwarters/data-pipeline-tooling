@@ -48,10 +48,17 @@ finding and the absolute seconds as specific to the machine and the disk.
 | Phase | Reads | Grows with |
 |---|---|---|
 | `case_current` | the **whole** silver history | every observation ever polled — forever |
-| the three aggregates | the resulting current-state frame, already in memory | the **Case count** — bounded by the team's workload |
+| the three `case_current`-sourced aggregates | the resulting current-state frame, already in memory | the **Case count** — bounded by the team's workload |
 
 Silver is append-only, so the first phase has no natural ceiling. The second
 touches one row per Case, and never sees the history at all.
+
+**This script measures neither of the two Detail Table aggregates
+(`answer_remediation_current`, `appeal_outcomes_current`)**: it runs only
+`case_current_builder` and `publish_aggregates`, never the Detail hops
+(`gold_detail_builder`, `publish_gold`) those two aggregates reduce from, so
+they are out of scope rather than measured at zero — do not read the numbers
+below as covering them.
 
 ## Measured baseline
 

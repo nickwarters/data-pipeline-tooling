@@ -49,7 +49,7 @@ pipelines/orders` imports `pipelines.orders.pipeline` and executes
   a `TODO` to build the assembly, because *what* gold means is per-feed. For a
   worked example of a real one, see
   `pipelines/sharepoint_cases/gold.py`: a current-state reduce with a declared
-  grain, plus three aggregates, all refreshed whole on every run.
+  grain, plus five aggregates, all refreshed whole on every run.
 
 ### Each hop is wired where you can see it
 
@@ -770,7 +770,7 @@ follows the ordinary scaffold shape — a `*_builder` per hop, driven by
 `run(context)` — and the first two hops are deliberately thin. Landing the list's rows as immutable
 versions is one job and interpreting them is another: raw and silver do no
 derivation and no parsing, and everything that reads meaning into a Case happens
-in the third hop (`gold.py`, four tables refreshed whole on every poll — see the
+in the third hop (`gold.py`, thirteen tables refreshed whole on every poll — see the
 [data dictionary](data-dictionary-sharepoint-cases.md)).
 
 **0. One declaration says what is polled.** `schema.py` holds a frozen
@@ -858,8 +858,8 @@ and in the returned `ingestion_batch_id` instead.
 
 **5. Every watermark is committed last, after gold.** Advancing one vouches for
 its window having been *published*, not merely fetched — so the commits are the
-final statement of `run`, in one block below every list's hops and all four gold
-tables. That is why they are not committed per list after its silver hop.
+final statement of `run`, in one block below every list's hops and every gold
+table. That is why they are not committed per list after its silver hop.
 
 Each list has its own watermark, keyed on `(site, list_id)`, so a newly onboarded
 list does a first load while the others resume. Where a partial failure lands:

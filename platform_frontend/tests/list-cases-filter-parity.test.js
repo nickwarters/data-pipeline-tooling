@@ -232,6 +232,24 @@ const SCENARIOS = [
     expected: ['open-late'],
   },
   {
+    name: 'overdue negated',
+    filter: { overdue: false },
+    rows: OVERDUE_ROWS,
+    // A null due date is not overdue — no clock has passed — and a status the
+    // review clock does not run in is not overdue however old the date.
+    expected: ['open-early', 'open-undated', 'sent-late', 'done-late'],
+  },
+  {
+    name: 'onHold with overdue negated (the Action Centre On Hold group)',
+    filter: { onHold: true, overdue: false },
+    rows: [
+      caseRow('parked', { onHold: true, dueDate: LONG_FUTURE }),
+      caseRow('parked-late', { onHold: true, dueDate: LONG_PAST }),
+      caseRow('running-late', { dueDate: LONG_PAST }),
+    ],
+    expected: ['parked'],
+  },
+  {
     name: 'effectiveOutcome',
     filter: { effectiveOutcome: 'fail' },
     rows: [

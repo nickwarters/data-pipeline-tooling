@@ -29,8 +29,8 @@ import {
  * Case Type's human name, carried so per-source consumers (dashboards,
  * fetchers) need not re-resolve it.
  *
- * The two cadence thresholds are **projected** here, not read from a config the
- * source carries: the dashboard surfaces only ever hold `CaseSource`, and a
+ * The three cadence thresholds are **projected** here, not read from a config
+ * the source carries: the dashboard surfaces only ever hold `CaseSource`, and a
  * source that carried the whole Case Type config would give every dashboard
  * reader access to every descriptor there is. Each is omitted when the Case
  * Type declares nothing, so a source is byte-identical to what it was before
@@ -42,7 +42,8 @@ import {
  * displayName: string,
  * maxInProgressCases?: number,
  * actionCentreSlaDays?: import('../sharepoint-client.js').ActionCentreSlaDays,
- * breachWindowHours?: number
+ * breachWindowHours?: number,
+ * reviewSlaWorkingDays?: number
  * }} CaseSource
  */
 
@@ -67,6 +68,7 @@ function toCaseSource({
   maxInProgressCases,
   actionCentreSlaDays,
   breachWindowHours,
+  reviewSlaWorkingDays,
 }) {
   return {
     slug,
@@ -75,6 +77,7 @@ function toCaseSource({
     ...(maxInProgressCases === undefined ? {} : { maxInProgressCases }),
     ...(actionCentreSlaDays === undefined ? {} : { actionCentreSlaDays }),
     ...(breachWindowHours === undefined ? {} : { breachWindowHours }),
+    ...(reviewSlaWorkingDays === undefined ? {} : { reviewSlaWorkingDays }),
   };
 }
 
@@ -286,6 +289,7 @@ export function resolveCaseSourcesFromCaseTypes(userGroups, caseTypes) {
       maxInProgressCases: config.maxInProgressCases,
       actionCentreSlaDays: config.actionCentreSlaDays,
       breachWindowHours: config.breachWindowHours,
+      reviewSlaWorkingDays: config.reviewSlaWorkingDays,
     })
   );
 }

@@ -835,12 +835,15 @@
    One reason-grouped, count-driven worklist replacing the stack of per-role
    tables. Each reason carries a tone (mirrors its KPI tile) used for the dot,
    the count badge and the breached "waiting" age. `appeal` has no semantic
-   token, so a fixed accessible purple is declared here with a dark variant. */
+   token, so a fixed accessible purple is declared here with a dark variant;
+   `hold` is a deliberately muted neutral — parked is not urgent, and a
+   distinct dot is what makes the group scannable next to its siblings. */
 
 .cora-action-centre {
   --cora-ac-overdue: var(--cora-color-danger);
   --cora-ac-awaiting: var(--cora-color-info);
   --cora-ac-appeal: #6d3fbf;
+  --cora-ac-hold: #5b6472;
   display: block;
   background: var(--cora-color-surface);
   border: 1px solid var(--cora-color-border);
@@ -853,15 +856,18 @@
 @media (prefers-color-scheme: dark) {
   .cora-action-centre {
     --cora-ac-appeal: #b18cf0;
+    --cora-ac-hold: #9aa4b2;
   }
 }
 
 :root[data-theme='dark'] .cora-action-centre {
   --cora-ac-appeal: #b18cf0;
+  --cora-ac-hold: #9aa4b2;
 }
 
 :root[data-theme='light'] .cora-action-centre {
   --cora-ac-appeal: #6d3fbf;
+  --cora-ac-hold: #5b6472;
 }
 
 .cora-ac-header {
@@ -964,6 +970,10 @@
 .cora-ac-dot--awaiting {
   background: var(--cora-ac-awaiting);
 }
+.cora-ac-dot--hold {
+  background: var(--cora-ac-hold);
+}
+
 .cora-ac-dot--appeal {
   background: var(--cora-ac-appeal);
 }
@@ -989,6 +999,10 @@
 .cora-ac-count--awaiting {
   background: var(--cora-ac-awaiting);
 }
+.cora-ac-count--hold {
+  background: var(--cora-ac-hold);
+}
+
 .cora-ac-count--appeal {
   background: var(--cora-ac-appeal);
 }
@@ -1048,6 +1062,10 @@
 }
 .cora-ac-wait--awaiting {
   color: var(--cora-ac-awaiting);
+  font-weight: var(--cora-font-weight-semibold);
+}
+.cora-ac-wait--hold {
+  color: var(--cora-ac-hold);
   font-weight: var(--cora-font-weight-semibold);
 }
 .cora-ac-wait--appeal {

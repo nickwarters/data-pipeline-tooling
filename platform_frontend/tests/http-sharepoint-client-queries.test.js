@@ -243,6 +243,34 @@ test('HttpSharePointClient: listCases with overdue:true adds DueDate lt and Stat
   );
 });
 
+test('HttpSharePointClient: listCases with overdue:false adds the negated, null-safe DueDate condition', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ value: [] }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await client.listCases(
+    { onHold: true, overdue: false },
+    { listName: 'Cases-ExampleReview' }
+  );
+
+  assert.equal(calls.length, 1);
+  const url = decodeURIComponent(calls[0].url);
+  assert.ok(url.includes('OnHold eq 1'), 'should keep the onHold condition');
+  assert.match(
+    url,
+    /\(Status ne 'In-progress' or DueDate eq null or DueDate ge '[^']+'\)/,
+    'should negate the overdue rule from the same status list, null DueDate included'
+  );
+});
+
 test('HttpSharePointClient: listCases without overdue filter omits DueDate condition', async () => {
   const { client, calls } = emptyPageClient();
 

@@ -5,12 +5,16 @@ key appends, a re-presented unchanged key is a no-op, a changed key is a visible
 failure, and no existing row is ever updated or deleted.
 """
 
+import sqlite3
+
 import pandas as pd
 import pytest
 
 from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError
+from framework.core.protocols import RUN_PROVENANCE_COLUMN
 from framework.io import AppendOnly, AppendOnlyConflictError
+from framework.run.run_context import RunContext, active_context
 from tools.store import Store
 
 
@@ -346,3 +350,148 @@ def test_append_only_normalises_and_compares_by_key_columns():
 def test_append_only_requires_at_least_one_key_column():
     with pytest.raises(ValueError, match="at least one key column"):
         AppendOnly(())
+
+
+# --- the reserved run-provenance column --------------------------------------
+#
+# Every row carries the run that first landed it, and that column takes no part
+# in the comparison that decides unseen / unchanged / conflict. Excluding it is
+# load-bearing: an overlapping poll re-reads rows an earlier run landed, so a
+# comparison that included the column would turn routine operation into
+# AppendOnlyConflictError.
+
+
+def test_an_appended_row_names_the_run_that_first_landed_it(tmp_path):
+    store = Store(tmp_path / "raw.db")
+    writer = store.writer("observations", AppendOnly("observation_id"))
+
+    with active_context(RunContext(pipeline_run_id="run-a")):
+        writer.write(_ds({"observation_id": "v1", "status": "open"}))
+
+    assert _rows(store, "observations") == [
+        {
+            "observation_id": "v1",
+            "status": "open",
+            RUN_PROVENANCE_COLUMN: "run-a",
+        }
+    ]
+
+
+def test_the_same_batch_under_a_later_run_is_still_a_noop(tmp_path):
+    # The regression this exclusion exists for. An overlapping window re-reads
+    # observations a previous run landed: no conflict, no duplicate row, and the
+    # stored provenance stays with the run that first landed it.
+    store = Store(tmp_path / "raw.db")
+    writer = store.writer("observations", AppendOnly("observation_id"))
+    batch = _ds(
+        {"observation_id": "v1", "status": "open"},
+        {"observation_id": "v2", "status": "closed"},
+    )
+    with active_context(RunContext(pipeline_run_id="run-a")):
+        writer.write(batch)
+
+    with active_context(RunContext(pipeline_run_id="run-b")):
+        writer.write(batch)
+
+    assert _rows(store, "observations") == [
+        {"observation_id": "v1", "status": "open", RUN_PROVENANCE_COLUMN: "run-a"},
+        {"observation_id": "v2", "status": "closed", RUN_PROVENANCE_COLUMN: "run-a"},
+    ]
+
+
+def test_a_later_run_stamps_only_the_keys_it_actually_appends(tmp_path):
+    # The partly-overlapping poll: the seen key keeps the run that landed it,
+    # the unseen one names the run that just did.
+    store = Store(tmp_path / "raw.db")
+    writer = store.writer("observations", AppendOnly("observation_id"))
+    with active_context(RunContext(pipeline_run_id="run-a")):
+        writer.write(_ds({"observation_id": "v1", "status": "open"}))
+
+    with active_context(RunContext(pipeline_run_id="run-b")):
+        writer.write(
+            _ds(
+                {"observation_id": "v1", "status": "open"},
+                {"observation_id": "v2", "status": "closed"},
+            )
+        )
+
+    assert [row[RUN_PROVENANCE_COLUMN] for row in _rows(store, "observations")] == [
+        "run-a",
+        "run-b",
+    ]
+
+
+def test_a_real_value_change_under_a_later_run_still_conflicts(tmp_path):
+    # The exclusion must not blunt the check it sits inside: a genuine change on
+    # a seen key is still refused, even though the run id also differs.
+    store = Store(tmp_path / "raw.db")
+    writer = store.writer("observations", AppendOnly("observation_id"))
+    with active_context(RunContext(pipeline_run_id="run-a")):
+        writer.write(_ds({"observation_id": "v1", "status": "open"}))
+
+    with active_context(RunContext(pipeline_run_id="run-b")):
+        with pytest.raises(AppendOnlyConflictError, match="different values"):
+            writer.write(_ds({"observation_id": "v1", "status": "closed"}))
+
+    assert _rows(store, "observations") == [
+        {"observation_id": "v1", "status": "open", RUN_PROVENANCE_COLUMN: "run-a"}
+    ]
+
+
+def test_a_narrowed_batch_is_still_refused_for_a_real_column(tmp_path):
+    # The narrowed-batch refusal keeps working on the feed's own columns; only
+    # the framework's provenance column is exempt from it.
+    store = Store(tmp_path / "raw.db")
+    writer = store.writer("observations", AppendOnly("observation_id"))
+    with active_context(RunContext(pipeline_run_id="run-a")):
+        writer.write(_ds({"observation_id": "v1", "status": "open", "note": "x"}))
+
+        with pytest.raises(ValueError, match="missing column"):
+            writer.write(_ds({"observation_id": "v2", "status": "open"}))
+
+
+def test_a_write_with_no_run_context_lands_beside_stamped_rows(tmp_path):
+    # No context, no id — and the target already holding the column must not
+    # make that an error: the unstamped row lands with a null provenance.
+    store = Store(tmp_path / "raw.db")
+    writer = store.writer("observations", AppendOnly("observation_id"))
+    with active_context(RunContext(pipeline_run_id="run-a")):
+        writer.write(_ds({"observation_id": "v1", "status": "open"}))
+
+    writer.write(_ds({"observation_id": "v2", "status": "closed"}))
+
+    landed = _rows(store, "observations")
+    assert [row["observation_id"] for row in landed] == ["v1", "v2"]
+    assert landed[0][RUN_PROVENANCE_COLUMN] == "run-a"
+    # Read back through pandas, so the SQL NULL arrives as NaN.
+    assert pd.isna(landed[1][RUN_PROVENANCE_COLUMN])
+
+
+def test_a_target_that_predates_the_column_is_widened_rather_than_refused(tmp_path):
+    # The upgrade path. A table already on disk — landed before the column
+    # existed, or created by hand with its own DDL — has no provenance column,
+    # and an INSERT naming it would fail outright. It is added in place.
+    db = tmp_path / "raw.db"
+    con = sqlite3.connect(db)
+    con.execute("CREATE TABLE observations (observation_id TEXT, status TEXT)")
+    con.execute("INSERT INTO observations VALUES ('v1', 'open')")
+    con.commit()
+    con.close()
+
+    store = Store(db)
+    writer = store.writer("observations", AppendOnly("observation_id"))
+    with active_context(RunContext(pipeline_run_id="run-a")):
+        # The pre-existing row is re-presented unchanged, so this exercises the
+        # comparison against a row whose provenance is NULL as well as the
+        # append of the new one.
+        writer.write(
+            _ds(
+                {"observation_id": "v1", "status": "open"},
+                {"observation_id": "v2", "status": "closed"},
+            )
+        )
+
+    landed = _rows(store, "observations")
+    assert [row["observation_id"] for row in landed] == ["v1", "v2"]
+    assert pd.isna(landed[0][RUN_PROVENANCE_COLUMN])  # never rewritten
+    assert landed[1][RUN_PROVENANCE_COLUMN] == "run-a"

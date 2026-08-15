@@ -71,6 +71,87 @@ http://localhost:1234/SitePages/app.aspx?mock=1#/dashboard
 
 The mock client operates entirely in memory. `patchCase` writes to its internal array so that subsequent `getCase` calls return the updated row within the same page load.
 
+### Published Question Bank versions
+
+A Case past the reportable milestone resolves its questions from the Question
+Bank version stamped on its row, not from today's bank (ADR-0021). Two kinds of
+artifact live in `case-types/banks/`, both JSON in `.txt`, both named by
+[`src/lib/bank-artifacts.js`](../../src/lib/bank-artifacts.js):
+
+| Artifact           | Role                                                                          | Mutability                   |
+| ------------------ | ----------------------------------------------------------------------------- | ---------------------------- |
+| `{slug}.txt`       | The current bank — and therefore the current version                          | edited freely                |
+| `{slug}.<hex>.txt` | One immutable published version, resolved by `getVersionedExport(slug, hash)` | append-only, never rewritten |
+
+**A version identity is just an identifier.** It says "this bank, not that one"
+and it names a file. It is a hash so that it changes when the content does and
+stays unique, but nothing depends on how it is produced — every reader treats it
+as opaque, and there is no parity requirement with the Python side. Only
+[`src/lib/bank-version.js`](../../src/lib/bank-version.js) computes one.
+
+**There is no current-version pointer file.** `getExportHash(slug)` reads the
+bank artifact and derives its identity. A pointer would be a second statement of
+the same fact, and the two can disagree: a bank edited without republishing would
+go on claiming the old version, and a Case completed against it would freeze on
+content the Reviewer never saw.
+
+Two things follow that are easy to get wrong:
+
+- **The identity is the filename**, unchanged — which is why it is a bare hex
+  digest with no `sha256:` prefix. `:` is illegal in a Windows path and rejected
+  by SharePoint, so a prefixed identity could never have reached a filename.
+- **There is no environment-specific path.** Artifacts are resolved relative to
+  the module that reads them, so a UAT deploy reads UAT's copies because of
+  where it was deployed. `resolveEnvironment()` declares the list prefix and
+  nothing else.
+
+`getExportHash` deliberately hashes the **artifact**, not the Case Type config.
+The config exposes the bank's fields, but the publish step hashes the file, and
+a Case Type free to reshape what it exposes could otherwise produce an identity
+no published version answers to.
+
+`HttpSharePointClient` reads these files directly rather than through `_read` —
+no OData headers, and the body is parsed from text, because a `.txt` response
+does not arrive with a content type worth trusting. Every failure is `null`: a
+Case Type with no bank stamps no version rather than blocking completion.
+
+#### In mock mode
+
+`MockSharePointClient` reads **the same artifacts** the HTTP client does, rather
+than being seeded with copies of them — there is no such thing as a mock
+Question Bank, since the files ship with the code. A test may still hand it
+explicit `exportHashes` / `versionedExports`, which win over the files; the dev
+loop passes none. Two fixture Cases — `complaints-frozen-v1` and
+`complaints-frozen-v2` — are stamped against older published versions and open
+against those catalogues; the January one answers a question retired since,
+which no other Case can display. Their Answers name only the ids their own
+version asks, so the live-bank fixture contracts in `tests/complaints.test.js`
+deliberately skip any Case carrying a `questionBankVersion`.
+
+A Case completed in the dev loop stamps whatever the bank currently hashes to
+and re-opens against its published copy. Stamping a hash nothing serves is not a
+hard failure — the Case falls back to the live bank behind an "as-reviewed
+version unavailable" banner — which is why the wiring is covered by tests rather
+than left to the eye.
+
+#### Publishing
+
+After editing a bank, republish it:
+
+```sh
+node scripts/publish-bank.js            # every registered Case Type
+node scripts/publish-bank.js complaints # one
+```
+
+It compiles the bank and writes `{slug}.<hex>.txt` if that version is not yet
+published. It is idempotent and never rewrites a versioned file — a version some
+reportable Case resolves against has to stay exactly as published.
+
+Nothing goes stale if you forget, because there is no pointer to go stale. What
+happens instead is that the bank's current identity has no file: a Case
+completed against it stamps a version that resolves to nothing, and re-opens
+behind the fallback banner. A test fails on exactly that, naming the command.
+
 ---
 
 ## Data shapes
@@ -102,7 +183,7 @@ The mock client operates entirely in memory. `patchCase` writes to its internal 
  */
 ```
 
-The full shape (the `Effective*` reporting columns, `Appeals`, etc.) lives in `src/sharepoint-client.js`; the fields above are the storage-relevant subset. `status` widened to three values with the lifecycle change; `reportableAt` / `remediationDueDate` are stamped at Send Actions; `amendedOutcome` carries Controls' post-completion verdict and **replaces the removed `overrides[]` blob**. The client stamps `assignedAt` itself on every write that sets `assignedReviewer` (and clears it when the Reviewer is cleared), so no caller stamps it. See the [Case Type onboarding checklist](../case-type-onboarding.md) for the SharePoint columns behind each field.
+The full shape (the `Effective*` reporting columns, `Appeals`, etc.) lives in `src/sharepoint-client.js`; the fields above are the storage-relevant subset. `status` widened to three values with the lifecycle change; `reportableAt` / `remediationDueDate` are stamped at Send Actions; `amendedOutcome` carries Controls' post-completion verdict and **replaces the removed `overrides[]` blob**. The client stamps `assignedAt` itself on every write that sets `assignedReviewer` (and clears it when the Reviewer is cleared), so no caller stamps it — but `dueDate` on that same write is stamped by the _caller_, the dashboard allocation claim, because the review SLA it is computed from is per-Case-Type and the client is deliberately list-generic. See the [Case Type onboarding checklist](../case-type-onboarding.md) for the SharePoint columns behind each field.
 
 `answers` and `conversation` are stored as JSON blobs in the SharePoint list. `HttpSharePointClient` handles the serialisation/deserialisation; consumers always receive and send parsed JS objects.
 

@@ -6,6 +6,58 @@ Date: 2026-06-25
 
 Accepted (amended by [ADR-0023], Jul 2026)
 
+> **Amendment (2026-08-13, artifact layout).** The artifacts below are stored
+> **beside the bank they belong to**, in `case-types/banks/`, as JSON in `.txt`
+> files — not as `.json` in a separate `/Style Library/case-review/case-types/`
+> folder. Three things forced it: SharePoint Subscription Edition blocks or
+> mis-serves `.json` (the reason the bank artifact was already `.txt`); a
+> `sha256:`-prefixed hash cannot appear in a Windows or SharePoint filename, so
+> the identity is the bare digest — one value on the Case row, in the envelope
+> and in the filename, rather than one form stripped at the edge; and the folder
+> this ADR named was never where
+> the deploy actually puts the modules, so "beside the module" was not true of
+> the path as written. Names are composed in one place,
+> `src/lib/bank-artifacts.js`, and read relative to the module that reads them,
+> which retires the per-environment `exportBasePath` from [ADR-0033] — a UAT
+> deploy now reads UAT's artifacts because of where it was deployed, not
+> because it was told. The **decision** is unchanged: content-addressed
+> immutable versions, a hash stamped at the reportable milestone, live fallback
+> on a miss.
+>
+> | Role             | Was                           | Is                                                         |
+> | ---------------- | ----------------------------- | ---------------------------------------------------------- |
+> | Current bank     | `case-types/banks/{slug}.txt` | unchanged — and it **is** the current version              |
+> | Current export   | `{slug}.json`                 | **removed**; the current identity is derived from the bank |
+> | Versioned export | `{slug}.{hash}.json`          | `case-types/banks/{slug}.<hex>.txt`                        |
+> | Manifest         | `{slug}.history.json`         | not built; the versions on disk are the timeline           |
+>
+> **The current-version pointer is gone.** A file whose job was to state which
+> version is current is a second copy of a fact the bank already carries, and the
+> two can disagree — a bank edited without republishing keeps claiming the old
+> version, and a Case completed against it freezes on content the Reviewer never
+> saw. `src/lib/bank-version.js` derives the identity from the bank instead, so
+> there is nothing to keep in step. Its content duplicated the newest versioned
+> file anyway, save for the labels table, which the bank artifact already carries.
+>
+> **"The hash contract" below is over-specified and no longer holds in full.** A
+> version identity is an **identifier** — a way to distinguish one bank from
+> another and to name a file. A hash is a good choice for the job because it
+> changes when the content does and is unique, but nothing turns on how it is
+> produced; `0001`, `0002`, `0003` would satisfy every consumer. So: rules 2 and
+> 3 stand (identical questions are the same version; store the whole digest).
+> Rule 1's normalised key ordering was dropped as machinery serving nobody —
+> there is one implementation. Rule 4's "never recompute" was recorded because JS
+> and Python could not agree byte-for-byte, and **cross-language parity is not a
+> goal**: nothing outside `src/lib/bank-version.js` computes an identity, and
+> every reader — including the Python pipeline — treats what it is given as
+> opaque.
+>
+> `scripts/publish-bank.js` is the local half of the publish flow: it compiles a
+> bank and writes the immutable copy its identity names. It is idempotent and
+> never rewrites a versioned file. Forgetting to run it does not produce stale
+> content — it produces a Case stamped with a version no file answers to, which
+> takes the documented fallback and is caught by a test.
+
 > **Amendment ([ADR-0023]).** `questionBankVersion` is stamped at the **reportable**
 > milestone (Send Actions, or Complete Case on the no-actions path) rather than at final
 > `Completed` — the freeze this ADR protects now begins when the Case becomes reportable
@@ -239,3 +291,4 @@ The Python pipeline uses the **same** artifacts, gaining point-in-time stability
 [ADR-0007]: ./0007-case-storage-shape.md
 [ADR-0012]: ./0012-outcome-snapshot-at-completion-for-reporting.md
 [ADR-0015]: ./0015-data-only-case-type-export-for-reporting.md
+[ADR-0033]: ./0033-uat-environment.md

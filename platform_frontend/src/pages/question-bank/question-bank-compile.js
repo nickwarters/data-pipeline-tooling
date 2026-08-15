@@ -14,36 +14,15 @@
 /** @typedef {import('./question-bank-source.js').QuestionBank} QuestionBank */
 /** @typedef {import('./question-bank-source.js').DraftQuestion} DraftQuestion */
 
-import { outcomeResponseOptions } from '../../evaluators/configured-outcome.js';
+import {
+  bankVersionHash,
+  exportQuestions,
+  resolveCompiledOptions,
+} from '../../lib/bank-version.js';
 
-/**
- * Resolves the response options and their Outcome mapping for a compiled/exported
- * question. `outcome`-type questions derive both from the Case Type's Outcomes
- * (read-only); other types carry their own. Empty mappings collapse to `null` so
- * the caller can omit them.
- *
- * @param {DraftQuestion} q
- * @param {import('../../sharepoint-client.js').OutcomeOption[]} outcomeOptions
- * @returns {{ options: string[] | null, optionOutcomes: Record<string, string> | null }}
- */
-export function resolveCompiledOptions(q, outcomeOptions = []) {
-  if (q.responseType === 'outcome') {
-    const derived = outcomeResponseOptions(outcomeOptions);
-    return {
-      options: derived.options.length ? derived.options : null,
-      optionOutcomes: Object.keys(derived.optionOutcomes).length
-        ? derived.optionOutcomes
-        : null,
-    };
-  }
-  return {
-    options: q.options ?? null,
-    optionOutcomes:
-      q.optionOutcomes && Object.keys(q.optionOutcomes).length
-        ? q.optionOutcomes
-        : null,
-  };
-}
+// `resolveCompiledOptions` moved to lib/bank-version.js with the export
+// projection it belongs to; the editor and the simulator still reach it here.
+export { resolveCompiledOptions };
 
 /**
  * @param {QuestionBank} bank
@@ -130,44 +109,16 @@ export function highlight(code) {
 }
 
 /**
- * Returns a canonical JSON string with object keys sorted alphabetically at
- * every nesting level. Arrays preserve their order. Used to produce a
- * stable hash input regardless of how question objects were constructed.
- *
- * @param {unknown} value
- * @returns {string}
- */
-function canonicalise(value) {
-  if (Array.isArray(value)) {
-    return '[' + value.map(canonicalise).join(',') + ']';
-  }
-  if (value !== null && typeof value === 'object') {
-    const keys = Object.keys(/** @type {object} */ (value)).sort();
-    return (
-      '{' +
-      keys
-        .map(
-          (k) =>
-            JSON.stringify(k) +
-            ':' +
-            canonicalise(/** @type {any} */ (value)[k])
-        )
-        .join(',') +
-      '}'
-    );
-  }
-  return JSON.stringify(value);
-}
-
-/**
  * Data-only JSON export envelope for external reporting.
  *
  * Returns the function-free projection of the bank: slug, label, generatedAt,
- * a full SHA-256 hash (stable over questions+slug only, including labelIds),
- * a questions array that carries id/text/category/questionGroup/responseType/options/
- * optionOutcomes/showWhen/remediationActions/labelIds/deprecated,
- * case-type outcomeOptions/defaultOutcomeId, and a labels table. Excluded: computeOutcome,
- * disallowFreeFormRemediation, eligibleGroups.
+ * its version identity, the projected questions, case-type
+ * outcomeOptions/defaultOutcomeId, and a labels table. Excluded:
+ * computeOutcome, disallowFreeFormRemediation, eligibleGroups.
+ *
+ * The identity and the questions come from the same projection
+ * (`lib/bank-version.js`), so an envelope cannot carry a hash computed over
+ * anything other than the content it is publishing.
  *
  * @param {QuestionBank} bank
  * @returns {Promise<{
@@ -175,71 +126,21 @@ function canonicalise(value) {
  * label: string,
  * generatedAt: string,
  * hash: string,
- * questions: Array<{
- * id: string,
- * text: string,
- * category: string | null,
- * questionGroup: string | null,
- * responseType: string,
- * options: string[] | null,
- * optionOutcomes: Record<string, string> | null,
- * showWhen: Record<string, unknown> | null,
- * remediationActions: Array<import('../../sharepoint-client.js').RemediationActionDefinition> | null,
- * deprecated: boolean,
- * labelIds?: string[],
- * }>,
+ * questions: ReturnType<typeof exportQuestions>,
  * labels: Array<{ id: string, name: string, color: string }>,
  * outcomeOptions: import('../../sharepoint-client.js').OutcomeOption[],
  * defaultOutcomeId: string | null,
  * }>}
  */
 export async function compileExport(bank) {
-  const outcomeOptions = bank.outcomeOptions ?? [];
-  const questions = bank.questions.map((q) => {
-    const resolved = resolveCompiledOptions(q, outcomeOptions);
-    /** @type {{ id: string, text: string, category: string|null, questionGroup: string|null, responseType: string, options: string[]|null, optionOutcomes: Record<string, string>|null, showWhen: Record<string,unknown>|null, remediationActions: Array<import('../../sharepoint-client.js').RemediationActionDefinition>|null, deprecated: boolean, labelIds?: string[] }} */
-    const out = {
-      id: q.id,
-      text: q.text,
-      category: q.category ?? null,
-      questionGroup: q.questionGroup ?? null,
-      responseType: q.responseType,
-      options: resolved.options,
-      optionOutcomes: resolved.optionOutcomes,
-      showWhen: q.showWhen ?? null,
-      remediationActions: q.remediationActions
-        ? q.remediationActions.map((action, index) =>
-            typeof action === 'string'
-              ? { id: `${q.id}-ra-${index}`, text: action }
-              : { id: action.id, text: action.text }
-          )
-        : null,
-      deprecated: q.deprecated,
-    };
-    if (q.labelIds && q.labelIds.length) out.labelIds = q.labelIds;
-    return out;
-  });
-
-  const canonical = canonicalise({
-    slug: bank.slug,
-    questions,
-    outcomeOptions,
-    defaultOutcomeId: bank.defaultOutcomeId ?? null,
-  });
-  const buf = new TextEncoder().encode(canonical);
-  const hashBuf = await crypto.subtle.digest('SHA-256', buf);
-  const hashHex = [...new Uint8Array(hashBuf)]
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-
   return {
     slug: bank.slug,
     label: bank.label,
     generatedAt: new Date().toISOString(),
-    hash: `sha256:${hashHex}`,
-    questions,
+    hash: await bankVersionHash(bank),
+    questions: exportQuestions(bank),
     labels: bank.labels ?? [],
-    outcomeOptions,
+    outcomeOptions: bank.outcomeOptions ?? [],
     defaultOutcomeId: bank.defaultOutcomeId ?? null,
   };
 }

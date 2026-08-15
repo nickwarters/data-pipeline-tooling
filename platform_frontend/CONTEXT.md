@@ -234,6 +234,10 @@ still under review — i.e. not yet
 **Reportable**, which in status terms is `In-progress` alone. Derived, never
 stored: no column holds it, every surface re-derives it from the row's status and
 Due Date, and a row that carries an `overdue` value has had it derived on read.
+The Due Date it is judged against is itself stamped once and only at the claim —
+the claim date + the **Case Type**'s review SLA in working days (**5** by
+default), never recomputed afterwards — so a Case never claimed through the app
+carries no Due Date unless someone typed one into the list.
 Once the Case is Reportable the review clock stops and says nothing further about
 it — the **Remediation Due Date** governs the `Actions In Progress` phase, and a
 Case past _that_ date is "past its Remediation Due Date", a different statement

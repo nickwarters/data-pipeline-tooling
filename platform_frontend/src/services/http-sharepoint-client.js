@@ -6,6 +6,12 @@ import {
   isOverdue,
   OVERDUE_STATUSES,
 } from '../evaluators/overdue-evaluator.js';
+import {
+  BANKS_DIR,
+  bankArtifactName,
+  versionedExportName,
+} from '../lib/bank-artifacts.js';
+import { bankVersionHash } from '../lib/bank-version.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
@@ -26,7 +32,6 @@ import {
  * @typedef {{
  * webUrl?: string,
  * listPrefix?: string,
- * exportBasePath?: string,
  * fetchImpl?: FetchImpl,
  * sleep?: (ms: number) => Promise<void>,
  * now?: () => Date
@@ -140,8 +145,6 @@ export class HttpSharePointClient {
     // _listItemUrl/_listItemsUrl so every list access — including per-Case-Type
     // `opts.listName` overrides — lands in the environment's lists. Empty for prod.
     this._listPrefix = opts.listPrefix ?? '';
-    this._exportBasePath =
-      opts.exportBasePath ?? '/Style%20Library/case-review/case-types';
     /** @type {FetchImpl} */
     this._fetch =
       opts.fetchImpl ?? ((input, init) => globalThis.fetch(input, init));
@@ -520,45 +523,84 @@ export class HttpSharePointClient {
   }
 
   /**
-   * Reads the content-hash from the current `{slug}.json` export envelope.
-   * Returns null when the file is absent or carries no `hash` field — never
-   * hard-fails so a missing export does not block completion.
+   * The version identity of the Case Type's **current** Question Bank — what
+   * completion stamps onto a Case row.
+   *
+   * Derived from the bank artifact rather than read out of a pointer file
+   * beside it. The bank is the current version, so its identity is a fact about
+   * its content; a stored pointer would be a second copy of that fact, and a
+   * bank edited without republishing would go on claiming the old version.
+   *
+   * Deliberately reads the artifact rather than the Case Type config: the
+   * config exposes the bank's fields, but the publish step hashes the *file*,
+   * and a Case Type free to reshape what it exposes could otherwise produce an
+   * identity no published version answers to.
+   *
+   * Returns null when the artifact is absent or unreadable — a Case Type with
+   * no bank stamps no version rather than blocking completion.
    *
    * @param {string} slug
    * @returns {Promise<string | null>}
    */
   async getExportHash(slug) {
-    const url = this._absolute(
-      `${this._exportBasePath}/${encodeURIComponent(slug)}.json`
-    );
+    const bank = await this._readBankArtifact(bankArtifactName(slug));
+    if (!bank || typeof bank !== 'object' || !Array.isArray(bank.questions)) {
+      return null;
+    }
     try {
-      const body = await this._read(url);
-      const hash = body?.hash;
-      return typeof hash === 'string' && hash !== '' ? hash : null;
+      return await bankVersionHash(bank);
     } catch {
       return null;
     }
   }
 
   /**
-   * Fetches the immutable versioned export `{slug}.{hash}.json`. Returns the
-   * parsed object on success, null on any error (404, network failure) — never
-   * hard-fails so a missing file triggers the live-fallback path in the loader.
+   * Fetches one immutable published version. Returns the parsed envelope on
+   * success, null on any error (404, network failure) — never hard-fails, so a
+   * version that was stamped but never published triggers the loader's
+   * live-fallback path instead of breaking the Case.
    *
    * @param {string} slug
    * @param {string} hash
    * @returns {Promise<import('../sharepoint-client.js').VersionedExport | null>}
    */
   async getVersionedExport(slug, hash) {
-    const url = this._absolute(
-      `${this._exportBasePath}/${encodeURIComponent(slug)}.${encodeURIComponent(hash)}.json`
+    const body = await this._readBankArtifact(versionedExportName(slug, hash));
+    if (!body || typeof body !== 'object') return null;
+    return /** @type {import('../sharepoint-client.js').VersionedExport} */ (
+      body
     );
+  }
+
+  /**
+   * Reads one Question Bank artifact out of the deployed `case-types/banks/`
+   * folder, resolved against this module rather than an absolute Style Library
+   * path. That is how the current bank has always been loaded, and it is what
+   * keeps a UAT deploy reading UAT's artifacts: both environments get the
+   * folder they were deployed into, with nothing to declare and nothing to keep
+   * in step.
+   *
+   * These are static files, not list items, so this deliberately does not go
+   * through `_read`: no OData headers, no ETag handling, and the body is parsed
+   * from text because the artifacts are JSON stored in `.txt` and a `.txt`
+   * response arrives with a content type `Response.json()` has no business
+   * assuming.
+   *
+   * Returns null on any failure. Every caller here treats a missing artifact as
+   * "not published", which is a real state and not an error.
+   *
+   * @param {string} filename
+   * @returns {Promise<any | null>}
+   */
+  async _readBankArtifact(filename) {
+    const url = new URL(
+      `../../case-types/${BANKS_DIR}/${filename}`,
+      import.meta.url
+    ).href;
     try {
-      const body = await this._read(url);
-      if (!body || typeof body !== 'object') return null;
-      return /** @type {import('../sharepoint-client.js').VersionedExport} */ (
-        body
-      );
+      const res = await this._fetchWithThrottle(url, {});
+      if (!res.ok) return null;
+      return JSON.parse(await res.text());
     } catch {
       return null;
     }
@@ -993,6 +1035,18 @@ function buildFilterExpr(filter) {
       (status) => `Status eq '${escapeOData(status)}'`
     );
     conds.push(`(${statuses.join(' or ')})`);
+  } else if (filter.overdue === false) {
+    // The negation of the rule above, built from the same status list so the
+    // two can never drift. A null DueDate is not overdue — a Case with no
+    // review date has no clock to have passed. Kept as one ORed group so the
+    // indexed, selective terms a caller ANDs alongside it still lead the
+    // query.
+    const notInReview = OVERDUE_STATUSES.map(
+      (status) => `Status ne '${escapeOData(status)}'`
+    ).join(' and ');
+    conds.push(
+      `(${notInReview} or DueDate eq null or DueDate ge '${new Date().toISOString()}')`
+    );
   }
   // Action Centre reason flags — indexed boolean columns hoisted onto the Case
   // row so a reason count is a cheap `$count`, never a blob parse.

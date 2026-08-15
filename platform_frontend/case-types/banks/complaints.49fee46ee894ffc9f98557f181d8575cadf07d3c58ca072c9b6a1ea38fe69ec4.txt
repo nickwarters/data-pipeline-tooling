@@ -1,0 +1,1142 @@
+{
+  "slug": "complaints",
+  "label": "Complaints",
+  "generatedAt": "2026-08-13T15:34:31.259Z",
+  "hash": "49fee46ee894ffc9f98557f181d8575cadf07d3c58ca072c9b6a1ea38fe69ec4",
+  "questions": [
+    {
+      "id": "q-cmp-0001",
+      "text": "Was the complaint logged on the complaints register on the day it was received?",
+      "category": null,
+      "questionGroup": "Acknowledgement",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": [
+        {
+          "id": "q-cmp-0001-ra-0",
+          "text": "Log the complaint on the complaints register and correct the recorded receipt date."
+        }
+      ],
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0002",
+      "text": "Was the complaint categorised correctly at the point of logging?",
+      "category": null,
+      "questionGroup": "Acknowledgement",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0003",
+      "text": "Was the acknowledgement issued to the correct customer contact address?",
+      "category": null,
+      "questionGroup": "Acknowledgement",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0004",
+      "text": "Did the acknowledgement name the handler and give their direct contact details?",
+      "category": null,
+      "questionGroup": "Acknowledgement",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0005",
+      "text": "Was the customer told how long the investigation is expected to take?",
+      "category": null,
+      "questionGroup": "Acknowledgement",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false,
+      "labelIds": ["lbl-sla"]
+    },
+    {
+      "id": "q-cmp-0006",
+      "text": "Was the complaint routed to a handler independent of the original decision?",
+      "category": null,
+      "questionGroup": "Acknowledgement",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0007",
+      "text": "Were the customer's preferred contact method and times recorded?",
+      "category": null,
+      "questionGroup": "Acknowledgement",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0008",
+      "text": "Were all the points the customer raised identified and listed?",
+      "category": null,
+      "questionGroup": "Investigation",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0009",
+      "text": "Was every relevant system record and call recording reviewed?",
+      "category": null,
+      "questionGroup": "Investigation",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0010",
+      "text": "Was contact made with the customer where the complaint points were unclear?",
+      "category": null,
+      "questionGroup": "Investigation",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0011",
+      "text": "Were the policy and procedure versions in force at the time applied?",
+      "category": null,
+      "questionGroup": "Investigation",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0012",
+      "text": "Was the evidence gathered sufficient to support the decision reached?",
+      "category": null,
+      "questionGroup": "Investigation",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0013",
+      "text": "Were any linked or repeat complaints from the same customer considered?",
+      "category": null,
+      "questionGroup": "Investigation",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0014",
+      "text": "Was the investigation completed without avoidable delay?",
+      "category": null,
+      "questionGroup": "Investigation",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false,
+      "labelIds": ["lbl-sla"]
+    },
+    {
+      "id": "q-cmp-0015",
+      "text": "Was the uphold decision consistent with the evidence gathered?",
+      "category": null,
+      "questionGroup": "Resolution",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0016",
+      "text": "Was the redress calculation checked against the redress methodology?",
+      "category": null,
+      "questionGroup": "Resolution",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": [
+        {
+          "id": "q-cmp-0016-ra-0",
+          "text": "Recalculate the redress against the current methodology and offer it to the customer."
+        }
+      ],
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0017",
+      "text": "Was any distress and inconvenience payment consistent with the published scale?",
+      "category": null,
+      "questionGroup": "Resolution",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0018",
+      "text": "Was interest applied to the redress at the correct rate and for the correct period?",
+      "category": null,
+      "questionGroup": "Resolution",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0019",
+      "text": "Were the customer's own costs considered in the settlement?",
+      "category": null,
+      "questionGroup": "Resolution",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0020",
+      "text": "Was the resolution offered within the handler's delegated authority?",
+      "category": null,
+      "questionGroup": "Resolution",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0021",
+      "text": "Was the resolution recorded on the customer's account and systems?",
+      "category": null,
+      "questionGroup": "Resolution",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0022",
+      "text": "Was the final response written in plain language the customer can follow?",
+      "category": null,
+      "questionGroup": "Communication",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0023",
+      "text": "Did the final response address every point the customer raised?",
+      "category": null,
+      "questionGroup": "Communication",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": [
+        {
+          "id": "q-cmp-0023-ra-0",
+          "text": "Issue a supplementary response covering the points the final response did not address."
+        }
+      ],
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0024",
+      "text": "Did the final response explain the reasons for the decision?",
+      "category": null,
+      "questionGroup": "Communication",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0025",
+      "text": "Were the customer's referral rights and the time limit set out correctly?",
+      "category": null,
+      "questionGroup": "Communication",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false,
+      "labelIds": ["lbl-regulatory"]
+    },
+    {
+      "id": "q-cmp-0026",
+      "text": "Was the tone of the response appropriate to the customer's circumstances?",
+      "category": null,
+      "questionGroup": "Communication",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0027",
+      "text": "Were holding responses issued where the investigation ran beyond the expected time?",
+      "category": null,
+      "questionGroup": "Communication",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false,
+      "labelIds": ["lbl-sla"]
+    },
+    {
+      "id": "q-cmp-0028",
+      "text": "Was the response issued in the format the customer asked for?",
+      "category": null,
+      "questionGroup": "Communication",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0029",
+      "text": "Were indicators of customer vulnerability identified during the complaint?",
+      "category": null,
+      "questionGroup": "Customer Treatment",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0030",
+      "text": "Where vulnerability was identified, was it recorded on the customer record?",
+      "category": null,
+      "questionGroup": "Customer Treatment",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0031",
+      "text": "Were reasonable adjustments offered where the customer needed them?",
+      "category": null,
+      "questionGroup": "Customer Treatment",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": [
+        {
+          "id": "q-cmp-0031-ra-0",
+          "text": "Record the adjustments the customer needs and re-contact them using those adjustments."
+        }
+      ],
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0032",
+      "text": "Was the pace and channel of contact adapted to the customer's needs?",
+      "category": null,
+      "questionGroup": "Customer Treatment",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0033",
+      "text": "Was the customer treated fairly compared with others in the same circumstances?",
+      "category": null,
+      "questionGroup": "Customer Treatment",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0034",
+      "text": "Were affordability or hardship concerns raised by the customer acted on?",
+      "category": null,
+      "questionGroup": "Customer Treatment",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0035",
+      "text": "Was consent obtained before discussing the complaint with a third party?",
+      "category": null,
+      "questionGroup": "Customer Treatment",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0036",
+      "text": "Are the case notes a complete and accurate record of the investigation?",
+      "category": null,
+      "questionGroup": "Records & Evidence",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0037",
+      "text": "Is the evidence relied on saved to the complaint file?",
+      "category": null,
+      "questionGroup": "Records & Evidence",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0038",
+      "text": "Were the decision and its rationale recorded at the time it was made?",
+      "category": null,
+      "questionGroup": "Records & Evidence",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0039",
+      "text": "Are all customer contacts logged with date, channel and outcome?",
+      "category": null,
+      "questionGroup": "Records & Evidence",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0040",
+      "text": "Was personal data handled in line with the retention and access rules?",
+      "category": null,
+      "questionGroup": "Records & Evidence",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false,
+      "labelIds": ["lbl-regulatory"]
+    },
+    {
+      "id": "q-cmp-0041",
+      "text": "Is the complaint file free of information belonging to another customer?",
+      "category": null,
+      "questionGroup": "Records & Evidence",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0042",
+      "text": "Were any manual adjustments to the record authorised and evidenced?",
+      "category": null,
+      "questionGroup": "Records & Evidence",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0043",
+      "text": "Was the complaint reportable, and flagged as such correctly?",
+      "category": null,
+      "questionGroup": "Regulatory & Reporting",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false,
+      "labelIds": ["lbl-regulatory"]
+    },
+    {
+      "id": "q-cmp-0044",
+      "text": "Was the root cause coded against the correct product and cause category?",
+      "category": null,
+      "questionGroup": "Regulatory & Reporting",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0045",
+      "text": "Was the complaint closed within the regulatory deadline?",
+      "category": null,
+      "questionGroup": "Regulatory & Reporting",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false,
+      "labelIds": ["lbl-sla", "lbl-regulatory"]
+    },
+    {
+      "id": "q-cmp-0046",
+      "text": "Where the deadline was missed, was the customer told of their referral rights?",
+      "category": null,
+      "questionGroup": "Regulatory & Reporting",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": {
+        "q-cmp-0045": {
+          "in": ["Good with process enhancement", "Poor", "Poor with harm"]
+        }
+      },
+      "remediationActions": null,
+      "deprecated": false,
+      "labelIds": ["lbl-regulatory"]
+    },
+    {
+      "id": "q-cmp-0047",
+      "text": "Were any potential systemic issues escalated to the relevant forum?",
+      "category": null,
+      "questionGroup": "Regulatory & Reporting",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    },
+    {
+      "id": "q-cmp-0048",
+      "text": "Was any breach or near miss raised through the incident process?",
+      "category": null,
+      "questionGroup": "Regulatory & Reporting",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false,
+      "labelIds": ["lbl-regulatory"]
+    },
+    {
+      "id": "q-cmp-0049",
+      "text": "Was the complaint outcome fed back to the originating team?",
+      "category": null,
+      "questionGroup": "Regulatory & Reporting",
+      "responseType": "outcome",
+      "options": [
+        "Good",
+        "Good with process enhancement",
+        "Poor",
+        "Poor with harm"
+      ],
+      "optionOutcomes": {
+        "Good": "good",
+        "Good with process enhancement": "good-with-process-enhancement",
+        "Poor": "poor",
+        "Poor with harm": "poor-with-harm"
+      },
+      "showWhen": null,
+      "remediationActions": null,
+      "deprecated": false
+    }
+  ],
+  "outcomeOptions": [
+    {
+      "id": "good",
+      "wording": "Good",
+      "severity": 0
+    },
+    {
+      "id": "good-with-process-enhancement",
+      "wording": "Good with process enhancement",
+      "severity": 25
+    },
+    {
+      "id": "poor",
+      "wording": "Poor",
+      "severity": 50
+    },
+    {
+      "id": "poor-with-harm",
+      "wording": "Poor with harm",
+      "severity": 100
+    }
+  ],
+  "defaultOutcomeId": "good"
+}

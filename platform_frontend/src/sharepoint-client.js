@@ -555,10 +555,11 @@
  * questions are included by key so their answer keys stay stable across Case
  * Types, and Case Type-specific ones are declared inline beside them.
  *
- * `actionCentreSlaDays`, `breachWindowHours` and `remediationSlaWorkingDays`
- * are the review-cadence thresholds. Each is optional and each has a framework
- * default that lives next to the code reading it, so a Case Type declaring none
- * of them behaves exactly as it did before the keys existed — an absent key is
+ * `actionCentreSlaDays`, `breachWindowHours`, `reviewSlaWorkingDays` and
+ * `remediationSlaWorkingDays` are the review-cadence thresholds. Each is
+ * optional and each has a framework default that lives next to the code reading
+ * it, so a Case Type declaring none of them behaves exactly as it did before
+ * the keys existed — an absent key is
  * "use the default", never "no threshold".
  *
  * `voidReasons` narrows the Void Reasons the Case Type offers a Reviewer, from
@@ -587,6 +588,7 @@
  * appeal?: AppealConfig,
  * actionCentreSlaDays?: ActionCentreSlaDays,
  * breachWindowHours?: number,
+ * reviewSlaWorkingDays?: number,
  * remediationSlaWorkingDays?: number,
  * maxInProgressCases?: number,
  * remediationStatuses?: RemediationStatusValue[],

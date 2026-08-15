@@ -71,7 +71,7 @@ test('resolveCaseSourcesFromCaseTypes: carries the optional allocation limit fro
   ]);
 });
 
-test('resolveCaseSourcesFromCaseTypes: projects the two dashboard cadence thresholds', () => {
+test('resolveCaseSourcesFromCaseTypes: projects the three dashboard cadence thresholds', () => {
   const sources = resolveCaseSourcesFromCaseTypes(
     ['Reviewers - Complaints'],
     [
@@ -82,6 +82,7 @@ test('resolveCaseSourcesFromCaseTypes: projects the two dashboard cadence thresh
         config: minimalConfig({
           actionCentreSlaDays: { awaitingFrontline: 30 },
           breachWindowHours: 48,
+          reviewSlaWorkingDays: 7,
           // Not a dashboard threshold: the Case Review page reads it off the
           // config directly, so it must NOT appear on the source.
           remediationSlaWorkingDays: 5,
@@ -97,6 +98,7 @@ test('resolveCaseSourcesFromCaseTypes: projects the two dashboard cadence thresh
       displayName: 'Complaints',
       actionCentreSlaDays: { awaitingFrontline: 30 },
       breachWindowHours: 48,
+      reviewSlaWorkingDays: 7,
     },
   ]);
 });
@@ -123,6 +125,7 @@ test('resolveCaseSourcesFromCaseTypes: a Case Type declaring no threshold carrie
   });
   assert.equal(Object.hasOwn(source, 'actionCentreSlaDays'), false);
   assert.equal(Object.hasOwn(source, 'breachWindowHours'), false);
+  assert.equal(Object.hasOwn(source, 'reviewSlaWorkingDays'), false);
 });
 
 test('allocationSourcesFromCaseSources: isolates an invalid limit to that Case Type', async () => {
@@ -470,9 +473,10 @@ test('resolveAppCaseSources: example-review source carries its declared listName
     listName: 'Cases-ExampleReview',
     displayName: 'Example Review',
     // The end-to-end proof of the projection: this fixture declares diverging
-    // cadence thresholds and the two dashboard ones reach the source.
+    // cadence thresholds and the three dashboard ones reach the source.
     actionCentreSlaDays: { awaitingFrontline: 30 },
     breachWindowHours: 48,
+    reviewSlaWorkingDays: 8,
   });
 });
 

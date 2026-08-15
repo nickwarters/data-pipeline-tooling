@@ -28,6 +28,7 @@ import { isVoidReasonKey, VOID_REASONS } from '../src/lib/void-reasons.js';
 import { ACTION_CENTRE_REASONS } from '../src/services/action-centre-model.js';
 import { reviewerResponseOptions } from '../src/lib/response-options.js';
 import { CASE_TYPES, loadCaseTypeConfig } from '../case-types/manifest.js';
+import { classifyBankArtifact } from '../src/lib/bank-artifacts.js';
 import { resolveRelative } from './module-graph.js';
 
 /** @typedef {import('./verify_build.js').Failure} Failure */
@@ -826,7 +827,11 @@ function checkThresholds(slug, file, config) {
     }
   }
 
-  for (const key of ['breachWindowHours', 'remediationSlaWorkingDays']) {
+  for (const key of [
+    'breachWindowHours',
+    'reviewSlaWorkingDays',
+    'remediationSlaWorkingDays',
+  ]) {
     const value = config?.[key];
     if (value === undefined) continue;
     if (!Number.isInteger(value) || value <= 0) {
@@ -1045,6 +1050,15 @@ function checkOneBank(file, readText) {
   /** @param {string} message */
   const fail = (message) => failures.push({ kind: 'bank', file, message });
 
+  const filename = file.slice(file.lastIndexOf('/') + 1);
+  const artifact = classifyBankArtifact(filename);
+  if (!artifact) {
+    fail(
+      'is not a name this directory has a meaning for — a bank is `{slug}.txt` and a published version `{slug}.<64 hex digits>.txt`'
+    );
+    return failures;
+  }
+
   /** @type {any} */
   let bank;
   try {
@@ -1059,7 +1073,7 @@ function checkOneBank(file, readText) {
     return failures;
   }
 
-  const expectedSlug = file.slice(file.lastIndexOf('/') + 1, -'.txt'.length);
+  const expectedSlug = artifact.slug;
   if (!isNonEmptyString(bank.slug)) {
     fail('declares no `slug`');
   } else if (bank.slug !== expectedSlug) {
@@ -1068,6 +1082,22 @@ function checkOneBank(file, readText) {
     );
   }
   if (!isNonEmptyString(bank.label)) fail('declares no `label`');
+
+  // A published version is found by name, so its `hash` field and its filename
+  // cannot disagree — the app would otherwise serve content under an identity
+  // that never named it.
+  if (artifact.kind !== 'bank') {
+    if (!isNonEmptyString(bank.hash)) {
+      fail('is an export envelope but declares no `hash`');
+    } else if (bank.hash !== artifact.segment) {
+      fail(
+        `declares hash "${bank.hash}" but its filename says "${artifact.segment}" — a version is found by name, so the two cannot disagree`
+      );
+    }
+    if (!isNonEmptyString(bank.generatedAt)) {
+      fail('is an export envelope but declares no `generatedAt`');
+    }
+  }
 
   if (!Array.isArray(bank.questions)) {
     fail('declares no `questions` array');

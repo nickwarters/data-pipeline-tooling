@@ -38,14 +38,15 @@ slug `widget-review`. Substitute your own slug (kebab-case) and display name.
 A Case Type is not one file. It is a small constellation, each piece with one
 job:
 
-| Piece                  | File                                 | Job                                                                             |
-| ---------------------- | ------------------------------------ | ------------------------------------------------------------------------------- |
-| Question Bank artifact | `case-types/banks/widget-review.txt` | The reviewable content: Question Definitions, Outcome vocabulary, Labels        |
-| Case Type module       | `case-types/widget-review.js`        | The operational config: list, groups, sections, SLA, appeal routing, outcome fn |
-| Registry entry         | `case-types/manifest.js`             | THE one registration: slug, display name, lazy `import()`, bank thunk           |
-| Dev personas           | `dev/fixtures/personas.js`           | Mock users holding the new groups, selectable via `?asUser=`                    |
-| Example Cases          | `dev/fixtures/cases.js`              | Mock Case rows served by `MockSharePointClient` under `?mock=1`                 |
-| Tests                  | `tests/widget-review.test.js`        | Contract tests for the catalogue, outcome function, and fixtures                |
+| Piece                  | File                                       | Job                                                                               |
+| ---------------------- | ------------------------------------------ | --------------------------------------------------------------------------------- |
+| Question Bank artifact | `case-types/banks/widget-review.txt`       | The reviewable content: Question Definitions, Outcome vocabulary, Labels          |
+| Published bank version | `case-types/banks/widget-review.<hex>.txt` | Written by `node scripts/publish-bank.js`; what a reportable Case freezes against |
+| Case Type module       | `case-types/widget-review.js`              | The operational config: list, groups, sections, SLA, appeal routing, outcome fn   |
+| Registry entry         | `case-types/manifest.js`                   | THE one registration: slug, display name, lazy `import()`, bank thunk             |
+| Dev personas           | `dev/fixtures/personas.js`                 | Mock users holding the new groups, selectable via `?asUser=`                      |
+| Example Cases          | `dev/fixtures/cases.js`                    | Mock Case rows served by `MockSharePointClient` under `?mock=1`                   |
+| Tests                  | `tests/widget-review.test.js`              | Contract tests for the catalogue, outcome function, and fixtures                  |
 
 Two architectural facts explain the split:
 
@@ -171,6 +172,22 @@ Groups, one `showWhen`, one failure with a Remediation Action. That is enough
 to exercise every downstream surface, and the Question Bank editor is the
 right tool for growing it afterwards.
 
+Then **publish it**:
+
+```sh
+node scripts/publish-bank.js widget-review
+```
+
+That writes `case-types/banks/widget-review.<hex>.txt`, an immutable copy named
+by the bank's own identity. The bank itself is the current version — there is no
+pointer file — so what publishing adds is the copy a Case completed against
+today's bank will later resolve.
+
+Re-run it after every bank edit. Skipping it does not break anything
+immediately: a Case completed against an unpublished bank stamps a version, then
+re-opens behind an "as-reviewed version unavailable" banner because no file
+answers to it. A test fails on exactly that.
+
 ## Step 2 — Write the Case Type module
 
 Create `case-types/widget-review.js`. It must default-export an object
@@ -263,11 +280,8 @@ What each field does, and how to choose its value:
   Before claiming a Case, the framework counts this Reviewer's `In-progress`
   Cases whose `OnHold` value is No. Omit the field to leave allocation
   unlimited for this Case Type.
-- **Review cadence** — three optional thresholds. Each has a framework default,
-  and omitting a key means "use the default", never "no threshold". There is
-  deliberately no per-Case-Type _review_ SLA: whether a Case is **overdue** is
-  decided solely by the `dueDate` written on the Case row, which this frontend
-  reads and never computes.
+- **Review cadence** — four optional thresholds. Each has a framework default,
+  and omitting a key means "use the default", never "no threshold".
   - **`actionCentreSlaDays`** — how long a Case may sit in each Action Centre
     reason group before its waiting chip reads as breached, e.g.
     `{ awaitingFrontline: 14 }`. Partial: name only the reasons you differ on.
@@ -278,6 +292,16 @@ What each field does, and how to choose its value:
   - **`breachWindowHours`** — how far ahead the dashboard's Owner "At risk" tile
     looks for a Case about to breach its due date. Positive integer; default 24.
     The tile's sub-reason label states the window it applied, so it stays honest.
+  - **`reviewSlaWorkingDays`** — working days from the **allocation claim** to
+    the Case's review Due Date, the date **overdue** is judged against.
+    Positive integer; default 5. **Changing it moves no date already written.**
+    The due date is computed once when the Reviewer claims the Case and stored
+    on the Case row, so Cases already in someone's worklist keep the date they
+    were given and only later claims see the new number. A Case that was never
+    claimed through the app carries no review due date and can never read as
+    overdue. The date is stored date-only, so a Case reads as overdue from
+    midnight _on_ its due date — an SLA of 5 is four full working days plus an
+    overdue fifth, the same semantics `remediationDueDate` already has.
   - **`remediationSlaWorkingDays`** — working days from **Send Actions** to the
     Remediation Due Date. Positive integer; default 10. **Changing it moves no
     date already written.** The due date is computed once at Send Actions and

@@ -71,9 +71,13 @@ python -m scripts.benchmark_gold --base-dir C:\temp\bench --sweep
 ```
 
 It reports the two phases separately — the `case_current` reduce over the whole
-silver history, and the aggregates over the resulting one-row-per-Case frame —
-plus the silver read on its own, which is the number a network share moves. See
-[`benchmarking-gold.md`](benchmarking-gold.md).
+silver history, and the three `case_current`-sourced aggregates over the
+resulting one-row-per-Case frame — plus the silver read on its own, which is
+the number a network share moves. It does **not** measure the two aggregates
+that reduce from a Detail Table (`answer_remediation_current`,
+`appeal_outcomes_current`): the synthetic silver it seeds writes empty JSON
+blobs, so every Detail Table publishes zero rows and there is nothing for
+those two to count. See [`benchmarking-gold.md`](benchmarking-gold.md).
 
 ---
 
@@ -104,18 +108,26 @@ review platform, Review Outcomes flow *back* for reporting.
 
 - **Ingest** (per Case Type) brings a Case Type's source **Feeds** in and refines
   them into **Cases**. Its clean output is the **CasePool**.
-- **Selection** (per Case Type) reads the CasePool, narrows it (filter / score /
+- **Selection** (per **Selection group** — Case Types that share a volume target
+  and a hopper; most groups hold one Case Type) reads the CasePool, narrows it (filter / score /
   sort / sample / join), and produces the **SelectionPool** — the Cases chosen
   for review — which it both lands in gold (audit) and emits to the review
   platform as a **Deliverable**.
 - *The review platform (not part of this framework) reviews the Cases.*
 - **Sync** (platform-wide) pulls the platform's state — the returned **Review
-  Outcomes** and its full picture of each Case — back in as its own Feed.
+  Outcomes** and its full picture of each Case — back in as its own Feed. It
+  runs on two cadences: an **hourly poll** into silver and a **daily publish**
+  of gold, because only **Notification** needs fresh data and only the publish
+  is expensive ([Sync polls hourly, publishes gold
+  daily](adr/0023-sync-polls-hourly-publishes-gold-daily.md)).
+- **Notification** (platform-wide) reads Sync's silver observations hourly and
+  emits a **Deliverable** telling Case participants what needs their attention.
 - **Reporting** (platform-wide) joins Review Outcomes to the selected Cases and
   emits **Deliverables**.
 
-**Ingest** and **Selection** are **per Case Type**; **Sync** and **Reporting**
-are **platform-wide**. Note "Pipeline" the domain phase is distinct from the
+**Ingest** is **per Case Type** and **Selection** is **per Selection group**
+([Selection plans per group](adr/0021-selection-plans-per-group-over-the-whole-eligible-pool.md));
+**Sync** and **Reporting** are **platform-wide**. Note "Pipeline" the domain phase is distinct from the
 `Pipeline` *builder class* (see Primitives) — a phase composes one or more
 builder runs.
 
@@ -662,7 +674,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`adding-a-feed.md`](adding-a-feed.md) | Every Reader, the stubbed remote (SAS / SharePoint) seams, the SharePoint `Modified` checkpoint (`SharePointCheckpointStore`) that computes the next polling window, and the worked incremental feed that wires the two halves together. |
 | [`schema-enforcement.md`](schema-enforcement.md) | `Schema` / `SchemaValidator` / `SchemaCoercion`, value-level rules, composing the schema boundary onto a pipeline. |
 | [`data-dictionary-template.md`](data-dictionary-template.md) | The Confluence-ready template for documenting what every table/Feed and each of its fields means — the prose companion to `schema.py`. |
-| [`data-dictionary-sharepoint-cases.md`](data-dictionary-sharepoint-cases.md) | The template filled in for the `sharepoint_cases` feed: the raw observation, the Case version, and the four gold tables with their declared grains, all shared across every declared Case list and discriminated by `case_type`; why raw and silver do not store when we saw the row; why silver settles `case_type` to the polled list's declared value; and the two provisioning prerequisites (an index on `Modified`, and the site/GUID placeholders) that stand between it and a tenant. |
+| [`data-dictionary-sharepoint-cases.md`](data-dictionary-sharepoint-cases.md) | The template filled in for the `sharepoint_cases` feed: the raw observation, the Case version, the `answer`/`answer_capture`/`answer_action`/`general_answer`/`conversation_message`/`appeal`/`case_detail` silver Detail Tables, and the thirteen gold tables with their declared grains — including the two aggregates reduced from a Detail Table rather than `case_current` — all shared across every declared Case list and discriminated by `case_type`; why raw and silver do not store when we saw the row; why silver settles `case_type` to the polled list's declared value; the two provisioning prerequisites (an index on `Modified`, and the site/GUID placeholders) that stand between it and a tenant; and which further aggregates were deliberately refused, and why. |
 | [`data-dictionary-reviewer-activity.md`](data-dictionary-reviewer-activity.md) | The working-day, freshness-guarded `reviewer_activity_daily` aggregate and its sparse per-Reviewer `my-stats/{account}.txt` Report Feed, reduced from Sync's `case_current`. |
 | [`sharepoint-rest-ingest.md`](sharepoint-rest-ingest.md) | The operator runbook for that feed: scheduling it, re-driving it, and what REST polling cannot tell you. |
 | [`benchmarking-gold.md`](benchmarking-gold.md) | What one gold publication costs, which phase grows, and how to measure it against the storage it will run on (`scripts/benchmark_gold.py`) — the evidence behind publishing the aggregates on the sync's schedule rather than their own. |
@@ -670,6 +682,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`gold-accumulation.md`](gold-accumulation.md) | Gold's accumulate-by-run semantics, idempotent re-run, reading "current" — and the two shapes of current-only reduce (`LatestPerKey` by `load_date`, vs a Polling Feed's source-version ordering). |
 | [`processors.md`](processors.md) | The Selection transforms (`JoinWith`, per-group sampling), the Ingest / fan-out transforms (`SelectColumns`, `Unpivot`, `DeriveKey`, `LatestPerKey`), and the JSON blob reshapers (`ExplodeJsonMap`, `ExplodeJsonList`, `FlattenJsonObject`). |
 | [`selection.md`](selection.md) | The full Case Type declarations / Variation → CasePool → SelectionPool flow + explainability. |
+| [`person-targeted-selection.md`](person-targeted-selection.md) | The other **Selection mode** — every rule of the per-**Adviser** framework as a named pure function, with inputs, outputs and behaviour. Decision and reasoning in [ADR-0022](adr/0022-person-targeted-selection-plans-per-adviser.md). Not built yet. |
 | [`working-day-calendar.md`](working-day-calendar.md) | Availability arithmetic, and the YAML calendar file that seeds its holidays and weekend rule (`WorkingDayCalendar.from_yaml`, `orchestrate --calendar`). |
 | [`run-log-format.md`](run-log-format.md) | The JSONL record schema and the run registry. |
 | [`streaming-large-sources.md`](streaming-large-sources.md) | Streaming a source too big to hold whole: `Pipeline.read_chunks` driving the DAG once per chunk, chunk-level row filtering (id allow-list / predicate), which pairings are refused at wiring time and why, and `stream_step` as the low-level fallback. |

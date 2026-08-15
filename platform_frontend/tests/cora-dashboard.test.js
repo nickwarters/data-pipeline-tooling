@@ -89,11 +89,27 @@ function deferred() {
 }
 
 /**
- * @param {(accountNames: string[]) => Promise<any>} resolveManagers
+ * One claimable candidate, claimed at a fixed instant so a test can assert the
+ * stamped review due date literally.
+ *
+ * @param {{
+ *   resolveManagers?: (accountNames: string[]) => Promise<any>,
+ *   listName?: string,
+ *   reviewSlaWorkingDays?: number,
+ *   nowIso?: string,
+ * }} [options]
  * @returns {Promise<{ patches: any[], managerLookups: number }>}
  */
-async function runSingleCandidateAllocation(resolveManagers) {
+async function runSingleCandidateAllocation({
+  resolveManagers = async () => ({ u1: 'manager-1' }),
+  listName = 'Cases-Complaints',
+  reviewSlaWorkingDays,
+  nowIso = '2026-08-14T09:00:00.000Z',
+} = {}) {
   const ctx = context(capabilities({ isReviewer: true }));
+  if (reviewSlaWorkingDays !== undefined) {
+    ctx.caseSources[0].reviewSlaWorkingDays = reviewSlaWorkingDays;
+  }
   /** @type {any[]} */
   const patches = [];
   let managerLookups = 0;
@@ -122,11 +138,12 @@ async function runSingleCandidateAllocation(resolveManagers) {
             id: 'candidate',
             assignedReviewerManager: 'stale-manager',
             etag: '"1"',
-            _listOptions: { listName: 'Cases-Complaints' },
+            _listOptions: { listName },
           },
         ],
         isAtCapacity: false,
       }),
+      now: () => new Date(nowIso),
     })
   );
   const tools = /** @type {any} */ ({
@@ -573,6 +590,7 @@ test('dashboard allocation claims a candidate and refreshes reviewer rows throug
         ],
         isAtCapacity: false,
       }),
+      now: () => new Date('2026-08-14T09:00:00.000Z'),
     })
   );
   const tools = /** @type {any} */ ({
@@ -599,7 +617,11 @@ test('dashboard allocation claims a candidate and refreshes reviewer rows throug
   assert.deepEqual(patches, [
     [
       'oldest',
-      { assignedReviewer: 'u1', assignedReviewerManager: null },
+      {
+        assignedReviewer: 'u1',
+        assignedReviewerManager: null,
+        dueDate: '2026-08-21',
+      },
       '"re-read-8"',
       { listName: 'Cases-Complaints' },
     ],
@@ -1105,6 +1127,7 @@ test('dashboard allocation preserves the manager when a stale candidate returns 
         ],
         isAtCapacity: false,
       }),
+      now: () => new Date('2026-08-14T09:00:00.000Z'),
     })
   );
   const tools = /** @type {any} */ ({
@@ -1128,12 +1151,20 @@ test('dashboard allocation preserves the manager when a stale candidate returns 
     [
       [
         'stale',
-        { assignedReviewer: 'u1', assignedReviewerManager: 'manager-1' },
+        {
+          assignedReviewer: 'u1',
+          assignedReviewerManager: 'manager-1',
+          dueDate: '2026-08-21',
+        },
         '"fresh-stale"',
       ],
       [
         'available',
-        { assignedReviewer: 'u1', assignedReviewerManager: 'manager-1' },
+        {
+          assignedReviewer: 'u1',
+          assignedReviewerManager: 'manager-1',
+          dueDate: '2026-08-21',
+        },
         '"fresh-available"',
       ],
     ]
@@ -1148,8 +1179,13 @@ test('dashboard allocation preserves the manager when a stale candidate returns 
   );
 });
 
-test('dashboard allocation retries a non-412 manager write once with null and keeps it null', async () => {
+test('dashboard allocation retries a non-412 manager write once with null, keeps it null, and stamps one due date for the whole click', async () => {
   const ctx = context(capabilities({ isReviewer: true }));
+  // A clock that crosses midnight between the two candidates: the Reviewer's
+  // review clock starts when they asked for a Case, so every write must carry
+  // Thursday's date even though the second candidate is reached on Friday.
+  const ticks = ['2026-08-13T23:59:59.000Z', '2026-08-14T00:00:01.000Z'];
+  let tick = 0;
   /** @type {any[]} */
   const patches = [];
   let managerLookups = 0;
@@ -1192,6 +1228,7 @@ test('dashboard allocation retries a non-412 manager write once with null and ke
               isAtCapacity: false,
             }
           : { candidates: [], isAtCapacity: false },
+      now: () => new Date(ticks[Math.min(tick++, ticks.length - 1)]),
     })
   );
   const tools = /** @type {any} */ ({
@@ -1215,10 +1252,28 @@ test('dashboard allocation retries a non-412 manager write once with null and ke
     [
       [
         'first',
-        { assignedReviewer: 'u1', assignedReviewerManager: 'manager-1' },
+        {
+          assignedReviewer: 'u1',
+          assignedReviewerManager: 'manager-1',
+          dueDate: '2026-08-20',
+        },
       ],
-      ['first', { assignedReviewer: 'u1', assignedReviewerManager: null }],
-      ['second', { assignedReviewer: 'u1', assignedReviewerManager: null }],
+      [
+        'first',
+        {
+          assignedReviewer: 'u1',
+          assignedReviewerManager: null,
+          dueDate: '2026-08-20',
+        },
+      ],
+      [
+        'second',
+        {
+          assignedReviewer: 'u1',
+          assignedReviewerManager: null,
+          dueDate: '2026-08-20',
+        },
+      ],
     ]
   );
   // The manager retry is a second attempt at the same Case, so it re-sends the
@@ -1302,27 +1357,53 @@ const managerLookupCases = [
 
 for (const [label, resolveManagers] of managerLookupCases) {
   test(`dashboard allocation writes null manager for a ${label}`, async () => {
-    const { patches, managerLookups } =
-      await runSingleCandidateAllocation(resolveManagers);
+    const { patches, managerLookups } = await runSingleCandidateAllocation({
+      resolveManagers,
+    });
     assert.equal(managerLookups, 1);
     assert.deepEqual(patches[0][1], {
       assignedReviewer: 'u1',
       assignedReviewerManager: null,
+      dueDate: '2026-08-21',
     });
   });
 }
 
 test('dashboard allocation writes null manager when manager lookup rejects', async () => {
-  const { patches, managerLookups } = await runSingleCandidateAllocation(
-    async () => {
+  const { patches, managerLookups } = await runSingleCandidateAllocation({
+    resolveManagers: async () => {
       throw new Error('directory unavailable');
-    }
-  );
+    },
+  });
   assert.equal(managerLookups, 1);
   assert.deepEqual(patches[0][1], {
     assignedReviewer: 'u1',
     assignedReviewerManager: null,
+    dueDate: '2026-08-21',
   });
+});
+
+test("dashboard allocation stamps the Case Type's declared review SLA across the Christmas holidays", async () => {
+  // Ten working days from Friday 18 December 2026 skips Christmas Day, the
+  // Boxing Day substitute and New Year's Day, landing on 6 January 2027 — a
+  // date neither the default of five nor a weekends-only count could produce.
+  const { patches } = await runSingleCandidateAllocation({
+    nowIso: '2026-12-18T16:45:00.000Z',
+    reviewSlaWorkingDays: 10,
+  });
+
+  assert.equal(patches[0][1].dueDate, '2027-01-06');
+});
+
+test('dashboard allocation keys the review SLA by list and falls back to the default when no Case source matches', async () => {
+  // The declared ten sits on a source the candidate's list does not match, so a
+  // lookup that stopped discriminating by list would stamp 2026-08-28 instead.
+  const { patches } = await runSingleCandidateAllocation({
+    listName: 'Cases-Unregistered',
+    reviewSlaWorkingDays: 10,
+  });
+
+  assert.equal(patches[0][1].dueDate, '2026-08-21');
 });
 
 test('dashboard allocation exhausts stale candidates and renders the resulting empty state', async () => {

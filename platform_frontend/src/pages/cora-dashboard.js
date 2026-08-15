@@ -6,6 +6,11 @@ import { h } from '../lib/html.js';
 import { patchRoute } from '../core/route-state.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
 import { navigateTo } from '../lib/navigate.js';
+import { addWorkingDays } from '../lib/add-working-days.js';
+import {
+  ENGLAND_WALES_HOLIDAYS,
+  REVIEW_SLA_WORKING_DAYS,
+} from '../config/working-days.js';
 import {
   Allocation,
   getAllocationAvailability,
@@ -105,6 +110,23 @@ async function claimableEtagFor(client, candidate) {
   if (row.status !== CASE_STATUS.IN_PROGRESS) return null;
   if (!row.etag) return null;
   return row.etag;
+}
+
+/**
+ * The review SLA the candidate's Case Type declares, or the framework default.
+ * Keyed by the list the row was drawn from, not `row.caseType`: the allocation
+ * loader tags every candidate with the source it queried, so that provenance is
+ * correct by construction, whereas the Case Type column is verbatim source data.
+ *
+ * @param {import('../setup/resolve-eligible-case-types.js').CaseSource[]} caseSources
+ * @param {import('../components/sections/cora-allocation.js').AllocationCandidate} candidate
+ * @returns {number}
+ */
+function reviewSlaWorkingDaysFor(caseSources, candidate) {
+  const source = caseSources.find(
+    (s) => s.listName === candidate._listOptions.listName
+  );
+  return source?.reviewSlaWorkingDays ?? REVIEW_SLA_WORKING_DAYS;
 }
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
@@ -301,6 +323,7 @@ export function dashboardView(state, tools) {
  *   loadActionPage?: typeof loadActionCentrePage,
  *   loadOwnerSummary?: typeof loadOwnerSummaries,
  *   loadAllocationAvailability?: typeof getAllocationAvailability,
+ *   now?: () => Date,
  * }} [dependencies]
  */
 export function createRouteSlice(
@@ -314,6 +337,7 @@ export function createRouteSlice(
     loadActionPage = loadActionCentrePage,
     loadOwnerSummary = loadOwnerSummaries,
     loadAllocationAvailability = getAllocationAvailability,
+    now = () => new Date(),
   } = {}
 ) {
   /** @type {DashboardState} */
@@ -518,6 +542,10 @@ export function createRouteSlice(
 
         const currentUserId = tools.context.chrome.currentUser.id;
         let managerAccount = await allocationManagerFor(client, currentUserId);
+        // One instant for the whole click, however many candidates it has to
+        // work through: the Reviewer's clock starts when they asked for a Case,
+        // not when the third stale candidate finally gave way.
+        const claimedAt = now().toISOString();
         /** @type {unknown[]} */
         const readErrors = [];
         for (const candidate of availability.candidates) {
@@ -529,11 +557,20 @@ export function createRouteSlice(
             continue;
           }
           if (etag === null) continue;
+          // The review clock is stamped here and stored, never derived on read:
+          // a Case Type that later changes its SLA must not silently move a
+          // date a Reviewer has already been working to.
+          const dueDate = addWorkingDays(
+            claimedAt,
+            reviewSlaWorkingDaysFor(tools.context.caseSources, candidate),
+            ENGLAND_WALES_HOLIDAYS
+          );
           let result = await client.patchCase(
             candidate.id,
             {
               assignedReviewer: currentUserId,
               assignedReviewerManager: managerAccount,
+              dueDate,
             },
             etag,
             candidate._listOptions
@@ -545,6 +582,7 @@ export function createRouteSlice(
               {
                 assignedReviewer: currentUserId,
                 assignedReviewerManager: null,
+                dueDate,
               },
               etag,
               candidate._listOptions

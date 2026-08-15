@@ -32,13 +32,18 @@ where an outcome genuinely changes between runs.
 
 ## Load behaviour: accumulate, stamped by run
 
-Every gold row is stamped with two columns:
+Every gold row carries three columns:
 
-| Column | Meaning |
-|--------|---------|
-| `logical_run_id` | The **logical load** this row belongs to — a stable, caller-chosen key (e.g. a business date). It is the **idempotency key**. |
-| `pipeline_run_id` | The concrete **pipeline attempt** that wrote the row — the trace key back to the run log. Stamped only when the strategy was derived from a `RunContext`. |
-| `load_date` | The date this load represents, carried as a plain column for reporting/lineage. |
+| Column | Meaning | Stamped by |
+|--------|---------|------------|
+| `logical_run_id` | The **logical load** this row belongs to — a stable, caller-chosen key (e.g. a business date). It is the **idempotency key**. | the `AccumulateByRun` strategy / Writer |
+| `load_date` | The date this load represents, carried as a plain column for reporting/lineage. | the `AccumulateByRun` strategy / Writer |
+| `pipeline_run_id` | The concrete **pipeline attempt** that wrote the row — the trace key back to the run log. | the **Writer**, on every table it writes ([ADR-0020](adr/0020-writer-stamped-run-provenance-column.md)) |
+
+The first two are this strategy's own contract. The third is not: it is the
+reserved run-provenance column every table-backed Writer sets from the ambient
+run context, so a gold table gets it exactly as a refreshed raw table does, and
+one column has one stamper.
 
 A run **accumulates**: a later run adds its rows alongside earlier runs' rather
 than replacing them, so history is kept.
@@ -83,7 +88,8 @@ them from the shared `RunContext` so `--logical-run-id` flows straight through.
 The two are *linked* without being conflated: an accumulated row also carries
 `pipeline_run_id` (matching the run-log/registry key), so an operator can
 correlate a logical load's rows back to the exact execution that wrote them via
-the `RunRegistry`.
+the `RunRegistry`. That column is the Writer's, not the strategy's — the
+strategy neither takes it nor stamps it.
 
 ## How a changing record is represented across runs
 
@@ -216,9 +222,10 @@ p.run()
 The `Store` mints the `AccumulateByRunWriter`, which owns the location and the
 delete-by-logical-run/insert accumulate behaviour; the
 pipeline makes no load decision of its own. `AccumulateByRun.from_context(context)`
-derives the `logical_run_id` / `load_date` (and the `pipeline_run_id` trace key)
-from the shared `RunContext`, so a re-drive under the same `--logical-run-id`
-replaces that load idempotently.
+derives the `logical_run_id` / `load_date` from the shared `RunContext`, so a
+re-drive under the same `--logical-run-id` replaces that load idempotently. The
+`pipeline_run_id` trace key needs no deriving: the Writer reads it from the
+ambient run context when it writes.
 
 To enforce the schema on the same footing as silver, insert a `SchemaValidator`
 validate step before the write (see
@@ -288,3 +295,46 @@ is assembled from one coherent snapshot.
 
 The rule and its precondition — the observation must carry the *whole* parent —
 are recorded in [ADR-0015](adr/0015-detail-tables-reduce-to-the-parents-latest-observation.md).
+
+The implementation is `gold_detail_builder` in `pipelines/sharepoint_cases/gold.py`,
+generic over a per-table grain, declared in `DETAIL_GRAIN` — one builder for every
+Detail Table rather than a per-table judgement about what "latest" means.
+
+Silver keys a Detail Table's own `AppendOnly` load on a **composite**
+key — `answer` on `(source_observation_id, question_id)`, `answer_capture` on
+`(source_observation_id, question_id, field_key)`, `answer_action` on
+`(source_observation_id, question_id, action_id)`, `general_answer` on
+`(source_observation_id, general_key)`, `conversation_message` on
+`(source_observation_id, seq)`, `appeal` on
+`(source_observation_id, appeal_id)`, `case_detail` on
+`(source_observation_id, field_key)` — because the observation alone is not
+its grain: one observation yields many child rows, one per question,
+catalogue key, message, Appeal or Case Details field (and, for the two
+field-level answer tables, one per field or action within that question), and
+a single-column key would raise on
+the second of any of them for the same Case.
+
+### Aggregating a Detail Table
+
+An Aggregate table normally reduces `case_current` (see `case_counts` above).
+Two of `pipelines/sharepoint_cases/gold.py`'s five aggregates —
+`answer_remediation_current` and `appeal_outcomes_current` — reduce from a
+Detail Table instead: `answer` and `appeal` respectively, named in
+`DETAIL_AGGREGATES`.
+
+The source is that hop's **in-memory published dataset**, not silver and not
+a re-read of gold — the same reason a Detail Table's own reduction reads
+`observations=DatasetReader(current)` rather than re-reading
+`case_current` from disk (see *And a shape where neither reduce is right:
+Detail Tables*, above). Reading the in-memory dataset means the aggregate
+counts exactly the winning observation's rows the Detail hop just wrote, and
+works correctly under a dry run, where `Refresh()` writes nothing and a
+re-read from disk would see a stale or missing table.
+
+`publish_gold` runs one loop for every aggregate, Detail-sourced or not:
+`DETAIL_AGGREGATES.get(table, CURRENT_TABLE)` picks the in-memory dataset
+each `(table, step, transform)` entry reads, so the loop needs no branch —
+only a table naming a Detail Table as its source is looked up any
+differently. A Detail Table's dataset is kept in memory only when
+`DETAIL_AGGREGATES` names it as a source, so the other five Detail Tables'
+frames are freed once written rather than held for nobody to read.

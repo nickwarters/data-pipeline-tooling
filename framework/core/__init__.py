@@ -21,6 +21,7 @@ from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError, format_failure
 from framework.core.protocols import (
     DEFAULT_CHUNK_SIZE,
+    RUN_PROVENANCE_COLUMN,
     ChunkReader,
     ChunkWritable,
     DatasetProfiler,
@@ -60,6 +61,7 @@ __all__ = [
     "DEFAULT_CHUNK_SIZE",
     "Writer",
     "ChunkWritable",
+    "RUN_PROVENANCE_COLUMN",
     "Processor",
     "Validator",
     "DatasetProfiler",

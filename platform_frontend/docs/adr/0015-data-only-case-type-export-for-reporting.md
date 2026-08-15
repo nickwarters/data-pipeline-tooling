@@ -8,7 +8,17 @@ Accepted as amended by
 [ADR-0021](./0021-versioned-question-bank-snapshots-for-completed-cases.md). The
 function-free reporting contract remains current; the editable source is now
 the per-Case-Type bank text artifact, and reportable Cases resolve immutable
-`{slug}.{hash}.json` exports.
+versioned exports.
+
+**File names below are superseded.** ADR-0021's 2026-08 amendment moved every
+export beside its bank in `case-types/banks/`, as JSON in `.txt`:
+`{slug}.{hash}.json` is now `{slug}.<hex>.txt` (a `:` cannot appear in a
+SharePoint or Windows filename), and the current `{slug}.json` is **gone** —
+the bank artifact `{slug}.txt` is the current version, and the identity that
+names its published copy is derived from its content. The **contents** of an
+export are unchanged, which is what this ADR is actually about.
+[`docs/reporting-data-contract.md`](../reporting-data-contract.md) is the
+current word for a reporting consumer.
 
 ## Context
 
@@ -65,7 +75,7 @@ of that Case Type's **Question Bank**, intended as the contract for external
   `allowFreeFormRemediation` (authoring/UI templates — per-Case remediation
   _taken_ lives on the Answer), and Case-Type operational config
   (`eligibleGroups`, `actionCentreSlaDays`, `breachWindowHours`,
-  `remediationSlaWorkingDays`). `showWhen` is carried even
+  `reviewSlaWorkingDays`, `remediationSlaWorkingDays`). `showWhen` is carried even
   though the headline report does not need it: it is pure data, and it is the
   difference between counting failures and computing applicability-aware rates —
   including it now future-proofs the contract against a breaking format bump.

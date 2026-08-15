@@ -147,6 +147,37 @@ def test_leaves_a_type_it_cannot_map_alone_on_an_empty_frame():
     assert coerced["amount"].dtype == object  # untouched, not crashed on
 
 
+def test_coerces_mixed_precision_iso_spellings_in_one_column():
+    # Two spellings of the same ISO-8601 instant are real in one system — an app
+    # writes `.toISOString()` (always milliseconds), a fixture writes `Z` with
+    # none. Inference would fit one format to the first value and abort on the
+    # other; format="ISO8601" accepts both, so which rows share a batch cannot
+    # decide whether the hop survives.
+    raw = pd.DataFrame(
+        {
+            "case_ref": ["c1", "c2"],
+            "opened": ["2026-08-04T16:02:00Z", "2026-08-11T09:00:00.000Z"],
+        }
+    )
+
+    coerced = SchemaCoercion(DatedCase)(Dataset.from_pandas(raw)).to_pandas()
+
+    assert list(coerced["opened"]) == [
+        pd.Timestamp("2026-08-04T16:02:00Z"),
+        pd.Timestamp("2026-08-11T09:00:00Z"),
+    ]
+
+
+def test_a_non_iso_date_spelling_fails_fast_rather_than_being_guessed_at():
+    # Fixing the format closes the inference door on purpose: a hand-edited
+    # `05/08/2026` is ambiguous (5 Aug or 8 May?), and a guess would land a
+    # wrong instant silently. It aborts naming the column instead.
+    raw = pd.DataFrame({"case_ref": ["c1"], "opened": ["05/08/2026"]})
+
+    with pytest.raises(CoercionError, match="opened"):
+        SchemaCoercion(DatedCase)(Dataset.from_pandas(raw))
+
+
 def test_unparseable_date_fails_fast_with_a_located_message():
     # A value the coercer cannot parse aborts at the coerce step with a message
     # naming the column, so the breach is diagnosable.

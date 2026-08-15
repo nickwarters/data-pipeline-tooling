@@ -17,6 +17,7 @@ The modules behind this facade (``framework.io.readers``, ``framework.io.writers
 contract, the submodule paths are not. See ``docs/public-api.md``.
 """
 
+from framework.core.protocols import RUN_PROVENANCE_COLUMN
 from framework.io.readers import (
     DEFAULT_CHUNK_SIZE,
     ChunkedCsvReader,
@@ -80,6 +81,7 @@ __all__ = [
     "SqliteReader",
     "Writer",
     "ChunkWritable",
+    "RUN_PROVENANCE_COLUMN",
     "writing_chunks",
     "supports_chunk_writes",
     "CsvWriter",

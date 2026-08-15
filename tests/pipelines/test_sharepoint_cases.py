@@ -12,30 +12,41 @@ so every test here hands the Reader a fake that replays frames.
 from __future__ import annotations
 
 import datetime as dt
+import json
+import sqlite3
+from dataclasses import fields
 from functools import partial
 from uuid import UUID
 
 import pandas as pd
 import pytest
 
-from framework.core import ErrorCategory, ValidationError
-from framework.io import AppendOnlyConflictError
+from framework.core import Dataset, ErrorCategory, Reader, ValidationError
+from framework.io import AppendOnlyConflictError, DatasetReader
 from framework.run import Pipeline, RunContext, RunLog, dry_run_pipeline
-from framework.transform import Stamp
+from framework.transform import JsonShapeError, Stamp
 from pipelines.sharepoint_cases import gold
 from pipelines.sharepoint_cases.gold import (
+    ANSWER_REMEDIATION_DIMENSIONS,
+    DETAIL_GRAIN,
+    DETAIL_TABLES,
     GOLD_TABLES,
     UNASSIGNED,
+    UNDECIDED,
+    UNRESOLVED,
     UNSTAMPED,
+    UNSTATED,
     age_buckets,
+    answer_remediation,
+    appeal_outcomes,
     case_counts,
     case_current_builder,
+    gold_detail_builder,
 )
 from pipelines.sharepoint_cases.gold import throughput as throughput_transform
 from pipelines.sharepoint_cases.pipeline import (
     EXPAND_FIELDS,
     FEED_NAME,
-    PERSON_SUBFIELDS,
     RAW_FEED_COLUMNS,
     RENAME,
     SAFETY_LAG,
@@ -45,15 +56,29 @@ from pipelines.sharepoint_cases.pipeline import (
     main,
     raw_builder,
     run,
+    silver_answer_action_builder,
+    silver_answer_builder,
+    silver_answer_capture_builder,
+    silver_appeal_builder,
     silver_builder,
+    silver_case_detail_builder,
+    silver_conversation_message_builder,
+    silver_general_answer_builder,
     snake_case,
 )
 from pipelines.sharepoint_cases.schema import (
     CASE_LISTS,
     CASE_STATUSES,
     SITE,
+    AnswerCaptureRow,
+    AnswerRow,
+    AppealRow,
+    CaseDetailRow,
     CaseList,
+    ConversationMessageRow,
+    GeneralAnswerRow,
 )
+from tests._sharepoint_cases_fixtures import FakeListClient, item, items
 from tests.framework_testing import (
     RecordingRunLog,
     RecordingWriter,
@@ -77,6 +102,13 @@ from tools.store import StoreRegistry
 # Every column silver holds, in the order it holds them — which is exactly the
 # feed's rename map read the other way round.
 SILVER_COLUMNS = tuple(RENAME.values())
+
+ANSWER_COLUMNS = tuple(f.name for f in fields(AnswerRow))
+CAPTURE_COLUMNS = tuple(f.name for f in fields(AnswerCaptureRow))
+GENERAL_ANSWER_COLUMNS = tuple(f.name for f in fields(GeneralAnswerRow))
+CONVERSATION_MESSAGE_COLUMNS = tuple(f.name for f in fields(ConversationMessageRow))
+APPEAL_COLUMNS = tuple(f.name for f in fields(AppealRow))
+CASE_DETAIL_COLUMNS = tuple(f.name for f in fields(CaseDetailRow))
 
 SERVER_NOW = dt.datetime(2026, 8, 5, 9, tzinfo=dt.timezone.utc)
 WINDOW = ModifiedWindow(start=None, end=SERVER_NOW - SAFETY_LAG)
@@ -103,101 +135,15 @@ AS_OF = SERVER_NOW - SAFETY_LAG
 EVERY_HOP = {
     f"{FEED_NAME}:raw:{COMPLAINTS.case_type}",
     f"{FEED_NAME}:silver:{COMPLAINTS.case_type}",
+    f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:answer",
+    f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:answer_capture",
+    f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:answer_action",
+    f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:general_answer",
+    f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:conversation_message",
+    f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:appeal",
+    f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:case_detail",
     *(f"{FEED_NAME}:gold:{table}" for table in GOLD_TABLES),
 }
-
-
-class FakeListClient:
-    """A ``CaseListClient`` replaying frames per list, with a clock.
-
-    The positional frames are served in call order to whichever list asks;
-    ``by_list`` gives a named list its own. ``advance`` moves the clock on after
-    each ``server_time()`` — one step per poll — so a single client can serve a
-    test that runs the feed more than once.
-    """
-
-    def __init__(
-        self,
-        *frames: pd.DataFrame,
-        server_now: dt.datetime = SERVER_NOW,
-        advance: dt.timedelta = dt.timedelta(0),
-        by_list: dict[str, list[pd.DataFrame]] | None = None,
-    ):
-        self._frames = list(frames) or [items()]
-        self._by_list = {name: list(f) for name, f in (by_list or {}).items()}
-        self._server_now = server_now
-        self._advance = advance
-        self.calls: list[dict[str, object]] = []
-
-    def fetch_items(self, list_name, expand_fields, select_fields, filters):
-        self.calls.append(
-            {
-                "list_name": list_name,
-                "expand_fields": list(expand_fields),
-                "select_fields": list(select_fields),
-            }
-        )
-        frames = self._by_list.get(list_name, self._frames)
-        polled = sum(1 for call in self.calls if call["list_name"] == list_name)
-        return frames[min(polled - 1, len(frames) - 1)].copy()
-
-    def server_time(self) -> dt.datetime:
-        now = self._server_now
-        self._server_now = now + self._advance
-        return now
-
-
-def item(**overrides: object) -> dict[str, object]:
-    """One list item in the shape SharePoint returns it.
-
-    A real read leads with ``$select=*``, so every column is present; and an
-    expanded Person answers as a **nested object** on the property, or ``null``
-    where nobody holds the role. The fake must not be tidier than the payload, or
-    the tests stop proving anything about the real path. Unmentioned columns are
-    null, which is what most of them are on a live row.
-    """
-    row: dict[str, object] = {
-        "Id": 101,
-        "Modified": "2026-08-05T08:10:00Z",
-        # SharePoint's etag carries its own quotes.
-        "odata.etag": '"3"',
-        "Title": "CMP-000101",
-        "CaseType": "complaints",
-        "Status": "In-progress",
-        "AssignedReviewer": {"Name": "i:0#.w|CONTOSO\\a.khan"},
-        "ResponsibleParty": {
-            "Name": "i:0#.w|CONTOSO\\b.okafor",
-            "Title": "Bola Okafor",
-        },
-        "AssignedReviewerManager": {"Name": "i:0#.w|CONTOSO\\d.reid"},
-        "ResponsiblePartyManager": {"Name": "i:0#.w|CONTOSO\\e.novak"},
-        "VoidedBy": None,
-        "DueDate": "2026-08-14T00:00:00Z",
-        "Created": "2026-07-01T09:14:00Z",
-        "HasOpenAppeal": False,
-        "OnHold": False,
-        "Notes": "Awaiting the call recording.",
-        "Answers": '{"q-outcome":{"value":"Not upheld"}}',
-    }
-    # Every stored column the fixture did not name, minus the ones the feed
-    # derives: the persons arrive nested above, and the provenance is stamped.
-    flattened = {
-        f"{person}/{sub}" for person, subs in PERSON_SUBFIELDS.items() for sub in subs
-    }
-    absent = [
-        column
-        for column in RAW_FEED_COLUMNS
-        if column not in row
-        and column not in flattened
-        and not column.startswith("source_")
-    ]
-    row.update(dict.fromkeys(absent))
-    row.update(overrides)
-    return row
-
-
-def items(*rows: dict[str, object]) -> pd.DataFrame:
-    return pd.DataFrame(list(rows) or [item()])
 
 
 def source_reader(
@@ -468,6 +414,504 @@ def test_silver_aborts_when_the_id_is_missing():
     assert writer.writes == []
 
 
+# Reuses `version()`, defined below: its stamps are exactly DETAIL_ID_VARS,
+# which is the point under test.
+
+# --- silver: the Detail Table explodes ---------------------------------------
+
+
+def silver_answers(
+    answers_json: str,
+    *,
+    case_list: CaseList = COMPLAINTS,
+    reject_writer: RecordingWriter | None = None,
+) -> list[dict]:
+    """Drive the silver answer hop, in memory, over one observation's `answers`."""
+    writer = RecordingWriter()
+    silver_answer_builder(
+        given_rows([version(answers=answers_json)]),
+        writer,
+        case_list,
+        reject_writer or RecordingWriter(),
+    ).run()
+    return rows_of(writer)
+
+
+def test_an_answer_map_becomes_one_row_per_question_carrying_the_five_stamps():
+    # general:complaint-channel must not survive the explode -- it belongs to
+    # the General Question table.
+    rows = silver_answers(
+        json.dumps(
+            {
+                "q1": {"value": "A"},
+                "q2": {"value": "B"},
+                "general:complaint-channel": {"value": "Phone"},
+            }
+        )
+    )
+
+    assert {row["question_id"] for row in rows} == {"q1", "q2"}
+    for row in rows:
+        assert set(row) == set(ANSWER_COLUMNS)
+        assert row["case_type"] == COMPLAINTS.case_type
+        assert row["source_item_id"] == "101"
+        assert row["source_version"] == '"3"'
+        assert row["source_modified_at"] == pd.Timestamp("2026-08-05 08:10:00+00:00")
+        assert len(row["source_observation_id"]) > 0
+
+
+@pytest.mark.parametrize(
+    "answers_json, expected",
+    [
+        ('{"q1":{"value":"A","remediationRequired":"yes"}}', "yes"),
+        ('{"q1":{"value":"A","remediationRequired":"no"}}', "no"),
+        ('{"q1":{"value":"A"}}', None),
+    ],
+)
+def test_remediation_required_is_tri_state_and_survives_the_explode(
+    answers_json, expected
+):
+    [row] = silver_answers(answers_json)
+
+    assert row["remediation_required"] == expected
+
+
+def test_a_multi_select_answer_joins_value_text_on_the_separator():
+    [row] = silver_answers('{"q1":{"value":["Process","Training"]}}')
+
+    assert row["value_text"] == "Process|Training"
+    assert json.loads(row["value_json"]) == ["Process", "Training"]
+
+
+def test_a_scalar_answer_has_matching_value_text_and_value_json():
+    [row] = silver_answers('{"q1":{"value":"Not upheld"}}')
+
+    assert row["value_text"] == row["value_json"] == "Not upheld"
+
+
+def test_an_unknown_remediation_status_quarantines_while_the_good_answer_lands():
+    rejects = RecordingWriter()
+
+    rows = silver_answers(
+        json.dumps(
+            {
+                "q1": {"value": "A"},
+                "q2": {
+                    "value": "B",
+                    "remediationStatus": {"status": "resolved"},
+                },
+            }
+        ),
+        reject_writer=rejects,
+    )
+
+    assert [row["question_id"] for row in rows] == ["q1"]
+    [rejected] = rows_of(rejects)
+    assert rejected["question_id"] == "q2"
+    assert "remediation_status" in rejected["failed_rule"]
+
+
+def silver_captures(
+    answers_json: str,
+    *,
+    case_list: CaseList = COMPLAINTS,
+    reject_writer: RecordingWriter | None = None,
+    run_log: RunLog | None = None,
+) -> list[dict]:
+    """Drive the silver answer-capture hop, in memory, over one observation's
+    `answers`."""
+    writer = RecordingWriter()
+    silver_answer_capture_builder(
+        given_rows([version(answers=answers_json)]),
+        writer,
+        case_list,
+        reject_writer or RecordingWriter(),
+        run_log,
+    ).run()
+    return rows_of(writer)
+
+
+def test_a_capture_map_becomes_one_row_per_field_carrying_the_five_stamps():
+    # raw_value and capture_json must never reach the writer.
+    rows = silver_captures(
+        json.dumps(
+            {
+                "q1": {
+                    "value": "A",
+                    "capture": {
+                        "field-note": "Called back within SLA.",
+                        "field-owner": {
+                            "loginName": "user-rp",
+                            "displayName": "Bola Okafor",
+                        },
+                    },
+                }
+            }
+        )
+    )
+
+    assert {row["field_key"] for row in rows} == {"field-note", "field-owner"}
+    for row in rows:
+        assert set(row) == set(CAPTURE_COLUMNS)
+        assert row["question_id"] == "q1"
+        assert row["case_type"] == COMPLAINTS.case_type
+        assert row["source_item_id"] == "101"
+        assert row["source_version"] == '"3"'
+        assert row["source_modified_at"] == pd.Timestamp("2026-08-05 08:10:00+00:00")
+        assert len(row["source_observation_id"]) > 0
+
+
+# A sentinel for the null-capture-value param below: pandas lands a wholly-null
+# object column as NaN rather than None, and NaN != NaN, so equality can't
+# carry the expectation the way it does for every other shape.
+_REJECTED_AS_NAN = object()
+
+
+@pytest.mark.parametrize(
+    "capture_value, expected, rejected_raw_value",
+    [
+        pytest.param(
+            {"loginName": "user-rp", "displayName": "Bola Okafor"},
+            ("person", None, "user-rp", "Bola Okafor"),
+            None,
+            id="a-whole-person",
+        ),
+        pytest.param(
+            "Called back within SLA.",
+            ("text", "Called back within SLA.", None, None),
+            None,
+            id="text",
+        ),
+        pytest.param(
+            "user-rp",
+            ("text", "user-rp", None, None),
+            None,
+            id="a-person-field-holding-a-bare-string",
+        ),
+        pytest.param(
+            {"loginName": "user-rp"},
+            None,
+            json.dumps({"loginName": "user-rp"}),
+            id="a-half-filled-person",
+        ),
+        pytest.param(
+            [{"id": "legacy-action-0", "text": "Old-style action"}],
+            None,
+            json.dumps([{"id": "legacy-action-0", "text": "Old-style action"}]),
+            id="a-legacy-action-array",
+        ),
+        pytest.param(
+            None,
+            None,
+            # A JSON null lands as pandas NaN, not the string "null" -- hence
+            # the sentinel rather than a plain equality expectation.
+            _REJECTED_AS_NAN,
+            id="a-json-null",
+        ),
+        pytest.param(
+            42,
+            None,
+            42,
+            id="a-bare-json-number",
+        ),
+    ],
+)
+def test_discriminate_capture_value_places_every_shape(
+    capture_value, expected, rejected_raw_value
+):
+    # field-control proves a quarantined sibling doesn't abort the whole answer.
+    rejects = RecordingWriter()
+    run_log = RecordingRunLog()
+    rows = silver_captures(
+        json.dumps(
+            {
+                "q1": {
+                    "value": "A",
+                    "capture": {
+                        "field-control": "Always fine.",
+                        "field-target": capture_value,
+                    },
+                }
+            }
+        ),
+        reject_writer=rejects,
+        run_log=run_log,
+    )
+
+    if expected is None:
+        [control] = [row for row in rows if row["field_key"] == "field-control"]
+        assert control["value_kind"] == "text"
+        assert {row["field_key"] for row in rows} == {"field-control"}
+        [rejected] = rows_of(rejects)
+        assert rejected["field_key"] == "field-target"
+        assert "value_kind" in rejected["failed_rule"]
+        # raw_value must survive quarantine to diagnose; carried explicitly
+        # rather than json.dumps(capture_value) since a null lands as NaN and
+        # a number stays a Python scalar -- see discriminate_capture_value.
+        if rejected_raw_value is _REJECTED_AS_NAN:
+            assert pd.isna(rejected["raw_value"])
+        else:
+            assert rejected["raw_value"] == rejected_raw_value
+        quarantine = next(r for r in run_log.records if r["step"] == "quarantine")
+        assert quarantine["rows_quarantined"] >= 1
+    else:
+        kind, value_text, login, display = expected
+        [target] = [row for row in rows if row["field_key"] == "field-target"]
+        assert target["value_kind"] == kind
+        assert target["value_text"] == value_text
+        assert target["person_login"] == login
+        assert target["person_display"] == display
+
+
+def silver_general_answers(
+    answers_json: str,
+    *,
+    case_list: CaseList = COMPLAINTS,
+    reject_writer: RecordingWriter | None = None,
+) -> list[dict]:
+    """Drive the silver general-answer hop, in memory, over one observation's
+    `answers`."""
+    writer = RecordingWriter()
+    silver_general_answer_builder(
+        given_rows([version(answers=answers_json)]),
+        writer,
+        case_list,
+        reject_writer or RecordingWriter(),
+    ).run()
+    return rows_of(writer)
+
+
+def test_the_answer_and_general_answer_tables_tile_one_blob_with_no_loss_or_overlap():
+    # Driving one blob through both builders must partition its keys exactly.
+    # A plain "general" key (no colon) belongs to the catch-all (answer); the
+    # edge case "general:" (empty key) is included, landing as general_key == "".
+    blob = {
+        "q1": {"value": "A"},
+        "q2": {"value": "B"},
+        "general": {"value": "no prefix here"},
+        "general:complaint-channel": {"value": "Phone"},
+        "general:relationship": {"value": "Customer"},
+        "general:": {"value": "empty key"},
+    }
+    answers_json = json.dumps(blob)
+
+    question_ids = {row["question_id"] for row in silver_answers(answers_json)}
+    general_rows = silver_general_answers(answers_json)
+    assert set(general_rows[0]) == set(GENERAL_ANSWER_COLUMNS)
+    # Re-prefixed, to compare in the blob's own vocabulary rather than the
+    # stripped one the general_answer table stores.
+    general_keys = {f"general:{row['general_key']}" for row in general_rows}
+
+    assert "general" in question_ids
+    assert question_ids & general_keys == set()
+    assert question_ids | general_keys == set(blob)
+
+
+def test_an_array_general_answer_is_canonicalised_rather_than_refused():
+    [row] = silver_general_answers(
+        json.dumps({"general:products": {"value": ["Current account", "Savings"]}})
+    )
+
+    assert row["value_text"] == "Current account|Savings"
+    assert json.loads(row["value_json"]) == ["Current account", "Savings"]
+
+
+def silver_conversation_messages(
+    conversation_json: str,
+    *,
+    case_list: CaseList = COMPLAINTS,
+    reject_writer: RecordingWriter | None = None,
+) -> list[dict]:
+    """Drive the silver conversation-message hop, in memory, over one
+    observation's `conversation`."""
+    writer = RecordingWriter()
+    silver_conversation_message_builder(
+        given_rows([version(conversation=conversation_json)]),
+        writer,
+        case_list,
+        reject_writer or RecordingWriter(),
+    ).run()
+    return rows_of(writer)
+
+
+def test_a_conversation_becomes_one_row_per_message_carrying_the_five_stamps():
+    rows = silver_conversation_messages(
+        json.dumps(
+            [
+                {
+                    "author": {"loginName": "a.khan", "displayName": "Amira Khan"},
+                    "timestamp": "2026-08-04T16:02:00Z",
+                    "body": "Please confirm the call date.",
+                },
+                {
+                    "author": {"loginName": "b.okafor", "displayName": "Bola Okafor"},
+                    "timestamp": "2026-08-04T18:47:12.000Z",
+                    "body": "Confirmed -- the call was on the 30th.",
+                },
+            ]
+        )
+    )
+
+    assert [row["seq"] for row in rows] == [0, 1]
+    # author is a nested object, lifted by two dotted paths rather than landed
+    # as a JSON blob.
+    assert rows[0]["author_login"] == "a.khan"
+    assert rows[0]["author_display_name"] == "Amira Khan"
+    for row in rows:
+        assert set(row) == set(CONVERSATION_MESSAGE_COLUMNS)
+        assert row["case_type"] == COMPLAINTS.case_type
+        assert row["source_item_id"] == "101"
+        assert row["source_version"] == '"3"'
+        assert row["source_modified_at"] == pd.Timestamp("2026-08-05 08:10:00+00:00")
+        assert len(row["source_observation_id"]) > 0
+
+
+def silver_appeals(
+    appeals_json: str,
+    *,
+    case_list: CaseList = COMPLAINTS,
+    reject_writer: RecordingWriter | None = None,
+) -> list[dict]:
+    """Drive the silver appeal hop, in memory, over one observation's `appeals`."""
+    writer = RecordingWriter()
+    silver_appeal_builder(
+        given_rows([version(appeals=appeals_json)]),
+        writer,
+        case_list,
+        reject_writer or RecordingWriter(),
+    ).run()
+    return rows_of(writer)
+
+
+def appeal(**overrides: object) -> dict[str, object]:
+    """One Appeal element in the shape the app writes it: raised, no
+    citations, no resolution -- overridden per test."""
+    row: dict[str, object] = {
+        "id": "appeal-1754040000000",
+        "appellant": "e.novak",
+        "at": "2026-08-01T09:00:00Z",
+        "rationale": "The redress figure had already been paid directly.",
+        "state": "raised",
+    }
+    row.update(overrides)
+    return row
+
+
+def test_an_appeal_becomes_one_row_keyed_by_its_own_id_with_appeal_seq():
+    rows = silver_appeals(json.dumps([appeal(id="appeal-1"), appeal(id="appeal-2")]))
+
+    assert {row["appeal_id"] for row in rows} == {"appeal-1", "appeal-2"}
+    assert {row["appeal_seq"] for row in rows} == {0, 1}
+    for row in rows:
+        assert set(row) == set(APPEAL_COLUMNS)
+
+
+def test_an_unresolved_appeal_carries_nulls_in_every_resolution_column():
+    [row] = silver_appeals(json.dumps([appeal(state="raised")]))
+
+    assert row["resolution_verdict"] is None
+    assert row["resolution_rationale"] is None
+    assert row["resolution_resolver"] is None
+    assert row["resolution_at"] is None
+
+
+def test_cited_answer_keys_is_json_text_null_only_when_the_key_is_omitted():
+    # Feed semantics, not the encoding mechanism (covered by ExplodeJsonList's
+    # own suite): an omitted key is null, never "[]", which the app never writes.
+    omitted, present = silver_appeals(
+        json.dumps(
+            [
+                appeal(id="appeal-1"),
+                appeal(
+                    id="appeal-2",
+                    citedAnswerKeys=["q-outcome", "q-timeliness"],
+                ),
+            ]
+        )
+    )
+
+    # A mixed column lands the null as NaN, not None -- same quirk as
+    # _REJECTED_AS_NAN above.
+    assert pd.isna(omitted["cited_question_ids_json"])
+    assert json.loads(present["cited_question_ids_json"]) == [
+        "q-outcome",
+        "q-timeliness",
+    ]
+
+
+def test_an_unknown_appeal_state_quarantines_while_the_good_appeal_lands():
+    rejects = RecordingWriter()
+
+    rows = silver_appeals(
+        json.dumps([appeal(id="appeal-1"), appeal(id="appeal-2", state="withdrawn")]),
+        reject_writer=rejects,
+    )
+
+    assert [row["appeal_id"] for row in rows] == ["appeal-1"]
+    [rejected] = rows_of(rejects)
+    assert rejected["appeal_id"] == "appeal-2"
+    assert "state" in rejected["failed_rule"]
+
+
+def silver_case_details(
+    details_json: str | None,
+    *,
+    case_list: CaseList = COMPLAINTS,
+    reject_writer: RecordingWriter | None = None,
+) -> list[dict]:
+    """Drive the silver case-detail hop, in memory, over one observation's
+    `details`."""
+    writer = RecordingWriter()
+    silver_case_detail_builder(
+        given_rows([version(details=details_json)]),
+        writer,
+        case_list,
+        reject_writer or RecordingWriter(),
+    ).run()
+    return rows_of(writer)
+
+
+def test_a_details_map_becomes_one_row_per_field_carrying_the_five_stamps():
+    rows = silver_case_details(
+        json.dumps({"complaintRef": "CMP-000101", "customerName": "Priya Shah"})
+    )
+
+    assert {row["field_key"] for row in rows} == {"complaintRef", "customerName"}
+    for row in rows:
+        assert set(row) == set(CASE_DETAIL_COLUMNS)
+        assert row["case_type"] == COMPLAINTS.case_type
+        assert row["source_item_id"] == "101"
+        assert row["source_version"] == '"3"'
+        # A str declaration would abort here if this arrived untyped.
+        assert row["source_modified_at"] == pd.Timestamp("2026-08-05 08:10:00+00:00")
+        assert len(row["source_observation_id"]) > 0
+
+
+def test_an_empty_details_map_survives_the_whole_hop_as_a_zero_row_frame():
+    # ExplodeJsonMap's own suite covers the zero-row output; only this feed's
+    # test shows the whole hop tolerates that zero-row frame downstream.
+    assert silver_case_details("{}") == []
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        pytest.param(3, "3", id="an-int"),
+        pytest.param(1.5, "1.5", id="a-float"),
+        pytest.param(True, "true", id="a-bool"),
+        pytest.param({"n": 1}, '{"n": 1}', id="an-object"),
+        pytest.param(["x"], '["x"]', id="an-array"),
+        pytest.param(None, None, id="a-json-null"),
+    ],
+)
+def test_a_non_string_detail_value_lands_as_its_json_encoding(value, expected):
+    # Without encode_detail_value, the int/float/bool arms land value_text as
+    # a non-string dtype and abort at SchemaValidator's is_string_dtype check.
+    [row] = silver_case_details(json.dumps({"k": value}))
+
+    assert row["value_text"] == expected
+
+
 # --- gold: the current-state rule -------------------------------------------
 
 
@@ -617,14 +1061,290 @@ def test_every_current_row_carries_the_candidate_window_end():
     assert row["as_of_utc"] == AS_OF.isoformat()
 
 
-def test_current_gold_republishes_every_silver_column():
+AMENDED_COLUMNS = (
+    "amended_outcome_id",
+    "amended_reason",
+    "amended_justification",
+    "amended_by",
+    "amended_at",
+    "amended_from_appeal_id",
+)
+
+
+# The five raw JSON blob columns, which gold does not republish: each one's
+# data lives in its normalised home (the Detail Tables; the amended_* columns),
+# and silver case_version keeps the landed text.
+BLOB_COLUMNS = ("answers", "conversation", "appeals", "amended_outcome", "details")
+
+
+def test_current_gold_republishes_every_silver_column_except_the_blobs():
     [row] = current(version())
 
-    assert set(SILVER_COLUMNS) <= set(row)
-    assert set(row) - set(SILVER_COLUMNS) == {"case_id", "as_of_utc"}
+    assert set(SILVER_COLUMNS) - set(row) == set(BLOB_COLUMNS)
+    assert set(row) - set(SILVER_COLUMNS) == {
+        "case_id",
+        "as_of_utc",
+        *AMENDED_COLUMNS,
+    }
+
+
+def test_a_reason_carrying_amendment_flattens_onto_the_current_row():
+    # The qa-check/tm-check provenance arm: a reason key, no source Appeal.
+    blob = json.dumps(
+        {
+            "outcome": "poor-with-harm",
+            "reason": "qa-check",
+            "justification": "The missed needs check was immaterial.",
+            "amendedBy": "user-controls",
+            "amendedAt": "2026-06-12T00:00:00.000Z",
+        }
+    )
+
+    [row] = current(version(amended_outcome=blob))
+
+    assert row["amended_outcome_id"] == "poor-with-harm"
+    assert row["amended_reason"] == "qa-check"
+    assert row["amended_justification"] == "The missed needs check was immaterial."
+    assert row["amended_by"] == "user-controls"
+    # ISO text, verbatim: text inside a blob stays text.
+    assert row["amended_at"] == "2026-06-12T00:00:00.000Z"
+    assert pd.isna(row["amended_from_appeal_id"])
+    # The flatten consumes the blob: the columns are its only gold home now,
+    # and silver case_version keeps the landed text.
+    assert "amended_outcome" not in row
+
+
+def test_an_appeal_derived_amendment_carries_the_appeal_id_and_no_reason():
+    # The other provenance arm: fromAppealId (which joins appeal.appeal_id) is
+    # present iff the amendment came from agreeing an Appeal, and the app then
+    # writes no reason key.
+    blob = json.dumps(
+        {
+            "outcome": "poor-no-harm",
+            "justification": "Appeal agreed.",
+            "amendedBy": "user-controls",
+            "amendedAt": "2026-06-12T00:00:00Z",
+            "fromAppealId": "appeal-1754390400000",
+        }
+    )
+
+    [row] = current(version(amended_outcome=blob))
+
+    assert row["amended_outcome_id"] == "poor-no-harm"
+    assert row["amended_from_appeal_id"] == "appeal-1754390400000"
+    assert pd.isna(row["amended_reason"])
+
+
+@pytest.mark.parametrize(
+    "blob",
+    [
+        pytest.param(None, id="never-written"),
+        pytest.param("", id="empty"),
+        pytest.param("null", id="explicitly-cleared"),
+    ],
+)
+def test_a_case_with_no_amendment_carries_nulls_not_a_crash(blob):
+    # The column holds the JSON literal "null" when explicitly cleared and is
+    # empty or absent if never written; all three land identically.
+    [row] = current(version(amended_outcome=blob))
+
+    assert all(pd.isna(row[column]) for column in AMENDED_COLUMNS)
+
+
+def test_a_malformed_amendment_in_a_losing_observation_cannot_abort_gold():
+    # The flatten sits after the reduction, so only each Case's winning blob is
+    # ever parsed: a malformed blob in superseded history stays recoverable in
+    # silver without holding the rebuild hostage.
+    rows = current(
+        version(
+            source_version='"3"',
+            source_modified_at="2026-08-05 08:10:00+00:00",
+            amended_outcome="{not json",
+        ),
+        version(
+            source_version='"4"',
+            source_modified_at="2026-08-05 08:45:00+00:00",
+            amended_outcome=json.dumps({"outcome": "good"}),
+        ),
+    )
+
+    assert [row["amended_outcome_id"] for row in rows] == ["good"]
+
+
+# One representative grain: the builder is generic over DETAIL_GRAIN, and these
+# tests exercise the composition, not a per-table peculiarity.
+DETAIL_TABLE = "answer"
+
+# --- gold: the Detail Table reduction ----------------------------------------
+
+
+def winning_reader(*rows: dict) -> Reader:
+    """The gold ``case_current`` a parent observation history would produce.
+
+    Composes the real ``case_current_builder`` rather than hand-building the
+    winning pairs: the invariant worth testing is that a Detail row agrees with
+    whichever observation the parent's own reduction picked, not that an inner
+    join drops non-matching rows.
+    """
+    return given_rows(current(*rows))
+
+
+def child(
+    *,
+    source_item_id: str = "101",
+    case_type: str = COMPLAINTS.case_type,
+    source_observation_id: str,
+    question_id: str = "q1",
+) -> dict:
+    """One row of a child history, in the shape a silver Detail Table would carry.
+
+    ``case_type``/``source_item_id`` match ``version()``'s defaults, so the
+    derived ``case_id`` lines up with the parent's for the same Case.
+    """
+    return {
+        "source_item_id": source_item_id,
+        "case_type": case_type,
+        "source_observation_id": source_observation_id,
+        "question_id": question_id,
+        "field_value": "Not upheld",
+    }
+
+
+def details(
+    children: list[dict],
+    winners: Reader,
+    *,
+    grain: tuple[str, ...] = DETAIL_GRAIN[DETAIL_TABLE],
+) -> list[dict]:
+    """Drive ``gold_detail_builder`` over a child history, in memory."""
+    return gold_rows(
+        partial(
+            gold_detail_builder,
+            grain=grain,
+            observations=winners,
+            name=f"{FEED_NAME}:gold:detail:{DETAIL_TABLE}",
+        ),
+        children,
+    )
+
+
+def test_a_child_stripped_from_the_winning_observation_does_not_survive():
+    v1 = version(
+        source_observation_id="obs-1",
+        source_version='"3"',
+        source_modified_at="2026-08-05 08:10:00+00:00",
+    )
+    v2 = version(
+        source_observation_id="obs-2",
+        source_version='"4"',
+        source_modified_at="2026-08-05 08:45:00+00:00",
+        status="Completed",
+    )
+    winners = winning_reader(v1, v2)
+    children = [
+        child(source_observation_id="obs-1", question_id="q1"),
+        child(source_observation_id="obs-1", question_id="q2"),
+        child(source_observation_id="obs-2", question_id="q1"),
+        child(source_observation_id="obs-2", question_id="q3"),
+    ]
+
+    rows = details(children, winners)
+
+    assert {row["question_id"] for row in rows} == {"q1", "q3"}
+    assert {row["source_observation_id"] for row in rows} == {"obs-2"}
+
+
+def _two_observations(item_id: str, prefix: str) -> tuple[dict, dict]:
+    """An early and a winning observation of one Case, ids prefixed for a test."""
+    early = version(
+        id=int(item_id),
+        source_item_id=item_id,
+        source_observation_id=f"{prefix}-1",
+        source_version='"3"',
+        source_modified_at="2026-08-05 08:10:00+00:00",
+    )
+    late = version(
+        id=int(item_id),
+        source_item_id=item_id,
+        source_observation_id=f"{prefix}-2",
+        source_version='"4"',
+        source_modified_at="2026-08-05 08:45:00+00:00",
+        status="Completed",
+    )
+    return early, late
+
+
+def test_two_cases_do_not_take_each_others_children():
+    a1, a2 = _two_observations("101", "a")
+    b1, b2 = _two_observations("102", "b")
+    winners = winning_reader(a1, a2, b1, b2)
+    children = [
+        child(source_item_id="101", source_observation_id="a-1", question_id="stale"),
+        child(source_item_id="101", source_observation_id="a-2", question_id="q1"),
+        child(source_item_id="102", source_observation_id="b-1", question_id="stale"),
+        child(source_item_id="102", source_observation_id="b-2", question_id="q1"),
+    ]
+
+    rows = details(children, winners)
+
+    assert len(rows) == 2
+    assert len({row["case_id"] for row in rows}) == 2
+    assert {row["source_observation_id"] for row in rows} == {"a-2", "b-2"}
+
+
+def test_a_gold_detail_row_is_the_childs_columns_plus_case_id_and_as_of():
+    # The semi-join guarantee: a Detail row carries nothing from the parent
+    # beyond the two winner columns it joined on.
+    winners = winning_reader(version(source_observation_id="obs-1"))
+    [row] = details([child(source_observation_id="obs-1")], winners)
+
+    assert set(row) == set(child(source_observation_id="obs-1")) | {
+        "case_id",
+        "as_of_utc",
+    }
+    assert "status" not in row
+
+
+def test_a_repeated_grain_value_in_the_winning_observation_aborts_the_hop():
+    winners = winning_reader(version(source_observation_id="obs-1"))
+    writer = RecordingWriter()
+    children = [
+        child(source_observation_id="obs-1", question_id="q1"),
+        child(source_observation_id="obs-1", question_id="q1"),
+    ]
+
+    with pytest.raises(ValidationError, match="question_id"):
+        gold_detail_builder(
+            given_rows(children),
+            writer,
+            grain=DETAIL_GRAIN[DETAIL_TABLE],
+            observations=winners,
+            as_of=AS_OF,
+            name=f"{FEED_NAME}:gold:detail:{DETAIL_TABLE}",
+        ).run()
+
+    assert writer.writes == []
+
+
+def test_current_gold_carries_the_join_key_for_detail_tables():
+    # Nothing else states this column is load-bearing for a second table:
+    # winning_observations projects case_current down to it, so a future
+    # change to latest_case_version that dropped it would silently break
+    # every Detail Table's join with no error to catch it.
+    [row] = current(version())
+
+    assert "source_observation_id" in row
 
 
 # --- gold: the current counts ------------------------------------------------
+
+
+def given_columns(*names: str) -> Reader:
+    """A zero-**row**, declared-column source -- what a quiet poll really hands
+    an aggregate transform, unlike ``given_rows([])``'s zero-**column** frame,
+    which no production path emits.
+    """
+    return DatasetReader(Dataset.from_pandas(pd.DataFrame(columns=list(names))))
 
 
 def aggregate_pipeline(reader, writer, *, table: str, transform, step: str) -> Pipeline:
@@ -858,10 +1578,256 @@ def test_throughput_is_empty_when_nothing_has_ended():
     assert ended(version()) == []
 
 
+# Reuses winning_reader() and details() above: proving this aggregate comes
+# from the winning observation means driving the same reduction, not hand
+# building already-reduced rows.
+
+
+def answer_child(
+    *,
+    source_item_id: str = "101",
+    case_type: str = COMPLAINTS.case_type,
+    source_observation_id: str,
+    question_id: str = "q1",
+    remediation_required: str | None = None,
+    remediation_status: str | None = None,
+) -> dict:
+    """One row of an ``answer`` Detail Table child history, remediation-shaped."""
+    return {
+        "source_item_id": source_item_id,
+        "case_type": case_type,
+        "source_observation_id": source_observation_id,
+        "question_id": question_id,
+        "remediation_required": remediation_required,
+        "remediation_status": remediation_status,
+    }
+
+
+# --- gold: aggregates over the Detail Tables ---------------------------------
+
+
+def gold_answer(children: list[dict], winners: Reader) -> list[dict]:
+    """The gold ``answer`` Detail Table rows a child history reduces to."""
+    return details(children, winners, grain=DETAIL_GRAIN["answer"])
+
+
+def remediation(rows: list[dict]) -> list[dict]:
+    return aggregate(answer_remediation, "count-by-remediation", rows)
+
+
+def test_remediation_counts_come_from_the_winning_observation():
+    v1 = version(
+        source_observation_id="obs-1",
+        source_version='"3"',
+        source_modified_at="2026-08-05 08:10:00+00:00",
+    )
+    v2 = version(
+        source_observation_id="obs-2",
+        source_version='"4"',
+        source_modified_at="2026-08-05 08:45:00+00:00",
+        status="Completed",
+    )
+    winners = winning_reader(v1, v2)
+    children = [
+        answer_child(
+            source_observation_id="obs-1",
+            question_id="q1",
+            remediation_required="yes",
+            remediation_status="partial",
+        ),
+        answer_child(source_observation_id="obs-2", question_id="q1"),
+    ]
+
+    rows = remediation(gold_answer(children, winners))
+
+    assert [
+        (row["remediation_required"], row["remediation_status"], row["answer_count"])
+        for row in rows
+    ] == [(UNDECIDED, UNRESOLVED, 1)]
+
+
+def test_an_undecided_remediation_is_counted_and_the_total_matches_gold_answer():
+    winners = winning_reader(version(source_observation_id="obs-1"))
+    children = [
+        answer_child(source_observation_id="obs-1", question_id="q1"),
+        answer_child(
+            source_observation_id="obs-1",
+            question_id="q2",
+            remediation_required="yes",
+            remediation_status="complete",
+        ),
+    ]
+    answer_rows = gold_answer(children, winners)
+
+    rows = remediation(answer_rows)
+
+    assert (UNDECIDED, UNRESOLVED, 1) in [
+        (row["remediation_required"], row["remediation_status"], row["answer_count"])
+        for row in rows
+    ]
+    # answer_count sums to gold answer's row count, not a Case count.
+    assert sum(row["answer_count"] for row in rows) == len(answer_rows)
+
+
+def test_a_decided_remediation_with_no_status_counts_as_unresolved():
+    winners = winning_reader(version(source_observation_id="obs-1"))
+    [row] = remediation(
+        gold_answer(
+            [
+                answer_child(
+                    source_observation_id="obs-1",
+                    remediation_required="yes",
+                    remediation_status=None,
+                )
+            ],
+            winners,
+        )
+    )
+
+    assert (row["remediation_required"], row["remediation_status"]) == (
+        "yes",
+        UNRESOLVED,
+    )
+
+
+def test_two_case_types_do_not_share_a_question_id():
+    v1 = version(source_observation_id="obs-1")
+    v2 = version(
+        id=101,
+        source_item_id="101",
+        case_type=OTHER.case_type,
+        source_observation_id="obs-2",
+    )
+    winners = winning_reader(v1, v2)
+    children = [
+        answer_child(source_observation_id="obs-1", case_type=COMPLAINTS.case_type),
+        answer_child(source_observation_id="obs-2", case_type=OTHER.case_type),
+    ]
+
+    rows = remediation(gold_answer(children, winners))
+
+    # Question ids are per-Case-Type bank, so distinct case_types must not merge.
+    assert len(rows) == 2
+    assert {row["case_type"] for row in rows} == {
+        COMPLAINTS.case_type,
+        OTHER.case_type,
+    }
+    assert all(row["answer_count"] == 1 for row in rows)
+
+
+def test_remediation_is_empty_when_nothing_was_answered():
+    writer = RecordingWriter()
+    aggregate_pipeline(
+        given_columns(*ANSWER_REMEDIATION_DIMENSIONS),
+        writer,
+        table="table",
+        transform=answer_remediation,
+        step="count-by-remediation",
+    ).run()
+
+    frame = writer.dataset.to_pandas()
+    assert list(frame.columns) == [
+        *ANSWER_REMEDIATION_DIMENSIONS,
+        "answer_count",
+        "as_of_utc",
+    ]
+    assert len(frame) == 0
+
+
+def appeal_child(
+    *,
+    source_item_id: str = "101",
+    case_type: str = COMPLAINTS.case_type,
+    source_observation_id: str,
+    appeal_id: str = "appeal-1",
+    state: str | None = "raised",
+    resolution_verdict: str | None = None,
+) -> dict:
+    """One row of an ``appeal`` Detail Table child history, outcome-shaped."""
+    return {
+        "source_item_id": source_item_id,
+        "case_type": case_type,
+        "source_observation_id": source_observation_id,
+        "appeal_id": appeal_id,
+        "state": state,
+        "resolution_verdict": resolution_verdict,
+    }
+
+
+def gold_appeal(children: list[dict], winners: Reader) -> list[dict]:
+    """The gold ``appeal`` Detail Table rows a child history reduces to."""
+    return details(children, winners, grain=DETAIL_GRAIN["appeal"])
+
+
+def outcomes(rows: list[dict]) -> list[dict]:
+    return aggregate(appeal_outcomes, "count-by-outcome", rows)
+
+
+def test_appeal_outcomes_come_from_the_winning_observation():
+    # Must count once, as resolved/agreed -- never twice across both observations.
+    v1 = version(
+        source_observation_id="obs-1",
+        source_version='"3"',
+        source_modified_at="2026-08-05 08:10:00+00:00",
+    )
+    v2 = version(
+        source_observation_id="obs-2",
+        source_version='"4"',
+        source_modified_at="2026-08-05 08:45:00+00:00",
+        status="Completed",
+    )
+    winners = winning_reader(v1, v2)
+    children = [
+        appeal_child(
+            source_observation_id="obs-1",
+            appeal_id="appeal-1",
+            state="raised",
+            resolution_verdict=None,
+        ),
+        appeal_child(
+            source_observation_id="obs-2",
+            appeal_id="appeal-1",
+            state="resolved",
+            resolution_verdict="agreed",
+        ),
+    ]
+
+    rows = outcomes(gold_appeal(children, winners))
+
+    assert [
+        (row["state"], row["resolution_verdict"], row["appeal_count"]) for row in rows
+    ] == [("resolved", "agreed", 1)]
+
+
+def test_an_unresolved_appeal_counts_under_a_literal_and_totals_to_gold_appeal():
+    # Also proves a null state counts as unstated.
+    winners = winning_reader(version(source_observation_id="obs-1"))
+    children = [
+        appeal_child(
+            source_observation_id="obs-1",
+            appeal_id="appeal-1",
+            state=None,
+            resolution_verdict=None,
+        )
+    ]
+    appeal_rows = gold_appeal(children, winners)
+
+    rows = outcomes(appeal_rows)
+
+    assert [
+        (row["state"], row["resolution_verdict"], row["appeal_count"]) for row in rows
+    ] == [(UNSTATED, UNRESOLVED, 1)]
+    assert sum(row["appeal_count"] for row in rows) == len(appeal_rows)
+
+
+def test_an_aggregate_is_never_mistaken_for_a_detail_table():
+    assert set(DETAIL_TABLES) == set(DETAIL_GRAIN)
+
+
 # --- the composed plan -----------------------------------------------------
 
 
-def test_both_hops_plan_exactly_the_steps_they_always_have():
+def test_all_nine_ingest_hops_plan_exactly_the_steps_they_always_have():
     reader, writer, rejects = given_rows([]), RecordingWriter(), RecordingWriter()
 
     # No column gate on the raw hop, unlike a file feed: the observation
@@ -885,6 +1851,90 @@ def test_both_hops_plan_exactly_the_steps_they_always_have():
         "  [Validate] post-validate (depends on: quarantine)",
         "  [Write] write (depends on: post-validate)",
     ]
+    assert silver_answer_builder(
+        reader, writer, COMPLAINTS, rejects
+    ).describe().splitlines() == [
+        "Pipeline: sharepoint_cases:silver:complaints:answer",
+        "  [Read] read",
+        "  [Transform] explode (depends on: read)",
+        "  [Transform] value-text (depends on: explode)",
+        "  [Transform] coerce (depends on: value-text)",
+        "  [Quarantine] quarantine (depends on: coerce)",
+        "  [Validate] post-validate (depends on: quarantine)",
+        "  [Write] write (depends on: post-validate)",
+    ]
+    assert silver_answer_capture_builder(
+        reader, writer, COMPLAINTS, rejects
+    ).describe().splitlines() == [
+        "Pipeline: sharepoint_cases:silver:complaints:answer_capture",
+        "  [Read] read",
+        "  [Transform] explode-answers (depends on: read)",
+        "  [Transform] explode-capture (depends on: explode-answers)",
+        "  [Transform] discriminate (depends on: explode-capture)",
+        "  [Transform] coerce (depends on: discriminate)",
+        "  [Quarantine] quarantine (depends on: coerce)",
+        "  [Transform] drop-raw-value (depends on: quarantine)",
+        "  [Validate] post-validate (depends on: drop-raw-value)",
+        "  [Write] write (depends on: post-validate)",
+    ]
+    assert silver_answer_action_builder(
+        reader, writer, COMPLAINTS, rejects
+    ).describe().splitlines() == [
+        "Pipeline: sharepoint_cases:silver:complaints:answer_action",
+        "  [Read] read",
+        "  [Transform] explode-answers (depends on: read)",
+        "  [Transform] explode-actions (depends on: explode-answers)",
+        "  [Transform] coerce (depends on: explode-actions)",
+        "  [Quarantine] quarantine (depends on: coerce)",
+        "  [Validate] post-validate (depends on: quarantine)",
+        "  [Write] write (depends on: post-validate)",
+    ]
+    assert silver_general_answer_builder(
+        reader, writer, COMPLAINTS, rejects
+    ).describe().splitlines() == [
+        "Pipeline: sharepoint_cases:silver:complaints:general_answer",
+        "  [Read] read",
+        "  [Transform] explode (depends on: read)",
+        "  [Transform] value-text (depends on: explode)",
+        "  [Transform] coerce (depends on: value-text)",
+        "  [Quarantine] quarantine (depends on: coerce)",
+        "  [Validate] post-validate (depends on: quarantine)",
+        "  [Write] write (depends on: post-validate)",
+    ]
+    assert silver_conversation_message_builder(
+        reader, writer, COMPLAINTS, rejects
+    ).describe().splitlines() == [
+        "Pipeline: sharepoint_cases:silver:complaints:conversation_message",
+        "  [Read] read",
+        "  [Transform] explode (depends on: read)",
+        "  [Transform] coerce (depends on: explode)",
+        "  [Quarantine] quarantine (depends on: coerce)",
+        "  [Validate] post-validate (depends on: quarantine)",
+        "  [Write] write (depends on: post-validate)",
+    ]
+    assert silver_appeal_builder(
+        reader, writer, COMPLAINTS, rejects
+    ).describe().splitlines() == [
+        "Pipeline: sharepoint_cases:silver:complaints:appeal",
+        "  [Read] read",
+        "  [Transform] explode (depends on: read)",
+        "  [Transform] coerce (depends on: explode)",
+        "  [Quarantine] quarantine (depends on: coerce)",
+        "  [Validate] post-validate (depends on: quarantine)",
+        "  [Write] write (depends on: post-validate)",
+    ]
+    assert silver_case_detail_builder(
+        reader, writer, COMPLAINTS, rejects
+    ).describe().splitlines() == [
+        "Pipeline: sharepoint_cases:silver:complaints:case_detail",
+        "  [Read] read",
+        "  [Transform] explode (depends on: read)",
+        "  [Transform] encode-value (depends on: explode)",
+        "  [Transform] coerce (depends on: encode-value)",
+        "  [Quarantine] quarantine (depends on: coerce)",
+        "  [Validate] post-validate (depends on: quarantine)",
+        "  [Write] write (depends on: post-validate)",
+    ]
 
 
 def test_the_gold_hops_plan_exactly_the_steps_they_always_have():
@@ -898,7 +1948,25 @@ def test_the_gold_hops_plan_exactly_the_steps_they_always_have():
         "  [Read] read",
         "  [Transform] derive-key (depends on: read)",
         "  [Transform] latest-version (depends on: derive-key)",
-        "  [Transform] stamp-as-of (depends on: latest-version)",
+        "  [Transform] flatten-amended-outcome (depends on: latest-version)",
+        "  [Transform] drop-blobs (depends on: flatten-amended-outcome)",
+        "  [Transform] stamp-as-of (depends on: drop-blobs)",
+        "  [Validate] unique-validate (depends on: stamp-as-of)",
+        "  [Write] write (depends on: unique-validate)",
+    ]
+    assert gold_detail_builder(
+        reader,
+        writer,
+        grain=DETAIL_GRAIN[DETAIL_TABLE],
+        observations=reader,
+        as_of=AS_OF,
+        name=f"{FEED_NAME}:gold:detail",
+    ).describe().splitlines() == [
+        f"Pipeline: {FEED_NAME}:gold:detail",
+        "  [Read] read",
+        "  [Transform] derive-key (depends on: read)",
+        "  [Transform] latest-observation (depends on: derive-key)",
+        "  [Transform] stamp-as-of (depends on: latest-observation)",
         "  [Validate] unique-validate (depends on: stamp-as-of)",
         "  [Write] write (depends on: unique-validate)",
     ]
@@ -906,6 +1974,8 @@ def test_the_gold_hops_plan_exactly_the_steps_they_always_have():
         ("case_counts_current", "count-by-reviewer-and-status"),
         ("case_age_buckets_current", "bucket-by-age"),
         ("case_throughput_daily", "count-by-terminal-date"),
+        ("answer_remediation_current", "count-by-remediation"),
+        ("appeal_outcomes_current", "count-by-outcome"),
     ):
         assert aggregate_pipeline(
             reader,
@@ -925,7 +1995,7 @@ def test_the_gold_hops_plan_exactly_the_steps_they_always_have():
 # --- end to end ------------------------------------------------------------
 
 
-def test_the_bundled_sample_lands_every_item_across_both_pages(tmp_path):
+def test_the_bundled_sample_lands_every_item_across_both_pages(tmp_path, capsys):
     [poll] = run(
         RunContext(base_dir=tmp_path, pipeline=FEED_NAME), client=LocalJsonListClient()
     )
@@ -942,12 +2012,43 @@ def test_the_bundled_sample_lands_every_item_across_both_pages(tmp_path):
     # One fixture Case carries no Case Reference at all, which is ordinary.
     assert [row["Title"] for row in landed_raw][:2] == ["CMP-000101", "CMP-000102"]
     assert pd.isna(landed_raw[2]["Title"])
+    # Counts below are derived from cases_page_1.json / cases_page_2.json's
+    # per-item content -- see those fixtures for the breakdown. Both Conversation
+    # and Appeals timestamps there deliberately mix formats.
     assert (poll.raw_rows, poll.silver_rows) == (5, 5)
+    assert poll.detail_rows == {
+        "answer": 6,
+        "answer_capture": 2,
+        "answer_action": 1,
+        "general_answer": 1,
+        "conversation_message": 3,
+        "appeal": 2,
+        "case_detail": 13,
+    }
     # The fixture exercises all four real statuses, so the whole vocabulary
     # passes the schema gate rather than only the one a happy path would use.
     assert {row["status"] for row in read_rows(med.silver, "case_version")} == set(
         CASE_STATUSES
     )
+    # A single poll, so every Case's only observation is its winning one.
+    assert sum(
+        row["answer_count"] for row in read_rows(med.gold, "answer_remediation_current")
+    ) == len(read_rows(med.gold, "answer"))
+    assert sum(
+        row["appeal_count"] for row in read_rows(med.gold, "appeal_outcomes_current")
+    ) == len(read_rows(med.gold, "appeal"))
+
+    # main()'s per-poll line is derived from detail_rows and otherwise
+    # unpinned; exercise the CLI path once, against a separate base dir, to
+    # lock its shape down.
+    exit_code = main(["prog", "--base-dir", str(tmp_path / "via-cli"), "--sample"])
+    assert exit_code == 0
+    assert (
+        "5 observation(s) -> 5 case version(s), 6 answer row(s), "
+        "2 answer_capture row(s), 1 answer_action row(s), "
+        "1 general_answer row(s), 3 conversation_message row(s), "
+        "2 appeal row(s), 13 case_detail row(s)."
+    ) in capsys.readouterr().out
 
 
 def test_a_repeated_observation_is_a_no_op_in_raw_and_silver(tmp_path):
@@ -1031,7 +2132,7 @@ def test_a_quiet_first_window_still_types_the_columns_it_creates(tmp_path):
 
 def test_a_quiet_window_still_runs_and_records_every_hop(tmp_path):
     # A quiet poll is not a different pipeline: an operator reading the run log
-    # still sees all six hops, against every table, with zero rows.
+    # still sees every hop, against every table, with zero rows.
     log_path = tmp_path / "runs.log"
     context = RunContext(
         base_dir=tmp_path, pipeline=FEED_NAME, run_log=RunLog(log_path)
@@ -1041,13 +2142,33 @@ def test_a_quiet_window_still_runs_and_records_every_hop(tmp_path):
 
     records = read_run_log(log_path)
     assert {record["pipeline"] for record in records} == EVERY_HOP
-    assert {row["name"] for record in records for row in record["data_locations"]} == {
+    locations = [
+        location for record in records for location in record["data_locations"]
+    ]
+    assert {location["name"] for location in locations} == {
         COMPLAINTS.list_name,
         "case_observation",
         "case_version",
         *GOLD_TABLES,
     }
+    # "answer" is a table in both silver.db (the exploded rows) and gold.db
+    # (the Detail Table's reduction) -- the same name, two different bases.
+    answer_namespaces = {
+        location["namespace"] for location in locations if location["name"] == "answer"
+    }
+    assert any(ns.endswith("silver.db") for ns in answer_namespaces)
+    assert any(ns.endswith("gold.db") for ns in answer_namespaces)
     assert {record["rows_out"] for record in records} == {0}
+
+    # Gold publishes in GOLD_TABLES's declared order.
+    gold_names = [
+        record["pipeline"]
+        for record in records
+        if record["pipeline"].startswith(f"{FEED_NAME}:gold:")
+    ]
+    assert list(dict.fromkeys(gold_names)) == [
+        f"{FEED_NAME}:gold:{table}" for table in GOLD_TABLES
+    ]
 
 
 def test_nothing_safe_to_poll_returns_nothing_and_writes_nothing(tmp_path):
@@ -1124,13 +2245,25 @@ def test_the_sample_client_names_a_list_it_has_no_pages_for():
 
 
 def landed_gold(tmp_path) -> set[str]:
-    """Which gold tables exist under ``tmp_path`` — not how many rows they hold."""
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
-    return {
-        table
-        for table in GOLD_TABLES
-        if med.gold.columns_of(table).columns() is not None
-    }
+    """Which tables actually exist in the gold database under ``tmp_path``.
+
+    Reads ``sqlite_master`` directly rather than iterating ``GOLD_TABLES`` and
+    probing each: probing the registry can only ever confirm the registry, and
+    would never catch a table published without also being added to it. Empty
+    when the database itself is absent (nothing published yet).
+    """
+    db_path = tmp_path / FEED_NAME / "gold.db"
+    if not db_path.exists():
+        return set()
+    connection = sqlite3.connect(db_path)
+    try:
+        rows = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name NOT LIKE 'sqlite_%'"
+        ).fetchall()
+    finally:
+        connection.close()
+    return {row[0] for row in rows}
 
 
 def explode(*args: object, **kwargs: object):
@@ -1154,7 +2287,313 @@ def test_a_poll_publishes_every_gold_table_and_then_commits_the_watermark(tmp_pa
     )
 
 
-def test_a_quiet_first_window_commits_and_publishes_four_empty_gold_tables(tmp_path):
+def test_the_winning_observation_settles_gold_answer_and_drops_the_others(tmp_path):
+    early = item(Answers=json.dumps({"q1": {"value": "A"}, "q2": {"value": "X"}}))
+    later = item(
+        Answers=json.dumps({"q1": {"value": "B"}, "q3": {"value": "Y"}}),
+        Status="Completed",
+    )
+    later.update({"Modified": "2026-08-05T08:45:00Z", "odata.etag": '"4"'})
+    client = FakeListClient(items(early), items(later), advance=NEXT_POLL)
+    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+
+    run(context, client=client)
+    run(context, client=client)
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    # Silver is append-only: it keeps both observations, not just the winner.
+    assert len(read_rows(med.silver, "answer")) == 4
+
+    gold_answer = read_rows(med.gold, "answer")
+    assert {row["question_id"] for row in gold_answer} == {"q1", "q3"}
+    [winner] = read_rows(med.gold, "case_current")
+    assert {row["source_observation_id"] for row in gold_answer} == {
+        winner["source_observation_id"]
+    }
+
+
+def test_the_winning_observation_settles_gold_general_answer_and_drops_the_others(
+    tmp_path,
+):
+    early = item(
+        Answers=json.dumps(
+            {"general:a": {"value": "first"}, "general:b": {"value": "X"}}
+        )
+    )
+    later = item(
+        Answers=json.dumps(
+            {"general:a": {"value": "second"}, "general:c": {"value": "Y"}}
+        ),
+        Status="Completed",
+    )
+    later.update({"Modified": "2026-08-05T08:45:00Z", "odata.etag": '"4"'})
+    client = FakeListClient(items(early), items(later), advance=NEXT_POLL)
+    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+
+    run(context, client=client)
+    run(context, client=client)
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    # Silver is append-only: it keeps both observations, not just the winner.
+    assert len(read_rows(med.silver, "general_answer")) == 4
+
+    gold_general_answer = read_rows(med.gold, "general_answer")
+    assert {row["general_key"] for row in gold_general_answer} == {"a", "c"}
+    [winner] = read_rows(med.gold, "case_current")
+    assert {row["source_observation_id"] for row in gold_general_answer} == {
+        winner["source_observation_id"]
+    }
+
+
+def test_the_winning_observation_settles_gold_capture_and_action_and_drops_the_others(
+    tmp_path,
+):
+    # Poll 2 sets remediationRequired to "no", the app's trigger for deleting
+    # both -- the exact deletion a child-keyed reduce is structurally blind to.
+    stripped_early = item(
+        Id=101,
+        Answers=json.dumps(
+            {
+                "q1": {
+                    "value": "A",
+                    "remediationRequired": "yes",
+                    "remediationActions": [
+                        {"id": "ra-0", "text": "Retrain the branch team."}
+                    ],
+                    "capture": {"field-a": "Old note."},
+                }
+            }
+        ),
+    )
+    stripped_later = item(
+        Id=101,
+        Answers=json.dumps({"q1": {"value": "A", "remediationRequired": "no"}}),
+        Status="Completed",
+    )
+    stripped_later.update({"Modified": "2026-08-05T08:45:00Z", "odata.etag": '"4"'})
+
+    # Item 102 adds a genuinely new capture field on poll 2, proving gold
+    # reflects an addition rather than always landing empty.
+    grown_early = item(
+        Id=102, Answers=json.dumps({"q1": {"value": "A", "remediationRequired": "yes"}})
+    )
+    grown_later = item(
+        Id=102,
+        Answers=json.dumps(
+            {
+                "q1": {
+                    "value": "A",
+                    "remediationRequired": "yes",
+                    "capture": {"field-added": "Added on the second poll."},
+                }
+            }
+        ),
+        Status="Completed",
+    )
+    grown_later.update({"Modified": "2026-08-05T08:45:00Z", "odata.etag": '"4"'})
+
+    client = FakeListClient(
+        items(stripped_early, grown_early),
+        items(stripped_later, grown_later),
+        advance=NEXT_POLL,
+    )
+    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+
+    run(context, client=client)
+    run(context, client=client)
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    assert len(read_rows(med.silver, "answer_capture")) == 2
+    assert len(read_rows(med.silver, "answer_action")) == 1
+
+    gold_capture = read_rows(med.gold, "answer_capture")
+    gold_action = read_rows(med.gold, "answer_action")
+
+    # The semi-join reads the winner's absence correctly, rather than keeping
+    # a stale row a per-child reduce would have no reason to drop.
+    assert not [row for row in gold_capture if row["source_item_id"] == "101"]
+    assert not [row for row in gold_action if row["source_item_id"] == "101"]
+
+    [added] = [row for row in gold_capture if row["source_item_id"] == "102"]
+    assert added["field_key"] == "field-added"
+
+
+def test_the_winning_observation_settles_gold_conversation_message_and_appeal(
+    tmp_path,
+):
+    # conversation_message's key is positional (seq), not a JSON map key or a
+    # minted id, so an observation-spanning superset collides on the grain
+    # itself -- without the semi-join, UniqueValidator would abort the hop, so
+    # a weakened reduction fails loudly here, not silently.
+    message_1 = {
+        "author": {"loginName": "a.khan", "displayName": "Amira Khan"},
+        "timestamp": "2026-08-04T16:02:00Z",
+        "body": "Please confirm the call date.",
+    }
+    message_2 = {
+        "author": {"loginName": "b.okafor", "displayName": "Bola Okafor"},
+        "timestamp": "2026-08-04T18:47:12.000Z",
+        "body": "Confirmed -- the call was on the 30th.",
+    }
+    message_3 = {
+        "author": {"loginName": "a.khan", "displayName": "Amira Khan"},
+        "timestamp": "2026-08-05T08:00:00.000Z",
+        "body": "Thanks, closing this out.",
+    }
+    early = item(Conversation=json.dumps([message_1, message_2]))
+    later = item(
+        Conversation=json.dumps([message_1, message_2, message_3]),
+        Status="Completed",
+    )
+    later.update({"Modified": "2026-08-05T08:45:00Z", "odata.etag": '"4"'})
+
+    # Companion: an Appeal in the shape resolveAppeal() writes in the real app.
+    early["Appeals"] = json.dumps(
+        [
+            {
+                "id": "appeal-1",
+                "appellant": "e.novak",
+                "at": "2026-08-04T09:00:00Z",
+                "rationale": "Reconsider the outcome.",
+                "state": "raised",
+            }
+        ]
+    )
+    later["Appeals"] = json.dumps(
+        [
+            {
+                "id": "appeal-1",
+                "appellant": "e.novak",
+                "at": "2026-08-04T09:00:00Z",
+                "rationale": "Reconsider the outcome.",
+                "state": "resolved",
+                "resolution": {
+                    "verdict": "agreed",
+                    "rationale": "The amended statement changes the outcome.",
+                    "resolver": "d.reid",
+                    "at": "2026-08-05T08:44:00Z",
+                },
+            }
+        ]
+    )
+    client = FakeListClient(items(early), items(later), advance=NEXT_POLL)
+    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+
+    run(context, client=client)
+    run(context, client=client)
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    assert len(read_rows(med.silver, "conversation_message")) == 5
+    [winner] = read_rows(med.gold, "case_current")
+
+    gold_messages = read_rows(med.gold, "conversation_message")
+    assert [row["seq"] for row in gold_messages] == [0, 1, 2]
+    assert {row["source_observation_id"] for row in gold_messages} == {
+        winner["source_observation_id"]
+    }
+
+    # Gold holds the Appeal once, resolved, with every resolution_* column filled.
+    assert len(read_rows(med.silver, "appeal")) == 2
+    [gold_appeal] = read_rows(med.gold, "appeal")
+    assert gold_appeal["appeal_id"] == "appeal-1"
+    assert gold_appeal["state"] == "resolved"
+    assert gold_appeal["resolution_verdict"] == "agreed"
+    assert gold_appeal["resolution_resolver"] == "d.reid"
+
+
+def test_the_winning_observation_settles_gold_case_detail_and_drops_the_others(
+    tmp_path,
+):
+    # The composite AppendOnly key (source_observation_id, field_key) is under
+    # test -- no other end-to-end test exercises this table otherwise, since
+    # item()'s default Details cell falls into the absent -> None sweep.
+    early = item(
+        Details=json.dumps({"complaintRef": "CMP-000101", "customerName": "Priya Shah"})
+    )
+    later = item(
+        Details=json.dumps(
+            {"customerName": "Priya Shah", "sourceSystem": "legacy-crm"}
+        ),
+        Status="Completed",
+    )
+    later.update({"Modified": "2026-08-05T08:45:00Z", "odata.etag": '"4"'})
+    client = FakeListClient(items(early), items(later), advance=NEXT_POLL)
+    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+
+    run(context, client=client)
+    run(context, client=client)
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    assert len(read_rows(med.silver, "case_detail")) == 4
+
+    gold_case_detail = read_rows(med.gold, "case_detail")
+    assert {row["field_key"] for row in gold_case_detail} == {
+        "customerName",
+        "sourceSystem",
+    }
+    [winner] = read_rows(med.gold, "case_current")
+    assert {row["source_observation_id"] for row in gold_case_detail} == {
+        winner["source_observation_id"]
+    }
+
+
+@pytest.mark.parametrize("cell", [None, "misfiled", "complaints"])
+def test_gold_answer_derives_the_same_case_id_as_the_settled_case_type(tmp_path, cell):
+    # Mirrors test_silver_settles_the_case_type_to_the_polled_lists_declared_one:
+    # OTHER's declared case_type is "other", never whatever this raw cell says.
+    client = FakeListClient(items(item(CaseType=cell)))
+
+    run(
+        RunContext(base_dir=tmp_path, pipeline=FEED_NAME),
+        client=client,
+        case_lists=(OTHER,),
+    )
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    [case] = read_rows(med.gold, "case_current")
+    [row] = read_rows(med.gold, "answer")
+    # Fails with zero rows (the semi-join matches nothing) or an IdentityError
+    # if the answer hop ever reads raw's own CaseType cell instead of the one
+    # silver settled.
+    assert row["case_id"] == case["case_id"]
+    assert row["case_type"] == OTHER.case_type
+
+
+def test_a_malformed_answers_blob_raises_and_case_version_still_lands(tmp_path):
+    client = FakeListClient(items(item(Answers="not json")))
+    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+
+    with pytest.raises(JsonShapeError):
+        run(context, client=client)
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    assert len(read_rows(med.silver, "case_version")) == 1
+    assert landed_gold(tmp_path) == set()
+    assert SharePointCheckpointStore(tmp_path).committed_watermark(SOURCE) is None
+
+
+def test_a_malformed_details_blob_raises_and_case_version_details_still_holds_it(
+    tmp_path,
+):
+    client = FakeListClient(items(item(Details="not json")))
+    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
+
+    with pytest.raises(JsonShapeError):
+        run(context, client=client)
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    assert landed_gold(tmp_path) == set()
+    assert SharePointCheckpointStore(tmp_path).committed_watermark(SOURCE) is None
+    # The frontend's Details parse fallback is undefined, so absent and
+    # unparseable are indistinguishable downstream -- silver is the only place
+    # the raw text survives.
+    [case_version] = read_rows(med.silver, "case_version")
+    assert case_version["details"] == "not json"
+
+
+def test_a_quiet_first_window_commits_and_publishes_thirteen_empty_gold_tables(
+    tmp_path,
+):
     # Nothing to reduce is not nothing to publish: a consumer reading gold must
     # find the tables, empty, rather than a missing one it has to special-case.
     run(
@@ -1174,7 +2613,16 @@ def test_an_overlap_reread_does_not_double_count_gold(tmp_path):
     # The overlap re-presents rows that did not change. Silver no-ops them; gold
     # must not count the Case twice either.
     context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
-    client = FakeListClient(advance=NEXT_POLL)
+    client = FakeListClient(
+        items(
+            item(
+                Details=json.dumps(
+                    {"complaintRef": "CMP-000101", "customerName": "Priya Shah"}
+                )
+            )
+        ),
+        advance=NEXT_POLL,
+    )
 
     run(context, client=client)
     run(context, client=client)
@@ -1184,6 +2632,11 @@ def test_an_overlap_reread_does_not_double_count_gold(tmp_path):
     assert [
         row["case_count"] for row in read_rows(med.gold, "case_counts_current")
     ] == [1]
+    assert len(read_rows(med.silver, "answer")) == 1
+    # Proves the composite (source_observation_id, field_key) key: a wrong
+    # single-column key would raise an AppendOnly conflict here instead of a
+    # clean no-op.
+    assert len(read_rows(med.silver, "case_detail")) == 2
 
 
 def test_a_failure_in_current_gold_leaves_no_gold_and_no_checkpoint(
@@ -1205,8 +2658,9 @@ def test_a_failure_in_the_last_aggregate_leaves_the_earlier_gold_and_no_checkpoi
 ):
     # Gold Writers commit independently, so an earlier table stays refreshed.
     # That is acceptable evidence: the watermark did not move, so the next run
-    # rebuilds all four from the same history and converges.
-    monkeypatch.setattr(gold, "throughput", explode)
+    # rebuilds everything from the same history and converges. appeal_outcomes
+    # is the last table GOLD_TABLES declares.
+    monkeypatch.setattr(gold, "appeal_outcomes", explode)
 
     with pytest.raises(RuntimeError, match="boom"):
         run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME), client=FakeListClient())
@@ -1214,8 +2668,17 @@ def test_a_failure_in_the_last_aggregate_leaves_the_earlier_gold_and_no_checkpoi
     checkpoints = SharePointCheckpointStore(tmp_path)
     assert landed_gold(tmp_path) == {
         "case_current",
+        "answer",
+        "answer_capture",
+        "answer_action",
+        "general_answer",
+        "conversation_message",
+        "appeal",
+        "case_detail",
         "case_counts_current",
         "case_age_buckets_current",
+        "case_throughput_daily",
+        "answer_remediation_current",
     }
     assert checkpoints.committed_watermark(SOURCE) is None
     assert not checkpoints.path.exists()
@@ -1420,14 +2883,34 @@ def test_a_dry_run_previews_every_write_and_commits_none_of_them(tmp_path):
 
     report = dry_run_pipeline(lambda ctx: run(ctx, client=client), FEED_NAME, tmp_path)
 
-    # Raw, silver and all four gold tables are previewed; none is committed.
+    # The fixture item carries no capture map, remediationActions, general
+    # answer, Conversation, Appeals or Details, so these six preview empty.
+    empty_detail_tables = (
+        "answer_capture",
+        "answer_action",
+        "general_answer",
+        "conversation_message",
+        "appeal",
+        "case_detail",
+    )
+    expected = [
+        ("raw case_observation", 1),
+        ("silver case_version", 1),
+        ("silver answer", 1),
+        *((f"silver {t}", 0) for t in empty_detail_tables),
+        ("gold case_current", 1),
+        ("gold answer", 1),
+        *((f"gold {t}", 0) for t in empty_detail_tables),
+        ("gold case_counts_current", 1),
+        ("gold case_age_buckets_current", 1),
+        ("gold case_throughput_daily", 0),
+        # The fixture's one answer row is undecided, so it lands under the
+        # UNDECIDED/UNRESOLVED fills; no Appeals means the next row is empty.
+        ("gold answer_remediation_current", 1),
+        ("gold appeal_outcomes_current", 0),
+    ]
     assert [step.note for step in report.steps if step.node_type == "Write"] == [
-        "would write 1 row(s)",
-        "would write 1 row(s)",
-        "would write 1 row(s)",
-        "would write 1 row(s)",
-        "would write 1 row(s)",
-        "would write 0 row(s)",
+        f"would write {n} row(s)" for _, n in expected
     ]
     assert read_rows(med.gold, "case_current") == before
     # The real run's watermark stands; the preview did not move it on.

@@ -7,17 +7,23 @@ test('resolveEnvironment: "uat" resolves to the UAT environment', () => {
   const env = resolveEnvironment('uat');
   assert.equal(env.name, 'uat');
   assert.equal(env.listPrefix, 'uat_');
-  assert.equal(
-    env.exportBasePath,
-    '/Style%20Library/case-review-uat/case-types'
-  );
 });
 
 test('resolveEnvironment: "prod" resolves to prod with no list prefix', () => {
   const env = resolveEnvironment('prod');
   assert.equal(env.name, 'prod');
   assert.equal(env.listPrefix, '');
-  assert.equal(env.exportBasePath, '/Style%20Library/case-review/case-types');
+});
+
+test('resolveEnvironment: declares the list prefix and nothing else', () => {
+  // Question Bank artifacts used to need a second environment declaration — a
+  // Style Library base path per environment — and now resolve relative to the
+  // module that reads them, so each deploy reads the artifacts it was deployed
+  // with. Pinning the shape keeps that from being quietly reintroduced.
+  assert.deepEqual(Object.keys(resolveEnvironment('uat')).sort(), [
+    'listPrefix',
+    'name',
+  ]);
 });
 
 test('resolveEnvironment: undefined (dev loop, no host token) resolves to prod', () => {

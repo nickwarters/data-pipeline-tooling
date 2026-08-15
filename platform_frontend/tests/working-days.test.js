@@ -5,11 +5,16 @@ import assert from 'node:assert/strict';
 import {
   ENGLAND_WALES_HOLIDAYS,
   REMEDIATION_SLA_WORKING_DAYS,
+  REVIEW_SLA_WORKING_DAYS,
 } from '../src/config/working-days.js';
 import { addWorkingDays } from '../src/lib/add-working-days.js';
 
-test('working-days config: the SLA is 10 working days', () => {
+test('working-days config: the remediation SLA is 10 working days', () => {
   assert.equal(REMEDIATION_SLA_WORKING_DAYS, 10);
+});
+
+test('working-days config: the review SLA is 5 working days', () => {
+  assert.equal(REVIEW_SLA_WORKING_DAYS, 5);
 });
 
 test('working-days config: holidays are unique, sorted ISO dates', () => {

@@ -1,10 +1,14 @@
 # Data dictionary — `sharepoint_cases`
 
 The filled-in entry for the `sharepoint_cases` feed, following
-[`data-dictionary-template.md`](data-dictionary-template.md). Six tables: the
-faithful raw observation, the typed Case version, and the four gold tables
-reduced from the version history — the current Case and three aggregates. Every
-declared Case list lands in the same six tables and is told apart by
+[`data-dictionary-template.md`](data-dictionary-template.md). Twenty-two
+tables: the faithful raw observation, the typed Case version and its silver
+`answer`, `answer_capture`, `answer_action`, `general_answer`,
+`conversation_message`, `appeal` and `case_detail` Detail Tables, and the
+thirteen gold tables reduced from the version history — the current Case,
+those same seven Detail Tables, and five aggregates, two of which reduce from
+a Detail Table rather than from the current Case. Every declared Case list
+lands in the same tables and is told apart by
 `case_type`. The
 Python contract is
 [`pipelines/sharepoint_cases/schema.py`](../pipelines/sharepoint_cases/schema.py);
@@ -43,14 +47,22 @@ entry's `list_name` changed accordingly.
 
 ## Where "when we saw it" lives
 
-Neither the raw nor the silver table carries an observation timestamp, an
-ingestion batch id, or a pipeline run id as a **column**, and that is
-deliberate. (Gold does carry `as_of_utc`, but that is the run's *candidate
-window end*, not when we looked — see below.) The load strategy is
-`AppendOnly`, which compares every non-key column of a re-presented row against
-the row already stored; a per-read stamp would differ on every overlapping poll
-and turn each ordinary re-read into an append-only conflict. The rows record
-*what the list said*, and only that.
+Neither the raw nor the silver table carries an observation timestamp or an
+ingestion batch id as a **column**, and that is deliberate. (Gold does carry
+`as_of_utc`, but that is the run's *candidate window end*, not when we looked —
+see below.) The load strategy is `AppendOnly`, which compares every non-key
+column of a re-presented row against the row already stored; a per-read stamp
+would differ on every overlapping poll and turn each ordinary re-read into an
+append-only conflict. The rows record *what the list said*, and only that.
+
+**The one exception is `pipeline_run_id`**, the reserved run-provenance column
+every table-backed Writer stamps
+([ADR-0020](adr/0020-writer-stamped-run-provenance-column.md)). It escapes the
+problem above by construction: the append-only comparison **excludes** it, so an
+overlapping poll still reads as unchanged. Because an unchanged row is never
+rewritten, the value is *the run that first landed the row* — not when we last
+saw it — and it is stable across re-drives. It is the framework's column, not
+the feed's: no schema declares it, and it is added after validation.
 
 When we saw it is recorded elsewhere, and is still recoverable: the **run log**
 (`<base>/_runs/sharepoint_cases.log`) timestamps every step and its
@@ -104,6 +116,7 @@ vocabulary every hop below reads.
 | `source_modified_at` | *(stamped, from `Modified`)* | text | No | The item's `Modified`, in UTC. |
 | `source_version` | *(stamped, from `odata.etag`)* | text | No | The version observed; falls back to a digest of the item's projected values where the list supplies no stamp. |
 | `source_observation_id` | *(stamped)* | text | No | A sha256 over list, item and version — the append-only key. Derived, so it replaces no source column. |
+| `pipeline_run_id` | *(stamped by the Writer)* | text | No | The run that **first landed** this observation. Excluded from the append-only comparison, so a re-read is still a no-op. See *Where "when we saw it" lives* above. |
 | *(all others)* | the list's own column names | as returned | mostly | See the `case_version` table below. |
 
 ### Part C — Row checks
@@ -171,6 +184,7 @@ silver, `case_type` is always the Case Type of the list the row came from.
 | Field | Source column | Type | Nullable | Value rules | Description | Example | Sensitivity | Notes |
 |-------|---------------|------|----------|-------------|-------------|---------|-------------|-------|
 | `source_observation_id` | *(stamped)* | `str` | No | `NonNull` | The observation's identity, and the append-only key. | *(64-char sha256)* | None | |
+| `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that **first landed** this version. Not declared by the schema — the Writer adds it after validation — and excluded from the append-only comparison. | *(32-char hex)* | None | See *Where "when we saw it" lives* above. |
 | `source_list_name` | *(stamped)* | `str` | No | `NonNull` | The list observed. | `Cases-Complaints` | None | |
 | `source_item_id` | *(stamped)* | `str` | No | `NonNull` | The list item observed, as text. | `101` | Internal | Same value as `id`, in the provenance vocabulary. |
 | `source_version` | *(stamped)* | `str` | No | `NonNull` | The version observed. | `\"3\"` | None | Opaque text. SharePoint's ETag carries its own quotes, and they are kept rather than stripped — the value is compared, never parsed. |
@@ -245,7 +259,11 @@ it to a bare account name, or joining it to a person, is a gold concern.
 #### JSON blob columns
 
 `answers`, `conversation`, `appeals`, `amended_outcome` and `details` land as
-text and are never parsed by this feed. They are deliberately un-indexed and
+text and are never parsed *at this layer*: silver keeps each blob exactly as
+the list holds it, which is what makes a malformed one recoverable. Their
+normalised homes are downstream — the Detail Tables for the first four (and
+`details`), and the flattened `amended_*` columns on gold `case_current` for
+`amended_outcome`. They are deliberately un-indexed and
 never queried on the source side either: the reason-defining data is hoisted onto
 the flag and date columns precisely so nothing has to scan a blob.
 
@@ -270,36 +288,729 @@ guessed at here would quarantine real data.
   no rule here, because a rule this feed cannot justify is a rule that will
   eventually reject good data.
 
-## Gold — the current Case and three aggregates
+## `answer` — silver layer (Detail Table)
 
-Silver accumulates *observations*; gold answers *what is true now*. Four tables,
-all rebuilt whole with `Refresh()` on every poll from the entire silver history,
-in [`pipelines/sharepoint_cases/gold.py`](../pipelines/sharepoint_cases/gold.py).
+One row per observation × Question Definition, exploded from `case_version`'s
+`answers` JSON map. `general:`-prefixed keys belong to the
+[`general_answer`](#general_answer--silver-layer-detail-table) table and are
+excluded before this table ever sees them; `remediationActions` and `capture`
+are separate Detail Tables of their own.
+
+### Why this table reads silver, not raw
+
+Raw holds the list's own `CaseType` cell exactly as the list holds it —
+nullable and hand-editable — while silver has already settled `case_type` to
+the value the polled `CaseList` declares. `DeriveKey` mints `case_id` from
+`(case_type, source_item_id)`, so an answer row built over raw's cell would, on
+any list where that cell is blank or wrong, mint a different `case_id` than the
+parent Case's; the gold semi-join would then match nothing and land zero rows,
+silently. Reading silver also means a Case quarantined out of `case_version`
+contributes no answer rows at all — right, since a quarantined Case can never
+win an observation.
+
+### Part A — Table / Feed overview
+
+| Attribute | Value |
+|-----------|-------|
+| **Table / Feed name** | `answer` |
+| **Subject / Case Type** | `sharepoint_cases` |
+| **Medallion layer** | silver |
+| **Grain** | one row per observation × Question Definition |
+| **Is this a Case Type?** | No — a Detail Table hanging off `case_version` |
+| **Natural key → `case_id`** | `schema.NATURAL_KEY`, via `DETAIL_ID_VARS` — applied at gold, not here |
+| **Source system** | the settled `case_version` batch just fetched (not the whole silver history) |
+| **Reader** | `DatasetReader` over that batch |
+| **Load strategy** | `AppendOnly(("source_observation_id", "question_id"))` — composite, because one observation yields many answer rows |
+| **Upstream dependencies** | none declared — the batch is in memory, not reread from silver |
+| **Schedule / freshness** | with the poll, immediately after `case_version`'s own silver hop |
+| **Owner / data steward** | *<team>* |
+| **Source of truth doc** | `pipelines/sharepoint_cases/schema.py` |
+| **Last reviewed** | 2026-08-14 |
+
+### Part B — Field dictionary
+
+| Field | Source path | Type | Nullable | Value rules | Description | Example | Sensitivity |
+|-------|--------------|------|----------|-------------|-------------|---------|-------------|
+| `case_type` | *(from `case_version`)* | `str` | No | `NonNull` | The settled Case Type — see *Why this table reads silver, not raw*. | `complaints` | None |
+| `source_item_id` | *(from `case_version`)* | `str` | No | `NonNull` | The list item observed. | `101` | Internal |
+| `source_modified_at` | *(from `case_version`)* | `datetime` | No | `NonNull` | When the observation was made. | `2026-08-05T08:10:00+00:00` | None |
+| `source_version` | *(from `case_version`)* | `str` | No | `NonNull` | The version observed. | `"3"` | None |
+| `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
+| `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema — the Writer adds it after validation — so it appears in no schema and in no grain. | *(32-char hex)* | None |
+| `question_id` | the `answers` map's key | `str` | No | `NonNull` | The Question Definition this row answers. No `Pattern`: a question id has no documented format, so a pattern would divert real answers into quarantine to guard a namespace nobody has proposed. | `q-root-cause` | None |
+| `value_json` | `answers[question_id].value` | `str` | Yes | — | The value exactly as the source stored it — a scalar as itself, a list as JSON text. Not always parseable as a single JSON value; it is the lossless copy. | `["Process","Training"]` | Internal |
+| `value_text` | *(derived)* | `str` | Yes | — | The canonical, groupable rendering of `value_json`: a multi-select's elements joined on `\|`; anything else stringified. Not display copy — see `derive_value_text`. | `Process\|Training` | Internal |
+| `justification` | `answers[question_id].justification` | `str` | Yes | — | Free text. | | Internal |
+| `remediation_required` | `answers[question_id].remediationRequired` | `str` | Yes | `OneOf(yes, no)` | Tri-state: `"yes"`, `"no"`, or the key **absent**, which means undecided and is distinct from `"no"`. A key is deleted, not nulled, when a reviewer changes their mind. | `yes` | None |
+| `free_form_remediation` | `answers[question_id].freeFormRemediation` | `str` | Yes | — | Free text. | | Internal |
+| `remediation_status` | `answers[question_id].remediationStatus.status` | `str` | Yes | `OneOf(complete, partial, cancelled)` | The full framework vocabulary is validated even where one Case Type's UI offers fewer — a narrower offer is display-only. | `partial` | None |
+| `remediation_status_details` | `answers[question_id].remediationStatus.details` | `str` | Yes | — | Free text. | | Internal |
+
+### Part C — Row checks
+
+None.
+
+### Part D — Quarantine & data quality
+
+- `remediation_required` and `remediation_status` are the only value rules that
+  can quarantine a row; the raw `answers` blob and the parent `case_version` row
+  are kept either way.
+- A malformed `answers` blob (text that is not JSON, or JSON that is not an
+  object) is a feed defect, not a bad value: `ExplodeJsonMap` raises
+  `JsonShapeError` and aborts the run before anything from that batch commits.
+- A structural breach — a missing column, a wrong dtype, a null provenance
+  column — still aborts the run.
+
+## `answer_capture` — silver layer (Detail Table)
+
+One row per observation × Question Definition × Issue Capture Field, exploded
+from one answer's flat `capture` map — one level further down than `answer`
+itself. Reaching it is two chained explodes: the first lands each answer's
+`capture` object as JSON text (`ExplodeJsonMap`'s `value_into` mode, via
+`_as_column_value`), the second reads that text straight back and explodes it
+by field key. An absent or empty `capture` map contributes zero rows for that
+answer, not an error.
+
+**Issue Capture Groups appear nowhere in this table.** Knowing which group a
+field belongs to needs the Case Type's own configuration, which this ingest
+feed does not join — Groups are presentation-only.
+
+### Part A — Table / Feed overview
+
+| Attribute | Value |
+|-----------|-------|
+| **Table / Feed name** | `answer_capture` |
+| **Subject / Case Type** | `sharepoint_cases` |
+| **Medallion layer** | silver |
+| **Grain** | one row per observation × Question Definition × Issue Capture Field |
+| **Is this a Case Type?** | No — a Detail Table hanging off `case_version` |
+| **Natural key → `case_id`** | `schema.NATURAL_KEY`, via `DETAIL_ID_VARS` — applied at gold, not here |
+| **Source system** | the settled `case_version` batch just fetched (not the whole silver history) |
+| **Reader** | `DatasetReader` over that batch |
+| **Load strategy** | `AppendOnly(("source_observation_id", "question_id", "field_key"))` — composite, because one observation yields many capture rows |
+| **Upstream dependencies** | none declared — the batch is in memory, not reread from silver |
+| **Schedule / freshness** | with the poll, alongside the other Detail Tables |
+| **Owner / data steward** | *<team>* |
+| **Source of truth doc** | `pipelines/sharepoint_cases/schema.py` |
+| **Last reviewed** | 2026-08-14 |
+
+### Part B — Field dictionary
+
+| Field | Source path | Type | Nullable | Value rules | Description | Example | Sensitivity |
+|-------|--------------|------|----------|-------------|-------------|---------|-------------|
+| `case_type` | *(from `case_version`)* | `str` | No | `NonNull` | The settled Case Type. | `complaints` | None |
+| `source_item_id` | *(from `case_version`)* | `str` | No | `NonNull` | The list item observed. | `101` | Internal |
+| `source_modified_at` | *(from `case_version`)* | `datetime` | No | `NonNull` | When the observation was made. | `2026-08-05T08:10:00+00:00` | None |
+| `source_version` | *(from `case_version`)* | `str` | No | `NonNull` | The version observed. | `"3"` | None |
+| `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
+| `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema — the Writer adds it after validation — so it appears in no schema and in no grain. | *(32-char hex)* | None |
+| `question_id` | the `answers` map's key | `str` | No | `NonNull` | The Question Definition this capture value belongs to. | `q-root-cause` | None |
+| `field_key` | the `capture` map's key | `str` | No | `NonNull` | The Issue Capture Field key — unique within a Case Type by app contract, not enforced here. | `field-owner` | None |
+| `value_kind` | *(derived)* | `str` | No | `NonNull`, `OneOf(text, person)` | Which arm the value discriminated to; see `discriminate_capture_value`. A legacy `Action[]` value, a half-filled person, or any other unrecognised shape is stamped `unsupported` and quarantines on this rule, rather than earning a label of its own. | `person` | None |
+| `value_text` | the `capture` map's value | `str` | Yes | — | Filled for the `text` arm only. A `person`-typed field holding a bare string still lands here, as `text` — discrimination is on the value, never on a declared type this feed does not see, matching the review application's own reader. | `Called back within SLA.` | Internal |
+| `person_login` | `capture[field_key].loginName` | `str` | Yes | — | Filled for the `person` arm only. A **bare account** (`user-rp`), not the claims login `case_version`'s Person columns hold — the two vocabularies do not join. | `user-rp` | PII |
+| `person_display` | `capture[field_key].displayName` | `str` | Yes | — | Filled for the `person` arm only. Cached at selection time; not looked up here. | `Bola Okafor` | PII |
+
+### Part C — Row checks
+
+None.
+
+### Part D — Quarantine & data quality
+
+- `value_kind` is the only value rule that can quarantine a row, and it is
+  total: `discriminate_capture_value` always stamps one of `text`, `person` or
+  `unsupported`, so every row reaches the rule with a non-null value to judge.
+  The rejected row still carries `raw_value` (dropped only after quarantine),
+  so the offending shape is diagnosable from the reject table alone.
+- The legacy `Action[]` capture arm — a value shape no live Case Type writes —
+  quarantines here rather than being modelled: it fails the `OneOf(text,
+  person)` rule the same way a half-filled person object does.
+- A malformed `answers` or `capture` blob (text that is not JSON, or JSON of
+  the wrong shape) is a feed defect, not a bad value: the chained
+  `ExplodeJsonMap` hops raise `JsonShapeError` and abort the run before
+  anything from that batch commits.
+- A structural breach — a missing column, a wrong dtype, a null provenance
+  column — still aborts the run.
+
+## `answer_action` — silver layer (Detail Table)
+
+One row per observation × Question Definition × ticked Remediation Action,
+exploded from one answer's `remediationActions` list — the feed's first Detail
+Table exploded from a **list**, not a map key. `{id, text}` is the real
+frontend contract for one action (a third `completed` field some docs describe
+is stale there, not here).
+
+Because the source is a list rather than a map key, `action_id` *can* repeat
+within one answer: the review application's own selection UI forbids it, but
+this feed has no way to enforce an application-level rule. A hand-edited
+duplicate therefore **aborts** the run (`AppendOnly`'s conflict at silver, or
+`UniqueValidator` at gold) rather than quarantining — a structural breach of
+the declared grain, not an ordinary bad value.
+
+### Part A — Table / Feed overview
+
+| Attribute | Value |
+|-----------|-------|
+| **Table / Feed name** | `answer_action` |
+| **Subject / Case Type** | `sharepoint_cases` |
+| **Medallion layer** | silver |
+| **Grain** | one row per observation × Question Definition × ticked Remediation Action |
+| **Is this a Case Type?** | No — a Detail Table hanging off `case_version` |
+| **Natural key → `case_id`** | `schema.NATURAL_KEY`, via `DETAIL_ID_VARS` — applied at gold, not here |
+| **Source system** | the settled `case_version` batch just fetched (not the whole silver history) |
+| **Reader** | `DatasetReader` over that batch |
+| **Load strategy** | `AppendOnly(("source_observation_id", "question_id", "action_id"))` — composite, because one observation yields many action rows |
+| **Upstream dependencies** | none declared — the batch is in memory, not reread from silver |
+| **Schedule / freshness** | with the poll, alongside the other Detail Tables |
+| **Owner / data steward** | *<team>* |
+| **Source of truth doc** | `pipelines/sharepoint_cases/schema.py` |
+| **Last reviewed** | 2026-08-14 |
+
+### Part B — Field dictionary
+
+| Field | Source path | Type | Nullable | Value rules | Description | Example | Sensitivity |
+|-------|--------------|------|----------|-------------|-------------|---------|-------------|
+| `case_type` | *(from `case_version`)* | `str` | No | `NonNull` | The settled Case Type. | `complaints` | None |
+| `source_item_id` | *(from `case_version`)* | `str` | No | `NonNull` | The list item observed. | `101` | Internal |
+| `source_modified_at` | *(from `case_version`)* | `datetime` | No | `NonNull` | When the observation was made. | `2026-08-05T08:10:00+00:00` | None |
+| `source_version` | *(from `case_version`)* | `str` | No | `NonNull` | The version observed. | `"3"` | None |
+| `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
+| `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema — the Writer adds it after validation — so it appears in no schema and in no grain. | *(32-char hex)* | None |
+| `question_id` | the `answers` map's key | `str` | No | `NonNull` | The Question Definition this action belongs to. | `q-root-cause` | None |
+| `action_seq` | the `remediationActions` list's 0-based position | `int` | No | `NonNull` | Declared (not dropped) because `ExplodeJsonList`'s `ordinal_into` is mandatory, so the column exists either way, and only a declared column is typed. Descriptive only — `action_id` is the grain. | `0` | None |
+| `action_id` | `remediationActions[].id` | `str` | No | `NonNull` | From the Remediation Action bank's own definitions. | `q-root-cause-ra-0` | None |
+| `action_text` | `remediationActions[].text` | `str` | Yes | — | Denormalised from the bank at selection time — a **snapshot**. A later rename in the bank does not reach a row already written here. | `Retrain the branch team on call handling.` | Internal |
+
+### Part C — Row checks
+
+None.
+
+### Part D — Quarantine & data quality
+
+- No value rule can quarantine a row here: every declared field is either
+  structural (`NonNull`) or unconstrained free text. A structural breach — a
+  missing column, a wrong dtype, a null provenance column, or a duplicate
+  `action_id` within one answer — aborts the run rather than quarantining.
+- A malformed `answers` or `remediationActions` blob (text that is not JSON,
+  or JSON of the wrong shape) is a feed defect, not a bad value:
+  `ExplodeJsonMap`/`ExplodeJsonList` raise `JsonShapeError` and abort the run
+  before anything from that batch commits.
+
+## `general_answer` — silver layer (Detail Table)
+
+**Why two tables tile one blob.** General Question answers live in the *same*
+`answers` JSON map as real answers, under keys prefixed `general:` — but they
+come from a shared catalogue rather than a Question Definition id, are plain
+strings by app contract, are never outcome-driving, and never fail. `answer`
+above excludes the `general:` prefix; this table includes it and strips it, so
+the two tables partition one blob with no key landing in both and none lost.
+
+One row per observation × General Question catalogue key, exploded from
+`case_version`'s `answers` JSON map — from the other side of the same explode
+`answer` reads. Reads the settled silver batch, never raw, for the same reason
+`answer` does — see *Why this table reads silver, not raw* above.
+
+### Part A — Table / Feed overview
+
+| Attribute | Value |
+|-----------|-------|
+| **Table / Feed name** | `general_answer` |
+| **Subject / Case Type** | `sharepoint_cases` |
+| **Medallion layer** | silver |
+| **Grain** | one row per observation × General Question catalogue key |
+| **Is this a Case Type?** | No — a Detail Table hanging off `case_version` |
+| **Natural key → `case_id`** | `schema.NATURAL_KEY`, via `DETAIL_ID_VARS` — applied at gold, not here |
+| **Source system** | the settled `case_version` batch just fetched (not the whole silver history) |
+| **Reader** | `DatasetReader` over that batch |
+| **Load strategy** | `AppendOnly(("source_observation_id", "general_key"))` — composite, because one observation yields many general-answer rows |
+| **Upstream dependencies** | none declared — the batch is in memory, not reread from silver |
+| **Schedule / freshness** | with the poll, alongside the other Detail Tables |
+| **Owner / data steward** | *<team>* |
+| **Source of truth doc** | `pipelines/sharepoint_cases/schema.py` |
+| **Last reviewed** | 2026-08-14 |
+
+### Part B — Field dictionary
+
+| Field | Source path | Type | Nullable | Value rules | Description | Example | Sensitivity |
+|-------|--------------|------|----------|-------------|-------------|---------|-------------|
+| `case_type` | *(from `case_version`)* | `str` | No | `NonNull` | The settled Case Type. | `complaints` | None |
+| `source_item_id` | *(from `case_version`)* | `str` | No | `NonNull` | The list item observed. | `101` | Internal |
+| `source_modified_at` | *(from `case_version`)* | `datetime` | No | `NonNull` | When the observation was made. | `2026-08-05T08:10:00+00:00` | None |
+| `source_version` | *(from `case_version`)* | `str` | No | `NonNull` | The version observed. | `"3"` | None |
+| `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
+| `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema — the Writer adds it after validation — so it appears in no schema and in no grain. | *(32-char hex)* | None |
+| `general_key` | the `answers` map's key, `general:` prefix stripped | `str` | No | `NonNull` | The General Question catalogue key. No `OneOf`/`Pattern` — rationale in `GeneralAnswerRow`'s docstring. | `complaint-channel` | None |
+| `value_json` | `answers[key].value` | `str` | Yes | — | The value exactly as the source stored it — a scalar as itself, a list as JSON text. Carried even though the app contract says plain string: see *Part D*. | `"Phone"` | Internal |
+| `value_text` | *(derived)* | `str` | Yes | — | The canonical, groupable rendering of `value_json` — reuses `derive_value_text` unchanged, giving `answer` and `general_answer` one identical value contract. | `Phone` | Internal |
+
+### Part C — Row checks
+
+None.
+
+### Part D — Quarantine & data quality
+
+- No value rule on this schema can quarantine a row today — see
+  `silver_general_answer_builder`'s docstring for why the quarantine node
+  stays wired anyway.
+- A malformed `answers` blob (text that is not JSON, or JSON that is not an
+  object) is a feed defect, not a bad value: `ExplodeJsonMap` raises
+  `JsonShapeError` and aborts the run before anything from that batch commits.
+- A structural breach — a missing column, a wrong dtype, a null provenance
+  column — still aborts the run.
+- The tiling asymmetry between this table's include filter and `answer`'s
+  exclude filter is documented on `GeneralAnswerRow` and tested by
+  `ExplodeJsonMap`'s own suite, not here.
+- The `"general:"`-exactly key lands with `general_key == ""`, visible rather
+  than quarantined — proven by the tiling test.
+
+## `conversation_message` — silver layer (Detail Table)
+
+One row per observation × Conversation message, exploded from
+`case_version`'s `conversation` JSON **list** — the feed's first Detail Table
+off a blob other than `answers`. The app writes no message id, no read state,
+no thread or Appeal association, and no edit or delete path, so `seq`, the
+blob's own 0-based ordinal, is the grain key rather than anything the message
+carries. Reads the settled silver batch, never raw, for the same reason
+`answer` does — see *Why this table reads silver, not raw* above.
+
+### Part A — Table / Feed overview
+
+| Attribute | Value |
+|-----------|-------|
+| **Table / Feed name** | `conversation_message` |
+| **Subject / Case Type** | `sharepoint_cases` |
+| **Medallion layer** | silver |
+| **Grain** | one row per observation × Conversation message |
+| **Is this a Case Type?** | No — a Detail Table hanging off `case_version` |
+| **Natural key → `case_id`** | `schema.NATURAL_KEY`, via `DETAIL_ID_VARS` — applied at gold, not here |
+| **Source system** | the settled `case_version` batch just fetched (not the whole silver history) |
+| **Reader** | `DatasetReader` over that batch |
+| **Load strategy** | `AppendOnly(("source_observation_id", "seq"))` — composite, because one observation yields many message rows |
+| **Upstream dependencies** | none declared — the batch is in memory, not reread from silver |
+| **Schedule / freshness** | with the poll, alongside the other Detail Tables |
+| **Owner / data steward** | *<team>* |
+| **Source of truth doc** | `pipelines/sharepoint_cases/schema.py` |
+| **Last reviewed** | 2026-08-14 |
+
+### Part B — Field dictionary
+
+| Field | Source path | Type | Nullable | Value rules | Description | Example | Sensitivity |
+|-------|--------------|------|----------|-------------|-------------|---------|-------------|
+| `case_type` | *(from `case_version`)* | `str` | No | `NonNull` | The settled Case Type. | `complaints` | None |
+| `source_item_id` | *(from `case_version`)* | `str` | No | `NonNull` | The list item observed. | `101` | Internal |
+| `source_modified_at` | *(from `case_version`)* | `datetime` | No | `NonNull` | When the observation was made. | `2026-08-05T08:10:00+00:00` | None |
+| `source_version` | *(from `case_version`)* | `str` | No | `NonNull` | The version observed. | `"3"` | None |
+| `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
+| `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema — the Writer adds it after validation — so it appears in no schema and in no grain. | *(32-char hex)* | None |
+| `seq` | the `conversation` list's 0-based position | `int` | No | `NonNull` | The grain key — the app mints no message id. A durable *pointer* only while the Conversation stays append-only: a mid-list insert would renumber every later message silently. | `0` | None |
+| `author_login` | `conversation[].author.loginName` | `str` | Yes | — | The bare account name the app stamped at post time — see *Bare account logins vs. claims logins*, below. | `a.khan` | Internal |
+| `author_display_name` | `conversation[].author.displayName` | `str` | Yes | — | An **unrefreshed snapshot** of what the sender was called when they posted; never join it as a current name. | `Amira Khan` | Internal |
+| `posted_at` | `conversation[].timestamp` | `str` | Yes | — | Kept as text on purpose — see *Blob timestamps stay text*, below. | `2026-08-04T16:02:00Z` | None |
+| `body` | `conversation[].body` | `str` | Yes | — | Free text, unmoderated. | `Please confirm the call date.` | Internal |
+
+### Part C — Row checks
+
+None.
+
+### Part D — Quarantine & data quality
+
+- No value rule is declared on this schema, so nothing here quarantines; the
+  quarantine node stays wired anyway, for the same reason
+  `silver_general_answer_builder`'s does.
+- A malformed `conversation` blob (text that is not JSON, or JSON that is not
+  an array) is a feed defect, not a bad value: `ExplodeJsonList` raises
+  `JsonShapeError` and aborts the run before anything from that batch commits.
+- A structural breach — a missing column, a wrong dtype, a null provenance
+  column — still aborts the run.
+
+## `appeal` — silver layer (Detail Table)
+
+One row per observation × Appeal, exploded from `case_version`'s `appeals`
+JSON **list**, with the Appeal's 1:1 `resolution` object lifted onto the same
+row via dotted paths — exactly as `answer` lifts `remediationStatus`. Unlike a
+Conversation message, an Appeal *does* carry its own identity: `appeal_id`
+(`appeal-${Date.now()}`, minted by the app) is the grain key, and `appeal_seq`
+is descriptive only. Reads the settled silver batch, never raw — see *Why
+this table reads silver, not raw* above.
+
+### Part A — Table / Feed overview
+
+| Attribute | Value |
+|-----------|-------|
+| **Table / Feed name** | `appeal` |
+| **Subject / Case Type** | `sharepoint_cases` |
+| **Medallion layer** | silver |
+| **Grain** | one row per observation × Appeal |
+| **Is this a Case Type?** | No — a Detail Table hanging off `case_version` |
+| **Natural key → `case_id`** | `schema.NATURAL_KEY`, via `DETAIL_ID_VARS` — applied at gold, not here |
+| **Source system** | the settled `case_version` batch just fetched (not the whole silver history) |
+| **Reader** | `DatasetReader` over that batch |
+| **Load strategy** | `AppendOnly(("source_observation_id", "appeal_id"))` — composite, because one observation yields many Appeal rows |
+| **Upstream dependencies** | none declared — the batch is in memory, not reread from silver |
+| **Schedule / freshness** | with the poll, alongside the other Detail Tables |
+| **Owner / data steward** | *<team>* |
+| **Source of truth doc** | `pipelines/sharepoint_cases/schema.py` |
+| **Last reviewed** | 2026-08-14 |
+
+### Part B — Field dictionary
+
+| Field | Source path | Type | Nullable | Value rules | Description | Example | Sensitivity |
+|-------|--------------|------|----------|-------------|-------------|---------|-------------|
+| `case_type` | *(from `case_version`)* | `str` | No | `NonNull` | The settled Case Type. | `complaints` | None |
+| `source_item_id` | *(from `case_version`)* | `str` | No | `NonNull` | The list item observed. | `101` | Internal |
+| `source_modified_at` | *(from `case_version`)* | `datetime` | No | `NonNull` | When the observation was made. | `2026-08-05T08:10:00+00:00` | None |
+| `source_version` | *(from `case_version`)* | `str` | No | `NonNull` | The version observed. | `"3"` | None |
+| `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
+| `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema — the Writer adds it after validation — so it appears in no schema and in no grain. | *(32-char hex)* | None |
+| `appeal_id` | `appeals[].id` | `str` | No | `NonNull` | The grain key, minted by the app as `appeal-${Date.now()}`. No `Pattern`/`Unique` — see *Part D*. | `appeal-1754210400000` | None |
+| `appeal_seq` | the `appeals` list's 0-based position | `int` | No | `NonNull` | Declared, not dropped, for the same reason `answer_action.action_seq` is — `ExplodeJsonList`'s ordinal is mandatory and typed either way. Descriptive only; `appeal_id` is the key. | `0` | None |
+| `appellant` | `appeals[].appellant` | `str` | Yes | — | A bare account name — see *Bare account logins vs. claims logins*, below. | `e.novak` | Internal |
+| `raised_at` | `appeals[].at` | `str` | Yes | — | Kept as text — see *Blob timestamps stay text*. | `2026-08-05T08:30:00Z` | None |
+| `rationale` | `appeals[].rationale` | `str` | Yes | — | Free text. | | Internal |
+| `state` | `appeals[].state` | `str` | Yes | `OneOf(raised, underReview, resolved)` | `underReview` is included although unwritten today — `openAppealOf` treats anything but `resolved` as open, so excluding it would quarantine real rows the moment that transition ships. | `raised` | None |
+| `cited_question_ids_json` | `appeals[].citedAnswerKeys` | `str` | Yes | — | JSON array text of Question Definition ids, joining `answer.question_id` — never a joined string. **Null means the key was omitted**, which is what "no citations" looks like; the app never writes `[]`. | `["q-outcome","q-timeliness"]` | Internal |
+| `resolution_verdict` | `appeals[].resolution.verdict` | `str` | Yes | `OneOf(agreed, rejected)` | Null while unresolved — see the `resolution_*` group note below. | `agreed` | None |
+| `resolution_rationale` | `appeals[].resolution.rationale` | `str` | Yes | — | Free text. Null while unresolved. | | Internal |
+| `resolution_resolver` | `appeals[].resolution.resolver` | `str` | Yes | — | A bare account name — see *Bare account logins vs. claims logins*, below. Null while unresolved. | `d.reid` | Internal |
+| `resolution_at` | `appeals[].resolution.at` | `str` | Yes | — | Kept as text — see *Blob timestamps stay text*. Null while unresolved. | `2026-08-04T10:00:00Z` | None |
+
+The four `resolution_*` columns are null **together**: the shared prefix says
+so, rather than `resolver`/`resolved_at` sitting beside `raised_at` as if they
+were its siblings. An unresolved Appeal carries nulls in all four rather than
+being absent as a row.
+
+### Part C — Row checks
+
+None.
+
+### Part D — Quarantine & data quality
+
+- Only `state` and `resolution_verdict` carry a value rule (`OneOf`); every
+  other column is free text and cannot quarantine a row.
+- No `Pattern` on `appeal_id`: `appeal-${Date.now()}` is one function's
+  implementation detail, nothing enforces it, and a hand-edited blob would
+  quarantine a real Appeal for failing to look like one. No `Unique` either —
+  that rule is per-column over a whole batch spanning many Cases, and grain
+  uniqueness is `UniqueValidator`'s job at gold.
+- `appeal_id` **can repeat** within one observation where a JSON map key
+  cannot — this is the second Detail grain (after `answer_action.action_id`)
+  drawn from a list rather than a map. The app's own UI forbids a duplicate,
+  but this feed cannot enforce an application-level rule; a hand-edited
+  duplicate therefore **aborts** the run (`AppendOnly`'s conflict at silver,
+  or `UniqueValidator` at gold) rather than quarantining.
+- A malformed `appeals` blob (text that is not JSON, or JSON that is not an
+  array) is a feed defect, not a bad value: `ExplodeJsonList` raises
+  `JsonShapeError` and aborts the run before anything from that batch commits.
+- A structural breach — a missing column, a wrong dtype, a null provenance
+  column, or an Appeal element that is not an object at all (every field
+  lifts to `None`, so `appeal_id` lands null) — still aborts the run.
+
+## `case_detail` — silver layer (Detail Table)
+
+One row per observation × Case Details field, exploded from `case_version`'s
+`details` JSON map — the smallest Detail Table this feed publishes, and the
+last: with it, every nested structure on the Case row has a normalised home.
+Reads the settled silver batch, never raw, for the same reason `answer`
+does — see *Why this table reads silver, not raw* above.
+
+### Why this blob has less contract behind it than the others
+
+- **The review application never writes `Details`.** It is read-only in
+  every role the app has, so the shape here comes from whatever creates the
+  Case row outside the application — there is no writer contract to cite the
+  way every other blob's section above cites one.
+- **The frontend's parse fallback for `Details` is `undefined`**, so "absent"
+  and "unparseable" are indistinguishable once a Case reaches the app.
+  Silver `case_version.details` is therefore the *only* recoverable copy of a
+  malformed blob.
+- Keys come from the Case Type's `detailFields[].key`, declared in frontend
+  config this ingest feed never joins. A key present in the blob but
+  undeclared in that config renders nowhere in the app, yet lands here —
+  deliberately not filtered.
+- Values are whatever string the writer used and are **not normalised**: a
+  date lands as `"2026-06-18"`, not an ISO `datetime`. Parsing it is a
+  Reporting concern.
+
+### Part A — Table / Feed overview
+
+| Attribute | Value |
+|-----------|-------|
+| **Table / Feed name** | `case_detail` |
+| **Subject / Case Type** | `sharepoint_cases` |
+| **Medallion layer** | silver |
+| **Grain** | one row per observation × Case Details field |
+| **Is this a Case Type?** | No — a Detail Table hanging off `case_version` |
+| **Natural key → `case_id`** | `schema.NATURAL_KEY`, via `DETAIL_ID_VARS` — applied at gold, not here |
+| **Source system** | the settled `case_version` batch just fetched (not the whole silver history) |
+| **Reader** | `DatasetReader` over that batch |
+| **Load strategy** | `AppendOnly(("source_observation_id", "field_key"))` — composite, because one observation yields many field rows |
+| **Upstream dependencies** | none declared — the batch is in memory, not reread from silver |
+| **Schedule / freshness** | with the poll, alongside the other Detail Tables |
+| **Owner / data steward** | *<team>* |
+| **Source of truth doc** | `pipelines/sharepoint_cases/schema.py` |
+| **Last reviewed** | 2026-08-14 |
+
+### Part B — Field dictionary
+
+| Field | Source path | Type | Nullable | Value rules | Description | Example | Sensitivity |
+|-------|--------------|------|----------|-------------|-------------|---------|-------------|
+| `case_type` | *(from `case_version`)* | `str` | No | `NonNull` | The settled Case Type. | `complaints` | None |
+| `source_item_id` | *(from `case_version`)* | `str` | No | `NonNull` | The list item observed. | `101` | Internal |
+| `source_modified_at` | *(from `case_version`)* | `datetime` | No | `NonNull` | When the observation was made. | `2026-08-05T08:10:00+00:00` | None |
+| `source_version` | *(from `case_version`)* | `str` | No | `NonNull` | The version observed. | `"3"` | None |
+| `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
+| `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema — the Writer adds it after validation — so it appears in no schema and in no grain. | *(32-char hex)* | None |
+| `field_key` | the `details` map's key | `str` | No | `NonNull` | The Case Details field key — declared per Case Type in frontend config this feed does not join; an undeclared key still lands. No `Pattern`/`Length` for the same reason `question_id` has none. | `complaintRef` | None |
+| `value_text` | the `details` map's value, encoded by `encode_detail_value` | `str` | Yes | — | The value as the source wrote it — a JSON string lands as itself, any other JSON value (number, boolean) lands as its JSON encoding, so a boolean reads `true`, not the Python spelling `True`. Not normalised: a date is `"2026-06-18"`, not a `datetime`. | `CMP-000101` | Internal |
+
+**No `value_json` twin.** Argued from the data, not from symmetry with
+`answer`: `details` is a flat `key -> string` map, so for every value the app
+contract admits, a `value_json` twin would be byte-identical to `value_text`
+on every row. The only rows where the two could differ are contract breaches
+(a non-string value), and the lossless copy of those already exists one table
+over, in `case_version.details`.
+
+### Part C — Row checks
+
+None.
+
+### Part D — Quarantine & data quality
+
+- **No value rule on this schema can quarantine a row today.** `CaseDetailRow`
+  declares `NonNull` on the five stamps and `field_key`, and nothing else —
+  the field vocabulary lives in per-Case-Type config this pipeline cannot
+  see, so a rule here would quarantine real data to guard a namespace nobody
+  has proposed. `{"": "x"}` is legal JSON, so an empty-string `field_key` is
+  possible, lands, and is not ruled against. The quarantine node stays wired
+  anyway, for the same reason `silver_general_answer_builder`'s does.
+- A malformed `details` blob (text that is not JSON, or JSON that is not an
+  object) is a feed defect, not a bad value: `ExplodeJsonMap` raises
+  `JsonShapeError` and aborts the run before anything from that batch
+  commits.
+- An off-contract **value** — `details` holding a JSON number, boolean or
+  null where the app contract says a string — is not a value-rule breach
+  either: there is no rule that expresses "must be text", and quarantining
+  would make the field silently vanish from a Case that genuinely carries
+  it, hiding the only evidence. It is instead **encoded to text** by
+  `encode_detail_value` before coercion, so it always lands, faithfully.
+  Losslessness is not sacrificed: silver `case_version.details` keeps the
+  raw blob text regardless.
+- A structural breach — a missing column, a wrong dtype, a null provenance
+  column — still aborts the run.
+
+## Two prose points shared between `conversation_message` and `appeal`
+
+**Bare account logins vs. claims logins.** `conversation_message.author_login`,
+`appeal.appellant` and `appeal.resolution_resolver` are bare account names
+(`a.khan`) — what the app itself stamps — never the claims login
+(`i:0#.w|CONTOSO\a.khan`) every `case_version` Person column holds. The two
+vocabularies do not join: matching one against the other silently matches
+nothing. This feed lands each verbatim rather than guessing at a farm's AD
+domain, which is Case-Type-agnostic and has no business knowing it.
+
+**Blob timestamps stay text on purpose.** `posted_at`, `raised_at` and
+`resolution_at` are declared `str`, not `datetime`. `SchemaCoercion` now
+parses datetimes with `format="ISO8601"`, so the two real spellings these
+blobs carry — the app's `.toISOString()` (`.mmmZ`) and a hand-edited `Z`
+without milliseconds — coexist in one batch. What has not changed is that
+the coerce step sits *above* quarantine: a value that is not ISO-8601 at
+all (a hand-edited `05/08/2026`) still raises and aborts the *whole poll*,
+and blob text is exactly where a hand edit can put one. The rule: a typed
+column stays typed; text inside a blob stays text, until there is evidence
+the blobs are clean enough to re-type. (`source_modified_at` stays
+`datetime` because it comes from OData, is uniform, and is already typed
+upstream — it is not one of these blob fields.)
+
+## Gold — the current Case, its Detail Tables, and five aggregates
+
+Silver accumulates *observations*; gold answers *what is true now*. Every
+table is rebuilt whole with `Refresh()` on every poll from the entire silver
+history, in
+[`pipelines/sharepoint_cases/gold.py`](../pipelines/sharepoint_cases/gold.py).
 They are published **before** the polling watermark is committed, so a failure
-anywhere leaves the watermark where it was and the next run rebuilds all four.
+anywhere leaves the watermark where it was and the next run rebuilds
+everything.
 
 | Table | Declared grain | Measure |
 |-------|----------------|---------|
 | `case_current` | one row per `case_id` | the Case, as it currently stands |
+| `answer` | `case_id` × `question_id` | the winning observation's answer rows |
+| `answer_capture` | `case_id` × `question_id` × `field_key` | the winning observation's Issue Capture rows |
+| `answer_action` | `case_id` × `question_id` × `action_id` | the winning observation's Remediation Action rows |
+| `general_answer` | `case_id` × `general_key` | the winning observation's General Question answer rows |
+| `conversation_message` | `case_id` × `seq` | the winning observation's Conversation messages |
+| `appeal` | `case_id` × `appeal_id` | the winning observation's Appeals |
+| `case_detail` | `case_id` × `field_key` | the winning observation's Case Details fields |
 | `case_counts_current` | `assigned_reviewer_name` × `assigned_reviewer_manager_name` × `status` | `case_count` |
 | `case_age_buckets_current` | `age_bucket` × `status` | `case_count` |
 | `case_throughput_daily` | `terminal_date` × `terminal_status` | `case_count` |
+| `answer_remediation_current` | `case_type` × `question_id` × `remediation_required` × `remediation_status` | `answer_count` |
+| `appeal_outcomes_current` | `case_type` × `state` × `resolution_verdict` | `appeal_count` |
 
-Only `case_current` carries a live grain gate (`UniqueValidator("case_id")`); the
-three aggregates get none, because a uniqueness check below the group-by that
-produced the grain is satisfied by construction. Their grain is declared here.
+Only `case_current` carries a live grain gate (`UniqueValidator("case_id")`);
+each Detail Table carries one too (e.g. `UniqueValidator(("case_id",
+"question_id", "field_key"))` for `answer_capture`, via
+`gold_detail_builder`'s generic `grain=`); the five aggregates get none,
+because a uniqueness check below the group-by that produced the grain is
+satisfied by construction. Their grain is declared here.
+
+The first three aggregates reduce from `case_current`; the last two —
+`answer_remediation_current` and `appeal_outcomes_current` — reduce from a
+published gold Detail Table instead (`answer` and `appeal` respectively), per
+`DETAIL_AGGREGATES` in `gold.py`. See their own sections below for why that
+source and grain earn a table while three other candidates were refused —
+also recorded in *What is deliberately not aggregated*, below.
 
 Every gold table spans **every** declared Case list: a Reviewer holds Cases
 across Case Types, so an aggregate computed per list would not add up.
+
+### `answer`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | `case_id` × `question_id` |
+| **Load strategy** | `Refresh()` |
+| **Source** | silver `answer`'s accumulated history, semi-joined to `case_current`'s winning `(case_id, source_observation_id)` pairs |
+| **Columns** | every silver `answer` column, plus `case_id` and `as_of_utc` |
+
+Reduced per [ADR-0015](adr/0015-detail-tables-reduce-to-the-parents-latest-observation.md):
+the children of each Case's *winning* observation, and nothing else. A
+question a reviewer removed between observations (unticking the last
+Remediation Action, or setting Remediation Required back to undecided so the
+key is dropped) is genuinely absent from the winning observation's map, and the
+semi-join reads that absence correctly — a per-question reduce would instead
+keep the deleted answer forever, because a deletion writes no row for a
+key-based reduce to prefer over. `observations=DatasetReader(current)` reads
+`case_current`'s already-materialised dataset rather than rereading gold, so a
+dry run — where `Refresh()` wrote nothing — cannot hand the semi-join a stale
+or missing table.
+
+### `answer_capture`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | `case_id` × `question_id` × `field_key` |
+| **Load strategy** | `Refresh()` |
+| **Source** | silver `answer_capture`'s accumulated history, semi-joined to `case_current`'s winning `(case_id, source_observation_id)` pairs |
+| **Columns** | every silver `answer_capture` column, plus `case_id` and `as_of_utc` |
+
+Reduced by the same `gold_detail_builder`, per the same rule as `answer`
+above. The property worth calling out here specifically: the review
+application deletes a question's whole `capture` map, not just individual
+fields, the moment that question stops failing (`remediationRequired` moves
+off `"yes"`). The semi-join reads that deletion correctly — a Case whose
+failing answer was resolved between polls contributes no `answer_capture` rows
+for it, even though silver still holds the earlier observation's rows forever.
+
+### `answer_action`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | `case_id` × `question_id` × `action_id` |
+| **Load strategy** | `Refresh()` |
+| **Source** | silver `answer_action`'s accumulated history, semi-joined to `case_current`'s winning `(case_id, source_observation_id)` pairs |
+| **Columns** | every silver `answer_action` column, plus `case_id` and `as_of_utc` |
+
+Reduced by the same `gold_detail_builder`, per the same rule as `answer`
+above. Unticking the last Remediation Action on a question removes the whole
+`remediationActions` list the same way resolving the question removes
+`capture` — the semi-join drops those rows from gold rather than keeping a
+stale action a per-child reduce would have no reason to prefer over.
+
+### `general_answer`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | `case_id` × `general_key` |
+| **Load strategy** | `Refresh()` |
+| **Source** | silver `general_answer`'s accumulated history, semi-joined to `case_current`'s winning `(case_id, source_observation_id)` pairs |
+| **Columns** | every silver `general_answer` column, plus `case_id` and `as_of_utc` |
+
+Reduced by the same `gold_detail_builder`, per the same rule as `answer`
+above. A General Question answer a reviewer's app pruned between observations
+(the question dropped from the Case Type's config) is genuinely absent from
+the winning observation's map, and the semi-join reads that absence correctly.
+
+### `conversation_message`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | `case_id` × `seq` |
+| **Load strategy** | `Refresh()` |
+| **Source** | silver `conversation_message`'s accumulated history, semi-joined to `case_current`'s winning `(case_id, source_observation_id)` pairs |
+| **Columns** | every silver `conversation_message` column, plus `case_id` and `as_of_utc` |
+
+Reduced by the same `gold_detail_builder`, per the same rule as `answer`
+above — the winning observation's full message list, and nothing carried over
+from an earlier one. Because a Conversation only ever grows, this table's
+semi-join has no deletion to read correctly the way the answer-derived tables
+do; what it guarantees instead is that a Case whose thread grew *between*
+observations shows only the latest observation's full list, not an
+observation-spanning superset a per-message reduce would produce by never
+knowing to stop.
+
+### `appeal`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | `case_id` × `appeal_id` |
+| **Load strategy** | `Refresh()` |
+| **Source** | silver `appeal`'s accumulated history, semi-joined to `case_current`'s winning `(case_id, source_observation_id)` pairs |
+| **Columns** | every silver `appeal` column, plus `case_id` and `as_of_utc` |
+
+Reduced by the same `gold_detail_builder`, per the same rule as `answer`
+above. `appeals` is additive and its own elements are never deleted, but an
+Appeal's row still changes shape in place — `raised` gains a full
+`resolution` the moment Controls resolves it — so the semi-join is what
+guarantees gold shows the *latest* state of each Appeal (one row, not two)
+rather than whichever observation a naive per-`appeal_id` reduce happened to
+prefer.
+
+### `case_detail`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | `case_id` × `field_key` |
+| **Load strategy** | `Refresh()` |
+| **Source** | silver `case_detail`'s accumulated history, semi-joined to `case_current`'s winning `(case_id, source_observation_id)` pairs |
+| **Columns** | every silver `case_detail` column, plus `case_id` and `as_of_utc` |
+
+Reduced by the same `gold_detail_builder`, per the same rule as `answer`
+above. This grain is structurally guaranteed **twice over**, unlike every
+other Detail Table's: a JSON object cannot repeat a key, so silver can never
+carry two rows sharing one observation's `field_key`, and the semi-join keeps
+exactly one observation per Case. `UniqueValidator((case_id, field_key))` here
+is therefore a tripwire, the same role it plays below `case_current`'s own
+reduction — kept for the case a future change gets it wrong, not because
+today's data could trip it.
 
 ### `as_of_utc`, on every table
 
 `as_of_utc` is the **candidate SharePoint window end** — the instant this run is
 about to commit as its watermark — as ISO-8601 UTC text. Never `utcnow()`: a
-re-drive of the same window must produce identical gold. Where a *calendar date*
-is derived from it (`terminal_date`, the age arithmetic) the instant is converted
-to the **local** date first, per
+re-drive of the same window must produce identical **data**. Where a *calendar
+date* is derived from it (`terminal_date`, the age arithmetic) the instant is
+converted to the **local** date first, per
 [`tools/observability/timestamps.py`](../tools/observability/timestamps.py).
+
+### `pipeline_run_id`, on every table
+
+| Column | Type | Null? | Description |
+|--------|------|-------|-------------|
+| `pipeline_run_id` | text | No | The pipeline run that wrote the row. |
+
+The reserved run-provenance column every table-backed Writer stamps
+([ADR-0020](adr/0020-writer-stamped-run-provenance-column.md)). It is the
+framework's, not the feed's: no gold builder declares it, and it is added after
+validation, so it appears in no schema and in no grain.
+
+Because every gold table is rebuilt whole with `Refresh()`, the value is
+**uniform per table** — the run named on any row is the run that wrote all of
+them. A re-drive of the same window therefore produces identical data with a
+different `pipeline_run_id`: identical *data*, not identical bytes. Which
+attempt produced a table is also answerable without reading it, from the run
+registry — `python -m cli runs --table case_current`
+([operator CLI](operator-cli.md)).
 
 ### `case_current`
 
@@ -309,7 +1020,7 @@ to the **local** date first, per
 | **Identity** | a `sha256` over `{namespace: "sharepoint_cases", natural_key: {case_type, source_item_id}}`, stamped by `DeriveKey` |
 | **Load strategy** | `Refresh()` |
 | **Source** | the whole `silver.case_version` history, across every declared list |
-| **Columns** | every silver column, plus `case_id` and `as_of_utc` |
+| **Columns** | every silver column **except the five raw JSON blobs**, plus `case_id`, `as_of_utc`, and the six columns flattened out of `amended_outcome` (below) |
 
 **Which version is current.** One stable sort on `case_id`,
 `source_modified_at` (parsed UTC), the parsed source version's major then minor
@@ -331,11 +1042,46 @@ declared slug, not the list's editable cell. The cost is stated plainly:
 **renaming the subject re-keys history** ([ADR-0016](adr/0016-one-sync-subject-for-every-case-type.md)),
 so the pending `cora_cases` rename needs the treatment a re-key always needs.
 
+**The flattened Amended Outcome.** `amended_outcome` is 1:1 with the Case —
+a table built from it would have exactly one row per Case, which is a wide
+Case row wearing a join — so its normalised home is columns on this row,
+lifted by `FlattenJsonObject` **after** the current-state reduction (only
+each Case's *winning* blob is ever parsed; a malformed blob in superseded
+history cannot abort the rebuild). The flatten happens at gold, not silver:
+`case_version` is the rename and the type contract and nothing else, and
+keeps every blob as landed text. Every name carries an `amended_` prefix so
+none can be read as the scalar `outcome` / `effective_outcome` columns
+beside them.
+
+| Column | Blob field | Notes |
+|--------|------------|-------|
+| `amended_outcome_id` | `outcome` | an `OutcomeOption` **id** (`poor-with-harm`), not the display wording |
+| `amended_reason` | `reason` | an Amendment Reason key (`qa-check` \| `tm-check` \| `appeal`, plus per-Case-Type extras). **No `OneOf`**: Case Types may declare `extraAmendmentReasons` in frontend config this pipeline cannot see — the same argument that left `general_answer.general_key` unruled. Absent on pre-field amendments and **always** absent on appeal-derived ones |
+| `amended_justification` | `justification` | free text |
+| `amended_by` | `amendedBy` | a **bare account login** (`user-controls`), not the claims login the Person columns hold — the two vocabularies do not join (see the shared prose point above) |
+| `amended_at` | `amendedAt` | ISO text, verbatim — text inside a blob stays text, as every Detail Table's blob timestamp does |
+| `amended_from_appeal_id` | `fromAppealId` | present **iff** the amendment came from agreeing an Appeal; **joins the gold `appeal` table's `appeal_id`**. Mutually exclusive with `amended_reason` in practice |
+
+A Case never amended (`amended_outcome` empty or absent) and one explicitly
+cleared (the column holds the JSON literal `"null"`) land identically: all
+six columns null. The Current Outcome rule the app itself applies is
+`amended_outcome_id ?? outcome_at_completion` — but prefer the source's own
+`effective_outcome` projection, which the app writes in the same PATCH.
+
 Two things to know about what this table holds:
 
-- It republishes **every** silver column, including the `answers`,
-  `conversation` and `details` JSON blobs, on every poll. A consumer has nowhere
-  else to read them; the price is that `Refresh()` rewrites them each time.
+- It republishes every silver column **except the five raw JSON blobs**,
+  which are dropped rather than published beside the tables built from them:
+  a consumer reading the same data two ways — an unnormalised text blob
+  beside its typed rows — is exactly the duplication the normalisation
+  removes, and the blob is the arm no schema enforcement, value rule or
+  grain validation can say anything about. Where each blob's data now
+  lives: `answers` in the gold `answer`, `answer_capture`, `answer_action`
+  and `general_answer` Detail Tables; `conversation` in
+  `conversation_message`; `appeals` in `appeal`; `details` in `case_detail`;
+  `amended_outcome` in the flattened `amended_*` columns on this very table.
+  The landed blob text itself remains readable in silver `case_version`,
+  the faithful observation history.
 - **A Case deleted from the list stays here forever.** The poll asks for items
   modified in a window, and a deleted item is not returned by anything —
   deletion inference is out of scope for this feed. `case_current` is "every
@@ -425,3 +1171,113 @@ Two caveats, both real:
   therefore **changes a historical count on the next poll**. That is the honest
   reading of a source that owns the event; a frozen copy would report a number
   the source no longer agrees with.
+
+### `answer_remediation_current`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | `case_type` × `question_id` × `remediation_required` × `remediation_status` |
+| **Source** | the published gold `answer` Detail Table, read from that hop's already-materialised dataset — not silver, and not a re-read of gold |
+| **Columns** | `case_type`, `question_id`, `remediation_required`, `remediation_status`, `answer_count`, `as_of_utc` |
+
+Counts the winning observation's answer rows (gold `answer`) by the
+remediation decision recorded against each question and the status of that
+remediation. `case_type` **leads the grain**, and this is a correctness
+requirement rather than a convenience: `question_id`s are drawn from a
+per-Case-Type question bank, so `q1` in two banks names two different
+questions, and grouping without `case_type` would silently sum them as one.
+
+**`answer_count` within one `(case_type, question_id)` group is a Case
+count** — gold `answer` holds exactly one row per Case × question, per
+ADR-0015. Summed *across* every `question_id`, though, it counts *answers*,
+not Cases: a Case that answered three questions contributes three rows. The
+identity that always holds is `sum(answer_count) == ` the row count of gold
+`answer` — never the current Case count.
+
+Two literal fills, not source values, for the same reason `case_counts`'s
+`(unassigned)` is one — a NULL group key is a hole in the grain a reader may
+silently drop:
+
+- `remediation_required` is filled `(undecided)` where the source key is
+  absent. This is **not a fill for missing data** — it is the tri-state's
+  real third state (`AnswerRow.remediation_required`'s docstring), and it
+  must stay distinguishable from a reviewer having explicitly chosen `"no"`.
+- `remediation_status` is filled `(unresolved)` where absent — which covers
+  both a question never marked for remediation at all, and one marked
+  `remediation_required="yes"` with no status recorded yet (e.g. `"yes"`
+  paired with a null status counts under `(unresolved)`, not dropped).
+
+**Stated limitation.** This table cannot be filtered to open Cases. A gold
+Detail row carries nothing from its parent beyond the two winner columns it
+semi-joined on (`gold_detail_builder`'s semi-join is deliberately narrow — see
+*Part B*'s `answer` field dictionary above); reading `case_current.status`
+alongside it would need a two-input transform this feed has never needed. A
+consumer wanting "open Cases with an undecided remediation" joins this table
+to `case_current` itself.
+
+### `appeal_outcomes_current`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | `case_type` × `state` × `resolution_verdict` |
+| **Source** | the published gold `appeal` Detail Table, read from that hop's already-materialised dataset — not silver, and not a re-read of gold |
+| **Columns** | `case_type`, `state`, `resolution_verdict`, `appeal_count`, `as_of_utc` |
+
+Counts the winning observation's Appeal rows (gold `appeal`) by lifecycle
+state and resolution verdict. `case_type` leads the grain for the same
+correctness reason it leads `answer_remediation_current`'s.
+
+**`appeal_count` counts Appeals, not Cases** — a Case may raise several, so
+this table does not answer "how many Cases have an open appeal". That
+question is `case_current.has_open_appeal`, source-written, and is
+deliberately not restated here. An Appeal that gains its `resolution` between
+observations is counted **once**: gold `appeal`'s own semi-join has already
+picked the winning observation's row for that `appeal_id` (see the `appeal`
+section above), so this transform never sees both states of one Appeal.
+
+Two literal fills, the same convention as `answer_remediation_current`'s:
+
+- `state` is filled `(unstated)` where absent.
+- `resolution_verdict` is filled `(unresolved)` where absent — **the same
+  literal** `answer_remediation_current` uses for its own unresolved case,
+  because both mean one thing: no resolution recorded.
+
+`sum(appeal_count)` equals gold `appeal`'s own row count — every Appeal lands
+in exactly one `(state, resolution_verdict)` group, dropped or fill, never
+both.
+
+**Stated limitation.** Carries the same `status`-filter limitation as
+`answer_remediation_current` — see its own note above.
+
+## What is deliberately not aggregated
+
+Three of the issue's five proposed aggregates are refused here, deliberately,
+rather than deferred quietly. Each earns its refusal on its own terms.
+
+- **Answer outcomes** (`case_type` × `question_id` × `value_text`) — deferred
+  to #383, not built against a stub. Without the Question Definition
+  dimension, there is no wording, Question Group or Category to roll
+  an answer's raw value up to, so the only available grouping is the stored
+  `value_text` — and for a multi-select, `value_text` is the selected values
+  *joined* on `|` (see `derive_value_text`), so grouping on it counts
+  combinations of values, not the values themselves. A grain built on that
+  would need re-doing the moment #383 lands, not extending.
+- **Capture field values** (`case_type` × `field_key` × `value_text`) —
+  refused outright. `field_key` cardinality is unbounded: a free-text Issue
+  Capture field yields close to one distinct value per Case, so a grain on it
+  is not an aggregate in any useful sense — it approaches the row count of
+  `answer_capture` itself. The `person` arm has nowhere to go in a count at
+  all — a login is an identity, not a measure. Its real home is the Reporting
+  pipeline's per-Case-Type pivots, which can shape a typed, per-field view
+  this Case-Type-agnostic ingest feed cannot.
+- **Conversation latency** (`case_id`, or `case_type` × author side) —
+  refused. `case_current.awaiting_responsible_party` and
+  `case_current.awaiting_since` are already source-written and already answer
+  the latency question directly, so an aggregate here would be a second,
+  derived spelling of a fact the source already states. Splitting by author
+  side would also need the bare-account-to-claims-login join
+  `conversation_message.author_login` and `case_current`'s Person columns
+  deliberately do not support (see *Bare account logins vs. claims logins*,
+  above) — this feed refuses that join on principle, not for lack of time.
+  #356, the in-app clock, is the related inverse and should be read before
+  re-proposing this.

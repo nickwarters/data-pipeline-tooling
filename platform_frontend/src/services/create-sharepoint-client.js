@@ -49,6 +49,9 @@ export async function createSharePointClient(
       loadCaseTypeConfig(slug)
     );
 
+    // No Question Bank versions are seeded. The mock reads the artifacts in
+    // `case-types/banks/` itself — the same files a deploy serves — so the dev
+    // loop and a deploy cannot disagree about what a version contains.
     return new MockSharePointClient({
       personas,
       persona,
@@ -61,7 +64,6 @@ export async function createSharePointClient(
   return new HttpSharePointClient({
     webUrl: resolveHostWebUrl(),
     listPrefix: env.listPrefix,
-    exportBasePath: env.exportBasePath,
   });
 }
 

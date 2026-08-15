@@ -166,6 +166,35 @@ decision with its own transition and its own flag pairing, not a resurrection of
 one — the ticket issue #699 previously referenced for building that transition is
 superseded by this amendment.
 
+### Amendment — issue #571, 2026-08-14
+
+**A fourth reason, On Hold, joins the table** — third in priority order, directly below
+Awaiting Frontline. It is Reviewer-scoped, keyed on the app-written `OnHold` state
+column with `PlacedOnHoldAt` as its clock: exactly the plain state/clock column pair
+the Decision below prescribes, both already written together by the Case Review page's
+hold toggle and cleared by `completionPatch`, so no new writer and no new column. The
+default cadence is 14 days — a deliberately conservative placeholder pending a product
+answer, overridable per Case Type via `actionCentreSlaDays.onHold` ([ADR-0044]).
+
+**Precedence: Overdue wins.** A Case that is both on hold and overdue is urgent, not
+parked, and appears in the Overdue group only — carrying the inline "also On Hold"
+note. The precedence is expressed in the reason's _filter_ (`{ onHold: true,
+overdue: false }`) rather than at render time, so the `$count` header, the collapsed
+peek and the paged rows all agree. This required teaching both clients
+`overdue: false`, previously silently ignored. The mock negates the shared
+`isOverdue` evaluator; the OData side emits the negation of the `overdue: true`
+expression, built from the same `OVERDUE_STATUSES` list so the two cannot drift, with
+`DueDate eq null` counted as not overdue — a Case with no review date has no clock to
+have passed. The two-count fallback (subtracting a `{ onHold: true, overdue: true }`
+`$count` and filtering at render) was considered for [ADR-0031] threshold safety and
+rejected while unproven necessary; the chosen expression must still be verified
+against a UAT list at realistic volume before relying on it in production.
+
+**The Awaiting Frontline overlap stays additive**, matching how Overdue and Awaiting
+Frontline already overlap: only Overdue was specified as winning. In practice the
+overlap is small — the hold toggle is offered only at `In-progress`, while
+`awaitingResponsibleParty` from Send Actions belongs to `Actions In Progress`.
+
 ## Context
 
 The dashboard Action Centre groups a Reviewer/Controls/Owner worklist by
@@ -270,3 +299,4 @@ reason logic versions with the code and is unit-tested to 100% coverage.
 [ADR-0009]: ./0009-mock-first-dev-loop.md
 [ADR-0027]: ./0027-appeal-flow-journeyowner-controls.md
 [ADR-0031]: ./0031-scaling-against-the-list-view-threshold.md
+[ADR-0044]: ./0044-case-type-review-cadence-thresholds-are-data.md

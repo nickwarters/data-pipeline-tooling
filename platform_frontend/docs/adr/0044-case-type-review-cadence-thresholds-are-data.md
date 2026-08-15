@@ -37,16 +37,17 @@ passed `undefined` positionally to reach `now`.
 **Each review-cadence threshold is an optional `CaseTypeConfig` key whose
 default lives next to the code that reads it.**
 
-Three keys:
+Four keys (`reviewSlaWorkingDays` added by the 2026-08 amendment below):
 
-| Key                                            | Default                             | Read by                              |
-| ---------------------------------------------- | ----------------------------------- | ------------------------------------ |
-| `actionCentreSlaDays?: Record<string, number>` | the reason's own `defaultSlaDays`   | the dashboard Action Centre          |
-| `breachWindowHours?: number`                   | `DEFAULT_BREACH_WINDOW_HOURS` (24)  | the KPI strip's Owner "At risk" tile |
-| `remediationSlaWorkingDays?: number`           | `REMEDIATION_SLA_WORKING_DAYS` (10) | `CaseMachine` at Send Actions        |
+| Key                                            | Default                             | Read by                               |
+| ---------------------------------------------- | ----------------------------------- | ------------------------------------- |
+| `actionCentreSlaDays?: Record<string, number>` | the reason's own `defaultSlaDays`   | the dashboard Action Centre           |
+| `breachWindowHours?: number`                   | `DEFAULT_BREACH_WINDOW_HOURS` (24)  | the KPI strip's Owner "At risk" tile  |
+| `reviewSlaWorkingDays?: number`                | `REVIEW_SLA_WORKING_DAYS` (5)       | the dashboard at the allocation claim |
+| `remediationSlaWorkingDays?: number`           | `REMEDIATION_SLA_WORKING_DAYS` (10) | `CaseMachine` at Send Actions         |
 
 An absent key means "use the framework default", never "no threshold".
-Complaints declares none of the three, so its behaviour is unchanged in every
+Complaints declares none of the four, so its behaviour is unchanged in every
 respect — the same numbers, the same copy, the same projected `CaseSource`
 object, key for key.
 
@@ -91,17 +92,18 @@ and also rejects the numbers a type cannot: a negative day count, a zero-length
 breach window, a fractional working day. Zero is allowed for a cadence, because
 Overdue is legitimately breached the moment it lands.
 
-### The two dashboard thresholds are projected onto `CaseSource`, not carried
+### The three dashboard thresholds are projected onto `CaseSource`, not carried
 
-The Action Centre and the KPI strip only ever hold `CaseSource`. So
-`resolveCaseSourcesFromCaseTypes()` copies `actionCentreSlaDays` and
-`breachWindowHours` onto the source, omitting each when the Case Type declares
-nothing — the same omit-when-undefined shape `maxInProgressCases` already uses.
-`CaseSource` is not widened to carry the whole `CaseTypeConfig`.
+The Action Centre, the KPI strip and the allocation claim only ever hold
+`CaseSource`. So `resolveCaseSourcesFromCaseTypes()` copies
+`actionCentreSlaDays`, `breachWindowHours` and `reviewSlaWorkingDays` onto the
+source, omitting each when the Case Type declares nothing — the same
+omit-when-undefined shape `maxInProgressCases` already uses. `CaseSource` is not
+widened to carry the whole `CaseTypeConfig`.
 
 **This deserves an honest reading rather than a precedent citation.**
 `CaseSource` began as a data-access descriptor: which list, under what slug, by
-what name. `maxInProgressCases` was already a policy value on it, and these two
+what name. `maxInProgressCases` was already a policy value on it, and these
 push it further in that direction — it is becoming a Case-Type policy
 descriptor with a data-access core. That is the decision taken here, taken
 deliberately, and the alternatives were both worse: putting the config object on
@@ -115,6 +117,14 @@ projected onto `CaseSource` only when a surface that holds nothing but a
 because the Case Review page reads the Case Type config directly and has no need
 of it. If a third or fourth knob wants a seat on `CaseSource`, that is the
 signal to give the dashboard a proper policy lookup instead of another key.
+
+> **Amended (2026-08, #676):** `reviewSlaWorkingDays` is that third knob, so the
+> tripwire above is **moved rather than acted on**: it is one omit-when-undefined
+> number read at one call site — the allocation claim — and a policy-lookup
+> layer nothing else would use yet buys nothing. The **fourth** knob wanting a
+> seat carries the lookup with it. Its default, `REVIEW_SLA_WORKING_DAYS`, sits
+> in `src/config/working-days.js` beside `REMEDIATION_SLA_WORKING_DAYS`, for the
+> same reason that one does.
 
 ### `CaseRow.caseType` holding the registry slug is load-bearing
 
@@ -139,6 +149,35 @@ from the fixtures and from the two documents that listed it. `isOverdue()` loses
 its ignored config parameter and becomes `isOverdue(caseRow, now)`, which
 removes the six call sites that were passing `undefined` positionally to reach
 the second argument.
+
+> **Amended (2026-08, #676):** the premise above — "the row arrives with its due
+> date already set" — was false. Nothing has ever written `DueDate`: not this
+> app, not the provisioning, not any upstream. Unless a Maintainer typed a date
+> into the SharePoint list by hand, the column was empty, so `isOverdue()`
+> returned false for every Case and no Case could read as Overdue. The Action
+> Centre's `overdue` reason and the KPI strip's "at risk" tile were counting
+> against a column nobody filled in.
+>
+> What survives unchanged is the part that was actually load-bearing: 0044
+> rejected **computing the review due date on read** from a Case Type key, and
+> that is still rejected, for the same reason — two opinions about one date,
+> one recomputed and one persisted, disagreeing the moment either moves. The
+> amendment adds the missing writer instead. `reviewSlaWorkingDays` is stamped
+> **once**, at the allocation claim, as the claim date plus that many working
+> days, and stored date-only on the row exactly as ADR-0025 stamps
+> `remediationDueDate`. Changing a Case Type's number moves no date already
+> written. What remains true of `slaHours` specifically is that it stays
+> deleted: it was an hours-based key with no writer, and this is a
+> working-days key with one.
+>
+> One asymmetry is worth naming, because it looks like an inconsistency. The
+> clients stamp `assignedAt` themselves on every write that names a Reviewer
+> (`services/assignment-stamp.js`), but `dueDate` is stamped by the dashboard,
+> in the same PATCH. That is deliberate: `assignedAt` is an invariant of the
+> write — any write naming a Reviewer must record when — whereas the review
+> clock needs the Case Type's SLA, and the clients are list-generic transport
+> that know nothing of Case Types and must not start loading their config to
+> find out.
 
 ## Considered alternatives
 
@@ -182,3 +221,14 @@ the second argument.
 - The holiday calendar stays global. Per-region holidays remain ADR-0025's open
   follow-up and are not addressed here: a Case Type can now choose _how many_
   working days it gets, not _which_ days are working days.
+
+## Amendment — issue #571, 2026-08-14
+
+The Action Centre gained an On Hold reason (ADR-0030 as amended), and with it
+`actionCentreSlaDays.onHold` became a valid key — automatically, because the
+config check validates keys against the reason table rather than a second
+list. Its framework default is 14 days, a deliberately conservative
+placeholder pending a product answer on what "parked too long" means. Zero is
+the one value to avoid: it would badge every parked Case as breached the
+moment it is parked, which defeats a group whose point is _not otherwise
+urgent_.

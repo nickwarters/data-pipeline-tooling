@@ -27,8 +27,8 @@ The strategies shipped today:
 - :class:`Refresh` — truncate + reload each run; the table mirrors the current
   source snapshot after every run.
 - :class:`AccumulateByRun` — accumulate rows stamped by ``logical_run_id`` /
-  ``load_date`` plus optional ``pipeline_run_id``; a re-driven logical run is
-  idempotent via delete-by-logical-run then insert.
+  ``load_date``; a re-driven logical run is idempotent via delete-by-logical-run
+  then insert.
 - :class:`UpsertStrategy` — merge incoming rows into the target by a declared
   key set: matching keys are replaced, new keys are inserted, unmatched target
   rows are preserved.
@@ -122,14 +122,18 @@ class Refresh:
 class AccumulateByRun:
     """Accumulate rows per logical run, stamped with run metadata.
 
-    ``logical_run_id`` is the idempotency key a re-driven run deletes by;
-    ``pipeline_run_id`` is the concrete attempt, stamped for traceability when
-    the strategy was derived from a RunContext.
+    ``logical_run_id`` is the idempotency key a re-driven run deletes by, and
+    ``load_date`` is the business date the rows landed under. Both are this
+    strategy's own contract.
+
+    It does **not** stamp ``pipeline_run_id``: the concrete attempt behind a row
+    is the reserved provenance column, and the Writer stamps that for every
+    table it writes. One column, one stamper — an accumulating target gets it
+    exactly as a refreshed one does.
     """
 
     logical_run_id: str
     load_date: str
-    pipeline_run_id: str | None = None
 
     def __post_init__(self) -> None:
         if not self.logical_run_id:
@@ -143,7 +147,6 @@ class AccumulateByRun:
         return cls(
             logical_run_id=context.logical_run_id,
             load_date=context.load_date,
-            pipeline_run_id=context.pipeline_run_id,
         )
 
     def writer_for(
@@ -160,7 +163,6 @@ class AccumulateByRun:
             table,
             self.logical_run_id,
             self.load_date,
-            pipeline_run_id=self.pipeline_run_id,
             busy_timeout_ms=busy_timeout_ms,
         )
 
@@ -168,13 +170,11 @@ class AccumulateByRun:
         """Stamp this run's identity onto ``frame`` in place and return it.
 
         The run columns every accumulating sink needs, wherever it persists:
-        ``logical_run_id`` (the idempotency key a re-driven run deletes by),
-        ``load_date``, and ``pipeline_run_id`` when the strategy came from a
-        RunContext.
+        ``logical_run_id`` (the idempotency key a re-driven run deletes by) and
+        ``load_date``. The attempt behind the row is not among them — that is
+        the Writer's provenance stamp, set in one place for every table.
         """
         frame["logical_run_id"] = self.logical_run_id
-        if self.pipeline_run_id is not None:
-            frame["pipeline_run_id"] = self.pipeline_run_id
         frame["load_date"] = self.load_date
         return frame
 

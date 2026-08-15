@@ -1,22 +1,21 @@
-"""Gold for the ``sharepoint_cases`` feed: the current Case, and three aggregates.
+"""Gold for the ``sharepoint_cases`` feed: the current Case, its Detail Tables,
+and five aggregates.
 
 Silver is an append-only history of *observations* across every declared Case
-list. Gold is the other shape: **one row per Case as it stands now**, over every
-list, and three counts reduced from it. Every table is rebuilt whole with
+list. Gold reduces that three ways. Every table is rebuilt whole with
 ``Refresh()`` on every poll, so a re-drive converges rather than accumulating.
+Every table's declared grain is in ``docs/data-dictionary-sharepoint-cases.md``.
 
-Four tables, and their declared grain:
-
-===========================  =================================================
-``case_current``             one row per ``case_id`` -- the latest observation
-``case_counts_current``      reviewer x that reviewer's manager x ``status``
-``case_age_buckets_current`` ``age_bucket`` x ``status``
-``case_throughput_daily``    ``terminal_date`` x ``terminal_status``
-===========================  =================================================
+The Detail Tables, named in ``DETAIL_TABLES`` (derived from ``GOLD_TABLES`` and
+``DETAIL_GRAIN``), hold the child rows of the Cases' *winning* observation.
+Two of the five aggregates -- ``answer_remediation_current`` and
+``appeal_outcomes_current`` -- reduce from a Detail Table (``answer`` and
+``appeal`` respectively) rather than from ``case_current``, per
+``DETAIL_AGGREGATES`` below.
 
 **One instant decides everything.** ``as_of`` is the candidate SharePoint window
 end -- the value the run is about to commit as its watermark -- and never
-``utcnow()``: a re-drive of the same window must produce byte-identical gold.
+``utcnow()``: a re-drive of the same window must produce **identical data**.
 Every table carries it as ``as_of_utc``. A *calendar date* (``terminal_date``,
 the age arithmetic) is the **local** date of that instant, through
 ``tools.observability.timestamps``.
@@ -29,13 +28,20 @@ from __future__ import annotations
 import datetime as dt
 import re
 from functools import partial
+from typing import Sequence
 
 import pandas as pd
 
 from framework.core import Dataset, Reader, UniqueValidator, Writer
 from framework.io import DatasetReader, Refresh
 from framework.run import Pipeline, RunLog
-from framework.transform import DeriveKey, Stamp
+from framework.transform import (
+    DeriveKey,
+    DropColumns,
+    FlattenJsonObject,
+    JoinWith,
+    Stamp,
+)
 from tools.medallion import Medallion
 from tools.observability.timestamps import local_date
 
@@ -46,16 +52,82 @@ from .schema import FEED_NAME, NATURAL_KEY
 SILVER_TABLE = "case_version"
 CURRENT_TABLE = "case_current"
 
-# All four gold tables, in publication order.
+# Every gold table, in publication order.
 GOLD_TABLES = (
     CURRENT_TABLE,
+    "answer",
+    "answer_capture",
+    "answer_action",
+    "general_answer",
+    "conversation_message",
+    "appeal",
+    "case_detail",
     "case_counts_current",
     "case_age_buckets_current",
     "case_throughput_daily",
+    "answer_remediation_current",
+    "appeal_outcomes_current",
 )
 
 CASE_ID_COLUMN = "case_id"
+
+# The grain of each Detail Table, declared for every one this feed may ever
+# grow; DETAIL_TABLES below is the subset that actually publishes.
+DETAIL_GRAIN: dict[str, tuple[str, ...]] = {
+    "answer": (CASE_ID_COLUMN, "question_id"),
+    "answer_capture": (CASE_ID_COLUMN, "question_id", "field_key"),
+    "answer_action": (CASE_ID_COLUMN, "question_id", "action_id"),
+    "general_answer": (CASE_ID_COLUMN, "general_key"),
+    "conversation_message": (CASE_ID_COLUMN, "seq"),
+    "appeal": (CASE_ID_COLUMN, "appeal_id"),
+    "case_detail": (CASE_ID_COLUMN, "field_key"),
+}
+
+# The Detail Tables that actually publish today, derived from GOLD_TABLES so
+# the two cannot drift apart.
+DETAIL_TABLES: tuple[str, ...] = tuple(t for t in GOLD_TABLES if t in DETAIL_GRAIN)
+
+# Aggregates that reduce from a Detail Table rather than case_current, named to
+# the Detail Table each reduces.
+DETAIL_AGGREGATES: dict[str, str] = {
+    "answer_remediation_current": "answer",
+    "appeal_outcomes_current": "appeal",
+}
+
+# The amended_outcome blob, flattened onto the case_current row -- it is 1:1
+# with the Case, so it wants columns, not a Detail Table. Every name carries an
+# amended_ prefix so none can be read as the scalar outcome / effective_outcome
+# columns beside them. amended_outcome_id holds an OutcomeOption *id*
+# (poor-with-harm), not display wording; amended_reason is an Amendment Reason
+# key with no OneOf, because Case Types may declare extraAmendmentReasons in
+# frontend config this pipeline cannot see (the same argument that left
+# general_key unruled); amended_at stays ISO text -- text inside a blob stays
+# text, as every Detail Table's blob timestamp does; amended_from_appeal_id
+# joins the gold appeal table's appeal_id, and is present iff the amendment came
+# from agreeing an Appeal (amended_reason is then absent). amended_by is a bare
+# account login, not the claims login the Person columns hold.
+AMENDED_OUTCOME_FIELDS = {
+    "outcome": "amended_outcome_id",
+    "reason": "amended_reason",
+    "justification": "amended_justification",
+    "amendedBy": "amended_by",
+    "amendedAt": "amended_at",
+    "fromAppealId": "amended_from_appeal_id",
+}
+
+# The four blob columns whose data now lives in a Detail Table, dropped from
+# case_current rather than republished: a consumer reading the same data two
+# ways -- an unnormalised text blob beside the typed table built from it -- is
+# exactly the duplication the normalisation removes, and the blob is the arm no
+# schema enforcement, value rule or grain validation can say anything about.
+# The fifth blob, amended_outcome, is consumed by its flatten below. Silver
+# keeps all five as landed text: it is the faithful observation history, and
+# the only place a malformed blob is recoverable.
+DETAIL_BLOB_COLUMNS = ("answers", "conversation", "appeals", "details")
+
 AS_OF_COLUMN = "as_of_utc"
+# The pair a Detail row's semi-join keys on.
+WINNER_COLUMNS = (CASE_ID_COLUMN, "source_observation_id")
 
 # A Case whose review is over, and the source-written stamp that says when it
 # ended. The source writes each stamp once, on the one transition into that
@@ -67,6 +139,10 @@ TERMINAL_STATUSES = {"Completed": "completed_at", "Void": "voided_at"}
 # reader may silently drop, losing rows from a total.
 UNASSIGNED = "(unassigned)"
 UNSTAMPED = "(unstamped)"
+# The tri-state's real third state (see AnswerRow), not a fill for missing data.
+UNDECIDED = "(undecided)"
+UNRESOLVED = "(unresolved)"
+UNSTATED = "(unstated)"
 
 # The grain of ``case_counts_current``, in the order it groups and sorts by. The
 # Assigned Reviewer leads: the question this table answers is "who is holding
@@ -76,6 +152,20 @@ COUNT_DIMENSIONS = (
     "assigned_reviewer_manager_name",
     "status",
 )
+
+# The grain of ``answer_remediation_current``. ``case_type`` leads: question_ids
+# are drawn from a per-Case-Type question bank, so grouping without it would sum
+# two different questions as one.
+ANSWER_REMEDIATION_DIMENSIONS = (
+    "case_type",
+    "question_id",
+    "remediation_required",
+    "remediation_status",
+)
+
+# The grain of ``appeal_outcomes_current``; ``case_type`` leads for the same
+# reason as above.
+APPEAL_OUTCOME_DIMENSIONS = ("case_type", "state", "resolution_verdict")
 
 # ``(exclusive upper bound in days, label)``, tried in order; the last entry is
 # the open-ended bucket and its bound is ignored. A bucket's sort order is its
@@ -171,26 +261,32 @@ def latest_case_version(dataset: Dataset) -> Dataset:
     return Dataset.from_pandas(current.reset_index(drop=True))
 
 
+def winning_observations(observations: Reader) -> Dataset:
+    """Gold ``case_current``, projected to ``WINNER_COLUMNS`` so the join is a
+    semi-join. No ``drop_duplicates()``: ``UniqueValidator(CASE_ID_COLUMN)`` in
+    ``case_current_builder`` already makes a duplicate winning pair impossible.
+    """
+    frame = observations.read().to_pandas()
+    projected = frame.loc[:, list(WINNER_COLUMNS)].reset_index(drop=True)
+    return Dataset.from_pandas(projected)
+
+
 # --- the aggregates ---------------------------------------------------------
 
 
 def case_counts(dataset: Dataset) -> Dataset:
     """Count current Cases by reviewer, that reviewer's manager, and status."""
-    frame = dataset.to_pandas()
     # Only the two Person columns are filled; ``status`` is declared non-null in
     # silver and a null there is a schema breach, not a reporting gap.
-    filled = {
-        column: frame[column].where(frame[column].notna(), UNASSIGNED)
-        for column in ("assigned_reviewer_name", "assigned_reviewer_manager_name")
-    }
-    counted = (
-        frame.assign(**filled)
-        .groupby(list(COUNT_DIMENSIONS))
-        .size()
-        .reset_index(name="case_count")
-        .sort_values(list(COUNT_DIMENSIONS), kind="stable")
+    return _counted(
+        dataset.to_pandas(),
+        COUNT_DIMENSIONS,
+        fills={
+            "assigned_reviewer_name": UNASSIGNED,
+            "assigned_reviewer_manager_name": UNASSIGNED,
+        },
+        measure="case_count",
     )
-    return Dataset.from_pandas(counted.reset_index(drop=True))
 
 
 def _age_in_days(created: pd.Timestamp | None, as_of_day: dt.date) -> int | None:
@@ -294,6 +390,57 @@ def throughput(dataset: Dataset) -> Dataset:
     return Dataset.from_pandas(counted.reset_index(drop=True))
 
 
+def _counted(
+    frame: pd.DataFrame,
+    dimensions: Sequence[str],
+    *,
+    fills: dict[str, str],
+    measure: str,
+) -> Dataset:
+    """Group ``frame`` by ``dimensions`` into one row per combination, counted.
+
+    ``.where``, not ``fillna``, so an all-null float64 ``fills`` column lands as
+    ``object`` rather than staying float64 with the literal coerced to NaN.
+    """
+    filled = {
+        column: frame[column].where(frame[column].notna(), literal)
+        for column, literal in fills.items()
+    }
+    counted = (
+        frame.assign(**filled)
+        .groupby(list(dimensions))
+        .size()
+        .reset_index(name=measure)
+        .sort_values(list(dimensions), kind="stable")
+    )
+    return Dataset.from_pandas(counted.reset_index(drop=True))
+
+
+def answer_remediation(dataset: Dataset) -> Dataset:
+    """Count the gold ``answer`` Detail Table by remediation decision and status."""
+    frame = dataset.to_pandas()
+    return _counted(
+        frame,
+        ANSWER_REMEDIATION_DIMENSIONS,
+        fills={
+            "remediation_required": UNDECIDED,
+            "remediation_status": UNRESOLVED,
+        },
+        measure="answer_count",
+    )
+
+
+def appeal_outcomes(dataset: Dataset) -> Dataset:
+    """Count the gold ``appeal`` Detail Table by state and resolution verdict."""
+    frame = dataset.to_pandas()
+    return _counted(
+        frame,
+        APPEAL_OUTCOME_DIMENSIONS,
+        fills={"state": UNSTATED, "resolution_verdict": UNRESOLVED},
+        measure="appeal_count",
+    )
+
+
 # --- the builders -----------------------------------------------------------
 
 
@@ -314,6 +461,21 @@ def case_current_builder(
     never fire: ``drop_duplicates`` has just guaranteed what it checks. It is
     kept as a **tripwire** -- this is the one hop whose grain comes from a rule
     rather than from a ``groupby``, so the one a future change could get wrong.
+
+    The ``amended_outcome`` blob is flattened **here, not at silver**:
+    ``case_version`` is the rename and the type contract and nothing else, and
+    keeps every blob as landed text -- the faithful observation history, and
+    the only place a malformed blob is recoverable. So ``case_current`` derives
+    the ``AMENDED_OUTCOME_FIELDS`` columns no silver row carries, exactly as
+    the Detail Tables derive typed rows from the other four blobs -- this blob
+    is 1:1 with the Case, so its normalised home is columns on the Case row
+    rather than a one-row-per-Case table wearing a join. Flattened after the
+    reduction, so only each Case's winning blob is ever parsed -- and a
+    malformed blob in a *losing* observation cannot abort the rebuild.
+
+    No raw blob column is republished: the flatten consumes
+    ``amended_outcome``, and ``DETAIL_BLOB_COLUMNS`` are dropped -- see the
+    comment there for why.
     """
     p = Pipeline(f"{FEED_NAME}:gold:{CURRENT_TABLE}", run_log=run_log)
     r = p.read(reader, name="read")
@@ -327,11 +489,71 @@ def case_current_builder(
         name="derive-key",
     )
     latest = p.transform(latest_case_version, keyed, name="latest-version")
+    # The flatten consumes amended_outcome (drop is the default); the other
+    # four blobs are dropped explicitly -- see DETAIL_BLOB_COLUMNS.
+    flattened = p.transform(
+        FlattenJsonObject(column="amended_outcome", fields=AMENDED_OUTCOME_FIELDS),
+        latest,
+        name="flatten-amended-outcome",
+    )
+    unblobbed = p.transform(
+        DropColumns(list(DETAIL_BLOB_COLUMNS)), flattened, name="drop-blobs"
+    )
     stamped = p.transform(
-        Stamp(AS_OF_COLUMN, as_of.isoformat()), latest, name="stamp-as-of"
+        Stamp(AS_OF_COLUMN, as_of.isoformat()), unblobbed, name="stamp-as-of"
     )
     validated = p.validate(
         UniqueValidator(CASE_ID_COLUMN), stamped, name="unique-validate"
+    )
+    p.write(writer, validated, name="write")
+    return p
+
+
+def gold_detail_builder(
+    reader: Reader,
+    writer: Writer,
+    *,
+    grain: Sequence[str],
+    observations: Reader,
+    as_of: dt.datetime,
+    name: str,
+    run_log: RunLog | None = None,
+) -> Pipeline:
+    """Build one Detail Table's gold hop. **Grain: one row per ``grain``.**
+
+    Reduces a silver Detail Table's accumulated history to the child rows of
+    the Cases' *winning* observation. It never orders and never breaks a tie --
+    ``latest_case_version`` has already picked the winner, and a second
+    ordering path here could disagree with it. **Precondition**: a
+    Detail row's ``case_type`` must be the settled one, or the semi-join
+    matches nothing and gold lands zero rows silently.
+    """
+    p = Pipeline(name, run_log=run_log)
+    r = p.read(reader, name="read")
+    keyed = p.transform(
+        DeriveKey(
+            into=CASE_ID_COLUMN,
+            namespace=FEED_NAME,
+            natural_key=list(NATURAL_KEY),
+        ),
+        r,
+        name="derive-key",
+    )
+    current = p.transform(
+        JoinWith(
+            partial(winning_observations, observations),
+            on=list(WINNER_COLUMNS),
+            how="inner",
+            name="winning-observations",
+        ),
+        keyed,
+        name="latest-observation",
+    )
+    stamped = p.transform(
+        Stamp(AS_OF_COLUMN, as_of.isoformat()), current, name="stamp-as-of"
+    )
+    validated = p.validate(
+        UniqueValidator(list(grain)), stamped, name="unique-validate"
     )
     p.write(writer, validated, name="write")
     return p
@@ -347,23 +569,27 @@ def publish_gold(
     describe: bool = False,
     run_log: RunLog | None = None,
 ) -> None:
-    """Rebuild all four gold tables from the accumulated silver history.
+    """Rebuild every gold table from the accumulated silver history.
 
-    ``case_current`` is published first and its dataset feeds the three
-    aggregates, so silver is read once and every aggregate counts exactly the
-    rows the current table holds. They commit independently, in order; a failure
-    part-way leaves the earlier ones refreshed, which is safe because the caller
-    has not advanced any watermark and the next run rebuilds all four.
+    ``case_current`` is published first and its dataset feeds the Detail
+    Tables and the five aggregates, so silver is read once and each of them
+    reduces exactly the current table's own rows. They commit independently,
+    in order; a failure part-way leaves the earlier ones refreshed, which is
+    safe because the caller has not advanced any watermark and the next run
+    rebuilds everything. See ``docs/gold-accumulation.md`` for why each source
+    is read from memory rather than re-read from disk.
 
     Each hop runs as a bare ``p.run()``, so it inherits the ambient run context
     the runner makes active -- which is where a dry run's write-nothing
     behaviour comes from.
     """
-    # Only a dry run against a fresh base directory has no silver table: the
-    # write was previewed rather than performed, so there is nothing to reduce.
-    # A probe rather than a caught OperationalError, which would also swallow
-    # "database is locked".
-    if med.silver.columns_of(SILVER_TABLE).columns() is None:
+    # Only a dry run can have any of these silver tables missing; one probe up
+    # front, rather than a per-table skip, so a partial silver history cannot
+    # make gold silently under-publish.
+    if any(
+        med.silver.columns_of(table).columns() is None
+        for table in (SILVER_TABLE, *DETAIL_TABLES)
+    ):
         return
 
     current_p = case_current_builder(
@@ -376,6 +602,23 @@ def publish_gold(
         print(current_p.describe())
     current = current_p.run()
 
+    sources: dict[str, Dataset] = {CURRENT_TABLE: current}
+    for table in DETAIL_TABLES:
+        p = gold_detail_builder(
+            med.silver.reader(table),
+            med.gold.writer(table, Refresh()),
+            grain=DETAIL_GRAIN[table],
+            observations=DatasetReader(current),
+            as_of=as_of,
+            name=f"{FEED_NAME}:gold:{table}",
+            run_log=run_log,
+        )
+        if describe:
+            print(p.describe())
+        dataset = p.run()
+        if table in DETAIL_AGGREGATES.values():
+            sources[table] = dataset
+
     for table, step, transform in (
         ("case_counts_current", "count-by-reviewer-and-status", case_counts),
         (
@@ -384,9 +627,16 @@ def publish_gold(
             partial(age_buckets, as_of=as_of),
         ),
         ("case_throughput_daily", "count-by-terminal-date", throughput),
+        (
+            "answer_remediation_current",
+            "count-by-remediation",
+            answer_remediation,
+        ),
+        ("appeal_outcomes_current", "count-by-outcome", appeal_outcomes),
     ):
         p = Pipeline(f"{FEED_NAME}:gold:{table}", run_log=run_log)
-        node = p.read(DatasetReader(current), name="read")
+        source = sources[DETAIL_AGGREGATES.get(table, CURRENT_TABLE)]
+        node = p.read(DatasetReader(source), name="read")
         node = p.transform(transform, node, name=step)
         node = p.transform(
             Stamp(AS_OF_COLUMN, as_of.isoformat()), node, name="stamp-as-of"

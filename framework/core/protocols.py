@@ -25,6 +25,16 @@ Severity = Literal["error", "warn"]
 DEFAULT_CHUNK_SIZE = 10_000
 
 
+# The reserved column every table-backed Writer stamps with the run that wrote
+# the row — the row-level counterpart of the run record's ``data_locations``.
+# Declared here, with the :class:`Writer` contract, because the stamp is a
+# *Writer's* rule: the framework has no notion of raw/silver/gold, and a Writer
+# knows only that it is writing. The value is read from the ambient run context,
+# so no feed wires anything and no ``Store.writer(...)`` signature changes; it is
+# never part of a load strategy's value comparison.
+RUN_PROVENANCE_COLUMN = "pipeline_run_id"
+
+
 @runtime_checkable
 class Reader(Protocol):
     """A source of one feed's data."""

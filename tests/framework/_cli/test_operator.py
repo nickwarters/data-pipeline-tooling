@@ -362,6 +362,57 @@ def test_runs_lists_recent_runs_from_the_registry(tmp_path):
     assert "ok" in result.stdout
 
 
+def _run_fixture_source(tmp_path, run_date="2026-05-29"):
+    result = _cli(
+        "run",
+        "clipipelines/_source",
+        "--base-dir",
+        str(tmp_path),
+        "--run-date",
+        run_date,
+    )
+    assert result.returncode == 0, result.stderr
+    return result
+
+
+def test_runs_shows_what_a_given_run_wrote(tmp_path):
+    # The lineage question in the run direction, from the CLI: the run id an
+    # operator reads off a run line, back to the table(s) that run landed.
+    _run_fixture_source(tmp_path)
+    listing = _cli("runs", "--base-dir", str(tmp_path))
+    run_id = listing.stdout.split("[run ")[1].split("]")[0]
+
+    result = _cli("runs", "--base-dir", str(tmp_path), "--run", run_id)
+
+    assert result.returncode == 0, result.stderr
+    assert "raw.db -> cases" in result.stdout
+    assert run_id in result.stdout
+
+
+def test_runs_shows_which_run_last_wrote_a_table(tmp_path):
+    # The reverse direction: a table name back to the run behind it, with the
+    # later of two runs winning.
+    _run_fixture_source(tmp_path, run_date="2026-05-29")
+    _run_fixture_source(tmp_path, run_date="2026-05-30")
+    listing = _cli("runs", "--base-dir", str(tmp_path))
+    latest_run_id = listing.stdout.strip().splitlines()[-1].split("[run ")[1].strip("]")
+
+    result = _cli("runs", "--base-dir", str(tmp_path), "--table", "cases")
+
+    assert result.returncode == 0, result.stderr
+    assert latest_run_id in result.stdout
+    assert "raw.db -> cases" in result.stdout
+
+
+def test_runs_reports_a_table_nothing_has_written(tmp_path):
+    _run_fixture_source(tmp_path)
+
+    result = _cli("runs", "--base-dir", str(tmp_path), "--table", "no_such_table")
+
+    assert result.returncode == 0, result.stderr
+    assert "no committed write" in result.stdout
+
+
 def test_status_shows_latest_run_per_pipeline(tmp_path):
     assert (
         _cli(
@@ -744,7 +795,7 @@ def test_every_usage_example_in_the_module_docstring_parses():
     import cli.operator as operator
 
     examples = re.findall(r"^    python -m cli (.+)$", operator.__doc__, re.MULTILINE)
-    assert len(examples) == 4, examples
+    assert len(examples) == 6, examples
     parser = operator.build_parser()
     for example in examples:
         args = shlex.split(example.replace("<", "_").replace(">", "_"))

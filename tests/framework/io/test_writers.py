@@ -1,3 +1,4 @@
+import io
 import json
 import sqlite3
 from pathlib import Path
@@ -7,6 +8,7 @@ import pytest
 
 from framework._internal.connection import connect
 from framework.core.dataset import Dataset
+from framework.core.protocols import RUN_PROVENANCE_COLUMN
 from framework.io import writers as writers_module
 from framework.io.readers import CsvReader, ExcelReader, SqliteReader
 from framework.io.strategy import AccumulateByRun, InsertOrIgnore, Refresh
@@ -23,6 +25,7 @@ from framework.io.writers import (
     StdoutWriter,
 )
 from framework.run.builder import Pipeline
+from framework.run.run_context import RunContext, active_context
 
 FIXTURE = Path(__file__).parent.parent.parent / "fixtures" / "cases.csv"
 
@@ -531,3 +534,151 @@ def test_the_quarantine_chunk_writer_forwards_what_it_rejected_to(tmp_path):
     # A reused Writer starts each session clean rather than reporting the last.
     with writing_chunks(quarantine) as w:
         assert w.data_locations == []
+
+
+# --- the reserved run-provenance column ------------------------------------
+#
+# Every table-backed Writer stamps the run that wrote the row. The value comes
+# from the ambient run context, so these tests put one around the write rather than
+# passing an id in — that *is* the contract.
+
+
+def test_refresh_stamps_the_run_that_rebuilt_the_table(tmp_path):
+    db = tmp_path / "gold.db"
+    with active_context(RunContext(pipeline_run_id="run-a")):
+        SqliteTruncateReloadWriter(db, "case_current").write(
+            Dataset.from_pandas(pd.DataFrame({"case_id": ["c1", "c2"]}))
+        )
+
+    landed = SqliteReader(db, "case_current").read().to_pandas()
+    # A replaced table is uniform: the run named on any row wrote all of them.
+    assert list(landed[RUN_PROVENANCE_COLUMN]) == ["run-a", "run-a"]
+
+
+def test_a_refresh_re_drive_keeps_the_data_and_moves_the_provenance(tmp_path):
+    # The property that survives the stamp: a re-drive of the same window
+    # produces identical *data*, and the column records which attempt produced
+    # it. Byte-identity does not survive, and is not what is claimed any more.
+    db = tmp_path / "gold.db"
+    rows = Dataset.from_pandas(pd.DataFrame({"case_id": ["c1"], "count": [3]}))
+
+    with active_context(RunContext(pipeline_run_id="run-a")):
+        SqliteTruncateReloadWriter(db, "case_counts").write(rows)
+    first = SqliteReader(db, "case_counts").read().to_pandas()
+
+    with active_context(RunContext(pipeline_run_id="run-b")):
+        SqliteTruncateReloadWriter(db, "case_counts").write(rows)
+    second = SqliteReader(db, "case_counts").read().to_pandas()
+
+    pd.testing.assert_frame_equal(
+        first.drop(columns=[RUN_PROVENANCE_COLUMN]),
+        second.drop(columns=[RUN_PROVENANCE_COLUMN]),
+    )
+    assert list(first[RUN_PROVENANCE_COLUMN]) == ["run-a"]
+    assert list(second[RUN_PROVENANCE_COLUMN]) == ["run-b"]
+
+
+def test_a_refresh_write_outside_any_run_context_still_works(tmp_path):
+    # The framework is import-only and its components are usable from a script
+    # or a test with no run around them; a provenance stamp must not become a
+    # reason a write fails. No context, no id, no column — and no error.
+    db = tmp_path / "raw.db"
+    SqliteTruncateReloadWriter(db, "cases").write(
+        Dataset.from_pandas(pd.DataFrame({"case_id": ["c1"]}))
+    )
+
+    landed = SqliteReader(db, "cases").read()
+    assert landed.columns == ["case_id"]
+
+
+def test_the_file_writers_deliver_exactly_the_columns_they_were_given(tmp_path):
+    # The deliberate asymmetry, pinned. A table-backed Writer stamps the run
+    # that wrote the row; the file Writers must not, because what they produce
+    # leaves the system and its columns are a contract with whoever reads it.
+    # Run *inside* a run context, so the absence is the rule rather than the
+    # absence of an id.
+    dataset = Dataset.from_pandas(pd.DataFrame({"case_id": ["c1"], "amount": [100]}))
+    csv_path = tmp_path / "out.csv"
+    excel_path = tmp_path / "out.xlsx"
+    json_path = tmp_path / "out.json"
+    console = io.StringIO()
+
+    with active_context(RunContext(pipeline_run_id="run-a")):
+        CsvWriter(csv_path, Refresh()).write(dataset)
+        ExcelWriter(excel_path, Refresh()).write(dataset)
+        JsonWriter(json_path, Refresh()).write(dataset)
+        StdoutWriter(stream=console).write(dataset)
+
+    assert csv_path.read_text(encoding="utf-8").splitlines()[0] == "case_id,amount"
+    assert list(pd.read_excel(excel_path).columns) == ["case_id", "amount"]
+    assert json.loads(json_path.read_text(encoding="utf-8")) == [
+        {"case_id": "c1", "amount": 100}
+    ]
+    assert RUN_PROVENANCE_COLUMN not in console.getvalue()
+
+
+def test_an_accumulating_row_carries_the_run_columns_from_exactly_one_stamper(tmp_path):
+    # The reconciliation: `AccumulateByRun` owns `logical_run_id` / `load_date`
+    # — the idempotency key it deletes by, and the business date — while the run
+    # that wrote the row is the Writer's provenance stamp, read from the ambient
+    # context rather than carried on the strategy.
+    db = tmp_path / "gold.db"
+    strategy = AccumulateByRun.from_context(
+        RunContext(
+            pipeline_run_id="run-a", logical_run_id="load-1", load_date="2026-05-29"
+        )
+    )
+    assert not hasattr(strategy, "pipeline_run_id")
+
+    with active_context(RunContext(pipeline_run_id="run-a")):
+        strategy.writer_for(db, "selection_pool").write(
+            Dataset.from_pandas(pd.DataFrame({"case_id": ["c1"]}))
+        )
+
+    [landed] = SqliteReader(db, "selection_pool").read().to_pandas().to_dict("records")
+    assert landed == {
+        "case_id": "c1",
+        "logical_run_id": "load-1",
+        "load_date": "2026-05-29",
+        RUN_PROVENANCE_COLUMN: "run-a",
+    }
+
+
+def test_a_re_driven_logical_run_keeps_its_key_and_names_the_new_attempt(tmp_path):
+    # A re-drive replaces the logical run's rows, so the rows that survive are
+    # the ones the second attempt wrote — and they say so.
+    db = tmp_path / "gold.db"
+    rows = Dataset.from_pandas(pd.DataFrame({"case_id": ["c1"]}))
+
+    for run_id in ("run-a", "run-b"):
+        with active_context(RunContext(pipeline_run_id=run_id)):
+            AccumulateByRunWriter(db, "selection_pool", "load-1", "2026-05-29").write(
+                rows
+            )
+
+    landed = SqliteReader(db, "selection_pool").read().to_pandas()
+    assert list(landed["logical_run_id"]) == ["load-1"]
+    assert list(landed[RUN_PROVENANCE_COLUMN]) == ["run-b"]
+
+
+def test_the_quarantine_writer_stamps_the_run_the_pipeline_no_longer_does(tmp_path):
+    # The other reconciled stamper. The pipeline hands the rejects their
+    # `logical_run_id` / `load_date`; the run that wrote them comes from the
+    # Writer, on the same one path every other table uses.
+    db = tmp_path / "silver.db"
+    rejects = Dataset.from_pandas(
+        pd.DataFrame(
+            {
+                "case_ref": ["BAD"],
+                "logical_run_id": ["load-1"],
+                "load_date": ["2026-05-29"],
+            }
+        )
+    )
+
+    with active_context(RunContext(pipeline_run_id="run-a")):
+        QuarantineWriter(db, "rejects").write(rejects)
+
+    [landed] = SqliteReader(db, "rejects").read().to_pandas().to_dict("records")
+    assert landed[RUN_PROVENANCE_COLUMN] == "run-a"
+    assert landed["logical_run_id"] == "load-1"

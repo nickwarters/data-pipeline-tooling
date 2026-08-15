@@ -36,7 +36,7 @@ from framework._internal.describe import render
 from framework._internal.locations import file_location, table_location
 from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError
-from framework.core.protocols import ChunkWritable, Writer
+from framework.core.protocols import RUN_PROVENANCE_COLUMN, ChunkWritable, Writer
 from framework.io.sql import quote_identifier
 from framework.io.strategy import LoadStrategy
 
@@ -101,6 +101,59 @@ def _frame_for_strategy(
     return apply_to_frame(dataset.to_pandas(), read_existing)
 
 
+def _current_run_id() -> str | None:
+    """The ambient run's ``pipeline_run_id``, or ``None`` outside a run.
+
+    Imported lazily on purpose: ``framework.run`` composes ``framework.io``, so
+    naming the run context at module level would close the cycle. The lookup is
+    a ``ContextVar`` read, so doing it per write costs nothing worth caching.
+    """
+    from framework.run.run_context import current_context
+
+    context = current_context()
+    return None if context is None else context.pipeline_run_id
+
+
+def _stamp_run_provenance(frame: pd.DataFrame, run_id: str | None) -> pd.DataFrame:
+    """Stamp ``run_id`` onto ``frame`` as the reserved provenance column.
+
+    The one place the column is written, so "which run wrote this row?" has a
+    single implementation across every table-backed Writer. Outside a run
+    context there is no id, and the frame is returned untouched rather than the
+    write failing — the framework's components stay usable from a script or a
+    test with no run around them.
+
+    The frame is mutated in place: every caller owns the frame it passes, having
+    just taken it from ``Dataset.to_pandas()``, which copies.
+    """
+    if run_id is not None:
+        frame[RUN_PROVENANCE_COLUMN] = run_id
+    return frame
+
+
+def _ensure_provenance_column(con: sqlite3.Connection, table: str) -> None:
+    """Add the provenance column to an existing target that predates it.
+
+    A table already on disk — landed before this column existed, or created by
+    hand with its own DDL and constraints — has no such column, and an
+    ``INSERT`` naming it fails outright. So the column is added in place, the
+    same additive-migration rule the run registry applies to its own store
+    (``tools.observability.record_schema.ensure_columns``): widen what is there
+    rather than re-create it, because these files live on a shared drive and are
+    not disposable.
+
+    A no-op when the table does not exist yet (the caller creates it from the
+    stamped frame, so it arrives with the column) or already has it.
+    """
+    existing = con.execute(f"PRAGMA table_info({quote_identifier(table)})").fetchall()
+    if not existing or any(row[1] == RUN_PROVENANCE_COLUMN for row in existing):
+        return
+    con.execute(
+        f"ALTER TABLE {quote_identifier(table)} "
+        f"ADD COLUMN {quote_identifier(RUN_PROVENANCE_COLUMN)} TEXT"
+    )
+
+
 def supports_chunk_writes(writer: object) -> bool:
     """Whether ``writer`` can take one source's rows as a sequence of writes.
 
@@ -119,6 +172,13 @@ def writing_chunks(writer: object):
     replace their target and which append. A Writer that offers no such session
     raises here, naming itself and why, instead of silently doing its
     whole-dataset thing once per chunk.
+
+    Every chunk of one drive carries the same run in its provenance column. The
+    Writers that hand back *themselves* get that for free: the ambient run
+    context is established once around the whole graph walk, so each chunk's
+    write reads the same id. The two that hand back a helper — the accumulating
+    and quarantine sessions — resolve it once when the session opens, because
+    their later chunks take a path that would otherwise not stamp at all.
     """
     if not supports_chunk_writes(writer):
         raise TypeError(
@@ -138,6 +198,10 @@ class _AppendingChunkWriter:
     Held by the session rather than by the Writer so the Writer itself stays
     stateless: whatever must happen once per load has already happened when the
     session opened, and everything from here is an append.
+
+    ``prepare`` is the per-chunk frame hook, and the session binds whatever it
+    resolved **once** — including the run that owns the drive — so every chunk
+    of one load is stamped identically rather than each re-deriving it.
     """
 
     def __init__(
@@ -233,6 +297,13 @@ def _staged_merge(
         # is already there.
         frame.iloc[:0].to_sql(table, con, if_exists="append", index=False)
 
+        # A target that predates the provenance column would refuse an INSERT
+        # naming it; widen it in place instead. Only when this write actually
+        # carries a stamp — an unstamped write (no run context) must not add a
+        # column of nulls to a table that has none.
+        if RUN_PROVENANCE_COLUMN in frame.columns:
+            _ensure_provenance_column(con, table)
+
         yield _StagedMerge(
             con=con,
             staging=quote_identifier(staging),
@@ -290,6 +361,18 @@ class _FileWriter:
     An implementation detail of this module, not a base class Writers outside it
     are expected to inherit: the ``Writer`` contract stays structural, so any
     object with ``write(dataset)`` remains a Writer.
+
+    **No provenance stamp, deliberately.** Every *table*-backed Writer stamps
+    the run that wrote the row
+    (:data:`~framework.core.protocols.RUN_PROVENANCE_COLUMN`); the file Writers
+    do not. What they produce is a **Deliverable** — a file that leaves the
+    system for a person or another application — whose columns are a contract
+    with whoever reads it. An extra column would be one the recipient did not
+    ask for and cannot interpret. The question "which run produced this file?"
+    is answered without touching the file at all, by the run record's
+    ``data_locations``. The asymmetry is a decision — recorded in the
+    architecture decisions and pinned by a test — not an omission to be tidied
+    up later.
     """
 
     def __init__(
@@ -392,6 +475,10 @@ class StdoutWriter:
 
     An optional ``label`` is printed above the table to caption what is being
     shown when several datasets land on the same console.
+
+    Like the file Writers, it stamps no provenance column: its only purpose is
+    being read by a human, and a run id repeated down every line is noise. What
+    run printed it is the question the run log already answers.
     """
 
     def __init__(
@@ -411,7 +498,14 @@ class StdoutWriter:
 
 
 class SqliteTruncateReloadWriter:
-    """A Writer that full-refreshes one table: truncate + reload."""
+    """A Writer that full-refreshes one table: truncate + reload.
+
+    Stamps the reserved run-provenance column
+    (:data:`~framework.core.protocols.RUN_PROVENANCE_COLUMN`) on every row it
+    writes. Because the table is replaced wholesale, the value is uniform: the
+    run named on any row of the table is the run that wrote **all** of it. A
+    write outside a run context leaves the column off rather than failing.
+    """
 
     def __init__(
         self,
@@ -426,10 +520,9 @@ class SqliteTruncateReloadWriter:
 
     def write(self, dataset: Dataset) -> None:
         self.data_locations = [table_location(self._db_path, self._table)]
+        frame = _stamp_run_provenance(dataset.to_pandas(), _current_run_id())
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
-            dataset.to_pandas().to_sql(
-                self._table, con, if_exists="replace", index=False
-            )
+            frame.to_sql(self._table, con, if_exists="replace", index=False)
 
     def describe(self) -> str:
         return render(self, db_path=str(self._db_path), table=self._table)
@@ -448,6 +541,11 @@ class QuarantineWriter:
     or ``load_date`` — those come from the dataset (added by the pipeline at
     quarantine time). The ``failed_rule`` column also arrives pre-stamped by the
     partitioner.
+
+    It does stamp the reserved provenance column, exactly as every other
+    table-backed Writer does: a quarantine table is a table the framework wrote,
+    and "which run rejected this row?" is the same question asked of the
+    rejects.
     """
 
     def __init__(
@@ -463,8 +561,18 @@ class QuarantineWriter:
 
     def write(self, dataset: Dataset) -> None:
         self.data_locations = [table_location(self._db_path, self._table)]
-        frame = dataset.to_pandas()
+        self._replace(_stamp_run_provenance(dataset.to_pandas(), _current_run_id()))
+
+    def _replace(self, frame: pd.DataFrame) -> None:
+        """Clear this logical run's prior rejects, then land ``frame``.
+
+        Takes an already-stamped frame, so the whole-dataset write and the first
+        chunk of a streamed one land by the same statements.
+        """
+        self.data_locations = [table_location(self._db_path, self._table)]
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
+            if RUN_PROVENANCE_COLUMN in frame.columns:
+                _ensure_provenance_column(con, self._table)
             if "logical_run_id" in frame.columns:
                 _replace_logical_run(
                     con, self._table, frame["logical_run_id"].iloc[0], frame
@@ -485,11 +593,17 @@ class QuarantineWriter:
         clear happens with the first chunk that has any and every chunk after it
         appends. A run that rejects nothing writes nothing and clears nothing —
         exactly what a whole-dataset quarantine of the same run does.
+
+        The run that owns the drive is read **once**, here, and every chunk is
+        stamped with it — including the ones that take the plain append path,
+        which would otherwise land unstamped beside the first chunk's rows.
         """
-        yield _QuarantineChunkWriter(self)
+        yield _QuarantineChunkWriter(self, _current_run_id())
 
     def _append(self, frame: pd.DataFrame) -> None:
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
+            if RUN_PROVENANCE_COLUMN in frame.columns:
+                _ensure_provenance_column(con, self._table)
             frame.to_sql(self._table, con, if_exists="append", index=False)
 
     def describe(self) -> str:
@@ -497,19 +611,26 @@ class QuarantineWriter:
 
 
 class _QuarantineChunkWriter:
-    """Clear the logical run's prior rejects with the first chunk, then append."""
+    """Clear the logical run's prior rejects with the first chunk, then append.
 
-    def __init__(self, inner: "QuarantineWriter") -> None:
+    Stamps every chunk with the run the session opened under, so the appended
+    chunks carry the same provenance as the first one rather than landing
+    unstamped beside it.
+    """
+
+    def __init__(self, inner: "QuarantineWriter", run_id: str | None) -> None:
         self._inner = inner
+        self._run_id = run_id
         self._cleared = False
         self.data_locations: list[dict[str, str]] = []
 
     def write(self, dataset: Dataset) -> None:
+        frame = _stamp_run_provenance(dataset.to_pandas(), self._run_id)
         if not self._cleared:
-            self._inner.write(dataset)
+            self._inner._replace(frame)
             self._cleared = True
         else:
-            self._inner._append(dataset.to_pandas())
+            self._inner._append(frame)
         self.data_locations = self._inner.data_locations
 
 
@@ -531,6 +652,14 @@ class SqliteUpsertWriter:
 
     Target rows whose key does NOT appear in the incoming batch are never
     read or written.
+
+    Every written row is stamped with the run that wrote it
+    (:data:`~framework.core.protocols.RUN_PROVENANCE_COLUMN`). A replaced row is
+    a **real rewrite** — the target row is deleted and the incoming one inserted
+    — so it takes the **new** run id: the last writer is the honest answer to
+    "which run wrote this row?". A key the batch does not carry is untouched and
+    keeps whatever it had. Nothing here compares stored values, so the column
+    disturbs no decision.
     """
 
     def __init__(
@@ -548,7 +677,7 @@ class SqliteUpsertWriter:
 
     def write(self, dataset: Dataset) -> None:
         self.data_locations = [table_location(self._db_path, self._table)]
-        frame = dataset.to_pandas()
+        frame = _stamp_run_provenance(dataset.to_pandas(), _current_run_id())
         missing = [c for c in self._key_columns if c not in frame.columns]
         if missing:
             raise ValueError(
@@ -607,6 +736,13 @@ class SqliteInsertOrIgnoreWriter:
 
     When the target table carries no constraints every incoming row is appended,
     which is equivalent to a plain append.
+
+    Every row that actually lands is stamped with the run that wrote it
+    (:data:`~framework.core.protocols.RUN_PROVENANCE_COLUMN`). An **ignored row
+    is not written**, so the row already in the target keeps the run that
+    inserted it — the same "first landed" reading as an append-only target.
+    Conflict resolution is the target's own constraints, which the extra column
+    takes no part in.
     """
 
     def __init__(
@@ -622,7 +758,7 @@ class SqliteInsertOrIgnoreWriter:
 
     def write(self, dataset: Dataset) -> None:
         self.data_locations = [table_location(self._db_path, self._table)]
-        frame = dataset.to_pandas()
+        frame = _stamp_run_provenance(dataset.to_pandas(), _current_run_id())
         with _staged_merge(
             self._db_path,
             self._table,
@@ -662,6 +798,12 @@ class SqliteInsertIfAbsentWriter:
     Existing rows are never modified or deleted.  Re-running the same input is a
     no-op and leaves all surrogate assignments unchanged — the reference table is
     a stable system of record across re-runs.
+
+    Each inserted row is stamped with the run that wrote it
+    (:data:`~framework.core.protocols.RUN_PROVENANCE_COLUMN`). Only unseen keys
+    are inserted, so the value means **"first seen"** and is as stable as the
+    surrogate beside it. The absent/present decision reads the key columns only,
+    so the column changes nothing about which rows are new.
     """
 
     def __init__(
@@ -681,7 +823,7 @@ class SqliteInsertIfAbsentWriter:
 
     def write(self, dataset: Dataset) -> None:
         self.data_locations = [table_location(self._db_path, self._table)]
-        frame = dataset.to_pandas()
+        frame = _stamp_run_provenance(dataset.to_pandas(), _current_run_id())
         missing = [c for c in self._key_columns if c not in frame.columns]
         if missing:
             raise ValueError(
@@ -739,6 +881,10 @@ class SqliteInsertIfAbsentWriter:
                 0, self._surrogate_column, range(max_id + 1, max_id + 1 + len(new_rows))
             )
 
+            # This Writer appends straight to the target rather than through the
+            # staged merge, so it widens a pre-existing table itself.
+            if RUN_PROVENANCE_COLUMN in new_rows.columns:
+                _ensure_provenance_column(con, self._table)
             new_rows.to_sql(self._table, con, if_exists="append", index=False)
 
     @contextmanager
@@ -788,6 +934,19 @@ class SqliteAppendOnlyWriter:
     Steps 3–6 are the shared staged-merge shape; no target row is updated or
     deleted at any point, which is the whole contract.
 
+    **The reserved provenance column takes no part in any of that.** Every row
+    is stamped with the run that wrote it
+    (:data:`~framework.core.protocols.RUN_PROVENANCE_COLUMN`), and both the
+    narrowed-batch refusal (3) and the value comparison (4) skip it. They have
+    to: the column is the framework's, not the batch's, and a poll whose window
+    overlaps the previous one re-reads rows an *earlier* run first landed — so a
+    comparison that included it would read every ordinary overlap as a changed
+    value and raise :class:`AppendOnlyConflictError`.
+
+    Because an unchanged key is never rewritten, the stored value stays as
+    whichever run first inserted the row: the column means **"the run that first
+    landed this row"**, and is stable across re-drives.
+
     Physical uniqueness on the target is **not** required: the repository's
     single-writer rule plus this Writer's one transaction is the boundary
     today, and a later schema migration can add a UNIQUE constraint without
@@ -809,7 +968,11 @@ class SqliteAppendOnlyWriter:
 
     def write(self, dataset: Dataset) -> None:
         self.data_locations = [table_location(self._db_path, self._table)]
-        frame = self._collapsed(dataset.to_pandas())
+        # Stamped after the collapse, so the run id can neither tell two
+        # otherwise-identical observations apart nor mask a real disagreement.
+        frame = _stamp_run_provenance(
+            self._collapsed(dataset.to_pandas()), _current_run_id()
+        )
 
         with _staged_merge(
             self._db_path,
@@ -882,6 +1045,11 @@ class SqliteAppendOnlyWriter:
         The opposite drift — a batch carrying a column the target lacks — is
         already loud: the comparison below names that column on both sides and
         SQLite refuses the statement.
+
+        The reserved provenance column is exempt. It is this Writer's own stamp
+        rather than anything the batch declared, and a write outside a run
+        context carries no id at all — refusing that as source drift would blame
+        the feed for the framework's own column.
         """
         target_columns = [
             row[1]
@@ -889,7 +1057,11 @@ class SqliteAppendOnlyWriter:
                 f"PRAGMA table_info({merge.target})"
             ).fetchall()
         ]
-        dropped = [c for c in target_columns if c not in frame.columns]
+        dropped = [
+            c
+            for c in target_columns
+            if c not in frame.columns and c != RUN_PROVENANCE_COLUMN
+        ]
         if dropped:
             raise ValueError(
                 f"append-only load of {self._table!r} refused: the incoming "
@@ -901,8 +1073,19 @@ class SqliteAppendOnlyWriter:
     def _refuse_changed_rows(
         self, merge: _StagedMerge, key_match: str, frame: pd.DataFrame
     ) -> None:
-        """Raise if any staged key contradicts the row the target already holds."""
-        value_columns = [c for c in frame.columns if c not in self._key_columns]
+        """Raise if any staged key contradicts the row the target already holds.
+
+        The provenance column is excluded from the comparison — the one
+        genuinely load-bearing exclusion in the epic. An overlapping poll
+        re-presents rows a previous run first landed; those rows carry *this*
+        run's id in staging and the earlier run's in the target, so including
+        the column would make every routine overlap a conflict.
+        """
+        value_columns = [
+            c
+            for c in frame.columns
+            if c not in self._key_columns and c != RUN_PROVENANCE_COLUMN
+        ]
         if not value_columns:
             # Key-only rows carry nothing that could have changed.
             return
@@ -970,10 +1153,12 @@ class AccumulateByRunWriter:
 
     Owns its target location (a single layer db file + table). Used for the gold
     layer (the accumulating SelectionPool / Review Outcomes), whose history must
-    survive across runs. Each row is stamped with the ``logical_run_id`` /
-    ``load_date`` plus ``pipeline_run_id`` when the strategy was derived from a
-    RunContext. A re-driven logical run is idempotent via delete-by-logical-run
-    then insert.
+    survive across runs. Each row is stamped with the ``logical_run_id`` and
+    ``load_date`` this Writer was built with — the strategy's own contract — and,
+    like every table-backed Writer, with the reserved provenance column naming
+    the run that wrote it. A re-driven logical run is idempotent via
+    delete-by-logical-run then insert, so a re-drive's rows carry the run that
+    actually landed them.
     """
 
     def __init__(
@@ -982,21 +1167,21 @@ class AccumulateByRunWriter:
         table: str,
         logical_run_id: str,
         load_date: str,
-        pipeline_run_id: str | None = None,
         busy_timeout_ms: int = 5000,
     ) -> None:
         self._db_path = Path(db_path)
         self._table = table
         self._logical_run_id = logical_run_id
         self._load_date = load_date
-        self._pipeline_run_id = pipeline_run_id
         self._busy_timeout_ms = busy_timeout_ms
         self.data_locations: list[dict[str, str]] = []
 
     def write(self, dataset: Dataset) -> None:
         self.data_locations = [table_location(self._db_path, self._table)]
-        frame = self._stamp(dataset.to_pandas())
+        frame = self._stamp(dataset.to_pandas(), _current_run_id())
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
+            if RUN_PROVENANCE_COLUMN in frame.columns:
+                _ensure_provenance_column(con, self._table)
             _replace_logical_run(con, self._table, self._logical_run_id, frame)
 
     @contextmanager
@@ -1024,17 +1209,27 @@ class AccumulateByRunWriter:
                     "WHERE logical_run_id = ?",
                     (self._logical_run_id,),
                 )
+        # The run that owns the drive is read once, here: every chunk of one
+        # load is stamped with the same value rather than each re-deriving it.
+        run_id = _current_run_id()
         yield _AppendingChunkWriter(
-            self._db_path, self._table, self._busy_timeout_ms, prepare=self._stamp
+            self._db_path,
+            self._table,
+            self._busy_timeout_ms,
+            prepare=lambda frame: self._stamp(frame, run_id),
         )
 
-    def _stamp(self, frame: pd.DataFrame) -> pd.DataFrame:
-        """Stamp this run's identity onto ``frame`` in place and return it."""
+    def _stamp(self, frame: pd.DataFrame, run_id: str | None) -> pd.DataFrame:
+        """Stamp this run's identity onto ``frame`` in place and return it.
+
+        The two columns this Writer owns — the idempotency key it deletes by and
+        the business date — plus the provenance column every table-backed Writer
+        sets. ``run_id`` is passed in rather than read here, so a chunked load
+        can resolve it once for the whole session.
+        """
         frame["logical_run_id"] = self._logical_run_id
-        if self._pipeline_run_id is not None:
-            frame["pipeline_run_id"] = self._pipeline_run_id
         frame["load_date"] = self._load_date
-        return frame
+        return _stamp_run_provenance(frame, run_id)
 
     def describe(self) -> str:
         return render(self, db_path=str(self._db_path), table=self._table)
