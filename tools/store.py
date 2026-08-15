@@ -190,6 +190,17 @@ class StoreRegistry:
             busy_timeout_ms=self._busy_timeout_ms,
         )
 
+    def db_file(self, namespace: str | os.PathLike[str]) -> Path:
+        """The physical file behind ``namespace``, resolved through the backend.
+
+        :meth:`store` deliberately hides physical layout from pipelines, which
+        address tables and never files. This is for the operations whose subject
+        *is* the file rather than the rows in it — applying migrations to it —
+        and it resolves through the same backend, so a registry configured with
+        a different one is not bypassed by rebuilding the path by hand.
+        """
+        return Path(self._backend.db_file(self._root, namespace))
+
     def register(self, name: str, component: Reader | Writer) -> Reader | Writer:
         """Register a Reader or Writer under ``name`` for later lookup.
 

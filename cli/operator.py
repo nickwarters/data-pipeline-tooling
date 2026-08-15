@@ -13,9 +13,15 @@ Run from the repository root so the import-only ``framework`` package resolves::
     python -m cli runs --base-dir /data --run fd76eda3
     python -m cli runs --base-dir /data --table case_current
     python -m cli log cases --base-dir /data --pipeline-run-id <pipeline-run-id>
+    python -m cli migrate --base-dir /data --check
 
 The base directory is the option ``--base-dir`` (or ``--env <name>``, which
 resolves one), never a positional argument.
+
+``migrate`` applies the SQL migrations that own the *shape* of those databases.
+It walks the repository's ``migrations/`` tree — the only registry of which
+databases are under migration control — and brings each subject-layer under the
+resolved base directory up to date; ``--check`` reports instead of writing.
 
 ``run`` addresses a pipeline by *its location on disk*: ``pipelines/orders`` maps
 to the module ``pipelines.orders.pipeline``, imported at runtime, whose
@@ -52,8 +58,15 @@ from framework.run import (
 )
 from tools.calendar import WorkingDayCalendar
 from tools.environments import ENV_VAR, known_environments, resolve_base_dir
+from tools.migrations import (
+    MIGRATIONS_ROOT,
+    MigrationError,
+    MigrationRunner,
+    discover_targets,
+)
 from tools.observability.run_store import RunStore
 from tools.orchestration import Orchestrator
+from tools.store import StoreRegistry
 
 
 def _resolve_app(name: str):
@@ -245,6 +258,65 @@ def _orchestrate(args: argparse.Namespace) -> int:
             line += f"  {decision.reason}"
         print(line)
     if any(decision.status == "failed" for decision in decisions):
+        return 1
+    return 0
+
+
+def _migrate(args: argparse.Namespace) -> int:
+    """``migrate``: bring every database the migrations tree names up to date.
+
+    The tree is walked rather than a list of subjects being configured
+    anywhere — a subject under migration control is one with a directory in it.
+    Each subject-layer is an independent database with its own ledger, so a
+    failure in one is reported and the walk continues to the rest (the same
+    per-item failure isolation ``orchestrate`` uses); the command exits non-zero
+    at the end if anything failed.
+
+    ``--check`` reports what is outstanding and exits non-zero if anything is,
+    writing nothing — a CI gate. It is deliberately not wired into
+    ``run`` / ``orchestrate``: a pipeline can be invoked directly as
+    ``python -m pipelines.<name>``, which would bypass such a check anyway, and
+    a run against an unmigrated database already fails at the write.
+    """
+    base_dir = _base_dir_or_report(args)
+    if base_dir is None:
+        return 1
+    root = Path(args.migrations_root) if args.migrations_root else MIGRATIONS_ROOT
+    try:
+        targets = discover_targets(root)
+    except MigrationError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    if not targets:
+        print(f"no migrations under {root}")
+        return 0
+    registry = StoreRegistry(base_dir)
+    width = max(len(target.namespace) for target in targets)
+    outstanding = current = failed = 0
+    for target in targets:
+        db_path = registry.db_file(target.namespace)
+        label = f"{target.namespace.ljust(width)}  {db_path}"
+        runner = MigrationRunner(db_path, target.directory)
+        try:
+            migrations = runner.pending() if args.check else runner.apply()
+        except MigrationError as exc:
+            print(f"{label}  FAILED: {exc}", file=sys.stderr)
+            failed += 1
+            continue
+        if not migrations:
+            print(f"{label}  up to date")
+            current += 1
+            continue
+        outstanding += 1
+        names = ", ".join(migration.name for migration in migrations)
+        verb = "pending" if args.check else "applied"
+        print(f"{label}  {verb} {len(migrations)}: {names}")
+    action, state = ("checked", "pending") if args.check else ("migrated", "applied")
+    print(
+        f"{action} {len(targets)} database(s): {outstanding} {state}, "
+        f"{current} up to date, {failed} failed"
+    )
+    if failed or (args.check and outstanding):
         return 1
     return 0
 
@@ -453,6 +525,26 @@ def register(sub) -> None:
         "and weekend rule; omit for the default (weekends only, no holidays)",
     )
     orchestrate.set_defaults(func=_orchestrate)
+
+    migrate = sub.add_parser(
+        "migrate", help="apply SQL migrations to every subject-layer database"
+    )
+    _add_base_dir_args(migrate)
+    migrate.add_argument(
+        "--check",
+        action="store_true",
+        help="report what is outstanding and exit non-zero if anything is, "
+        "without writing (a CI gate)",
+    )
+    migrate.add_argument(
+        "--migrations-root",
+        dest="migrations_root",
+        default=None,
+        metavar="DIR",
+        help=f"the migrations tree to apply (default: {MIGRATIONS_ROOT}); for an "
+        "alternate checkout",
+    )
+    migrate.set_defaults(func=_migrate)
 
     runs = sub.add_parser("runs", help="list recent runs from the run registry")
     _add_base_dir_args(runs)

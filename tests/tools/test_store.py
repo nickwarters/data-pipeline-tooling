@@ -239,3 +239,23 @@ def test_registry_rejects_a_component_that_is_neither_reader_nor_writer(tmp_path
 
     with pytest.raises(TypeError, match="neither a Reader"):
         registry.register("bad", object())
+
+
+def test_registry_db_file_resolves_a_namespace_to_its_physical_file(tmp_path):
+    # store() hides layout from pipelines, which address tables. db_file is for
+    # the operations whose subject *is* the file — applying migrations to it —
+    # and resolves through the same backend rather than rebuilding the path.
+    registry = StoreRegistry(tmp_path)
+
+    assert registry.db_file("cases/silver") == tmp_path / "cases" / "silver.db"
+    assert registry.db_file("cases") == tmp_path / "cases.db"
+
+
+def test_registry_db_file_goes_through_the_configured_backend(tmp_path):
+    class FlatBackend:
+        def db_file(self, root, namespace):
+            return Path(root) / f"{str(namespace).replace('/', '_')}.db"
+
+    registry = StoreRegistry(tmp_path, backend=FlatBackend())
+
+    assert registry.db_file("cases/silver") == tmp_path / "cases_silver.db"

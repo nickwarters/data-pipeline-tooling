@@ -171,7 +171,8 @@ python3 -m venv .venv
 .venv/bin/python -m cli scaffold orders            # scaffold a feed -> pipelines/orders/ + tests/pipelines/test_orders.py
 .venv/bin/python -m cli scaffold orders --from-feed-file sample.csv  # seed schema/sample/test from a real CSV header
 .venv/bin/python -m cli scaffold --case-type claims # scaffold a Case Type ingest feed (source->raw->silver, identity declared)
-.venv/bin/python -m cli run pipelines/ingest --base-dir /tmp/demo  # operator CLI: run/orchestrate/status/runs/log (see docs/operator-cli.md)
+.venv/bin/python -m cli run pipelines/ingest --base-dir /tmp/demo  # operator CLI: run/orchestrate/migrate/status/runs/log (see docs/operator-cli.md)
+.venv/bin/python -m cli migrate --base-dir /tmp/demo --check       # report databases behind their migrations (exit 1 if any)
 .venv/bin/pre-commit run --all-files             # lint + format the whole tree on demand
 
 npm ci --prefix platform_frontend                # install the frontend toolchain (once per clone)
@@ -220,7 +221,7 @@ Run pipelines as **modules from the repo root** (`python -m pipelines.<name>`)
 so the import-only `framework` package resolves on `sys.path`. The framework
 itself is also runnable — `python -m cli <command>` (entry point in the
 top-level `cli/`) is the single surface for authoring (`scaffold`) and operating
-(`run`/`orchestrate`/`status`/`runs`/`log`) pipelines. `run` addresses a pipeline
+(`run`/`orchestrate`/`migrate`/`status`/`runs`/`log`) pipelines. `run` addresses a pipeline
 by **its location on disk** — `python -m cli run pipelines/<name>` imports
 `pipelines.<name>.pipeline` and executes its `run(context)` callable (reading an
 optional `UPSTREAMS` freshness tuple), so the dependency stays one-way and the
@@ -230,7 +231,13 @@ path, run at its scheduled time by the same rule (no handler registry) — and
 takes a required `--app` naming an application's schedules module that exposes
 `build_pipeline_sets()`, plus an optional `--calendar <file>` naming a YAML
 calendar file (`holidays` + `weekend`) that seeds the `WorkingDayCalendar` every
-schedule judges against (omitted, it is weekends-only).
+schedule judges against (omitted, it is weekends-only). `migrate` applies the
+SQL migrations that own those databases' *shape*: it walks the `migrations/`
+tree — the only registry of which databases are under migration control, since a
+subject opts in by having a directory there — and brings each subject-layer under
+the resolved base directory up to date, with `--check` reporting what is pending
+and exiting non-zero without writing (a CI gate, deliberately **not** wired into
+`run`/`orchestrate`).
 
 Scaffold a new feed with `python -m cli scaffold <feed>`: it renders the
 feed code as a `pipelines/<feed>/` subpackage (schema, pipeline, sample fixture)
