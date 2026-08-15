@@ -54,7 +54,7 @@ toolchain, a domain language, or a release. Two rules follow:
   plus the operator commands; see below) lives in the top-level `cli/` package,
   and the cross-cutting `retry` / `calendar` / `medallion` /
   `deliverables` /
-  `environments` / orchestration /
+  `environments` / migrations / orchestration /
   observability utilities in the top-level `tools/` package — both siblings of
   `framework/`,
   not facades. `shared/` contains application-wide declarations such as
@@ -70,7 +70,13 @@ toolchain, a domain language, or a release. Two rules follow:
   `tools/observability/run_store.py` — the counterpart of `tools.store`'s
   `StoreRegistry`, which owns where the *data* lands — and the UTC-instant /
   local-calendar-date rule every freshness check reads is settled once in
-  `tools/observability/timestamps.py`. Then `case_review/` (the
+  `tools/observability/timestamps.py`. That run metadata self-migrates from
+  `RUN_RECORD_FIELDS` and stays that way; the physical shape of a *medallion*
+  database is instead declared by the numbered SQL files under
+  `migrations/<subject>/<layer>/` and applied by `tools/migrations.py`, which
+  records what it applied in a `schema_migrations` ledger inside that database —
+  a ledger whose presence is what marks the database as under migration control
+  ([`docs/migrations.md`](docs/migrations.md)). Then `case_review/` (the
   case-review *application* — domain types
   Case Type declarations, `CasePool`, and its gold helpers, which live outside
   the framework; it also owns the application's orchestration schedules,
@@ -109,7 +115,7 @@ toolchain, a domain language, or a release. Two rules follow:
   behind them (those are internal layout); the cross-cutting `tools.*` helpers
   (`tools.retry` / `tools.calendar` / `tools.orchestration` /
   `tools.observability` / `tools.environments` /
-  `tools.deliverables`) are a sibling
+  `tools.migrations` / `tools.deliverables`) are a sibling
   utility package, not a facade.
   The facades are the stable contract;
   [`docs/public-api.md`](docs/public-api.md) lists the surface, the internal
