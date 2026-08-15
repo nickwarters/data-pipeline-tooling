@@ -1,16 +1,23 @@
 """Ordered SQL files that own a database's shape, with a ledger inside it.
 
-The physical shape of a medallion database — its tables, primary keys, indexes
-and ``NOT NULL``s — is declared by numbered ``.sql`` files under
-``migrations/<subject>/<layer>/`` and applied by the runner here. Each database
-carries its own ``schema_migrations`` ledger recording which files it has seen,
-so a database is self-describing: what it has applied is stored in it, not in a
-central register that could disagree with the file in front of you.
+The physical shape of a database — its tables, primary keys, indexes and
+``NOT NULL``s — is declared by numbered ``.sql`` files under
+``migrations/<subject>/<database>/`` and applied by the runner here. Each
+database carries its own ``schema_migrations`` ledger recording which files it
+has seen, so a database is self-describing: what it has applied is stored in it,
+not in a central register that could disagree with the file in front of you.
+
+The tree names a *subject* and a *database within it*, matching the
+``<subject>/<name>`` namespace ``tools.store`` maps to
+``<base_dir>/<subject>/<name>.db``. Nothing here knows the medallion: raw,
+silver and gold are three databases of one subject to this module, exactly as
+they are to the namespace Store, and the raw/silver/gold reading of them is the
+``tools.medallion`` profile's business alone.
 
 **The ledger's presence is the opt-in.** A database carrying a
 ``schema_migrations`` table is under migration control and is expected to have
 been shaped by SQL; one without it behaves exactly as it always has. That makes
-every subject's conversion additive and independent —
+every database's conversion additive and independent —
 :func:`is_under_migration_control` is the cheap check the writers ask before
 refusing to conjure a table.
 
@@ -54,7 +61,6 @@ from pathlib import Path
 
 from framework._internal.connection import connect
 from framework.core.errors import ErrorCategory, PipelineError
-from tools.medallion import LAYERS
 from tools.observability.timestamps import utc_now_iso
 
 __all__ = [
@@ -130,23 +136,23 @@ class AppliedMigration:
 
 @dataclass(frozen=True)
 class MigrationTarget:
-    """One subject-layer with migrations: the database a runner is pointed at."""
+    """One database with migrations, and the directory holding them."""
 
     subject: str
-    layer: str
+    database: str
     directory: Path
 
     @property
     def namespace(self) -> str:
         """The ``tools.store`` namespace whose file this target shapes."""
-        return f"{self.subject}/{self.layer}"
+        return f"{self.subject}/{self.database}"
 
 
 class MigrationRunner:
     """Applies one directory of migrations to one SQLite database.
 
-    A runner is bound to a single ``(database, directory)`` pair — one medallion
-    layer of one subject — because that pairing is what the ledger records. It
+    A runner is bound to a single ``(database, directory)`` pair, because that
+    pairing is what the ledger records. It
     holds no connection: each call opens one, does its work, and closes.
     """
 
@@ -293,15 +299,13 @@ def is_under_migration_control(
 def discover_targets(
     root: str | os.PathLike[str] = MIGRATIONS_ROOT,
 ) -> list[MigrationTarget]:
-    """Every subject-layer under the migrations tree, in subject then layer order.
+    """Every subject/database under the migrations tree, in subject then name order.
 
     **The tree is the registry.** There is no other list of which databases are
-    under migration control: a subject opts in by having a directory here, and
+    under migration control: a database opts in by having a directory here, and
     an operator applying migrations walks this rather than a config file that
     could fall behind it. A missing tree is not an error — nothing has opted in
-    yet — but a subject directory whose child is not a medallion layer is, since
-    a mistyped ``sliver`` would otherwise quietly migrate a brand-new database
-    file that no pipeline will ever write to.
+    yet.
 
     Only directories are considered at both levels, so a ``README.md`` beside
     the subjects is ignored rather than read as one.
@@ -309,41 +313,29 @@ def discover_targets(
     root = Path(root)
     if not root.is_dir():
         return []
-    targets: list[MigrationTarget] = []
-    for subject_dir in sorted(p for p in root.iterdir() if p.is_dir()):
-        for layer_dir in sorted(p for p in subject_dir.iterdir() if p.is_dir()):
-            if layer_dir.name not in LAYERS:
-                raise MigrationError(
-                    f"Not a medallion layer: {layer_dir} "
-                    f"(expected one of {', '.join(LAYERS)})"
-                )
-            targets.append(
-                MigrationTarget(
-                    subject=subject_dir.name,
-                    layer=layer_dir.name,
-                    directory=layer_dir,
-                )
-            )
-    # Layer order is the medallion's own (raw, silver, gold), not alphabetical:
-    # an operator reading the output follows the data's direction of travel.
-    targets.sort(key=lambda t: (t.subject, LAYERS.index(t.layer)))
-    return targets
+    return [
+        MigrationTarget(
+            subject=subject_dir.name, database=database_dir.name, directory=database_dir
+        )
+        for subject_dir in sorted(p for p in root.iterdir() if p.is_dir())
+        for database_dir in sorted(p for p in subject_dir.iterdir() if p.is_dir())
+    ]
 
 
 def migrations_directory(
     subject: str,
-    layer: str,
+    database: str,
     *,
     root: str | os.PathLike[str] = MIGRATIONS_ROOT,
 ) -> Path:
-    """The directory holding one subject-layer's migrations.
+    """The directory holding one database's migrations.
 
-    The ``migrations/<subject>/<layer>/`` layout mirrors the medallion's
-    ``<subject>/{raw,silver,gold}.db`` on-disk shape, so a database and the
-    files that shape it are found the same way. One function owns the layout so
-    the CLI and the tests cannot spell it differently.
+    The ``migrations/<subject>/<database>/`` layout mirrors the on-disk
+    ``<base_dir>/<subject>/<database>.db``, so a database and the files that
+    shape it are found the same way. One function owns the layout so the CLI and
+    the tests cannot spell it differently.
     """
-    return Path(root) / subject / layer
+    return Path(root) / subject / database
 
 
 def _read_migration(path: Path, version: int) -> Migration:
