@@ -18,7 +18,10 @@ def to_bare_account(value: object) -> str:
 
     Blank, ``None`` and NaN all reduce to ``""`` — never a match, because two
     people with no login are not the same person. ``value != value`` is the
-    NaN test, so nothing here reaches behind the ``Dataset`` seam for one.
+    NaN test, so nothing here reaches behind the ``Dataset`` seam for one. That
+    test is ambiguous for pandas' own ``NA``, which no caller can produce today
+    because every reader upstream is numpy-backed; moving one to a nullable
+    dtype would need a widened guard here.
     """
     if value is None or value != value:
         return ""
