@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 
 from shared.account_names import to_bare_account
@@ -27,13 +26,8 @@ def test_a_login_in_any_spelling_reduces_to_the_lower_cased_bare_account(
     assert to_bare_account(value) == expected
 
 
-@pytest.mark.parametrize("value", [None, "", "   ", np.nan, float("nan")])
+@pytest.mark.parametrize("value", [None, "", "   ", float("nan"), "i:0#.w|CONTOSO\\"])
 def test_an_absent_login_reduces_to_blank_so_it_can_never_match(value):
+    # Every caller must drop the blank before joining: "" == "" would otherwise
+    # match two strangers.
     assert to_bare_account(value) == ""
-
-
-def test_two_blanks_are_equal_as_strings_but_are_not_a_person():
-    # Guarding the shape of the trap rather than the equality: every caller must
-    # drop the blank before joining, because "" == "" would match two strangers.
-    assert to_bare_account(None) == to_bare_account("")
-    assert to_bare_account("i:0#.w|CONTOSO\\") == ""

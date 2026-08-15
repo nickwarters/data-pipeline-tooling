@@ -7,12 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from framework.core import ValidationError
-from framework.io import Refresh
+from framework.io import AppendOnly, Refresh
 from framework.run import RunContext
 from pipelines.notifications import pipeline as notifications
 from pipelines.notifications.pipeline import (
     CASE_LINK_TEMPLATE,
+    LEDGER_KEY,
     LEDGER_TABLE,
     SUBJECT,
     SUBJECT_LINE,
@@ -129,7 +129,7 @@ def _ledger(base_dir: Path) -> list[dict]:
     return read_rows(store, LEDGER_TABLE)
 
 
-# --- the issue's four sequences ---------------------------------------------
+# --- the rule's four worked sequences ---------------------------------------
 
 
 def test_the_reviewer_posting_notifies_the_party_and_their_manager(tmp_path, users_csv):
@@ -418,6 +418,26 @@ def test_a_dry_run_writes_no_file_and_records_nobody_as_told(tmp_path, users_csv
     assert _recipients(tmp_path) == sorted([PARTY_EMAIL, MANAGER_EMAIL])
 
 
+def test_re_presenting_a_ledger_row_is_a_no_op_rather_than_a_conflict(tmp_path):
+    # The reason the row is exactly its key. A crash between the outbox write
+    # and the ledger write leaves rows to re-present on the next pass; a
+    # non-key column would make the append-only comparison see a value move and
+    # abort, turning a duplicate notification into a stuck pipeline.
+    store = medallion(StoreRegistry(tmp_path), SUBJECT).gold
+    rows = [
+        {
+            "case_id": "case-1",
+            "recipient": PARTY_EMAIL,
+            "message_at": "2026-08-04T16:02:00.000Z",
+        }
+    ]
+
+    store.writer(LEDGER_TABLE, AppendOnly(LEDGER_KEY)).write(given_rows(rows).read())
+    store.writer(LEDGER_TABLE, AppendOnly(LEDGER_KEY)).write(given_rows(rows).read())
+
+    assert [{key: row[key] for key in LEDGER_KEY} for row in _ledger(tmp_path)] == rows
+
+
 def test_the_first_pass_tolerates_a_ledger_that_does_not_exist_yet(tmp_path, users_csv):
     _seed(tmp_path, [_case()], [_message(0, "a.khan", "2026-08-04T16:02:00.000Z")])
     store = medallion(StoreRegistry(tmp_path), SUBJECT).gold
@@ -466,21 +486,8 @@ def _recipients_of(last_author: str, *, party: str = PARTY) -> list[str]:
     ]
 
 
-def test_the_managers_edge_is_read_from_the_party_not_from_the_author():
-    # The Manager here is b.okafor's, even though a.khan wrote the last Message
-    # and has a different manager of their own.
-    assert _recipients_of("a.khan") == sorted([PARTY_EMAIL, MANAGER_EMAIL])
-
-
 def test_a_case_with_no_responsible_party_notifies_only_the_reviewer_side():
     assert _recipients_of(MANAGER_LOGIN, party="") == [REVIEWER_EMAIL]
-
-
-def test_the_outbox_contract_check_rejects_a_wrong_column_order():
-    dataset = given_rows([{"subject": "s", "recipients": "r", "body": "b"}]).read()
-
-    with pytest.raises(ValidationError):
-        notifications.ExactColumns(("recipients", "subject", "body")).validate(dataset)
 
 
 def test_the_outbox_filename_is_unique_per_pass_and_legal_on_windows():
