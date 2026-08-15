@@ -502,6 +502,45 @@ test('SaveQueue: a Case with no Answers round-trips a 412 without a false confli
   );
 });
 
+test('SaveQueue: a successful response without Answers preserves the baseline for a later 412', async () => {
+  const answers = { 'q-1': { value: 'Yes' } };
+  const client = makeClient({
+    patchResponses: [
+      {
+        ok: true,
+        status: 200,
+        data: caseRow({
+          answers: /** @type {any} */ (null),
+          etag: 'etag-after-first-save',
+        }),
+      },
+      { ok: false, status: 412 },
+      {
+        ok: true,
+        status: 200,
+        data: caseRow({ answers, etag: 'etag-after-retry' }),
+      },
+    ],
+    getCaseRow: caseRow({ answers, etag: 'etag-fresh' }),
+  });
+  const q = new SaveQueue(client, { debounceMs: 0 });
+  q.loadCase(caseRow({ answers }));
+
+  q.enqueueFields('c1', { notes: 'first save' });
+  await q.whenIdle();
+  q.enqueueFields('c1', { notes: 'second save' });
+  await q.whenIdle();
+
+  assert.equal(q.status.get(), 'saved');
+  assert.equal(
+    client.patchCalls.length,
+    3,
+    'the later 412 retries because the successful response kept the baseline'
+  );
+  assert.deepEqual(client.patchCalls[2].fields, { notes: 'second save' });
+  assert.equal(client.patchCalls[2].etag, 'etag-fresh');
+});
+
 test('SaveQueue: a second loadCase for the same Case does not discard writes already queued', async () => {
   const client = makeClient();
   const timer = makeTimer();
