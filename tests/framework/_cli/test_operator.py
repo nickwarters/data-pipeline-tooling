@@ -795,9 +795,200 @@ def test_every_usage_example_in_the_module_docstring_parses():
     import cli.operator as operator
 
     examples = re.findall(r"^    python -m cli (.+)$", operator.__doc__, re.MULTILINE)
-    assert len(examples) == 6, examples
+    assert len(examples) == 7, examples
     parser = operator.build_parser()
     for example in examples:
         args = shlex.split(example.replace("<", "_").replace(">", "_"))
         parsed = parser.parse_args(args)  # SystemExit here means a stale example
         assert parsed.command == args[0]
+
+
+# --- migrate ---------------------------------------------------------------
+#
+# The migrations tree these drive is a throwaway one under tmp_path, named by
+# --migrations-root: the repository's own tree is the deployed subjects' and
+# must not decide whether this plumbing works.
+
+CREATE_CASES = "CREATE TABLE cases (case_id TEXT PRIMARY KEY);\n"
+CREATE_EVENTS = "CREATE TABLE events (event_id TEXT PRIMARY KEY);\n"
+
+
+def _migration(root, subject, layer, name, sql):
+    """Write one migration file into a throwaway migrations tree."""
+    directory = root / subject / layer
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / name).write_text(sql, encoding="utf-8")
+    return directory / name
+
+
+def _tables(db_path):
+    import sqlite3
+
+    con = sqlite3.connect(db_path)
+    try:
+        return {
+            row[0]
+            for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+    finally:
+        con.close()
+
+
+def test_migrate_applies_every_subject_layer_the_tree_names(tmp_path):
+    # The tree is the registry of which databases exist: two subjects, three
+    # databases, all brought up to date in one command.
+    tree = tmp_path / "migrations"
+    _migration(tree, "cases", "raw", "0001_create_cases.sql", CREATE_CASES)
+    _migration(tree, "cases", "silver", "0001_create_cases.sql", CREATE_CASES)
+    _migration(tree, "activity", "gold", "0001_create_events.sql", CREATE_EVENTS)
+    base = tmp_path / "data"
+
+    result = _cli("migrate", "--base-dir", str(base), "--migrations-root", str(tree))
+
+    assert result.returncode == 0, result.stderr
+    assert "cases" in _tables(base / "cases" / "raw.db")
+    assert "cases" in _tables(base / "cases" / "silver.db")
+    assert "events" in _tables(base / "activity" / "gold.db")
+    assert "applied 1: 0001_create_cases.sql" in result.stdout
+    assert "migrated 3 database(s): 3 applied, 0 up to date, 0 failed" in result.stdout
+
+
+def test_migrate_reports_a_database_that_is_already_current(tmp_path):
+    tree = tmp_path / "migrations"
+    _migration(tree, "cases", "raw", "0001_create_cases.sql", CREATE_CASES)
+    base = tmp_path / "data"
+    _cli("migrate", "--base-dir", str(base), "--migrations-root", str(tree))
+
+    result = _cli("migrate", "--base-dir", str(base), "--migrations-root", str(tree))
+
+    assert result.returncode == 0, result.stderr
+    assert "up to date" in result.stdout
+    assert "migrated 1 database(s): 0 applied, 1 up to date, 0 failed" in result.stdout
+
+
+def test_migrate_check_exits_non_zero_and_writes_nothing_when_pending(tmp_path):
+    # The CI gate: it must report the outstanding file by name and leave the
+    # database untouched — not even created.
+    tree = tmp_path / "migrations"
+    _migration(tree, "cases", "raw", "0001_create_cases.sql", CREATE_CASES)
+    base = tmp_path / "data"
+
+    result = _cli(
+        "migrate", "--base-dir", str(base), "--migrations-root", str(tree), "--check"
+    )
+
+    assert result.returncode == 1
+    assert "pending 1: 0001_create_cases.sql" in result.stdout
+    assert "checked 1 database(s): 1 pending, 0 up to date, 0 failed" in result.stdout
+    assert not (base / "cases" / "raw.db").exists()
+
+
+def test_migrate_check_exits_zero_when_everything_is_applied(tmp_path):
+    tree = tmp_path / "migrations"
+    _migration(tree, "cases", "raw", "0001_create_cases.sql", CREATE_CASES)
+    base = tmp_path / "data"
+    _cli("migrate", "--base-dir", str(base), "--migrations-root", str(tree))
+
+    result = _cli(
+        "migrate", "--base-dir", str(base), "--migrations-root", str(tree), "--check"
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "up to date" in result.stdout
+
+
+def test_migrate_resolves_base_dir_from_the_dev_environment(tmp_path):
+    # No --base-dir and no --env: the same default the run command takes.
+    tree = tmp_path / "migrations"
+    _migration(tree, "cases", "raw", "0001_create_cases.sql", CREATE_CASES)
+    base = tmp_path / "from_env"
+    env = {
+        **os.environ,
+        "PIPELINE_DATA_DIR_DEV": str(base),
+    }
+    result = subprocess.run(
+        [sys.executable, "-m", "cli", "migrate", "--migrations-root", str(tree)],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "cases" in _tables(base / "cases" / "raw.db")
+
+
+def test_migrate_explicit_base_dir_overrides_the_environment(tmp_path):
+    tree = tmp_path / "migrations"
+    _migration(tree, "cases", "raw", "0001_create_cases.sql", CREATE_CASES)
+    explicit = tmp_path / "explicit"
+    env = {**os.environ, "PIPELINE_DATA_DIR_DEV": str(tmp_path / "from_env")}
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "cli",
+            "migrate",
+            "--base-dir",
+            str(explicit),
+            "--env",
+            "dev",
+            "--migrations-root",
+            str(tree),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (explicit / "cases" / "raw.db").exists()
+    assert not (tmp_path / "from_env").exists()
+
+
+def test_migrate_isolates_one_broken_subject_from_the_rest(tmp_path):
+    # Each subject-layer is an independent database with its own ledger, so a
+    # bad set in one must not decide whether the others get migrated — but the
+    # command still exits non-zero.
+    tree = tmp_path / "migrations"
+    _migration(tree, "broken", "raw", "0001_bad.sql", "CRATE TABLE oops (x INT);\n")
+    _migration(tree, "cases", "raw", "0001_create_cases.sql", CREATE_CASES)
+    base = tmp_path / "data"
+
+    result = _cli("migrate", "--base-dir", str(base), "--migrations-root", str(tree))
+
+    assert result.returncode == 1
+    assert "FAILED" in result.stderr
+    assert "0001_bad.sql" in result.stderr
+    assert "cases" in _tables(base / "cases" / "raw.db")
+    assert "migrated 2 database(s): 1 applied, 0 up to date, 1 failed" in result.stdout
+
+
+def test_migrate_reports_an_empty_tree_without_failing(tmp_path):
+    # Nothing has opted in yet — the state the repository is in today.
+    result = _cli(
+        "migrate",
+        "--base-dir",
+        str(tmp_path / "data"),
+        "--migrations-root",
+        str(tmp_path / "absent"),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "no migrations under" in result.stdout
+
+
+def test_migrate_rejects_a_directory_that_is_not_a_medallion_layer(tmp_path):
+    # A mistyped layer would otherwise migrate a brand-new database file that
+    # no pipeline ever writes to.
+    tree = tmp_path / "migrations"
+    _migration(tree, "cases", "sliver", "0001_create_cases.sql", CREATE_CASES)
+
+    result = _cli(
+        "migrate", "--base-dir", str(tmp_path / "data"), "--migrations-root", str(tree)
+    )
+
+    assert result.returncode == 1
+    assert "Not a medallion layer" in result.stderr
+    assert "Traceback" not in result.stderr

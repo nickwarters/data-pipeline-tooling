@@ -54,6 +54,7 @@ from pathlib import Path
 
 from framework._internal.connection import connect
 from framework.core.errors import ErrorCategory, PipelineError
+from tools.medallion import LAYERS
 from tools.observability.timestamps import utc_now_iso
 
 __all__ = [
@@ -63,6 +64,8 @@ __all__ = [
     "Migration",
     "MigrationError",
     "MigrationRunner",
+    "MigrationTarget",
+    "discover_targets",
     "is_under_migration_control",
     "migrations_directory",
 ]
@@ -123,6 +126,20 @@ class AppliedMigration:
     name: str
     checksum: str
     applied_at: str
+
+
+@dataclass(frozen=True)
+class MigrationTarget:
+    """One subject-layer with migrations: the database a runner is pointed at."""
+
+    subject: str
+    layer: str
+    directory: Path
+
+    @property
+    def namespace(self) -> str:
+        """The ``tools.store`` namespace whose file this target shapes."""
+        return f"{self.subject}/{self.layer}"
 
 
 class MigrationRunner:
@@ -271,6 +288,46 @@ def is_under_migration_control(
         return _has_ledger(con)
     finally:
         con.close()
+
+
+def discover_targets(
+    root: str | os.PathLike[str] = MIGRATIONS_ROOT,
+) -> list[MigrationTarget]:
+    """Every subject-layer under the migrations tree, in subject then layer order.
+
+    **The tree is the registry.** There is no other list of which databases are
+    under migration control: a subject opts in by having a directory here, and
+    an operator applying migrations walks this rather than a config file that
+    could fall behind it. A missing tree is not an error — nothing has opted in
+    yet — but a subject directory whose child is not a medallion layer is, since
+    a mistyped ``sliver`` would otherwise quietly migrate a brand-new database
+    file that no pipeline will ever write to.
+
+    Only directories are considered at both levels, so a ``README.md`` beside
+    the subjects is ignored rather than read as one.
+    """
+    root = Path(root)
+    if not root.is_dir():
+        return []
+    targets: list[MigrationTarget] = []
+    for subject_dir in sorted(p for p in root.iterdir() if p.is_dir()):
+        for layer_dir in sorted(p for p in subject_dir.iterdir() if p.is_dir()):
+            if layer_dir.name not in LAYERS:
+                raise MigrationError(
+                    f"Not a medallion layer: {layer_dir} "
+                    f"(expected one of {', '.join(LAYERS)})"
+                )
+            targets.append(
+                MigrationTarget(
+                    subject=subject_dir.name,
+                    layer=layer_dir.name,
+                    directory=layer_dir,
+                )
+            )
+    # Layer order is the medallion's own (raw, silver, gold), not alphabetical:
+    # an operator reading the output follows the data's direction of travel.
+    targets.sort(key=lambda t: (t.subject, LAYERS.index(t.layer)))
+    return targets
 
 
 def migrations_directory(
