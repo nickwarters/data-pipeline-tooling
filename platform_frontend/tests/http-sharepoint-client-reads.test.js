@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { HttpSharePointClient } from '../src/services/http-sharepoint-client.js';
 import {
+  PERSON_COLUMNS,
   WEB_URL,
   caseRowResponse,
   makeFetch,
@@ -10,6 +11,42 @@ import {
 } from './helpers/http-sharepoint-client.js';
 
 // Capability: case reads, hydration, and derived fields.
+
+test('HttpSharePointClient: Person-column metadata includes every required unique mapping', () => {
+  const requiredMappings = [
+    ['assignedReviewer', 'AssignedReviewer', 'AssignedReviewerId'],
+    ['responsibleParty', 'ResponsibleParty', 'ResponsiblePartyId'],
+    [
+      'assignedReviewerManager',
+      'AssignedReviewerManager',
+      'AssignedReviewerManagerId',
+    ],
+    [
+      'responsiblePartyManager',
+      'ResponsiblePartyManager',
+      'ResponsiblePartyManagerId',
+    ],
+    ['voidedBy', 'VoidedBy', 'VoidedById'],
+  ];
+  assert.ok(PERSON_COLUMNS.length >= requiredMappings.length);
+  for (const key of ['field', 'column', 'idColumn']) {
+    assert.equal(
+      new Set(
+        PERSON_COLUMNS.map((mapping) => /** @type {any} */ (mapping)[key])
+      ).size,
+      PERSON_COLUMNS.length,
+      `${key} values are unique`
+    );
+  }
+  const mappings = new Set(
+    PERSON_COLUMNS.map(({ field, column, idColumn }) =>
+      [field, column, idColumn].join('|')
+    )
+  );
+  for (const required of requiredMappings) {
+    assert.ok(mappings.has(required.join('|')), `${required[0]} is registered`);
+  }
+});
 
 test('HttpSharePointClient: getCase parses the Details JSON blob into CaseRow.details', async () => {
   const client = readsClient(
@@ -286,240 +323,103 @@ test('HttpSharePointClient: listCases derives overdue from the hydrated default 
   assert.equal(rows[0].overdue, true);
 });
 
-test('HttpSharePointClient: getCase reads both managers as account names, not lookup ids', async () => {
-  // The manager columns are Person columns like the other two, and Section
-  // access matches the Reviewer Manager and Responsible Party Manager Roles
-  // against the signed-in user's bare account — a row carrying anything else
-  // silently disables both Roles.
-  const { fetch, calls } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(
-          JSON.stringify(
-            caseRowResponse({
-              Id: 'case-x',
-              Title: 'X',
-              // The numbers the unexpanded read would have handed back, left
-              // here on purpose: taking either would look like it worked.
-              AssignedReviewerManagerId: 44,
-              ResponsiblePartyManagerId: 45,
-              AssignedReviewerManager: { Name: 'i:0#.w|CONTOSO\\mgr-r' },
-              ResponsiblePartyManager: { Name: 'i:0#.w|CONTOSO\\mgr-rp' },
-            })
-          ),
-          { status: 200 }
-        ),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
-  const row = await client.getCase('case-x', {
-    listName: 'Cases-ExampleReview',
-  });
-  assert.equal(row?.assignedReviewerManager, 'mgr-r');
-  assert.equal(row?.responsiblePartyManager, 'mgr-rp');
-  const url = decodeURIComponent(calls[0].url);
-  // Asserted as the whole expand list, not a prefix: a person column dropped
-  // off the end costs no error and no empty column, only a row that quietly
-  // reads as having nobody in that role.
-  assert.ok(
-    url.includes(
-      '$expand=AssignedReviewer,ResponsibleParty,AssignedReviewerManager,ResponsiblePartyManager,VoidedBy'
-    ),
-    'every person column must be expanded for its account name'
-  );
-  for (const column of [
-    'AssignedReviewer',
-    'ResponsibleParty',
-    'AssignedReviewerManager',
-    'ResponsiblePartyManager',
-    'VoidedBy',
-  ]) {
-    assert.ok(
-      url.includes(`${column}/Name`),
-      `${column}/Name must be selected, or the expanded entity carries no account`
+for (const { field, column, idColumn, emptyValue } of PERSON_COLUMNS) {
+  test(`HttpSharePointClient: listCases reads ${field} as a bare account name`, async () => {
+    const client = readsClient(
+      caseRowResponse({
+        [idColumn]: 27,
+        [column]: { Name: 'i:0#.w|CONTOSO\\jsmith' },
+      })
     );
+
+    const [row] = await client.listCases(
+      {},
+      { listName: 'Cases-ExampleReview' }
+    );
+
+    assert.equal(/** @type {any} */ (row)[field], 'jsmith');
+    assert.notEqual(/** @type {any} */ (row)[field], 27);
+  });
+
+  test(`HttpSharePointClient: listCases preserves empty ${field} semantics`, async () => {
+    const client = readsClient(
+      caseRowResponse({ [idColumn]: null, [column]: null })
+    );
+
+    const [row] = await client.listCases(
+      {},
+      { listName: 'Cases-ExampleReview' }
+    );
+
+    assert.equal(/** @type {any} */ (row)[field], emptyValue);
+  });
+}
+
+test('HttpSharePointClient: a Case with nobody responsible has no display name', async () => {
+  const client = readsClient(
+    caseRowResponse({ ResponsiblePartyId: null, ResponsibleParty: null })
+  );
+
+  const [row] = await client.listCases({}, { listName: 'Cases-ExampleReview' });
+
+  assert.equal(row.responsiblePartyDisplayName, undefined);
+});
+
+test('HttpSharePointClient: getCase and listCases project every Person column', async () => {
+  const item = caseRowResponse({
+    AssignedReviewer: { Name: 'i:0#.w|CONTOSO\\reviewer' },
+    ResponsibleParty: {
+      Name: 'i:0#.w|CONTOSO\\responsible',
+      Title: 'Responsible Person',
+    },
+    AssignedReviewerManager: { Name: 'i:0#.w|CONTOSO\\reviewer-manager' },
+    ResponsiblePartyManager: {
+      Name: 'i:0#.w|CONTOSO\\responsible-manager',
+    },
+    VoidedBy: { Name: 'i:0#.w|CONTOSO\\voider' },
+  });
+  const { fetch, calls } = makeFetch([
+    {
+      when: (call) => call.method === 'GET' && call.url.includes('/items('),
+      respond: () => new Response(JSON.stringify(item), { status: 200 }),
+    },
+    {
+      when: (call) => call.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ value: [item] }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const row = await client.getCase('case-1', {
+    listName: 'Cases-ExampleReview',
+  });
+  const [listed] = await client.listCases(
+    {},
+    { listName: 'Cases-ExampleReview' }
+  );
+
+  assert.equal(row?.responsiblePartyDisplayName, 'Responsible Person');
+  assert.equal(listed.responsiblePartyDisplayName, 'Responsible Person');
+  assert.equal(calls.length, 2);
+  const projectedColumns = PERSON_COLUMNS.map(({ column }) => column);
+  const expectedExpand = projectedColumns;
+  const expectedSelect = [
+    '*',
+    ...projectedColumns.flatMap((column) =>
+      column === 'ResponsibleParty'
+        ? [`${column}/Name`, `${column}/Title`]
+        : [`${column}/Name`]
+    ),
+  ];
+  for (const call of calls) {
+    const query = new URL(call.url).searchParams;
+    assert.deepEqual(query.get('$expand')?.split(','), expectedExpand);
+    assert.deepEqual(query.get('$select')?.split(','), expectedSelect);
   }
-});
-
-test('HttpSharePointClient: a Case with no managers reads them as absent, not empty accounts', async () => {
-  const client = readsClient(
-    caseRowResponse({
-      Id: 'case-x',
-      Title: 'X',
-      AssignedReviewerManager: null,
-    })
-  );
-  const row = await client.getCase('case-x', {
-    listName: 'Cases-ExampleReview',
-  });
-  assert.equal(row?.assignedReviewerManager, undefined);
-  assert.equal(row?.responsiblePartyManager, undefined);
-});
-
-test('HttpSharePointClient: getCase reads the Responsible Party as an account name, not a lookup id', async () => {
-  // The column is a Person column, so SharePoint answers with the numeric User
-  // Information List id unless the lookup is expanded. That number is local to
-  // one site collection; the app keys identity on the bare account name, and
-  // Section access matches the Responsible Party Role on it.
-  const { fetch, calls } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(
-          JSON.stringify(
-            caseRowResponse({
-              Id: 'case-rp',
-              Title: 'T',
-              AssignedReviewerId: 'user-r',
-              ResponsiblePartyId: 27,
-              ResponsibleParty: {
-                Name: 'i:0#.w|CONTOSO\\jrp',
-                Title: 'Jordan RP',
-              },
-            })
-          ),
-          { status: 200 }
-        ),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
-
-  const row = await client.getCase('case-rp', {
-    listName: 'Cases-ExampleReview',
-  });
-
-  assert.equal(row?.responsibleParty, 'jrp');
-  assert.equal(row?.responsiblePartyDisplayName, 'Jordan RP');
-  const url = decodeURIComponent(calls[0].url);
-  assert.ok(
-    url.includes('$expand=AssignedReviewer,ResponsibleParty'),
-    'the read must expand the person for the account name to be there at all'
-  );
-  assert.ok(
-    url.includes('$select=*'),
-    'and keep every other column the read returned before'
-  );
-});
-
-test('HttpSharePointClient: a Case with nobody responsible reads as an empty account', async () => {
-  const client = readsClient(
-    caseRowResponse({ Id: 'case-none', Title: 'T', ResponsibleParty: null })
-  );
-
-  const row = await client.getCase('case-none', {
-    listName: 'Cases-ExampleReview',
-  });
-
-  assert.equal(row?.responsibleParty, '');
-  assert.equal(row?.responsiblePartyDisplayName, undefined);
-});
-
-test('HttpSharePointClient: getCase reads the Assigned Reviewer as an account name, not a lookup id', async () => {
-  // The same Person column story as the Responsible Party: the flat `…Id` is a
-  // site-local number, and the app matches the Assigned Reviewer Role — which
-  // grants edit on the Issues tab — against the signed-in user's bare account.
-  const { fetch, calls } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(
-          JSON.stringify(
-            caseRowResponse({
-              Id: 'case-ar',
-              Title: 'T',
-              // The number the unexpanded read would have handed back, left here
-              // on purpose: taking it would look like a working account name.
-              AssignedReviewerId: 27,
-              AssignedReviewer: {
-                Name: 'i:0#.w|CONTOSO\\jrev',
-                Title: 'Jordan Reviewer',
-              },
-            })
-          ),
-          { status: 200 }
-        ),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
-
-  const row = await client.getCase('case-ar', {
-    listName: 'Cases-ExampleReview',
-  });
-
-  assert.equal(row?.assignedReviewer, 'jrev');
-  const url = decodeURIComponent(calls[0].url);
-  assert.ok(
-    url.includes('$expand=AssignedReviewer,ResponsibleParty'),
-    'both person columns must be expanded for either account name to be there'
-  );
-  assert.ok(
-    url.includes('$select=*'),
-    'and keep every other column the read returned before'
-  );
-});
-
-test('HttpSharePointClient: a Case with nobody assigned reads as an empty account', async () => {
-  const client = readsClient(
-    caseRowResponse({ Id: 'case-none', Title: 'T', AssignedReviewer: null })
-  );
-
-  const row = await client.getCase('case-none', {
-    listName: 'Cases-ExampleReview',
-  });
-
-  assert.equal(row?.assignedReviewer, '');
-});
-
-test('HttpSharePointClient: listCases expands both person columns on every row', async () => {
-  const { fetch, calls } = makeFetch([
-    {
-      when: (c) => c.method === 'GET',
-      respond: () =>
-        new Response(
-          JSON.stringify({
-            value: [
-              caseRowResponse({
-                Id: 'case-1',
-                Title: 'One',
-                AssignedReviewer: {
-                  Name: 'i:0#.w|CONTOSO\\jrev',
-                  Title: 'Jordan Reviewer',
-                },
-                ResponsibleParty: {
-                  Name: 'i:0#.w|CONTOSO\\jrp',
-                  Title: 'Jordan RP',
-                },
-              }),
-            ],
-          }),
-          { status: 200 }
-        ),
-    },
-  ]);
-  const client = new HttpSharePointClient({
-    webUrl: WEB_URL,
-    fetchImpl: fetch,
-  });
-
-  const rows = await client.listCases({}, { listName: 'Cases-ExampleReview' });
-
-  assert.equal(rows[0].assignedReviewer, 'jrev');
-  assert.equal(rows[0].responsibleParty, 'jrp');
-  assert.ok(
-    decodeURIComponent(calls[0].url).includes(
-      '$expand=AssignedReviewer,ResponsibleParty'
-    )
-  );
 });
 
 test('HttpSharePointClient: getCase throws when called without a listName', async () => {

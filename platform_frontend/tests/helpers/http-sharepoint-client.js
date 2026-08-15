@@ -4,6 +4,57 @@ import { HttpSharePointClient } from '../../src/services/http-sharepoint-client.
 /** @typedef {{ method: string, url: string, headers: Record<string, string>, body: string|null }} CapturedCall */
 
 /**
+ * @typedef {Object} PersonColumn
+ * @property {string} field
+ * @property {string} column
+ * @property {string} idColumn
+ * @property {Array<''|null>} clearValues
+ * @property {''|undefined} emptyValue
+ */
+
+// Account-valued fields use their public empty-string spelling. Nullable
+// manager fields accept both spellings of nobody and must normalize either to
+// a SharePoint null lookup id; voidedBy is nullable but has no empty-string UI.
+/** @type {PersonColumn[]} */
+export const PERSON_COLUMNS = [
+  {
+    field: 'assignedReviewer',
+    column: 'AssignedReviewer',
+    idColumn: 'AssignedReviewerId',
+    clearValues: [''],
+    emptyValue: '',
+  },
+  {
+    field: 'responsibleParty',
+    column: 'ResponsibleParty',
+    idColumn: 'ResponsiblePartyId',
+    clearValues: [''],
+    emptyValue: '',
+  },
+  {
+    field: 'assignedReviewerManager',
+    column: 'AssignedReviewerManager',
+    idColumn: 'AssignedReviewerManagerId',
+    clearValues: [null, ''],
+    emptyValue: undefined,
+  },
+  {
+    field: 'responsiblePartyManager',
+    column: 'ResponsiblePartyManager',
+    idColumn: 'ResponsiblePartyManagerId',
+    clearValues: [null, ''],
+    emptyValue: undefined,
+  },
+  {
+    field: 'voidedBy',
+    column: 'VoidedBy',
+    idColumn: 'VoidedById',
+    clearValues: [null],
+    emptyValue: undefined,
+  },
+];
+
+/**
  * Build a fake fetch that returns the response for the first matching rule.
  * Every request is recorded for protocol assertions.
  *

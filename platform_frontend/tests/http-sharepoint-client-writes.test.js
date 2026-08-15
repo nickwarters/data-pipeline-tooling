@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { HttpSharePointClient } from '../src/services/http-sharepoint-client.js';
 import {
+  PERSON_COLUMNS,
   WEB_URL,
   caseRowResponse,
   digestResponse,
@@ -348,61 +349,59 @@ test('HttpSharePointClient: patchCase can target a supplied SharePoint list', as
   );
 });
 
-test('HttpSharePointClient: writing the managers resolves each account to its numeric id', async () => {
-  // The manager columns are Person columns like the other two: SharePoint
-  // takes the id, and the account string it would otherwise receive is an
-  // invalid person value that fails the save.
-  const { client, calls } = personWriteClient();
+for (const { field, column, idColumn, clearValues } of PERSON_COLUMNS) {
+  test(`HttpSharePointClient: patchCase resolves ${field} to its numeric id`, async () => {
+    const { client, calls } = personWriteClient();
 
-  const result = await client.patchCase(
-    'case-1',
-    { assignedReviewerManager: 'jsmith', responsiblePartyManager: 'jsmith' },
-    '"v1"',
-    { listName: 'Cases-ExampleReview' }
-  );
+    const result = await client.patchCase(
+      'case-1',
+      /** @type {any} */ ({ [field]: 'jsmith' }),
+      '"v1"',
+      { listName: 'Cases-ExampleReview' }
+    );
 
-  assert.equal(result.ok, true);
-  const body = JSON.parse(
-    String(calls.find((c) => c.method === 'PATCH')?.body)
-  );
-  assert.equal(body.AssignedReviewerManagerId, 14);
-  assert.equal(body.ResponsiblePartyManagerId, 14);
-  assert.ok(
-    !('AssignedReviewerManager' in body) &&
-      !('ResponsiblePartyManager' in body),
-    'the account string never reaches a Person column'
-  );
-  assert.equal(
-    calls.filter((c) => c.url.endsWith('/_api/web/ensureuser')).length,
-    1,
-    'one account is one lookup, whichever columns it lands in'
-  );
-});
+    assert.equal(result.ok, true);
+    const ensureCalls = calls.filter((call) =>
+      call.url.endsWith('/_api/web/ensureuser')
+    );
+    assert.equal(ensureCalls.length, 1);
+    assert.equal(ensureCalls[0].method, 'POST');
+    assert.deepEqual(JSON.parse(String(ensureCalls[0].body)), {
+      logonName: 'i:0#.w|CONTOSO\\jsmith',
+    });
+    const body = JSON.parse(
+      String(calls.find((call) => call.method === 'PATCH')?.body)
+    );
+    assert.equal(body[idColumn], 14);
+    assert.equal(typeof body[idColumn], 'number');
+    assert.equal(column in body, false, 'the account string is never written');
+  });
 
-test('HttpSharePointClient: clearing the managers writes null, whichever way nobody is spelled', async () => {
-  // The row speaks both dialects — the managers allow an explicit null where
-  // the other two person fields use the empty string — and SharePoint clears
-  // a Person column with null either way.
-  const { client, calls } = personWriteClient();
+  for (const clearValue of clearValues) {
+    const spelling = clearValue === null ? 'null' : 'an empty string';
+    test(`HttpSharePointClient: patchCase clears ${field} with ${spelling}`, async () => {
+      const { client, calls } = personWriteClient();
 
-  await client.patchCase(
-    'case-1',
-    { assignedReviewerManager: null, responsiblePartyManager: '' },
-    '"v1"',
-    { listName: 'Cases-ExampleReview' }
-  );
+      await client.patchCase(
+        'case-1',
+        /** @type {any} */ ({ [field]: clearValue }),
+        '"v1"',
+        { listName: 'Cases-ExampleReview' }
+      );
 
-  assert.equal(
-    calls.find((c) => c.url.endsWith('/_api/web/ensureuser')),
-    undefined,
-    'there is no account to resolve'
-  );
-  const body = JSON.parse(
-    String(calls.find((c) => c.method === 'PATCH')?.body)
-  );
-  assert.equal(body.AssignedReviewerManagerId, null);
-  assert.equal(body.ResponsiblePartyManagerId, null);
-});
+      assert.equal(
+        calls.find((call) => call.url.endsWith('/_api/web/ensureuser')),
+        undefined,
+        'there is no account to resolve'
+      );
+      const body = JSON.parse(
+        String(calls.find((call) => call.method === 'PATCH')?.body)
+      );
+      assert.equal(body[idColumn], null);
+      assert.equal(idColumn in body, true, 'the clear is not omitted');
+    });
+  }
+}
 
 test('HttpSharePointClient: patchCase throws when called without a listName', async () => {
   const { fetch, calls } = makeFetch([]);
@@ -547,38 +546,7 @@ test('HttpSharePointClient: patchCase writes status, answers and conversation to
   assert.equal(body.Conversation, JSON.stringify(conversation));
 });
 
-// --- The Responsible Party person column ---
-
-test('HttpSharePointClient: writing the Responsible Party resolves the account to its numeric id', async () => {
-  // A Person column is written by id, not by name, so the account the app holds
-  // has to be turned into one first. EnsureUser is also what adds a directory
-  // user to this site's User Information List if they are not in it yet.
-  const { client, calls } = personWriteClient();
-
-  const result = await client.patchCase(
-    'case-1',
-    { responsibleParty: 'jsmith' },
-    '"v1"',
-    { listName: 'Cases-ExampleReview' }
-  );
-
-  assert.equal(result.ok, true);
-  const ensure = calls.find((c) => c.url.endsWith('/_api/web/ensureuser'));
-  assert.ok(ensure, 'EnsureUser was called');
-  assert.equal(ensure.method, 'POST');
-  assert.deepEqual(JSON.parse(String(ensure.body)), {
-    logonName: 'i:0#.w|CONTOSO\\jsmith',
-  });
-
-  const patch = calls.find((c) => c.method === 'PATCH');
-  const body = JSON.parse(String(patch?.body));
-  assert.equal(body.ResponsiblePartyId, 14);
-  assert.equal(
-    typeof body.ResponsiblePartyId,
-    'number',
-    'a quoted id is rejected by SharePoint as an invalid person value'
-  );
-});
+// --- EnsureUser protocol and cache behaviour ---
 
 test('HttpSharePointClient: an account is resolved once and reused for later saves', async () => {
   const { client, calls } = personWriteClient();
@@ -595,24 +563,6 @@ test('HttpSharePointClient: an account is resolved once and reused for later sav
     1,
     'a debounced save must not pay a directory round trip every time'
   );
-});
-
-test('HttpSharePointClient: clearing the Responsible Party writes null, not an empty account', async () => {
-  const { client, calls } = personWriteClient();
-
-  await client.patchCase('case-1', { responsibleParty: '' }, '"v1"', {
-    listName: 'Cases-ExampleReview',
-  });
-
-  assert.equal(
-    calls.find((c) => c.url.endsWith('/_api/web/ensureuser')),
-    undefined,
-    'there is no account to resolve'
-  );
-  const body = JSON.parse(
-    String(calls.find((c) => c.method === 'PATCH')?.body)
-  );
-  assert.equal(body.ResponsiblePartyId, null);
 });
 
 test('HttpSharePointClient: an unresolvable account fails the save instead of writing a wrong one', async () => {
@@ -675,37 +625,7 @@ test('HttpSharePointClient: a legacy verbose EnsureUser envelope still yields th
   assert.equal(body.ResponsiblePartyId, 21);
 });
 
-// --- The Assigned Reviewer person column ---
-
-test('HttpSharePointClient: writing the Assigned Reviewer resolves the account to its numeric id', async () => {
-  // Self-allocation writes this field today, so the wrong shape here is a live
-  // failed save rather than a latent one.
-  const { client, calls } = personWriteClient();
-
-  const result = await client.patchCase(
-    'case-1',
-    { assignedReviewer: 'jsmith' },
-    '"v1"',
-    { listName: 'Cases-ExampleReview' }
-  );
-
-  assert.equal(result.ok, true);
-  const ensure = calls.find((c) => c.url.endsWith('/_api/web/ensureuser'));
-  assert.ok(ensure, 'EnsureUser was called');
-  assert.equal(ensure.method, 'POST');
-  assert.deepEqual(JSON.parse(String(ensure.body)), {
-    logonName: 'i:0#.w|CONTOSO\\jsmith',
-  });
-
-  const patch = calls.find((c) => c.method === 'PATCH');
-  const body = JSON.parse(String(patch?.body));
-  assert.equal(body.AssignedReviewerId, 14);
-  assert.equal(
-    typeof body.AssignedReviewerId,
-    'number',
-    'a quoted id is rejected by SharePoint as an invalid person value'
-  );
-});
+// --- Assignment pairing ---
 
 test('HttpSharePointClient: allocation writes Reviewer and manager as Person ids in one PATCH', async () => {
   let nextPersonId = 14;
@@ -744,24 +664,6 @@ test('HttpSharePointClient: allocation writes Reviewer and manager as Person ids
     AssignedReviewerManagerId: ensuredIds.get(managerLogin),
     AssignedAt: FROZEN_ASSIGNMENT,
   });
-});
-
-test('HttpSharePointClient: clearing the Assigned Reviewer writes null, not an empty account', async () => {
-  const { client, calls } = personWriteClient();
-
-  await client.patchCase('case-1', { assignedReviewer: '' }, '"v1"', {
-    listName: 'Cases-ExampleReview',
-  });
-
-  assert.equal(
-    calls.find((c) => c.url.endsWith('/_api/web/ensureuser')),
-    undefined,
-    'there is no account to resolve'
-  );
-  const body = JSON.parse(
-    String(calls.find((c) => c.method === 'PATCH')?.body)
-  );
-  assert.equal(body.AssignedReviewerId, null);
 });
 
 test('HttpSharePointClient: allocation with a null manager omits manager EnsureUser and writes explicit null', async () => {
