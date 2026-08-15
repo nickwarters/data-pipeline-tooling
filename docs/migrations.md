@@ -237,6 +237,30 @@ There is no run to read for a brand-new feed, which is why `scaffold` renders a
 starting baseline from the feed's own declarations instead — see
 [adding-a-feed.md](adding-a-feed.md).
 
+## Which subjects are under migration control
+
+Three, today: `sharepoint_cases`, `reviewer_activity` and `notifications` — the
+two `case_review/schedules.py` orchestrates, plus the ledger subject
+`notifications` writes. Everything else under `pipelines/` is a demonstration or
+example that only ever writes into a `tmp_path` inside tests, and keeps implicit
+table creation.
+
+That distinction is enforced, not just recorded.
+`tests/integration/test_migration_coverage.py` asserts every subject a pipeline
+writes either has a `migrations/<subject>/` directory or appears in an
+exclusions map with a reason. **Forgetting is otherwise silent**: a new deployed
+feed with no migrations directory does not fail, it quietly keeps creating its
+tables on first write with whatever dtypes the frame happened to carry and no
+keys at all — which is the price of the self-declaring rule that makes
+converting subjects one at a time possible.
+
+A pipeline declares the subject it writes as a module-level `SUBJECT` /
+`FEED_NAME` / `NAMESPACE`; a subject it only *reads* (`SYNC_SUBJECT`) belongs to
+the pipeline that writes it. The check self-tests — it asserts it can still find
+the subjects it is guarding, that a fabricated unmigrated subject is caught, and
+that no exclusion has gone stale — because a guard that has quietly stopped
+guarding passes every test it has unless one of them is about the guard.
+
 ## See also
 
 - [`run-log-format.md`](run-log-format.md) — the run record schema and the
