@@ -806,7 +806,9 @@ None.
 (`i:0#.w|CONTOSO\a.khan`) every `case_version` Person column holds. The two
 vocabularies do not join: matching one against the other silently matches
 nothing. This feed lands each verbatim rather than guessing at a farm's AD
-domain, which is Case-Type-agnostic and has no business knowing it.
+domain, which is Case-Type-agnostic and has no business knowing it. A consumer
+that must match the two — the `notifications` pipeline is the first — applies
+the encoding on its own side, through `shared/account_names.py`.
 
 **Blob timestamps stay text on purpose.** `posted_at`, `raised_at` and
 `resolution_at` are declared `str`, not `datetime`. `SchemaCoercion` now
