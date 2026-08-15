@@ -40,6 +40,11 @@ from tools.store import Store, StoreRegistry
 from .users import UsersReader
 
 PIPELINE_NAME = "notifications"
+# Same-day, deliberately: the default max_age_days of 0 is the whole coupling
+# between the two schedules. Sync may run as often as it likes and this as often
+# as it likes; all that is required is that today's Sync has landed before
+# anyone is told anything. Widening this would trade that guarantee for a
+# quieter run log.
 UPSTREAMS = (FreshnessRequirement("sharepoint_cases"),)
 
 SYNC_SUBJECT = "sharepoint_cases"
