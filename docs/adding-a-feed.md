@@ -28,7 +28,36 @@ pipelines/orders/
   sample_data/orders.csv
 tests/pipelines/
   test_orders.py       # drives raw_builder() with sample rows + a recording writer
+migrations/orders/
+  raw/0001_create_initial_tables.sql         # the feed's baseline DDL, one per
+  silver/0001_create_initial_tables.sql      # database it writes — including
+  gold/0001_create_initial_tables.sql        # quarantine, whose reject table
+  quarantine/0001_create_initial_tables.sql  # would otherwise be undeclared
 ```
+
+**The feed is born under migration control.** Its baselines declare the schema's
+columns plus what the wiring stamps — `logical_run_id` / `load_date` from
+`AccumulateByRun`, `pipeline_run_id` from every table-backed Writer, and
+`failed_rule` on the reject table. Apply them before the first run:
+
+```sh
+python -m cli migrate --base-dir /tmp/demo
+python -m cli run pipelines/orders --base-dir /tmp/demo
+```
+
+Edit those files freely until you have applied them somewhere; after that a shape
+change is a **new numbered migration** beside the baseline, never an edit to it —
+the runner records each file's checksum when it applies it and refuses one that
+has changed since ([migrations.md](migrations.md)). The generated test uses
+`migrated_base_dir(tmp_path, FEED_NAME)`, so it runs against the same write path
+production takes: no Writer creates a missing table, and a column the baseline
+forgot fails there rather than in a live run.
+
+With `--from-feed-file`, the **raw** baseline is declared in the source's own
+column names and silver's in the canonical ones — the same split
+`RAW_FEED_COLUMNS` / `RENAME` make in the code, since raw lands the source
+faithfully and the rename happens at silver. The Case Type variant renders no
+gold baseline, matching the pipeline it renders, which stops at silver.
 
 `pipeline.py` follows the framework's canonical pipeline contract: it exposes a
 `run(context: RunContext, *, describe: bool = False) -> Dataset` callable (and an

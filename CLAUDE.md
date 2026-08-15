@@ -248,9 +248,11 @@ and exiting non-zero without writing (a CI gate, deliberately **not** wired into
 `run`/`orchestrate`).
 
 Scaffold a new feed with `python -m cli scaffold <feed>`: it renders the
-feed code as a `pipelines/<feed>/` subpackage (schema, pipeline, sample fixture)
-and its test as `tests/pipelines/test_<feed>.py`, from the template under
-`cli/scaffold_templates/feed/`, ready to run and customise. The
+feed code as a `pipelines/<feed>/` subpackage (schema, pipeline, sample fixture),
+its test as `tests/pipelines/test_<feed>.py`, and its baseline migrations as
+`migrations/<feed>/<database>/0001_create_initial_tables.sql` — one per database
+it writes, quarantine included — from the template under
+`cli/scaffold_templates/feed/`, ready to `migrate` and run. The
 generic feed refines source -> raw -> silver -> gold, one `*_builder` per hop
 (`raw_builder` lands faithfully; `silver_builder` renames via `RENAME` + coerces + quarantines +
 validates the schema; `gold_builder` is a passthrough stub with a `TODO`) — the

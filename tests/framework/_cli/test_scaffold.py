@@ -415,3 +415,122 @@ def test_feed_file_seeds_structural_rejection_rows_missing_a_column(tmp_path):
         test_text, "test_silver_builder_quarantines_value_rule_breaches"
     )
     assert '"Case Number": "C1", "Adviser Name": "Smith"' in quarantine
+
+
+# --- migrations --------------------------------------------------------------
+#
+# A scaffolded feed is born with its baselines. Without them it would be the one
+# subject nothing declares — which tests/integration/test_migration_coverage.py
+# refuses — and the author would find out by writing one themselves.
+
+
+def _migration(root, feed, database):
+    return (
+        root / "migrations" / feed / database / "0001_create_initial_tables.sql"
+    ).read_text(encoding="utf-8")
+
+
+def test_a_scaffolded_feed_declares_every_database_it_writes(tmp_path):
+    scaffold.render("orders", tmp_path)
+
+    databases = sorted(p.name for p in (tmp_path / "migrations" / "orders").iterdir())
+
+    # Quarantine included: a reject table is a table like any other, and a feed
+    # whose reject table is undeclared would abort the first time it rejected a
+    # row — a failure that only shows up on the bad-data path.
+    assert databases == ["gold", "quarantine", "raw", "silver"]
+
+
+def test_the_case_type_variant_declares_nothing_for_gold(tmp_path):
+    # It stops at silver, because how silver is assembled into gold is
+    # per-Case-Type and an open decision. A gold baseline would be a guess.
+    scaffold.render("claims", tmp_path, case_type=True)
+
+    databases = sorted(p.name for p in (tmp_path / "migrations" / "claims").iterdir())
+
+    assert databases == ["quarantine", "raw", "silver"]
+
+
+def test_the_baseline_declares_the_schema_plus_what_the_wiring_stamps(tmp_path):
+    scaffold.render("orders", tmp_path)
+
+    silver = _migration(tmp_path, "orders", "silver")
+
+    for column in ("record_id", "label", "amount"):
+        assert f'"{column}"' in silver
+    # AccumulateByRun stamps the business run and its date; every table-backed
+    # Writer stamps the run that wrote the row.
+    for column in ("logical_run_id", "load_date", "pipeline_run_id"):
+        assert f'"{column}"' in silver
+    assert '"amount" INTEGER' in silver
+    assert '"record_id" TEXT' in silver
+
+
+def test_the_reject_table_carries_the_rule_that_rejected_the_row(tmp_path):
+    scaffold.render("orders", tmp_path)
+
+    assert '"failed_rule"' in _migration(tmp_path, "orders", "quarantine")
+
+
+def test_raw_is_declared_in_the_sources_own_column_names(tmp_path):
+    # Raw lands the source faithfully and the rename to canonical names happens
+    # at silver, so a header that is not a clean identifier is declared as it
+    # arrives — the same split RAW_FEED_COLUMNS / RENAME make in the code.
+    feed = _write_feed(tmp_path / "cases.csv", "Case Number,Adviser Name\nC1,Smith\n")
+    scaffold.render("cases", tmp_path, feed_file=feed)
+
+    assert '"Case Number"' in _migration(tmp_path, "cases", "raw")
+    assert '"case_number"' in _migration(tmp_path, "cases", "silver")
+
+
+def test_a_scaffolded_feed_runs_against_its_own_migrations(tmp_path, monkeypatch):
+    # The ticket's "done when", end to end: scaffold, apply what it wrote, and
+    # run the feed against the result. Every table it writes must be declared,
+    # or the run aborts with MissingTableError.
+    import sys
+
+    from framework.run.run_context import RunContext
+    from tests.framework_testing import migrate_subject
+
+    scaffold.render("orders", tmp_path)
+    (tmp_path / "pipelines" / "__init__.py").write_text("", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    for name in list(sys.modules):
+        if name.startswith("pipelines"):
+            monkeypatch.delitem(sys.modules, name, raising=False)
+
+    from pipelines.orders import pipeline as feed  # noqa: PLC0415
+
+    base_dir = tmp_path / "data"
+    migrate_subject(base_dir, "orders", migrations_root=tmp_path / "migrations")
+    feed.run(RunContext(base_dir=base_dir, pipeline="orders"))
+
+    landed = _rows(base_dir / "orders" / "gold.db", "orders")
+    assert landed
+
+
+def _rows(db_path, table):
+    import sqlite3
+
+    con = sqlite3.connect(db_path)
+    try:
+        return con.execute(f'SELECT * FROM "{table}"').fetchall()
+    finally:
+        con.close()
+
+
+def test_the_template_fields_the_plan_assumes_are_the_templates_own(tmp_path):
+    # The plan hard-codes the template's declared fields, because there is no
+    # feed file to read them from. If the template's schema changes and this map
+    # does not, a scaffolded feed's baseline would silently describe the old one.
+    scaffold.render("orders", tmp_path)
+    schema_text = (tmp_path / "pipelines" / "orders" / "schema.py").read_text("utf-8")
+
+    for name, _ in scaffold._TEMPLATE_FIELDS:
+        assert f"    {name}:" in schema_text
+    declared = [
+        line.split(":")[0].strip()
+        for line in schema_text.splitlines()
+        if line.startswith("    ") and ":" in line and not line.strip().startswith("#")
+    ]
+    assert declared == [name for name, _ in scaffold._TEMPLATE_FIELDS]

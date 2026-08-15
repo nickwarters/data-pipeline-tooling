@@ -18,6 +18,7 @@ from tests.framework_testing import (
     RecordingRunLog,
     RecordingWriter,
     given_rows,
+    migrated_base_dir,
     read_rows,
 )
 from tools.medallion import medallion
@@ -28,9 +29,10 @@ from .schema import MyfeedRow
 
 
 def test_bundled_sample_feed_refines_through_to_gold(tmp_path):
-    run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
+    base_dir = migrated_base_dir(tmp_path, FEED_NAME)
+    run(RunContext(base_dir=base_dir, pipeline=FEED_NAME))
 
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
 
     landed = read_rows(med.raw, FEED_NAME)
     assert len(landed) > 0
