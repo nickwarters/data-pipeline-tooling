@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from tools.deliverables import (
+    NOTIFICATIONS_DESTINATION,
     REPORT_FEEDS_DESTINATION,
     get_deliverable_path,
     get_deliverable_root,
@@ -12,6 +13,21 @@ from tools.deliverables import (
 def test_deliverable_root_accepts_string_and_pathlike_base_dirs(tmp_path):
     assert get_deliverable_root(str(tmp_path)) == tmp_path / "deliverables"
     assert get_deliverable_root(tmp_path) == tmp_path / "deliverables"
+
+
+def test_each_named_destination_is_its_own_directory_under_the_outbox(tmp_path):
+    assert REPORT_FEEDS_DESTINATION != NOTIFICATIONS_DESTINATION
+    assert get_deliverable_path(tmp_path, NOTIFICATIONS_DESTINATION) == (
+        tmp_path / "deliverables" / "cora_notifications"
+    )
+    assert get_deliverable_path(
+        tmp_path, NOTIFICATIONS_DESTINATION, "20260815T120000Z-abc123.json"
+    ) == (
+        tmp_path
+        / "deliverables"
+        / "cora_notifications"
+        / "20260815T120000Z-abc123.json"
+    )
 
 
 def test_destination_and_nested_deliverable_paths_have_expected_layout(tmp_path):

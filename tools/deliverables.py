@@ -6,9 +6,11 @@ import os
 from pathlib import Path, PureWindowsPath
 
 REPORT_FEEDS_DESTINATION = "cora_report_feeds"
+NOTIFICATIONS_DESTINATION = "cora_notifications"
 
 __all__ = [
     "REPORT_FEEDS_DESTINATION",
+    "NOTIFICATIONS_DESTINATION",
     "get_deliverable_root",
     "get_deliverable_path",
 ]
