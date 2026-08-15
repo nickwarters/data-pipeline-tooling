@@ -14,8 +14,8 @@ not author the last Message** — *the two silent parties*.
 
 Amends [ADR-0023](0023-sync-polls-hourly-publishes-gold-daily.md), whose
 load-bearing premise was that Notification reads observations rather than
-current state. That premise is now false, and the cadence consequence it carried
-is deferred to #681.
+current state. That premise is now false. It carries no cadence consequence,
+because Notification is cadence-agnostic by construction — see below.
 
 ## Decision 1 — Notification reads gold current state
 
@@ -37,20 +37,22 @@ The `case_current` half is the same argument with no ambiguity at all: it is
 already one row per Case, so Notification does not reduce it, does not re-derive
 `case_id`, and does not carry a second, disagreeing latest-per-Case rule.
 
-### Consequence: gold's publish cadence is now Notification's cadence
+### Consequence: none. Notification is cadence-agnostic
 
-This is the cost, and it is real. ADR-0023 split Sync into an hourly poll and a
-daily publish *because* Notification was the sole hourly consumer and read
-silver. With Notification on gold, an hourly poll no longer serves anybody:
-Notification will see whatever the last publish left, so on the split cadence it
-would tell people about a Message up to a day after it was posted.
+Notification means *"emit whatever has been required since the last run"*, with
+the first run emitting everything. Its dedupe is state-based rather than
+clock-based — a recipient is emitted when their last-notified Message is older
+than the Case's current last Message — so the pipeline holds however often it is
+asked. Daily, twice daily, hourly, every ten minutes: the output is the same set
+of notifications, just divided into more or fewer passes.
 
-Aligning the two — publishing gold at Notification's cadence, or un-splitting
-ADR-0023 — is **deferred to #681** and deliberately not decided here. It is a
-cadence and cost question about Sync, not a question about who gets notified,
-and Notification is correct at *any* cadence because its dedupe is state-based
-rather than clock-based: it emits when a recipient's last-notified Message is
-older than the Case's current last Message, however often it is asked.
+So reading gold imposes **no cadence obligation on Sync**. How stale a
+notification is tracks how stale gold is, and that is a latency property to tune
+against whatever Sync ends up doing, not a correctness debt this decision
+incurs. ADR-0023's hourly poll loses the consumer that justified it, which is
+worth knowing when Sync is next revisited — but it is a question about Sync's
+own shape, not something Notification is waiting on. Nothing here schedules the
+pipeline, and nothing here needs a particular schedule to be correct.
 
 ## Decision 2 — the two silent parties
 
@@ -127,8 +129,8 @@ see the go-live checklist in
 - **Read silver observations** (what ADR-0023 assumed). Rejected: it duplicates
   the observation-snapshot reduction in a second place, and Notification needs
   `case_current`'s person and status columns anyway, which silver observations
-  do not carry at one-row-per-Case grain. The cadence coupling it would have
-  avoided is the real cost, and #681 owns it.
+  do not carry at one-row-per-Case grain. It would have kept Notification able
+  to run ahead of a publish, which is a latency gain and not a correctness one.
 - **Strip the Responsible Party Manager's posting rights so the thread has two
   parties.** Rejected. It genuinely simplifies the rule — with two parties,
   "notify whoever did not speak last" is one recipient and the third row of the
@@ -149,8 +151,10 @@ see the go-live checklist in
 
 ## Consequences
 
-- **Notification is a gold consumer**, so it runs after the publish and inherits
-  its cadence until #681 settles that. Nothing schedules it in this change.
+- **Notification is a gold consumer**, so it runs after the publish and sees
+  whatever that publish left. Any cadence is correct; the cadence chosen only
+  decides how promptly a Message is reported. Nothing schedules it in this
+  change.
 - **A party who is absent or unresolvable is skipped, never substituted.** A
   Case with no Responsible Party, or a Responsible Party with no directory row,
   yields fewer recipients — never a fallback recipient, and never an

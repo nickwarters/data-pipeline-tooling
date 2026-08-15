@@ -126,8 +126,8 @@ review platform, Review Outcomes flow *back* for reporting.
   Case for the two Conversation parties who did not post the last Message
   ([Notification recipients are the two parties who did not speak
   last](adr/0024-notification-recipients-are-the-two-parties-who-did-not-speak-last.md);
-  [`data-dictionary-notifications.md`](data-dictionary-notifications.md)). Gold's
-  publish cadence is therefore Notification's cadence; aligning them is #681.
+  [`data-dictionary-notifications.md`](data-dictionary-notifications.md)). It
+  emits what is owed since the last run and is correct at any cadence.
 - **Reporting** (platform-wide) joins Review Outcomes to the selected Cases and
   emits **Deliverables**.
 

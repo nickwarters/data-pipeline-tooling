@@ -13,10 +13,12 @@ status: amended
 > last Message, the Case's people columns and its status at one grain, already
 > reduced. The split below therefore no longer has a consumer that needs the
 > hourly half: on this cadence Notification sees whatever the daily publish left.
-> **Aligning the two cadences — publishing gold at Notification's cadence, or
-> un-splitting this ADR — is #681.** The cost argument below (the publish is the
-> expense, the poll is cheap) is unaffected and still holds; only the "one
-> hourly consumer, on silver" justification for the split does not.
+> That is a latency property, not a defect — Notification emits what is owed
+> since its last run and is correct at any cadence, so it is **not** waiting on a
+> change here. The cost argument below (the publish is the expense, the poll is
+> cheap) is unaffected and still holds; only the "one hourly consumer, on silver"
+> justification for the split does not. Whether the split still earns its keep is
+> a question for whenever this ADR is next revisited.
 
 The hourly cadence exists for exactly one consumer — **Notification** — and
 Notification reads *observations*, not current state. *(Superseded — see the
@@ -95,4 +97,4 @@ true instead of racing it.
   above and is withdrawn: Notification does not read silver, and re-deriving the
   observation-snapshot reduction outside gold is exactly what ADR-0024 refuses.
   A consumer that needs fresher *current state* has one honest answer, and it is
-  to publish gold more often — #681.
+  to publish gold more often.
