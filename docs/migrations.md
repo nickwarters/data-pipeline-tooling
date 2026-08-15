@@ -1,6 +1,6 @@
-# SQL migrations — the shape of a medallion database
+# SQL migrations — the shape of a database
 
-A medallion database's physical shape — its tables, primary keys, indexes and
+A database's physical shape — its tables, primary keys, indexes and
 `NOT NULL`s — is declared by numbered `.sql` files, applied by the migration
 runner in [`tools/migrations.py`](../tools/migrations.py) and driven by
 `python -m cli migrate`. This page covers the layout it reads, the ledger it
@@ -9,7 +9,7 @@ writes, the rules it enforces, and what a migrated database does differently.
 > **Status.** The runner and the `migrate` command exist; nothing is under
 > migration control yet. The baseline migrations per subject, and the writer
 > behaviour a migrated database earns, are separate pieces of the same epic.
-> Until a subject has a migrations directory, everything behaves exactly as it
+> Until a database has a migrations directory, everything behaves exactly as it
 > did before.
 
 ## Layout
@@ -17,23 +17,35 @@ writes, the rules it enforces, and what a migrated database does differently.
 ```
 migrations/
   <subject>/
+    <database>/0001_create_initial_tables.sql
+```
+
+One directory per **database**, addressed as a subject and a database within it
+— the same `<subject>/<name>` namespace `tools.store` maps to
+`<base_dir>/<subject>/<name>.db`, so a database and the files that shape it are
+found the same way. `tools.migrations.migrations_directory(subject, database)`
+owns that mapping; `MIGRATIONS_ROOT` is the repository's `migrations/` tree.
+
+For a subject following the raw/silver/gold medallion that reads:
+
+```
+migrations/
+  sharepoint_cases/
     raw/0001_create_initial_tables.sql
     silver/0001_create_initial_tables.sql
     gold/0001_create_initial_tables.sql
 ```
 
-One directory per **subject-layer**, mirroring the medallion's on-disk
-`<base_dir>/<subject>/{raw,silver,gold}.db` — so a database and the files that
-shape it are found the same way. `tools.migrations.migrations_directory(subject,
-layer)` owns that mapping; `MIGRATIONS_ROOT` is the repository's `migrations/`
-tree.
+— but **the migration machinery does not know the medallion**. `raw`, `silver`
+and `gold` are three databases of one subject to it, exactly as they are to the
+namespace Store; reading them as a medallion is the `tools.medallion` profile's
+business alone. A subject whose databases are named otherwise migrates the same
+way.
 
-**The tree is the registry.** There is no list of subjects anywhere else: a
-subject is under migration control exactly when it has a directory here, so
-adding one is the whole opt-in and `migrate` needs no configuration to find it.
-`discover_targets()` is that walk. A subject directory whose child is not a
-medallion layer is refused — a mistyped `sliver` would otherwise quietly migrate
-a brand-new database file that no pipeline will ever write to.
+**The tree is the registry.** There is no list of databases anywhere else: one is
+under migration control exactly when it has a directory here, so adding one is
+the whole opt-in and `migrate` needs no configuration to find it.
+`discover_targets()` is that walk.
 
 **A file is named `<0000>_<description>.sql`.** The four-digit version is
 fixed-width so a directory listing, a shell glob and the runner all put the
@@ -79,8 +91,8 @@ way. Two migration mechanisms on one file would be worse than one.
 python -m cli migrate [--base-dir DIR] [--env ENV] [--check]
 ```
 
-Walks the tree and brings every subject-layer database under the resolved base
-directory up to date; `--check` reports what is outstanding and exits non-zero
+Walks the tree and brings every database it names, under the resolved base
+directory, up to date; `--check` reports what is outstanding and exits non-zero
 if anything is, without writing. Worked output and the failure-isolation rule
 are in [operator-cli.md](operator-cli.md#migrate--apply-the-sql-migrations-that-own-the-databases-shape).
 
@@ -139,9 +151,10 @@ on the other box.
 
 ## Where a baseline comes from
 
-The first migration of a subject-layer — its `0001_create_initial_tables.sql` —
-has to describe the tables that layer *already* writes, and the two halves of the
-medallion answer that question differently.
+A database's first migration — its `0001_create_initial_tables.sql` — has to
+describe the tables it *already* writes. Deriving that is the generator's
+problem, not the runner's, and for a subject following the medallion the two
+halves of it answer the question differently.
 
 **Silver and gold generate from the declared dataclasses.** Those layers land a
 canonical shape the feed declares, so the schema is the authority and the
@@ -164,4 +177,4 @@ edited migration is an error (above) and a regenerated one would be exactly that
 - [`run-log-format.md`](run-log-format.md) — the run record schema and the
   registry's own, separate, self-migrating store.
 - [`adr/0001-sqlite-per-subject-medallion-store.md`](adr/0001-sqlite-per-subject-medallion-store.md)
-  — why a subject's layers are three SQLite files.
+  — why a subject's databases are separate SQLite files.

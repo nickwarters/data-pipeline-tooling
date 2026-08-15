@@ -20,8 +20,9 @@ resolves one), never a positional argument.
 
 ``migrate`` applies the SQL migrations that own the *shape* of those databases.
 It walks the repository's ``migrations/`` tree — the only registry of which
-databases are under migration control — and brings each subject-layer under the
-resolved base directory up to date; ``--check`` reports instead of writing.
+databases are under migration control — and brings each ``<subject>/<database>``
+it names, under the resolved base directory, up to date; ``--check`` reports
+instead of writing.
 
 ``run`` addresses a pipeline by *its location on disk*: ``pipelines/orders`` maps
 to the module ``pipelines.orders.pipeline``, imported at runtime, whose
@@ -265,12 +266,12 @@ def _orchestrate(args: argparse.Namespace) -> int:
 def _migrate(args: argparse.Namespace) -> int:
     """``migrate``: bring every database the migrations tree names up to date.
 
-    The tree is walked rather than a list of subjects being configured
-    anywhere — a subject under migration control is one with a directory in it.
-    Each subject-layer is an independent database with its own ledger, so a
-    failure in one is reported and the walk continues to the rest (the same
-    per-item failure isolation ``orchestrate`` uses); the command exits non-zero
-    at the end if anything failed.
+    The tree is walked rather than a list of databases being configured
+    anywhere — one under migration control is one with a directory in it. Each is
+    an independent file with its own ledger, so a failure in one is reported and
+    the walk continues to the rest (the same per-item failure isolation
+    ``orchestrate`` uses); the command exits non-zero at the end if anything
+    failed.
 
     ``--check`` reports what is outstanding and exits non-zero if anything is,
     writing nothing — a CI gate. It is deliberately not wired into
@@ -282,11 +283,7 @@ def _migrate(args: argparse.Namespace) -> int:
     if base_dir is None:
         return 1
     root = Path(args.migrations_root) if args.migrations_root else MIGRATIONS_ROOT
-    try:
-        targets = discover_targets(root)
-    except MigrationError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
+    targets = discover_targets(root)
     if not targets:
         print(f"no migrations under {root}")
         return 0
@@ -527,7 +524,7 @@ def register(sub) -> None:
     orchestrate.set_defaults(func=_orchestrate)
 
     migrate = sub.add_parser(
-        "migrate", help="apply SQL migrations to every subject-layer database"
+        "migrate", help="apply SQL migrations to every database the tree names"
     )
     _add_base_dir_args(migrate)
     migrate.add_argument(
