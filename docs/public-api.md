@@ -100,9 +100,10 @@ siblings beside it:
 
 - `framework/_internal/` — cross-cutting helpers with **no** public name:
   `connection` (`connect`), `describe` (`render`), `identity`
-  (`sha256_json`), `locations` (`file_location` / `table_location`), and `schema`
+  (`sha256_json`), `locations` (`file_location` / `table_location`), `schema`
   (the shared `ValueRule` protocol + the Python↔pandas type mapping and
-  annotation reading both schema adapters derive from). The leading underscore
+  annotation reading both schema adapters derive from), and `schema_control`
+  (whether a database declares its own shape). The leading underscore
   marks it private: application code (`pipelines/` + `case_review/`) never
   imports from here, and the public-API test enforces that. The sibling `tools/`
   package does, where a helper is genuinely shared with the framework.
@@ -161,8 +162,8 @@ Moving data across the boundary. (Where it *lands* — the namespace `Store` /
 | `RUN_PROVENANCE_COLUMN` | Re-exported from `framework.core` so a Writer's reserved provenance column is nameable from the facade a Writer is imported from. |
 | `writing_chunks`, `supports_chunk_writes` | Open a Writer's chunk-write session, or ask whether it has one. `writing_chunks` raises a `TypeError` naming the Writer when it has none, so a chunked load never silently degrades into one-load-per-chunk. |
 | `KeyFilterChunkReader`, `PredicateChunkReader`, `ChunkFilter` | Chunk-level row filters that wrap any `ChunkReader`, applied **per chunk before accumulation** so a huge source narrows to the rows of interest with bounded memory and a bounded landed table. `KeyFilterChunkReader(inner, key_column, allowed_keys)` is the id-allow-list (semi-join) case (keys normalised so float-vs-int / bytes-vs-str don't drop rows); `PredicateChunkReader(inner, predicate)` the general `ChunkFilter` form. Both expose `rows_scanned` / `rows_kept`. |
-| `Writer`, `CsvWriter`, `ExcelWriter`, `JsonWriter`, `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `SqliteInsertOrIgnoreWriter`, `SqliteInsertIfAbsentWriter`, `SqliteAppendOnlyWriter`, `QuarantineWriter`, `StdoutWriter` | The `write(dataset)` port and its concrete sinks (`SqliteInsertIfAbsentWriter` is the `InsertIfAbsent` reference-table sink: it inserts new keys only, minting compact integer surrogates, and never modifies an existing row; `SqliteAppendOnlyWriter` is the `AppendOnly` immutable-version sink: unseen keys append, an unchanged key is a no-op, a changed key raises `AppendOnlyConflictError`; `StdoutWriter` is a console sink for *seeing* a result — e.g. an explainer trace — rather than persisting it). (The remote `SharePointWriter` lives in `tools.integrations`, not this facade — see below.) |
-| `LoadStrategy`, `Refresh`, `AccumulateByRun`, `UpsertStrategy`, `InsertOrIgnore`, `InsertIfAbsent`, `AppendOnly`, `AppendOnlyConflictError` | The load strategies a Writer carries. Each **realises itself**: `writer_for(db_path, table, busy_timeout_ms=...)` mints the SQLite Writer implementing it (so `Store.writer` is a one-line delegation and any object satisfying the `LoadStrategy` protocol works), and the optional `apply_to_frame(frame, read_existing)` is the file-writer half. `UpsertStrategy` / `InsertIfAbsent` / `AppendOnly` define no `apply_to_frame` — they are table-backed only, and a file Writer handed one raises a `TypeError` naming both. `AppendOnlyConflictError` is the `PipelineError` (category `data`) an `AppendOnly` load raises when a key it has already accepted arrives with different values. |
+| `Writer`, `CsvWriter`, `ExcelWriter`, `JsonWriter`, `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `SqliteInsertOrIgnoreWriter`, `SqliteInsertIfAbsentWriter`, `SqliteAppendOnlyWriter`, `QuarantineWriter`, `StdoutWriter`, `MissingTableError` | The `write(dataset)` port and its concrete sinks (`SqliteInsertIfAbsentWriter` is the `InsertIfAbsent` reference-table sink: it inserts new keys only, minting compact integer surrogates, and never modifies an existing row; `SqliteAppendOnlyWriter` is the `AppendOnly` immutable-version sink: unseen keys append, an unchanged key is a no-op, a changed key raises `AppendOnlyConflictError`; `StdoutWriter` is a console sink for *seeing* a result — e.g. an explainer trace — rather than persisting it). (The remote `SharePointWriter` lives in `tools.integrations`, not this facade — see below.) |
+| `LoadStrategy`, `Refresh`, `AccumulateByRun`, `UpsertStrategy`, `InsertOrIgnore`, `InsertIfAbsent`, `AppendOnly`, `AppendOnlyConflictError` | The load strategies a Writer carries. Each **realises itself**: `writer_for(db_path, table, busy_timeout_ms=...)` mints the SQLite Writer implementing it (so `Store.writer` is a one-line delegation and any object satisfying the `LoadStrategy` protocol works), and the optional `apply_to_frame(frame, read_existing)` is the file-writer half. `UpsertStrategy` / `InsertIfAbsent` / `AppendOnly` define no `apply_to_frame` — they are table-backed only, and a file Writer handed one raises a `TypeError` naming both. `AppendOnlyConflictError` is the `PipelineError` (category `data`) an `AppendOnly` load raises when a key it has already accepted arrives with different values. `Refresh` empties its target by dropping it, unless the database declares its own shape — see the Writers row above. |
 
 ### `framework.transform` — reshaping a feed mid-pipeline
 
@@ -217,6 +218,13 @@ These are implementation detail. The facades draw from some of them, but the
 **module paths and any name not re-exported above are not public** and may change
 without notice:
 
+- `framework._internal.schema_control` (`LEDGER_TABLE`, `under_migration_control`)
+  — the one definition of what "this database declares its own shape" means: the
+  ledger table's name and the probe for it. Both sides of the framework/tools
+  line need it — the Writers before refusing to create a table, `tools.migrations`
+  before reporting — so it is settled here and imported *upward*, never the
+  reverse. Two definitions would be a silent disagreement between what the runner
+  writes and what the Writers look for.
 - `framework._internal.connection` (`connect`) — the connection factory seam;
   used by Readers/Writers/Store, not by pipelines.
 - `framework.io.sql` (`quote_identifier`) — the single place a table/column name is
