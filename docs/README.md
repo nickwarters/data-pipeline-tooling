@@ -117,11 +117,14 @@ review platform, Review Outcomes flow *back* for reporting.
 - **Sync** (platform-wide) pulls the platform's state — the returned **Review
   Outcomes** and its full picture of each Case — back in as its own Feed. It
   runs on two cadences: an **hourly poll** into silver and a **daily publish**
-  of gold, because only **Notification** needs fresh data and only the publish
-  is expensive ([Sync polls hourly, publishes gold
-  daily](adr/0023-sync-polls-hourly-publishes-gold-daily.md)).
-- **Notification** (platform-wide) reads Sync's silver observations hourly and
-  emits a **Deliverable** telling Case participants what needs their attention.
+  of gold, because only the publish is expensive ([Sync polls hourly, publishes
+  gold daily](adr/0023-sync-polls-hourly-publishes-gold-daily.md) — amended, its
+  "Notification is the one hourly consumer, on silver" premise no longer holds).
+- **Notification** (platform-wide) reads Sync's **gold current state** and emits
+  a **Deliverable** telling Case participants what needs their attention. Gold's
+  publish cadence is therefore Notification's cadence; aligning them is #681
+  ([Notification recipients are the two parties who did not speak
+  last](adr/0024-notification-recipients-are-the-two-parties-who-did-not-speak-last.md)).
 - **Reporting** (platform-wide) joins Review Outcomes to the selected Cases and
   emits **Deliverables**.
 

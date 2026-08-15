@@ -1,16 +1,26 @@
 ---
-status: accepted
+status: amended
 ---
 
 # Sync polls hourly into silver; it publishes gold daily
 
-**Sync** is split into two separately addressed pipelines on two cadences: the
-**poll** (source → raw → silver) runs hourly, and the **publish**
-(silver → gold) runs daily. Today `pipelines/sharepoint_cases` does both in one
-`run()`; this ADR records the shape it is to take, not the shape it has.
+> **Amended by
+> [ADR-0024](0024-notification-recipients-are-the-two-parties-who-did-not-speak-last.md).**
+> The premise stated in the next paragraph — that Notification reads
+> observations rather than current state — is **no longer true**. Notification
+> reads Sync's *gold* current state (`case_current` and the gold
+> `conversation_message` Detail Table), because the recipient rule needs the
+> last Message, the Case's people columns and its status at one grain, already
+> reduced. The split below therefore no longer has a consumer that needs the
+> hourly half: on this cadence Notification sees whatever the daily publish left.
+> **Aligning the two cadences — publishing gold at Notification's cadence, or
+> un-splitting this ADR — is #681.** The cost argument below (the publish is the
+> expense, the poll is cheap) is unaffected and still holds; only the "one
+> hourly consumer, on silver" justification for the split does not.
 
 The hourly cadence exists for exactly one consumer — **Notification** — and
-Notification reads *observations*, not current state.
+Notification reads *observations*, not current state. *(Superseded — see the
+amendment note above.)*
 
 ## Why
 
@@ -80,5 +90,9 @@ true instead of racing it.
   a *date*; there is no sub-daily schedule and this ADR does not add one. Hourly
   means an hourly external trigger against an hourly schedules module.
 - **Anything new that wants intra-day current state must say so.** It will find
-  gold up to a day stale, and the answer is to read silver observations as
-  Notification does — not to move the publish back into the poll.
+  gold up to a day stale. The original wording here pointed such a consumer at
+  silver observations "as Notification does", which contradicts the amendment
+  above and is withdrawn: Notification does not read silver, and re-deriving the
+  observation-snapshot reduction outside gold is exactly what ADR-0024 refuses.
+  A consumer that needs fresher *current state* has one honest answer, and it is
+  to publish gold more often — #681.

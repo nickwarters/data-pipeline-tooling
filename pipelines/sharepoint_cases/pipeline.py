@@ -118,7 +118,8 @@ UPSTREAMS = ()
 # looks like it needs every display name landed -- but the fix belongs at the
 # source, not here: a Message carries ``author.loginName`` (see the Message
 # shape in ``platform_frontend``), so the match is login-to-login against the
-# ``Name`` sub-field already selected. Matching on display names would be the
+# ``Name`` sub-field already selected -- which is the *claims* spelling, so the
+# consumer normalises both sides before matching. Matching on display names would be the
 # wrong repair anyway -- they are neither unique nor stable, and the pair most
 # likely to collide is a Responsible Party and their own Manager.
 PERSON_SUBFIELDS = {
