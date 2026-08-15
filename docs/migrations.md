@@ -194,25 +194,49 @@ on the other box.
 ## Where a baseline comes from
 
 A database's first migration — its `0001_create_initial_tables.sql` — has to
-describe the tables it *already* writes. Deriving that is the generator's
-problem, not the runner's, and for a subject following the medallion the two
-halves of it answer the question differently.
+describe the tables it *already* writes, and it is generated rather than written
+out by hand:
 
-**Silver and gold generate from the declared dataclasses.** Those layers land a
-canonical shape the feed declares, so the schema is the authority and the
-baseline is derived from it.
+```sh
+python -m pipelines.sharepoint_cases.pipeline --base-dir /tmp/run --sample
+python scripts/generate_baseline_migrations.py sharepoint_cases \
+    --base-dir /tmp/run --stdout          # review
+python scripts/generate_baseline_migrations.py sharepoint_cases --base-dir /tmp/run
+```
 
-**Raw's baseline comes from the actual raw read columns**, not from the field
-list in the feed's `schema.py`. Raw lands the source *faithfully*, and
-`schema.py` is not a faithful record of what that is: `scaffold
---from-feed-file` caps the fields it seeds at 40 columns, so a schema generated
-from a wide source describes a prefix of it. Generating raw's DDL from the
-schema would therefore silently declare a narrower table than the feed writes.
+**The source is a database a real run made.** Introspecting one is the only
+source that covers every table a subject has, because not every table has a
+dataclass to declare it: a gold aggregate's columns are whatever its transform
+computed, a quarantine reject table's are the rejected row plus its reason, and a
+raw landing table's are the source's. `tools.baseline_ddl` renders both halves —
+`columns_of_table` for a live table, `columns_of_schema` for a declared one — and
+the declared-type → SQLite-type mapping is derived from what `pandas.to_sql`
+creates for the dtypes `SchemaCoercion` produces, so a generated baseline
+reproduces today's physical shape rather than an idealised one. A test checks
+that mapping against pandas itself.
 
-The consequence is accepted rather than designed around: a wide source — a 600+
-column CSV — starts life as a very large hand-maintained DDL file. It is
-generated once and then edited by hand like any other migration, because an
-edited migration is an error (above) and a regenerated one would be exactly that.
+**Where a table does have a declared dataclass, the two are cross-checked.** A
+baseline should be both faithful (it matches what runs today) and intentional (it
+matches what the feed says it writes); where they disagree the generator reports
+the table, the column and both types, and leaves the judgement to whoever is
+running it. #695 turns that same comparison into a standing test.
+
+**Raw's baseline therefore comes from the actual raw read columns**, never from
+the field list in the feed's `schema.py`. Raw lands the source *faithfully* and
+`schema.py` is not a faithful record of what that is: `scaffold --from-feed-file`
+caps the fields it seeds at 40 columns, so a schema generated from a wide source
+describes a prefix of it. The consequence is accepted rather than designed
+around: a wide source — a 600+ column CSV — starts life as a very large
+hand-maintained DDL file.
+
+**Generated once, then maintained by hand.** The generator refuses to overwrite a
+baseline that is already checked in, because the runner's checksum refuses an
+edited migration: once a database has applied a file, changing that file strands
+it. A shape change after the baseline is a new numbered migration.
+
+Without `--base-dir` the generator falls back to the declared schemas alone, and
+says which tables it therefore could not cover. That is the path a
+freshly-scaffolded feed takes, where there is no run to introspect yet.
 
 ## See also
 
