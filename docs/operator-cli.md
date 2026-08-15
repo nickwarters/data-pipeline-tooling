@@ -1,11 +1,12 @@
-# The operator CLI — run, orchestrate, status, runs, log
+# The operator CLI — run, orchestrate, migrate, status, runs, log
 
 The framework is import-only, but it is also runnable as a tool:
 `python -m cli <command>` is the single entry point for both authoring
 (`scaffold`, see [adding a feed](adding-a-feed.md)) and operating pipelines. The
 operator side is a small command surface for the everyday tasks that would
 otherwise need a hand-written wrapper script: **run** a
-pipeline by its path, **orchestrate** scheduled due work, check its **status**,
+pipeline by its path, **orchestrate** scheduled due work, **migrate** the
+databases they write into, check its **status**,
 list recent **runs**, and inspect a run **log**. It is a thin shell
 over the public `framework.run` runtime surface (`run_pipeline`,
 `Orchestrator`) and the `RunLog` / `RunRegistry` observability seam —
@@ -585,6 +586,65 @@ planned per-file runs.
 
 > **Note:** CLI dry-run support for the `run` and `orchestrate` commands (passing
 > `--dry-run` / `--plan` on the command line) is a known follow-up.
+
+## `migrate` — apply the SQL migrations that own the databases' shape
+
+```sh
+python -m cli migrate [--base-dir DIR] [--env ENV] [--check] [--migrations-root DIR]
+```
+
+`run` fills the medallion databases; `migrate` decides what shape they are in.
+It walks the repository's `migrations/` tree and brings every subject-layer
+database under the resolved base directory up to date, recording what it applied
+in a `schema_migrations` ledger inside each one. The full rules — the file naming,
+the ledger, the checksum, the one-transaction-per-file guarantee — are in
+[migrations.md](migrations.md).
+
+**The tree is the registry.** There is no list of subjects anywhere else: a
+subject is under migration control exactly when it has a
+`migrations/<subject>/<layer>/` directory, so adding one is the whole opt-in and
+this command needs no configuration to find it. A directory that is not a
+medallion layer (a mistyped `sliver`) is refused rather than quietly migrating a
+brand-new database file no pipeline will ever write to.
+
+```console
+$ python -m cli migrate --base-dir /data
+sharepoint_cases/raw     /data/sharepoint_cases/raw.db     applied 1: 0001_create_initial_tables.sql
+sharepoint_cases/silver  /data/sharepoint_cases/silver.db  applied 1: 0001_create_initial_tables.sql
+sharepoint_cases/gold    /data/sharepoint_cases/gold.db    up to date
+migrated 3 database(s): 2 applied, 1 up to date, 0 failed
+```
+
+Each subject-layer is an independent database with its own ledger, so a failure
+in one is reported to stderr and the walk continues to the rest — the same
+per-item failure isolation `orchestrate` applies to scheduled work. The command
+exits non-zero if anything failed.
+
+### `--check` — report without writing
+
+`--check` prints what is outstanding and exits **non-zero if anything is**,
+writing nothing: no transaction, no database file created, no ledger created.
+That makes it a CI gate ("does this branch leave a database behind its
+migrations?") and safe to run against a live share.
+
+```console
+$ python -m cli migrate --base-dir /data --check
+sharepoint_cases/raw     /data/sharepoint_cases/raw.db     pending 1: 0002_add_case_type_index.sql
+sharepoint_cases/silver  /data/sharepoint_cases/silver.db  up to date
+checked 2 database(s): 1 pending, 1 up to date, 0 failed
+$ echo $?
+1
+```
+
+**It is deliberately not wired into `run` or `orchestrate`.** A pipeline can be
+invoked directly as `python -m pipelines.<name>`, which would bypass such a
+check anyway; and a run against an unmigrated database already fails at the
+write, naming the missing table. A *pending* migration instead surfaces SQLite's
+raw `no such column`, which fails fast but reads poorly — accepted rather than
+paid for with a check on every run.
+
+`--migrations-root` points the command at a different tree; it defaults to the
+`migrations/` directory of the checkout the `tools` package was imported from.
 
 ## `status` — the latest run per pipeline
 

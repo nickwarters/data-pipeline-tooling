@@ -7,6 +7,7 @@ from tools.migrations import (
     MIGRATIONS_ROOT,
     MigrationError,
     MigrationRunner,
+    discover_targets,
     is_under_migration_control,
     migrations_directory,
 )
@@ -328,3 +329,48 @@ def test_migrations_directory_mirrors_the_medallion_layout(tmp_path):
     )
     assert migrations_directory("cases", "silver").is_relative_to(MIGRATIONS_ROOT)
     assert MIGRATIONS_ROOT.name == "migrations"
+
+
+def test_discover_targets_walks_the_tree_in_subject_then_medallion_order(tmp_path):
+    # The tree is the registry of which databases are under migration control,
+    # and it is read in the data's direction of travel: raw, silver, gold.
+    for subject, layer in [
+        ("cases", "gold"),
+        ("cases", "raw"),
+        ("cases", "silver"),
+        ("activity", "gold"),
+    ]:
+        (tmp_path / subject / layer).mkdir(parents=True)
+
+    targets = discover_targets(tmp_path)
+
+    assert [(t.subject, t.layer) for t in targets] == [
+        ("activity", "gold"),
+        ("cases", "raw"),
+        ("cases", "silver"),
+        ("cases", "gold"),
+    ]
+    assert targets[1].namespace == "cases/raw"
+    assert targets[1].directory == tmp_path / "cases" / "raw"
+
+
+def test_discover_targets_on_a_tree_that_does_not_exist_yet_is_empty(tmp_path):
+    # Today's state: nothing has opted in. Not an error.
+    assert discover_targets(tmp_path / "absent") == []
+
+
+def test_discover_targets_ignores_files_beside_the_subjects(tmp_path):
+    (tmp_path / "cases" / "raw").mkdir(parents=True)
+    (tmp_path / "README.md").write_text("How to add a migration.\n", encoding="utf-8")
+    (tmp_path / "cases" / "notes.txt").write_text("scratch\n", encoding="utf-8")
+
+    assert [t.namespace for t in discover_targets(tmp_path)] == ["cases/raw"]
+
+
+def test_a_subject_directory_that_is_not_a_medallion_layer_is_an_error(tmp_path):
+    # A mistyped layer would otherwise migrate a brand-new database file that no
+    # pipeline will ever write to.
+    (tmp_path / "cases" / "sliver").mkdir(parents=True)
+
+    with pytest.raises(MigrationError, match="Not a medallion layer"):
+        discover_targets(tmp_path)

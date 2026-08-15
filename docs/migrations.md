@@ -1,15 +1,16 @@
 # SQL migrations — the shape of a medallion database
 
 A medallion database's physical shape — its tables, primary keys, indexes and
-`NOT NULL`s — is declared by numbered `.sql` files and applied by the migration
-runner in [`tools/migrations.py`](../tools/migrations.py). This page covers the
-runner: the layout it reads, the ledger it writes, and the rules it enforces.
+`NOT NULL`s — is declared by numbered `.sql` files, applied by the migration
+runner in [`tools/migrations.py`](../tools/migrations.py) and driven by
+`python -m cli migrate`. This page covers the layout it reads, the ledger it
+writes, the rules it enforces, and what a migrated database does differently.
 
-> **Status.** The runner exists; nothing is under migration control yet. The
-> `migrations/` tree, the `python -m cli migrate` command, and the writer
-> behaviour that a migrated database earns are separate pieces of the same
-> epic. Until a subject has a migrations directory, everything behaves exactly
-> as it did before.
+> **Status.** The runner and the `migrate` command exist; nothing is under
+> migration control yet. The baseline migrations per subject, and the writer
+> behaviour a migrated database earns, are separate pieces of the same epic.
+> Until a subject has a migrations directory, everything behaves exactly as it
+> did before.
 
 ## Layout
 
@@ -26,6 +27,13 @@ One directory per **subject-layer**, mirroring the medallion's on-disk
 shape it are found the same way. `tools.migrations.migrations_directory(subject,
 layer)` owns that mapping; `MIGRATIONS_ROOT` is the repository's `migrations/`
 tree.
+
+**The tree is the registry.** There is no list of subjects anywhere else: a
+subject is under migration control exactly when it has a directory here, so
+adding one is the whole opt-in and `migrate` needs no configuration to find it.
+`discover_targets()` is that walk. A subject directory whose child is not a
+medallion layer is refused — a mistyped `sliver` would otherwise quietly migrate
+a brand-new database file that no pipeline will ever write to.
 
 **A file is named `<0000>_<description>.sql`.** The four-digit version is
 fixed-width so a directory listing, a shell glob and the runner all put the
@@ -52,17 +60,35 @@ It is modelled on the `registry_migrations` ledger in
 with the checksum added.
 
 **The ledger's presence is the opt-in.** A database carrying the table is under
-migration control and is expected to have been shaped by SQL; one without it
-behaves exactly as it always has. `is_under_migration_control(db_path)` is the
-cheap, side-effect-free check for that — a database that does not exist is not
-created just to answer `False`. That is what lets subjects convert one at a
-time.
+migration control, and **refuses implicit table creation**: a table a migration
+forgot fails the write, naming it, rather than being conjured by
+`frame.to_sql(...)` with whatever dtypes the frame happened to carry. A database
+*without* the ledger behaves exactly as it always has — the writers create as
+they always did. `is_under_migration_control(db_path)` is the cheap,
+side-effect-free check for that; a database that does not exist is not created
+just to answer `False`. That per-database self-declaration is what lets subjects
+convert one at a time instead of the whole repository changing behaviour at once.
 
 Run metadata is **out of scope**: `_registry/runs.db` and
 `_orchestration/runs.db` self-migrate from `RUN_RECORD_FIELDS` and stay that
 way. Two migration mechanisms on one file would be worse than one.
 
-## Using the runner
+## Applying them — `python -m cli migrate`
+
+```sh
+python -m cli migrate [--base-dir DIR] [--env ENV] [--check]
+```
+
+Walks the tree and brings every subject-layer database under the resolved base
+directory up to date; `--check` reports what is outstanding and exits non-zero
+if anything is, without writing. Worked output and the failure-isolation rule
+are in [operator-cli.md](operator-cli.md#migrate--apply-the-sql-migrations-that-own-the-databases-shape).
+
+It is deliberately **not** wired into `run` / `orchestrate`: a pipeline can be
+invoked directly as `python -m pipelines.<name>`, which would bypass such a
+check anyway, and an unmigrated database already fails at the write.
+
+## Using the runner directly
 
 ```python
 from tools.migrations import MigrationRunner, migrations_directory
@@ -110,6 +136,28 @@ text read with universal newlines, so a CRLF checkout on Windows and an LF one
 on macOS agree. The framework deploys to Windows and is developed on macOS; a
 checksum that disagreed across the two would make every migration look rewritten
 on the other box.
+
+## Where a baseline comes from
+
+The first migration of a subject-layer — its `0001_create_initial_tables.sql` —
+has to describe the tables that layer *already* writes, and the two halves of the
+medallion answer that question differently.
+
+**Silver and gold generate from the declared dataclasses.** Those layers land a
+canonical shape the feed declares, so the schema is the authority and the
+baseline is derived from it.
+
+**Raw's baseline comes from the actual raw read columns**, not from the field
+list in the feed's `schema.py`. Raw lands the source *faithfully*, and
+`schema.py` is not a faithful record of what that is: `scaffold
+--from-feed-file` caps the fields it seeds at 40 columns, so a schema generated
+from a wide source describes a prefix of it. Generating raw's DDL from the
+schema would therefore silently declare a narrower table than the feed writes.
+
+The consequence is accepted rather than designed around: a wide source — a 600+
+column CSV — starts life as a very large hand-maintained DDL file. It is
+generated once and then edited by hand like any other migration, because an
+edited migration is an error (above) and a regenerated one would be exactly that.
 
 ## See also
 
