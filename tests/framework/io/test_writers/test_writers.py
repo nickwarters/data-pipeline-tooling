@@ -27,7 +27,7 @@ from framework.io.writers import (
 from framework.run.builder import Pipeline
 from framework.run.run_context import RunContext, active_context
 
-FIXTURE = Path(__file__).parent.parent.parent / "fixtures" / "cases.csv"
+FIXTURE = Path(__file__).parent.parent.parent.parent / "fixtures" / "cases.csv"
 
 
 def test_truncate_reload_writer_round_trips_a_dataset(tmp_path):

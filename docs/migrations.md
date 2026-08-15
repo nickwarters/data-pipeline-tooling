@@ -6,11 +6,11 @@ runner in [`tools/migrations.py`](../tools/migrations.py) and driven by
 `python -m cli migrate`. This page covers the layout it reads, the ledger it
 writes, the rules it enforces, and what a migrated database does differently.
 
-> **Status.** The runner and the `migrate` command exist; nothing is under
-> migration control yet. The baseline migrations per subject, and the writer
-> behaviour a migrated database earns, are separate pieces of the same epic.
-> Until a database has a migrations directory, everything behaves exactly as it
-> did before.
+> **Status.** The runner, the `migrate` command and the Writer behaviour a
+> migrated database earns all exist; **nothing is under migration control yet**,
+> because no database has a migrations directory. The baseline migrations per
+> subject are the remaining piece of the epic. Until a database has one,
+> everything behaves exactly as it did before.
 
 ## Layout
 
@@ -84,6 +84,48 @@ convert one at a time instead of the whole repository changing behaviour at once
 Run metadata is **out of scope**: `_registry/runs.db` and
 `_orchestration/runs.db` self-migrate from `RUN_RECORD_FIELDS` and stay that
 way. Two migration mechanisms on one file would be worse than one.
+
+## What a migrated database does differently
+
+Two things change for the Writers, and only for a database carrying the ledger.
+
+**No Writer creates a table.** A table a migration did not declare fails the
+write with a `MissingTableError` naming the table and the command that would
+declare it, instead of being conjured by `frame.to_sql(...)` with whatever dtypes
+the frame happened to carry and no keys at all. That applies to every
+table-backed Writer — the merge Writers that used to ensure the target existed
+by appending an empty frame, the plain appenders, and `Refresh`.
+
+**`Refresh` stops replacing.** `if_exists="replace"` drops the table and
+recreates it from the frame, so the primary key, indexes and `NOT NULL`s a
+migration created would be gone after the next nightly run — silently, with the
+rows still landing. Against a migrated database `Refresh` deletes the rows and
+appends the new ones instead, inside one transaction, so a failing append rolls
+the delete back. Both paths land the same rows; only what survives underneath
+them differs.
+
+Three consequences worth stating plainly:
+
+- **A gold rebuild whose column set changes now needs a migration.** Adding a
+  column to a `Refresh` target used to happen by writing a wider frame. On a
+  migrated database that write fails on the column SQLite does not have — add it
+  in a migration first.
+- **The same applies to quarantine reject tables.** A quarantine database is a
+  database like any other: put it under migration control and its reject tables
+  must be declared before a run can quarantine anything. It is its own file
+  (`<subject>/quarantine.db`), so it is its own `migrations/<subject>/quarantine/`
+  directory — opt it in separately, or leave it out and it keeps creating tables
+  as it always has.
+- **A missing *column* still reads poorly.** A missing table names itself; a
+  column the migration forgot surfaces as SQLite's raw `no such column`. That is
+  decision 4 of the epic — fail fast, and do not pay for a pre-write column check
+  on every run — not an oversight.
+
+One piece of Python-side DDL deliberately survives this ticket: the additive
+`ALTER TABLE … ADD COLUMN` that widens a pre-provenance-column table so an
+`INSERT` naming the run-provenance column can succeed. Gating it now would break
+any baseline that does not declare that column, which is the baseline
+generator's business to settle first.
 
 ## Applying them — `python -m cli migrate`
 
