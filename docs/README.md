@@ -121,10 +121,13 @@ review platform, Review Outcomes flow *back* for reporting.
   gold daily](adr/0023-sync-polls-hourly-publishes-gold-daily.md) — amended, its
   "Notification is the one hourly consumer, on silver" premise no longer holds).
 - **Notification** (platform-wide) reads Sync's **gold current state** and emits
-  a **Deliverable** telling Case participants what needs their attention. Gold's
-  publish cadence is therefore Notification's cadence; aligning them is #681
+  a **Deliverable** telling Case participants what needs their attention: one
+  JSON file per pass in the `cora_notifications` outbox, holding one object per
+  Case for the two Conversation parties who did not post the last Message
   ([Notification recipients are the two parties who did not speak
-  last](adr/0024-notification-recipients-are-the-two-parties-who-did-not-speak-last.md)).
+  last](adr/0024-notification-recipients-are-the-two-parties-who-did-not-speak-last.md);
+  [`data-dictionary-notifications.md`](data-dictionary-notifications.md)). Gold's
+  publish cadence is therefore Notification's cadence; aligning them is #681.
 - **Reporting** (platform-wide) joins Review Outcomes to the selected Cases and
   emits **Deliverables**.
 
@@ -679,6 +682,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`data-dictionary-template.md`](data-dictionary-template.md) | The Confluence-ready template for documenting what every table/Feed and each of its fields means — the prose companion to `schema.py`. |
 | [`data-dictionary-sharepoint-cases.md`](data-dictionary-sharepoint-cases.md) | The template filled in for the `sharepoint_cases` feed: the raw observation, the Case version, the `answer`/`answer_capture`/`answer_action`/`general_answer`/`conversation_message`/`appeal`/`case_detail` silver Detail Tables, and the thirteen gold tables with their declared grains — including the two aggregates reduced from a Detail Table rather than `case_current` — all shared across every declared Case list and discriminated by `case_type`; why raw and silver do not store when we saw the row; why silver settles `case_type` to the polled list's declared value; the two provisioning prerequisites (an index on `Modified`, and the site/GUID placeholders) that stand between it and a tenant; and which further aggregates were deliberately refused, and why. |
 | [`data-dictionary-reviewer-activity.md`](data-dictionary-reviewer-activity.md) | The working-day, freshness-guarded `reviewer_activity_daily` aggregate and its sparse per-Reviewer `my-stats/{account}.txt` Report Feed, reduced from Sync's `case_current`. |
+| [`data-dictionary-notifications.md`](data-dictionary-notifications.md) | The notification outbox file and the three keys that are its consumer's contract; the `notified` ledger and why its row is exactly its key; the `users` reference feed the recipients and the Responsible Party Manager are resolved through; and the placeholder link template and example addresses standing between it and a tenant. |
 | [`sharepoint-rest-ingest.md`](sharepoint-rest-ingest.md) | The operator runbook for that feed: scheduling it, re-driving it, and what REST polling cannot tell you. |
 | [`benchmarking-gold.md`](benchmarking-gold.md) | What one gold publication costs, which phase grows, and how to measure it against the storage it will run on (`scripts/benchmark_gold.py`) — the evidence behind publishing the aggregates on the sync's schedule rather than their own. |
 | [`sharepoint-cases-going-live.md`](sharepoint-cases-going-live.md) | The one-time path from the feed as it stands to one an external scheduler drives. |

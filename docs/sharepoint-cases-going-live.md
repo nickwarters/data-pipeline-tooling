@@ -259,6 +259,28 @@ Do not proceed past stage 4 unless all of these hold:
 - [ ] The dry run at stage 4 produced the columns and row counts you expected.
 - [ ] A backup covers the feed's whole directory **and** the checkpoint.
 
+### If the `notifications` pipeline is going live alongside this feed
+
+It reads this feed's gold, so it cannot be pointed at a tenant before this one
+is. Three items, all in
+[`data-dictionary-notifications.md`](data-dictionary-notifications.md):
+
+- [ ] `CASE_LINK_TEMPLATE` in `pipelines/notifications/pipeline.py` has the real
+      **site collection** and the real **host `.aspx` page** the review
+      application is served from. The `#/conversation/...` fragment after them is
+      the app's own route and stays as it is. A placeholder link is a
+      notification the recipient cannot act on.
+- [ ] `pipelines/notifications/sample_data/users.csv` points at a real directory
+      extract, not the bundled `@example.invalid` fixture. The four columns are
+      `login,email,manager_login,manager_email`; a duplicate `login` aborts the
+      read on purpose.
+- [ ] **The first run's file is drained or discarded deliberately.** The ledger
+      starts empty, so the first pass emits a notification for *every*
+      non-terminal Case that has a Conversation — not a defect, and not
+      something to build a seed flag for. Decide before that run whether the
+      backlog should be sent or dropped, and act on the file accordingly. Every
+      pass after it emits only what has changed.
+
 ## Rollback
 
 Honest about what is and is not reversible.

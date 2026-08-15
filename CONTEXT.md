@@ -210,7 +210,7 @@ The Pipeline that pulls the review platform's own state — **Review Outcomes** 
 _Avoid_: writeback, reconcile, import
 
 **Notification**:
-A message telling a Case participant that something on their Case needs their attention. _Here_: produced by the `notifications` pipeline reading **Sync**'s **gold current state** — `case_current` and the gold `conversation_message` Detail Table, so the last Message, the Case's people and its status arrive at one grain, already reduced ([ADR-0024](docs/adr/0024-notification-recipients-are-the-two-parties-who-did-not-speak-last.md)) — and emitted as a **Deliverable** — one JSON file of many notifications in the outbox — which the notification service drains as a per-file work queue with no ordering key. Reading gold rather than silver means gold's publish cadence *is* Notification's cadence; aligning them is #681, and the pipeline is correct at any cadence because its dedupe is state-based rather than clock-based. Two triggers only: a Case becoming Reportable **and** carrying remediation, and a new **Conversation** **Message** (the review platform's terms — see [`platform_frontend/CONTEXT.md`](platform_frontend/CONTEXT.md)). It is **not** a **Report Feed**: a Report Feed is a published dataset, a Notification is an instruction to tell a named person something once.
+A message telling a Case participant that something on their Case needs their attention. _Here_: produced by the `notifications` pipeline reading **Sync**'s **gold current state** — `case_current` and the gold `conversation_message` Detail Table, so the last Message, the Case's people and its status arrive at one grain, already reduced ([ADR-0024](docs/adr/0024-notification-recipients-are-the-two-parties-who-did-not-speak-last.md)) — and emitted as a **Deliverable** — one JSON file of many notifications, written **per pass** to a path of its own under `deliverables/cora_notifications/`, so a `Refresh` can never overwrite a file nobody has drained yet — which the notification service drains as a per-file work queue with no ordering key. Each object in the array carries exactly three keys, `recipients` / `subject` / `body`, and a pass owing nobody anything writes **no file at all** rather than an empty array (see [`docs/data-dictionary-notifications.md`](docs/data-dictionary-notifications.md)). Reading gold rather than silver means gold's publish cadence *is* Notification's cadence; aligning them is #681, and the pipeline is correct at any cadence because its dedupe is state-based rather than clock-based. Two triggers only: a Case becoming Reportable **and** carrying remediation, and a new **Conversation** **Message** (the review platform's terms — see [`platform_frontend/CONTEXT.md`](platform_frontend/CONTEXT.md)). It is **not** a **Report Feed**: a Report Feed is a published dataset, a Notification is an instruction to tell a named person something once.
 _Avoid_: alert, email; message (reserved for a Conversation entry)
 
 **Notification rule**:
@@ -349,7 +349,8 @@ the operator CLI; a layout with no owner drifts.
 **Deliverable outbox**:
 The owner of a base directory's local deliverable layout —
 `<base_dir>/deliverables/<destination>/…` — is `tools.deliverables`. Its
-canonical report-feed destination is `REPORT_FEEDS_DESTINATION`, and
+canonical report-feed destination is `REPORT_FEEDS_DESTINATION`, its
+**Notification** destination `NOTIFICATIONS_DESTINATION`, and
 `shared.constants` declares the dev/prod roots used by the application, and
 `tools.environments` lets `PIPELINE_DATA_DIR_DEV` and `PIPELINE_DATA_DIR_PROD`
 override them; an unset production override is reported to stderr when the
