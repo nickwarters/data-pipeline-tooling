@@ -271,12 +271,14 @@ instead of sharing `globalThis`.
 Case Type modules under `case-types/` are pure JavaScript. Test them with
 straight imports and no DOM stubs.
 
-Standard checks for every Case Type:
+Generic Question Definition rules belong to `npm run verify`, where they protect
+every registered Case Type. The configuration gate requires non-empty options
+for authored and Outcome choices, checks that every `showWhen` reference and
+`equals`/`in` value is valid for the referenced Question, and rejects cycles.
 
-- Catalogue has the expected number of questions.
-- Every choice question has a non-empty `options[]`.
-- All `showWhen` references point to questions in the catalogue.
-- No cycles in the `showWhen` graph.
-- `computeOutcome` returns the correct result for pass, fail, and refer cases.
-- Informational questions without an `optionOutcomes` mapping do not affect
-  the outcome and raise no Issues.
+Do not repeat those rules in one Case Type's suite or pin authored question,
+group, Outcome, response-wording or list-name inventories. Keep local tests for
+code-owned configuration unique to the Case Type and for dynamic fixture or
+integration contracts: completed fixtures recompute to their frozen Outcome,
+stored Answers remain applicable and resolvable, compiled options round-trip,
+and bulk shortcuts remain equivalent to their individual operations.
