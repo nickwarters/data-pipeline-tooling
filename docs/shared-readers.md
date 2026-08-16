@@ -55,8 +55,6 @@ The common case. A private helper resolves the location; each class wraps the
 Reader the store mints and delegates the three ports.
 
 ```python
-UPSTREAM = FreshnessRequirement("sharepoint_cases")
-
 _SUBJECT = "sharepoint_cases"
 _CASE_CURRENT_TABLE = "case_current"
 
@@ -130,8 +128,8 @@ accident. Nothing in `pipelines/` should use it.
 6. **Keep the location names module-private** (`_SUBJECT`, `_TABLE`). If they
    are importable, a consumer will import them and you are back where you
    started.
-7. **Declare the module's `UPSTREAM`** so a consumer's `UPSTREAMS` follows from
-   what it reads.
+7. **Declare no freshness requirement.** How current the data must be is the
+   consuming pipeline's call, not the reader's — see below.
 8. **Test it in `tests/readers/test_<subject>.py`**: rows seeded where the
    producer puts them come back, the ports delegate, and a base directory with
    nothing in it fails the way the underlying Reader already fails rather than
@@ -172,24 +170,34 @@ method: no `reader.for_case_type(...)`, no `reader.since(...)`.
 
 **G5 — Read what was written.** See below.
 
-**G6 — The upstream travels with the reader.** Each module declares its
-`FreshnessRequirement`, and a consumer cites it:
-
-```python
-from readers.sharepoint_cases import UPSTREAM as SYNC_UPSTREAM
-
-UPSTREAMS = (SYNC_UPSTREAM,)
-```
-
-Two pipelines reading the same data cannot then disagree about how fresh it has
-to be.
-
-**G7 — Column guarantees stay consumer-side.** The reader declares no column
+**G6 — Column guarantees stay consumer-side.** The reader declares no column
 contract. `reviewer_activity` keeps its own `SOURCE_COLUMNS` and
 `ColumnValidator`, and `notifications` keeps its own. A single tuple on the
 reader would become the union of every consumer's needs — so each consumer
 would be gated on columns it does not use, and the failure message would land
 somewhere other than the code that actually depends on them.
+
+## Freshness is the consumer's call, never the reader's
+
+A Shared Reader carries no `FreshnessRequirement`, and `readers/` imports
+nothing from `framework.run`. Each consuming pipeline declares its own
+`UPSTREAMS`:
+
+```python
+# pipelines/notifications/pipeline.py
+UPSTREAMS = (FreshnessRequirement("sharepoint_cases"),)
+```
+
+The tempting alternative is to declare it once on the reader so two pipelines
+reading the same dataset cannot disagree about how fresh it has to be. They are
+entitled to disagree. `notifications` must not tell anyone anything on
+yesterday's picture, so a stale Sync should stop it; a monthly aggregate would
+rather publish slightly stale than not publish at all. Freshness is a statement
+about **what a consumer can safely act on**, not about where the data is — and a
+reader serves more than one consumer by definition, so it has no basis to
+choose. A shared default is also the quiet kind of coupling this package exists
+to remove: whatever suited the first consumer becomes what every later one
+inherits without deciding.
 
 ## What a Shared Reader must not do (G5)
 
