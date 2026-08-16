@@ -3,12 +3,12 @@
 The Sync Feed owns these datasets and is the only thing that writes them. This
 module is the one place that knows *where* they are, so a consumer of the Case
 Review Platform's current state names neither a layer nor a table and asserts
-nothing about the producer's storage shape (ADR-0026, G3).
+nothing about the producer's storage shape.
 
-Both readers are pass-throughs (G5): they hand back the rows as landed, with no
+Both readers are pass-throughs: they hand back the rows as landed, with no
 projection, no coercion and no column contract. A consumer that needs specific
-columns keeps its own ``ColumnValidator`` (G7) — the reader must not grow into
-the union of every consumer's needs.
+columns keeps its own ``ColumnValidator`` — the reader must not grow into the
+union of every consumer's needs.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from framework.run import FreshnessRequirement
 from tools.medallion import medallion
 from tools.store import StoreRegistry
 
-#: What must have run, and how recently, for either read to be current (G6).
+#: What must have run, and how recently, for either read to be current.
 #: A consumer's ``UPSTREAMS`` follows from what it reads rather than restating
 #: it. Same-day, deliberately: ``max_age_days`` of 0 means today's Sync must
 #: have landed before anything downstream speaks about a Case.

@@ -79,7 +79,7 @@ def test_each_reader_sees_only_its_own_table(tmp_path):
 
 
 def test_the_read_is_a_pass_through(tmp_path):
-    # G5: no projection, no coercion, no re-shaping. Every landed column comes
+    # No projection, no coercion, no re-shaping. Every landed column comes
     # back, including one no consumer has asked for.
     _seed(tmp_path, "case_current", [{**CASES[0], "unexpected_column": "kept"}])
 
@@ -140,7 +140,7 @@ def test_an_empty_base_dir_fails_the_way_the_underlying_reader_already_fails(
 
 
 def test_the_upstream_travels_with_the_module():
-    # G6: a consumer's UPSTREAMS follows from what it reads. Same-day is the
+    # A consumer's UPSTREAMS follows from what it reads. Same-day is the
     # coupling between the two schedules, so pin the age rather than just the
     # pipeline name.
     assert UPSTREAM == FreshnessRequirement("sharepoint_cases")
