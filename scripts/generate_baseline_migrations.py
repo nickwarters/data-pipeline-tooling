@@ -30,7 +30,6 @@ a shape change after the baseline is a new numbered migration.
 from __future__ import annotations
 
 import argparse
-import sqlite3
 import sys
 from pathlib import Path
 
@@ -39,51 +38,9 @@ if str(REPO_ROOT) not in sys.path:  # pragma: no cover - import bootstrap
     sys.path.insert(0, str(REPO_ROOT))
 
 from framework._internal.connection import connect  # noqa: E402
-from framework._internal.schema_control import LEDGER_TABLE  # noqa: E402
-from tools.migrations import MIGRATIONS_ROOT  # noqa: E402
+from tools.migrations import MIGRATIONS_ROOT, create_statements  # noqa: E402
 
 BASELINE_FILENAME = "0001_create_initial_tables.sql"
-
-
-def _is_generated(name: str) -> bool:
-    """Objects that are machinery rather than data, and never belong in a baseline.
-
-    The ledger is the migration runner's own bookkeeping, and it creates that
-    itself. The staging tables are the merge Writers' scratch space, dropped at
-    the end of the write that made them — one caught mid-run would otherwise be
-    declared as though it were part of the feed. ``sqlite_*`` is SQLite's own.
-    """
-    return (
-        name == LEDGER_TABLE
-        or name.startswith("_stage_")
-        or name.startswith("_upsert_stage_")
-        or name.startswith("_insert_or_ignore_stage_")
-        or name.startswith("sqlite_")
-    )
-
-
-def _statements_of(con: sqlite3.Connection) -> list[str]:
-    """Every ``CREATE`` statement the database holds, tables first, then indexes.
-
-    ``sql`` is NULL for the objects SQLite creates implicitly — the index behind
-    a ``PRIMARY KEY`` or a ``UNIQUE`` constraint — and re-running the table's own
-    statement recreates those, so skipping them loses nothing and declaring them
-    would fail.
-
-    Order is deterministic (tables before the indexes that need them, then by
-    name), so regenerating from an unchanged database produces a byte-identical
-    file and a baseline can be diffed against the database it describes.
-    """
-    rows = con.execute(
-        "SELECT name, tbl_name, sql FROM sqlite_master "
-        "WHERE sql IS NOT NULL "
-        "ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END, name"
-    ).fetchall()
-    return [
-        sql.strip() + ";"
-        for name, tbl_name, sql in rows
-        if not _is_generated(name) and not _is_generated(tbl_name)
-    ]
 
 
 def _databases_of(base_dir: Path, subject: str) -> list[Path]:
@@ -116,7 +73,7 @@ def _baseline_of(subject: str, db_path: Path) -> str:
     """One database's baseline, or ``""`` if it holds nothing worth declaring."""
     con = connect(db_path)
     try:
-        statements = _statements_of(con)
+        statements = create_statements(con)
     finally:
         con.close()
     if not statements:

@@ -508,6 +508,43 @@ def test_a_scaffolded_feed_runs_against_its_own_migrations(tmp_path, monkeypatch
     landed = _rows(base_dir / "orders" / "gold.db", "orders")
     assert landed
 
+    # ...and the shape it declared is the shape the feed would have created for
+    # itself. The same feed run against a bare base directory takes the
+    # implicit-creation branch, so comparing the two says the baseline is what
+    # the first write would have made rather than a model of it. This is the
+    # claim the scaffold's DDL used to rest on a hand-kept type map for; now it
+    # builds the tables and copies out what SQLite stored, so the comparison is
+    # a check on the whole path rather than on the map.
+    unmigrated = tmp_path / "unmigrated"
+    feed.run(RunContext(base_dir=unmigrated, pipeline="orders"))
+
+    for database in ("raw", "silver", "gold"):
+        declared = _columns(base_dir / "orders" / f"{database}.db", "orders")
+        created = _columns(unmigrated / "orders" / f"{database}.db", "orders")
+        assert declared == created, database
+
+
+def _columns(db_path, table):
+    import sqlite3
+
+    con = sqlite3.connect(db_path)
+    try:
+        return [(row[1], row[2]) for row in con.execute(f"PRAGMA table_info({table})")]
+    finally:
+        con.close()
+
+
+def test_the_dtype_map_the_scaffold_builds_with_is_the_frameworks_own():
+    # The scaffold creates its tables by writing a zero-row frame, so the dtypes
+    # it picks decide the column types. They have to be the dtypes SchemaCoercion
+    # gives a zero-row frame, or a scaffolded baseline would describe a table the
+    # feed's own first write would not have made.
+    from framework.transform.coercion import _EMPTY_DTYPES
+
+    assert scaffold._DECLARED_TO_DTYPE == {
+        declared.__name__: dtype for declared, dtype in _EMPTY_DTYPES.items()
+    }
+
 
 def _rows(db_path, table):
     import sqlite3

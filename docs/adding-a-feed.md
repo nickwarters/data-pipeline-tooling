@@ -36,10 +36,15 @@ migrations/orders/
 ```
 
 **The feed is born under migration control.** A brand-new feed is the one case
-with no database to copy a `CREATE` statement out of, so `scaffold` renders its
-starting baselines from what the template declares — every table it makes after
-this one is generated the other way, out of `sqlite_master`
-([migrations.md](migrations.md)). Those baselines declare the schema's
+with no database to copy a `CREATE` statement out of — so `scaffold` makes one.
+It creates each table exactly as the feed's first write would (a zero-row frame
+of the declared dtypes through `to_sql`) and copies the statements SQLite stored
+back out, with the same `create_statements` the baseline generator uses on a real
+run's database ([migrations.md](migrations.md)). So a scaffolded baseline *is*
+what the feed would have created, not a model of it, and there is no
+declared-type → SQLite-type table to keep in step with what pandas does. A test
+proves it by running the same feed against a bare base directory and comparing
+the tables column for column. Those baselines carry the schema's
 columns plus what the wiring stamps — `logical_run_id` / `load_date` from
 `AccumulateByRun`, `pipeline_run_id` from every table-backed Writer, and
 `failed_rule` on the reject table. Apply them before the first run:

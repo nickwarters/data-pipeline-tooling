@@ -7,6 +7,7 @@ from tools.migrations import (
     MIGRATIONS_ROOT,
     MigrationError,
     MigrationRunner,
+    create_statements,
     discover_targets,
     is_under_migration_control,
     migrations_directory,
@@ -372,3 +373,87 @@ def test_discover_targets_ignores_files_beside_the_subjects(tmp_path):
     (tmp_path / "cases" / "notes.txt").write_text("scratch\n", encoding="utf-8")
 
     assert [t.namespace for t in discover_targets(tmp_path)] == ["cases/raw"]
+
+
+# --- create_statements: reading a database's declared shape back out ---------
+
+
+def _built(tmp_path, *statements):
+    """A database holding exactly these objects."""
+    con = sqlite3.connect(tmp_path / "built.db")
+    for statement in statements:
+        con.execute(statement)
+    con.commit()
+    return con
+
+
+def test_create_statements_copies_the_statement_verbatim(tmp_path):
+    # The whole point: the shape is read back, not reconstructed. What comes out
+    # is what `sqlite3 <db> .schema` prints, spacing and all.
+    declared = 'CREATE TABLE "cases" (\n  "case_id" TEXT NOT NULL,\n  score REAL\n)'
+    con = _built(tmp_path, declared)
+    try:
+        assert create_statements(con) == [declared + ";"]
+    finally:
+        con.close()
+
+
+def test_create_statements_puts_a_table_before_the_index_that_needs_it(tmp_path):
+    # A migration file is applied as one script, top to bottom: an index ahead
+    # of its table is a file that cannot run. Named so that sorting by name
+    # alone would put the index first.
+    con = _built(
+        tmp_path,
+        "CREATE TABLE zzz_cases (opened TIMESTAMP)",
+        "CREATE INDEX aaa_opened ON zzz_cases (opened)",
+    )
+    try:
+        kinds = [statement.split()[1] for statement in create_statements(con)]
+    finally:
+        con.close()
+
+    assert kinds == ["TABLE", "INDEX"]
+
+
+def test_create_statements_skips_an_index_sqlite_made_itself(tmp_path):
+    # SQLite mints an index for a UNIQUE constraint and records it with a NULL
+    # sql. Emitting it is impossible; re-running the table's statement makes it.
+    con = _built(tmp_path, "CREATE TABLE cases (case_id TEXT UNIQUE)")
+    try:
+        statements = create_statements(con)
+    finally:
+        con.close()
+
+    assert len(statements) == 1
+    assert "sqlite_autoindex" not in statements[0]
+
+
+def test_create_statements_leaves_out_the_machinery(tmp_path):
+    # The ledger is this runner's own bookkeeping and a staging table is a
+    # merge's scratch space stranded by a killed process; neither is data. An
+    # index on either goes with it, which is why the filter reads tbl_name too.
+    con = _built(
+        tmp_path,
+        "CREATE TABLE cases (case_id TEXT)",
+        f"CREATE TABLE {LEDGER_TABLE} (name TEXT PRIMARY KEY)",
+        "CREATE TABLE _stage_cases (case_id TEXT)",
+        "CREATE TABLE _upsert_stage_cases (case_id TEXT)",
+        "CREATE TABLE _insert_or_ignore_stage_cases (case_id TEXT)",
+        "CREATE INDEX stage_lookup ON _stage_cases (case_id)",
+    )
+    try:
+        statements = create_statements(con)
+    finally:
+        con.close()
+
+    assert len(statements) == 1
+    assert "cases" in statements[0]
+    assert LEDGER_TABLE not in statements[0]
+
+
+def test_create_statements_reads_an_empty_database_as_nothing(tmp_path):
+    con = _built(tmp_path)
+    try:
+        assert create_statements(con) == []
+    finally:
+        con.close()

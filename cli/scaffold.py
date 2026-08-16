@@ -36,12 +36,14 @@ import argparse
 import csv
 import keyword
 import re
+import sqlite3
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
 from framework.core.protocols import RUN_PROVENANCE_COLUMN
-from framework.io.sql import quote_identifier
+from tools.migrations import create_statements
 
 # The placeholder tokens in the template: substituted in file contents and paths.
 _SLUG_TOKEN = "myfeed"
@@ -391,7 +393,13 @@ _REJECT_REASON_COLUMN = "failed_rule"
 # with ``cli/scaffold_templates/*/schema.py`` by a test.
 _TEMPLATE_FIELDS = (("record_id", "str"), ("label", "str"), ("amount", "int"))
 
-_DECLARED_TO_SQLITE = {"str": "TEXT", "int": "INTEGER", "float": "REAL"}
+# The dtype a zero-row frame carries for each declared type, which is what
+# decides the column type ``to_sql`` creates. Deliberately the same mapping as
+# ``SchemaCoercion``'s ``_EMPTY_DTYPES``, since the whole point of building the
+# tables here is that they come out as the feed's first write would have made
+# them. ``tests/framework/_cli/test_scaffold.py`` asserts the two agree, so a
+# change there fails here rather than drifting.
+_DECLARED_TO_DTYPE = {"str": "object", "int": "int64", "float": "float64"}
 
 
 def _schema_fields(spec: "_FeedSpec | None") -> list[tuple[str, str]]:
@@ -401,34 +409,52 @@ def _schema_fields(spec: "_FeedSpec | None") -> list[tuple[str, str]]:
     return list(zip(spec.names, spec.inferred))
 
 
-def _columns(pairs: list[tuple[str, str]], *stamps: str) -> list[str]:
-    """``"name" TYPE`` fragments for a rendered ``CREATE TABLE``.
+def _columns(pairs: list[tuple[str, str]], *stamps: str) -> dict[str, str]:
+    """``column -> dtype`` for one table: its declared fields, then its stamps.
+
+    Stamps are text: ``logical_run_id`` and ``load_date`` from
+    ``AccumulateByRun``, ``pipeline_run_id`` from every table-backed Writer,
+    ``failed_rule`` from the quarantine partitioner.
+    """
+    typed = {
+        name: _DECLARED_TO_DTYPE.get(declared, "object") for name, declared in pairs
+    }
+    typed.update({name: "object" for name in stamps})
+    return typed
+
+
+def _build_and_read_back(tables: dict[str, dict[str, str]], *, header: str) -> str:
+    """A baseline file, built by making the tables and copying what SQLite kept.
 
     A brand-new feed is the one case with no database to copy a ``CREATE``
-    statement out of, so its starting baseline is rendered from what the
-    template declares. Every table it makes after this one is generated the
-    other way, from `sqlite_master` — see
-    ``scripts/generate_baseline_migrations.py``.
+    statement out of — so this makes one. Each table is created the way the
+    feed's first write would have created it, by writing a zero-row frame of the
+    declared dtypes through ``to_sql``, and then the statements SQLite stored are
+    read straight back out with the same
+    :func:`~tools.migrations.create_statements`
+    ``scripts/generate_baseline_migrations.py`` uses on a real run's database.
+
+    So there is no declared-type → SQLite-type table to keep in step with what
+    pandas actually does, and a scaffolded baseline is what the feed would have
+    created rather than a model of it. The database is a throwaway; only the text
+    survives.
     """
-    typed = [
-        (name, _DECLARED_TO_SQLITE.get(declared, "TEXT")) for name, declared in pairs
-    ]
-    typed += [(name, "TEXT") for name in stamps]
-    return [f"{quote_identifier(name)} {sqlite_type}" for name, sqlite_type in typed]
+    import pandas as pd  # noqa: PLC0415 - a CLI import, not a module-load cost
 
+    with tempfile.TemporaryDirectory() as scratch:
+        con = sqlite3.connect(Path(scratch) / "scaffold.db")
+        try:
+            for table, columns in tables.items():
+                frame = pd.DataFrame(
+                    {name: pd.Series(dtype=dtype) for name, dtype in columns.items()}
+                )
+                frame.to_sql(table, con, index=False)
+            statements = create_statements(con)
+        finally:
+            con.close()
 
-def _render_migration(tables: dict[str, list[str]], *, header: str) -> str:
-    """A whole baseline file: the header comment, then one CREATE per table.
-
-    No ``IF NOT EXISTS``: a baseline runs once against a database that does not
-    have the table, and a migration that quietly does nothing when the table is
-    already there would hide exactly the drift the ledger exists to catch.
-    """
-    parts = ["\n".join(f"-- {line}".rstrip() for line in header.splitlines())]
-    for table, columns in tables.items():
-        body = ",\n".join(f"    {column}" for column in columns)
-        parts.append(f"CREATE TABLE {quote_identifier(table)} (\n{body}\n);")
-    return "\n\n".join(parts) + "\n"
+    comment = "\n".join(f"-- {line}".rstrip() for line in header.splitlines())
+    return "\n\n".join((comment, *statements)) + "\n"
 
 
 def _migration_plan(
@@ -478,7 +504,7 @@ def _migration_plan(
         "it anywhere."
     )
     return {
-        database: _render_migration(tables, header=header.format(database=database))
+        database: _build_and_read_back(tables, header=header.format(database=database))
         for database, tables in plan.items()
     }
 

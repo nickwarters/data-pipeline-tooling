@@ -72,6 +72,7 @@ __all__ = [
     "MigrationError",
     "MigrationRunner",
     "MigrationTarget",
+    "create_statements",
     "discover_targets",
     "is_under_migration_control",
     "migrations_directory",
@@ -379,3 +380,58 @@ def _apply_one(con: sqlite3.Connection, migration: Migration) -> None:
     except sqlite3.Error as exc:
         con.rollback()
         raise MigrationError(f"Migration failed: {migration.path}: {exc}") from exc
+
+
+# --- reading a database's declared shape back out ----------------------------
+#
+# The other direction from applying a migration: what the database *already*
+# says its shape is. SQLite keeps the verbatim ``CREATE`` statement of every
+# table and index in ``sqlite_master``, so a baseline can be copied out rather
+# than reconstructed from a model of what created it.
+#
+# Lives here because deciding which objects are *not* part of a database's
+# declared shape needs the ledger's name and the merge Writers' staging
+# convention, both of which this module already owns.
+
+# Staging tables the merge Writers create and drop within one write. One caught
+# mid-run — or stranded by a killed process — would otherwise be declared as
+# though it were part of the feed.
+_STAGE_PREFIXES = ("_stage_", "_upsert_stage_", "_insert_or_ignore_stage_")
+
+
+def _is_machinery(name: str) -> bool:
+    """Objects that are bookkeeping rather than data."""
+    return (
+        name == LEDGER_TABLE
+        or name.startswith(_STAGE_PREFIXES)
+        or name.startswith("sqlite_")
+    )
+
+
+def create_statements(con: sqlite3.Connection) -> list[str]:
+    """Every ``CREATE`` statement the database declares, tables then indexes.
+
+    The same text ``sqlite3 <db> .schema`` prints, minus the machinery: the
+    runner's own ledger, the merge Writers' staging tables, and SQLite's
+    internals. An index on one of those goes with it, which is why the filter
+    reads ``tbl_name`` as well as ``name``.
+
+    ``sql`` is NULL for the objects SQLite creates implicitly — the index behind
+    a ``PRIMARY KEY`` or a ``UNIQUE`` constraint — and re-running the table's own
+    statement recreates those, so skipping them loses nothing and declaring them
+    would fail.
+
+    Order is deterministic (tables before the indexes that need them, then by
+    name), so reading an unchanged database twice gives the same list and a
+    baseline generated from it can be diffed against the database it describes.
+    """
+    rows = con.execute(
+        "SELECT name, tbl_name, sql FROM sqlite_master "
+        "WHERE sql IS NOT NULL "
+        "ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END, name"
+    ).fetchall()
+    return [
+        sql.strip() + ";"
+        for name, tbl_name, sql in rows
+        if not _is_machinery(name) and not _is_machinery(tbl_name)
+    ]

@@ -121,55 +121,6 @@ def test_constraints_and_indexes_survive_because_the_statement_is_copied(tmp_pat
     assert "cases_opened" in indexes
 
 
-def test_an_index_is_declared_after_the_table_it_needs(tmp_path):
-    # A file is applied as one script, top to bottom: an index ahead of its table
-    # is a migration that cannot run.
-    base = tmp_path / "data"
-    _database(
-        base / "cases" / "silver.db",
-        # Named so that sorting by name alone would put the index first.
-        "CREATE TABLE zzz_cases (opened TIMESTAMP)",
-        "CREATE INDEX aaa_opened ON zzz_cases (opened)",
-    )
-    out = tmp_path / "migrations"
-    generator.generate("cases", base_dir=base, out_root=out, to_stdout=False)
-
-    sql = _baseline(out, "cases", "silver")
-    assert sql.index("CREATE TABLE") < sql.index("CREATE INDEX")
-
-
-def test_an_implicit_index_is_not_declared(tmp_path):
-    # SQLite mints an index for a UNIQUE constraint and records it with a NULL
-    # sql. Emitting it is impossible; re-running the table's statement makes it.
-    base = tmp_path / "data"
-    _database(base / "cases" / "silver.db", "CREATE TABLE cases (case_id TEXT UNIQUE)")
-    out = tmp_path / "migrations"
-    generator.generate("cases", base_dir=base, out_root=out, to_stdout=False)
-
-    assert "sqlite_autoindex" not in _baseline(out, "cases", "silver")
-
-
-def test_the_ledger_and_the_scratch_tables_are_not_part_of_a_baseline(tmp_path):
-    # schema_migrations is the runner's own bookkeeping and a staging table is a
-    # merge's scratch space stranded by a killed process; neither is data. An
-    # index on either goes with it, which is why the filter reads tbl_name too.
-    base = tmp_path / "data"
-    _database(
-        base / "cases" / "silver.db",
-        "CREATE TABLE cases (case_id TEXT)",
-        "CREATE TABLE schema_migrations (name TEXT PRIMARY KEY)",
-        "CREATE TABLE _stage_cases (case_id TEXT)",
-        "CREATE INDEX stage_lookup ON _stage_cases (case_id)",
-    )
-    out = tmp_path / "migrations"
-    generator.generate("cases", base_dir=base, out_root=out, to_stdout=False)
-
-    sql = _baseline(out, "cases", "silver")
-    assert "schema_migrations" not in sql
-    assert "_stage_cases" not in sql
-    assert "stage_lookup" not in sql
-
-
 def test_regenerating_an_unchanged_database_is_byte_identical(tmp_path):
     # So a checked-in baseline can be diffed against the database it claims to
     # describe, and the diff means something.
@@ -276,7 +227,7 @@ def test_the_generated_baseline_matches_what_a_real_run_creates(tmp_path):
         tables = sorted(
             row[0]
             for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            if not generator._is_generated(row[0])
+            if row[0] != "schema_migrations"
         )
         con.close()
         assert tables, f"{target.namespace} produced no tables"

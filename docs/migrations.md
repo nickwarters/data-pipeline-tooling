@@ -233,9 +233,10 @@ it. A shape change after the baseline is a new numbered migration. Regenerating
 from an unchanged database is byte-identical, so a baseline can be regenerated
 elsewhere and diffed against the one checked in.
 
-There is no run to read for a brand-new feed, which is why `scaffold` renders a
-starting baseline from the feed's own declarations instead — see
-[adding-a-feed.md](adding-a-feed.md).
+A brand-new feed has no run to read, so `scaffold` makes one: it creates each
+table the way the feed's first write would and copies the statements out through
+the same `create_statements`. Same mechanism, a database built on the spot rather
+than one a run left behind — see [adding-a-feed.md](adding-a-feed.md).
 
 ## Keeping the migration and the dataclass in step
 
