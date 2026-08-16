@@ -23,7 +23,7 @@ the builder is
 | **Is this a Case Type?** | No — Reporting aggregate |
 | **Natural key → `case_id`** | n/a |
 | **Source system** | Sync gold `sharepoint_cases.case_current` |
-| **Reader** | `SqliteReader` over `sharepoint_cases/gold.db` |
+| **Reader** | `readers.sharepoint_cases.CurrentCasesReader` — the Shared Reader over the Sync subject's published Cases, constructed with a `base_dir` and resolving its own location ([ADR-0026](adr/0026-shared-readers-declare-cross-subject-reads.md)). This pipeline names no layer and no table for data it does not own; the physical source above is a fact about the data, not a coupling in the code |
 | **Load strategy** | `Refresh()` |
 | **Upstream dependencies** | `sharepoint_cases` Sync pipeline |
 | **Schedule / freshness** | Working days (Monday-Friday by default); known stale Sync history blocks, while missing history is allowed with a first-run warning |
