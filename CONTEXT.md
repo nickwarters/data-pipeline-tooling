@@ -607,6 +607,33 @@ So **CasePool** and **SelectionPool** relate to **Ingest** and **Selection** onl
 
 **Store topology (current working assumption).** Where a feed lands is **application infrastructure**, not framework vocabulary: the opaque **`namespace`** (a *logical database*, one file holding many related tables) → file mapping lives in the sibling `tools.store`. `StoreRegistry(root).store(namespace)` mints a namespace **Store** that binds `(namespace, table)` to concrete Readers/Writers; it does not infer load strategy or business meaning. `StoreRegistry` also registers named Readers/Writers (`register(name, reader|writer)` → `reader(name)` / `writer(name)`) so a pipeline refers to a component by name. The raw/silver/gold **medallion is an application-level profile** (`tools.medallion.medallion(registry, subject)` → `.raw`/`.silver`/`.gold` namespace Stores), layered over the same `tools.store`. Physically the medallion still maps to one three-file medallion **per subject** for now (`<subject>/{raw,silver,gold}.db`). A normalised schema can span several namespaces (one database per namespace; cross-database joins stay in Python). **Sync's intended topology is now settled**: *one* subject, `cora_cases`, holding every Case Type's Cases and **Detail Tables** in shared tables discriminated by a `case_type` column — the Case lists are provisioned from one template so they cannot diverge in shape, per-Case-Type variation is already key/value rows inside the blobs, and one database per subject means splitting by Case Type would make every cross-Case-Type query an `ATTACH` forever ([ADR-0016](docs/adr/0016-one-sync-subject-for-every-case-type.md)). The `sharepoint_cases` feed polls every declared Case list into those shared tables already; adopting the `cora_cases` subject name is a separate migration. Reporting's topology is still open.
 
+**A table's physical shape is owned by SQL, not by Python.** A database carrying
+a `schema_migrations` ledger has its tables, keys and indexes declared by the
+numbered files under `migrations/<subject>/<database>/` and applied by
+`python -m cli migrate`; the declared **row schema** dataclass continues to own
+*intent* — what a row means, what its values must satisfy — and nothing about
+[graduated schema enforcement](docs/adr/0006-graduated-schema-enforcement.md)
+changes. Strictness is **per database and self-declaring**: the ledger's presence
+is the whole opt-in, so a database without one behaves exactly as it always has
+and subjects convert one at a time. Three subjects are under migration control
+today — `sharepoint_cases`, `reviewer_activity` and the `notifications` ledger
+subject; everything else under `pipelines/` is a demonstration that writes only
+into a `tmp_path`. **Changing a deployed table is a new numbered migration**,
+never an edit to an applied one (its checksum is recorded) and never an edit to
+a dataclass alone ([ADR-0025](docs/adr/0025-sql-migrations-own-the-physical-table-shape.md),
+[migrations.md](docs/migrations.md)).
+
+**New data on the Case Review Platform is assumed to need a pipeline change.**
+The two projects share a system and not a glossary, and a column added to a
+`Cases-{slug}` list breaks nothing downstream — the feed keeps polling what it
+always polled — so the omission is invisible unless someone looks for it. The
+default is therefore that new frontend data flows through to the pipelines;
+deciding it does not is the rare case and is **recorded with a reason**. Every
+such change is considered from **both** sides of the model: the frontend's
+`Cases-{slug}` column schema (the provisioning authority) and this project's
+declared row schemas, since neither is authoritative for the other. The rule is
+held by a test, not by memory — see `CLAUDE.md` for the three that enforce it.
+
 **Each feed wires its own hops.** There is no shared recipe for the standard source → raw and raw → silver hops: every `*_builder` is six or so readable lines a junior developer can follow top to bottom and edit in place. The trade is deliberate — a policy change to "the standard hop" now has to be made in each feed — and it was taken because one shared definition every feed composed was harder to read than the six lines it saved. `case_review.gold.ingest_silver_to_gold` is the domain-side builder for the silver → gold hop.
 
 **Per-subject files are the current stage, not the end state.** One subject → one medallion → three files is what isolates a new pipeline cheaply *while the schemas are still being discovered*, and the single-writer-per-file rule is why a new pipeline takes its own subject rather than adding a table to someone else's. Neither is a prohibition. The expected destination is the opposite shape: once enough pipelines exist for the recurring schemas to have **fallen out of them**, a small number of strongly-schema'd databases — plausibly one per layer, `raw` / `silver` / `gold`, with each table prefixed by its subject — and the pipelines repointed at those. So "this pipeline writes its own subject" is a statement about today's uncertainty, and a design that assumes per-subject files are permanent is arguing against a direction already chosen.

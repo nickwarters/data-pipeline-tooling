@@ -321,6 +321,54 @@ The framework's primary deployment target is **Windows**, but it must also run o
 
 The framework's language, runtime, and tooling have not been chosen yet. Before scaffolding anything substantial, confirm those decisions with the user rather than assuming — they have indicated the details will be defined collaboratively ("We'll dive into the details next").
 
+**New data on the Case Review Platform is assumed to need a pipeline change.**
+Every change that introduces data on the frontend — a new `Cases-{slug}` column,
+a new field inside one of the JSON blobs — must be considered for the data
+pipelines. The default is that it needs to flow through. Deciding it does not is
+the rare case, and it must be **recorded with a reason** rather than left silent:
+adding a column downstream of nothing breaks nothing, so "not considered" and
+"considered and declined" look identical afterwards unless one of them was
+written down.
+
+Consider every data change **from both sides of the model**: the frontend's
+`Cases-{slug}` column schema
+([`platform_frontend/docs/case-type-onboarding.md`](platform_frontend/docs/case-type-onboarding.md),
+the provisioning authority a Maintainer creates a list from) *and* this project's
+declared row schemas. The two projects keep separate glossaries and **neither is
+authoritative for the other** — a term that matches by spelling may not match by
+meaning, so check both.
+
+**A change to a deployed table's shape is a migration, not an edit to a
+dataclass.** The dataclass says what a row means; the numbered SQL under
+`migrations/<subject>/<database>/` says what the table is
+([ADR-0025](docs/adr/0025-sql-migrations-own-the-physical-table-shape.md)). Editing
+an applied migration is refused by its recorded checksum; the change is a new
+numbered file beside it.
+
+**All three of these are review questions, not tests.** Each one was attempted
+mechanically and each attempt was rejected for the same underlying reason — the
+guard ended up coupled to something that drifts — so they are written down where
+a reviewer reads them rather than half-enforced by a check that goes quiet:
+
+- *Does new data on the platform reach the pipelines?* A column-name comparison
+  against the onboarding guide couples the suite to a document that may move out
+  of this repository, and cannot see a new field inside a JSON blob at all.
+  Explored in #730.
+- *Do the migrations and the declared dataclasses still agree?* Anything checking
+  it mechanically has to be told which tables have a dataclass at all, and that
+  list drifts — see
+  [`docs/migrations.md`](docs/migrations.md#keeping-the-migration-and-the-dataclass-in-step).
+- *Is every subject that lands in a real environment under migration control?*
+  Two guards were tried — a hand-maintained exclusion list, and deriving
+  "deployed" from the orchestration schedules — and neither held. Explored in
+  #729. Until then it is a thing to remember, which is part of why `scaffold`
+  renders a new feed's baselines for you.
+
+A guard whose failure mode is silence is worse than a written rule, because it
+also stops anyone looking. #729 and #730 are the same question in two places, and
+both lean the same way: ask the *environment* — a real base directory, a real
+tenant — rather than the repository.
+
 **Before opening or reviewing a pull request**, read
 [`docs/pull-request-review.md`](docs/pull-request-review.md) — what a review of a
 change to this repository should cover, and in particular the places where a change

@@ -293,5 +293,8 @@ does not depend on remembering.
 
 - [`run-log-format.md`](run-log-format.md) — the run record schema and the
   registry's own, separate, self-migrating store.
+- [`adr/0025-sql-migrations-own-the-physical-table-shape.md`](adr/0025-sql-migrations-own-the-physical-table-shape.md)
+  — the decision itself, the alternatives weighed, and how migrating raw sits
+  against ADR-0006's graduated enforcement.
 - [`adr/0001-sqlite-per-subject-medallion-store.md`](adr/0001-sqlite-per-subject-medallion-store.md)
   — why a subject's databases are separate SQLite files.
