@@ -32,7 +32,7 @@ from .report_feed import (
 
 PIPELINE_NAME = "reviewer_activity"
 # Cited, not restated: the freshness requirement travels with the reader, so
-# what this pipeline must wait for follows from what it reads (ADR-0026, G6).
+# what this pipeline must wait for follows from what it reads.
 UPSTREAMS = (SYNC_UPSTREAM,)
 
 

@@ -12,15 +12,14 @@ from .schema import ReviewerActivityDaily
 
 # What this pipeline owns and writes. Where its *source* lives is not declared
 # here at all: it is read through readers.sharepoint_cases.CurrentCasesReader,
-# which is the one place the Sync subject's layer and table are named
-# (ADR-0026).
+# which is the one place the Sync subject's layer and table are named.
 SUBJECT = "reviewer_activity"
 TABLE = "reviewer_activity_daily"
 
-# The columns this aggregate needs from whatever it is given. It stays here
-# rather than moving to the reader (G7): a column tuple on a Shared Reader
-# becomes the union of every consumer's needs, and this validator's failure
-# message is most useful beside the code that depends on these five.
+# The columns this aggregate needs from whatever it is given. They stay here
+# rather than moving to the reader: a column tuple on a shared reader becomes
+# the union of every consumer's needs, and this validator's failure message is
+# most useful beside the code that depends on these five.
 SOURCE_COLUMNS = (
     "assigned_reviewer_name",
     "case_type",
