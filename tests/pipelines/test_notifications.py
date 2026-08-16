@@ -19,8 +19,8 @@ from pipelines.notifications.pipeline import (
     SYNC_SUBJECT,
 )
 from tests.framework_testing import (
+    build_databases,
     given_rows,
-    migrated_base_dir,
     read_rows,
     rows_of,
 )
@@ -107,14 +107,18 @@ def users_csv(tmp_path, monkeypatch):
 
 @pytest.fixture()
 def base_dir(tmp_path):
-    """A base directory with both subjects this pipeline touches migrated.
+    """A base directory with the two gold databases this pipeline touches.
 
     ``notifications`` reads Sync's gold and writes its own ledger subject, and
     both are under migration control — so the seeded Sync rows go into the
     tables Sync's baseline declares, and the ledger lands in the table its own
     baseline declares rather than one the first write invents.
+
+    Gold on both sides is all this pipeline touches, so it is all that gets
+    built: naming Sync as a whole subject would build its raw, silver and
+    quarantine for nothing.
     """
-    return migrated_base_dir(tmp_path, SYNC_SUBJECT, SUBJECT)
+    return build_databases(tmp_path, f"{SYNC_SUBJECT}/gold", f"{SUBJECT}/gold")
 
 
 def _run(base_dir: Path, *, dry_run: bool = False):
