@@ -6,16 +6,21 @@ import pandas as pd
 
 from framework.core import ColumnValidator, Dataset, Reader, SchemaValidator, Writer
 from framework.run import Pipeline, RunLog
-from pipelines.sharepoint_cases.schema import FEED_NAME
 from tools.observability.timestamps import local_date
 
 from .schema import ReviewerActivityDaily
 
+# What this pipeline owns and writes. Where its *source* lives is not declared
+# here at all: it is read through readers.sharepoint_cases.CurrentCasesReader,
+# which is the one place the Sync subject's layer and table are named
+# (ADR-0026).
 SUBJECT = "reviewer_activity"
 TABLE = "reviewer_activity_daily"
-SYNC_SUBJECT = FEED_NAME
-SYNC_TABLE = "case_current"
 
+# The columns this aggregate needs from whatever it is given. It stays here
+# rather than moving to the reader (G7): a column tuple on a Shared Reader
+# becomes the union of every consumer's needs, and this validator's failure
+# message is most useful beside the code that depends on these five.
 SOURCE_COLUMNS = (
     "assigned_reviewer_name",
     "case_type",

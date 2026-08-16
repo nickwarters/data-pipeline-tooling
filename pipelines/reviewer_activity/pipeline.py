@@ -9,19 +9,18 @@ from pathlib import Path
 from framework.core import Dataset, PipelineError, format_failure
 from framework.io import Refresh
 from framework.run import (
-    FreshnessRequirement,
     Pipeline,
     RunContext,
     run_pipeline,
 )
+from readers.sharepoint_cases import UPSTREAM as SYNC_UPSTREAM
+from readers.sharepoint_cases import CurrentCasesReader
 from tools.medallion import medallion
 from tools.observability import timestamps
 from tools.store import StoreRegistry
 
 from .gold import (
     SUBJECT,
-    SYNC_SUBJECT,
-    SYNC_TABLE,
     TABLE,
     reviewer_activity_daily_builder,
 )
@@ -32,7 +31,9 @@ from .report_feed import (
 )
 
 PIPELINE_NAME = "reviewer_activity"
-UPSTREAMS = (FreshnessRequirement("sharepoint_cases"),)
+# Cited, not restated: the freshness requirement travels with the reader, so
+# what this pipeline must wait for follows from what it reads (ADR-0026, G6).
+UPSTREAMS = (SYNC_UPSTREAM,)
 
 
 def build_reviewer_activity_daily_pipeline(
@@ -40,12 +41,15 @@ def build_reviewer_activity_daily_pipeline(
     *,
     describe: bool = False,
 ) -> Pipeline:
-    """Build the aggregate pipeline over Sync's current gold."""
-    registry = StoreRegistry(context.base_dir)
-    sync = medallion(registry, SYNC_SUBJECT)
-    output = medallion(registry, SUBJECT)
+    """Build the aggregate pipeline over Sync's current Cases.
+
+    The source is read through its Shared Reader and the target through this
+    pipeline's own medallion. That asymmetry is the design: a pipeline resolves
+    where it *writes*, and never where someone else's data lives.
+    """
+    output = medallion(StoreRegistry(context.base_dir), SUBJECT)
     pipeline = reviewer_activity_daily_builder(
-        sync.gold.reader(SYNC_TABLE),
+        CurrentCasesReader(base_dir=context.base_dir),
         output.gold.writer(TABLE, Refresh()),
         run_log=context.run_log,
     )
