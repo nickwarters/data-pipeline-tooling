@@ -16,8 +16,8 @@ from pipelines.notifications.pipeline import (
     LEDGER_TABLE,
     SUBJECT,
     SUBJECT_LINE,
-    SYNC_SUBJECT,
 )
+from readers import users
 from tests.framework_testing import (
     build_databases,
     given_rows,
@@ -35,6 +35,10 @@ MANAGER_LOGIN = "e.novak"
 REVIEWER_EMAIL = "a.khan@example.invalid"
 PARTY_EMAIL = "b.okafor@example.invalid"
 MANAGER_EMAIL = "e.novak@example.invalid"
+
+# The producing subject, named here because these tests stand in for the Sync
+# pipeline when they seed its gold. The pipeline under test no longer knows it.
+SYNC_SUBJECT = "sharepoint_cases"
 
 USERS = (
     "login,email,manager_login,manager_email\n"
@@ -99,9 +103,15 @@ def _seed(base_dir: Path, cases: list[dict], messages: list[dict]) -> None:
 
 @pytest.fixture()
 def users_csv(tmp_path, monkeypatch):
+    """Stand a test directory extract in for the bundled one.
+
+    Patches the reader's own declaration of where the feed lives, rather than a
+    helper on this pipeline: the pipeline no longer knows, which is the point of
+    the change this fixture follows.
+    """
     path = tmp_path / "users.csv"
     path.write_text(USERS, encoding="utf-8")
-    monkeypatch.setattr(notifications, "users_path", lambda: path)
+    monkeypatch.setattr(users, "_BUNDLED_FEED", path)
     return path
 
 
@@ -318,7 +328,7 @@ def test_a_party_who_is_their_own_manager_collapses_to_one_recipient(
         "b.okafor,b.okafor@example.invalid,b.okafor,b.okafor@example.invalid\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(notifications, "users_path", lambda: path)
+    monkeypatch.setattr(users, "_BUNDLED_FEED", path)
     _seed(base_dir, [_case()], [_message(0, "a.khan", "2026-08-04T16:02:00.000Z")])
 
     _run(base_dir)
@@ -336,7 +346,7 @@ def test_a_manager_the_directory_learns_later_is_told_and_the_party_is_not_again
         "b.okafor,b.okafor@example.invalid,,\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(notifications, "users_path", lambda: without_manager)
+    monkeypatch.setattr(users, "_BUNDLED_FEED", without_manager)
     _seed(base_dir, [_case()], [_message(0, "a.khan", "2026-08-04T16:02:00.000Z")])
     _run(base_dir)
     assert _recipients(base_dir) == [PARTY_EMAIL]
@@ -344,7 +354,7 @@ def test_a_manager_the_directory_learns_later_is_told_and_the_party_is_not_again
 
     with_manager = base_dir / "with-manager.csv"
     with_manager.write_text(USERS, encoding="utf-8")
-    monkeypatch.setattr(notifications, "users_path", lambda: with_manager)
+    monkeypatch.setattr(users, "_BUNDLED_FEED", with_manager)
     _run(base_dir)
 
     later = [path for path in _files(base_dir) if path != first]
