@@ -15,8 +15,7 @@ a ``base_dir`` and nothing else::
 The import names the subject. The constructor supplies the root. Everything past
 that -- layer, table, file, database, whether there is a database at all -- is
 the reader's, so a consumer that names no table and no layer is not asserting
-the producer's storage shape. The decision and its reasoning are
-``docs/adr/0026-shared-readers-declare-cross-subject-reads.md``.
+the producer's storage shape.
 
 Nothing here is exported from this package root: a consumer imports the module
 named for the subject, because that import is half of what it is meant to say.
@@ -47,9 +46,13 @@ aggregation, no as-of filtering. The one carve-out is a reader that *already*
 normalises an untrustworthy source, which moves across as it stands; it is not a
 licence to add shaping to a new entry.
 
-The ADR carries two more: the module declares its own ``FreshnessRequirement``
-(G6), and column guarantees stay with the consumer that needs them, never
-growing here into the union of everyone's (G7).
+**G6 -- The upstream travels with the reader.** A module declares its own
+``FreshnessRequirement``, so a consumer inherits the statement of what must have
+run first rather than restating it.
+
+**G7 -- Column guarantees stay consumer-side.** A reader declares no column
+contract. The consumer that needs specific columns keeps its own validator, so
+nothing here grows into the union of everyone's needs.
 
 Writing a module
 ----------------
