@@ -698,5 +698,6 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`escape-hatch-store.md`](escape-hatch-store.md) | Iterating against a flat scratch db (and a pre-baked SQL query) outside the medallion / namespace Store, and migrating back. |
 | [`testing-helpers.md`](testing-helpers.md) | `tests.framework_testing` — the test-only helpers for testing concrete pipelines (`given_rows`, `RecordingWriter`, `read_rows`, `RecordingRunLog`, `read_run_log`). |
 | [`testing-external-systems.md`](testing-external-systems.md) | Mocking remote external systems (SAS, SFTP) to maintain fast, in-memory orchestration tests using Dependency Injection and boundary Protocols. |
+| [`pull-request-review.md`](pull-request-review.md) | What a review of a change to this repository should cover: the layering and facade boundaries, the data-change rule from both sides of the model, when a dataclass change is really a migration, the test smells worth naming (a guard never verified negatively; an assertion that infers something from an absence), the cross-platform constraint, and docs-are-part-of-the-change. |
 | [`adr/`](adr/) | Every architectural decision (the *why*). |
 | [`../CONTEXT.md`](../CONTEXT.md) | The domain language — the canonical glossary. |
