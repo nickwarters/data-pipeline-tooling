@@ -239,27 +239,40 @@ starting baseline from the feed's own declarations instead — see
 
 ## Which subjects are under migration control
 
-Three, today: `sharepoint_cases`, `reviewer_activity` and `notifications` — the
-two `case_review/schedules.py` orchestrates, plus the ledger subject
-`notifications` writes. Everything else under `pipelines/` is a demonstration or
-example that only ever writes into a `tmp_path` inside tests, and keeps implicit
-table creation.
+Three, today: `sharepoint_cases`, `reviewer_activity` and `notifications`.
+Everything else under `pipelines/` is a demonstration or example that only ever
+writes into a `tmp_path` inside tests, and keeps implicit table creation.
 
 That distinction is enforced, not just recorded.
-`tests/integration/test_migration_coverage.py` asserts every subject a pipeline
-writes either has a `migrations/<subject>/` directory or appears in an
-exclusions map with a reason. **Forgetting is otherwise silent**: a new deployed
-feed with no migrations directory does not fail, it quietly keeps creating its
-tables on first write with whatever dtypes the frame happened to carry and no
-keys at all — which is the price of the self-declaring rule that makes
-converting subjects one at a time possible.
+`tests/integration/test_migration_coverage.py` is the guard, and **forgetting is
+otherwise silent**: a deployed feed with no migrations directory does not fail,
+it quietly keeps creating its tables on first write with whatever dtypes the
+frame happened to carry and no keys at all — which is the price of the
+self-declaring rule that makes converting subjects one at a time possible.
 
-A pipeline declares the subject it writes as a module-level `SUBJECT` /
-`FEED_NAME` / `NAMESPACE`; a subject it only *reads* (`SYNC_SUBJECT`) belongs to
-the pipeline that writes it. The check self-tests — it asserts it can still find
-the subjects it is guarding, that a fabricated unmigrated subject is caught, and
-that no exclusion has gone stale — because a guard that has quietly stopped
-guarding passes every test it has unless one of them is about the guard.
+The guard holds no list of its own. It works out what to check from three things
+the repository already maintains for their own reasons:
+
+- **What is deployed** is what an application schedules. A pipeline reaches a
+  real environment by being named in an `<app>/schedules.py` — that is what
+  `orchestrate --app` runs, night after night — so appearing there *is* being
+  deployed. The schedules modules are found by looking, not by being listed.
+- **What it writes** is the subject it declares as a module-level `SUBJECT` /
+  `FEED_NAME` / `NAMESPACE`. A subject it only *reads* (`SYNC_SUBJECT`) belongs
+  to the pipeline that writes it. A scheduled pipeline declaring nothing is
+  itself the failure, since then nothing can say what it writes.
+- **What is covered** is the `migrations/` tree, already the only registry of
+  which databases are under migration control.
+
+So adding, renaming or deleting a pipeline costs nothing here. A pipeline that
+is not deployed is never mentioned; one that becomes deployed is picked up by
+the act of scheduling it; and a migrations directory left behind by a pipeline
+that has gone is caught from the same two sources, in the other direction.
+
+The check self-tests — it asserts the schedules are still being found and read,
+that a scheduled feed with no migrations is caught, and that an orphaned
+directory is caught — because a guard that has quietly stopped guarding passes
+every test it has unless one of them is about the guard.
 
 ## See also
 

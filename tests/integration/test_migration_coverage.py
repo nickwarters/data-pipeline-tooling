@@ -1,32 +1,41 @@
-"""Every subject that lands in a real environment is under migration control.
+"""Every scheduled pipeline's subject is under migration control.
 
 The self-declaring rule (decision 2 on #685) is what makes converting subjects
 one at a time possible: a database carrying the ``schema_migrations`` ledger is
 strict, one without it behaves as it always has. The cost of that cheapness is
-that **forgetting is silent** — a new deployed feed with no migrations directory
-does not fail, it just quietly keeps creating its tables on first write with
-whatever dtypes the frame happened to carry and no keys at all. Nothing else in
-the system would notice.
+that **forgetting is silent** — a deployed feed with no migrations directory does
+not fail, it just quietly keeps creating its tables on first write with whatever
+dtypes the frame happened to carry and no keys at all. Nothing else in the system
+would notice.
 
-So this is the thing that notices. Every subject a pipeline writes must either
-have a ``migrations/<subject>/`` directory or appear below with a reason.
+So this is the thing that notices, and it works out what to guard rather than
+being told:
 
-**A pipeline declares the subject it writes** as a module-level ``SUBJECT`` /
-``FEED_NAME`` / ``NAMESPACE``. A subject it only *reads* — ``SYNC_SUBJECT`` — is
-another pipeline's to own, and is covered where that pipeline is.
+* **What is deployed** is what an application schedules. A pipeline reaches a
+  real environment by being named in an app's ``schedules.py`` — that is what
+  ``python -m cli orchestrate --app`` runs, night after night — so appearing
+  there *is* being deployed. Every ``<app>/schedules.py`` in the tree is read;
+  nothing lists which apps exist.
+* **What it writes** is the subject it declares (``SUBJECT`` / ``FEED_NAME`` /
+  ``NAMESPACE``). A scheduled pipeline declaring none is itself the failure,
+  because then nothing can tell what it writes.
+* **What is covered** is the ``migrations/`` tree, which is already the only
+  registry of which databases are under migration control.
 
-Like ``tests/integration/test_public_api.py``, the check self-tests: it asserts
-it can still find the subjects it is supposed to be guarding, and that a
-fabricated unmigrated subject is actually caught. A guard that has quietly
-stopped guarding passes every test it has unless one of them is about the guard.
+All three are read from the repository. There is no list here to maintain when a
+pipeline is added, renamed or deleted: a pipeline that is not deployed is not
+mentioned, and one that becomes deployed is picked up by the act of scheduling
+it. The converse — an orphaned migrations directory left behind by a pipeline
+that has gone — is caught the same way, from the same two sources.
+
+Like ``tests/integration/test_public_api.py``, the check self-tests: a guard
+that has quietly stopped finding anything passes every assertion it makes.
 """
 
 from __future__ import annotations
 
 import importlib
 from pathlib import Path
-
-import pytest
 
 from tools.migrations import MIGRATIONS_ROOT, discover_targets
 
@@ -38,57 +47,50 @@ PIPELINES = ROOT / "pipelines"
 # covered by the pipeline that writes it.
 DECLARATIONS = ("SUBJECT", "FEED_NAME", "NAMESPACE")
 
-# Subjects that are deliberately not under migration control, and why. Each of
-# these is written only into a ``tmp_path`` inside tests and is not deployed
-# state; none of them has a database anybody would have to migrate.
-#
-# Keyed by *subject* rather than by pipeline because a subject is what a
-# migrations directory is named after — and two pipelines can share one, as
-# ``ingest`` and ``selection`` share ``cases``.
-EXCLUDED_SUBJECTS = {
-    "cases": (
-        "demonstration pipelines (ingest, selection); the walking-skeleton "
-        "subject, written only into tmp_path by tests"
-    ),
-    "case_selection": (
-        "demonstration pipeline; the person-targeted selection example, not "
-        "deployed state"
-    ),
-    "complaints_a": "example Case Type feed; no deployed database",
-    "complaints_b": "example Case Type feed; no deployed database",
-    "complaints_c": "example Case Type feed; no deployed database",
-    "ref_lookup": "example reference-table feed; no deployed database",
-    "retail_analytics": "example analytics feed; no deployed database",
-    "wide_cases": "demonstration fan-out (demo_fan_out); no deployed database",
-}
 
-# Pipelines that declare no subject at all: they build their store names inline
-# because they exist to demonstrate a mechanism rather than to land a feed.
-# Listed so that a *deployed* pipeline which simply forgot to declare one cannot
-# slip past the check by declaring nothing.
-UNDECLARED_PIPELINES = {
-    "pipelines.comprehensive_examples.pipeline": (
-        "a tour of every primitive, wiring stores inline under tmp_path"
-    ),
-    **{
-        f"pipelines.demo_{name}.pipeline": (
-            "orchestration schedule demonstration; writes nothing deployed"
-        )
-        for name in (
-            "later",
-            "overdue",
-            "report",
-            "steady",
-            "tomorrow",
-            "urgent",
-            "very_overdue",
-        )
-    },
-}
+def schedule_modules() -> list[str]:
+    """Every application schedules module in the tree.
+
+    An application exposes ``build_pipeline_sets()`` from ``<app>/schedules.py``
+    and an operator names it with ``orchestrate --app``. Found by looking rather
+    than by being listed, so a second application is covered the day it appears.
+    """
+    return [
+        f"{path.parent.name}.schedules"
+        for path in sorted(ROOT.glob("*/schedules.py"))
+        if (path.parent / "__init__.py").exists()
+    ]
 
 
-def pipeline_modules() -> list[str]:
-    """Every runnable pipeline module under ``pipelines/``.
+def scheduled_pipelines() -> dict[str, set[str]]:
+    """Pipeline module -> the schedules module(s) that deploy it.
+
+    A ``ScheduledPipeline`` addresses its pipeline by path — ``pipelines/<name>``,
+    the same address ``python -m cli run`` takes — which maps to the module the
+    runner imports.
+    """
+    deployed: dict[str, set[str]] = {}
+    for name in schedule_modules():
+        module = importlib.import_module(name)
+        for pipeline_set in module.build_pipeline_sets():
+            for scheduled in pipeline_set.pipelines:
+                leaf = Path(scheduled.path).name
+                deployed.setdefault(f"pipelines.{leaf}.pipeline", set()).add(name)
+    return deployed
+
+
+def declared_subject(module_name: str) -> str | None:
+    """The subject a pipeline module says it writes, or ``None`` if it says none."""
+    module = importlib.import_module(module_name)
+    for declaration in DECLARATIONS:
+        value = getattr(module, declaration, None)
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+def writing_pipelines() -> dict[str, set[str]]:
+    """Subject -> every pipeline module in the tree that declares it writes it.
 
     Both shapes the tree holds: a ``pipelines/<feed>/pipeline.py`` subpackage
     (what ``scaffold`` renders) and a bare ``pipelines/<name>.py`` module.
@@ -99,18 +101,12 @@ def pipeline_modules() -> list[str]:
             modules.append(f"pipelines.{path.name}.pipeline")
         elif path.suffix == ".py" and path.name != "__init__.py":
             modules.append(f"pipelines.{path.stem}")
-    return modules
 
-
-def declared_subjects() -> dict[str, set[str]]:
-    """Subject -> the pipeline module(s) that declare they write it."""
     subjects: dict[str, set[str]] = {}
-    for name in pipeline_modules():
-        module = importlib.import_module(name)
-        for declaration in DECLARATIONS:
-            value = getattr(module, declaration, None)
-            if isinstance(value, str) and value:
-                subjects.setdefault(value, set()).add(name)
+    for name in modules:
+        subject = declared_subject(name)
+        if subject is not None:
+            subjects.setdefault(subject, set()).add(name)
     return subjects
 
 
@@ -118,133 +114,99 @@ def migrated_subjects() -> set[str]:
     return {target.subject for target in discover_targets(MIGRATIONS_ROOT)}
 
 
-def test_every_subject_a_pipeline_writes_is_migrated_or_excluded():
-    # The guard itself. A new deployed feed with no migrations directory does
-    # not fail on its own — it quietly keeps creating its tables — so this is
-    # what makes the omission visible.
+def test_every_scheduled_pipeline_writes_a_subject_under_migration_control():
+    # The guard itself. A deployed feed with no migrations directory does not
+    # fail on its own — it quietly keeps creating its tables — so this is what
+    # makes the omission visible, on the day the pipeline is scheduled.
     migrated = migrated_subjects()
-    unaccounted = {
-        subject: sorted(writers)
-        for subject, writers in declared_subjects().items()
-        if subject not in migrated and subject not in EXCLUDED_SUBJECTS
-    }
+    unaccounted = []
+    for module, schedules in sorted(scheduled_pipelines().items()):
+        subject = declared_subject(module)
+        where = ", ".join(sorted(schedules))
+        if subject is None:
+            unaccounted.append(
+                f"  {module} (scheduled by {where}) declares no "
+                f"{' / '.join(DECLARATIONS)}, so nothing can tell what it writes"
+            )
+        elif subject not in migrated:
+            unaccounted.append(
+                f"  {module} (scheduled by {where}) writes {subject!r}, which has "
+                f"no migrations/{subject}/ directory"
+            )
 
     assert not unaccounted, (
-        "these subjects are written by a pipeline but are neither under "
-        "migration control nor excluded:\n"
-        + "\n".join(
-            f"  {subject} (written by {', '.join(writers)}) — add "
-            f"migrations/{subject}/, or add it to EXCLUDED_SUBJECTS with a reason"
-            for subject, writers in sorted(unaccounted.items())
-        )
+        "these pipelines are scheduled to run in a real environment but their "
+        "tables are not declared by any migration:\n" + "\n".join(unaccounted)
     )
 
 
-def test_every_pipeline_either_declares_its_subject_or_says_why_it_does_not():
-    # The other half: declaring nothing must not be a way past the check.
-    declared = {
-        module for writers in declared_subjects().values() for module in writers
-    }
-    silent = [
-        module
-        for module in pipeline_modules()
-        if module not in declared and module not in UNDECLARED_PIPELINES
-    ]
+def test_no_migrations_directory_is_orphaned():
+    # The other direction, and the "existing pipeline deleted or renamed" case: a
+    # migrations directory for a subject nothing writes any more is dead weight
+    # that would silently apply itself to a future feed reusing the name.
+    written = set(writing_pipelines())
+    orphaned = sorted(migrated_subjects() - written)
 
-    assert not silent, (
-        "these pipelines declare no SUBJECT / FEED_NAME / NAMESPACE, so the "
-        "coverage check cannot see what they write:\n"
-        + "\n".join(f"  {module}" for module in silent)
+    assert not orphaned, (
+        f"no pipeline declares it writes these migrated subjects: {orphaned}. "
+        "Either the pipeline was renamed or deleted and its migrations should "
+        "go with it, or it no longer declares the subject it writes."
     )
-
-
-def test_the_three_deployed_subjects_are_the_ones_under_migration_control():
-    # What "deployed" means today: the two subjects case_review/schedules.py
-    # orchestrates, and the ledger subject notifications writes. Stated as an
-    # equality so that adding a migrations directory for something else, or
-    # dropping one of these, is a decision someone has to make here.
-    assert migrated_subjects() == {
-        "sharepoint_cases",
-        "reviewer_activity",
-        "notifications",
-    }
 
 
 # --- the check checks itself -------------------------------------------------
 
 
-def test_the_enumeration_still_finds_the_subjects_it_is_guarding():
-    # A guard that has quietly stopped finding anything passes every assertion
-    # above. So: the enumeration must still see the deployed subjects, and see
-    # them attributed to the pipelines that actually write them.
-    subjects = declared_subjects()
+def test_the_schedules_are_still_being_found_and_read():
+    # Every assertion above passes vacuously if this enumeration returns nothing,
+    # which is exactly how a guard stops guarding without anyone noticing.
+    modules = schedule_modules()
+    deployed = scheduled_pipelines()
 
-    assert subjects["sharepoint_cases"] == {"pipelines.sharepoint_cases.pipeline"}
-    assert subjects["reviewer_activity"] == {"pipelines.reviewer_activity.pipeline"}
-    assert subjects["notifications"] == {"pipelines.notifications.pipeline"}
-    assert len(subjects) >= 9
+    assert "case_review.schedules" in modules
+    assert "pipelines.sharepoint_cases.pipeline" in deployed
+    assert "pipelines.reviewer_activity.pipeline" in deployed
+
+
+def test_a_scheduled_pipeline_with_no_migrations_would_be_caught():
+    # The failure the guard exists for, driven directly: a feed added to an
+    # application's schedules whose author did not add a migrations directory.
+    migrated = migrated_subjects()
+    fabricated = {"pipelines.sharepoint_cases.pipeline": "sharepoint_cases"}
+    fabricated["pipelines.brand_new_feed.pipeline"] = "brand_new_feed"
+
+    caught = [
+        module for module, subject in fabricated.items() if subject not in migrated
+    ]
+
+    assert caught == ["pipelines.brand_new_feed.pipeline"]
+
+
+def test_a_scheduled_pipeline_declaring_no_subject_would_be_caught():
+    # Declaring nothing must not be a way past the check: it is the failure, not
+    # an omission the check shrugs at.
+    assert declared_subject("pipelines.comprehensive_examples.pipeline") is None
+    assert declared_subject("pipelines.sharepoint_cases.pipeline") == "sharepoint_cases"
+
+
+def test_an_orphaned_migrations_directory_would_be_caught():
+    written = set(writing_pipelines())
+
+    assert sorted({"sharepoint_cases", "deleted_feed"} - written) == ["deleted_feed"]
 
 
 def test_a_subject_only_read_is_not_treated_as_one_this_pipeline_writes():
     # reviewer_activity and notifications both read Sync's gold. Attributing
-    # sharepoint_cases to them would be harmless today (it is migrated) and
-    # wrong the moment a pipeline reads an excluded subject.
-    subjects = declared_subjects()
-
-    assert "pipelines.reviewer_activity.pipeline" not in subjects["sharepoint_cases"]
-    assert "pipelines.notifications.pipeline" not in subjects["sharepoint_cases"]
-
-
-def test_an_unmigrated_unexcluded_subject_would_be_caught():
-    # The failure the guard exists for, driven directly: a new deployed feed
-    # whose author did not add a migrations directory.
-    fabricated = {**declared_subjects(), "brand_new_feed": {"pipelines.new.pipeline"}}
-    migrated = migrated_subjects()
-
-    unaccounted = [
-        subject
-        for subject in fabricated
-        if subject not in migrated and subject not in EXCLUDED_SUBJECTS
-    ]
-
-    assert unaccounted == ["brand_new_feed"]
-
-
-def test_no_exclusion_is_stale():
-    # An exclusion for a subject nothing writes any more is dead weight that
-    # would silently cover a future feed that happened to reuse the name.
-    declared = set(declared_subjects())
-    orphaned = sorted(set(EXCLUDED_SUBJECTS) - declared)
-
-    assert not orphaned, (
-        f"no pipeline writes these excluded subjects any more: {orphaned}. "
-        "Remove them from EXCLUDED_SUBJECTS."
+    # sharepoint_cases to them would make the orphan check pass for a directory
+    # whose own pipeline had gone.
+    assert declared_subject("pipelines.reviewer_activity.pipeline") == (
+        "reviewer_activity"
     )
+    assert declared_subject("pipelines.notifications.pipeline") == "notifications"
 
 
-def test_nothing_is_both_excluded_and_migrated():
-    # If one of these gains a baseline, its exclusion is obsolete and the reason
-    # attached to it has stopped being true.
-    both = sorted(set(EXCLUDED_SUBJECTS) & migrated_subjects())
+def test_the_pipeline_tree_is_still_being_walked():
+    subjects = writing_pipelines()
 
-    assert not both, (
-        f"these subjects are excluded but also have migrations: {both}. "
-        "Remove the exclusion — it is now saying something untrue."
-    )
-
-
-def test_every_exclusion_carries_a_reason():
-    blank = sorted(
-        subject
-        for subject, reason in {**EXCLUDED_SUBJECTS, **UNDECLARED_PIPELINES}.items()
-        if not reason.strip()
-    )
-
-    assert not blank, f"these exclusions carry no reason: {blank}"
-
-
-@pytest.mark.parametrize("module", sorted(UNDECLARED_PIPELINES))
-def test_a_pipeline_excused_from_declaring_still_exists(module):
-    # The other kind of stale entry: an excuse for a module that has since been
-    # renamed or deleted would quietly excuse nothing.
-    assert module in pipeline_modules()
+    assert subjects["sharepoint_cases"] == {"pipelines.sharepoint_cases.pipeline"}
+    assert len(subjects) >= 9
