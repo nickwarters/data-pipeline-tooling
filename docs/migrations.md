@@ -204,39 +204,38 @@ python scripts/generate_baseline_migrations.py sharepoint_cases \
 python scripts/generate_baseline_migrations.py sharepoint_cases --base-dir /tmp/run
 ```
 
-**The source is a database a real run made.** Introspecting one is the only
-source that covers every table a subject has, because not every table has a
-dataclass to declare it: a gold aggregate's columns are whatever its transform
-computed, a quarantine reject table's are the rejected row plus its reason, and a
-raw landing table's are the source's. `tools.baseline_ddl` renders both halves —
-`columns_of_table` for a live table, `columns_of_schema` for a declared one — and
-the declared-type → SQLite-type mapping is derived from what `pandas.to_sql`
-creates for the dtypes `SchemaCoercion` produces, so a generated baseline
-reproduces today's physical shape rather than an idealised one. A test checks
-that mapping against pandas itself.
+**The baseline is copied out of the database, not reconstructed.** SQLite keeps
+the verbatim `CREATE` statement of every table and index in `sqlite_master`, so
+the shape a database already has is written down inside it: the generator reads
+those statements and writes them to the file. What lands is what
+`sqlite3 <db> .schema` prints.
 
-**Where a table does have a declared dataclass, the two are cross-checked.** A
-baseline should be both faithful (it matches what runs today) and intentional (it
-matches what the feed says it writes); where they disagree the generator reports
-the table, the column and both types, and leaves the judgement to whoever is
-running it. #695 turns that same comparison into a standing test.
+That is what makes a baseline faithful by construction rather than by argument.
+There is no declared-type → SQLite-type mapping to be right about, no model of
+what `pandas.to_sql` would have done, and nothing to keep in step as either
+changes. It also covers every table the same way — a gold aggregate's columns are
+whatever its transform computed, a quarantine reject table's are the rejected row
+plus its reason, a raw landing table's are the source's, and none of the three has
+a dataclass to be derived from. Constraints and indexes come along for free, for
+the same reason: they are in the statement.
 
-**Raw's baseline therefore comes from the actual raw read columns**, never from
-the field list in the feed's `schema.py`. Raw lands the source *faithfully* and
-`schema.py` is not a faithful record of what that is: `scaffold --from-feed-file`
-caps the fields it seeds at 40 columns, so a schema generated from a wide source
-describes a prefix of it. The consequence is accepted rather than designed
-around: a wide source — a 600+ column CSV — starts life as a very large
-hand-maintained DDL file.
+**Raw's baseline is therefore the actual raw read columns**, never the field list
+in the feed's `schema.py`. Raw lands the source *faithfully* and `schema.py` is
+not a faithful record of what that is: `scaffold --from-feed-file` caps the fields
+it seeds at 40 columns, so a schema generated from a wide source describes a
+prefix of it. The consequence is accepted rather than designed around: a wide
+source — a 600+ column CSV — starts life as a very large hand-maintained DDL file.
 
 **Generated once, then maintained by hand.** The generator refuses to overwrite a
 baseline that is already checked in, because the runner's checksum refuses an
 edited migration: once a database has applied a file, changing that file strands
-it. A shape change after the baseline is a new numbered migration.
+it. A shape change after the baseline is a new numbered migration. Regenerating
+from an unchanged database is byte-identical, so a baseline can be regenerated
+elsewhere and diffed against the one checked in.
 
-Without `--base-dir` the generator falls back to the declared schemas alone, and
-says which tables it therefore could not cover. That is the path a
-freshly-scaffolded feed takes, where there is no run to introspect yet.
+There is no run to read for a brand-new feed, which is why `scaffold` renders a
+starting baseline from the feed's own declarations instead — see
+[adding-a-feed.md](adding-a-feed.md).
 
 ## See also
 

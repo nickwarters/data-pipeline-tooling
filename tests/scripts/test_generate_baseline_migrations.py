@@ -1,4 +1,4 @@
-"""Generating a subject's baseline migrations from what the code produces.
+"""Generating a subject's baseline migrations from the databases themselves.
 
 The load-bearing test here is the last one: it runs the real `sharepoint_cases`
 pipeline against its bundled fixture, generates baselines from the databases that
@@ -18,7 +18,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts import generate_baseline_migrations as generator  # noqa: E402
-from tools.baseline_ddl import Column  # noqa: E402
 from tools.migrations import MigrationRunner, discover_targets  # noqa: E402
 
 
@@ -39,6 +38,10 @@ def _columns(db_path, table):
         con.close()
 
 
+def _baseline(out, subject, database):
+    return (out / subject / database / "0001_create_initial_tables.sql").read_text()
+
+
 def test_every_database_a_subject_has_gets_a_baseline(tmp_path):
     base = tmp_path / "data"
     _database(base / "cases" / "silver.db", "CREATE TABLE cases (case_id TEXT)")
@@ -48,18 +51,28 @@ def test_every_database_a_subject_has_gets_a_baseline(tmp_path):
     _database(base / "cases" / "quarantine.db", "CREATE TABLE rejects (why TEXT)")
     out = tmp_path / "migrations"
 
-    assert (
-        generator.generate(
-            "cases", base_dir=base, databases=[], out_root=out, to_stdout=False
-        )
-        == 0
-    )
+    code = generator.generate("cases", base_dir=base, out_root=out, to_stdout=False)
+    assert code == 0
 
     assert [t.namespace for t in discover_targets(out)] == [
         "cases/gold",
         "cases/quarantine",
         "cases/silver",
     ]
+
+
+def test_the_baseline_is_the_databases_own_create_statement(tmp_path):
+    # The point of #689 after review: the statement is copied, not rebuilt. What
+    # lands in the file is what `sqlite3 <db> .schema` would print, down to the
+    # spacing, so nothing about the shape passes through a model of it.
+    base = tmp_path / "data"
+    declared = 'CREATE TABLE "cases" (\n  "case_id" TEXT NOT NULL,\n  score REAL\n)'
+    _database(base / "cases" / "silver.db", declared)
+    out = tmp_path / "migrations"
+
+    generator.generate("cases", base_dir=base, out_root=out, to_stdout=False)
+
+    assert declared + ";" in _baseline(out, "cases", "silver")
 
 
 def test_the_generated_sql_recreates_the_tables_it_was_read_from(tmp_path):
@@ -70,9 +83,7 @@ def test_the_generated_sql_recreates_the_tables_it_was_read_from(tmp_path):
         "CREATE TABLE notes (case_id TEXT, note TEXT)",
     )
     out = tmp_path / "migrations"
-    generator.generate(
-        "cases", base_dir=base, databases=[], out_root=out, to_stdout=False
-    )
+    generator.generate("cases", base_dir=base, out_root=out, to_stdout=False)
 
     rebuilt = tmp_path / "rebuilt.db"
     MigrationRunner(rebuilt, out / "cases" / "silver").apply()
@@ -81,24 +92,99 @@ def test_the_generated_sql_recreates_the_tables_it_was_read_from(tmp_path):
     assert _columns(rebuilt, "notes") == [("case_id", "TEXT"), ("note", "TEXT")]
 
 
+def test_constraints_and_indexes_survive_because_the_statement_is_copied(tmp_path):
+    # What deriving DDL from a dataclass could never carry: a primary key, a NOT
+    # NULL, an index. Copying the statement means they cost nothing to keep.
+    base = tmp_path / "data"
+    _database(
+        base / "cases" / "silver.db",
+        "CREATE TABLE cases (case_id TEXT PRIMARY KEY, opened TIMESTAMP NOT NULL)",
+        "CREATE INDEX cases_opened ON cases (opened)",
+    )
+    out = tmp_path / "migrations"
+    generator.generate("cases", base_dir=base, out_root=out, to_stdout=False)
+
+    rebuilt = tmp_path / "rebuilt.db"
+    MigrationRunner(rebuilt, out / "cases" / "silver").apply()
+
+    con = sqlite3.connect(rebuilt)
+    try:
+        info = list(con.execute("PRAGMA table_info(cases)"))
+        indexes = [row[1] for row in con.execute("PRAGMA index_list(cases)")]
+    finally:
+        con.close()
+
+    assert [(row[1], row[3], row[5]) for row in info] == [
+        ("case_id", 0, 1),  # notnull, pk
+        ("opened", 1, 0),
+    ]
+    assert "cases_opened" in indexes
+
+
+def test_an_index_is_declared_after_the_table_it_needs(tmp_path):
+    # A file is applied as one script, top to bottom: an index ahead of its table
+    # is a migration that cannot run.
+    base = tmp_path / "data"
+    _database(
+        base / "cases" / "silver.db",
+        # Named so that sorting by name alone would put the index first.
+        "CREATE TABLE zzz_cases (opened TIMESTAMP)",
+        "CREATE INDEX aaa_opened ON zzz_cases (opened)",
+    )
+    out = tmp_path / "migrations"
+    generator.generate("cases", base_dir=base, out_root=out, to_stdout=False)
+
+    sql = _baseline(out, "cases", "silver")
+    assert sql.index("CREATE TABLE") < sql.index("CREATE INDEX")
+
+
+def test_an_implicit_index_is_not_declared(tmp_path):
+    # SQLite mints an index for a UNIQUE constraint and records it with a NULL
+    # sql. Emitting it is impossible; re-running the table's statement makes it.
+    base = tmp_path / "data"
+    _database(base / "cases" / "silver.db", "CREATE TABLE cases (case_id TEXT UNIQUE)")
+    out = tmp_path / "migrations"
+    generator.generate("cases", base_dir=base, out_root=out, to_stdout=False)
+
+    assert "sqlite_autoindex" not in _baseline(out, "cases", "silver")
+
+
 def test_the_ledger_and_the_scratch_tables_are_not_part_of_a_baseline(tmp_path):
     # schema_migrations is the runner's own bookkeeping and a staging table is a
-    # merge's scratch space stranded by a killed process; neither is data.
+    # merge's scratch space stranded by a killed process; neither is data. An
+    # index on either goes with it, which is why the filter reads tbl_name too.
     base = tmp_path / "data"
     _database(
         base / "cases" / "silver.db",
         "CREATE TABLE cases (case_id TEXT)",
         "CREATE TABLE schema_migrations (name TEXT PRIMARY KEY)",
         "CREATE TABLE _stage_cases (case_id TEXT)",
+        "CREATE INDEX stage_lookup ON _stage_cases (case_id)",
     )
     out = tmp_path / "migrations"
-    generator.generate(
-        "cases", base_dir=base, databases=[], out_root=out, to_stdout=False
-    )
+    generator.generate("cases", base_dir=base, out_root=out, to_stdout=False)
 
-    sql = (out / "cases" / "silver" / "0001_create_initial_tables.sql").read_text()
+    sql = _baseline(out, "cases", "silver")
     assert "schema_migrations" not in sql
     assert "_stage_cases" not in sql
+    assert "stage_lookup" not in sql
+
+
+def test_regenerating_an_unchanged_database_is_byte_identical(tmp_path):
+    # So a checked-in baseline can be diffed against the database it claims to
+    # describe, and the diff means something.
+    base = tmp_path / "data"
+    _database(
+        base / "cases" / "silver.db",
+        "CREATE TABLE cases (case_id TEXT)",
+        "CREATE TABLE notes (note TEXT)",
+    )
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    generator.generate("cases", base_dir=base, out_root=first, to_stdout=False)
+    generator.generate("cases", base_dir=base, out_root=second, to_stdout=False)
+
+    assert _baseline(first, "cases", "silver") == _baseline(second, "cases", "silver")
 
 
 def test_a_checked_in_baseline_is_never_overwritten(tmp_path, capsys):
@@ -108,20 +194,14 @@ def test_a_checked_in_baseline_is_never_overwritten(tmp_path, capsys):
     base = tmp_path / "data"
     _database(base / "cases" / "silver.db", "CREATE TABLE cases (case_id TEXT)")
     out = tmp_path / "migrations"
-    generator.generate(
-        "cases", base_dir=base, databases=[], out_root=out, to_stdout=False
-    )
-    existing = (out / "cases" / "silver" / "0001_create_initial_tables.sql").read_text()
+    generator.generate("cases", base_dir=base, out_root=out, to_stdout=False)
+    existing = _baseline(out, "cases", "silver")
 
-    code = generator.generate(
-        "cases", base_dir=base, databases=[], out_root=out, to_stdout=False
-    )
+    code = generator.generate("cases", base_dir=base, out_root=out, to_stdout=False)
 
     assert code == 1
     assert "refusing to overwrite" in capsys.readouterr().err
-    assert (
-        out / "cases" / "silver" / "0001_create_initial_tables.sql"
-    ).read_text() == existing
+    assert _baseline(out, "cases", "silver") == existing
 
 
 def test_stdout_mode_writes_nothing(tmp_path, capsys):
@@ -129,9 +209,7 @@ def test_stdout_mode_writes_nothing(tmp_path, capsys):
     _database(base / "cases" / "silver.db", "CREATE TABLE cases (case_id TEXT)")
     out = tmp_path / "migrations"
 
-    generator.generate(
-        "cases", base_dir=base, databases=[], out_root=out, to_stdout=True
-    )
+    generator.generate("cases", base_dir=base, out_root=out, to_stdout=True)
 
     assert "CREATE TABLE" in capsys.readouterr().out
     assert not out.exists()
@@ -143,7 +221,6 @@ def test_a_subject_with_no_databases_is_reported_rather_than_silently_empty(
     code = generator.generate(
         "absent",
         base_dir=tmp_path / "data",
-        databases=[],
         out_root=tmp_path / "migrations",
         to_stdout=False,
     )
@@ -152,69 +229,20 @@ def test_a_subject_with_no_databases_is_reported_rather_than_silently_empty(
     assert "no databases" in capsys.readouterr().err
 
 
-def test_a_live_table_that_disagrees_with_its_declared_schema_is_reported(
-    tmp_path, monkeypatch, capsys
-):
-    # The cross-check earns its place here: a baseline should be faithful (it
-    # matches what runs today) *and* intentional (it matches what the feed says
-    # it writes). Where the two disagree the generator says so and leaves the
-    # judgement to the person running it.
-    from dataclasses import dataclass
-
-    @dataclass(frozen=True)
-    class Declared:
-        case_id: str
-        score: int
-
-    monkeypatch.setattr(
-        generator, "SCHEMAS", {"cases/silver/cases": Declared}, raising=False
-    )
-    monkeypatch.setattr(generator, "_load_schemas", lambda: None)
+def test_an_empty_database_is_noted_and_gets_no_directory(tmp_path, capsys):
+    # A database file a run touched but never wrote a table into has nothing to
+    # declare. Creating an empty migrations directory for it would put it under
+    # migration control, which is exactly the state that makes a Writer refuse.
     base = tmp_path / "data"
-    _database(
-        base / "cases" / "silver.db",
-        "CREATE TABLE cases (case_id TEXT, score TEXT, extra TEXT)",
-    )
-
-    generator.generate(
-        "cases",
-        base_dir=base,
-        databases=[],
-        out_root=tmp_path / "migrations",
-        to_stdout=False,
-    )
-
-    errors = capsys.readouterr().err
-    assert "'score' is TEXT live but INTEGER by declaration" in errors
-    assert "live column 'extra' is not declared" in errors
-    assert "declared column 'pipeline_run_id' is not in the live table" in errors
-
-
-def test_without_a_run_to_read_the_declared_schemas_are_the_source(
-    tmp_path, monkeypatch
-):
-    # The scaffold's path: a brand-new feed has no database to introspect, so its
-    # baseline can only come from what it declares.
-    from dataclasses import dataclass
-
-    @dataclass(frozen=True)
-    class Declared:
-        case_id: str
-
-    monkeypatch.setattr(
-        generator, "SCHEMAS", {"cases/silver/cases": Declared}, raising=False
-    )
-    monkeypatch.setattr(generator, "_load_schemas", lambda: None)
+    _database(base / "cases" / "silver.db", "CREATE TABLE cases (case_id TEXT)")
+    _database(base / "cases" / "gold.db")
     out = tmp_path / "migrations"
 
-    code = generator.generate(
-        "cases", base_dir=None, databases=["silver"], out_root=out, to_stdout=False
-    )
-
+    code = generator.generate("cases", base_dir=base, out_root=out, to_stdout=False)
     assert code == 0
-    sql = (out / "cases" / "silver" / "0001_create_initial_tables.sql").read_text()
-    assert '"case_id" TEXT' in sql
-    assert '"pipeline_run_id" TEXT' in sql
+
+    assert "gold.db holds no tables" in capsys.readouterr().err
+    assert not (out / "cases" / "gold").exists()
 
 
 def test_the_generated_baseline_matches_what_a_real_run_creates(tmp_path):
@@ -233,11 +261,7 @@ def test_the_generated_baseline_matches_what_a_real_run_creates(tmp_path):
     out = tmp_path / "migrations"
     assert (
         generator.generate(
-            "sharepoint_cases",
-            base_dir=run_dir,
-            databases=[],
-            out_root=out,
-            to_stdout=False,
+            "sharepoint_cases", base_dir=run_dir, out_root=out, to_stdout=False
         )
         == 0
     )
@@ -260,7 +284,3 @@ def test_the_generated_baseline_matches_what_a_real_run_creates(tmp_path):
             assert _columns(db_path, table) == _columns(produced, table), (
                 f"{target.namespace}.{table}"
             )
-
-
-def test_the_columns_dataclass_renders_what_it_was_given():
-    assert Column("case_id", "TEXT").render() == '"case_id" TEXT'
