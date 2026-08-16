@@ -21,6 +21,7 @@ FIXTURE = Path(__file__).parent.parent / "fixtures" / "cases.csv"
 
 PIPELINES_DIR = Path(__file__).parent.parent.parent / "pipelines"
 CASE_REVIEW_DIR = Path(__file__).parent.parent.parent / "case_review"
+READERS_DIR = Path(__file__).parent.parent.parent / "readers"
 PUBLIC_FACADES = {"core", "io", "transform", "run"}
 
 
@@ -63,20 +64,32 @@ def _framework_import_violations(source: str) -> list[str]:
     return found
 
 
-def _facade_offenders(root: Path) -> dict[str, list[str]]:
-    """Map each production module under ``root`` to the ways it bypasses the
-    public facades. Empty means the tree is clean.
+def _scanned_modules(root: Path) -> list[str]:
+    """Return the production modules the facade check inspects under ``root``.
 
     Test modules are excluded: their tests legitimately import framework
     internals (e.g. ``tests.framework_testing``).
+
+    Exposed so a tree's test can assert it actually *scanned* something. An
+    empty tree yields no offenders, which reads exactly like a clean one — the
+    kind of assertion that infers a guarantee from an absence.
+    """
+    return [
+        str(path.relative_to(root))
+        for path in sorted(root.rglob("*.py"))
+        if not path.name.startswith("test_") and "__pycache__" not in path.parts
+    ]
+
+
+def _facade_offenders(root: Path) -> dict[str, list[str]]:
+    """Map each production module under ``root`` to the ways it bypasses the
+    public facades. Empty means the tree is clean.
     """
     offenders: dict[str, list[str]] = {}
-    for path in sorted(root.rglob("*.py")):
-        if path.name.startswith("test_") or "__pycache__" in path.parts:
-            continue
-        found = _framework_import_violations(path.read_text(encoding="utf-8"))
+    for name in _scanned_modules(root):
+        found = _framework_import_violations((root / name).read_text(encoding="utf-8"))
         if found:
-            offenders[str(path.relative_to(root))] = found
+            offenders[name] = found
     return offenders
 
 
@@ -282,6 +295,21 @@ def test_case_review_imports_framework_only_through_the_public_facades():
     # legitimately import framework internals and stay out of scope.
     offenders = _facade_offenders(CASE_REVIEW_DIR)
     assert not offenders, f"case_review bypassing the public facades: {offenders}"
+
+
+def test_readers_import_framework_only_through_the_public_facades():
+    # readers/ is a third application tree beside pipelines/ and case_review/ —
+    # the Shared Readers that declare a cross-subject read once
+    # (docs/adr/0026-shared-readers-declare-cross-subject-reads.md) — so it is
+    # held to the same boundary. tools.store / tools.medallion are sibling
+    # utilities, not framework internals, and stay allowed: resolving where a
+    # dataset lands is exactly what a module here is for.
+    offenders = _facade_offenders(READERS_DIR)
+    assert not offenders, f"readers bypassing the public facades: {offenders}"
+    # ...and the tree was actually read. Until the subject modules land this is
+    # the package docstring alone, so without this the test above would pass on
+    # an empty directory and keep passing if the directory were deleted.
+    assert _scanned_modules(READERS_DIR), f"{READERS_DIR} has no modules to check"
 
 
 def test_the_boundary_check_itself_catches_both_kinds_of_violation():
