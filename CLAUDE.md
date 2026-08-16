@@ -319,4 +319,11 @@ The framework's primary deployment target is **Windows**, but it must also run o
 
 The framework's language, runtime, and tooling have not been chosen yet. Before scaffolding anything substantial, confirm those decisions with the user rather than assuming — they have indicated the details will be defined collaboratively ("We'll dive into the details next").
 
+**Before opening or reviewing a pull request**, read
+[`docs/pull-request-review.md`](docs/pull-request-review.md) — what a review of a
+change to this repository should cover, and in particular the places where a change
+is silently incomplete rather than broken (a dataclass field changed without the
+migration beside it; a guard that was never verified negatively; an assertion that
+infers something from an absence).
+
 **Keep the docs in sync with every change.** Any piece of work — a new primitive, a renamed term, a behaviour change — is not done until the affected documentation reflects it: the relevant per-slice doc under `docs/`, the usage guide [`docs/README.md`](docs/README.md), the domain language in [`CONTEXT.md`](CONTEXT.md), and any ADR it touches. Treat stale docs as a defect in the change itself, not a follow-up.
