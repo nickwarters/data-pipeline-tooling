@@ -30,10 +30,58 @@ the helpers take and return plain Python **row dicts**, never a pandas frame.
 | `assert_rows_equal(actual, expected, *, ignoring=(), unordered=False)` | Assert two row lists are equal; `actual` may be anything `rows_of` accepts. `ignoring` drops stamp columns (`logical_run_id` / `load_date`); `unordered` compares as multisets. |
 | `RecordingRunLog()` | A `RunLog` that captures records in memory. `.records`, `.records_for_step(step)`, `.warn_hits`, `.errors`. |
 | `read_run_log(path)` | Parse an on-disk JSONL run-log file into the same record dicts a `RecordingRunLog` captures. |
+| `build_databases(base_dir, *specs)` | A base directory whose databases have been built from the checked-in migrations. A spec is a whole subject (`"sharepoint_cases"`) or one of its databases (`"sharepoint_cases/silver"`) — the branch a feed writing a migrated database actually takes in production. |
+| `database_registry(base_dir, *specs)` | The same, handed back as a `StoreRegistry`. |
+| the `databases` fixture | The fixture form: `base_dir = databases("sharepoint_cases/silver")` builds into pytest's `tmp_path`. |
 
 The surface is split internally into `tests.framework_testing.rows` (the row helpers
-above) and `tests.framework_testing.run_log` (`RecordingRunLog` / `read_run_log`), both
+above), `tests.framework_testing.run_log` (`RecordingRunLog` / `read_run_log`) and
+`tests.framework_testing.databases` (the database helpers), all
 re-exported from `tests.framework_testing` — import from the package, not the modules.
+
+## Building the databases a test writes
+
+A database with a checked-in baseline behaves differently at the write: no Writer
+creates a missing table, and `Refresh` deletes-then-appends rather than dropping
+the table its migration declared ([migrations.md](migrations.md)). A test that
+runs against a bare `tmp_path` is therefore testing the *other* branch — the one
+production no longer takes.
+
+```python
+from tests.framework_testing import build_databases
+
+def test_the_feed_lands_its_rows(tmp_path):
+    base_dir = build_databases(tmp_path, "sharepoint_cases")
+    feed.run(RunContext(base_dir=base_dir), client=FakeClient())
+```
+
+or, as a fixture:
+
+```python
+def test_the_feed_lands_its_rows(databases):
+    base_dir = databases("sharepoint_cases/silver")
+```
+
+Four things worth knowing:
+
+- **It applies the real `migrations/` tree.** A test-only DDL path would defeat
+  the point — what is worth testing is that the checked-in SQL and the code
+  agree. A table a baseline forgot fails these tests exactly as it fails a run.
+- **A spec is a subject or one of its databases.** `"sharepoint_cases"` builds
+  every database that subject declares; `"sharepoint_cases/silver"` builds one.
+  Name what the test actually writes — the whole subject is the convenient
+  default, not the cheap one, and `sharepoint_cases` is 23 tables across four
+  files.
+- **The names come from the tree**, not from the medallion. Raw, silver, gold and
+  quarantine are one application's profile over the store; a subject whose
+  databases are called something else builds the same way.
+- **Anything the tree does not declare is an error naming it**, rather than an
+  unbuilt base directory quietly proving nothing — including `subject/typo`,
+  which naming a subject alone could never have caught. Feeds without baselines
+  (the demo and example pipelines) keep implicit creation and need no fixture.
+
+Pass several specs when a pipeline reads one subject and writes another —
+`build_databases(tmp_path, "sharepoint_cases/silver", "reviewer_activity/gold")`.
 
 ## Given-source-rows / expect-output-rows
 
