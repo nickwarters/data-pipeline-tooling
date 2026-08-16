@@ -16,9 +16,7 @@ import pytest
 
 from framework.core import Dataset
 from framework.io import Refresh
-from framework.run import FreshnessRequirement
 from readers.sharepoint_cases import (
-    UPSTREAM,
     ConversationMessagesReader,
     CurrentCasesReader,
 )
@@ -137,12 +135,3 @@ def test_an_empty_base_dir_fails_the_way_the_underlying_reader_already_fails(
     # from the same message they would have seen before.
     with pytest.raises(sqlite3.OperationalError, match="unable to open database file"):
         reader.read()
-
-
-def test_the_upstream_travels_with_the_module():
-    # A consumer's UPSTREAMS follows from what it reads. Same-day is the
-    # coupling between the two schedules, so pin the age rather than just the
-    # pipeline name.
-    assert UPSTREAM == FreshnessRequirement("sharepoint_cases")
-    assert UPSTREAM.upstream_pipeline == "sharepoint_cases"
-    assert UPSTREAM.max_age_days == 0

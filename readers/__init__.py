@@ -46,13 +46,14 @@ aggregation, no as-of filtering. The one carve-out is a reader that *already*
 normalises an untrustworthy source, which moves across as it stands; it is not a
 licence to add shaping to a new entry.
 
-**G6 -- The upstream travels with the reader.** A module declares its own
-``FreshnessRequirement``, so a consumer inherits the statement of what must have
-run first rather than restating it.
-
-**G7 -- Column guarantees stay consumer-side.** A reader declares no column
+**G6 -- Column guarantees stay consumer-side.** A reader declares no column
 contract. The consumer that needs specific columns keeps its own validator, so
 nothing here grows into the union of everyone's needs.
+
+**Not a rule here: how fresh the data has to be.** Two pipelines can read the
+same dataset and legitimately want different tolerances, so each consuming
+pipeline declares its own ``UPSTREAMS`` and a reader carries no
+``FreshnessRequirement``.
 
 Writing a module
 ----------------
