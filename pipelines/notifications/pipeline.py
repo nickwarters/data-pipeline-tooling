@@ -26,13 +26,13 @@ import pandas as pd
 from framework.core import Dataset, PipelineError, Reader, Writer, format_failure
 from framework.io import AppendOnly, DatasetReader, JsonWriter, Refresh
 from framework.run import (
+    FreshnessRequirement,
     Pipeline,
     RunContext,
     RunLog,
     run_pipeline,
 )
 from framework.transform import AntiJoinWith
-from readers.sharepoint_cases import UPSTREAM as SYNC_UPSTREAM
 from readers.sharepoint_cases import ConversationMessagesReader, CurrentCasesReader
 from readers.users import UsersReader
 from shared.account_names import to_bare_account
@@ -42,11 +42,12 @@ from tools.observability import timestamps
 from tools.store import Store, StoreRegistry
 
 PIPELINE_NAME = "notifications"
-# Cited from the readers rather than restated here. Same-day, deliberately: the
-# max_age_days of 0 they carry is the whole coupling between the two schedules.
-# Sync may run as often as it likes and this as often as it likes; all that is
-# required is that today's Sync has landed before anyone is told anything.
-UPSTREAMS = (SYNC_UPSTREAM,)
+# Same-day, deliberately: the default max_age_days of 0 is the whole coupling
+# between the two schedules. Sync may run as often as it likes and this as often
+# as it likes; all that is required is that today's Sync has landed before
+# anyone is told anything. Widening this would trade that guarantee for a
+# quieter run log.
+UPSTREAMS = (FreshnessRequirement("sharepoint_cases"),)
 
 # What this pipeline owns and writes. Where the Cases and the Conversation
 # Messages it reads actually live is not declared here at all.

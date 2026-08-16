@@ -9,6 +9,12 @@ Both readers are pass-throughs: they hand back the rows as landed, with no
 projection, no coercion and no column contract. A consumer that needs specific
 columns keeps its own ``ColumnValidator`` — the reader must not grow into the
 union of every consumer's needs.
+
+Nor does either declare how fresh the data has to be. Two pipelines can read the
+same Cases and legitimately want different tolerances -- notifications must not
+tell anyone anything on yesterday's picture, while a monthly report would rather
+publish slightly stale than not at all -- and a reader has no basis to choose
+between them. Each consuming pipeline declares its own ``UPSTREAMS``.
 """
 
 from __future__ import annotations
@@ -16,15 +22,8 @@ from __future__ import annotations
 import os
 
 from framework.core import Dataset, Reader
-from framework.run import FreshnessRequirement
 from tools.medallion import medallion
 from tools.store import StoreRegistry
-
-#: What must have run, and how recently, for either read to be current.
-#: A consumer's ``UPSTREAMS`` follows from what it reads rather than restating
-#: it. Same-day, deliberately: ``max_age_days`` of 0 means today's Sync must
-#: have landed before anything downstream speaks about a Case.
-UPSTREAM = FreshnessRequirement("sharepoint_cases")
 
 # Private, and that is the entire point of the module: the subject, the layer
 # and the table are what a consumer must not know.

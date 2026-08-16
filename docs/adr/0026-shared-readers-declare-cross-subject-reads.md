@@ -151,13 +151,28 @@ self-limiting — G1 below is encoded in the package name.
   normalises an untrustworthy source — `UsersReader` canonicalising logins and
   refusing a duplicate — that behaviour moves across as-is. It is not a licence
   to add shaping to a new entry.
-- **G6 — The upstream travels with the reader.** Each module declares its
-  `FreshnessRequirement`, so a consumer that reads a subject also inherits the
-  statement of what must have run first, rather than restating it.
-- **G7 — Column guarantees stay consumer-side.** The reader declares no column
+- **G6 — Column guarantees stay consumer-side.** The reader declares no column
   contract; `reviewer_activity` keeps its own `SOURCE_COLUMNS` and
   `ColumnValidator`. Nothing at the reader grows into the union of every
   consumer's needs.
+
+**A seventh guardrail was drafted and rejected: the upstream travelling with
+the reader.** Each module would have declared a `FreshnessRequirement` that
+consumers cited instead of restating, so two pipelines reading the same dataset
+could not disagree about how fresh it had to be. That symmetry is the problem:
+they are entitled to disagree. `notifications` must not tell anyone anything on
+yesterday's picture, so its tolerance is same-day and a stale Sync should stop
+it; a monthly aggregate would rather publish slightly stale than not publish.
+Freshness is a statement about **what a consumer can safely act on**, not about
+where the data is, and the reader — which by definition serves more than one
+consumer — has no basis to choose. A shared default would also be the quiet
+kind of coupling this ADR exists to remove: the tolerance that suits the first
+consumer becomes the tolerance every later one inherits without deciding.
+So each consuming pipeline declares its own `UPSTREAMS`, and `readers/` imports
+nothing from `framework.run`. The guardrails were renumbered when it was
+dropped, so column guarantees are G6 here; earlier drafts and
+[#732](https://github.com/nickwarters/data-pipeline-tooling/issues/732) number
+them G7.
 
 G1, G3 and G5 are the load-bearing three. G1 keeps the package from becoming a
 second way to reach the store. G3 is the decision itself — an entry that
