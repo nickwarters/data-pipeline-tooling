@@ -17,7 +17,13 @@ from pipelines.reviewer_activity.gold import (
 )
 from pipelines.reviewer_activity.pipeline import UPSTREAMS, main, run
 from pipelines.sharepoint_cases.schema import FEED_NAME as SYNC_SUBJECT
-from tests.framework_testing import RecordingWriter, given_rows, read_rows, rows_of
+from tests.framework_testing import (
+    RecordingWriter,
+    build_databases,
+    given_rows,
+    read_rows,
+    rows_of,
+)
 from tools.medallion import medallion
 from tools.observability import timestamps
 from tools.observability.run_log import RunLog
@@ -112,21 +118,38 @@ def test_gold_builder_validates_its_aggregate_contract_before_writing():
     assert row["as_of_utc"] == AS_OF
 
 
-def test_main_reads_sync_gold_and_refreshes_the_reporting_subject(tmp_path):
-    registry = StoreRegistry(tmp_path)
+@pytest.fixture
+def base_dir(tmp_path):
+    """A base directory with both subjects this pipeline touches migrated.
+
+    ``reviewer_activity`` writes its own gold and reads Sync's, and both are
+    under migration control — so a test seeding Sync gold as a fixture has to
+    seed it into the table Sync's baseline declares, exactly as the real feed
+    writes it.
+
+    Both ends are named database by database rather than subject by subject:
+    gold is the only one either side touches here, and building Sync whole
+    would build its raw, silver and quarantine for nothing.
+    """
+    return build_databases(tmp_path, f"{SYNC_SUBJECT}/gold", "reviewer_activity/gold")
+
+
+def test_main_reads_sync_gold_and_refreshes_the_reporting_subject(base_dir):
+    registry = StoreRegistry(base_dir)
     sync = medallion(registry, SYNC_SUBJECT)
     reporting = medallion(registry, "reviewer_activity")
-    gold_rows = [_case()]
-    silver_rows = [_case(reviewer=r"i:0#.w|CONTEXT\SILVER")]
 
     sync.gold.writer("case_current", Refresh()).write(
-        Dataset.from_pandas(pd.DataFrame(gold_rows))
+        Dataset.from_pandas(pd.DataFrame([_case()]))
     )
-    sync.silver.writer("case_current", Refresh()).write(
-        Dataset.from_pandas(pd.DataFrame(silver_rows))
-    )
+    # This test used to plant a decoy — a contradicting `case_current` in Sync's
+    # *silver* — to show the aggregate reads gold. Both subjects are under
+    # migration control now, and the decoy is not merely unnecessary but
+    # impossible: Sync's silver baseline declares no such table, which states the
+    # same thing structurally rather than by experiment.
+    assert sync.silver.columns_of("case_current").columns() is None
 
-    assert main(["prog", "--base-dir", str(tmp_path)]) == 0
+    assert main(["prog", "--base-dir", str(base_dir)]) == 0
 
     # The published row, minus the reserved provenance column every table-backed
     # Writer stamps: the run that wrote it is asserted separately, because its
@@ -144,7 +167,7 @@ def test_main_reads_sync_gold_and_refreshes_the_reporting_subject(tmp_path):
     sync.gold.writer("case_current", Refresh()).write(
         Dataset.from_pandas(pd.DataFrame([_case(reviewer=r"CONTEXT\NEW")]))
     )
-    assert main(["prog", "--base-dir", str(tmp_path)]) == 0
+    assert main(["prog", "--base-dir", str(base_dir)]) == 0
 
     rows = read_rows(reporting.gold, "reviewer_activity_daily")
     assert [row["reviewer_account"] for row in rows] == ["new"]
@@ -158,20 +181,20 @@ def test_reviewer_activity_declares_sync_as_a_freshness_upstream():
 
 
 def test_main_blocks_stale_sync_without_replacing_existing_publication(
-    tmp_path, monkeypatch, capsys
+    base_dir, monkeypatch, capsys
 ):
-    registry = StoreRegistry(tmp_path)
+    registry = StoreRegistry(base_dir)
     sync = medallion(registry, SYNC_SUBJECT)
     sync.gold.writer("case_current", Refresh()).write(
         Dataset.from_pandas(pd.DataFrame([_case()]))
     )
 
-    assert main(["prog", "--base-dir", str(tmp_path)]) == 0
+    assert main(["prog", "--base-dir", str(base_dir)]) == 0
 
-    gold_path = tmp_path / "reviewer_activity" / "gold.db"
+    gold_path = base_dir / "reviewer_activity" / "gold.db"
     report_files = {
-        path.relative_to(tmp_path): path.read_bytes()
-        for path in (tmp_path / "deliverables").rglob("*")
+        path.relative_to(base_dir): path.read_bytes()
+        for path in (base_dir / "deliverables").rglob("*")
         if path.is_file()
     }
     assert report_files
@@ -181,30 +204,33 @@ def test_main_blocks_stale_sync_without_replacing_existing_publication(
         "tools.observability.run_log.utc_now_iso",
         lambda: "2026-08-01T00:00:00+00:00",
     )
-    RunLog(tmp_path / "_runs" / "sharepoint_cases.log").record(
+    RunLog(base_dir / "_runs" / "sharepoint_cases.log").record(
         "stale-sync", "sharepoint_cases", "run", "ok"
     )
 
-    assert main(["prog", "--base-dir", str(tmp_path)]) == 1
+    assert main(["prog", "--base-dir", str(base_dir)]) == 1
 
     assert "upstream sharepoint_cases is stale" in capsys.readouterr().err
     assert gold_path.read_bytes() == gold_before
     assert {
-        path.relative_to(tmp_path): path.read_bytes()
-        for path in (tmp_path / "deliverables").rglob("*")
+        path.relative_to(base_dir): path.read_bytes()
+        for path in (base_dir / "deliverables").rglob("*")
         if path.is_file()
     } == report_files
 
 
-def test_dry_run_stops_before_reading_uncommitted_reviewer_activity_gold(tmp_path):
-    registry = StoreRegistry(tmp_path)
+def test_dry_run_stops_before_reading_uncommitted_reviewer_activity_gold(base_dir):
+    registry = StoreRegistry(base_dir)
     sync = medallion(registry, SYNC_SUBJECT)
+    reporting = medallion(registry, "reviewer_activity")
     sync.gold.writer("case_current", Refresh()).write(
         Dataset.from_pandas(pd.DataFrame([_case()]))
     )
 
-    result = run(RunContext(base_dir=tmp_path, dry_run=True))
+    result = run(RunContext(base_dir=base_dir, dry_run=True))
 
     assert len(result) == 1
-    assert not (tmp_path / "reviewer_activity" / "gold.db").exists()
-    assert not (tmp_path / "deliverables").exists()
+    # The aggregate table exists before the run — its migration created it — so
+    # "wrote nothing" is that it is still empty rather than still absent.
+    assert read_rows(reporting.gold, "reviewer_activity_daily") == []
+    assert not (base_dir / "deliverables").exists()

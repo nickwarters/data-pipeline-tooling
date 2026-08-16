@@ -17,7 +17,7 @@ from pipelines.reviewer_activity.report_feed import (
     ReportFeedWriter,
     reviewer_report_feed_builder,
 )
-from tests.framework_testing import given_rows, make_dataset
+from tests.framework_testing import build_databases, given_rows, make_dataset
 from tools.deliverables import get_deliverable_path
 from tools.medallion import medallion
 from tools.observability import timestamps
@@ -125,27 +125,39 @@ def test_pipeline_rejects_malformed_committed_gold_before_writer(tmp_path):
         pipeline.run()
 
 
-def test_publication_reads_committed_gold_and_has_one_writer(tmp_path):
-    registry = StoreRegistry(tmp_path)
+@pytest.fixture
+def base_dir(tmp_path):
+    """A base directory with ``reviewer_activity``'s gold built from its baseline.
+
+    These tests seed the subject's own committed gold and publish from it, so
+    they have to write into the table its baseline declares — the same table the
+    aggregate hop writes in production. Gold is all they touch, so gold is all
+    they build.
+    """
+    return build_databases(tmp_path, "reviewer_activity/gold")
+
+
+def test_publication_reads_committed_gold_and_has_one_writer(base_dir):
+    registry = StoreRegistry(base_dir)
     output = medallion(registry, "reviewer_activity")
     output.gold.writer("reviewer_activity_daily", Refresh()).write(
         make_dataset([_row("A.KHAN", "2026-08-01")])
     )
 
-    result = publish_report_feeds(RunContext(base_dir=tmp_path))
+    result = publish_report_feeds(RunContext(base_dir=base_dir))
 
     assert len(result) == 1
     description = reviewer_report_feed_builder(
         given_rows([_row("a.khan", "2026-08-01")]),
-        ReportFeedWriter(tmp_path, generated_at="2026-08-01T12:00:00+00:00"),
+        ReportFeedWriter(base_dir, generated_at="2026-08-01T12:00:00+00:00"),
     ).describe()
     assert description.count("[Write]") == 1
 
 
 def test_publish_only_retries_from_committed_gold_without_recomputing(
-    tmp_path, monkeypatch
+    base_dir, monkeypatch
 ):
-    registry = StoreRegistry(tmp_path)
+    registry = StoreRegistry(base_dir)
     output = medallion(registry, "reviewer_activity")
     output.gold.writer("reviewer_activity_daily", Refresh()).write(
         make_dataset([_row("A.KHAN", "2026-08-01")])
@@ -161,7 +173,7 @@ def test_publish_only_retries_from_committed_gold_without_recomputing(
     )
 
     reviewer_pipeline.run(
-        RunContext(base_dir=tmp_path, params={"publish_only": "true"})
+        RunContext(base_dir=base_dir, params={"publish_only": "true"})
     )
 
-    assert _path(tmp_path, "a.khan").exists()
+    assert _path(base_dir, "a.khan").exists()
