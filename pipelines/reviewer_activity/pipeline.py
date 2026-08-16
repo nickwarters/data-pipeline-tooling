@@ -9,11 +9,11 @@ from pathlib import Path
 from framework.core import Dataset, PipelineError, format_failure
 from framework.io import Refresh
 from framework.run import (
+    FreshnessRequirement,
     Pipeline,
     RunContext,
     run_pipeline,
 )
-from readers.sharepoint_cases import UPSTREAM as SYNC_UPSTREAM
 from readers.sharepoint_cases import CurrentCasesReader
 from tools.medallion import medallion
 from tools.observability import timestamps
@@ -31,9 +31,7 @@ from .report_feed import (
 )
 
 PIPELINE_NAME = "reviewer_activity"
-# Cited, not restated: the freshness requirement travels with the reader, so
-# what this pipeline must wait for follows from what it reads.
-UPSTREAMS = (SYNC_UPSTREAM,)
+UPSTREAMS = (FreshnessRequirement("sharepoint_cases"),)
 
 
 def build_reviewer_activity_daily_pipeline(
