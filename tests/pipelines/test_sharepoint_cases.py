@@ -82,8 +82,8 @@ from tests._sharepoint_cases_fixtures import FakeListClient, item, items
 from tests.framework_testing import (
     RecordingRunLog,
     RecordingWriter,
+    build_databases,
     given_rows,
-    migrated_base_dir,
     read_rows,
     read_run_log,
     rows_of,
@@ -2006,7 +2006,7 @@ def base_dir(tmp_path):
     feed no longer takes — and would not notice a baseline that forgot a table,
     which is exactly what these tests are here to catch.
     """
-    return migrated_base_dir(tmp_path, FEED_NAME)
+    return build_databases(tmp_path, FEED_NAME)
 
 
 def test_the_bundled_sample_lands_every_item_across_both_pages(base_dir, capsys):
