@@ -20,6 +20,12 @@ The surface splits into two implementation modules, both re-exported here:
   :class:`RecordingRunLog` captures a run's structured records in memory;
   :func:`read_run_log` parses an on-disk JSONL run-log into the same record
   dicts.
+- :mod:`tests.framework_testing.databases` — a base directory whose **databases
+  have been built** by applying the real ``migrations/`` tree, named either a
+  whole subject at a time or one database of one. A database carrying the ledger
+  behaves differently at the write (no Writer creates a missing table;
+  ``Refresh`` preserves the DDL), so a feed's tests have to run against a built
+  one to be testing the branch production takes.
 
 Everything stays behind the :class:`~framework.core.dataset.Dataset` seam:
 helpers take and return plain Python row dicts, never a pandas frame.
@@ -27,6 +33,10 @@ helpers take and return plain Python row dicts, never a pandas frame.
 
 from __future__ import annotations
 
+from tests.framework_testing.databases import (
+    build_databases,
+    database_registry,
+)
 from tests.framework_testing.rows import (
     RecordingWriter,
     assert_rows_equal,
@@ -52,4 +62,7 @@ __all__ = [
     # run-log
     "RecordingRunLog",
     "read_run_log",
+    # databases built from the migrations tree
+    "build_databases",
+    "database_registry",
 ]
