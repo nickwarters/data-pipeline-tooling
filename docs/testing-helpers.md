@@ -30,53 +30,58 @@ the helpers take and return plain Python **row dicts**, never a pandas frame.
 | `assert_rows_equal(actual, expected, *, ignoring=(), unordered=False)` | Assert two row lists are equal; `actual` may be anything `rows_of` accepts. `ignoring` drops stamp columns (`logical_run_id` / `load_date`); `unordered` compares as multisets. |
 | `RecordingRunLog()` | A `RunLog` that captures records in memory. `.records`, `.records_for_step(step)`, `.warn_hits`, `.errors`. |
 | `read_run_log(path)` | Parse an on-disk JSONL run-log file into the same record dicts a `RecordingRunLog` captures. |
-| `migrated_base_dir(tmp_path, *subjects)` | A base directory with each named subject's checked-in migrations applied — the branch a migration-controlled subject actually takes in production. |
-| `migrated_registry(tmp_path, *subjects)` / `migrated_medallion(tmp_path, subject)` | The same, handed back as a `StoreRegistry` or the subject's raw/silver/gold `Medallion`. |
-| `migrate_subject(base_dir, subject)` | Apply one subject's migrations into an existing base directory. |
-| the `migrated` fixture | The fixture form: `base_dir = migrated("sharepoint_cases")` migrates into pytest's `tmp_path`. |
+| `build_databases(base_dir, *specs)` | A base directory whose databases have been built from the checked-in migrations. A spec is a whole subject (`"sharepoint_cases"`) or one of its databases (`"sharepoint_cases/silver"`) — the branch a feed writing a migrated database actually takes in production. |
+| `database_registry(base_dir, *specs)` | The same, handed back as a `StoreRegistry`. |
+| the `databases` fixture | The fixture form: `base_dir = databases("sharepoint_cases/silver")` builds into pytest's `tmp_path`. |
 
 The surface is split internally into `tests.framework_testing.rows` (the row helpers
 above), `tests.framework_testing.run_log` (`RecordingRunLog` / `read_run_log`) and
-`tests.framework_testing.migrated` (the migrated-store helpers), all
+`tests.framework_testing.databases` (the database helpers), all
 re-exported from `tests.framework_testing` — import from the package, not the modules.
 
-## Testing a subject that is under migration control
+## Building the databases a test writes
 
-A subject with checked-in baselines behaves differently at the write: no Writer
+A database with a checked-in baseline behaves differently at the write: no Writer
 creates a missing table, and `Refresh` deletes-then-appends rather than dropping
-the table its migration declared ([migrations.md](migrations.md)). A test of such
-a subject that runs against a bare `tmp_path` is therefore testing the *other*
-branch — the one production no longer takes.
+the table its migration declared ([migrations.md](migrations.md)). A test that
+runs against a bare `tmp_path` is therefore testing the *other* branch — the one
+production no longer takes.
 
 ```python
-from tests.framework_testing import migrated_base_dir
+from tests.framework_testing import build_databases
 
 def test_the_feed_lands_its_rows(tmp_path):
-    base_dir = migrated_base_dir(tmp_path, "sharepoint_cases")
+    base_dir = build_databases(tmp_path, "sharepoint_cases")
     feed.run(RunContext(base_dir=base_dir), client=FakeClient())
 ```
 
 or, as a fixture:
 
 ```python
-def test_the_feed_lands_its_rows(migrated):
-    base_dir = migrated("sharepoint_cases")
+def test_the_feed_lands_its_rows(databases):
+    base_dir = databases("sharepoint_cases/silver")
 ```
 
-Three things worth knowing:
+Four things worth knowing:
 
 - **It applies the real `migrations/` tree.** A test-only DDL path would defeat
   the point — what is worth testing is that the checked-in SQL and the code
   agree. A table a baseline forgot fails these tests exactly as it fails a run.
-- **Every database the subject declares is migrated**, not just silver: raw,
-  gold, quarantine, whatever the tree names. A test that migrated some of them
-  would fail at the first write into one it missed.
-- **A subject with no baselines is an error naming it**, rather than an
-  unmigrated base directory quietly proving nothing. Subjects without baselines
+- **A spec is a subject or one of its databases.** `"sharepoint_cases"` builds
+  every database that subject declares; `"sharepoint_cases/silver"` builds one.
+  Name what the test actually writes — the whole subject is the convenient
+  default, not the cheap one, and `sharepoint_cases` is 23 tables across four
+  files.
+- **The names come from the tree**, not from the medallion. Raw, silver, gold and
+  quarantine are one application's profile over the store; a subject whose
+  databases are called something else builds the same way.
+- **Anything the tree does not declare is an error naming it**, rather than an
+  unbuilt base directory quietly proving nothing — including `subject/typo`,
+  which naming a subject alone could never have caught. Feeds without baselines
   (the demo and example pipelines) keep implicit creation and need no fixture.
 
-Pass several subjects when a pipeline reads one and writes another —
-`migrated_base_dir(tmp_path, "sharepoint_cases", "reviewer_activity")`.
+Pass several specs when a pipeline reads one subject and writes another —
+`build_databases(tmp_path, "sharepoint_cases/silver", "reviewer_activity/gold")`.
 
 ## Given-source-rows / expect-output-rows
 

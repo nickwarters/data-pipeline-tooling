@@ -39,9 +39,10 @@ default — ``None``, meaning "the system zone, resolved per instant" — is no
 longer reached by the tests it displaces. ``tests/test_suite_defaults.py``
 restores and exercises it directly so that branch keeps its cover.
 
-It also re-exports the ``migrated`` fixture (``tests.framework_testing.migrated``)
-so a test of a migration-controlled subject can ask for it by name; a fixture
-defined in a helper module is not collected until a conftest imports it.
+It also re-exports the ``databases`` fixture
+(``tests.framework_testing.databases``) so a test can build the databases it
+writes by name; a fixture defined in a helper module is not collected until a
+conftest imports it.
 """
 
 from __future__ import annotations
@@ -52,7 +53,7 @@ import pytest
 
 # Re-exported so every test can ask for it by name: a fixture defined in a
 # helper module is not collected unless a conftest imports it.
-from tests.framework_testing.migrated import migrated  # noqa: F401
+from tests.framework_testing.databases import databases  # noqa: F401
 from tools.observability import timestamps
 
 
