@@ -31,13 +31,13 @@ from framework.run import (
     run_pipeline,
 )
 from framework.transform import AntiJoinWith
+from readers import users
+from readers.users import UsersReader
 from shared.account_names import to_bare_account
 from tools.deliverables import NOTIFICATIONS_DESTINATION, get_deliverable_path
 from tools.medallion import medallion
 from tools.observability import timestamps
 from tools.store import Store, StoreRegistry
-
-from .users import UsersReader
 
 PIPELINE_NAME = "notifications"
 # Same-day, deliberately: the default max_age_days of 0 is the whole coupling
@@ -312,7 +312,15 @@ def outbox_filename(generated_at: str, pipeline_run_id: str) -> str:
 
 
 def users_path() -> Path:
-    return Path(__file__).resolve().parent / "sample_data" / "users.csv"
+    """The directory extract behind the recipients, as this pipeline sees it.
+
+    Interim, and reaching for the reader's private declaration on purpose:
+    naming a path here is exactly what a consumer must stop doing, and #737
+    deletes this helper along with the rest of the location arithmetic. It
+    survives one ticket only so the tests that stub the directory keep their
+    existing seam while the reader moves.
+    """
+    return users._BUNDLED_FEED
 
 
 def run(context: RunContext, *, describe: bool = False) -> Dataset:
@@ -325,7 +333,7 @@ def run(context: RunContext, *, describe: bool = False) -> Dataset:
     selection = pending_notifications_builder(
         sync.gold.reader(MESSAGE_TABLE),
         sync.gold.reader(CASE_TABLE),
-        UsersReader(users_path()),
+        UsersReader(path=users_path()),
         ledger_reader(ledger_store),
         run_log=context.run_log,
     )

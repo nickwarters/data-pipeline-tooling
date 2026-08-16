@@ -9,7 +9,8 @@ Recipients are the two Conversation parties who did not author the last Message
 [ADR-0024](adr/0024-notification-recipients-are-the-two-parties-who-did-not-speak-last.md).
 
 The prose companion to `pipelines/notifications/`; the enforced contracts are in
-`pipelines/notifications/pipeline.py` and `pipelines/notifications/users.py`.
+`pipelines/notifications/pipeline.py` and, for the `users` directory feed it
+reads but does not own, the Shared Reader `readers/users.py`.
 
 ## Three things to know before this reaches a tenant
 
@@ -133,8 +134,8 @@ The directory extract behind every recipient. Read-only; nothing writes it.
 | **Feed name** | `users` |
 | **Grain** | one row per `login` — **enforced**; a duplicate is refused |
 | **Is this a Case Type?** | No — **Reference Data** |
-| **Source system** | a directory extract *(today: the bundled `pipelines/notifications/sample_data/users.csv`)* |
-| **Reader** | `UsersReader` — wraps a `CsvReader` |
+| **Source system** | a directory extract *(today: the bundled `readers/sample_data/users.csv`)* |
+| **Reader** | `readers.users.UsersReader` — a Shared Reader wrapping a `CsvReader`; constructed with a `base_dir` and resolving its own location ([ADR-0026](adr/0026-shared-readers-declare-cross-subject-reads.md)) |
 | **Load strategy** | none — read straight into the join, never landed |
 
 ### Part B — field dictionary

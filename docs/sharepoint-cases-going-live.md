@@ -270,7 +270,7 @@ is. Three items, all in
       application is served from. The `#/conversation/...` fragment after them is
       the app's own route and stays as it is. A placeholder link is a
       notification the recipient cannot act on.
-- [ ] `pipelines/notifications/sample_data/users.csv` points at a real directory
+- [ ] `readers/sample_data/users.csv` points at a real directory
       extract, not the bundled `@example.invalid` fixture. The four columns are
       `login,email,manager_login,manager_email`; a duplicate `login` aborts the
       read on purpose.
