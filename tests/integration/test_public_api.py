@@ -299,9 +299,8 @@ def test_case_review_imports_framework_only_through_the_public_facades():
 
 def test_readers_import_framework_only_through_the_public_facades():
     # readers/ is a third application tree beside pipelines/ and case_review/ —
-    # the Shared Readers that declare a cross-subject read once
-    # (docs/adr/0026-shared-readers-declare-cross-subject-reads.md) — so it is
-    # held to the same boundary. tools.store / tools.medallion are sibling
+    # the shared readers a pipeline uses to reach data it does not own — so it
+    # is held to the same boundary. tools.store / tools.medallion are sibling
     # utilities, not framework internals, and stay allowed: resolving where a
     # dataset lands is exactly what a module here is for.
     offenders = _facade_offenders(READERS_DIR)
