@@ -207,6 +207,14 @@ to grow the escape hatch toward it.
 The reason the escape hatch honours the seams is that migration is then almost
 mechanical:
 
+0. **Decide whether the data is yours.** If the spike was reading a dataset
+   another pipeline produces, the destination is **not** your medallion — it is
+   a Shared Reader (`readers/<subject>.py`), and steps 1–2 do not apply to it.
+   Minting your own subject for someone else's data is the mistake this step
+   exists to catch: it lands a second copy under a second owner, and the
+   original's rename silently stops reaching you. See
+   [shared-readers.md](shared-readers.md). Steps 1–5 are for the data the
+   pipeline genuinely owns.
 1. **Mint a subject's medallion.** Replace `ScratchStore(path)` with
    `med = medallion(StoreRegistry(root), "<subject>")`.
 2. **Name the layers.** A `store.reader(table)` becomes
