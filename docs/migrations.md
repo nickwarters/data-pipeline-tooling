@@ -237,6 +237,58 @@ There is no run to read for a brand-new feed, which is why `scaffold` renders a
 starting baseline from the feed's own declarations instead — see
 [adding-a-feed.md](adding-a-feed.md).
 
+## Keeping the migration and the dataclass in step
+
+Two things describe one table. The numbered SQL says what the table **is** — its
+columns, their types, its keys and indexes. The declared dataclass says what a
+row **means**: which columns a feed must carry, what their values must satisfy,
+what the quarantine partitioner routes on. Neither replaces the other, and
+[graduated schema enforcement](adr/0006-graduated-schema-enforcement.md) is
+unchanged by this — the validators still gate the data, they simply no longer
+decide the storage.
+
+Two owners of one thing can drift, and the failure is quiet: nothing breaks at
+import, and the first symptom is a run failing on a column SQLite does not have.
+**This is a review question, not a test.** Anything that would catch it
+mechanically has to be told which tables have a dataclass at all — a gold
+aggregate's columns are whatever its transform computed, a quarantine reject
+table's are the rejected row plus its reason, a raw landing table's are the
+source's, and none of the three has one — so it ends up carrying a hand-kept map
+that itself drifts, which is what it was supposed to prevent.
+
+So it is written down where a reviewer will read it, in
+[pull-request-review.md](pull-request-review.md): *did a field change on a
+dataclass without a migration beside it?* Two things to know when answering that:
+
+- **Compare storage affinity, not the type name.** SQLite has no date or boolean
+  type. `DATE` and `TIMESTAMP` are one physical column (both NUMERIC); `TEXT` and
+  `INTEGER` are genuinely two. A declared `date` lands as `DATE` where the frame
+  carries `datetime.date` objects and as `TIMESTAMP` where `SchemaCoercion` has
+  cast it to `datetime64` — the same declaration, two names, one column.
+- **A column no dataclass declares is not automatically wrong.** Every
+  table-backed Writer stamps the reserved provenance column, gold's Detail Tables
+  carry the `case_id` and `as_of_utc` their builder derives, and none of that
+  belongs in a feed's row schema.
+
+## Which subjects are under migration control
+
+Three, today: `sharepoint_cases`, `reviewer_activity` and `notifications`.
+Everything else under `pipelines/` is a demonstration or example that only ever
+writes into a `tmp_path` inside tests, and keeps implicit table creation.
+
+**Nothing checks that list.** A feed that reaches a real environment with no
+migrations directory does not fail — it quietly keeps creating its tables on
+first write, with whatever dtypes the frame happened to carry, no keys and no
+indexes. That is the price of the self-declaring rule that makes converting
+subjects one at a time possible, and it is **accepted for now rather than
+solved**: two approaches were tried on this epic — a hand-maintained exclusion
+list, and deriving "deployed" from the orchestration schedules — and neither was
+right. [#729](https://github.com/nickwarters/data-pipeline-tooling/issues/729)
+carries the problem statement, both rejected approaches with the reasons, and the
+directions worth exploring. Until then, adding a subject to that list is a thing
+to remember, and `scaffold` renders a new feed's baselines so the common path
+does not depend on remembering.
+
 ## See also
 
 - [`run-log-format.md`](run-log-format.md) — the run record schema and the
