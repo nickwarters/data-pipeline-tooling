@@ -17,6 +17,7 @@ from framework.run import RunContext
 from tests.framework_testing import (
     RecordingRunLog,
     RecordingWriter,
+    build_databases,
     given_rows,
     read_rows,
 )
@@ -34,6 +35,9 @@ def test_case_type_declares_its_identity_contract():
 
 
 def test_source_lands_in_raw_then_conforms_to_silver(tmp_path):
+    # The feed's tables are declared by migrations/myfeed/, not created by the
+    # first write, so they have to exist before the run.
+    build_databases(tmp_path, FEED_NAME)
     silver = run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
     med = medallion(StoreRegistry(tmp_path), FEED_NAME)
 
