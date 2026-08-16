@@ -19,8 +19,8 @@ from pipelines.reviewer_activity.pipeline import UPSTREAMS, main, run
 from pipelines.sharepoint_cases.schema import FEED_NAME as SYNC_SUBJECT
 from tests.framework_testing import (
     RecordingWriter,
+    build_databases,
     given_rows,
-    migrated_base_dir,
     read_rows,
     rows_of,
 )
@@ -126,8 +126,12 @@ def base_dir(tmp_path):
     under migration control — so a test seeding Sync gold as a fixture has to
     seed it into the table Sync's baseline declares, exactly as the real feed
     writes it.
+
+    Both ends are named database by database rather than subject by subject:
+    gold is the only one either side touches here, and building Sync whole
+    would build its raw, silver and quarantine for nothing.
     """
-    return migrated_base_dir(tmp_path, SYNC_SUBJECT, "reviewer_activity")
+    return build_databases(tmp_path, f"{SYNC_SUBJECT}/gold", "reviewer_activity/gold")
 
 
 def test_main_reads_sync_gold_and_refreshes_the_reporting_subject(base_dir):

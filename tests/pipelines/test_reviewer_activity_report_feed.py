@@ -17,7 +17,7 @@ from pipelines.reviewer_activity.report_feed import (
     ReportFeedWriter,
     reviewer_report_feed_builder,
 )
-from tests.framework_testing import given_rows, make_dataset, migrated_base_dir
+from tests.framework_testing import build_databases, given_rows, make_dataset
 from tools.deliverables import get_deliverable_path
 from tools.medallion import medallion
 from tools.observability import timestamps
@@ -127,13 +127,14 @@ def test_pipeline_rejects_malformed_committed_gold_before_writer(tmp_path):
 
 @pytest.fixture
 def base_dir(tmp_path):
-    """A base directory with ``reviewer_activity``'s migrations applied.
+    """A base directory with ``reviewer_activity``'s gold built from its baseline.
 
     These tests seed the subject's own committed gold and publish from it, so
     they have to write into the table its baseline declares — the same table the
-    aggregate hop writes in production.
+    aggregate hop writes in production. Gold is all they touch, so gold is all
+    they build.
     """
-    return migrated_base_dir(tmp_path, "reviewer_activity")
+    return build_databases(tmp_path, "reviewer_activity/gold")
 
 
 def test_publication_reads_committed_gold_and_has_one_writer(base_dir):
