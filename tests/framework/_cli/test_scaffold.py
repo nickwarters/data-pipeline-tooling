@@ -115,10 +115,13 @@ def test_the_rendered_hops_are_wired_inline(tmp_path):
         "  [Write] write (depends on: columns)",
     ]
     # Scaffolded without a feed file, so RENAME is empty and no rename is planned.
+    # The select is planned either way: silver keeps the declared columns and
+    # drops anything else raw carried, which is what its baseline declares.
     assert silver_plan == [
         "Pipeline: widgets:silver",
         "  [Read] read",
-        "  [Transform] coerce (depends on: read)",
+        "  [Transform] select (depends on: read)",
+        "  [Transform] coerce (depends on: select)",
         "  [Quarantine] quarantine (depends on: coerce)",
         "  [Validate] post-validate (depends on: quarantine)",
         "  [Write] write (depends on: post-validate)",
@@ -338,7 +341,7 @@ def test_feed_file_over_the_column_limit_truncates_with_a_note(
     ]
     assert len(fields) == 3  # kept the first three columns only
     assert "2 column(s) beyond the scaffold's limit of 3 were dropped" in schema
-    assert "dropping the remaining 2" in capsys.readouterr().err
+    assert "remaining 2 still land in raw" in capsys.readouterr().err
 
 
 def test_feed_file_not_supported_with_case_type(tmp_path):
@@ -415,3 +418,244 @@ def test_feed_file_seeds_structural_rejection_rows_missing_a_column(tmp_path):
         test_text, "test_silver_builder_quarantines_value_rule_breaches"
     )
     assert '"Case Number": "C1", "Adviser Name": "Smith"' in quarantine
+
+
+# --- migrations --------------------------------------------------------------
+#
+# A scaffolded feed is born with its baselines. Without them it would be the one
+# subject nothing declares — which tests/integration/test_migration_coverage.py
+# refuses — and the author would find out by writing one themselves.
+
+
+def _migration(root, feed, database):
+    return (
+        root / "migrations" / feed / database / "0001_create_initial_tables.sql"
+    ).read_text(encoding="utf-8")
+
+
+def test_a_scaffolded_feed_declares_every_database_it_writes(tmp_path):
+    scaffold.render("orders", tmp_path)
+
+    databases = sorted(p.name for p in (tmp_path / "migrations" / "orders").iterdir())
+
+    # Quarantine included: a reject table is a table like any other, and a feed
+    # whose reject table is undeclared would abort the first time it rejected a
+    # row — a failure that only shows up on the bad-data path.
+    assert databases == ["gold", "quarantine", "raw", "silver"]
+
+
+def test_the_case_type_variant_declares_nothing_for_gold(tmp_path):
+    # It stops at silver, because how silver is assembled into gold is
+    # per-Case-Type and an open decision. A gold baseline would be a guess.
+    scaffold.render("claims", tmp_path, case_type=True)
+
+    databases = sorted(p.name for p in (tmp_path / "migrations" / "claims").iterdir())
+
+    assert databases == ["quarantine", "raw", "silver"]
+
+
+def test_the_baseline_declares_the_schema_plus_what_the_wiring_stamps(tmp_path):
+    scaffold.render("orders", tmp_path)
+
+    silver = _migration(tmp_path, "orders", "silver")
+
+    for column in ("record_id", "label", "amount"):
+        assert f'"{column}"' in silver
+    # AccumulateByRun stamps the business run and its date; every table-backed
+    # Writer stamps the run that wrote the row.
+    for column in ("logical_run_id", "load_date", "pipeline_run_id"):
+        assert f'"{column}"' in silver
+    assert '"amount" INTEGER' in silver
+    assert '"record_id" TEXT' in silver
+
+
+def test_the_reject_table_carries_the_rule_that_rejected_the_row(tmp_path):
+    scaffold.render("orders", tmp_path)
+
+    assert '"failed_rule"' in _migration(tmp_path, "orders", "quarantine")
+
+
+def test_raw_is_declared_in_the_sources_own_column_names(tmp_path):
+    # Raw lands the source faithfully and the rename to canonical names happens
+    # at silver, so a header that is not a clean identifier is declared as it
+    # arrives — the same split RAW_FEED_COLUMNS / RENAME make in the code.
+    feed = _write_feed(tmp_path / "cases.csv", "Case Number,Adviser Name\nC1,Smith\n")
+    scaffold.render("cases", tmp_path, feed_file=feed)
+
+    assert '"Case Number"' in _migration(tmp_path, "cases", "raw")
+    assert '"case_number"' in _migration(tmp_path, "cases", "silver")
+
+
+def test_a_scaffolded_feed_runs_against_its_own_migrations(tmp_path, monkeypatch):
+    # The ticket's "done when", end to end: scaffold, apply what it wrote, and
+    # run the feed against the result. Every table it writes must be declared,
+    # or the run aborts with MissingTableError.
+    import sys
+
+    from framework.run.run_context import RunContext
+    from tests.framework_testing import build_databases
+
+    scaffold.render("orders", tmp_path)
+    (tmp_path / "pipelines" / "__init__.py").write_text("", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    for name in list(sys.modules):
+        if name.startswith("pipelines"):
+            monkeypatch.delitem(sys.modules, name, raising=False)
+
+    from pipelines.orders import pipeline as feed  # noqa: PLC0415
+
+    base_dir = tmp_path / "data"
+    build_databases(base_dir, "orders", migrations_root=tmp_path / "migrations")
+    feed.run(RunContext(base_dir=base_dir, pipeline="orders"))
+
+    landed = _rows(base_dir / "orders" / "gold.db", "orders")
+    assert landed
+
+
+_MAX = scaffold._MAX_FEED_COLUMNS
+
+
+def _feed_file(tmp_path, headers):
+    import csv  # noqa: PLC0415
+
+    path = tmp_path / "source.csv"
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(headers)
+        for row in range(3):
+            writer.writerow([f"v{row}_{i}" for i in range(len(headers))])
+    return path
+
+
+def test_a_narrow_feed_file_scaffolds_and_runs_against_its_own_migrations(
+    tmp_path, monkeypatch
+):
+    # The common --from-feed-file path, end to end: a source inside the cap, so
+    # the schema covers it and every hop's baseline matches what it writes.
+    import importlib  # noqa: PLC0415
+    import sys  # noqa: PLC0415
+
+    from framework.run.run_context import RunContext  # noqa: PLC0415
+    from tests.framework_testing import build_databases  # noqa: PLC0415
+
+    header = ["Ref Code", "Some Label", "amount"]
+    scaffold.render("narrow", tmp_path, feed_file=_feed_file(tmp_path, header))
+    (tmp_path / "pipelines" / "__init__.py").write_text("", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    for name in list(sys.modules):
+        if name.startswith("pipelines"):
+            monkeypatch.delitem(sys.modules, name, raising=False)
+
+    feed_module = importlib.import_module("pipelines.narrow.pipeline")
+    base_dir = tmp_path / "data"
+    build_databases(base_dir, "narrow", migrations_root=tmp_path / "migrations")
+    feed_module.run(RunContext(base_dir=base_dir, pipeline="narrow"))
+
+    # raw carries the source's own spellings, silver the canonical ones.
+    assert "Ref Code" in _columns(base_dir / "narrow" / "raw.db", "narrow")
+    assert "ref_code" in _columns(base_dir / "narrow" / "silver.db", "narrow")
+
+
+def test_a_source_wider_than_the_cap_runs_and_stops_at_raw(tmp_path, monkeypatch):
+    # The two halves together: raw keeps all 45 source columns, SELECT_RAW_COLUMNS
+    # narrows silver to the declared 40, and every hop's write matches the table
+    # its baseline declared. Before the select was wired in, this run died on
+    # `table wide has no column named Ref Code 40!`.
+    import importlib  # noqa: PLC0415
+    import sys  # noqa: PLC0415
+
+    from framework.run.run_context import RunContext  # noqa: PLC0415
+    from tests.framework_testing import build_databases  # noqa: PLC0415
+
+    header = [f"Ref Code {i}!" for i in range(_MAX + 5)]
+    scaffold.render("wide", tmp_path, feed_file=_feed_file(tmp_path, header))
+    (tmp_path / "pipelines" / "__init__.py").write_text("", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    for name in list(sys.modules):
+        if name.startswith("pipelines"):
+            monkeypatch.delitem(sys.modules, name, raising=False)
+
+    feed_module = importlib.import_module("pipelines.wide.pipeline")
+    base_dir = tmp_path / "data"
+    build_databases(base_dir, "wide", migrations_root=tmp_path / "migrations")
+    feed_module.run(RunContext(base_dir=base_dir, pipeline="wide"))
+
+    raw = _columns(base_dir / "wide" / "raw.db", "wide")
+    assert f"Ref Code {_MAX + 4}!" in raw  # the last source column, verbatim
+
+    for database in ("silver", "gold"):
+        landed = _columns(base_dir / database.join(["wide/", ".db"]), "wide")
+        assert f"ref_code_{_MAX - 1}" in landed  # the last declared field
+        assert f"Ref Code {_MAX}!" not in landed  # ...and nothing past the cap
+        assert f"ref_code_{_MAX}" not in landed
+
+
+def test_raw_mirrors_the_whole_feed_file_while_silver_follows_the_capped_schema(
+    tmp_path,
+):
+    # Raw is always whatever came in, so its baseline declares every column the
+    # file has, in the file's own spelling. Silver and gold describe the
+    # dataclass, which the scaffold caps -- so on a source wider than the cap the
+    # two deliberately part company. A scaffold is a starting point, not the
+    # finished feed; _read_feed_file says as much on the way past.
+    header = [f"Ref Code {i}!" for i in range(_MAX + 5)]
+    scaffold.render("wide", tmp_path, feed_file=_feed_file(tmp_path, header))
+
+    raw = _migration(tmp_path, "wide", "raw")
+    for column in header:
+        assert f'"{column}"' in raw
+
+    for database in ("silver", "gold"):
+        sql = _migration(tmp_path, "wide", database)
+        assert '"ref_code_1"' in sql
+        # ...and nothing past the cap, under either spelling.
+        assert f'"Ref Code {_MAX}!"' not in sql
+        assert f'"ref_code_{_MAX + 1}"' not in sql
+
+
+def test_the_dropped_columns_warning_says_where_they_go(tmp_path, capsys):
+    # Not a blocker any more -- silver drops them cleanly -- so the warning says
+    # where they end up and what carrying one further would take.
+    header = [f"col_{i}" for i in range(_MAX + 5)]
+    scaffold.render("wide", tmp_path, feed_file=_feed_file(tmp_path, header))
+
+    warning = capsys.readouterr().err
+    assert "remaining 5 still land in raw" in warning
+    assert "SELECT_RAW_COLUMNS drops them at silver" in warning
+
+
+def _columns(db_path, table):
+    import sqlite3
+
+    con = sqlite3.connect(db_path)
+    try:
+        return [row[1] for row in con.execute(f"PRAGMA table_info({table})")]
+    finally:
+        con.close()
+
+
+def _rows(db_path, table):
+    import sqlite3
+
+    con = sqlite3.connect(db_path)
+    try:
+        return con.execute(f'SELECT * FROM "{table}"').fetchall()
+    finally:
+        con.close()
+
+
+def test_the_template_fields_the_plan_assumes_are_the_templates_own(tmp_path):
+    # The plan hard-codes the template's declared fields, because there is no
+    # feed file to read them from. If the template's schema changes and this map
+    # does not, a scaffolded feed's baseline would silently describe the old one.
+    scaffold.render("orders", tmp_path)
+    schema_text = (tmp_path / "pipelines" / "orders" / "schema.py").read_text("utf-8")
+
+    for name, _ in scaffold._TEMPLATE_FIELDS:
+        assert f"    {name}:" in schema_text
+    declared = [
+        line.split(":")[0].strip()
+        for line in schema_text.splitlines()
+        if line.startswith("    ") and ":" in line and not line.strip().startswith("#")
+    ]
+    assert declared == [name for name, _ in scaffold._TEMPLATE_FIELDS]

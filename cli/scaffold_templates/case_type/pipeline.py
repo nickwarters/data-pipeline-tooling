@@ -42,7 +42,11 @@ from framework.core import (
 )
 from framework.io import AccumulateByRun, CsvReader, Reader, Writer
 from framework.run import Pipeline, RunContext, RunLog
-from framework.transform import SchemaCoercion, SchemaValueRulePartitioner
+from framework.transform import (
+    SchemaCoercion,
+    SchemaValueRulePartitioner,
+    SelectColumns,
+)
 from tools.environments import known_environments, resolve_base_dir
 from tools.medallion import medallion
 from tools.store import StoreRegistry
@@ -51,6 +55,13 @@ from .schema import NAMESPACE, NATURAL_KEY, MyfeedRow  # noqa: F401
 
 FEED_NAME = "myfeed"
 SAMPLE_CSV = Path(__file__).parent / "sample_data" / "myfeed.csv"
+
+# The source columns silver keeps. raw lands whatever the source gave; silver
+# narrows it to the columns this Case Type declares, so a wider source does not
+# leak through into silver -- whose table is declared at this shape by
+# migrations/myfeed/. Edit it when the feed should carry more or fewer columns,
+# and add a migration beside the change.
+SELECT_RAW_COLUMNS = [f.name for f in fields(MyfeedRow)]
 
 # Pipelines this feed depends on being fresh before it runs
 UPSTREAMS = ()
@@ -79,13 +90,14 @@ def silver_builder(
     reject_writer: Writer | None = None,
     run_log: RunLog | None = None,
 ) -> Pipeline:
-    """Build the silver hop: coerce, quarantine value-rule breaches, validate.
+    """Build the silver hop: select, coerce, quarantine value-rule breaches, validate.
 
     ``reject_writer`` is opt-in: given one, value-rule breaches are routed to
     quarantine so the good rows still land. Edit these lines to change the hop.
     """
     p = Pipeline(f"{FEED_NAME}:silver", run_log=run_log)
     node = p.read(reader, name="read")
+    node = p.transform(SelectColumns(SELECT_RAW_COLUMNS), node, name="select")
     node = p.transform(SchemaCoercion(MyfeedRow), node, name="coerce")
     if reject_writer is not None:
         node = p.quarantine(

@@ -41,7 +41,12 @@ from framework.core import (
 )
 from framework.io import AccumulateByRun, CsvReader, Reader, Refresh, Writer
 from framework.run import Pipeline, RunContext, RunLog
-from framework.transform import Rename, SchemaCoercion, SchemaValueRulePartitioner
+from framework.transform import (
+    Rename,
+    SchemaCoercion,
+    SchemaValueRulePartitioner,
+    SelectColumns,
+)
 from tools.environments import known_environments, resolve_base_dir
 from tools.medallion import medallion
 from tools.store import StoreRegistry
@@ -55,6 +60,15 @@ SAMPLE_CSV = Path(__file__).parent / "sample_data" / "myfeed.csv"
 # canonical field names. raw keeps the source names faithfully; silver renames
 # them to the schema's vocabulary. Empty when the source already uses identifiers.
 RENAME: dict[str, str] = {}
+
+# The source columns silver keeps. raw lands whatever the source gave; silver
+# narrows it to the columns this feed declares, so a wider source does not leak
+# through into silver, gold and quarantine -- whose tables are declared at this
+# shape by migrations/myfeed/. A scaffold seeded from a feed file replaces this
+# with the source's own column names (RENAME's keys, plus the ones that needed
+# no renaming). Edit it when the feed should carry more or fewer columns, and
+# add a migration beside the change.
+SELECT_RAW_COLUMNS = [f.name for f in fields(MyfeedRow)]
 
 # Pipelines this feed depends on being fresh before it runs (a tuple of
 # ``framework.run.FreshnessRequirement``). A source feed has none.
@@ -84,14 +98,16 @@ def silver_builder(
     reject_writer: Writer | None = None,
     run_log: RunLog | None = None,
 ) -> Pipeline:
-    """Build the silver hop: rename, coerce, quarantine, validate.
+    """Build the silver hop: select, rename, coerce, quarantine, validate.
 
-    Rename the source columns to the schema's vocabulary, coerce the dtypes
-    storage loses, quarantine value-rule breaches so the good rows still land,
-    then validate the declared schema. Edit these lines to change the hop.
+    Keep the source columns this feed declares, rename them to the schema's
+    vocabulary, coerce the dtypes storage loses, quarantine value-rule breaches
+    so the good rows still land, then validate the declared schema. Edit these
+    lines to change the hop.
     """
     p = Pipeline(f"{FEED_NAME}:silver", run_log=run_log)
     node = p.read(reader, name="read")
+    node = p.transform(SelectColumns(SELECT_RAW_COLUMNS), node, name="select")
     if RENAME:
         node = p.transform(Rename(RENAME), node, name="rename")
     node = p.transform(SchemaCoercion(MyfeedRow), node, name="coerce")
