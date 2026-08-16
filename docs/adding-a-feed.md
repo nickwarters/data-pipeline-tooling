@@ -28,7 +28,83 @@ pipelines/orders/
   sample_data/orders.csv
 tests/pipelines/
   test_orders.py       # drives raw_builder() with sample rows + a recording writer
+migrations/orders/
+  raw/0001_create_initial_tables.sql         # the feed's baseline DDL, one per
+  silver/0001_create_initial_tables.sql      # database it writes — including
+  gold/0001_create_initial_tables.sql        # quarantine, whose reject table
+  quarantine/0001_create_initial_tables.sql  # would otherwise be undeclared
 ```
+
+**The feed is born under migration control.** A brand-new feed is the one case
+with no database to copy a `CREATE` statement out of, so `scaffold` renders its
+starting baselines from what it knows: the declared field names and their types
+(`str`/`int`/`float` → `TEXT`/`INTEGER`/`REAL`), taken from the same inference
+`--from-feed-file` already runs over the sample. Every table the feed makes after
+this one is declared the other way, by copying `sqlite_master` out of a real run
+([migrations.md](migrations.md)). Those baselines carry the landed
+columns plus what the wiring stamps — `logical_run_id` / `load_date` from
+`AccumulateByRun`, `pipeline_run_id` from every table-backed Writer, and
+`failed_rule` on the reject table. Apply them before the first run:
+
+```sh
+python -m cli migrate --base-dir /tmp/demo
+python -m cli run pipelines/orders --base-dir /tmp/demo
+```
+
+Edit those files freely until you have applied them somewhere; after that a shape
+change is a **new numbered migration** beside the baseline, never an edit to it —
+the runner records each file's checksum when it applies it and refuses one that
+has changed since ([migrations.md](migrations.md)). The generated test calls
+`build_databases(tmp_path, FEED_NAME)` before it runs, so it exercises the same
+write path production takes: no Writer creates a missing table, and a column the
+baseline forgot fails there rather than in a live run.
+
+With `--from-feed-file`, the **raw** baseline is declared in the source's own
+column names and silver's in the canonical ones — the same split
+`RAW_FEED_COLUMNS` / `RENAME` make in the code, since raw lands the source
+faithfully and the rename happens at silver. The Case Type variant renders no
+gold baseline, matching the pipeline it renders, which stops at silver.
+
+**Raw's baseline mirrors the feed file; the rest follow the schema.** Raw is
+always whatever came in, so its baseline declares *every* column the file has, in
+the file's own spelling — the 40-column cap does not apply to it. Silver, gold
+and quarantine describe the dataclass, so they carry the canonical names and the
+cap does apply.
+
+**`SELECT_RAW_COLUMNS` is what keeps those two in step.** The generated silver
+hop opens with a `SelectColumns` over it:
+
+```python
+SELECT_RAW_COLUMNS = [f.name for f in fields(OrdersRow)]   # or the source's own names
+...
+node = p.transform(SelectColumns(SELECT_RAW_COLUMNS), node, name="select")
+```
+
+So raw lands everything the source gave and silver keeps only the columns this
+feed declares — which is exactly the shape silver's, gold's and quarantine's
+baselines describe. Without it a 45-column source would reach silver carrying
+columns its table does not have, and the write would fail on `no such column`.
+
+Seeded from a feed file, the list is the source's own column names: `RENAME`'s
+keys plus the ones that needed no renaming. (`RENAME`'s keys alone would be
+wrong whenever only *some* of the source names need canonicalising — silver
+would keep those and drop the rest.)
+
+On a source wider than the cap the scaffold says where the extra columns go:
+
+```
+warning: feed file has 45 columns; keeping the first 40 in the generated
+schema, validator, test and the silver/gold baselines. The remaining 5 still
+land in raw -- raw is whatever came in -- and SELECT_RAW_COLUMNS drops them at
+silver. To carry one of them further, add it to the schema, to
+SELECT_RAW_COLUMNS, and to a migration.
+```
+
+`SelectColumns` raises if a listed column is absent, so a projection that has
+drifted from the source fails at the hop naming the column rather than landing a
+short table. That is also why widening the feed is three edits and not one: the
+schema says what a row means, `SELECT_RAW_COLUMNS` says what silver keeps, and
+the migration says what the table is.
 
 `pipeline.py` follows the framework's canonical pipeline contract: it exposes a
 `run(context: RunContext, *, describe: bool = False) -> Dataset` callable (and an
