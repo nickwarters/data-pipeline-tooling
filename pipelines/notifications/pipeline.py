@@ -1,10 +1,12 @@
 """Tell the two Conversation parties who did not post the last Message.
 
-Reads Sync's **gold** current state -- ``case_current`` and the gold
-``conversation_message`` Detail Table -- because the rule needs the last
-Message, the Case's people and its status at one grain, already reduced. Both
-tables already carry ``case_id`` and are already one row per their own grain, so
-nothing here re-derives a key or reduces a second time.
+Reads Sync's published current state -- every Case as it currently stands, and
+every Conversation Message -- because the rule needs the last Message, the
+Case's people and its status at one grain, already reduced. Both arrive keyed by
+``case_id`` and already one row per their own grain, so nothing here re-derives
+a key or reduces a second time. Neither is this pipeline's to locate: they come
+through ``readers.sharepoint_cases``, which is why no layer or table is named
+below.
 
 Emits one JSON file per pass into the deliverable outbox: an array of objects
 carrying exactly ``recipients`` / ``subject`` / ``body``. The path is unique per
@@ -24,14 +26,14 @@ import pandas as pd
 from framework.core import Dataset, PipelineError, Reader, Writer, format_failure
 from framework.io import AppendOnly, DatasetReader, JsonWriter, Refresh
 from framework.run import (
-    FreshnessRequirement,
     Pipeline,
     RunContext,
     RunLog,
     run_pipeline,
 )
 from framework.transform import AntiJoinWith
-from readers import users
+from readers.sharepoint_cases import UPSTREAM as SYNC_UPSTREAM
+from readers.sharepoint_cases import ConversationMessagesReader, CurrentCasesReader
 from readers.users import UsersReader
 from shared.account_names import to_bare_account
 from tools.deliverables import NOTIFICATIONS_DESTINATION, get_deliverable_path
@@ -40,17 +42,14 @@ from tools.observability import timestamps
 from tools.store import Store, StoreRegistry
 
 PIPELINE_NAME = "notifications"
-# Same-day, deliberately: the default max_age_days of 0 is the whole coupling
-# between the two schedules. Sync may run as often as it likes and this as often
-# as it likes; all that is required is that today's Sync has landed before
-# anyone is told anything. Widening this would trade that guarantee for a
-# quieter run log.
-UPSTREAMS = (FreshnessRequirement("sharepoint_cases"),)
+# Cited from the readers rather than restated here. Same-day, deliberately: the
+# max_age_days of 0 they carry is the whole coupling between the two schedules.
+# Sync may run as often as it likes and this as often as it likes; all that is
+# required is that today's Sync has landed before anyone is told anything.
+UPSTREAMS = (SYNC_UPSTREAM,)
 
-SYNC_SUBJECT = "sharepoint_cases"
-CASE_TABLE = "case_current"
-MESSAGE_TABLE = "conversation_message"
-
+# What this pipeline owns and writes. Where the Cases and the Conversation
+# Messages it reads actually live is not declared here at all.
 SUBJECT = "notifications"
 LEDGER_TABLE = "notified"
 # The ledger row is exactly this and nothing else. A notified_at column would be
@@ -106,10 +105,10 @@ def _empty(columns: tuple[str, ...]) -> Dataset:
 def last_message_per_case(messages: Dataset) -> Dataset:
     """Reduce the Conversation to each Case's last Message.
 
-    Gold holds one observation's worth of Messages per Case, so ``seq`` totally
-    orders the thread and the last Message is one ``idxmax``. ``posted_at`` is
-    carried through verbatim: it is the ledger's key, and parsing it would let a
-    spelling difference re-notify everybody.
+    Sync publishes one observation's worth of Messages per Case, so ``seq``
+    totally orders the thread and the last Message is one ``idxmax``.
+    ``posted_at`` is carried through verbatim: it is the ledger's key, and
+    parsing it would let a spelling difference re-notify everybody.
     """
     frame = messages.to_pandas()
     if frame.empty:
@@ -311,29 +310,18 @@ def outbox_filename(generated_at: str, pipeline_run_id: str) -> str:
     return f"{stamp}-{pipeline_run_id[:8]}.json"
 
 
-def users_path() -> Path:
-    """The directory extract behind the recipients, as this pipeline sees it.
-
-    Interim, and reaching for the reader's private declaration on purpose:
-    naming a path here is exactly what a consumer must stop doing, and #737
-    deletes this helper along with the rest of the location arithmetic. It
-    survives one ticket only so the tests that stub the directory keep their
-    existing seam while the reader moves.
-    """
-    return users._BUNDLED_FEED
-
-
 def run(context: RunContext, *, describe: bool = False) -> Dataset:
     """Select who is owed a notification, then publish and record it."""
     base_dir = context.base_dir or Path.cwd() / "data"
-    registry = StoreRegistry(base_dir)
-    sync = medallion(registry, SYNC_SUBJECT)
-    ledger_store = medallion(registry, SUBJECT).gold
+    # The ledger is this pipeline's own subject, so it resolves that itself.
+    # Everything it reads belongs to someone else and arrives through a reader
+    # that knows where it lives.
+    ledger_store = medallion(StoreRegistry(base_dir), SUBJECT).gold
 
     selection = pending_notifications_builder(
-        sync.gold.reader(MESSAGE_TABLE),
-        sync.gold.reader(CASE_TABLE),
-        UsersReader(path=users_path()),
+        ConversationMessagesReader(base_dir=base_dir),
+        CurrentCasesReader(base_dir=base_dir),
+        UsersReader(base_dir=base_dir),
         ledger_reader(ledger_store),
         run_log=context.run_log,
     )
