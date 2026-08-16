@@ -40,7 +40,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from tools.baseline_ddl import PROVENANCE_COLUMN, Column, render_migration
+from framework.core.protocols import RUN_PROVENANCE_COLUMN
+from framework.io.sql import quote_identifier
 
 # The placeholder tokens in the template: substituted in file contents and paths.
 _SLUG_TOKEN = "myfeed"
@@ -400,11 +401,34 @@ def _schema_fields(spec: "_FeedSpec | None") -> list[tuple[str, str]]:
     return list(zip(spec.names, spec.inferred))
 
 
-def _columns(pairs: list[tuple[str, str]], *stamps: str) -> list[Column]:
-    return [
-        Column(name, _DECLARED_TO_SQLITE.get(declared, "TEXT"))
-        for name, declared in pairs
-    ] + [Column(name, "TEXT") for name in stamps]
+def _columns(pairs: list[tuple[str, str]], *stamps: str) -> list[str]:
+    """``"name" TYPE`` fragments for a rendered ``CREATE TABLE``.
+
+    A brand-new feed is the one case with no database to copy a ``CREATE``
+    statement out of, so its starting baseline is rendered from what the
+    template declares. Every table it makes after this one is generated the
+    other way, from `sqlite_master` — see
+    ``scripts/generate_baseline_migrations.py``.
+    """
+    typed = [
+        (name, _DECLARED_TO_SQLITE.get(declared, "TEXT")) for name, declared in pairs
+    ]
+    typed += [(name, "TEXT") for name in stamps]
+    return [f"{quote_identifier(name)} {sqlite_type}" for name, sqlite_type in typed]
+
+
+def _render_migration(tables: dict[str, list[str]], *, header: str) -> str:
+    """A whole baseline file: the header comment, then one CREATE per table.
+
+    No ``IF NOT EXISTS``: a baseline runs once against a database that does not
+    have the table, and a migration that quietly does nothing when the table is
+    already there would hide exactly the drift the ledger exists to catch.
+    """
+    parts = ["\n".join(f"-- {line}".rstrip() for line in header.splitlines())]
+    for table, columns in tables.items():
+        body = ",\n".join(f"    {column}" for column in columns)
+        parts.append(f"CREATE TABLE {quote_identifier(table)} (\n{body}\n);")
+    return "\n\n".join(parts) + "\n"
 
 
 def _migration_plan(
@@ -429,13 +453,13 @@ def _migration_plan(
         if spec is not None and spec.needs_raw
         else declared
     )
-    stamps = (*_STAMP_COLUMNS, PROVENANCE_COLUMN)
+    stamps = (*_STAMP_COLUMNS, RUN_PROVENANCE_COLUMN)
     plan = {
         "raw": {feed: _columns(raw_pairs, *stamps)},
         "silver": {feed: _columns(declared, *stamps)},
         "quarantine": {
             feed: _columns(
-                declared, *_STAMP_COLUMNS, _REJECT_REASON_COLUMN, PROVENANCE_COLUMN
+                declared, *_STAMP_COLUMNS, _REJECT_REASON_COLUMN, RUN_PROVENANCE_COLUMN
             )
         },
     }
@@ -454,7 +478,7 @@ def _migration_plan(
         "it anywhere."
     )
     return {
-        database: render_migration(tables, header=header.format(database=database))
+        database: _render_migration(tables, header=header.format(database=database))
         for database, tables in plan.items()
     }
 

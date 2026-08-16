@@ -17,8 +17,8 @@ from framework.run import RunContext
 from tests.framework_testing import (
     RecordingRunLog,
     RecordingWriter,
+    build_databases,
     given_rows,
-    migrated_base_dir,
     read_rows,
 )
 from tools.medallion import medallion
@@ -29,10 +29,12 @@ from .schema import MyfeedRow
 
 
 def test_bundled_sample_feed_refines_through_to_gold(tmp_path):
-    base_dir = migrated_base_dir(tmp_path, FEED_NAME)
-    run(RunContext(base_dir=base_dir, pipeline=FEED_NAME))
+    # The feed's tables are declared by migrations/myfeed/, not created by the
+    # first write, so they have to exist before the run.
+    build_databases(tmp_path, FEED_NAME)
+    run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
 
-    med = medallion(StoreRegistry(base_dir), FEED_NAME)
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
 
     landed = read_rows(med.raw, FEED_NAME)
     assert len(landed) > 0

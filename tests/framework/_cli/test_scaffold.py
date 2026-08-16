@@ -490,7 +490,7 @@ def test_a_scaffolded_feed_runs_against_its_own_migrations(tmp_path, monkeypatch
     import sys
 
     from framework.run.run_context import RunContext
-    from tests.framework_testing import migrate_subject
+    from tests.framework_testing import build_databases
 
     scaffold.render("orders", tmp_path)
     (tmp_path / "pipelines" / "__init__.py").write_text("", encoding="utf-8")
@@ -502,7 +502,7 @@ def test_a_scaffolded_feed_runs_against_its_own_migrations(tmp_path, monkeypatch
     from pipelines.orders import pipeline as feed  # noqa: PLC0415
 
     base_dir = tmp_path / "data"
-    migrate_subject(base_dir, "orders", migrations_root=tmp_path / "migrations")
+    build_databases(base_dir, "orders", migrations_root=tmp_path / "migrations")
     feed.run(RunContext(base_dir=base_dir, pipeline="orders"))
 
     landed = _rows(base_dir / "orders" / "gold.db", "orders")

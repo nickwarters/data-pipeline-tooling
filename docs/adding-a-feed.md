@@ -35,7 +35,11 @@ migrations/orders/
   quarantine/0001_create_initial_tables.sql  # would otherwise be undeclared
 ```
 
-**The feed is born under migration control.** Its baselines declare the schema's
+**The feed is born under migration control.** A brand-new feed is the one case
+with no database to copy a `CREATE` statement out of, so `scaffold` renders its
+starting baselines from what the template declares — every table it makes after
+this one is generated the other way, out of `sqlite_master`
+([migrations.md](migrations.md)). Those baselines declare the schema's
 columns plus what the wiring stamps — `logical_run_id` / `load_date` from
 `AccumulateByRun`, `pipeline_run_id` from every table-backed Writer, and
 `failed_rule` on the reject table. Apply them before the first run:
@@ -48,10 +52,10 @@ python -m cli run pipelines/orders --base-dir /tmp/demo
 Edit those files freely until you have applied them somewhere; after that a shape
 change is a **new numbered migration** beside the baseline, never an edit to it —
 the runner records each file's checksum when it applies it and refuses one that
-has changed since ([migrations.md](migrations.md)). The generated test uses
-`migrated_base_dir(tmp_path, FEED_NAME)`, so it runs against the same write path
-production takes: no Writer creates a missing table, and a column the baseline
-forgot fails there rather than in a live run.
+has changed since ([migrations.md](migrations.md)). The generated test calls
+`build_databases(tmp_path, FEED_NAME)` before it runs, so it exercises the same
+write path production takes: no Writer creates a missing table, and a column the
+baseline forgot fails there rather than in a live run.
 
 With `--from-feed-file`, the **raw** baseline is declared in the source's own
 column names and silver's in the canonical ones — the same split
