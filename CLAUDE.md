@@ -85,7 +85,14 @@ toolchain, a domain language, or a release. Two rules follow:
   Case Type declarations, `CasePool`, and its gold helpers, which live outside
   the framework; it also owns the application's orchestration schedules,
   `case_review/schedules.py`, which `orchestrate --app` names),
-  `pipelines/` (scripts), `tests/` (pytest, with author test helpers
+  `pipelines/` (scripts), `readers/` (the **Shared Readers**: a read that
+  crosses a subject boundary goes through `readers/<subject>.py`, which declares
+  that dataset's location once and hands a consumer a `Reader` it constructs
+  with a `base_dir` and nothing else — a pipeline resolves the subject it
+  *writes* through the medallion and never the one it merely reads
+  ([ADR-0026](docs/adr/0026-shared-readers-declare-cross-subject-reads.md),
+  [`docs/shared-readers.md`](docs/shared-readers.md)); read-only by
+  construction, it mints no Writers), `tests/` (pytest, with author test helpers
   in `tests/framework_testing/`), `docs/` (architecture, ADRs).
 - **Test layout:** `tests/` mirrors the source shape — `tests/framework/`
   (itself split into `core/`, `io/`, `transform/`, `run/`,
