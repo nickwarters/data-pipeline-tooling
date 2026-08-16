@@ -11,7 +11,7 @@ happens to be a file bundled beside it.
 
 **This makes no claim about the Staff Hierarchy.** The two are expected to
 converge and they have not; nothing here decides it either way, and the silence
-is deliberate rather than an omission (ADR-0026).
+is deliberate rather than an omission.
 """
 
 from __future__ import annotations
