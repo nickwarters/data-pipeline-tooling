@@ -6,13 +6,14 @@ between the framework and the pipeline scripts that depend on it: it states
 **which names are public**, **which modules are internal layout**, and the one
 rule that follows from that split.
 
-> **The rule.** Application code — both `pipelines/` and the `case_review/`
-> domain layer — imports from the public **facades** — `framework.core`,
+> **The rule.** Application code — `pipelines/`, the `case_review/` domain
+> layer, and the `readers/` Shared Readers — imports from the public
+> **facades** — `framework.core`,
 > `framework.io`, `framework.transform`, `framework.run` — never from the
 > modules behind them. The facade names are the stable surface; the submodule
 > paths can be reorganised without notice. A test
-> (`tests/integration/test_public_api.py`) holds both `pipelines/` and
-> `case_review/` to this boundary — and it checks *both* halves:
+> (`tests/integration/test_public_api.py`) holds all three trees
+> to this boundary — and it checks *both* halves:
 > `framework._internal.schema` fails because it names no facade, and
 > `framework.core.value_rules` fails because it reaches **behind** one.
 > (Previously the check compared only the second dotted segment, so the second —
