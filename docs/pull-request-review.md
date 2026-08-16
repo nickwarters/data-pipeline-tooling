@@ -44,8 +44,12 @@ asks where the new field went.
   *and* this project's declared row schemas. The two projects keep separate
   glossaries and **neither is authoritative for the other** — a term that matches
   by spelling may not match by meaning.
-- `tests/integration/test_frontend_case_columns_reach_the_feed.py` holds the
-  Case list column side of this. It cannot see a new field inside a JSON blob.
+- **Nothing checks this.** A test comparing the documented column list against
+  `RAW_FEED_COLUMNS` was built and rejected: it coupled the suite to a document
+  that may move out of the repository, and could not see inside the JSON blobs
+  where a good share of new fields appear
+  ([#730](https://github.com/nickwarters/data-pipeline-tooling/issues/730)). So
+  this one is on the reviewer — which is the whole reason it is written here.
 
 ## A change to a deployed table's shape
 
@@ -74,6 +78,12 @@ The single most important thing to check on a change touching either:
   change over that.
 - **Is a gold rebuild's column set changing?** That is a migration too. So is a
   quarantine reject table's.
+- **Is a new feed heading for a real environment?** Nothing checks that a
+  deployed subject has a `migrations/<subject>/` directory — a feed without one
+  does not fail, it quietly keeps creating its tables. `scaffold` renders the
+  baselines for a feed it generates, so this is really a question about anything
+  it did not generate. Tracked as
+  [#729](https://github.com/nickwarters/data-pipeline-tooling/issues/729).
 - **Is the migration in its own numbered file, applied in its own transaction?**
   Production is a UNC share under the rollback journal, where a writer's lock is
   exclusive.

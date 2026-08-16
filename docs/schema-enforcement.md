@@ -88,10 +88,13 @@ chunk in a `.read_chunks` stream run the same hops as a busy one, with no
 per-feed casting to get them past the gate.
 
 **The coercer has the other half of the rule.** A dtype the validator waves
-through still reaches storage, and an empty write is what *creates* a SQLite
-table — a column landed as `object` takes `TEXT` affinity for the life of the
-feed, so a feed whose first poll is quiet would store every later integer id as
-text. So on an empty frame `SchemaCoercion` types **every** declared column,
+through still reaches storage, and where a table is *not* declared by a
+migration an empty write is what *creates* it — a column landed as `object`
+takes `TEXT` affinity for the life of the feed, so a feed whose first poll is
+quiet would store every later integer id as text. (Under migration control the
+SQL fixes the affinity instead, and the coercion below stops being what decides
+it — but it still decides what the *validator* sees, so the rule is unchanged
+either way.) So on an empty frame `SchemaCoercion` types **every** declared column,
 including the round-trip-safe `str` / `int` / `float` it leaves alone when there
 are rows. The target dtypes are chosen for the affinity they create — `object` →
 `TEXT`, `int64` → `INTEGER`, `float64` → `REAL` — since fixing the created
