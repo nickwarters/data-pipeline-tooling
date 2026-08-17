@@ -61,6 +61,36 @@ test('conversation view renders messages and gates composition by access', () =>
   assert.equal(readOnly.querySelector('textarea'), null);
 });
 
+test('conversation panel exposes a close control only when onClose is passed', () => {
+  let closed = 0;
+  const withClose = conversationView({
+    messages: [],
+    access: 'read-only',
+    heading: 'Conversation',
+    onSend() {},
+    onClose: () => {
+      closed += 1;
+    },
+  });
+  const close = getByRole(withClose, 'button', {
+    name: 'Close conversation panel',
+  });
+  fireEvent(close, 'click');
+  assert.equal(closed, 1);
+
+  const withoutClose = conversationView({
+    messages: [],
+    access: 'read-only',
+    heading: 'Conversation',
+    onSend() {},
+  });
+  assert.equal(
+    withoutClose.querySelector('.cora-conversation-close'),
+    null,
+    'omitting onClose renders no close button'
+  );
+});
+
 test('conversation Send reads and clears the live textarea after a rerender', () => {
   /** @type {any} */
   const container = document.createElement('main');

@@ -12,13 +12,29 @@ import { awaitingFrontlineAfterPost } from '../../services/action-centre-flags.j
  *   access: 'edit'|'read-only'|'hidden',
  *   heading: string,
  *   onSend: (body: string) => void|Promise<void>,
+ *   onClose?: () => void,
  * }} props
  */
 export function conversationView(props) {
   return h(
     'section',
     { className: 'cora-conversation-panel' },
-    h('h2', {}, props.heading),
+    props.onClose
+      ? h(
+          'div',
+          { className: 'cora-conversation-panel-header' },
+          h('h2', {}, props.heading),
+          h(
+            'button',
+            {
+              className: 'cora-conversation-close',
+              'aria-label': 'Close conversation panel',
+              onclick: props.onClose,
+            },
+            '×'
+          )
+        )
+      : h('h2', {}, props.heading),
     props.messages.length
       ? h(
           'ul',
