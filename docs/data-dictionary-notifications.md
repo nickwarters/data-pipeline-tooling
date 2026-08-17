@@ -2,11 +2,16 @@
 
 The `notifications` pipeline reads Sync's **gold** current state and produces
 three things: a **file Deliverable** in the outbox (the notifications
-themselves), a gold **`notified` ledger** (who has been told what), and it
-consumes one **`users` reference feed** (who a login is, and who manages them).
-Recipients are the two Conversation parties who did not author the last Message
-— see
-[ADR-0024](adr/0024-notification-recipients-are-the-two-parties-who-did-not-speak-last.md).
+themselves), two gold **Notified ledger** tables (who has been told what, one
+per trigger), and it consumes one **`users` reference feed** (who a login is,
+and who manages them). Two triggers, each with its own recipient rule: a
+Conversation Message notifies the two Conversation parties who did not author
+the last Message — see
+[ADR-0024](adr/0024-notification-recipients-are-the-two-parties-who-did-not-speak-last.md)
+— and a Case becoming Reportable while carrying remediation notifies the
+Responsible Party and their Manager, the Manager resolved from the Responsible
+Party's own directory row the same way ADR-0024 resolves it for the Conversation
+rule.
 
 The prose companion to `pipelines/notifications/`; the enforced contracts are in
 `pipelines/notifications/pipeline.py` and, for the `users` directory feed it
@@ -14,27 +19,31 @@ reads but does not own, the Shared Reader `readers/users.py`.
 
 ## Three things to know before this reaches a tenant
 
-**1. `CASE_LINK_TEMPLATE` is a placeholder.** It is
-`https://sharepoint.invalid/sites/REPLACE-ME/SitePages/REPLACE-ME.aspx#/conversation/{case_type}/{source_item_id}`,
-and two tenant facts fold into it: the **site collection** holding the review
+**1. `CASE_LINK_TEMPLATE` and `REPORTABLE_CASE_LINK_TEMPLATE` are placeholders.**
+Both are built from one shared base,
+`https://sharepoint.invalid/sites/REPLACE-ME/SitePages/REPLACE-ME.aspx`, and two
+tenant facts fold into it: the **site collection** holding the review
 application, and the **host `.aspx` page** the single-page app is served from.
 Neither exists anywhere in this repository to copy — the app derives its own site
-from the page it is served from. The fragment after them is the app's registered
-`#/conversation/:caseType/:id` route, and is *not* a placeholder: it is
-deliberately a deep link into the app rather than a `DispForm.aspx` list form,
-because the recipient must land somewhere they can **reply**. Both unknowns are
-swapped in one place.
+from the page it is served from. The fragment after the base is what differs
+between the two constants: `#/conversation/:caseType/:id` for the Conversation
+trigger, `#/case/:caseType/:id` for the Reportable trigger, and neither fragment
+is a placeholder — both are the app's own registered routes, and the
+Conversation one is deliberately a deep link the recipient can **reply** from
+rather than a `DispForm.aspx` list form. Both tenant unknowns are swapped in one
+place because the two constants share the same base.
 
 **2. `sample_data/users.csv` carries example addresses, not people.** Every
 address is `@example.invalid` and every login is a fixture name. Going live means
 pointing this feed at a real directory extract with the same four columns; until
 then a notification would be addressed to nobody.
 
-**3. The first run tells everybody.** The ledger is empty on the first pass, so
-every non-terminal Case with a Conversation produces a notification. This is
-accepted, not a defect — the pipeline writes a file into an outbox, it does not
-send mail — and the operator drains or discards that first file **deliberately**.
-See the go-live checklist in
+**3. The first run tells everybody, on both triggers.** Each ledger is empty on
+the first pass, so every non-terminal Case with a Conversation produces a
+notification, and every already-Reportable Case carrying remediation produces
+one too. This is accepted, not a defect — the pipeline writes a file into an
+outbox, it does not send mail — and the operator drains or discards that first
+file **deliberately**. See the go-live checklist in
 [`sharepoint-cases-going-live.md`](sharepoint-cases-going-live.md).
 
 ---
@@ -47,25 +56,28 @@ See the go-live checklist in
 |-----------|-------|
 | **Deliverable name** | `deliverables/cora_notifications/<stamp>-<run>.json` |
 | **Destination** | `NOTIFICATIONS_DESTINATION` = `cora_notifications` (`tools/deliverables.py`) |
-| **Grain** | one object per Case with at least one un-notified recipient |
+| **Grain** | one object per Case per trigger with at least one un-notified recipient — a Case qualifying under both triggers in one pass yields two objects |
 | **Writer** | `JsonWriter` (`orient="records"`, so the file is a JSON array of objects in frame-column order) |
 | **Load strategy** | `Refresh()` — onto a path that is **unique per pass**, so it never overwrites an undrained file |
 | **Upstream dependencies** | `sharepoint_cases` gold `case_current` and `conversation_message`; the `users` feed |
 | **Consumer** | the notification service, which drains the outbox as a per-file work queue with no ordering key |
-| **Emitted when** | at least one recipient survives the ledger anti-join; a pass owing nobody anything writes **no file at all**, rather than an empty array |
+| **Emitted when** | at least one recipient survives either trigger's ledger anti-join; a pass owing nobody anything on **either** trigger writes **no file at all**, rather than an empty array |
 
 ### Part B — the three keys, verbatim
 
 **This is the consumer's contract.** Every object carries exactly these three
 keys, in this order, and no others. Adding a fourth is a breaking change to the
-notification service, and the pipeline gates it: a validate node refuses any
-other column set or order before the file is written.
+notification service. There is no validate node gating it: the contract is held
+by construction — each trigger's render step builds its frame with
+`columns=list(OUTBOX_COLUMNS)` — and checked by
+`test_the_file_is_an_array_of_objects_carrying_exactly_the_three_keys` in
+`tests/pipelines/test_notifications.py`.
 
 | Key | Type | Description | Example |
 |-----|------|-------------|---------|
 | `recipients` | `str` | The recipients' email addresses joined by `;`, **with no spaces around the separator**, sorted. Never blank — an object with no recipients is never produced. | `a.khan@example.invalid;e.novak@example.invalid` |
-| `subject` | `str` | The literal string `you have a new message`. Not templated, not per-Case. | `you have a new message` |
-| `body` | `str` | A minimal HTML block: one paragraph, then one paragraph holding one `<a href>` to the Case's conversation. **No `<style>` element, no inline `style=` attribute, no table layout** — the notification system supports HTML but barely any styling. Every interpolated value is `html.escape`d. | `<p>There is a new message…</p>\n<p><a href="…">Open the conversation</a></p>` |
+| `subject` | `str` | One of two literal strings, one per trigger: `SUBJECT_LINE` (`you have a new message`) for the Conversation trigger, `REPORTABLE_SUBJECT_LINE` (`a case is reportable and needs remediation attention`) for the Reportable trigger. Not templated, not per-Case within a trigger. | `you have a new message` |
+| `body` | `str` | A minimal HTML block: one paragraph, then one paragraph holding one `<a href>` — to the Case's conversation for the Conversation trigger, to the Case page for the Reportable trigger. **No `<style>` element, no inline `style=` attribute, no table layout** — the notification system supports HTML but barely any styling. Every interpolated value is `html.escape`d. | `<p>There is a new message…</p>\n<p><a href="…">Open the conversation</a></p>` |
 
 ---
 
@@ -120,6 +132,62 @@ None. The row is its key; there are no other fields for a rule to relate.
 - A crash between the outbox write and the ledger write costs a **duplicate
   notification** on the next pass, never a lost one. That is why the two writes
   are ordered, and why they are ordered that way round.
+
+---
+
+## `notified_reportable` — gold layer, `notifications` subject
+
+The Reportable trigger's own **Notified ledger** table, distinct from `notified`
+above because the two triggers do not share a natural key.
+
+### Part A — overview
+
+| Attribute | Value |
+|-----------|-------|
+| **Table name** | `notified_reportable` |
+| **Subject** | `notifications` (`<base_dir>/notifications/gold.db`) |
+| **Medallion layer** | gold |
+| **Grain** | one row per `(case_id, recipient)` |
+| **Is this a Case Type?** | No — application state |
+| **Reader** | `SqliteReader`, through the namespace `Store` |
+| **Load strategy** | `AppendOnly(("case_id", "recipient"))` |
+| **Written** | *after* the outbox file lands, by a sequencing edge in the graph — the same rule as `notified`, applied independently |
+
+### Part B — field dictionary
+
+| Field | Type | Nullable | Description | Example | Sensitivity | Notes |
+|-------|------|----------|-------------|---------|-------------|-------|
+| `case_id` | `str` | No | The Case the notification was about, as gold already carries it. | `9f2c…` | Internal | Not re-derived here; gold's column is used as landed. |
+| `recipient` | `str` | No | The email address told. Keyed by the address rather than the login, because the address is what was actually written into a file. | `b.okafor@example.invalid` | PII | A directory email change therefore re-notifies once — the safe direction. |
+
+**No `reportable_at` column, and no timestamp column at all.** Unlike
+`message_at` on the Conversation trigger's table, `reportable_at` is frozen at
+the Reportable milestone and never advances for a given Case — so a Case cannot
+become Reportable a second time, and a third key column would do no work
+distinguishing rows. `(case_id, recipient)` is the whole, truthful key. The row
+is otherwise exactly its key, for the same reason `notified`'s is: the
+append-only comparison spans every non-provenance column, so a non-key value
+would turn a legitimate re-present into an `AppendOnlyConflictError`.
+
+### Part C — Row checks
+
+None. The row is its key; there are no other fields for a rule to relate.
+
+### Part D — quality notes
+
+- The first pass reads a table that **does not exist yet**, the same guard as
+  `notified`: `Store.columns_of(...)` returning `None` yields an empty
+  two-column Dataset instead of raising.
+- A crash between the outbox write and this ledger write costs a **duplicate
+  notification** on the next pass, never a lost one — the same trade-off as
+  `notified`, made independently because the two writes are unrelated.
+- The predicate reads `had_remediation`, never `effective_had_remediation`:
+  `had_remediation` is frozen at the Reportable milestone the trigger is about,
+  where `effective_had_remediation` is the later, post-amendment correction.
+- **Accepted cost:** a terminal Case (`Completed`/`Void`) is excluded from
+  selection even while carrying remediation. A Case that becomes
+  Reportable-with-remediation and reaches a terminal status before the next
+  pass runs is therefore **never notified at all** — not merely delayed.
 
 ---
 

@@ -265,21 +265,25 @@ It reads this feed's gold, so it cannot be pointed at a tenant before this one
 is. Three items, all in
 [`data-dictionary-notifications.md`](data-dictionary-notifications.md):
 
-- [ ] `CASE_LINK_TEMPLATE` in `pipelines/notifications/pipeline.py` has the real
-      **site collection** and the real **host `.aspx` page** the review
-      application is served from. The `#/conversation/...` fragment after them is
-      the app's own route and stays as it is. A placeholder link is a
+- [ ] `CASE_LINK_TEMPLATE` **and** `REPORTABLE_CASE_LINK_TEMPLATE` in
+      `pipelines/notifications/pipeline.py` have the real **site collection**
+      and the real **host `.aspx` page** the review application is served from.
+      Both constants share one base, so this is one edit, not two. The
+      `#/conversation/...` and `#/case/...` fragments after the base are the
+      app's own routes and stay as they are. A placeholder link is a
       notification the recipient cannot act on.
 - [ ] `readers/sample_data/users.csv` points at a real directory
       extract, not the bundled `@example.invalid` fixture. The four columns are
       `login,email,manager_login,manager_email`; a duplicate `login` aborts the
       read on purpose.
-- [ ] **The first run's file is drained or discarded deliberately.** The ledger
-      starts empty, so the first pass emits a notification for *every*
-      non-terminal Case that has a Conversation — not a defect, and not
-      something to build a seed flag for. Decide before that run whether the
-      backlog should be sent or dropped, and act on the file accordingly. Every
-      pass after it emits only what has changed.
+- [ ] **The first run's file is drained or discarded deliberately, for both
+      triggers.** Each of the two Notified ledgers starts empty, so the first
+      pass emits a notification for *every* non-terminal Case that has a
+      Conversation, **and** for every already-Reportable Case carrying
+      remediation — not a defect, and not something to build a seed flag for.
+      Decide before that run whether the backlog should be sent or dropped, and
+      act on the file accordingly. Every pass after it emits only what has
+      changed.
 
 ## Rollback
 

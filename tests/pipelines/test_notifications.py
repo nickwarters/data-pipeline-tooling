@@ -14,6 +14,9 @@ from pipelines.notifications.pipeline import (
     CASE_LINK_TEMPLATE,
     LEDGER_KEY,
     LEDGER_TABLE,
+    REPORTABLE_CASE_LINK_TEMPLATE,
+    REPORTABLE_LEDGER_TABLE,
+    REPORTABLE_SUBJECT_LINE,
     SUBJECT,
     SUBJECT_LINE,
 )
@@ -48,6 +51,7 @@ USERS = (
 )
 
 AS_OF = "2026-08-04T18:00:00+00:00"
+REPORTABLE_AT = "2026-08-04T20:00:00.000Z"
 
 
 # --- fixtures ---------------------------------------------------------------
@@ -61,6 +65,8 @@ def _case(
     source_item_id: str = "42",
     reviewer: str = REVIEWER,
     party: str = PARTY,
+    reportable_at: str | None = None,
+    had_remediation: float | None = None,
 ) -> dict[str, object]:
     return {
         "case_id": case_id,
@@ -70,6 +76,8 @@ def _case(
         "responsible_party_name": party,
         "status": status,
         "as_of_utc": AS_OF,
+        "reportable_at": reportable_at,
+        "had_remediation": had_remediation,
     }
 
 
@@ -158,6 +166,11 @@ def _recipients(base_dir: Path) -> list[str]:
 def _ledger(base_dir: Path) -> list[dict]:
     store = medallion(StoreRegistry(base_dir), SUBJECT).gold
     return read_rows(store, LEDGER_TABLE)
+
+
+def _reportable_ledger(base_dir: Path) -> list[dict]:
+    store = medallion(StoreRegistry(base_dir), SUBJECT).gold
+    return read_rows(store, REPORTABLE_LEDGER_TABLE)
 
 
 # --- the rule's four worked sequences ---------------------------------------
@@ -490,7 +503,272 @@ def test_the_ledger_reader_still_tolerates_a_table_that_is_absent(tmp_path):
     store = medallion(StoreRegistry(tmp_path), SUBJECT).gold
     assert store.columns_of(LEDGER_TABLE).columns() is None
 
-    assert rows_of(notifications.ledger_reader(store)()) == []
+    assert rows_of(notifications.ledger_reader(store, LEDGER_TABLE, LEDGER_KEY)()) == []
+
+
+# --- the Reportable-with-remediation trigger --------------------------------
+
+
+def test_reportable_with_remediation_notifies_the_party_and_their_manager(
+    base_dir, users_csv
+):
+    _seed(
+        base_dir,
+        [_case(reportable_at=REPORTABLE_AT, had_remediation=1)],
+        [],
+    )
+
+    _run(base_dir)
+
+    assert _recipients(base_dir) == sorted([PARTY_EMAIL, MANAGER_EMAIL])
+
+
+def test_the_managers_own_directory_row_wins_over_the_address_cached_on_the_party(
+    base_dir, tmp_path, monkeypatch
+):
+    stale = tmp_path / "users-stale-manager.csv"
+    stale.write_text(
+        "login,email,manager_login,manager_email\n"
+        f"b.okafor,{PARTY_EMAIL},{MANAGER_LOGIN},e.novak@old.invalid\n"
+        f"e.novak,{MANAGER_EMAIL},m.iqbal,m.iqbal@example.invalid\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(users, "_BUNDLED_FEED", stale)
+    _seed(base_dir, [_case(reportable_at=REPORTABLE_AT, had_remediation=1)], [])
+
+    _run(base_dir)
+
+    assert _recipients(base_dir) == sorted([PARTY_EMAIL, MANAGER_EMAIL])
+
+
+def test_a_reportable_case_with_no_remediation_notifies_nobody(base_dir, users_csv):
+    _seed(base_dir, [_case(reportable_at=REPORTABLE_AT, had_remediation=0.0)], [])
+
+    result = _run(base_dir)
+
+    assert len(result) == 0
+    assert _files(base_dir) == []
+
+
+def test_a_case_carrying_remediation_that_is_not_yet_reportable_notifies_nobody(
+    base_dir, users_csv
+):
+    _seed(base_dir, [_case(reportable_at=None, had_remediation=1)], [])
+
+    result = _run(base_dir)
+
+    assert len(result) == 0
+    assert _files(base_dir) == []
+
+
+def test_a_missing_remediation_flag_is_read_as_no_remediation_rather_than_as_truthy(
+    base_dir, users_csv
+):
+    # The NaN trap: had_remediation is gold REAL, so a missing flag arrives as
+    # NaN, and bool(nan) is True. Both a wholly-absent flag and an explicit 0.0
+    # must read as "no remediation".
+    _seed(
+        base_dir,
+        [
+            _case("case-1", reportable_at=REPORTABLE_AT, had_remediation=None),
+            _case(
+                "case-2",
+                reportable_at=REPORTABLE_AT,
+                had_remediation=0.0,
+                source_item_id="43",
+            ),
+        ],
+        [],
+    )
+
+    result = _run(base_dir)
+
+    assert len(result) == 0
+    assert _files(base_dir) == []
+
+
+def test_a_terminal_case_notifies_nobody_even_carrying_remediation(base_dir, users_csv):
+    _seed(
+        base_dir,
+        [
+            _case(
+                "case-1",
+                status="Completed",
+                reportable_at=REPORTABLE_AT,
+                had_remediation=1,
+            ),
+            _case(
+                "case-2",
+                status="Void",
+                reportable_at=REPORTABLE_AT,
+                had_remediation=1,
+                source_item_id="43",
+            ),
+        ],
+        [],
+    )
+
+    result = _run(base_dir)
+
+    assert len(result) == 0
+    assert _files(base_dir) == []
+
+
+def test_both_paths_empty_writes_no_file(base_dir, users_csv):
+    _seed(base_dir, [_case()], [])
+
+    result = _run(base_dir)
+
+    assert len(result) == 0
+    assert _files(base_dir) == []
+
+
+def test_the_remediation_body_links_to_the_case_rather_than_the_conversation(
+    base_dir, users_csv
+):
+    _seed(base_dir, [_case(reportable_at=REPORTABLE_AT, had_remediation=1)], [])
+
+    _run(base_dir)
+    notification = _payload(base_dir)[0]
+    body = notification["body"]
+
+    assert notification["subject"] == REPORTABLE_SUBJECT_LINE
+    expected = REPORTABLE_CASE_LINK_TEMPLATE.format(
+        case_type="claims", source_item_id="42"
+    )
+    assert f'<a href="{expected}"' in body
+    assert body.count("<a href=") == 1
+    assert body.count("<p>") == 2
+    assert "<style" not in body
+    assert "style=" not in body
+    assert "<table" not in body
+
+
+def test_the_remediation_notification_is_sent_once_and_a_second_pass_emits_no_file(
+    base_dir, users_csv
+):
+    _seed(base_dir, [_case(reportable_at=REPORTABLE_AT, had_remediation=1)], [])
+    _run(base_dir)
+    assert len(_files(base_dir)) == 1
+
+    result = _run(base_dir)
+
+    assert len(result) == 0
+    assert len(_files(base_dir)) == 1
+
+
+def test_both_triggers_on_one_case_produce_two_objects_and_neither_suppresses_the_other(
+    base_dir, users_csv
+):
+    _seed(
+        base_dir,
+        [_case(reportable_at=REPORTABLE_AT, had_remediation=1)],
+        [_message(0, "a.khan", "2026-08-04T16:02:00.000Z")],
+    )
+
+    _run(base_dir)
+    payload = _payload(base_dir)
+
+    assert len(payload) == 2
+    assert sorted(notification["subject"] for notification in payload) == sorted(
+        [SUBJECT_LINE, REPORTABLE_SUBJECT_LINE]
+    )
+    by_subject = {
+        notification["subject"]: notification["body"] for notification in payload
+    }
+    assert "#/case/" in by_subject[REPORTABLE_SUBJECT_LINE]
+    assert "#/conversation/" in by_subject[SUBJECT_LINE]
+    assert any(row["case_id"] == "case-1" for row in _ledger(base_dir))
+    assert any(row["case_id"] == "case-1" for row in _reportable_ledger(base_dir))
+
+    result = _run(base_dir)
+
+    assert len(result) == 0
+    assert len(_files(base_dir)) == 1
+
+
+def test_a_reportable_case_with_no_responsible_party_notifies_nobody(
+    base_dir, users_csv
+):
+    _seed(
+        base_dir,
+        [_case(party="", reportable_at=REPORTABLE_AT, had_remediation=1)],
+        [],
+    )
+
+    result = _run(base_dir)
+
+    assert len(result) == 0
+    assert _files(base_dir) == []
+
+
+def test_a_responsible_party_the_directory_does_not_know_is_skipped_not_substituted(
+    base_dir, users_csv
+):
+    _seed(
+        base_dir,
+        [
+            _case(
+                party="i:0#.w|CONTOSO\\z.stranger",
+                reportable_at=REPORTABLE_AT,
+                had_remediation=1,
+            )
+        ],
+        [],
+    )
+
+    result = _run(base_dir)
+
+    assert len(result) == 0
+    assert _files(base_dir) == []
+
+
+def test_a_reportable_only_dry_run_writes_no_file_and_records_nobody_as_told(
+    base_dir, users_csv
+):
+    _seed(base_dir, [_case(reportable_at=REPORTABLE_AT, had_remediation=1)], [])
+
+    result = _run(base_dir, dry_run=True)
+
+    assert len(result) == 2
+    assert _files(base_dir) == []
+    assert _ledger(base_dir) == []
+    assert _reportable_ledger(base_dir) == []
+
+    # And the pass that follows still tells them.
+    _run(base_dir)
+    payload = _payload(base_dir)
+    assert payload[0]["subject"] == REPORTABLE_SUBJECT_LINE
+
+
+def test_a_responsible_party_who_is_their_own_manager_collapses_to_one_recipient():
+    cases = given_rows(
+        [
+            {
+                "case_id": "case-1",
+                "case_type": "claims",
+                "source_item_id": "42",
+                "responsible_party_name": PARTY,
+            }
+        ]
+    ).read()
+    users = given_rows(
+        [
+            {
+                "login": "b.okafor",
+                "email": PARTY_EMAIL,
+                "manager_login": "b.okafor",
+                "manager_email": PARTY_EMAIL,
+            }
+        ]
+    ).read()
+
+    recipients = [
+        row["recipient"]
+        for row in rows_of(notifications.responsible_party_and_manager_of(cases, users))
+    ]
+
+    assert recipients == [PARTY_EMAIL]
 
 
 # --- the recipient rule, without the store --------------------------------
