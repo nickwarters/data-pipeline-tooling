@@ -35,8 +35,8 @@ through clean domain abstractions (a `CasePool` of `Case`s) instead of raw
 - **The Forwarder** — the separate delivery project keeps its local guidance at
   [`../forwarder/CLAUDE.md`](../forwarder/CLAUDE.md), its glossary at
   [`../forwarder/CONTEXT.md`](../forwarder/CONTEXT.md), and its decisions in
-  [`../forwarder/docs/adr/`](../forwarder/docs/adr/). This scaffold has no
-  runtime behavior and imports nothing from `framework/`.
+  [`../forwarder/docs/adr/`](../forwarder/docs/adr/). Its delivery loop runs from
+  `python -m forwarder.main` and imports nothing from `framework/`.
 
 The three projects share a repository, not a toolchain or release — see
 [`../CLAUDE.md`](../CLAUDE.md) for what runs where.

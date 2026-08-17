@@ -15,9 +15,9 @@ Platform frontend — vanilla JavaScript, no build step, deployed to SharePoint 
 lives entirely under [`platform_frontend/`](platform_frontend/) and is governed
 by its own [`CLAUDE.md`](platform_frontend/CLAUDE.md),
 [`CONTEXT.md`](platform_frontend/CONTEXT.md) and
-[`docs/adr/`](platform_frontend/docs/adr/). The Forwarder — an import-only
-Python package shell for the separate delivery application — lives entirely
-under [`forwarder/`](forwarder/) and is governed by its own
+[`docs/adr/`](platform_frontend/docs/adr/). The Forwarder — the separate
+delivery application, a long-running loop run with `python -m forwarder.main` —
+lives entirely under [`forwarder/`](forwarder/) and is governed by its own
 [`CLAUDE.md`](forwarder/CLAUDE.md), [`CONTEXT.md`](forwarder/CONTEXT.md) and
 [`docs/adr/`](forwarder/docs/adr/). They were merged into one repository so the
 system can be read and changed in one place; they share a commit gate, **not** a
@@ -186,6 +186,7 @@ python3 -m venv .venv
 npm ci --prefix platform_frontend                # install the frontend toolchain (once per clone)
 npm --prefix platform_frontend test              # frontend JS suite (node --test)
 .venv/bin/python -m pytest platform_frontend/tests  # frontend Python suite (deploy + scaffold scripts)
+.venv/bin/python -m forwarder.main                # Forwarder delivery loop (clients are stubs; see forwarder/CLAUDE.md)
 .venv/bin/python -m pytest forwarder/tests -q     # Forwarder package suite
 .venv/bin/python -m ruff check forwarder          # Forwarder lint
 .venv/bin/python -m ruff format --check forwarder # Forwarder format check

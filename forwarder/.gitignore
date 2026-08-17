@@ -1,0 +1,5 @@
+# What a local run of the loop leaves behind: delivered files, and the retry
+# files a failed delivery writes back into the queue. Both are operator state,
+# not source. The bundled QUEUE/*.json samples are committed; these are not.
+PROCESSED/
+QUEUE/*.retry_*.json
