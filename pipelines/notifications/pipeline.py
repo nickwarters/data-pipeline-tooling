@@ -1,4 +1,6 @@
-"""Tell the two Conversation parties who did not post the last Message.
+"""Tell the two Conversation parties who did not post the last Message, and the
+Responsible Party and their Manager when a Case becomes Reportable with
+remediation.
 
 Reads Sync's published current state -- every Case as it currently stands, and
 every Conversation Message -- because the rule needs the last Message, the
@@ -8,14 +10,17 @@ a key or reduces a second time. Neither is this pipeline's to locate: they come
 through ``readers.sharepoint_cases``, which is why no layer or table is named
 below.
 
-Emits one JSON file per pass into the deliverable outbox: an array of objects
-carrying exactly ``recipients`` / ``subject`` / ``body``. The path is unique per
+Two triggers, two independent selection passes over the same ``case_current``,
+each anti-joined against its own ledger table. Emits one JSON file per pass into
+the deliverable outbox: an array of objects carrying exactly ``recipients`` /
+``subject`` / ``body``, one object per Case per trigger. The path is unique per
 pass, so a `Refresh` can never overwrite a file nobody has drained yet.
 """
 
 from __future__ import annotations
 
 import argparse
+import functools
 import html
 import sys
 from pathlib import Path
@@ -59,6 +64,12 @@ LEDGER_TABLE = "notified"
 # already answers "which run first told them".
 LEDGER_KEY = ("case_id", "recipient", "message_at")
 
+# The Reportable-with-remediation trigger's own ledger, a second table rather
+# than a rekeying of the one above: reportable_at is frozen at the milestone and
+# never advances, so a third column here would do no work.
+REPORTABLE_LEDGER_TABLE = "notified_reportable"
+REPORTABLE_LEDGER_KEY = ("case_id", "recipient")
+
 # A Case whose review is over needs nobody's attention. Mirrors the Sync feed's
 # own terminal statuses.
 TERMINAL_STATUSES = ("Completed", "Void")
@@ -66,16 +77,20 @@ TERMINAL_STATUSES = ("Completed", "Void")
 # The three keys the notification service reads, in the order it reads them.
 OUTBOX_COLUMNS = ("recipients", "subject", "body")
 SUBJECT_LINE = "you have a new message"
+REPORTABLE_SUBJECT_LINE = "a case is reportable and needs remediation attention"
 RECIPIENT_SEPARATOR = ";"
 
 # PLACEHOLDER -- two tenant facts fold into one string: the site collection and
-# the host page the single-page app is served from. The fragment after them is
-# the app's own registered conversation route, so the recipient lands where they
-# can reply rather than on a read-only list form.
-CASE_LINK_TEMPLATE = (
-    "https://sharepoint.invalid/sites/REPLACE-ME/SitePages/REPLACE-ME.aspx"
-    "#/conversation/{case_type}/{source_item_id}"
-)
+# the host page the single-page app is served from. Shared by both link
+# constants below so the go-live swap stays a single place.
+_LINK_BASE = "https://sharepoint.invalid/sites/REPLACE-ME/SitePages/REPLACE-ME.aspx"
+
+# The fragment after the base is the app's own registered conversation route, so
+# the recipient lands where they can reply rather than on a read-only list form.
+CASE_LINK_TEMPLATE = _LINK_BASE + "#/conversation/{case_type}/{source_item_id}"
+# The Reportable trigger has no message to reply to, so it links to the Case
+# page itself rather than the conversation deep link above.
+REPORTABLE_CASE_LINK_TEMPLATE = _LINK_BASE + "#/case/{case_type}/{source_item_id}"
 
 _THREAD_COLUMNS = ("case_id", "last_author_login", "message_at")
 _CASE_COLUMNS = (
@@ -92,6 +107,19 @@ _PENDING_COLUMNS = (
     "message_at",
     "recipient",
 )
+
+# Reportable selection needs status/reportable_at/had_remediation for the
+# predicate, none of which live_cases' projection carries.
+_REPORTABLE_CASE_COLUMNS = (
+    "case_id",
+    "case_type",
+    "source_item_id",
+    "responsible_party_name",
+    "status",
+    "reportable_at",
+    "had_remediation",
+)
+_REPORTABLE_PENDING_COLUMNS = ("case_id", "case_type", "source_item_id", "recipient")
 
 
 def _empty(columns: tuple[str, ...]) -> Dataset:
@@ -137,6 +165,21 @@ def join_threads_to_cases(threads: Dataset, cases: Dataset) -> Dataset:
     return Dataset.from_pandas(merged)
 
 
+def _directory_index(
+    users: Dataset,
+) -> tuple[dict[str, str], dict[str, tuple[str, str]]]:
+    """Build the login-to-email and login-to-manager lookups both rules need."""
+    frame = users.to_pandas()
+    email_of = dict(zip(frame["login"], frame["email"]))
+    manager_of = {
+        login: (manager_login, manager_email)
+        for login, manager_login, manager_email in zip(
+            frame["login"], frame["manager_login"], frame["manager_email"]
+        )
+    }
+    return email_of, manager_of
+
+
 def recipients_of(threads: Dataset, users: Dataset) -> Dataset:
     """Resolve the two parties who did not author the last Message.
 
@@ -145,16 +188,7 @@ def recipients_of(threads: Dataset, users: Dataset) -> Dataset:
     because of who they manage, not because of who spoke. A party who is absent
     or whom the directory cannot resolve is skipped, never substituted.
     """
-    user_frame = users.to_pandas()
-    email_of = dict(zip(user_frame["login"], user_frame["email"]))
-    manager_of = {
-        login: (manager_login, manager_email)
-        for login, manager_login, manager_email in zip(
-            user_frame["login"],
-            user_frame["manager_login"],
-            user_frame["manager_email"],
-        )
-    }
+    email_of, manager_of = _directory_index(users)
 
     rows: list[dict[str, object]] = []
     for record in threads.to_pandas().to_dict("records"):
@@ -195,56 +229,126 @@ def recipients_of(threads: Dataset, users: Dataset) -> Dataset:
     return Dataset.from_pandas(pd.DataFrame(rows, columns=list(_PENDING_COLUMNS)))
 
 
-def render_notifications(pending: Dataset) -> Dataset:
+def reportable_cases(cases: Dataset) -> Dataset:
+    """Select Cases newly Reportable while carrying remediation.
+
+    Terminal Cases are excluded: ``had_remediation`` is only set on the Send
+    Actions path, which leaves the Case ``Actions In Progress``, so such a Case
+    reaches ``Completed`` only once its remediation is *finished*. Including
+    terminal Cases would email people about work already done. The accepted cost
+    is a Case that becomes Reportable-with-remediation and reaches
+    ``Completed``/``Void`` before the next pass runs: it is never notified at
+    all.
+    """
+    frame = cases.to_pandas()
+    # reportable_at is stamped text, never parsed -- NA reduces to "" here, same
+    # as a genuinely blank cell, so both mean "not yet Reportable".
+    stamped = frame["reportable_at"].fillna("").astype(str).str.strip() != ""
+    # had_remediation is gold REAL; a NULL arrives as NaN, and bool(nan) is
+    # True, so a naive .astype(bool) would treat every Case as carrying
+    # remediation. Comparing to 1 reads a missing flag as "no remediation".
+    remediated = frame["had_remediation"] == 1
+    live = ~frame["status"].isin(TERMINAL_STATUSES)
+    selected = frame[stamped & remediated & live]
+    return Dataset.from_pandas(
+        selected.loc[:, list(_REPORTABLE_CASE_COLUMNS)].reset_index(drop=True)
+    )
+
+
+def responsible_party_and_manager_of(cases: Dataset, users: Dataset) -> Dataset:
+    """Resolve the Responsible Party and their Manager for a Reportable Case.
+
+    Shares the two silent parties' properties: a party who is absent or
+    unresolvable is skipped, never substituted; the Manager comes from the
+    Responsible Party's own directory row, never ``responsible_party_manager_name``;
+    and one person in two roles collapses to one recipient.
+    """
+    email_of, manager_of = _directory_index(users)
+
+    rows: list[dict[str, object]] = []
+    for record in cases.to_pandas().to_dict("records"):
+        party = to_bare_account(record["responsible_party_name"])
+        manager_login, manager_email = manager_of.get(party, ("", ""))
+        manager = to_bare_account(manager_login)
+
+        by_login = {
+            party: email_of.get(party, ""),
+            manager: email_of.get(manager) or manager_email,
+        }
+        emails = sorted({email for login, email in by_login.items() if login and email})
+        rows.extend(
+            {
+                "case_id": record["case_id"],
+                "case_type": record["case_type"],
+                "source_item_id": record["source_item_id"],
+                "recipient": email,
+            }
+            for email in emails
+        )
+    if not rows:
+        return _empty(_REPORTABLE_PENDING_COLUMNS)
+    return Dataset.from_pandas(
+        pd.DataFrame(rows, columns=list(_REPORTABLE_PENDING_COLUMNS))
+    )
+
+
+def render_notifications(
+    pending: Dataset,
+    *,
+    subject: str,
+    link_template: str,
+    intro: str,
+    link_text: str,
+) -> Dataset:
     """Group the surviving recipients into one notification object per Case."""
     frame = pending.to_pandas()
     rows: list[dict[str, str]] = []
     for _, group in frame.groupby("case_id", sort=True):
         first = group.iloc[0]
-        link = CASE_LINK_TEMPLATE.format(
+        link = link_template.format(
             case_type=html.escape(str(first["case_type"]), quote=True),
             source_item_id=html.escape(str(first["source_item_id"]), quote=True),
         )
         rows.append(
             {
                 "recipients": RECIPIENT_SEPARATOR.join(sorted(set(group["recipient"]))),
-                "subject": SUBJECT_LINE,
+                "subject": subject,
                 # The notification system renders almost no styling, so this is
                 # a paragraph and a link and deliberately nothing else.
-                "body": (
-                    "<p>There is a new message on a case that needs your "
-                    "attention.</p>\n"
-                    f'<p><a href="{link}">Open the conversation</a></p>'
-                ),
+                "body": f'<p>{intro}</p>\n<p><a href="{link}">{link_text}</a></p>',
             }
         )
     return Dataset.from_pandas(pd.DataFrame(rows, columns=list(OUTBOX_COLUMNS)))
 
 
-def ledger_rows(pending: Dataset, *_written: Dataset) -> Dataset:
-    """Project the notified recipients down to the ledger's key.
+def ledger_rows(
+    pending: Dataset, *_written: Dataset, ledger_key: tuple[str, ...]
+) -> Dataset:
+    """Project the notified recipients down to a ledger's key.
 
     Takes the outbox write's result as a further input purely to order the two
     writes: nobody is recorded as told until the file telling them has landed.
     A crash between the two costs a duplicate notification, which is the safe
     direction.
     """
-    frame = pending.to_pandas().loc[:, list(LEDGER_KEY)].drop_duplicates()
+    frame = pending.to_pandas().loc[:, list(ledger_key)].drop_duplicates()
     return Dataset.from_pandas(frame.reset_index(drop=True))
 
 
-def ledger_reader(store: Store) -> Callable[[], Dataset]:
-    """A callable yielding the ledger's keys, tolerating a first run.
+def ledger_reader(
+    store: Store, table: str, ledger_key: tuple[str, ...]
+) -> Callable[[], Dataset]:
+    """A callable yielding a ledger's keys, tolerating a first run.
 
     ``SqliteReader`` raises on a table that does not exist yet, so the very
     first pass would abort before it could notify anybody.
     """
 
     def read() -> Dataset:
-        if store.columns_of(LEDGER_TABLE).columns() is None:
-            return _empty(LEDGER_KEY)
-        frame = store.reader(LEDGER_TABLE).read().to_pandas()
-        return Dataset.from_pandas(frame.loc[:, list(LEDGER_KEY)])
+        if store.columns_of(table).columns() is None:
+            return _empty(ledger_key)
+        frame = store.reader(table).read().to_pandas()
+        return Dataset.from_pandas(frame.loc[:, list(ledger_key)])
 
     return read
 
@@ -282,22 +386,73 @@ def pending_notifications_builder(
     return p
 
 
-def outbox_builder(
-    pending: Dataset,
-    outbox: Writer,
-    ledger: Writer,
+def reportable_notifications_builder(
+    cases: Reader,
+    users: Reader,
+    ledger: Callable[[], Dataset],
     *,
     run_log: RunLog | None = None,
 ) -> Pipeline:
-    """Build the publication half: the file first, then the ledger rows."""
+    """Build the selection half for the Reportable-with-remediation trigger.
+
+    A second, independent selection over the same ``case_current`` -- not a
+    branch of ``pending_notifications_builder``'s graph -- so each trigger
+    anti-joins its own ledger with its own key.
+    """
+    p = Pipeline(f"{PIPELINE_NAME}:reportable", run_log=run_log)
+    selected = p.transform(
+        reportable_cases, p.read(cases, name="read-cases"), name="select-reportable"
+    )
+    resolved = p.transform(
+        responsible_party_and_manager_of,
+        selected,
+        p.read(users, name="read-users"),
+        name="recipients",
+    )
+    p.transform(
+        AntiJoinWith(ledger, on=list(REPORTABLE_LEDGER_KEY), name="already-notified"),
+        resolved,
+        name="drop-notified",
+    )
+    return p
+
+
+def outbox_builder(
+    rendered: Dataset,
+    outbox: Writer,
+    pending: Dataset,
+    ledger: Writer,
+    pending_reportable: Dataset,
+    reportable_ledger: Writer,
+    *,
+    run_log: RunLog | None = None,
+) -> Pipeline:
+    """Build the publication half: the one file first, then each ledger's rows.
+
+    The union happens in plain Python before this is called.
+    """
     p = Pipeline(f"{PIPELINE_NAME}:outbox", run_log=run_log)
-    source = p.read(DatasetReader(pending), name="read-pending")
-    rendered = p.transform(render_notifications, source, name="render")
-    written = p.write(outbox, rendered, name="write-outbox")
+    source = p.read(DatasetReader(rendered), name="read-rendered")
+    written = p.write(outbox, source, name="write-outbox")
     p.write(
         ledger,
-        p.transform(ledger_rows, source, written, name="ledger-rows"),
+        p.transform(
+            functools.partial(ledger_rows, ledger_key=LEDGER_KEY),
+            p.read(DatasetReader(pending), name="read-pending"),
+            written,
+            name="ledger-rows",
+        ),
         name="write-ledger",
+    )
+    p.write(
+        reportable_ledger,
+        p.transform(
+            functools.partial(ledger_rows, ledger_key=REPORTABLE_LEDGER_KEY),
+            p.read(DatasetReader(pending_reportable), name="read-pending-reportable"),
+            written,
+            name="ledger-rows-reportable",
+        ),
+        name="write-ledger-reportable",
     )
     return p
 
@@ -312,18 +467,25 @@ def outbox_filename(generated_at: str, pipeline_run_id: str) -> str:
 
 
 def run(context: RunContext, *, describe: bool = False) -> Dataset:
-    """Select who is owed a notification, then publish and record it."""
+    """Select who is owed a notification on either trigger, publish, record.
+
+    Returns the union of both triggers' surviving recipients, reduced to
+    ``case_id`` / ``recipient`` -- callers use it only for its length, to know
+    how many notifications were owed this pass.
+    """
     base_dir = context.base_dir or Path.cwd() / "data"
     # The ledger is this pipeline's own subject, so it resolves that itself.
     # Everything it reads belongs to someone else and arrives through a reader
     # that knows where it lives.
     ledger_store = medallion(StoreRegistry(base_dir), SUBJECT).gold
+    cases = CurrentCasesReader(base_dir=base_dir)
+    users = UsersReader(base_dir=base_dir)
 
     selection = pending_notifications_builder(
         ConversationMessagesReader(base_dir=base_dir),
-        CurrentCasesReader(base_dir=base_dir),
-        UsersReader(base_dir=base_dir),
-        ledger_reader(ledger_store),
+        cases,
+        users,
+        ledger_reader(ledger_store, LEDGER_TABLE, LEDGER_KEY),
         run_log=context.run_log,
     )
     if describe:
@@ -331,10 +493,50 @@ def run(context: RunContext, *, describe: bool = False) -> Dataset:
     pending = selection.run(context)
     if not isinstance(pending, Dataset):
         raise TypeError("notification selection did not return a Dataset")
-    # Nobody is owed anything: publishing an empty array would put a file in the
-    # outbox for the service to drain and find nothing in.
-    if len(pending) == 0:
-        return pending
+
+    reportable_selection = reportable_notifications_builder(
+        cases,
+        users,
+        ledger_reader(ledger_store, REPORTABLE_LEDGER_TABLE, REPORTABLE_LEDGER_KEY),
+        run_log=context.run_log,
+    )
+    if describe:
+        print(reportable_selection.describe())
+    pending_reportable = reportable_selection.run(context)
+    if not isinstance(pending_reportable, Dataset):
+        raise TypeError("reportable selection did not return a Dataset")
+
+    # Nobody is owed anything on either trigger: publishing an empty array
+    # would put a file in the outbox for the service to drain and find nothing
+    # in. One trigger owing nobody anything while the other does must still
+    # publish, so this checks both together rather than either alone.
+    if len(pending) == 0 and len(pending_reportable) == 0:
+        return _empty(("case_id", "recipient"))
+
+    rendered = Dataset.from_pandas(
+        pd.concat(
+            [
+                render_notifications(
+                    pending,
+                    subject=SUBJECT_LINE,
+                    link_template=CASE_LINK_TEMPLATE,
+                    intro="There is a new message on a case that needs your attention.",
+                    link_text="Open the conversation",
+                ).to_pandas(),
+                render_notifications(
+                    pending_reportable,
+                    subject=REPORTABLE_SUBJECT_LINE,
+                    link_template=REPORTABLE_CASE_LINK_TEMPLATE,
+                    intro=(
+                        "A case has become reportable and is carrying remediation "
+                        "that needs your attention."
+                    ),
+                    link_text="Open the case",
+                ).to_pandas(),
+            ],
+            ignore_index=True,
+        )
+    )
 
     outbox = JsonWriter(
         get_deliverable_path(
@@ -345,22 +547,34 @@ def run(context: RunContext, *, describe: bool = False) -> Dataset:
         Refresh(),
     )
     publication = outbox_builder(
-        pending,
+        rendered,
         outbox,
+        pending,
         ledger_store.writer(LEDGER_TABLE, AppendOnly(LEDGER_KEY)),
+        pending_reportable,
+        ledger_store.writer(REPORTABLE_LEDGER_TABLE, AppendOnly(REPORTABLE_LEDGER_KEY)),
         run_log=context.run_log,
     )
     if describe:
         print(publication.describe())
     publication.run(context)
-    return pending
+    return Dataset.from_pandas(
+        pd.concat(
+            [
+                pending.to_pandas().loc[:, ["case_id", "recipient"]],
+                pending_reportable.to_pandas().loc[:, ["case_id", "recipient"]],
+            ],
+            ignore_index=True,
+        )
+    )
 
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m pipelines.notifications.pipeline",
         description="Emit notifications for the two Conversation parties who "
-        "did not post the last Message.",
+        "did not post the last Message, and for a Case newly Reportable "
+        "with remediation.",
     )
     parser.add_argument("--base-dir", default=None)
     parser.add_argument("--describe", action="store_true")

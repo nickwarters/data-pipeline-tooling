@@ -172,10 +172,10 @@ method: no `reader.for_case_type(...)`, no `reader.since(...)`.
 
 **G6 — Column guarantees stay consumer-side.** The reader declares no column
 contract. `reviewer_activity` keeps its own `SOURCE_COLUMNS` and
-`ColumnValidator`, and `notifications` keeps its own. A single tuple on the
-reader would become the union of every consumer's needs — so each consumer
-would be gated on columns it does not use, and the failure message would land
-somewhere other than the code that actually depends on them.
+`ColumnValidator`. A single tuple on the reader would become the union of every
+consumer's needs — so each consumer would be gated on columns it does not use,
+and the failure message would land somewhere other than the code that actually
+depends on them.
 
 ## Freshness is the consumer's call, never the reader's
 

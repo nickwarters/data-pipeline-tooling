@@ -85,6 +85,12 @@ not need telling — so there is no separate suppression step to look for.
 
 ### The ledger key is `(case_id, recipient, message_at)`
 
+This key is the Conversation Message trigger's own. The Reportable-with-
+remediation trigger, added later, keeps its own ledger table keyed
+`(case_id, recipient)` rather than reusing or rekeying this one — `reportable_at`
+is frozen at the milestone and never advances, so a third column would do no
+work. See [`data-dictionary-notifications.md`](../data-dictionary-notifications.md).
+
 `message_at` is the triggering Message's own `posted_at`. A recipient is
 notified only when the Case's last Message is newer than the one they were last
 notified about, so the ledger row *is* its key and carries nothing else.

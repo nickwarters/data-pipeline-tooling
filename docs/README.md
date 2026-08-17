@@ -123,11 +123,15 @@ review platform, Review Outcomes flow *back* for reporting.
 - **Notification** (platform-wide) reads Sync's **gold current state** and emits
   a **Deliverable** telling Case participants what needs their attention: one
   JSON file per pass in the `cora_notifications` outbox, holding one object per
-  Case for the two Conversation parties who did not post the last Message
+  Case per trigger. Two triggers, each with its own recipient set: a new
+  Conversation Message notifies the two Conversation parties who did not post it
   ([Notification recipients are the two parties who did not speak
   last](adr/0024-notification-recipients-are-the-two-parties-who-did-not-speak-last.md);
-  [`data-dictionary-notifications.md`](data-dictionary-notifications.md)). It
-  emits what is owed since the last run and is correct at any cadence.
+  [`data-dictionary-notifications.md`](data-dictionary-notifications.md)), and a
+  Case becoming Reportable while carrying remediation notifies the Responsible
+  Party and their Manager, the Manager resolved from the Responsible Party's own
+  directory row. It emits what is owed since the last run and is correct at any
+  cadence.
 - **Reporting** (platform-wide) joins Review Outcomes to the selected Cases and
   emits **Deliverables**.
 
