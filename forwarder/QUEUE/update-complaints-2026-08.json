@@ -1,0 +1,15 @@
+[
+  {
+    "item_id": 1,
+    "fields": {
+      "Status": "Closed"
+    }
+  },
+  {
+    "item_id": 2,
+    "fields": {
+      "Status": "Open",
+      "Owner": "a.reviewer"
+    }
+  }
+]
