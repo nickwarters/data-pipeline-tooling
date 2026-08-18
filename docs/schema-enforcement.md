@@ -1,8 +1,8 @@
 # Schema enforcement & what "silver" means
 
 This documents the `Schema` + `SchemaValidator` adapter and the
-`SchemaCoercion` processor that repairs raw's round-trip-lossy types ahead of the
-validator, plus how they compose onto a `Pipeline` to enforce the schema at
+`SchemaCoercion` processor that casts a dataset's columns to the declared types
+ahead of the validator, plus how they compose onto a `Pipeline` to enforce the schema at
 the silver boundary. For the *why*, see
 [graduated schema enforcement](adr/0006-graduated-schema-enforcement.md); for the
 surrounding primitives, [core-primitives.md](core-primitives.md).
@@ -94,14 +94,16 @@ takes `TEXT` affinity for the life of the feed, so a feed whose first poll is
 quiet would store every later integer id as text. (Under migration control the
 SQL fixes the affinity instead, and the coercion below stops being what decides
 it — but it still decides what the *validator* sees, so the rule is unchanged
-either way.) So on an empty frame `SchemaCoercion` types **every** declared column,
-including the round-trip-safe `str` / `int` / `float` it leaves alone when there
-are rows. The target dtypes are chosen for the affinity they create — `object` →
-`TEXT`, `int64` → `INTEGER`, `float64` → `REAL` — since fixing the created
-table's column types is the whole point. A declared type the coercer cannot map
-is left alone: an unsupported type is a schema configuration error, and
-`SchemaValidator` reports it at build time naming the field. The gate stands
-down and the shape is still declared.
+either way.) There is no zero-row branch in the coercer that arranges this: the
+ordinary paths run over no rows and land the same dtypes — with the same `TEXT` /
+`INTEGER` / `REAL` affinity — that they land over a full window. The `float64`
+column `reindex` invented does not satisfy a declared `str`, so it is cast to
+text; an `object` one already does and is skipped, and `object` is the same
+`TEXT` affinity either way. A declared type the coercer
+has no cast for is left alone: an unsupported type is a schema configuration
+error, and `SchemaValidator` reports
+it at build time naming the field. The gate stands down and the shape is still
+declared.
 
 Every breach is collected and reported **at once** in one located message
 naming the column and the expected-vs-actual type, then raised:
@@ -130,14 +132,16 @@ reaches the backing frame via `to_pandas()` exactly as a Reader/Writer/processor
 does — keeping `Dataset`'s public surface tiny and the pandas-dtype mapping in
 one place (`framework._internal.schema`).
 
-## `SchemaCoercion` — repairing what storage loses
+## `SchemaCoercion` — making a column carry what was declared
 
-A `SchemaValidator` can only *assert* the dtype it is handed, and raw hands it
-the dtypes a SQLite round-trip leaves behind: a `date` lands as text, a `bool`
-as `1`/`0` or `TRUE`/`FALSE`. Without a repair step those columns would fail the
-validator even when the underlying values are perfectly valid. `SchemaCoercion`
-is that repair step — the **write-side companion** of `SchemaValidator`, derived
-from the *same* dataclass:
+A `SchemaValidator` can only *assert* the dtype it is handed, and what it is
+handed is whatever the source and the storage between them decided: a SQLite
+round-trip lands a `date` as text and a `bool` as `1`/`0` or `TRUE`/`FALSE`, and
+a CSV reader's type inference lands a digits-only reference as `int64` and every
+number as text. Without a repair step those columns would fail the validator
+even when the underlying values are perfectly valid. `SchemaCoercion` is that
+repair step — the **write-side companion** of `SchemaValidator`, derived from
+the *same* dataclass:
 
 ```python
 from framework.transform import SchemaCoercion
@@ -147,17 +151,33 @@ coerced = SchemaCoercion(CaseA)(dataset)   # returns a transformed dataset
 
 It is a callable transform (`(dataset) -> Dataset`) and, like the validator,
 **engine-confined** — a cast needs the engine's vectorised operations, so it
-reaches the frame via `to_pandas()`/`from_pandas()`. It casts **only
-the round-trip-lossy declared types**:
+reaches the frame via `to_pandas()`/`from_pandas()`. Every declared type has a
+cast:
 
 | Declared type | Coerced from | Coerced to |
 |---------------|--------------|------------|
 | `date` / `datetime` | text (`"2026-01-01"`) | datetime64 |
 | `bool` | `TRUE`/`FALSE`, `Y`/`N`, `YES`/`NO` text, or `1`/`0` (incl. the `1.0`/`0.0` a nulled numeric column comes back as) | pandas `"boolean"` |
-| `str` / `int` / `float` | **only when the frame has no rows** (see above) | `object` / `int64` / `float64` |
+| `str` | a reference inferred as `int64`, a whole number widened to `float64` by a blank cell | pandas' text dtype |
+| `int` | numeric text (`"42"`), or a `float64` holding whole numbers | nullable `Int64` |
+| `float` | numeric text (`"3.14"`), or an integer column | `float64` |
 
 Boolean encodings are compared **case-folded and whitespace-stripped**, so
 `true`, `True` and `TRUE ` all map.
+
+**The no-op rule is the validator's own check.** For `str` / `int` / `float` the
+coercer asks the *validator's* dtype predicate whether the column already
+satisfies the declaration, and skips it when it does — so what the coercer
+leaves alone is by construction what the validator accepts, and the two halves
+cannot drift apart. `date` / `datetime` / `bool` are not guarded that way: a
+datetime64 column can still hold the wrong instant and a numeric boolean the
+wrong encoding, so those arms always run.
+
+The `str` arm inherits that check's limits along with its guarantee. `object` is
+unconditionally a string dtype to pandas, so a declared `str` column holding
+Python `int`s is skipped by the coercer — and then accepted by the validator,
+which has always accepted it. Nothing has drifted; the arm simply reaches what
+the validator would refuse, not everything that is not text.
 
 A `bool` lands as pandas' **nullable `"boolean"`** dtype, not numpy `bool`. The
 reason is that numpy `bool` has no null, so a gap would have to be invented as
@@ -177,19 +197,53 @@ either: SQLite is dynamically typed and stores a boolean column as `1`/`0`/NULL
 whichever dtype was written, so `Refresh` and `AccumulateByRun` write and
 re-read a table whose boolean dtype changed mid-life without a schema change.
 
-`str` / `int` / `float` **survive storage**, so they pass through untouched and
-stay the validator's gate — and columns the schema doesn't declare are left
-alone. This keeps the division crisp: **coercion repairs representation lost to
-storage; validation enforces the contract.**
+`int` lands as pandas' **nullable `Int64`** for the same reason `bool` lands as
+`"boolean"`: a column with a gap cannot be held as numpy `int64`, so the gap
+would have to be invented as a zero. Columns the schema doesn't declare are left
+alone entirely — the contract is the declared fields only. This keeps the
+division crisp: **coercion decides a column's representation; validation
+enforces the contract.**
 
 A value the coercer cannot cast — an unparseable date, a boolean encoding
-outside the known set (`"maybe"`) — is **not** silently dropped: it raises a
-`CoercionError` with one located message naming the schema, the column, and the
-reason, and the run aborts fail-fast:
+outside the known set (`"maybe"`), text that is not a number — is **not**
+silently dropped: it raises a `CoercionError` with one located message naming
+the schema, the column, and the value, and the run aborts fail-fast:
 
 ```
-CaseA coercion: column 'active' has unrecognized boolean encoding(s): 'maybe'
+CaseA coercion: column 'active' unrecognized boolean encoding(s): 'maybe'
+CaseA coercion: column 'score' not parseable as int: 'ten'
 ```
+
+### Gaps, blanks, and the two casts that refuse
+
+**A gap is the absence of a value, never a bad one.** It is excluded from every
+offender report and survives the cast as `pd.NA`, because whether a gap is
+allowed is the *validator's* question (`NonNull()`), and answering it in the
+coercer would blame the feed's data for a declaration. A blank or
+whitespace-only cell counts as a gap on the **numeric and boolean** paths — an
+empty CSV field is how a source spells "nothing here" — but never on the `str`
+path, where the empty string is a value in its own right (`StrictCsvReader`
+lands an empty field as exactly that).
+
+Two more rules are worth stating outright:
+
+- **A fractional value in a declared `int` aborts** rather than truncating.
+  `3.5` in a column declared as a whole number is a contradiction to report, not
+  to round away.
+- **The `str` path never raises**, and its whole-number repair is
+  **column-level**. A whole-number column widened to `float64` by a blank cell
+  would stringify `1234567890` as `"1234567890.0"`, so the coercer casts back
+  through `Int64` first — but one genuinely fractional value anywhere in the
+  column refuses that detour for the *whole* column, which then keeps its `.0`
+  rendering. That is a deliberate trade: a per-value repair would render two
+  spellings of one column.
+
+### One operational consequence
+
+**The coerce step sits *above* quarantine**, so declaring `int` or `float` makes
+a single unparseable value fatal to the whole run rather than a diverted row.
+That trade, and the escape hatch for a feed that would rather divert the row, are
+set out in [ADR-0006](adr/0006-graduated-schema-enforcement.md).
 
 ## Composing the boundary — coerce, then enforce
 

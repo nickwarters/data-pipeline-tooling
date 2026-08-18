@@ -176,8 +176,9 @@ class AnswerRow:
     # docstring for why this must carry NATURAL_KEY's columns.
     case_type: Annotated[str, NonNull()]
     source_item_id: Annotated[str, NonNull()]
-    # datetime, not str: the batch is already typed by SchemaCoercion(CaseVersion)
-    # -- a str declaration here aborts SchemaValidator on the dtype mismatch.
+    # datetime, not str: the batch arrives already typed by
+    # SchemaCoercion(CaseVersion), and a str declaration would have this schema's
+    # own coercion stringify that instant back to text rather than keep it.
     source_modified_at: Annotated[datetime, NonNull()]
     source_version: Annotated[str, NonNull()]
     source_observation_id: Annotated[str, NonNull()]

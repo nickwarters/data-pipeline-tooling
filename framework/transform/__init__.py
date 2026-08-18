@@ -11,10 +11,10 @@ the lazy ``JoinWith`` / ``AntiJoinWith``, the Ingest / fan-out
 ``ExplodeJsonMap`` / ``ExplodeJsonList`` / ``FlattenJsonObject``,
 and the bounded-subset
 ``TopNPerGroup`` / ``Sample`` / ``SamplePerGroup``)
-and ``SchemaCoercion`` — the *coerce* half of the schema adapter, which casts a
-column's round-trip-lossy values to the declared types, and every declared column
-when the frame has no rows to carry one (a reshape, not a check) —
-plus ``SchemaValueRulePartitioner`` for quarantine routing.
+and ``SchemaCoercion`` — the *coerce* half of the schema adapter, which casts
+each declared column the validator's dtype check would not already accept
+(a reshape, not a check) — plus ``SchemaValueRulePartitioner`` for quarantine
+routing.
 
 The schema *check* (``SchemaValidator``) and the declared-schema value rules
 (``ValueRule`` / ``Nullable`` / ``Pattern`` / ...) live on

@@ -10,6 +10,7 @@ import pytest
 from framework.core import ValidationError
 from framework.io import Refresh
 from framework.run import RunContext
+from framework.transform import CoercionError
 from pipelines.reviewer_activity import pipeline as reviewer_pipeline
 from pipelines.reviewer_activity import report_feed
 from pipelines.reviewer_activity.pipeline import publish_report_feeds
@@ -116,12 +117,15 @@ def test_writer_rejects_unsafe_reviewer_account(tmp_path, account):
 
 
 def test_pipeline_rejects_malformed_committed_gold_before_writer(tmp_path):
+    # Committed gold whose count is not a number is caught at the coerce step,
+    # before the validator ever sees the column — and the abort names the value
+    # that broke it rather than just the dtype the column ended up with.
     writer = ReportFeedWriter(tmp_path, generated_at="2026-08-01T12:00:00+00:00")
     pipeline = reviewer_report_feed_builder(
         given_rows([_row("a.khan", "2026-08-01", count="not-an-int")]), writer
     )
 
-    with pytest.raises(ValidationError, match="expected int"):
+    with pytest.raises(CoercionError, match="not parseable as int"):
         pipeline.run()
 
 

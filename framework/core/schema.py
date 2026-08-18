@@ -9,9 +9,9 @@ columns + dtypes + nullability + value rules + cross-field **row checks**
 downstream logic touches the data.
 
 It is the *check* half of the schema adapter; the *coerce* half —
-:class:`~framework.transform.coercion.SchemaCoercion`, which repairs the
-representation raw loses to storage — lives in ``framework.transform`` because it
-reshapes rather than checks. Both derive from the shared annotation reading and
+:class:`~framework.transform.coercion.SchemaCoercion`, which casts each declared
+column to the type the schema declared — lives in ``framework.transform`` because
+it reshapes rather than checks. Both derive from the shared annotation reading and
 type mapping in :mod:`framework._internal.schema`, so they stay consistent
 without depending on each other.
 

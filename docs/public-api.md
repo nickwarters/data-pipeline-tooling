@@ -82,14 +82,15 @@ the implementation modules living alongside it:
   `dataset` (`Dataset`), `protocols` (the small shared `Reader` / `Writer` /
   `Processor` / `Validator` shapes), and the **declared-schema contract** — the
   `validate(dataset)` `validators`, the `schema` check (`SchemaValidator`), and
-  the `value_rules` (`Nullable` / `Pattern` / ...). It sits *below* the task
-  facades. (The medallion `Layer` enum was **removed** here in favour of
+  the `value_rules` (the `Nullable` / `NonNull` field markers and
+  `Pattern` / ...). It sits *below* the task facades. (The medallion `Layer` enum was **removed** here in favour of
   the namespace Store + the `tools.medallion` profile.)
 - `framework/io/` — `readers`, `writers`, `strategy`, `sql`. (Where a feed
   *lands* — `Store` / `StoreRegistry` — moved out to `tools.store`.)
 - `framework/transform/` — the dataset-reshaping primitives: `processors`,
   `json_shaping` (the JSON blob explodes/flatten), `coercion` (`SchemaCoercion`
-  — the *coerce* half of the schema adapter), `quarantine`.
+  — the *coerce* half of the schema adapter
+  markers a schema declares), `quarantine`.
 - `framework/run/` — `builder`, `execution`, `address`,
   `trace`, `runner`, `run_context`, `dry_run` (the preview report behind
   `dry_run_pipeline`). It also re-exports the observability seam
@@ -175,7 +176,7 @@ Moving data across the boundary. (Where it *lands* — the namespace `Store` /
 | `TopNPerGroup`, `Sample`, `SamplePerGroup`, `Parse` | The bounded-subset reductions — top-`n` per group and the seeded, reproducible draws (pure functions of input + a fixed seed) — plus `Parse`, which decodes a packed text column through a callable. These existed in `framework.transform.processors` but were for a time **absent from the facade**; the omission is silent (unlike a missing Reader, an unexported processor raises nothing), and it caused a duplicate copy of them to grow in `tools/analytics/`. That fork is retired and this facade is now their only supported import. |
 | `ExplodeJsonMap`, `ExplodeJsonList`, `FlattenJsonObject` | The JSON blob reshapers: walk a JSON object/array held in one column into rows, or a 0-or-1 object into columns on the same row. `Unpivot`'s siblings for a blob rather than wide columns. |
 | `JsonShapeError` | Raised by the three JSON reshapers on malformed JSON, or JSON of the wrong shape, naming the column and the row. |
-| `SchemaCoercion` | The *coerce* half of the schema adapter: casts round-trip-lossy columns (`date` / `datetime` / `bool`) to the declared types — plus every declared column when the frame has no rows — a reshape, so it lives here, not with the schema check. |
+| `SchemaCoercion` | The *coerce* half of the schema adapter: casts each declared column the validator's own dtype check would not already accept — `date` / `datetime` / `bool` out of storage, `str` / `int` / `float` out of a reader's inference. A reshape, so it lives here, not with the schema check. |
 | `CoercionError` | Raised by `SchemaCoercion` on an uncastable value. |
 | `SchemaValueRulePartitioner` | The quarantine partitioner that routes value-rule / row-check rejects aside while preserving good rows for the main path. Usually reached through `Pipeline.quarantine(...)`, but exported for advanced schema/quarantine wiring. |
 
