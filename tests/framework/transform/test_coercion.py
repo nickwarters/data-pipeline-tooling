@@ -1,12 +1,13 @@
 """Schema-driven coercion between raw and silver.
 
-``SchemaCoercion`` is the processor that repairs the representation raw loses to
-storage: types that don't survive a SQLite round-trip (dates land as text,
-booleans as ``1``/``0`` or ``TRUE``/``FALSE``) are cast back to the Case Type
-schema's declared types *ahead of* the silver ``SchemaValidator``. It is
-engine-confined (reaches the frame via ``to_pandas``/``from_pandas``) and casts
-only the round-trip-lossy types — ``str``/``int``/``float`` survive storage, so
-they pass through untouched and stay the validator's gate.
+``SchemaCoercion`` is the processor that makes a column carry what the Case Type
+schema declared, *ahead of* the silver ``SchemaValidator``: types storage loses
+outright (dates land as text, booleans as ``1``/``0`` or ``TRUE``/``FALSE``) and
+types a reader's inference is free to land as something else (a digits-only
+reference read as ``int64``, a number read as text). A column the validator's
+dtype check would already accept is left alone, and a field can declare its own
+cast with ``Annotated[T, Coerce(fn)]``. It is engine-confined (reaches the frame
+via ``to_pandas``/``from_pandas``).
 """
 
 from dataclasses import dataclass
@@ -14,10 +15,17 @@ from datetime import date
 from decimal import Decimal
 from typing import Annotated
 
+import numpy as np
 import pandas as pd
 import pytest
 
-from framework.core import NonNull, Nullable, SchemaValidator, ValidationError
+from framework.core import (
+    Coerce,
+    NonNull,
+    Nullable,
+    SchemaValidator,
+    ValidationError,
+)
 from framework.core.dataset import Dataset
 from framework.transform import SchemaCoercion
 from framework.transform.processors import CoercionError
@@ -54,6 +62,49 @@ class MixedCase:
     opened: date
 
 
+@dataclass
+class ReferenceCase:
+    case_ref: str
+
+
+@dataclass
+class ScoredCase:
+    case_ref: str
+    score: int
+
+
+@dataclass
+class RatedCase:
+    case_ref: str
+    rating: float
+
+
+@dataclass
+class RequiredScoreCase:
+    case_ref: str
+    score: Annotated[int, NonNull()]
+
+
+def to_decimal(series: pd.Series) -> pd.Series:
+    return pd.Series([Decimal(v) for v in series], index=series.index, dtype="object")
+
+
+def parse_uk_dates(series: pd.Series) -> pd.Series:
+    return pd.to_datetime(series, format="%d/%m/%Y")
+
+
+@dataclass
+class MoneyCase:
+    case_ref: str
+    amount: Annotated[Decimal, Coerce(to_decimal)]
+
+
+@dataclass
+class UkDatedCase:
+    case_ref: str
+    opened: Annotated[date, Coerce(parse_uk_dates)]
+
+
 def test_coerces_a_declared_date_from_text_so_the_validator_passes():
     # raw lands a date as text (SQLite has no date type); the coercer casts it to
     # datetime64 so the silver SchemaValidator — which the un-coerced text would
@@ -80,10 +131,9 @@ def test_coerces_a_declared_bool_from_true_false_text():
     assert list(coerced.to_pandas()["active"]) == [True, False]
 
 
-def test_leaves_round_trip_safe_and_undeclared_columns_untouched():
-    # Scope: the coercer repairs only what storage loses. str/int/float
-    # survive a SQLite round-trip, so they pass through unchanged and stay the
-    # validator's gate; columns the schema doesn't declare are left alone too.
+def test_leaves_columns_the_schema_does_not_declare_untouched():
+    # The contract is the declared fields only: a column the schema says nothing
+    # about is carried through as it arrived, whatever it holds.
     raw = pd.DataFrame(
         {
             "case_ref": ["c1", "c2"],
@@ -92,14 +142,32 @@ def test_leaves_round_trip_safe_and_undeclared_columns_untouched():
             "note": ["keep", "me"],
         }
     )
-    dataset = Dataset.from_pandas(raw)
 
-    coerced = SchemaCoercion(MixedCase)(dataset).to_pandas()
+    coerced = SchemaCoercion(MixedCase)(Dataset.from_pandas(raw)).to_pandas()
 
-    assert list(coerced["case_ref"]) == ["c1", "c2"]
+    assert list(coerced["note"]) == ["keep", "me"]
+    assert coerced["note"].dtype == raw["note"].dtype
+
+
+def test_does_not_recast_a_column_that_already_carries_the_declared_dtype():
+    # The no-op guard asks the validator's own dtype check whether the column
+    # already satisfies the declaration, so what the coercer leaves alone is
+    # exactly what the validator would accept and the two cannot drift. An
+    # int64 score and a text reference are both already right: untouched.
+    raw = pd.DataFrame(
+        {
+            "case_ref": ["c1", "c2"],
+            "score": [10, 20],
+            "opened": ["2026-01-01", "2026-01-02"],
+        }
+    )
+
+    coerced = SchemaCoercion(MixedCase)(Dataset.from_pandas(raw)).to_pandas()
+
     assert list(coerced["score"]) == [10, 20]
-    assert coerced["score"].dtype == raw["score"].dtype  # int untouched, not recast
-    assert list(coerced["note"]) == ["keep", "me"]  # undeclared, untouched
+    assert coerced["score"].dtype == raw["score"].dtype
+    assert list(coerced["case_ref"]) == ["c1", "c2"]
+    assert coerced["case_ref"].dtype == raw["case_ref"].dtype
 
 
 def test_types_every_declared_column_when_the_frame_has_no_rows():
@@ -108,8 +176,8 @@ def test_types_every_declared_column_when_the_frame_has_no_rows():
     # invent the column. The validator lets an empty frame past on exactly that
     # basis — but the dtypes still reach storage, and an empty write is what
     # *creates* the table, fixing each column's affinity for the life of the
-    # feed. So when there are no rows the coercer types every declared column,
-    # including the round-trip-safe ones it leaves alone when there are.
+    # feed. No branch handles this: the ordinary paths run with no rows, and
+    # what they land is still what fixes the created table's affinity.
     empty = pd.DataFrame(
         {
             "case_ref": pd.Series([], dtype="float64"),  # as reindex invents it
@@ -126,10 +194,10 @@ def test_types_every_declared_column_when_the_frame_has_no_rows():
 
 
 def test_leaves_a_type_it_cannot_map_alone_on_an_empty_frame():
-    # A declared type outside the supported six is a schema configuration error,
-    # and `SchemaValidator` is where it is reported — at build time, naming the
-    # field. The coercer must not pre-empt that with a raw KeyError from its own
-    # dtype table, which an empty frame would otherwise be the only way to hit.
+    # A declared type outside the supported six, and no declared `Coerce` to say
+    # how to cast it, is a schema configuration error — and `SchemaValidator` is
+    # where it is reported, at build time, naming the field. The coercer must not
+    # pre-empt that by crashing on a type it has no arm for.
     @dataclass
     class OddCase:
         case_ref: str
@@ -298,3 +366,246 @@ def test_coerces_a_declared_bool_from_one_zero_encoding():
 
     SchemaValidator(FlaggedCase).validate(coerced)  # does not raise
     assert list(coerced.to_pandas()["active"]) == [True, False]
+
+
+def test_coerces_an_inferred_numeric_reference_to_text_so_the_validator_passes():
+    # The case the coercer exists for on the read side: a digits-only reference
+    # in a CSV is inferred as int64, and nothing between the reader and the
+    # validator could fix it before. A declared `str` is now cast to text.
+    raw = pd.DataFrame({"case_ref": [12345, 67890]})
+
+    coerced = SchemaCoercion(ReferenceCase)(Dataset.from_pandas(raw))
+
+    SchemaValidator(ReferenceCase).validate(coerced)  # does not raise
+    assert coerced.to_pandas()["case_ref"].tolist() == ["12345", "67890"]
+
+
+def test_renders_a_float_widened_whole_number_reference_without_a_trailing_point():
+    # A whole-number column with any blank cell cannot be held as an integer, so
+    # pandas widens it to float64 — and a plain cast would land the reference as
+    # "1234567890.0", which matches nothing downstream. The blank survives as a
+    # gap rather than being rendered as text.
+    raw = pd.DataFrame({"case_ref": [1234567890.0, np.nan]})
+
+    coerced = SchemaCoercion(ReferenceCase)(Dataset.from_pandas(raw)).to_pandas()
+
+    assert coerced["case_ref"].tolist()[0] == "1234567890"
+    assert coerced["case_ref"].isna().tolist() == [False, True]
+
+
+def test_a_null_reference_never_becomes_the_literal_text_of_its_own_absence():
+    # The failure this pins is a silent one: a gap cast to text as "nan" /
+    # "None" / "<NA>" is a value, and downstream it joins, matches and reports
+    # as one. It must stay a gap for the validator to judge.
+    raw = pd.DataFrame({"case_ref": [None, "c2"]})
+
+    coerced = SchemaCoercion(ReferenceCase)(Dataset.from_pandas(raw)).to_pandas()
+
+    assert coerced["case_ref"].isna().tolist() == [True, False]
+    assert set(coerced["case_ref"].dropna()) == {"c2"}
+
+
+def test_renders_a_genuinely_fractional_reference_as_its_own_text():
+    # The `str` path never aborts: a feed declares `str` precisely to keep an
+    # awkward value out of the fail-fast path, so a fraction renders as itself.
+    raw = pd.DataFrame({"case_ref": [3.5]})
+
+    coerced = SchemaCoercion(ReferenceCase)(Dataset.from_pandas(raw)).to_pandas()
+
+    assert coerced["case_ref"].tolist() == ["3.5"]
+
+
+def test_the_whole_number_repair_is_column_level_so_one_fraction_keeps_the_point():
+    # The repair is refused for the whole column when any value is fractional,
+    # by choice: a per-value repair would render two spellings of the same
+    # column. Pinned so the limitation is visible here rather than in a feed.
+    raw = pd.DataFrame({"case_ref": [1234567890.0, 3.5]})
+
+    coerced = SchemaCoercion(ReferenceCase)(Dataset.from_pandas(raw)).to_pandas()
+
+    assert coerced["case_ref"].tolist() == ["1234567890.0", "3.5"]
+
+
+def test_coerces_numeric_text_to_the_declared_number_so_the_validator_passes():
+    # The mirror of the reference case: a number landed as text (every value out
+    # of a strict CSV read) becomes the declared numeric type.
+    raw = pd.DataFrame({"case_ref": ["c1", "c2"], "score": ["10", "20"]})
+
+    coerced = SchemaCoercion(ScoredCase)(Dataset.from_pandas(raw))
+
+    SchemaValidator(ScoredCase).validate(coerced)  # does not raise
+    assert coerced.to_pandas()["score"].tolist() == [10, 20]
+
+
+def test_coerces_declared_float_text_to_float():
+    # Same path, declared float: the fractional value is kept, not truncated.
+    raw = pd.DataFrame({"case_ref": ["c1", "c2"], "rating": ["3.14", "2"]})
+
+    coerced = SchemaCoercion(RatedCase)(Dataset.from_pandas(raw))
+
+    SchemaValidator(RatedCase).validate(coerced)  # does not raise
+    assert coerced.to_pandas()["rating"].tolist() == [3.14, 2.0]
+
+
+def test_coerces_a_float_widened_int_column_keeping_the_null():
+    # A gap is enough to widen an integer column to float64. Coercing it back
+    # lands nullable Int64, so the gap survives as pd.NA rather than having to
+    # be invented as a zero.
+    raw = pd.DataFrame({"case_ref": ["c1", "c2"], "score": [10.0, np.nan]})
+
+    coerced = SchemaCoercion(ScoredCase)(Dataset.from_pandas(raw)).to_pandas()
+
+    assert coerced["score"].isna().tolist() == [False, True]
+    assert coerced["score"].dropna().tolist() == [10]
+
+
+def test_validator_accepts_the_nullable_integer_dtype_the_coercer_lands():
+    # The landed dtype is pandas' nullable "Int64" (numpy int64 cannot hold NA);
+    # assert the validator's dtype check accepts it rather than assuming.
+    frame = pd.DataFrame(
+        {"case_ref": ["c1", "c2"], "score": pd.array([10, None], dtype="Int64")}
+    )
+
+    SchemaValidator(ScoredCase).validate(Dataset.from_pandas(frame))  # does not raise
+
+
+@pytest.mark.parametrize(
+    ("schema", "column"),
+    [(ScoredCase, "score"), (RatedCase, "rating")],
+)
+def test_an_unparseable_number_fails_fast_naming_the_column_and_the_value(
+    schema, column
+):
+    # Nulling a bad value silently would lose it; the coerce step aborts instead
+    # with a message naming both the column and the value that broke it.
+    raw = pd.DataFrame({"case_ref": ["c1"], column: ["not-a-number"]})
+
+    with pytest.raises(CoercionError, match=f"{column}.*not-a-number"):
+        SchemaCoercion(schema)(Dataset.from_pandas(raw))
+
+
+def test_a_fractional_value_in_a_declared_int_aborts_rather_than_truncating():
+    # Truncation would silently change the value. A schema that declared an
+    # integer and received 3.5 has a contradiction to report, not to round away.
+    raw = pd.DataFrame({"case_ref": ["c1"], "score": ["3.5"]})
+
+    with pytest.raises(CoercionError, match="score.*not representable as int"):
+        SchemaCoercion(ScoredCase)(Dataset.from_pandas(raw))
+
+
+def test_a_null_in_a_declared_int_is_a_gap_not_a_fractional_value():
+    # The fractional check runs over float64, in which a gap is NaN — and
+    # `NaN % 1` is NaN, which compares unequal to 0. Unless the gaps are masked
+    # out, every null is reported as a fractional value and a plainly nullable
+    # column can never be coerced at all.
+    raw = pd.DataFrame({"case_ref": ["c1", "c2"], "score": ["10", None]})
+
+    coerced = SchemaCoercion(ScoredCase)(Dataset.from_pandas(raw)).to_pandas()
+
+    assert coerced["score"].isna().tolist() == [False, True]
+    assert coerced["score"].dropna().tolist() == [10]
+
+
+def test_null_in_a_non_null_int_is_a_nullability_breach_not_a_coercion_error():
+    # Presence is the validator's job, not the coercer's — the same division the
+    # bool path already draws: the gap coerces cleanly and is then reported
+    # against the declaration rather than against the value.
+    raw = pd.DataFrame({"case_ref": ["c1", "c2"], "score": ["10", None]})
+
+    coerced = SchemaCoercion(RequiredScoreCase)(Dataset.from_pandas(raw))
+
+    with pytest.raises(ValidationError, match="score.*null"):
+        SchemaValidator(RequiredScoreCase).validate(coerced)
+
+
+def test_the_unparseable_number_report_names_only_the_bad_value():
+    # An operator is pointed at the one value that is actually wrong: neither a
+    # null nor a blank cell is a bad number, so neither appears in the report.
+    raw = pd.DataFrame(
+        {"case_ref": ["c1", "c2", "c3", "c4"], "score": ["10", None, "  ", "ten"]}
+    )
+
+    with pytest.raises(CoercionError) as excinfo:
+        SchemaCoercion(ScoredCase)(Dataset.from_pandas(raw))
+
+    message = str(excinfo.value)
+    assert "ten" in message
+    assert "nan" not in message and "<NA>" not in message and "None" not in message
+
+
+def test_a_blank_cell_in_a_declared_int_is_a_gap_not_an_offender():
+    # A CSV spells "nothing here" as an empty field; reading that as a bad
+    # number would abort a hop over the absence of a value.
+    raw = pd.DataFrame({"case_ref": ["c1", "c2"], "score": ["10", ""]})
+
+    coerced = SchemaCoercion(ScoredCase)(Dataset.from_pandas(raw)).to_pandas()
+
+    assert coerced["score"].isna().tolist() == [False, True]
+
+
+def test_a_blank_cell_in_a_declared_bool_is_a_gap_not_an_unrecognized_encoding():
+    # Same rule on the boolean path, which shares the one gap definition: an
+    # empty field is the absence of an encoding, not an unknown one.
+    raw = pd.DataFrame({"case_ref": ["c1", "c2"], "active": ["TRUE", "  "]})
+
+    coerced = SchemaCoercion(OptionallyFlaggedCase)(Dataset.from_pandas(raw))
+
+    SchemaValidator(OptionallyFlaggedCase).validate(coerced)  # does not raise
+    assert coerced.to_pandas()["active"].isna().tolist() == [False, True]
+
+
+def test_a_declared_coerce_casts_a_type_the_framework_does_not_know():
+    # The extension point: an application declares its own domain type and says
+    # how it is cast, without that type having to be added to the framework.
+    raw = pd.DataFrame({"case_ref": ["c1", "c2"], "amount": ["1.50", "2.25"]})
+
+    coerced = SchemaCoercion(MoneyCase)(Dataset.from_pandas(raw)).to_pandas()
+
+    assert coerced["amount"].tolist() == [Decimal("1.50"), Decimal("2.25")]
+
+
+def test_the_validator_accepts_a_schema_whose_field_declares_its_own_cast():
+    # The other half of the seam, and the half that makes it usable: without it
+    # the validator would refuse `Decimal` at build time and no coerce->validate
+    # hop could name the type at all. The dtype check is skipped for the field —
+    # the declared cast decides its dtype — and the rest of the check still runs.
+    raw = pd.DataFrame({"case_ref": ["c1"], "amount": ["1.50"]})
+
+    coerced = SchemaCoercion(MoneyCase)(Dataset.from_pandas(raw))
+
+    SchemaValidator(MoneyCase).validate(coerced)  # does not raise
+
+
+def test_a_declared_coerce_overrides_the_built_in_cast_for_a_known_type():
+    # A `Coerce` on a type the framework does know is an override, not an
+    # error: a source spelling its dates `05/08/2026` — which the built-in
+    # ISO-only path refuses on purpose — declares how to read them.
+    raw = pd.DataFrame({"case_ref": ["c1"], "opened": ["05/08/2026"]})
+
+    coerced = SchemaCoercion(UkDatedCase)(Dataset.from_pandas(raw))
+
+    SchemaValidator(UkDatedCase).validate(coerced)  # does not raise
+    assert coerced.to_pandas()["opened"].tolist() == [pd.Timestamp("2026-08-05")]
+
+
+def test_a_failing_declared_cast_is_reported_against_its_column():
+    # A declared cast that rejects a value fails like any other coercion arm:
+    # located to the schema and column, so the seam does not cost diagnosability.
+    raw = pd.DataFrame({"case_ref": ["c1"], "opened": ["not-a-date"]})
+
+    with pytest.raises(CoercionError, match="opened.*declared coercion failed"):
+        SchemaCoercion(UkDatedCase)(Dataset.from_pandas(raw))
+
+
+def test_a_value_rule_beside_a_declared_coerce_still_runs():
+    # Skipping the dtype check must not take the rest of the contract with it:
+    # presence, nullability and value rules apply to a self-cast field in full.
+    @dataclass
+    class RequiredMoneyCase:
+        case_ref: str
+        amount: Annotated[Decimal, Coerce(to_decimal), NonNull()]
+
+    frame = pd.DataFrame({"case_ref": ["c1", "c2"], "amount": [Decimal("1.50"), None]})
+
+    with pytest.raises(ValidationError, match="amount.*null"):
+        SchemaValidator(RequiredMoneyCase).validate(Dataset.from_pandas(frame))

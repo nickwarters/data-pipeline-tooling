@@ -344,7 +344,7 @@ shape-hardening (`schema-enforcement.md`). The step order is:
 
 1. **`Rename`** the spaced/punctuated source names to the schema's canonical
    identifiers — the canonicalisation.
-2. **`SchemaCoercion`** — repair the dtypes storage round-trips lose.
+2. **`SchemaCoercion`** — cast each declared column to its declared type.
 3. **`SchemaValidator`** (as a post-validator) — check at the silver boundary.
 
 Add a `Rename(RENAME)` node to `silver_builder`, *before* `SchemaCoercion` and

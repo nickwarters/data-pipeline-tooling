@@ -12,8 +12,8 @@ either applies or it can't, so a failure is always fail-fast.
 
 Two families of concrete processor live in the framework. The schema-driven
 ``SchemaCoercion`` (in :mod:`framework.transform.coercion`) is the write-side
-companion of ``SchemaValidator`` that repairs the representation raw loses to
-storage.
+companion of ``SchemaValidator``, casting each declared column to the type the
+schema declared.
 This module holds reusable transforms: ``Filter`` and ``Score`` carry
 plain-Python row callables, ``VectorizedFilter`` and ``VectorizedDerive`` carry
 whole-frame callables for batch-friendly transforms, ``Sort`` and ``Rename``

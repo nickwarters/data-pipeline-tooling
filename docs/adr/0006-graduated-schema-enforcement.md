@@ -80,4 +80,53 @@ warns once, not every run.
 - A truncated source export — every row valid, yet thousands missing — is invisible
   per-row; the `VolumeAnomalyValidator` catches it run-over-run by comparing a
   run's row count against a baseline derived from the feed's recent run history.
+
+## Amendment (2026-08-18): coercion covers every declared type, and a field can declare its own cast
+
+The decision above is unchanged: enforcement is graduated, silver is the schema
+boundary, and coercion is a separate, earlier step. What widens is **which types
+that step repairs**, and the addition of a seam for a type the framework has
+never heard of.
+
+- **Coercion is no longer limited to what a SQLite round-trip loses.** The
+  original scope — `date` / `datetime` / `bool`, on the reasoning that
+  `str` / `int` / `float` survive storage unchanged — held only while storage was
+  the only thing between a source and the validator. It is not: a CSV read is
+  bare type inference, so a digits-only reference arrives as `int64` and a number
+  arrives as text, and nothing before the validator could repair either.
+  `SchemaCoercion` now casts **every** declared column whose dtype the validator
+  would not already accept. `int` lands as nullable `Int64`, for the same reason
+  `bool` lands as `"boolean"`: a gap cannot be held otherwise.
+- **The no-op rule is the validator's own dtype check**, asked directly. What
+  coercion leaves alone is by construction what validation accepts, so the two
+  halves of the adapter cannot drift.
+- **A field can declare its own cast**: `Annotated[T, Coerce(fn)]`, a marker
+  beside `Nullable` / `NonNull`, whose `Callable[[Series], Series]` runs in place
+  of the built-in arm. It is the extension point for an application's own
+  declared type — the framework does not grow an arm per domain type — and an
+  override where the built-in cast is deliberately strict (ISO-only dates).
+  `SchemaValidator` reads the same marker: such a field is accepted at build time
+  whatever its declared type, and its **dtype check is skipped**, because the
+  declared cast is what decides the dtype. Presence, nullability and value rules
+  still apply to it in full.
+- **Nullability stays the validator's question.** A gap is the absence of a
+  value, never a bad one: it is excluded from every offender report and left to
+  `NonNull()`. On the numeric and boolean paths a blank or whitespace-only cell
+  counts as a gap too — it is how a CSV spells "nothing here" — but never on the
+  `str` path, where the empty string is a value.
+- **The zero-row special case is gone.** The frame-is-empty branch existed to fix
+  a created table's column affinity, and with every declared type now having a
+  real cast the empty case stops being special: the ordinary paths run over no
+  rows and land the same dtypes. That the affinity is preserved is a free
+  consequence rather than a load-bearing constraint —
+  [ADR-0025](0025-sql-migrations-own-the-physical-table-shape.md) moved ownership
+  of a table's physical shape to the numbered SQL, which demoted the affinity job
+  this branch was written for.
+
+**The cost to be aware of.** The coerce step sits *above* quarantine
+([ADR-0007](0007-row-level-quarantine.md)): rules route rows aside, and rules run
+in the validator, after the cast. So declaring `int` or `float` makes a single
+unparseable value fatal to the whole run rather than a diverted row. That is the
+right default where the type is load-bearing; a feed that would rather divert the
+row declares `str` and gates the column with a value rule.
 </content>

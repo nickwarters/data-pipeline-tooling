@@ -119,7 +119,9 @@ class StrictCsvReader:
       raised naming the offending record — the *strict* in the name.
     - Values are landed as **text** (no type inference): the job here is
       faithful tokenisation, leaving dtype decisions to silver coercion
-      (``SchemaCoercion``) the same way the raw layer stays schema-light. An
+      (``SchemaCoercion``) the same way the raw layer stays schema-light. A
+      declared ``str`` lands as text there rather than passing through, and a
+      declared number or boolean reads a blank field as a gap. An
       empty field is the empty string; a doubled-quote empty field ``""`` is
       likewise the empty string.
 

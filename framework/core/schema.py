@@ -9,9 +9,9 @@ columns + dtypes + nullability + value rules + cross-field **row checks**
 downstream logic touches the data.
 
 It is the *check* half of the schema adapter; the *coerce* half —
-:class:`~framework.transform.coercion.SchemaCoercion`, which repairs the
-representation raw loses to storage — lives in ``framework.transform`` because it
-reshapes rather than checks. Both derive from the shared annotation reading and
+:class:`~framework.transform.coercion.SchemaCoercion`, which casts each declared
+column to the type the schema declared — lives in ``framework.transform`` because
+it reshapes rather than checks. Both derive from the shared annotation reading and
 type mapping in :mod:`framework._internal.schema`, so they stay consistent
 without depending on each other.
 
@@ -41,7 +41,7 @@ from framework._internal.schema import (
 )
 from framework.core.dataset import Dataset
 from framework.core.validators import ValidationError
-from framework.core.value_rules import NonNull, Nullable
+from framework.core.value_rules import Coerce, NonNull, Nullable
 
 
 def _declared_nullability(schema: type) -> dict[str, bool]:
@@ -67,6 +67,23 @@ def _declared_nullability(schema: type) -> dict[str, bool]:
     return declared
 
 
+def _declared_self_cast(schema: type) -> set[str]:
+    """Return the fields carrying a ``Coerce`` marker — the ones the dtype check skips.
+
+    A field that declares its own cast decides its own dtype, so the built-in
+    Python-type → dtype mapping has nothing to say about it: such a field is
+    neither refused at build time for a type outside that mapping nor
+    dtype-checked in :meth:`SchemaValidator.validate`. Presence, nullability and
+    value rules still apply to it in full.
+    """
+    hints = _resolved_hints(schema)
+    return {
+        f.name
+        for f in fields(schema)
+        if any(isinstance(m, Coerce) for m in _unwrap(hints[f.name])[1])
+    }
+
+
 class SchemaValidator:
     """Check a dataset against a Case Type schema (a dataclass): columns + dtypes.
 
@@ -81,12 +98,13 @@ class SchemaValidator:
         self._expected = _declared_fields(schema)
         self._row_checks = _declared_row_checks(schema)
         self._nullable = _declared_nullability(schema)
+        self._self_cast = _declared_self_cast(schema)
         # Fail at build time on a type the adapter cannot map to a dtype, so a
         # mis-declared schema surfaces where it is composed, not mid-run.
         unsupported = [
             (name, declared)
             for name, declared in self._expected
-            if declared not in _DTYPE_CHECKS
+            if declared not in _DTYPE_CHECKS and name not in self._self_cast
         ]
         if unsupported:
             details = "; ".join(
@@ -116,12 +134,16 @@ class SchemaValidator:
                 continue
             if not checks_values:
                 continue
-            check, label = _DTYPE_CHECKS[declared]
-            actual = frame[name].dtype
-            if not check(actual):
-                problems.append(f"column {name!r} expected {label} but found {actual}")
-                ill_typed.add(name)
-            elif not self._nullable[name] and frame[name].isna().any():
+            if name not in self._self_cast:
+                check, label = _DTYPE_CHECKS[declared]
+                actual = frame[name].dtype
+                if not check(actual):
+                    problems.append(
+                        f"column {name!r} expected {label} but found {actual}"
+                    )
+                    ill_typed.add(name)
+                    continue
+            if not self._nullable[name] and frame[name].isna().any():
                 problems.append(f"column {name!r} contains null value(s)")
         # Value rules run on the same frame via the shared traversal, but only
         # over columns that carry the declared dtype — a wrong-typed column's

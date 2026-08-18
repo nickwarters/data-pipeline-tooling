@@ -726,21 +726,32 @@ Two families of concrete processor ship now.
 
 **Schema coercion.** `SchemaCoercion(schema)` — the write-side companion of
 `SchemaValidator`, derived from the same Case Type dataclass. Where the validator
-*checks* dtypes, the coercer *repairs* the representation raw loses to storage,
-casting only the round-trip-lossy declared types — `date`/`datetime` (landed as
-text) and `bool` (`TRUE`/`FALSE` text or `1`/`0`). `str`/`int`/`float` survive a
-SQLite round-trip, so they pass through untouched and stay the validator's gate;
-undeclared columns are left alone. The one exception is a **zero-row** frame,
-where every declared column is typed — there is no value to carry the type, and
-where the table is *not* declared by a migration the dtypes of an empty write are
-what fix its column affinity (see
+*checks* dtypes, the coercer *makes them true*, casting **every** declared column
+whose dtype the validator would not already accept: `date`/`datetime` (landed as
+text) and `bool` (`TRUE`/`FALSE` text or `1`/`0`), which storage loses outright,
+and `str`/`int`/`float`, which a reader's inference is free to land as something
+else — a digits-only reference read as `int64`, a number read as text. `int`
+lands as nullable `Int64` (a gap cannot be held as numpy `int64`), and a column
+already carrying an accepted dtype is skipped by asking the validator's own
+check, so the two halves cannot drift; undeclared columns are left alone. No
+branch handles a **zero-row** frame: the same paths run with no rows, which is
+still what fixes a created table's column affinity where the table is *not*
+declared by a migration (see
 [schema enforcement](schema-enforcement.md#a-zero-row-frame-satisfies-any-declared-schema)). Dates and datetimes are parsed as **ISO-8601**
 (`format="ISO8601"`), so mixed precision in one column — `Z` beside `.000Z` —
 coerces cleanly rather than depending on which value came first; a non-ISO
 spelling (`05/08/2026`) is deliberately unparseable, since a guessed format
 would land a wrong instant silently. A value it cannot cast (an unparseable
-date, an unknown boolean encoding) raises a **`CoercionError`** with one located
-message naming the column. The raw→silver hop composes it ahead of the
+date, an unknown boolean encoding, text that is not a number) raises a
+**`CoercionError`** with one located message naming the column and the value; a
+gap is never one of them, because nullability is the validator's question.
+
+A field declares its own cast with `Annotated[T, Coerce(fn)]` — the seam for a
+declared type the framework has no arm for (an application's `Decimal`) and an
+override where it has one (`Annotated[date, Coerce(parse_uk_dates)]`); the
+marker is imported from `framework.core` beside `Nullable`/`NonNull`, and
+`SchemaValidator` accepts such a field and skips its dtype check while still
+applying presence, nullability and value rules. The raw→silver hop composes it ahead of the
 `SchemaValidator`, so the per-run order is **read → coerce (transform) →
 post-validate (schema) → write**.
 

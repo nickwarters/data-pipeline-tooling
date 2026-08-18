@@ -640,7 +640,7 @@ def test_reviewer_publish_only_malformed_gold_is_a_clean_cli_failure(
 
     error = capsys.readouterr().err
     assert code == 1
-    assert "expected int" in error
+    assert "not parseable as int" in error and "not-an-int" in error
     assert "Traceback" not in error
 
 
