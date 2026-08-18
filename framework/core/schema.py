@@ -34,7 +34,6 @@ if TYPE_CHECKING:
 from framework._internal.schema import (
     _DTYPE_CHECKS,
     _declared_fields,
-    _declared_markers,
     _declared_row_checks,
     _resolved_hints,
     _unwrap,
@@ -42,7 +41,7 @@ from framework._internal.schema import (
 )
 from framework.core.dataset import Dataset
 from framework.core.validators import ValidationError
-from framework.core.value_rules import Coerce, NonNull, Nullable
+from framework.core.value_rules import NonNull, Nullable
 
 
 def _declared_nullability(schema: type) -> dict[str, bool]:
@@ -82,16 +81,12 @@ class SchemaValidator:
         self._expected = _declared_fields(schema)
         self._row_checks = _declared_row_checks(schema)
         self._nullable = _declared_nullability(schema)
-        # A field that declares its own cast decides its own dtype, so the
-        # built-in Python-type -> dtype mapping has nothing to say about it:
-        # neither refused at build time below, nor dtype-checked in `validate`.
-        self._casts = _declared_markers(schema, Coerce)
         # Fail at build time on a type the adapter cannot map to a dtype, so a
         # mis-declared schema surfaces where it is composed, not mid-run.
         unsupported = [
             (name, declared)
             for name, declared in self._expected
-            if declared not in _DTYPE_CHECKS and name not in self._casts
+            if declared not in _DTYPE_CHECKS
         ]
         if unsupported:
             details = "; ".join(
@@ -121,16 +116,12 @@ class SchemaValidator:
                 continue
             if not checks_values:
                 continue
-            if name not in self._casts:
-                check, label = _DTYPE_CHECKS[declared]
-                actual = frame[name].dtype
-                if not check(actual):
-                    problems.append(
-                        f"column {name!r} expected {label} but found {actual}"
-                    )
-                    ill_typed.add(name)
-                    continue
-            if not self._nullable[name] and frame[name].isna().any():
+            check, label = _DTYPE_CHECKS[declared]
+            actual = frame[name].dtype
+            if not check(actual):
+                problems.append(f"column {name!r} expected {label} but found {actual}")
+                ill_typed.add(name)
+            elif not self._nullable[name] and frame[name].isna().any():
                 problems.append(f"column {name!r} contains null value(s)")
         # Value rules run on the same frame via the shared traversal, but only
         # over columns that carry the declared dtype — a wrong-typed column's

@@ -100,8 +100,8 @@ ordinary paths run over no rows and land the same dtypes — with the same `TEXT
 column `reindex` invented does not satisfy a declared `str`, so it is cast to
 text; an `object` one already does and is skipped, and `object` is the same
 `TEXT` affinity either way. A declared type the coercer
-has no cast for, and no `Coerce` marker to supply one, is left alone: an
-unsupported type is a schema configuration error, and `SchemaValidator` reports
+has no cast for is left alone: an unsupported type is a schema configuration
+error, and `SchemaValidator` reports
 it at build time naming the field. The gate stands down and the shape is still
 declared.
 
@@ -237,43 +237,6 @@ Two more rules are worth stating outright:
   column refuses that detour for the *whole* column, which then keeps its `.0`
   rendering. That is a deliberate trade: a per-value repair would render two
   spellings of one column.
-
-### `Coerce` — a field declares its own cast
-
-A declared type the framework has no arm for — an application's own `Decimal`,
-`UUID` or domain type — is cast by the field itself:
-
-```python
-from decimal import Decimal
-from typing import Annotated
-from framework.core import Coerce
-
-def to_decimal(series):                      # pd.Series -> pd.Series
-    return series.map(Decimal)
-
-@dataclass
-class Invoice:
-    case_ref: str
-    amount: Annotated[Decimal, Coerce(to_decimal)]
-```
-
-`Coerce` is a field marker declared alongside `Nullable` / `NonNull` and the
-value rules, and imported from `framework.core` with them. Its `cast` is
-`Callable[[pd.Series], pd.Series]` — engine-confined for the same reason a value
-rule is — and it **wins over the built-in path** for that column, so it is an
-override as well as an extension: `Annotated[date, Coerce(parse_uk_dates)]`
-reads a source that spells its dates `05/08/2026`, which the built-in ISO-only
-path refuses on purpose. A cast that raises `TypeError`, `ValueError` or
-`ArithmeticError` — the last because the `series.map(Decimal)` above raises
-`decimal.InvalidOperation` on a bad value — is reported as an ordinary located
-coercion failure (`column 'amount' declared coercion
-failed (...)`); anything else keeps its own traceback, because that is a bug in
-the cast rather than a problem with the data.
-
-`SchemaValidator` reads the same marker: a field carrying a `Coerce` is **not**
-refused at build time for declaring a type outside the supported six, and its
-**dtype check is skipped** — the declared cast decides the dtype. Presence,
-nullability and the field's value rules still apply to it in full.
 
 ### One operational consequence
 

@@ -5,9 +5,7 @@ The *coerce* half of the schema adapter, and the write-side companion of
 dtypes, this *repairs* them, casting each declared column whose dtype the
 validator would not already accept — ``date`` / ``datetime`` / ``bool``, which
 storage loses outright, and ``str`` / ``int`` / ``float``, which a reader's type
-inference is free to land as something else. A field can also declare its own
-cast with ``Annotated[T, Coerce(fn)]``, which is both the seam for a type the
-framework has no arm for and an override for one it does. It lives in
+inference is free to land as something else. It lives in
 ``framework.transform`` because it reshapes a column's values rather than gating
 them; it shares the dataclass-annotation reading with the validator via
 :mod:`framework._internal.schema`.
@@ -23,13 +21,8 @@ from datetime import date, datetime
 import pandas as pd
 from pandas.api import types as pdt
 
-from framework._internal.schema import (
-    _DTYPE_CHECKS,
-    _declared_fields,
-    _declared_markers,
-)
+from framework._internal.schema import _DTYPE_CHECKS, _declared_fields
 from framework.core.dataset import Dataset
-from framework.core.value_rules import Coerce
 from framework.transform.processors import CoercionError
 
 # Boolean encodings raw can leave behind once a source's booleans survive a
@@ -65,10 +58,6 @@ class SchemaCoercion:
     numeric text to the declared number. A column whose dtype the validator
     would already accept is left exactly as it is.
 
-    A field carrying ``Annotated[T, Coerce(fn)]`` is cast by ``fn`` instead —
-    the seam for a declared type the framework knows no cast for, and an
-    override where it does.
-
     A gap is the absence of a value, never a bad one: it is excluded from every
     offender report and left for the validator, which owns nullability. A value
     that cannot be cast aborts the step with a located
@@ -79,17 +68,13 @@ class SchemaCoercion:
     def __init__(self, schema: type) -> None:
         self._schema = schema
         self._expected = _declared_fields(schema)
-        self._casts = _declared_markers(schema, Coerce)
 
     def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         for name, declared in self._expected:
             if name not in frame.columns:
                 continue  # a missing column is the validator's breach to report
-            marker = self._casts.get(name)
-            if marker is not None:
-                frame[name] = self._declared_cast(marker, frame[name], name)
-            elif declared in (date, datetime):
+            if declared in (date, datetime):
                 frame[name] = self._to_datetime(frame[name], name)
             elif declared is bool:
                 frame[name] = self._to_bool(frame[name], name)
@@ -113,7 +98,7 @@ class SchemaCoercion:
         # intermittently, as a function of which rows share a batch. A value
         # that is not ISO-8601 at all still raises: turning it into a null
         # (errors="coerce") would silently lose it, which is worse than failing
-        # loudly. A source spelling dates any other way declares its own cast.
+        # loudly.
         try:
             return pd.to_datetime(series, format="ISO8601")
         except (ValueError, TypeError) as exc:
@@ -170,18 +155,6 @@ class SchemaCoercion:
         # dtype check accepts both, and a non-nullable declaration is then
         # reported as the nullability breach it is rather than a bad encoding.
         return mapped.astype("boolean")
-
-    def _declared_cast(
-        self, marker: Coerce, series: "pd.Series", name: str
-    ) -> "pd.Series":
-        # These three only: anything else out of a caller's cast is a bug in
-        # the cast, and keeps its own traceback rather than being dressed up as
-        # a problem with the data. ArithmeticError is one of them because
-        # `series.map(Decimal)` raises decimal.InvalidOperation on a bad value.
-        try:
-            return marker.cast(series)
-        except (TypeError, ValueError, ArithmeticError) as exc:
-            raise self._error(name, f"declared coercion failed ({exc})") from exc
 
     @staticmethod
     def _missing(series: "pd.Series") -> "pd.Series":

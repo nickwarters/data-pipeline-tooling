@@ -23,7 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass, fields
 from datetime import date, datetime
 from functools import lru_cache
-from typing import Callable, Protocol, TypeVar, get_type_hints, runtime_checkable
+from typing import Callable, Protocol, get_type_hints, runtime_checkable
 
 import pandas as pd
 from pandas.api import types as pdt
@@ -189,29 +189,6 @@ def _declared_fields(schema: type) -> list[tuple[str, type]]:
     """
     hints = _resolved_hints(schema)
     return [(f.name, _unwrap(hints[f.name])[0]) for f in fields(schema)]
-
-
-_Marker = TypeVar("_Marker")
-
-
-def _declared_markers(schema: type, marker_type: type[_Marker]) -> dict[str, _Marker]:
-    """Return the ``marker_type`` marker each field declares, for the fields that do.
-
-    The one walk behind both adapters' reading of a field marker — the marker
-    type is passed in so this stays free of any dependency on the concrete
-    markers, which live in :mod:`framework.core.value_rules`. A field declaring
-    the same marker twice is a schema error rather than a precedence question,
-    so the first is taken and no order is promised.
-    """
-    hints = _resolved_hints(schema)
-    declared: dict[str, _Marker] = {}
-    for f in fields(schema):
-        marker = next(
-            (m for m in _unwrap(hints[f.name])[1] if isinstance(m, marker_type)), None
-        )
-        if marker is not None:
-            declared[f.name] = marker
-    return declared
 
 
 def _declared_rules(schema: type) -> list[tuple[str, list[ValueRule]]]:

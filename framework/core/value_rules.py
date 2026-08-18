@@ -8,9 +8,6 @@ by :class:`~framework.core.schema.SchemaValidator`, and the masks they
 produce drive the quarantine partitioner. Each satisfies the
 :class:`~framework._internal.schema.ValueRule` protocol structurally.
 
-The ``Coerce`` marker lives here too: not a rule — it says how a field's column
-is *cast*, not what its values must be — but declared in ``Annotated`` alongside.
-
 Authoring a rule is an **engine-confined** act: a rule is handed the column's
 pandas Series directly, because judging thousands of values one at a time
 without the engine's vectorised operations would be unusably slow. The five
@@ -25,7 +22,6 @@ Re-exported from :mod:`framework.core`.
 from __future__ import annotations
 
 import re
-from typing import Callable
 
 import pandas as pd
 
@@ -136,24 +132,6 @@ class Nullable:
 
 class NonNull:
     """Declare that a schema field must not contain null values."""
-
-
-class Coerce:
-    """Declare how a schema field's column is cast, in place of the built-in path.
-
-    ``Annotated[Decimal, Coerce(to_decimal)]`` is the seam for a declared type
-    the framework has no cast for; ``Annotated[date, Coerce(parse_uk_dates)]``
-    overrides one it does. ``cast`` is handed the whole column and returns the
-    cast column — engine-confined for the same reason a value rule is: judging
-    or converting values one at a time would be unusably slow.
-
-    :class:`~framework.transform.coercion.SchemaCoercion` runs the cast in place
-    of its own arm for that column, and ``SchemaValidator`` skips its dtype check
-    for the field. Presence, nullability and value rules still apply in full.
-    """
-
-    def __init__(self, cast: Callable[["pd.Series"], "pd.Series"]) -> None:
-        self.cast = cast
 
 
 class Pattern(ValueRuleBase):

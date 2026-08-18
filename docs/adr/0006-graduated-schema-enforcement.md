@@ -81,12 +81,11 @@ warns once, not every run.
   per-row; the `VolumeAnomalyValidator` catches it run-over-run by comparing a
   run's row count against a baseline derived from the feed's recent run history.
 
-## Amendment (2026-08-18): coercion covers every declared type, and a field can declare its own cast
+## Amendment (2026-08-18): coercion covers every declared type
 
 The decision above is unchanged: enforcement is graduated, silver is the schema
 boundary, and coercion is a separate, earlier step. What widens is **which types
-that step repairs**, and the addition of a seam for a type the framework has
-never heard of.
+that step repairs**.
 
 - **Coercion is no longer limited to what a SQLite round-trip loses.** The
   original scope — `date` / `datetime` / `bool`, on the reasoning that
@@ -102,15 +101,6 @@ never heard of.
 - **The no-op rule is the validator's own dtype check**, asked directly. What
   coercion leaves alone is by construction what validation accepts, so the two
   halves of the adapter cannot drift.
-- **A field can declare its own cast**: `Annotated[T, Coerce(fn)]`, a marker
-  beside `Nullable` / `NonNull`, whose `Callable[[Series], Series]` runs in place
-  of the built-in arm. It is the extension point for an application's own
-  declared type — the framework does not grow an arm per domain type — and an
-  override where the built-in cast is deliberately strict (ISO-only dates).
-  `SchemaValidator` reads the same marker: such a field is accepted at build time
-  whatever its declared type, and its **dtype check is skipped**, because the
-  declared cast is what decides the dtype. Presence, nullability and value rules
-  still apply to it in full.
 - **Nullability stays the validator's question.** A gap is the absence of a
   value, never a bad one: it is excluded from every offender report and left to
   `NonNull()`. On the numeric and boolean paths a blank or whitespace-only cell

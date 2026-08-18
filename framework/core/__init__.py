@@ -2,8 +2,7 @@
 
 The noun every pipeline names regardless of task — ``Dataset`` — plus the
 foundational data contracts: declaring and enforcing a feed's schema
-(``SchemaValidator``, the value rules, and the ``Nullable`` / ``NonNull`` /
-``Coerce`` field markers) and structural validations.
+(``SchemaValidator``, value rules) and structural validations.
 
 The medallion (``raw`` / ``silver`` / ``gold``) is **no longer framework
 vocabulary**: the framework stores an opaque ``namespace`` → file, and the
@@ -46,7 +45,6 @@ from framework.core.validators import (
     needs_whole_dataset,
 )
 from framework.core.value_rules import (
-    Coerce,
     Length,
     NonNull,
     Nullable,
@@ -87,7 +85,6 @@ __all__ = [
     "row_checks",
     "Nullable",
     "NonNull",
-    "Coerce",
     "Pattern",
     "Length",
     "Range",

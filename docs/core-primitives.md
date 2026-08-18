@@ -746,12 +746,7 @@ date, an unknown boolean encoding, text that is not a number) raises a
 **`CoercionError`** with one located message naming the column and the value; a
 gap is never one of them, because nullability is the validator's question.
 
-A field declares its own cast with `Annotated[T, Coerce(fn)]` — the seam for a
-declared type the framework has no arm for (an application's `Decimal`) and an
-override where it has one (`Annotated[date, Coerce(parse_uk_dates)]`); the
-marker is imported from `framework.core` beside `Nullable`/`NonNull`, and
-`SchemaValidator` accepts such a field and skips its dtype check while still
-applying presence, nullability and value rules. The raw→silver hop composes it ahead of the
+The raw→silver hop composes it ahead of the
 `SchemaValidator`, so the per-run order is **read → coerce (transform) →
 post-validate (schema) → write**.
 

@@ -5,9 +5,8 @@ schema declared, *ahead of* the silver ``SchemaValidator``: types storage loses
 outright (dates land as text, booleans as ``1``/``0`` or ``TRUE``/``FALSE``) and
 types a reader's inference is free to land as something else (a digits-only
 reference read as ``int64``, a number read as text). A column the validator's
-dtype check would already accept is left alone, and a field can declare its own
-cast with ``Annotated[T, Coerce(fn)]``. It is engine-confined (reaches the frame
-via ``to_pandas``/``from_pandas``).
+dtype check would already accept is left alone. It is engine-confined (reaches
+the frame via ``to_pandas``/``from_pandas``).
 """
 
 from dataclasses import dataclass
@@ -20,10 +19,8 @@ import pandas as pd
 import pytest
 
 from framework.core import (
-    Coerce,
     NonNull,
     Nullable,
-    Pattern,
     SchemaValidator,
     ValidationError,
 )
@@ -84,26 +81,6 @@ class RatedCase:
 class RequiredScoreCase:
     case_ref: str
     score: Annotated[int, NonNull()]
-
-
-def to_decimal(series: pd.Series) -> pd.Series:
-    return series.map(Decimal)  # the cast `docs/schema-enforcement.md` documents
-
-
-def parse_uk_dates(series: pd.Series) -> pd.Series:
-    return pd.to_datetime(series, format="%d/%m/%Y")
-
-
-@dataclass
-class MoneyCase:
-    case_ref: str
-    amount: Annotated[Decimal, Coerce(to_decimal)]
-
-
-@dataclass
-class UkDatedCase:
-    case_ref: str
-    opened: Annotated[date, Coerce(parse_uk_dates)]
 
 
 def test_coerces_a_declared_date_from_text_so_the_validator_passes():
@@ -195,10 +172,10 @@ def test_types_every_declared_column_when_the_frame_has_no_rows():
 
 
 def test_leaves_a_type_it_cannot_map_alone_on_an_empty_frame():
-    # A declared type outside the supported six, and no declared `Coerce` to say
-    # how to cast it, is a schema configuration error — and `SchemaValidator` is
-    # where it is reported, at build time, naming the field. The coercer must not
-    # pre-empt that by crashing on a type it has no arm for.
+    # A declared type outside the supported six is a schema configuration error,
+    # and `SchemaValidator` is where it is reported, at build time, naming the
+    # field. The coercer must not pre-empt that by crashing on a type it has no
+    # arm for.
     @dataclass
     class OddCase:
         case_ref: str
@@ -537,67 +514,3 @@ def test_a_blank_cell_in_a_declared_bool_is_a_gap_not_an_unrecognized_encoding()
 
     SchemaValidator(OptionallyFlaggedCase).validate(coerced)  # does not raise
     assert coerced.to_pandas()["active"].isna().tolist() == [False, True]
-
-
-def test_a_declared_coerce_casts_a_type_the_framework_does_not_know():
-    # The extension point: an application declares its own domain type and how
-    # it is cast, without that type having to be added to the framework. The
-    # validator reads the same marker, which is what makes the seam usable —
-    # otherwise it would refuse `Decimal` at build time and no coerce->validate
-    # hop could name the type at all.
-    raw = pd.DataFrame({"case_ref": ["c1", "c2"], "amount": ["1.50", "2.25"]})
-
-    coerced = SchemaCoercion(MoneyCase)(Dataset.from_pandas(raw))
-
-    SchemaValidator(MoneyCase).validate(coerced)  # does not raise
-    assert coerced.to_pandas()["amount"].tolist() == [Decimal("1.50"), Decimal("2.25")]
-
-
-def test_a_declared_coerce_overrides_the_built_in_cast_for_a_known_type():
-    # A `Coerce` on a type the framework does know is an override, not an
-    # error: a source spelling its dates `05/08/2026` — which the built-in
-    # ISO-only path refuses on purpose — declares how to read them.
-    raw = pd.DataFrame({"case_ref": ["c1"], "opened": ["05/08/2026"]})
-
-    coerced = SchemaCoercion(UkDatedCase)(Dataset.from_pandas(raw))
-
-    SchemaValidator(UkDatedCase).validate(coerced)  # does not raise
-    assert coerced.to_pandas()["opened"].tolist() == [pd.Timestamp("2026-08-05")]
-
-
-def test_a_failing_declared_cast_is_reported_against_its_column():
-    # A declared cast that rejects a value fails like any other coercion arm:
-    # located to the schema and column, so the seam does not cost diagnosability.
-    raw = pd.DataFrame({"case_ref": ["c1"], "opened": ["not-a-date"]})
-
-    with pytest.raises(CoercionError, match="opened.*declared coercion failed"):
-        SchemaCoercion(UkDatedCase)(Dataset.from_pandas(raw))
-
-
-def test_the_documented_decimal_cast_reports_a_bad_value_as_a_located_failure():
-    # `series.map(Decimal)` — the cast the guide gives as *the* example — raises
-    # decimal.InvalidOperation on a bad value, which is an ArithmeticError and
-    # neither of the two exception types the seam first caught. Escaping, it
-    # bypasses PipelineError, `format_failure`, and the operator CLI's
-    # traceback-free failure path.
-    raw = pd.DataFrame({"case_ref": ["c1"], "amount": ["not-a-number"]})
-
-    with pytest.raises(CoercionError, match="amount.*declared coercion failed"):
-        SchemaCoercion(MoneyCase)(Dataset.from_pandas(raw))
-
-
-def test_a_value_rule_beside_a_declared_coerce_still_runs():
-    # Skipping the dtype check must not take the rest of the contract with it.
-    # The validator suppresses the rules of a column whose dtype it rejected; a
-    # self-cast column is not rejected, it is unasked, so its rules must run.
-    @dataclass
-    class PatternedMoneyCase:
-        case_ref: str
-        amount: Annotated[Decimal, Coerce(to_decimal), Pattern(r"\d+\.\d\d")]
-
-    raw = pd.DataFrame({"case_ref": ["c1", "c2"], "amount": ["1.50", "1.5"]})
-
-    coerced = SchemaCoercion(PatternedMoneyCase)(Dataset.from_pandas(raw))
-
-    with pytest.raises(ValidationError, match="amount.*violates pattern"):
-        SchemaValidator(PatternedMoneyCase).validate(coerced)
