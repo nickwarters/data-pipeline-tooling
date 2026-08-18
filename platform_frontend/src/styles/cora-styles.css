@@ -1676,6 +1676,32 @@
 
 /* ── Conversation ────────────────────────────────────────────────────────── */
 
+.cora-conversation-panel-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--cora-space-2);
+}
+
+/* Out-specifies the [data-cora-root] button reset (0,1,1), which otherwise
+   paints this button solid accent. */
+[data-cora-root] .cora-conversation-close {
+  background: transparent;
+  border: none;
+  /* Explicit box: padding alone leaves it under the 24px minimum target. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--cora-color-text-muted);
+}
+
+[data-cora-root] .cora-conversation-close:hover {
+  background: var(--cora-color-surface-2);
+}
+
 .cora-conversation-list {
   list-style: none;
   padding: 0;

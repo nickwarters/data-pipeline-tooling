@@ -1373,6 +1373,36 @@ test('route: mounting over a previous route’s leftover DOM keeps the conversat
   );
 });
 
+test('route: the conversation panel’s close control hides the panel and returns focus to the toggle', () => {
+  const toggleSnapshot = snapshot();
+  toggleSnapshot.machine = {
+    ...toggleSnapshot.machine,
+    canToggleConversation: true,
+  };
+  let state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: toggleSnapshot,
+  });
+  state = caseReviewReducer(state, { type: 'case/conversation-toggled' });
+  const view = renderShippedState(state);
+  const conversation = /** @type {any} */ (
+    view.container.querySelector('.cora-case-review__conversation')
+  );
+  assert.equal(conversation.hidden, false, 'the panel opens');
+
+  const close = getByRole(view.container, 'button', {
+    name: 'Close conversation panel',
+  });
+  fireEvent(close, 'click');
+
+  assert.equal(conversation.hidden, true, 'the close control hides the host');
+  assert.equal(
+    document.activeElement,
+    view.container.querySelector('.cora-conversation-toggle-btn'),
+    'focus returns to the header toggle'
+  );
+});
+
 test('route: Appeal renders directly from store state without legacy controller wiring', () => {
   const appealSnapshot = snapshot();
   appealSnapshot.access = {

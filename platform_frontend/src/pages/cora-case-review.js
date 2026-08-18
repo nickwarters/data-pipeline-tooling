@@ -1068,6 +1068,12 @@ export function createRouteSlice(params, context) {
             messages: caseRow.conversation,
             access: snapshot.access.conversation,
             heading: snapshot.sectionLabels.conversation.heading,
+            onClose: () => {
+              tools.dispatch({ type: 'case/conversation-toggled' });
+              /** @type {HTMLElement | null} */ (
+                parts.header.querySelector('.cora-conversation-toggle-btn')
+              )?.focus();
+            },
             onSend: async (body) => {
               await postConversationMessage({
                 client: context.client,
