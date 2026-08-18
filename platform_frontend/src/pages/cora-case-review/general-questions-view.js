@@ -1,7 +1,10 @@
 // @ts-check
 import { h } from '../../lib/html.js';
 import { buildCaptureControl } from '../../lib/capture-engine.js';
-import { generalAnswerKey } from '../../evaluators/general-questions.js';
+import {
+  generalAnswerKey,
+  generalAnswerText,
+} from '../../evaluators/general-questions.js';
 
 /** @typedef {import('../../sharepoint-client.js').GeneralQuestionField} GeneralQuestionField */
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
@@ -15,18 +18,6 @@ import { generalAnswerKey } from '../../evaluators/general-questions.js';
 export const GENERAL_QUESTIONS_TITLE = 'General Questions';
 
 /**
- * The current value of a General Question, '' when unanswered.
- *
- * @param {Record<string, Answer>} answers
- * @param {string} fieldKey
- * @returns {string}
- */
-function currentValue(answers, fieldKey) {
-  const value = answers[generalAnswerKey(fieldKey)]?.value;
-  return typeof value === 'string' ? value : '';
-}
-
-/**
  * Renders a Case Type's **General Questions**: arbitrary configured fields a
  * Reviewer answers alongside the Applicable Questions, shown above the first or
  * beneath the last Question Group, behind a separator. The caller places the
@@ -36,8 +27,11 @@ function currentValue(answers, fieldKey) {
  * General Questions are deliberately *not* outcome-driving. They carry no
  * `showWhen`, no failure mapping and no Remediation Actions, and their answers
  * are namespaced (`general:<key>`) inside the Case's `Answers` blob, so every
- * catalogue-driven evaluator — applicability, failure, Question Group progress,
- * completion gating and `computeOutcome` — steps straight over them.
+ * catalogue-driven evaluator — applicability, failure, Question Group progress
+ * and `computeOutcome` — steps straight over them. A field marked `required` is
+ * the one exception, and only to *timing*: it holds Send Actions / Complete
+ * Case until answered (`unfilledRequiredGeneralQuestion`) without contributing
+ * anything to the Outcome it holds up.
  *
  * Field types are the Issue Capture Group vocabulary, rendered by the same
  * `buildCaptureControl`, so a Case Type Owner has one set of field types to
@@ -103,7 +97,7 @@ export function withGeneralQuestions(applicableQuestions, props) {
 function questionField(field, answers, canEdit, onAnswer) {
   const control = buildCaptureControl(
     field,
-    currentValue(answers, field.key),
+    generalAnswerText(answers, field.key),
     (value) => {
       if (!canEdit) return;
       onAnswer(generalAnswerKey(field.key), value);

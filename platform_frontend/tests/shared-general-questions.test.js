@@ -123,3 +123,70 @@ test('the options copy is a real copy: mutating it in place leaves the catalogue
   assert.deepEqual(SHARED_GENERAL_QUESTIONS.reviewChannel.options, before);
   assert.deepEqual(theirs.options, before);
 });
+
+test('a shared question may be included with this Case Type insisting on an answer', () => {
+  const [bare] = resolveGeneralQuestions(['reviewChannel']);
+  const [insisted] = resolveGeneralQuestions([
+    { key: 'reviewChannel', required: true },
+  ]);
+  // Same question, asked the same way — the inclusion adds only how hard this
+  // Case Type presses for an answer.
+  assert.deepEqual(
+    { ...insisted, required: undefined },
+    {
+      ...bare,
+      required: undefined,
+    }
+  );
+  assert.equal(insisted.required, true);
+  assert.equal('required' in bare, false);
+});
+
+test('an inclusion that would reword a shared question is refused, naming what to remove', () => {
+  assert.throws(
+    () =>
+      resolveGeneralQuestions([
+        /** @type {any} */ ({ key: 'reviewChannel', label: 'My wording' }),
+      ]),
+    /may only add "required".*remove label/s
+  );
+});
+
+test('an inclusion of an unknown key fails the same way a bare one does', () => {
+  assert.throws(
+    () => resolveGeneralQuestions([{ key: 'nosuch', required: true }]),
+    /Unknown shared General Question "nosuch"/
+  );
+});
+
+test('an inline question is told apart from an inclusion by declaring its own type', () => {
+  const [own] = resolveGeneralQuestions([{ ...OWN, required: true }]);
+  assert.equal(own.key, OWN.key);
+  assert.equal(own.label, OWN.label);
+  assert.equal(own.required, true);
+});
+
+test('marking a shared question required leaves every other Case Type asking it as before', () => {
+  resolveGeneralQuestions([{ key: 'reviewChannel', required: true }]);
+  const [theirs] = resolveGeneralQuestions(['reviewChannel']);
+  assert.equal('required' in theirs, false);
+  assert.equal(
+    'required' in SHARED_GENERAL_QUESTIONS.reviewChannel,
+    false,
+    'the catalogue itself says nothing about who insists'
+  );
+});
+
+test('an inclusion is free to say nothing about required, and then says nothing about it', () => {
+  // The object and the bare-string forms are the same declaration written two
+  // ways; neither invents a `required: false` the gate would have to interpret.
+  const [object] = resolveGeneralQuestions([{ key: 'reviewChannel' }]);
+  const [string] = resolveGeneralQuestions(['reviewChannel']);
+  assert.deepEqual(object, string);
+  assert.equal('required' in object, false);
+
+  const [explicit] = resolveGeneralQuestions([
+    { key: 'reviewChannel', required: false },
+  ]);
+  assert.equal('required' in explicit, false);
+});

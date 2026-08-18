@@ -1,5 +1,6 @@
 // @ts-check
 
+import { unfilledRequiredGeneralQuestion } from '../../evaluators/general-questions.js';
 import { unfilledRequiredCapture } from '../../evaluators/issue-capture.js';
 import {
   anyRemediationRequired,
@@ -48,6 +49,10 @@ const REMEDIATION_DECISION_REASON =
 const REQUIRED_CAPTURE_REASON =
   'Fill in every required field on each failed Question on the Issues tab before this Case can go any further.';
 
+/** The same idea one tab earlier: the Case Type's required General Questions. */
+const REQUIRED_GENERAL_QUESTIONS_REASON =
+  'Answer every required General Question on the Review tab before this Case can go any further.';
+
 /** The other pre-send gate's wording: the named party, actions or no actions. */
 const RESPONSIBLE_PARTY_REASON =
   'Name a Responsible Party at the foot of the Issues tab before this Case can go any further.';
@@ -90,6 +95,7 @@ function missingResponsibleParty(input) {
  *   answers: Record<string, Answer>,
  *   allAnswered: boolean,
  *   captureGroups: import('../../sharepoint-client.js').CaptureGroup[],
+ *   generalQuestions: import('../../sharepoint-client.js').GeneralQuestionField[],
  * }} input
  * @returns {{ visible: boolean, disabled: boolean, label: string, reason: string | null }}
  */
@@ -115,9 +121,18 @@ export function completionControl(input) {
       input.captureGroups
     );
   const missingParty = readyToSend && missingResponsibleParty(input);
+  // Earlier than all three, on the tab the Reviewer has just left: a General
+  // Question the Case Type marked required. It holds the send without touching
+  // the Outcome — `allAnswered` above still speaks only for the catalogue, so a
+  // required General Question changes when the Case may be sent and nothing
+  // about what it concludes.
+  const unfilledGeneral =
+    readyToSend &&
+    unfilledRequiredGeneralQuestion(input.generalQuestions, input.answers);
   return {
     visible: readyToSend || canClose || gated,
-    disabled: gated || undecided || unfilledCapture || missingParty,
+    disabled:
+      gated || unfilledGeneral || undecided || unfilledCapture || missingParty,
     // Once the actions are sent there is nothing left to send, so the label is
     // the close either way; before that, remediation makes it the send.
     // "Carries remediation" is `hasTrackableRemediation` — literally "the
@@ -132,13 +147,15 @@ export function completionControl(input) {
         : 'Complete Case',
     reason: gated
       ? REMEDIATION_GATE_REASON
-      : undecided
-        ? REMEDIATION_DECISION_REASON
-        : unfilledCapture
-          ? REQUIRED_CAPTURE_REASON
-          : missingParty
-            ? RESPONSIBLE_PARTY_REASON
-            : null,
+      : unfilledGeneral
+        ? REQUIRED_GENERAL_QUESTIONS_REASON
+        : undecided
+          ? REMEDIATION_DECISION_REASON
+          : unfilledCapture
+            ? REQUIRED_CAPTURE_REASON
+            : missingParty
+              ? RESPONSIBLE_PARTY_REASON
+              : null,
   };
 }
 
@@ -185,6 +202,7 @@ export function completionControlView({ control, pending, onComplete }) {
  *   answers: Record<string, Answer>,
  *   allAnswered: boolean,
  *   captureGroups: import('../../sharepoint-client.js').CaptureGroup[],
+ *   generalQuestions: import('../../sharepoint-client.js').GeneralQuestionField[],
  *   computeOutcome: (answers: Record<string, Answer>) => import('../../sharepoint-client.js').OutcomeResult,
  *   exportHash: string | null,
  * }} input
@@ -202,6 +220,7 @@ export function completionPatch(input) {
     !input.allAnswered ||
     missingResponsibleParty(input) ||
     !machine.canComplete ||
+    unfilledRequiredGeneralQuestion(input.generalQuestions, input.answers) ||
     !remediationDecided(input.catalogue, input.answers) ||
     unfilledRequiredCapture(input.catalogue, input.answers, input.captureGroups)
   ) {

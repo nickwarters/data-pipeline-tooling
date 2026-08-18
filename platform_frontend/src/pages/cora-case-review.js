@@ -870,6 +870,7 @@ export function createRouteSlice(params, context) {
         answers: snapshot.answers,
         allAnswered: snapshot.allAnswered,
         captureGroups: config.captureGroups ?? [],
+        generalQuestions: config.generalQuestions ?? [],
         computeOutcome: config.computeOutcome,
         exportHash: snapshot.exportHash,
       });

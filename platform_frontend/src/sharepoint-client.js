@@ -92,7 +92,13 @@
  * `validateGeneralQuestions` rejects them at load time rather than shipping a
  * field that cannot work.
  *
- * @typedef {{ key: string, label: string, type: 'text' | 'textarea' | 'select' | 'radio', options?: string[], placeholder?: string }} GeneralQuestionField
+ * `required` is the same key a `CaptureField` carries and means the same thing:
+ * the Case cannot leave `In-progress` until it is answered. It gates only that
+ * transition — a required General Question still drives no applicability, no
+ * failure and no Outcome, so the gate never changes what the Case *says*, only
+ * when the Reviewer may say it.
+ *
+ * @typedef {{ key: string, label: string, type: 'text' | 'textarea' | 'select' | 'radio', options?: string[], required?: boolean, placeholder?: string }} GeneralQuestionField
  */
 
 /**

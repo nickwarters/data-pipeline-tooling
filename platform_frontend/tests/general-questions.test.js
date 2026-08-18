@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 
 const {
   generalAnswerKey,
+  generalAnswerText,
+  unfilledRequiredGeneralQuestion,
   GENERAL_ANSWER_PREFIX,
   GENERAL_QUESTION_TYPES,
   validateGeneralQuestions,
@@ -118,4 +120,94 @@ test('an out-of-vocabulary placement coerces to after rather than a third layout
     ),
     'after'
   );
+});
+
+/** @type {GeneralQuestionField[]} */
+const REQUIRED_AND_OPTIONAL = [
+  { key: 'reviewChannel', label: 'Channel', type: 'text', required: true },
+  { key: 'reviewerObservations', label: 'Observations', type: 'textarea' },
+];
+
+test('an unanswered General Question reads as empty text, whatever is stored', () => {
+  assert.equal(generalAnswerText({}, 'reviewChannel'), '');
+  assert.equal(
+    generalAnswerText(
+      { 'general:reviewChannel': { value: '' } },
+      'reviewChannel'
+    ),
+    ''
+  );
+  // A value the section cannot render is not an answer: the Reviewer sees a
+  // blank control, so the gate must read one too.
+  assert.equal(
+    generalAnswerText(
+      { 'general:reviewChannel': { value: ['Call recording'] } },
+      'reviewChannel'
+    ),
+    ''
+  );
+  assert.equal(
+    generalAnswerText(
+      { 'general:reviewChannel': { value: 'Call recording' } },
+      'reviewChannel'
+    ),
+    'Call recording'
+  );
+});
+
+test('only a required General Question is owed before the Case may be sent', () => {
+  assert.equal(
+    unfilledRequiredGeneralQuestion(REQUIRED_AND_OPTIONAL, {}),
+    true
+  );
+  assert.equal(
+    unfilledRequiredGeneralQuestion(REQUIRED_AND_OPTIONAL, {
+      'general:reviewChannel': { value: 'Call recording' },
+    }),
+    false,
+    'the optional question left blank owes nothing'
+  );
+  assert.equal(
+    unfilledRequiredGeneralQuestion(REQUIRED_AND_OPTIONAL, {
+      'general:reviewerObservations': { value: 'Nothing of note' },
+    }),
+    true,
+    'answering the optional one does not discharge the required one'
+  );
+});
+
+test('a Case Type marking nothing required is gated exactly as it was before the key existed', () => {
+  assert.equal(unfilledRequiredGeneralQuestion(undefined, {}), false);
+  assert.equal(unfilledRequiredGeneralQuestion([], {}), false);
+  assert.equal(
+    unfilledRequiredGeneralQuestion(
+      [
+        {
+          key: 'reviewerObservations',
+          label: 'Observations',
+          type: 'textarea',
+        },
+      ],
+      {}
+    ),
+    false
+  );
+});
+
+test('a required General Question is a declaration, not an Answer the evaluators can see', () => {
+  // The gate walks the Case Type's field list; every outcome-driving evaluator
+  // walks the catalogue. A `general:` key cannot appear in one, which is what
+  // keeps a required question a question about *timing*.
+  assert.doesNotThrow(() =>
+    validateAnswerKeyNamespace([
+      {
+        id: 'reviewChannel',
+        text: 'A Question Definition sharing the bare name',
+        responseType: 'yes-no-na',
+        failureValues: ['No'],
+        deprecated: false,
+      },
+    ])
+  );
+  assert.doesNotThrow(() => validateGeneralQuestions(REQUIRED_AND_OPTIONAL));
 });
