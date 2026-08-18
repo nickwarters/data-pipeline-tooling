@@ -157,8 +157,14 @@ const config = {
   // Shared questions are included by key (see case-types/general-questions.js)
   // so the same question keeps one answer key across Case Types. A
   // Complaints-specific question would be written out inline in this same list.
+  //
+  // How the Case was reviewed is `required`: it holds Send Actions / Complete
+  // Case until answered, because a Case reviewed on the file alone and one
+  // reviewed against the call are not the same piece of evidence, and afterwards
+  // nobody can tell which they are reading. Observations stay optional — it is
+  // an invitation to say something, and insisting would only produce "n/a".
   generalQuestions: resolveGeneralQuestions([
-    'reviewChannel',
+    { key: 'reviewChannel', required: true },
     'reviewerObservations',
   ]),
 

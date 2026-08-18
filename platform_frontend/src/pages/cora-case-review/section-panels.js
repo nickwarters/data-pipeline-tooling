@@ -307,6 +307,7 @@ export const SECTION_PANELS = {
       answers: snapshot.answers,
       allAnswered: snapshot.allAnswered,
       captureGroups: config.captureGroups ?? [],
+      generalQuestions: config.generalQuestions ?? [],
     });
     const summary = h(
       'div',

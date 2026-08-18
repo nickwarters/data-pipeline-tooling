@@ -137,6 +137,7 @@ test('completionPatch freezes outcome and effective columns in the lifecycle PAT
     answers,
     allAnswered: true,
     captureGroups: [],
+    generalQuestions: [],
     computeOutcome: () => ({ outcome: 'fail' }),
     exportHash: 'sha256:v1',
   });
@@ -173,6 +174,7 @@ test('completionPatch chooses the transition from the catalogue CaseMachine stam
     answers,
     allAnswered: true,
     captureGroups: [],
+    generalQuestions: [],
     computeOutcome: () => ({ outcome: 'fail' }),
     exportHash: null,
   });
@@ -201,6 +203,7 @@ test('completionPatch atomically clears hold fields when either transition leave
     catalogue: CATALOGUE,
     allAnswered: true,
     captureGroups: [],
+    generalQuestions: [],
     computeOutcome: () => ({ outcome: 'pass' }),
     exportHash: null,
   };
@@ -241,6 +244,7 @@ test('completionPatch rejects incomplete or unauthorised completion and uses fin
     answers: {},
     allAnswered: false,
     captureGroups: [],
+    generalQuestions: [],
     computeOutcome: () => ({ outcome: 'pass' }),
     exportHash: null,
   };
@@ -479,6 +483,7 @@ test('completionControl: shows Complete Case disabled, with the reason, while re
     answers: UNRESOLVED,
     allAnswered: true,
     captureGroups: [],
+    generalQuestions: [],
   });
   assert.equal(control.visible, true);
   assert.equal(control.disabled, true);
@@ -496,6 +501,7 @@ test('completionControl: shows Complete Case disabled, with the reason, while re
     },
     allAnswered: true,
     captureGroups: [],
+    generalQuestions: [],
   });
   assert.equal(ready.visible, true);
   assert.equal(ready.disabled, false);
@@ -513,6 +519,7 @@ test('completionControl: a viewer who cannot resolve remediation sees no button 
     answers: UNRESOLVED,
     allAnswered: true,
     captureGroups: [],
+    generalQuestions: [],
   });
   assert.equal(control.visible, false);
 });
@@ -528,6 +535,7 @@ test('completionControl: the pre-send path still reads Send Actions and is enabl
     answers: UNRESOLVED,
     allAnswered: true,
     captureGroups: [],
+    generalQuestions: [],
   });
   assert.equal(control.visible, true);
   assert.equal(control.disabled, false);
@@ -551,6 +559,7 @@ test('completionControl: no Responsible Party names the gate instead of hiding i
     answers,
     allAnswered: true,
     captureGroups: [],
+    generalQuestions: [],
   };
   const patchInput = {
     computeOutcome: () => ({ outcome: /** @type {string} */ ('fail') }),
@@ -615,6 +624,7 @@ test('completionPatch: refuses the final close while a remediation row is unreso
       answers: UNRESOLVED,
       allAnswered: true,
       captureGroups: [],
+      generalQuestions: [],
       computeOutcome: () => ({ outcome: 'pass' }),
       exportHash: null,
     }),
@@ -642,6 +652,7 @@ test('free-form remediation alone sends the Case down the actions path', () => {
     answers,
     allAnswered: true,
     captureGroups: [],
+    generalQuestions: [],
     computeOutcome: () => ({ outcome: 'fail' }),
     exportHash: null,
   });
@@ -657,6 +668,7 @@ test('free-form remediation alone sends the Case down the actions path', () => {
     answers,
     allAnswered: true,
     captureGroups: [],
+    generalQuestions: [],
   });
   assert.equal(control.label, 'Send Actions');
 });
@@ -676,6 +688,7 @@ test('whitespace-only free-form remediation is not remediation', () => {
     answers,
     allAnswered: true,
     captureGroups: [],
+    generalQuestions: [],
   });
   assert.equal(
     control.label,
@@ -696,6 +709,7 @@ test('whitespace-only free-form remediation is not remediation', () => {
       answers,
       allAnswered: true,
       captureGroups: [],
+      generalQuestions: [],
       computeOutcome: () => ({ outcome: 'fail' }),
       exportHash: null,
     }),
@@ -729,6 +743,7 @@ test('remediation on a Question that has left the catalogue does not fork the Ca
       answers,
       allAnswered: true,
       captureGroups: [],
+      generalQuestions: [],
     };
     assert.equal(completionControl(base).label, 'Complete Case');
 
@@ -754,6 +769,7 @@ function preSend(answers) {
     answers,
     allAnswered: true,
     captureGroups: [],
+    generalQuestions: [],
   };
 }
 
@@ -861,6 +877,7 @@ test('completionControl: one failure needing remediation still asks, whatever th
     },
     allAnswered: true,
     captureGroups: [],
+    generalQuestions: [],
   };
   const control = completionControl(mixed);
   assert.equal(control.visible, true);
@@ -896,6 +913,7 @@ test('completionControl: unanswered Questions still show nothing at all', () => 
     caseRow: { ...CASE_ROW, responsibleParty: '' },
     allAnswered: false,
     captureGroups: [],
+    generalQuestions: [],
   });
   assert.equal(control.visible, false);
 });
@@ -936,6 +954,7 @@ test('the close path is untouched by the pre-send decision gate', () => {
     answers: sent,
     allAnswered: true,
     captureGroups: [],
+    generalQuestions: [],
   });
   assert.equal(control.disabled, false);
   assert.equal(control.reason, null);
@@ -947,6 +966,7 @@ test('the close path is untouched by the pre-send decision gate', () => {
       answers: sent,
       allAnswered: true,
       captureGroups: [],
+      generalQuestions: [],
       computeOutcome: () => ({ outcome: 'pass' }),
       exportHash: null,
     }),
@@ -985,6 +1005,7 @@ function withCapture(capture, value = 'No') {
       },
     }),
     captureGroups: CAPTURE_GROUPS,
+    generalQuestions: [],
   };
 }
 
@@ -1018,6 +1039,7 @@ test('completionControl: the remediation decision is still asked for first', () 
   const control = completionControl({
     ...preSend({ q1: { value: 'No', capture: { origin: 'Sales' } } }),
     captureGroups: CAPTURE_GROUPS,
+    generalQuestions: [],
   });
   assert.match(String(control.reason), /Is remediation required\?/);
 });
@@ -1035,6 +1057,114 @@ test('completionPatch: writes nothing while a required capture field is empty', 
   assert.equal(
     completionPatch({
       ...withCapture({ origin: 'Sales', salesTeam: 'North' }),
+      ...patchInput,
+    })?.status,
+    'Completed'
+  );
+});
+
+// --- The pre-send required General Questions gate ---
+
+/** @type {import('../src/sharepoint-client.js').GeneralQuestionField[]} */
+const GENERAL_QUESTIONS = [
+  {
+    key: 'reviewChannel',
+    label: 'How was this Case reviewed?',
+    type: 'select',
+    options: ['Case file only', 'Call recording'],
+    required: true,
+  },
+  {
+    key: 'reviewerObservations',
+    label: 'Observations for the Case Type Owner',
+    type: 'textarea',
+  },
+];
+
+/** A Case with nothing to remediate, so only the General Questions can hold it. */
+const CLEAN_ANSWER = { q1: { value: 'Yes' } };
+
+/** @param {Record<string, any>} general */
+function withGeneral(general) {
+  /** @type {Record<string, any>} */
+  const answers = { ...CLEAN_ANSWER };
+  for (const [key, value] of Object.entries(general)) {
+    answers[`general:${key}`] = { value };
+  }
+  return { ...preSend(answers), generalQuestions: GENERAL_QUESTIONS };
+}
+
+test('completionControl: an unanswered required General Question disables the button with its reason', () => {
+  const control = completionControl(withGeneral({}));
+  assert.equal(control.visible, true);
+  assert.equal(control.disabled, true);
+  assert.match(String(control.reason), /General Question/);
+  assert.match(String(control.reason), /Review tab/);
+
+  const answered = completionControl(
+    withGeneral({ reviewChannel: 'Call recording' })
+  );
+  assert.equal(answered.disabled, false);
+  assert.equal(answered.reason, null);
+});
+
+test('completionControl: an unanswered General Question the Case Type left optional never blocks', () => {
+  const control = completionControl(
+    withGeneral({ reviewChannel: 'Case file only' })
+  );
+  assert.equal(control.disabled, false);
+  assert.equal(control.reason, null);
+});
+
+test('completionControl: a required General Question holds Send Actions too, not only the no-actions close', () => {
+  const sending = {
+    ...preSend({
+      q1: {
+        value: 'No',
+        remediationRequired: /** @type {const} */ ('yes'),
+        remediationActions: [{ id: 'a1', text: 'Fix' }],
+      },
+    }),
+    generalQuestions: GENERAL_QUESTIONS,
+  };
+  const control = completionControl(sending);
+  assert.equal(control.label, 'Send Actions');
+  assert.equal(control.disabled, true);
+  assert.match(String(control.reason), /General Question/);
+});
+
+test('completionControl: a General Question is asked for before the Issues tab gates', () => {
+  // Both tabs owe something. The Reviewer is sent back through them in the
+  // order they appear, rather than to the later one first.
+  const control = completionControl({
+    ...withGeneral({}),
+    answers: { q1: { value: 'No' } },
+  });
+  assert.match(String(control.reason), /General Question/);
+});
+
+test('completionControl: a Case Type declaring no General Questions is gated exactly as before', () => {
+  const control = completionControl({
+    ...preSend(CLEAN_ANSWER),
+    generalQuestions: [],
+  });
+  assert.equal(control.disabled, false);
+  assert.equal(control.reason, null);
+});
+
+test('completionPatch: writes nothing while a required General Question is unanswered', () => {
+  const patchInput = {
+    computeOutcome: () => ({ outcome: /** @type {const} */ ('pass') }),
+    exportHash: null,
+  };
+  assert.equal(
+    completionPatch({ ...withGeneral({}), ...patchInput }),
+    null,
+    'the button is only a style: the write guard has to hold the same line'
+  );
+  assert.equal(
+    completionPatch({
+      ...withGeneral({ reviewChannel: 'Call recording' }),
       ...patchInput,
     })?.status,
     'Completed'

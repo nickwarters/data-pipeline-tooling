@@ -13,6 +13,12 @@
  * A Case Type may include a shared question, leave it out, or declare its own
  * question inline — but it may not override a shared question's wording or
  * options, which would put the same key behind two different questions.
+ *
+ * `required` is the one exception, and deliberately so: it is not part of what
+ * the question *asks*, it is how hard this Case Type insists on an answer
+ * before the Reviewer may send. Two Case Types may reasonably differ there
+ * while asking the same question, so it is declared at the inclusion —
+ * `{ key: 'reviewChannel', required: true }` — rather than in the catalogue.
  */
 
 import { validateGeneralQuestions } from '../src/evaluators/general-questions.js';
@@ -20,9 +26,17 @@ import { validateGeneralQuestions } from '../src/evaluators/general-questions.js
 /** @typedef {import('../src/sharepoint-client.js').GeneralQuestionField} GeneralQuestionField */
 /** @typedef {Omit<GeneralQuestionField, 'key'>} SharedGeneralQuestion */
 /**
- * What a Case Type module declares: the key of a shared question to include, or
- * a Case Type-specific question written out in full.
- * @typedef {string | GeneralQuestionField} GeneralQuestionDeclaration
+ * How a Case Type includes a shared question while insisting on an answer: the
+ * key, plus `required`. Nothing else may be set — anything more would be the
+ * wording override the catalogue exists to prevent.
+ * @typedef {{ key: string, required?: boolean }} SharedGeneralQuestionInclusion
+ */
+/**
+ * What a Case Type module declares: the key of a shared question to include
+ * (bare, or with `required`), or a Case Type-specific question written out in
+ * full. The two object forms are told apart by `type`, which every inline
+ * question must carry and an inclusion may never carry.
+ * @typedef {string | SharedGeneralQuestionInclusion | GeneralQuestionField} GeneralQuestionDeclaration
  */
 
 /**
@@ -47,7 +61,8 @@ export const SHARED_GENERAL_QUESTIONS = {
  * Review tab renders, preserving declaration order so a Case Type can interleave
  * its own questions with shared ones.
  *
- * Throws on an unknown shared key, a duplicate key, or an unsupported type.
+ * Throws on an unknown shared key, a duplicate key, an unsupported type, or an
+ * inclusion trying to set anything but `required`.
  * That throw lands at module-evaluation time, which at runtime means *boot* —
  * `resolveAppCaseSources` loads every registered Case Type before any route
  * registers, so a bad declaration costs the app its boot rather than one Case
@@ -59,13 +74,36 @@ export const SHARED_GENERAL_QUESTIONS = {
  * @returns {GeneralQuestionField[]}
  */
 export function resolveGeneralQuestions(declarations = []) {
-  const fields = declarations.map((declaration) =>
-    typeof declaration === 'string'
-      ? sharedField(declaration)
-      : { ...declaration }
-  );
+  const fields = declarations.map((declaration) => {
+    if (typeof declaration === 'string') return sharedField(declaration);
+    // An inline question declares its own `type`; an inclusion never does. That
+    // is the whole discriminator, so an author who meant to include a shared
+    // question and typed a `label` is told, rather than quietly getting a new
+    // question under a catalogue key.
+    if ('type' in declaration) return { ...declaration };
+    return includedField(declaration);
+  });
   validateGeneralQuestions(fields);
   return fields;
+}
+
+/**
+ * A shared question included by key, with this Case Type's `required` on it.
+ *
+ * @param {SharedGeneralQuestionInclusion} inclusion
+ * @returns {GeneralQuestionField}
+ */
+function includedField(inclusion) {
+  const extra = Object.keys(inclusion).filter(
+    (name) => name !== 'key' && name !== 'required'
+  );
+  if (extra.length) {
+    throw new Error(
+      `Shared General Question "${inclusion.key}" may only add "required" at the inclusion — remove ${extra.sort().join(', ')}, or declare a question of your own with its own key.`
+    );
+  }
+  const field = sharedField(inclusion.key);
+  return inclusion.required === true ? { ...field, required: true } : field;
 }
 
 /**

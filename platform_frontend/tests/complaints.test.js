@@ -18,9 +18,10 @@ import { deriveFailureValues } from '../src/evaluators/failure-evaluator.js';
 import {
   validateGeneralQuestions,
   validateAnswerKeyNamespace,
+  unfilledRequiredGeneralQuestion,
   GENERAL_ANSWER_PREFIX,
 } from '../src/evaluators/general-questions.js';
-import { resolveGeneralQuestions } from '../case-types/general-questions.js';
+import { SHARED_GENERAL_QUESTIONS } from '../case-types/general-questions.js';
 import { resolveCompiledOptions } from '../src/pages/question-bank/question-bank-compile.js';
 import { cases } from '../dev/fixtures/cases.js';
 import { isReportable } from '../src/lib/case-machine.js';
@@ -47,9 +48,31 @@ test('complaints: General Questions and Question Definition ids pass the load-ti
 test('complaints: its General Questions are shared ones, resolved to the catalogue definitions', () => {
   // Included by key rather than restated, so the answer keys — and so any
   // cross-Case-Type reporting on them — stay stable as Case Types are added.
-  assert.deepEqual(
-    config.generalQuestions,
-    resolveGeneralQuestions(['reviewChannel', 'reviewerObservations'])
+  // `required` is the one thing an inclusion may add: it says how hard this
+  // Case Type insists on an answer, never what the question asks.
+  const fields = config.generalQuestions ?? [];
+  assert.ok(fields.length > 0);
+  for (const field of fields) {
+    const shared = SHARED_GENERAL_QUESTIONS[field.key];
+    assert.ok(shared, `${field.key} is in the shared catalogue`);
+    const { key, required: _required, ...asked } = field;
+    assert.deepEqual(
+      asked,
+      shared,
+      `${key} is asked as the catalogue words it`
+    );
+  }
+});
+
+test('complaints: a Case cannot be sent until the Reviewer says how it was reviewed', () => {
+  const fields = config.generalQuestions ?? [];
+  assert.equal(unfilledRequiredGeneralQuestion(fields, {}), true);
+  assert.equal(
+    unfilledRequiredGeneralQuestion(fields, {
+      [`${GENERAL_ANSWER_PREFIX}reviewChannel`]: { value: 'Call recording' },
+    }),
+    false,
+    'observations are an invitation to say something, not a gate'
   );
 });
 
