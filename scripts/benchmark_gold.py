@@ -9,7 +9,7 @@ Gold is published in two phases, and they scale differently:
 - ``case_current`` reads the **whole** silver history and reduces it to the
   latest observation of each Case. Silver is append-only, so this phase grows
   for as long as the feed runs.
-- the three ``case_current``-sourced aggregates group the resulting
+- the four ``case_current``-sourced aggregates group the resulting
   current-state frame, which holds one row per Case. This phase grows with
   the *Case count*, not with history depth.
 
@@ -174,16 +174,21 @@ def synthetic_silver(*, lists: int, cases: int, versions: int) -> pd.DataFrame:
 
 
 def publish_aggregates(med, current: Dataset, *, as_of: dt.datetime) -> None:
-    """Mirror the three ``case_current``-sourced aggregates from ``gold.publish_gold``;
+    """Mirror the four ``case_current``-sourced aggregates from ``gold.publish_gold``;
     the Detail-Table-sourced aggregates are out of scope since this script never
     runs the Detail hops.
     """
     for table, step, transform in (
-        ("case_counts_current", "count-by-reviewer-and-status", case_counts),
+        ("case_counts_current", "count-by-base-grain-and-status", case_counts),
         (
             "case_age_buckets_current",
             "bucket-by-age",
             partial(age_buckets, as_of=as_of),
+        ),
+        (
+            "case_age_from_assigned_buckets_current",
+            "bucket-by-age-from-assigned",
+            partial(age_buckets, as_of=as_of, age_from="assigned_at"),
         ),
         ("case_throughput_daily", "count-by-terminal-date", throughput),
     ):

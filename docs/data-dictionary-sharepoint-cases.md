@@ -1,12 +1,12 @@
 # Data dictionary — `sharepoint_cases`
 
 The filled-in entry for the `sharepoint_cases` feed, following
-[`data-dictionary-template.md`](data-dictionary-template.md). Twenty-two
+[`data-dictionary-template.md`](data-dictionary-template.md). Twenty-three
 tables: the faithful raw observation, the typed Case version and its silver
 `answer`, `answer_capture`, `answer_action`, `general_answer`,
 `conversation_message`, `appeal` and `case_detail` Detail Tables, and the
-thirteen gold tables reduced from the version history — the current Case,
-those same seven Detail Tables, and five aggregates, two of which reduce from
+fourteen gold tables reduced from the version history — the current Case,
+those same seven Detail Tables, and six aggregates, two of which reduce from
 a Detail Table rather than from the current Case. Every declared Case list
 lands in the same tables and is told apart by
 `case_type`. The
@@ -823,7 +823,7 @@ the blobs are clean enough to re-type. (`source_modified_at` stays
 `datetime` because it comes from OData, is uniform, and is already typed
 upstream — it is not one of these blob fields.)
 
-## Gold — the current Case, its Detail Tables, and five aggregates
+## Gold — the current Case, its Detail Tables, and six aggregates
 
 Silver accumulates *observations*; gold answers *what is true now*. Every
 table is rebuilt whole with `Refresh()` on every poll from the entire silver
@@ -843,28 +843,50 @@ everything.
 | `conversation_message` | `case_id` × `seq` | the winning observation's Conversation messages |
 | `appeal` | `case_id` × `appeal_id` | the winning observation's Appeals |
 | `case_detail` | `case_id` × `field_key` | the winning observation's Case Details fields |
-| `case_counts_current` | `assigned_reviewer_name` × `assigned_reviewer_manager_name` × `status` | `case_count` |
-| `case_age_buckets_current` | `age_bucket` × `status` | `case_count` |
-| `case_throughput_daily` | `terminal_date` × `terminal_status` | `case_count` |
+| `case_counts_current` | brand × `case_type` × `assigned_reviewer_name` × `status` | `case_count` |
+| `case_age_buckets_current` | brand × `case_type` × `assigned_reviewer_name` × `age_bucket` × `status` | `case_count` |
+| `case_age_from_assigned_buckets_current` | brand × `case_type` × `assigned_reviewer_name` × `age_bucket` × `status` | `case_count` |
+| `case_throughput_daily` | `terminal_date` × brand × `case_type` × `assigned_reviewer_name` × `terminal_status` | `case_count` |
 | `answer_remediation_current` | `case_type` × `question_id` × `remediation_required` × `remediation_status` | `answer_count` |
 | `appeal_outcomes_current` | `case_type` × `state` × `resolution_verdict` | `appeal_count` |
 
 Only `case_current` carries a live grain gate (`UniqueValidator("case_id")`);
 each Detail Table carries one too (e.g. `UniqueValidator(("case_id",
 "question_id", "field_key"))` for `answer_capture`, via
-`gold_detail_builder`'s generic `grain=`); the five aggregates get none,
+`gold_detail_builder`'s generic `grain=`); the six aggregates get none,
 because a uniqueness check below the group-by that produced the grain is
 satisfied by construction. Their grain is declared here.
 
-The first three aggregates reduce from `case_current`; the last two —
+**A common floor grain.** `case_counts_current`, `case_age_buckets_current`,
+`case_age_from_assigned_buckets_current` and `case_throughput_daily` each
+carry brand × `case_type` × `assigned_reviewer_name` as a base grain, plus
+`terminal_date` where the table is daily — so any report rolls up from the
+same floor regardless of which of the four it reads. Their `*_current`
+members carry no day column: they are point-in-time `Refresh()` snapshots
+stamped `as_of_utc`, and the day axis lives in the daily table instead; a
+per-day *history* of backlog or age is not answerable from a snapshot and is
+out of scope here — it would need a new accumulating table, not a widened
+one. No source reachable from this feed carries brand yet (there is no join
+path to `pipelines.ref_lookup`, where it exists today), so every builder
+fills it with the literal `(unknown)` — a considered decision, recorded here,
+not an oversight; only the fill changes the day a brand source lands, never
+the shape. `answer_remediation_current` and `appeal_outcomes_current` sit
+outside this family: they count Detail Table rows (answers, Appeals), not
+Cases, and answer a different question with no stated Case-rollup.
+
+The first four aggregates reduce from `case_current`; the last two —
 `answer_remediation_current` and `appeal_outcomes_current` — reduce from a
 published gold Detail Table instead (`answer` and `appeal` respectively), per
 `DETAIL_AGGREGATES` in `gold.py`. See their own sections below for why that
 source and grain earn a table while three other candidates were refused —
 also recorded in *What is deliberately not aggregated*, below.
 
-Every gold table spans **every** declared Case list: a Reviewer holds Cases
-across Case Types, so an aggregate computed per list would not add up.
+Every gold table spans **every** declared Case list: it is built once across
+every declared Case Type's current Cases rather than once per list. The
+base-grain aggregates carry `case_type` in their grain, so a Reviewer holding
+Cases across Case Types lands in one row per Case Type there — a consumer
+wanting that Reviewer's cross-Case-Type total sums across rows rather than
+reading a total that already assumed the sum.
 
 ### `answer`
 
@@ -1095,35 +1117,31 @@ Two things to know about what this table holds:
 
 | Attribute | Value |
 |-----------|-------|
-| **Grain** | `assigned_reviewer_name` × `assigned_reviewer_manager_name` × `status` |
-| **Columns** | `assigned_reviewer_name`, `assigned_reviewer_manager_name`, `status`, `case_count`, `as_of_utc` |
+| **Grain** | brand × `case_type` × `assigned_reviewer_name` × `status` |
+| **Columns** | `brand`, `case_type`, `assigned_reviewer_name`, `status`, `case_count`, `as_of_utc` |
 
-**The Assigned Reviewer leads**, because the question this table answers is who
-is holding what. That reviewer's manager is kept on the same row rather than in
-a table of its own: it is how the rows roll up, so a consumer wanting counts per
-manager sums this table instead of reading a second one that could disagree with
-it.
+The base grain (above) plus `status`, the one dimension this table adds: the
+question it answers is who is holding what, split by that Case's current
+status. Manager rollups join the Staff Hierarchy at report time.
 
-Both are **claims logins**, as silver holds them — not display names, and
-*neither is a team*. There is no team column on the provisioned list; what the
+`assigned_reviewer_name` is a **claims login**, as silver holds it — not a
+display name. There is no team column on the provisioned list; what the
 review platform calls "my team" is exactly the set of Cases whose
-`AssignedReviewerManagerId` is the signed-in user. Calling a dimension
-`owning_team` would assert something that does not exist, and shortening the
-manager to `reviewer_manager_name` would invent a synonym for a row that also
-carries `responsible_party_manager_name`.
+`AssignedReviewerManagerId` is the signed-in user, which this table does not
+carry.
 
-A Case with no Assigned Reviewer, or none recorded for that reviewer's manager,
-is counted under the literal `(unassigned)` in that column. That is a
-**reporting fill, never a source value**; it exists because a NULL group key is
-a hole in the grain that a reader may silently drop, which would make the table
-quietly fail to add up to the number of current Cases.
+A Case with no Assigned Reviewer is counted under the literal `(unassigned)`
+in that column. That is a **reporting fill, never a source value**; it exists
+because a NULL group key is a hole in the grain that a reader may silently
+drop, which would make the table quietly fail to add up to the number of
+current Cases.
 
 ### `case_age_buckets_current`
 
 | Attribute | Value |
 |-----------|-------|
-| **Grain** | `age_bucket` × `status` |
-| **Columns** | `age_bucket`, `age_bucket_order`, `status`, `case_count`, `as_of_utc` |
+| **Grain** | brand × `case_type` × `assigned_reviewer_name` × `age_bucket` × `status` |
+| **Columns** | `brand`, `case_type`, `assigned_reviewer_name`, `age_bucket`, `age_bucket_order`, `status`, `case_count`, `as_of_utc` |
 
 Age is whole **calendar** days from `created` to `as_of`, both as local dates.
 Not working days: `tools.calendar.WorkingDayCalendar` needs a seeded holiday set
@@ -1144,15 +1162,33 @@ measure. Seed the calendar first if a consumer asks for it.
 so if one appears it is corruption and is bucketed where someone will see it
 rather than clamped to zero where nobody will. Every current Case lands in
 exactly one bucket, so this table's total reconciles exactly with
-`case_counts_current`'s. The reviewer dimensions are deliberately absent — they
-are one join away in `case_current`.
+`case_counts_current`'s. A Case with no Assigned Reviewer is counted under the
+literal `(unassigned)` for the same reason `case_counts_current`'s is — without
+it, pandas' `groupby` would silently drop the Case's NULL reviewer key and this
+table would fail to reconcile.
+
+### `case_age_from_assigned_buckets_current`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | brand × `case_type` × `assigned_reviewer_name` × `age_bucket` × `status` |
+| **Columns** | `brand`, `case_type`, `assigned_reviewer_name`, `age_bucket`, `age_bucket_order`, `status`, `case_count`, `as_of_utc` |
+
+The twin of `case_age_buckets_current`, measuring age from `assigned_at`
+instead of `created`, with the same bucket boundaries and the same
+`(unassigned)` reviewer fill. The one difference worth stating: here,
+`unknown` means the Case has **never been assigned** — an ordinary state, not
+corruption, whereas an `unknown` row in the age-from-created table means a
+missing `created`, which is corruption (every landed Case has one). Every
+current Case lands in exactly one bucket here too, so this table's total also
+reconciles exactly with `case_counts_current`'s.
 
 ### `case_throughput_daily`
 
 | Attribute | Value |
 |-----------|-------|
-| **Grain** | `terminal_date` × `terminal_status` |
-| **Columns** | `terminal_date`, `terminal_status`, `case_count`, `as_of_utc` |
+| **Grain** | `terminal_date` × brand × `case_type` × `assigned_reviewer_name` × `terminal_status` |
+| **Columns** | `terminal_date`, `brand`, `case_type`, `assigned_reviewer_name`, `terminal_status`, `case_count`, `as_of_utc` |
 
 Cases that **first entered** a terminal state (`Completed`, `Void`) on a local
 calendar date. That event is derivable rather than reconstructed, because the
@@ -1162,6 +1198,14 @@ Case back to `In-progress`, and `voidedAt` is the same shape. So there is one
 transition into a terminal state per Case and its stamp is write-once. The count
 is taken from the *current* row, one per Case, so overlapping re-reads cannot
 inflate it.
+
+This is the rollup base for Case-completion questions in this subject:
+`reviewer_activity_daily` (see its own data dictionary) remains the
+independent, Report-Feed-sourced measure of the same activity, sourced from
+`case_current` by a different pipeline on its own schedule — the two are not
+meant to be reconciled against each other row for row, so a consumer asking
+"completions per Reviewer per day" within `sharepoint_cases` reads this table,
+not a second answer assembled from the other subject.
 
 Two caveats, both real:
 
@@ -1174,6 +1218,9 @@ Two caveats, both real:
   therefore **changes a historical count on the next poll**. That is the honest
   reading of a source that owns the event; a frozen copy would report a number
   the source no longer agrees with.
+
+A Case with no Assigned Reviewer is counted under the literal `(unassigned)`,
+the same convention as the other base-grain tables.
 
 ### `answer_remediation_current`
 

@@ -33,6 +33,7 @@ from pipelines.sharepoint_cases.gold import (
     GOLD_TABLES,
     UNASSIGNED,
     UNDECIDED,
+    UNKNOWN_BRAND,
     UNRESOLVED,
     UNSTAMPED,
     UNSTATED,
@@ -1372,14 +1373,15 @@ def aggregate(transform, step: str, rows: list[dict]) -> list[dict]:
 
 
 def counts(*rows: dict) -> list[dict]:
-    return aggregate(case_counts, "count-by-reviewer-and-status", current(*rows))
+    return aggregate(case_counts, "count-by-base-grain-and-status", current(*rows))
 
 
 def grain(rows: list[dict]) -> list[tuple]:
     return [
         (
+            row["brand"],
+            row["case_type"],
             row["assigned_reviewer_name"],
-            row["assigned_reviewer_manager_name"],
             row["status"],
             row["case_count"],
         )
@@ -1388,8 +1390,8 @@ def grain(rows: list[dict]) -> list[tuple]:
 
 
 def test_current_counts_match_the_current_table():
-    # Two Cases with one reviewer, split by status, and a third under a second
-    # reviewer reporting to a different manager.
+    # Two Cases with one reviewer, split by status, and a third under a
+    # second reviewer.
     rows = counts(
         version(),
         version(id=102, source_item_id="102", status="Completed"),
@@ -1397,33 +1399,58 @@ def test_current_counts_match_the_current_table():
             id=103,
             source_item_id="103",
             assigned_reviewer_name="i:0#.w|CONTOSO\\r.okafor",
-            assigned_reviewer_manager_name="i:0#.w|CONTOSO\\z.hale",
         ),
     )
 
     assert grain(rows) == [
-        ("i:0#.w|CONTOSO\\p.shah", "i:0#.w|CONTOSO\\d.reid", "Completed", 1),
-        ("i:0#.w|CONTOSO\\p.shah", "i:0#.w|CONTOSO\\d.reid", "In-progress", 1),
-        ("i:0#.w|CONTOSO\\r.okafor", "i:0#.w|CONTOSO\\z.hale", "In-progress", 1),
+        (
+            UNKNOWN_BRAND,
+            COMPLAINTS.case_type,
+            "i:0#.w|CONTOSO\\p.shah",
+            "Completed",
+            1,
+        ),
+        (
+            UNKNOWN_BRAND,
+            COMPLAINTS.case_type,
+            "i:0#.w|CONTOSO\\p.shah",
+            "In-progress",
+            1,
+        ),
+        (
+            UNKNOWN_BRAND,
+            COMPLAINTS.case_type,
+            "i:0#.w|CONTOSO\\r.okafor",
+            "In-progress",
+            1,
+        ),
     ]
     assert {row["as_of_utc"] for row in rows} == {AS_OF.isoformat()}
 
 
-def test_the_reviewer_leads_the_grain_and_the_manager_rolls_it_up():
-    # Two reviewers under one manager. The rows are per reviewer, and a count
-    # per manager is their sum — one table, not two that could disagree.
+def test_two_case_types_under_one_reviewer_produce_two_rows():
+    # Same reviewer, two Case Types: the base grain keeps them as two rows
+    # rather than summing across Case Type.
     rows = counts(
         version(),
-        version(
-            id=102,
-            source_item_id="102",
-            assigned_reviewer_name="i:0#.w|CONTOSO\\r.okafor",
-        ),
+        version(id=102, source_item_id="102", case_type=OTHER.case_type),
     )
 
     assert grain(rows) == [
-        ("i:0#.w|CONTOSO\\p.shah", "i:0#.w|CONTOSO\\d.reid", "In-progress", 1),
-        ("i:0#.w|CONTOSO\\r.okafor", "i:0#.w|CONTOSO\\d.reid", "In-progress", 1),
+        (
+            UNKNOWN_BRAND,
+            COMPLAINTS.case_type,
+            "i:0#.w|CONTOSO\\p.shah",
+            "In-progress",
+            1,
+        ),
+        (
+            UNKNOWN_BRAND,
+            OTHER.case_type,
+            "i:0#.w|CONTOSO\\p.shah",
+            "In-progress",
+            1,
+        ),
     ]
     assert sum(row["case_count"] for row in rows) == 2
 
@@ -1431,13 +1458,12 @@ def test_the_reviewer_leads_the_grain_and_the_manager_rolls_it_up():
 def test_a_case_with_nobody_assigned_is_counted_as_unassigned():
     # A NULL group key is a hole in the grain that a reader may silently drop,
     # so this Case is counted under a literal instead — in a table whose whole
-    # job is to add up to the number of current Cases. Both Person dimensions
-    # are filled, because an unassigned Case has neither.
-    rows = counts(
-        version(assigned_reviewer_name=None, assigned_reviewer_manager_name=None)
-    )
+    # job is to add up to the number of current Cases.
+    rows = counts(version(assigned_reviewer_name=None))
 
-    assert grain(rows) == [(UNASSIGNED, UNASSIGNED, "In-progress", 1)]
+    assert grain(rows) == [
+        (UNKNOWN_BRAND, COMPLAINTS.case_type, UNASSIGNED, "In-progress", 1)
+    ]
 
 
 # --- gold: the age profile ---------------------------------------------------
@@ -1447,8 +1473,9 @@ def aged(*rows: dict) -> list[dict]:
     return aggregate(partial(age_buckets, as_of=AS_OF), "bucket-by-age", current(*rows))
 
 
-def created_days_before(age: int) -> str:
-    """A ``created`` stamp exactly ``age`` local calendar days before ``as_of``."""
+def days_before(age: int) -> str:
+    """A stamp exactly ``age`` local calendar days before ``as_of`` -- used for
+    both ``created`` and ``assigned_at``, which share the same age arithmetic."""
     return f"{AS_OF.date() - dt.timedelta(days=age)} 09:14:00+00:00"
 
 
@@ -1467,7 +1494,7 @@ def created_days_before(age: int) -> str:
     ],
 )
 def test_an_age_falls_in_exactly_one_declared_bucket(age, label, order):
-    [row] = aged(version(created=created_days_before(age)))
+    [row] = aged(version(created=days_before(age)))
 
     assert (row["age_bucket"], row["age_bucket_order"]) == (label, order)
     assert row["case_count"] == 1
@@ -1483,7 +1510,7 @@ def test_a_case_with_no_created_date_has_an_unknown_age():
 def test_a_case_created_after_the_as_of_instant_is_unknown_rather_than_clamped():
     # Impossible while created <= Modified < as_of, so if it happens it is
     # corruption and belongs somewhere visible.
-    [row] = aged(version(created=created_days_before(-3)))
+    [row] = aged(version(created=days_before(-3)))
 
     assert row["age_bucket"] == "unknown"
 
@@ -1492,12 +1519,75 @@ def test_every_current_case_lands_in_exactly_one_age_bucket():
     # The docs claim the age profile totals to the number of current Cases —
     # every Case in one bucket, `unknown` catching the ones with no created date.
     history = (
-        version(created=created_days_before(2)),
-        version(id=102, source_item_id="102", created=created_days_before(40)),
+        version(created=days_before(2)),
+        version(id=102, source_item_id="102", created=days_before(40)),
         version(id=103, source_item_id="103", created=None, status="Completed"),
     )
 
     assert sum(row["case_count"] for row in aged(*history)) == len(current(*history))
+
+
+def test_age_buckets_carry_the_base_grain():
+    [row] = aged(version())
+
+    assert (row["brand"], row["case_type"], row["assigned_reviewer_name"]) == (
+        UNKNOWN_BRAND,
+        COMPLAINTS.case_type,
+        "i:0#.w|CONTOSO\\p.shah",
+    )
+
+
+def test_an_unassigned_case_is_counted_as_unassigned_in_the_age_profile():
+    # Without this fill, pandas' groupby would silently drop the Case's NULL
+    # reviewer key, breaking the invariant that this table totals to the same
+    # count as case_counts_current.
+    [row] = aged(version(assigned_reviewer_name=None))
+
+    assert row["assigned_reviewer_name"] == UNASSIGNED
+    assert row["case_count"] == 1
+
+
+# --- gold: the age-from-assigned profile -------------------------------------
+
+
+def aged_from_assigned(*rows: dict) -> list[dict]:
+    return aggregate(
+        partial(age_buckets, as_of=AS_OF, age_from="assigned_at"),
+        "bucket-by-age-from-assigned",
+        current(*rows),
+    )
+
+
+def test_an_age_from_assigned_falls_in_the_bucket_its_days_indicate():
+    [row] = aged_from_assigned(version(assigned_at=days_before(10)))
+
+    assert (row["age_bucket"], row["age_bucket_order"]) == ("8-14 days", 1)
+    assert row["case_count"] == 1
+
+
+def test_a_case_never_assigned_has_an_unknown_age_from_assigned():
+    # Unlike a null `created`, a null `assigned_at` is an ordinary state — the
+    # Case simply has not been handed to anyone yet — so `unknown` here means
+    # never-assigned, not corruption.
+    [row] = aged_from_assigned(version(assigned_at=None))
+
+    assert (row["age_bucket"], row["age_bucket_order"]) == ("unknown", 5)
+
+
+def test_every_current_case_lands_in_exactly_one_age_from_assigned_bucket():
+    history = (
+        version(assigned_at=days_before(2)),
+        version(
+            id=102,
+            source_item_id="102",
+            assigned_at=None,
+            status="Completed",
+        ),
+    )
+
+    assert sum(row["case_count"] for row in aged_from_assigned(*history)) == len(
+        current(*history)
+    )
 
 
 # --- gold: daily throughput --------------------------------------------------
@@ -1526,9 +1616,25 @@ def test_a_case_observed_many_times_but_completed_once_counts_once():
     )
 
     assert [
-        (row["terminal_date"], row["terminal_status"], row["case_count"])
+        (
+            row["terminal_date"],
+            row["brand"],
+            row["case_type"],
+            row["assigned_reviewer_name"],
+            row["terminal_status"],
+            row["case_count"],
+        )
         for row in ended(*history)
-    ] == [("2026-08-05", "Completed", 1)]
+    ] == [
+        (
+            "2026-08-05",
+            UNKNOWN_BRAND,
+            COMPLAINTS.case_type,
+            "i:0#.w|CONTOSO\\p.shah",
+            "Completed",
+            1,
+        )
+    ]
 
 
 def test_a_voided_case_counts_on_the_date_it_was_voided():
@@ -1542,10 +1648,25 @@ def test_a_voided_case_counts_on_the_date_it_was_voided():
         ),
     )
 
-    assert [(row["terminal_date"], row["terminal_status"]) for row in rows] == [
-        ("2026-08-04", "Void"),
-        ("2026-08-05", "Completed"),
+    assert [
+        (row["terminal_date"], row["assigned_reviewer_name"], row["terminal_status"])
+        for row in rows
+    ] == [
+        ("2026-08-04", "i:0#.w|CONTOSO\\p.shah", "Void"),
+        ("2026-08-05", "i:0#.w|CONTOSO\\p.shah", "Completed"),
     ]
+
+
+def test_an_unassigned_terminal_case_is_counted_as_unassigned():
+    rows = ended(
+        version(
+            assigned_reviewer_name=None,
+            status="Completed",
+            completed_at="2026-08-05 08:44:00+00:00",
+        )
+    )
+
+    assert [row["assigned_reviewer_name"] for row in rows] == [UNASSIGNED]
 
 
 def test_a_terminal_case_with_no_stamp_is_counted_as_unstamped():
@@ -1577,6 +1698,24 @@ def test_throughput_totals_the_cases_currently_in_a_terminal_status():
 
 def test_throughput_is_empty_when_nothing_has_ended():
     assert ended(version()) == []
+
+
+def test_throughput_returns_the_same_columns_whether_or_not_anything_ended():
+    # The empty-terminal branch hand-declares its shape; this pins it to the
+    # populated path so the two cannot silently drift apart.
+    populated = throughput_transform(
+        given_rows(
+            current(
+                version(
+                    status="Completed",
+                    completed_at="2026-08-05 08:44:00+00:00",
+                )
+            )
+        ).read()
+    )
+    empty = throughput_transform(given_rows(current(version())).read())
+
+    assert list(populated.to_pandas().columns) == list(empty.to_pandas().columns)
 
 
 # Reuses winning_reader() and details() above: proving this aggregate comes
@@ -1972,8 +2111,9 @@ def test_the_gold_hops_plan_exactly_the_steps_they_always_have():
         "  [Write] write (depends on: unique-validate)",
     ]
     for table, step in (
-        ("case_counts_current", "count-by-reviewer-and-status"),
+        ("case_counts_current", "count-by-base-grain-and-status"),
         ("case_age_buckets_current", "bucket-by-age"),
+        ("case_age_from_assigned_buckets_current", "bucket-by-age-from-assigned"),
         ("case_throughput_daily", "count-by-terminal-date"),
         ("answer_remediation_current", "count-by-remediation"),
         ("appeal_outcomes_current", "count-by-outcome"),
@@ -2635,7 +2775,7 @@ def test_a_malformed_details_blob_raises_and_case_version_details_still_holds_it
     assert case_version["details"] == "not json"
 
 
-def test_a_quiet_first_window_commits_and_publishes_thirteen_empty_gold_tables(
+def test_a_quiet_first_window_commits_and_publishes_fourteen_empty_gold_tables(
     base_dir,
 ):
     # Nothing to reduce is not nothing to publish: a consumer reading gold must
@@ -2730,6 +2870,7 @@ def test_a_failure_in_the_last_aggregate_leaves_the_earlier_gold_and_no_checkpoi
         "case_detail",
         "case_counts_current",
         "case_age_buckets_current",
+        "case_age_from_assigned_buckets_current",
         "case_throughput_daily",
         "answer_remediation_current",
     }
@@ -2817,8 +2958,9 @@ def test_the_same_item_id_in_two_lists_is_two_cases(base_dir):
 
 
 def test_gold_counts_across_every_list(base_dir):
-    # A Reviewer holds Cases across Case Types, so the aggregates are one count
-    # over the union rather than one table per list.
+    # A Reviewer holds Cases across Case Types, so the aggregate is one table
+    # over the union rather than one table per list -- split into one row per
+    # Case Type, since Case Type is part of the base grain.
     run(
         RunContext(base_dir=base_dir, pipeline=FEED_NAME),
         client=two_list_client(),
@@ -2826,9 +2968,12 @@ def test_gold_counts_across_every_list(base_dir):
     )
 
     med = medallion(StoreRegistry(base_dir), FEED_NAME)
-    assert [
-        row["case_count"] for row in read_rows(med.gold, "case_counts_current")
-    ] == [2]
+    rows = read_rows(med.gold, "case_counts_current")
+    assert {row["case_type"] for row in rows} == {
+        COMPLAINTS.case_type,
+        OTHER.case_type,
+    }
+    assert sum(row["case_count"] for row in rows) == 2
 
 
 def test_each_list_keeps_its_own_watermark(base_dir):
@@ -2959,6 +3104,7 @@ def test_a_dry_run_previews_every_write_and_commits_none_of_them(base_dir):
         *((f"gold {t}", 0) for t in empty_detail_tables),
         ("gold case_counts_current", 1),
         ("gold case_age_buckets_current", 1),
+        ("gold case_age_from_assigned_buckets_current", 1),
         ("gold case_throughput_daily", 0),
         # The fixture's one answer row is undecided, so it lands under the
         # UNDECIDED/UNRESOLVED fills; no Appeals means the next row is empty.

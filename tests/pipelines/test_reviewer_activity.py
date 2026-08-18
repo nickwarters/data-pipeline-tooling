@@ -11,6 +11,7 @@ from framework.core import RUN_PROVENANCE_COLUMN, Dataset
 from framework.io import Refresh
 from framework.run import FreshnessRequirement, RunContext
 from pipelines.reviewer_activity.gold import (
+    UNKNOWN_BRAND,
     aggregate_reviewer_activity,
     normalize_reviewer_account,
     reviewer_activity_daily_builder,
@@ -93,6 +94,7 @@ def test_aggregate_uses_the_local_calendar_date_and_is_sparse(monkeypatch):
             "reviewer_account": "a.khan",
             "reportable_date": pd.Timestamp("2026-08-10"),
             "case_type": "claims",
+            "brand": UNKNOWN_BRAND,
             "count": 2,
             "as_of_utc": AS_OF,
         },
@@ -100,6 +102,7 @@ def test_aggregate_uses_the_local_calendar_date_and_is_sparse(monkeypatch):
             "reviewer_account": "b.jones",
             "reportable_date": pd.Timestamp("2026-08-10"),
             "case_type": "onboarding",
+            "brand": UNKNOWN_BRAND,
             "count": 1,
             "as_of_utc": AS_OF,
         },
@@ -160,6 +163,7 @@ def test_main_reads_sync_gold_and_refreshes_the_reporting_subject(base_dir):
         "reviewer_account": "a.khan",
         "reportable_date": "2026-08-09",
         "case_type": "claims",
+        "brand": UNKNOWN_BRAND,
         "count": 1,
         "as_of_utc": AS_OF,
     }
