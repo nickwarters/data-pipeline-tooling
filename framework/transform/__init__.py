@@ -12,7 +12,7 @@ the lazy ``JoinWith`` / ``AntiJoinWith``, the Ingest / fan-out
 and the bounded-subset
 ``TopNPerGroup`` / ``Sample`` / ``SamplePerGroup``)
 and ``SchemaCoercion`` — the *coerce* half of the schema adapter, which casts
-every declared column the validator's dtype check would not already accept, by
+each declared column the validator's dtype check would not already accept, by
 the built-in path or by the field's own ``Coerce`` marker (a reshape, not a
 check) — plus ``SchemaValueRulePartitioner`` for quarantine routing.
 

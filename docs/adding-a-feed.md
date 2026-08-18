@@ -118,9 +118,10 @@ pipelines/orders` imports `pipelines.orders.pipeline` and executes
 - **`raw_builder`** gates the source with a `ColumnValidator` and lands a
   faithful copy.
 - **`silver_builder`** renames source columns to the schema's vocabulary
-  (`RENAME`), coerces the dtypes storage loses (`SchemaCoercion`), partitions
-  bad rows into a quarantine dataset (`SchemaValueRulePartitioner`), and validates
-  the declared schema (`SchemaValidator`).
+  (`RENAME`), casts each declared column to its declared type
+  (`SchemaCoercion`), partitions bad rows into a quarantine dataset
+  (`SchemaValueRulePartitioner`), and validates the declared schema
+  (`SchemaValidator`).
 - **`gold_builder`** is a passthrough to start — reads silver, writes gold — with
   a `TODO` to build the assembly, because *what* gold means is per-feed. For a
   worked example of a real one, see

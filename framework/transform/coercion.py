@@ -2,7 +2,7 @@
 
 The *coerce* half of the schema adapter, and the write-side companion of
 :class:`~framework.core.schema.SchemaValidator`: where the validator *checks*
-dtypes, this *repairs* them, casting every declared column whose dtype the
+dtypes, this *repairs* them, casting each declared column whose dtype the
 validator would not already accept — ``date`` / ``datetime`` / ``bool``, which
 storage loses outright, and ``str`` / ``int`` / ``float``, which a reader's type
 inference is free to land as something else. A field can also declare its own
@@ -18,7 +18,6 @@ exactly as a Reader/Writer/processor does.
 
 from __future__ import annotations
 
-from dataclasses import fields
 from datetime import date, datetime
 
 import pandas as pd
@@ -27,8 +26,7 @@ from pandas.api import types as pdt
 from framework._internal.schema import (
     _DTYPE_CHECKS,
     _declared_fields,
-    _resolved_hints,
-    _unwrap,
+    _declared_markers,
 )
 from framework.core.dataset import Dataset
 from framework.core.value_rules import Coerce
@@ -52,22 +50,6 @@ _BOOL_ENCODINGS: dict[str, bool] = {
     "YES": True,
     "NO": False,
 }
-
-
-def _declared_casts(schema: type) -> dict[str, Coerce]:
-    """Return the ``Coerce`` marker each field declares, for the fields that do.
-
-    The coercion-side companion of the validator's declaration readers: it keeps
-    only the ``Coerce`` entries off each field's ``Annotated`` metadata (value
-    rules and the nullability markers are read elsewhere, by the validator).
-    """
-    hints = _resolved_hints(schema)
-    declared: dict[str, Coerce] = {}
-    for f in fields(schema):
-        markers = [m for m in _unwrap(hints[f.name])[1] if isinstance(m, Coerce)]
-        if markers:
-            declared[f.name] = markers[-1]
-    return declared
 
 
 class SchemaCoercion:
@@ -97,7 +79,7 @@ class SchemaCoercion:
     def __init__(self, schema: type) -> None:
         self._schema = schema
         self._expected = _declared_fields(schema)
-        self._casts = _declared_casts(schema)
+        self._casts = _declared_markers(schema, Coerce)
 
     def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
@@ -112,12 +94,8 @@ class SchemaCoercion:
             elif declared is bool:
                 frame[name] = self._to_bool(frame[name], name)
             elif declared in (str, int, float):
-                # Asking the validator's own dtype check whether the column
-                # already satisfies the declaration keeps the two halves from
-                # drifting: what it accepts is exactly what is left alone. The
-                # lossy types above are not guarded this way — a datetime64
-                # column can still hold the wrong instant, and a numeric bool
-                # the wrong encoding.
+                # Asking the validator's own dtype check what to leave alone
+                # keeps the two halves of the adapter from drifting apart.
                 if _DTYPE_CHECKS[declared][0](frame[name].dtype):
                     continue
                 frame[name] = (
@@ -144,19 +122,13 @@ class SchemaCoercion:
     def _to_text(self, series: "pd.Series") -> "pd.Series":
         # A whole-number column with any blank cell cannot be held as an integer,
         # so pandas widens it to float64 and `1234567890` would stringify as
-        # "1234567890.0". The Int64 detour undoes that widening first. It is
-        # deliberately column-level: one genuinely fractional value anywhere and
-        # the cast is refused for the whole column, which keeps the ".0" on its
-        # whole numbers — a simpler rule than a per-value repair, and one that
-        # never renders a fraction as something it is not.
+        # "1234567890.0". The Int64 detour undoes that widening first, and is
+        # refused for the whole column when any one value resists it.
         if pdt.is_float_dtype(series.dtype):
             try:
                 series = series.astype("Int64")
             except (TypeError, ValueError, OverflowError):
                 pass  # a fraction or an infinity: render the values as they are
-        # Never raises, whatever the column holds — a feed that would rather
-        # carry an awkward value as text than abort declares `str` for exactly
-        # this reason.
         return series.astype("str")
 
     def _to_number(self, series: "pd.Series", name: str, declared: type) -> "pd.Series":
@@ -186,7 +158,10 @@ class SchemaCoercion:
     def _to_bool(self, series: "pd.Series", name: str) -> "pd.Series":
         normalized = series.astype("string").str.strip().str.upper()
         mapped = normalized.map(_BOOL_ENCODINGS)
-        unrecognized = series[mapped.isna() & ~self._missing(series)]
+        # `_missing` inlined: `normalized` is already the stripped text it would
+        # recompute, so the bool path makes one pass over the column, not two.
+        missing = normalized.isna() | normalized.eq("")
+        unrecognized = series[mapped.isna() & ~missing]
         if len(unrecognized):
             joined = self._offenders(unrecognized)
             raise self._error(name, f"unrecognized boolean encoding(s): {joined}")
@@ -199,23 +174,20 @@ class SchemaCoercion:
     def _declared_cast(
         self, marker: Coerce, series: "pd.Series", name: str
     ) -> "pd.Series":
-        # Only these two: anything else out of a caller's cast is a bug in the
-        # cast, and keeps its own traceback rather than being dressed up as a
-        # problem with the data.
+        # These three only: anything else out of a caller's cast is a bug in
+        # the cast, and keeps its own traceback rather than being dressed up as
+        # a problem with the data. ArithmeticError is one of them because
+        # `series.map(Decimal)` raises decimal.InvalidOperation on a bad value.
         try:
             return marker.cast(series)
-        except (TypeError, ValueError) as exc:
+        except (TypeError, ValueError, ArithmeticError) as exc:
             raise self._error(name, f"declared coercion failed ({exc})") from exc
 
     @staticmethod
     def _missing(series: "pd.Series") -> "pd.Series":
-        """Mask the gaps: a null, or text that is empty or only whitespace.
+        """Mask a numeric column's gaps — a null, or blank text.
 
-        A gap is the absence of a value, not a bad one, so it is excluded from
-        every offender report and left to the validator, which owns nullability.
-        A blank cell counts as a gap for the numeric and boolean paths — it is
-        how a CSV spells "nothing here" — but never for `str`, where the empty
-        string is a value in its own right.
+        Never for `str`, where the empty string is a value in its own right.
         """
         return series.isna() | series.astype("string").str.strip().eq("").fillna(False)
 

@@ -34,6 +34,7 @@ if TYPE_CHECKING:
 from framework._internal.schema import (
     _DTYPE_CHECKS,
     _declared_fields,
+    _declared_markers,
     _declared_row_checks,
     _resolved_hints,
     _unwrap,
@@ -67,23 +68,6 @@ def _declared_nullability(schema: type) -> dict[str, bool]:
     return declared
 
 
-def _declared_self_cast(schema: type) -> set[str]:
-    """Return the fields carrying a ``Coerce`` marker — the ones the dtype check skips.
-
-    A field that declares its own cast decides its own dtype, so the built-in
-    Python-type → dtype mapping has nothing to say about it: such a field is
-    neither refused at build time for a type outside that mapping nor
-    dtype-checked in :meth:`SchemaValidator.validate`. Presence, nullability and
-    value rules still apply to it in full.
-    """
-    hints = _resolved_hints(schema)
-    return {
-        f.name
-        for f in fields(schema)
-        if any(isinstance(m, Coerce) for m in _unwrap(hints[f.name])[1])
-    }
-
-
 class SchemaValidator:
     """Check a dataset against a Case Type schema (a dataclass): columns + dtypes.
 
@@ -98,13 +82,16 @@ class SchemaValidator:
         self._expected = _declared_fields(schema)
         self._row_checks = _declared_row_checks(schema)
         self._nullable = _declared_nullability(schema)
-        self._self_cast = _declared_self_cast(schema)
+        # A field that declares its own cast decides its own dtype, so the
+        # built-in Python-type -> dtype mapping has nothing to say about it:
+        # neither refused at build time below, nor dtype-checked in `validate`.
+        self._casts = _declared_markers(schema, Coerce)
         # Fail at build time on a type the adapter cannot map to a dtype, so a
         # mis-declared schema surfaces where it is composed, not mid-run.
         unsupported = [
             (name, declared)
             for name, declared in self._expected
-            if declared not in _DTYPE_CHECKS and name not in self._self_cast
+            if declared not in _DTYPE_CHECKS and name not in self._casts
         ]
         if unsupported:
             details = "; ".join(
@@ -134,7 +121,7 @@ class SchemaValidator:
                 continue
             if not checks_values:
                 continue
-            if name not in self._self_cast:
+            if name not in self._casts:
                 check, label = _DTYPE_CHECKS[declared]
                 actual = frame[name].dtype
                 if not check(actual):

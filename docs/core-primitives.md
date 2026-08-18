@@ -726,7 +726,7 @@ Two families of concrete processor ship now.
 
 **Schema coercion.** `SchemaCoercion(schema)` — the write-side companion of
 `SchemaValidator`, derived from the same Case Type dataclass. Where the validator
-*checks* dtypes, the coercer *makes them true*, casting **every** declared column
+*checks* dtypes, the coercer *makes them true*, casting each declared column
 whose dtype the validator would not already accept: `date`/`datetime` (landed as
 text) and `bool` (`TRUE`/`FALSE` text or `1`/`0`), which storage loses outright,
 and `str`/`int`/`float`, which a reader's inference is free to land as something

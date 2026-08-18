@@ -94,8 +94,10 @@ never heard of.
   the only thing between a source and the validator. It is not: a CSV read is
   bare type inference, so a digits-only reference arrives as `int64` and a number
   arrives as text, and nothing before the validator could repair either.
-  `SchemaCoercion` now casts **every** declared column whose dtype the validator
-  would not already accept. `int` lands as nullable `Int64`, for the same reason
+  `SchemaCoercion` now casts each declared column whose dtype the validator would
+  not already accept — no more, since what it leaves alone is what validation
+  accepts: an `object` column satisfies `str` whatever it holds, so the `str` arm
+  does not see it. `int` lands as nullable `Int64`, for the same reason
   `bool` lands as `"boolean"`: a gap cannot be held otherwise.
 - **The no-op rule is the validator's own dtype check**, asked directly. What
   coercion leaves alone is by construction what validation accepts, so the two

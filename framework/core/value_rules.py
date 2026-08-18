@@ -8,10 +8,8 @@ by :class:`~framework.core.schema.SchemaValidator`, and the masks they
 produce drive the quarantine partitioner. Each satisfies the
 :class:`~framework._internal.schema.ValueRule` protocol structurally.
 
-The ``Coerce`` marker lives here too. It is not a rule — it says how a field's
-column is *cast* rather than what its values must be — but it is one of the
-markers a schema author attaches in ``Annotated``, so it is declared and
-imported alongside them.
+The ``Coerce`` marker lives here too: not a rule — it says how a field's column
+is *cast*, not what its values must be — but declared in ``Annotated`` alongside.
 
 Authoring a rule is an **engine-confined** act: a rule is handed the column's
 pandas Series directly, because judging thousands of values one at a time
@@ -151,9 +149,7 @@ class Coerce:
 
     :class:`~framework.transform.coercion.SchemaCoercion` runs the cast in place
     of its own arm for that column, and ``SchemaValidator`` skips its dtype check
-    for the field — the declared cast decides the dtype, so the framework's
-    Python-type-to-dtype mapping has nothing to say about it. Presence,
-    nullability and value rules still apply in full.
+    for the field. Presence, nullability and value rules still apply in full.
     """
 
     def __init__(self, cast: Callable[["pd.Series"], "pd.Series"]) -> None:

@@ -468,9 +468,6 @@ def encode_detail_value(dataset: Dataset) -> Dataset:
     ``str`` passthrough also stops the dict/list arm (already JSON-encoded by
     ``ExplodeJsonMap``) from being double-encoded.
     """
-    # Not simplifiable to a cast: this emits JSON text (`{"n": 1}`) where a cast
-    # gives a Python repr (`{'n': 1}`), and the object dtype with None (not nan)
-    # is what row-dict consumers downstream read as an absent value.
     frame = dataset.to_pandas()
     values = []
     for cell in frame["value_text"]:

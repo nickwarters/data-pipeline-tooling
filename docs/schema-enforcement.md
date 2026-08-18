@@ -94,11 +94,12 @@ takes `TEXT` affinity for the life of the feed, so a feed whose first poll is
 quiet would store every later integer id as text. (Under migration control the
 SQL fixes the affinity instead, and the coercion below stops being what decides
 it — but it still decides what the *validator* sees, so the rule is unchanged
-either way.) There is no zero-row branch in the coercer that arranges this: it
-types **every** declared column whose dtype does not already satisfy the
-declaration, and an empty column satisfies nothing, so the ordinary paths run
-over no rows and land the same dtypes — with the same `TEXT` / `INTEGER` /
-`REAL` affinity — that they land over a full window. A declared type the coercer
+either way.) There is no zero-row branch in the coercer that arranges this: the
+ordinary paths run over no rows and land the same dtypes — with the same `TEXT` /
+`INTEGER` / `REAL` affinity — that they land over a full window. The `float64`
+column `reindex` invented does not satisfy a declared `str`, so it is cast to
+text; an `object` one already does and is skipped, and `object` is the same
+`TEXT` affinity either way. A declared type the coercer
 has no cast for, and no `Coerce` marker to supply one, is left alone: an
 unsupported type is a schema configuration error, and `SchemaValidator` reports
 it at build time naming the field. The gate stands down and the shape is still
@@ -150,17 +151,16 @@ coerced = SchemaCoercion(CaseA)(dataset)   # returns a transformed dataset
 
 It is a callable transform (`(dataset) -> Dataset`) and, like the validator,
 **engine-confined** — a cast needs the engine's vectorised operations, so it
-reaches the frame via `to_pandas()`/`from_pandas()`. It casts **every declared
-type**:
+reaches the frame via `to_pandas()`/`from_pandas()`. Every declared type has a
+cast:
 
 | Declared type | Coerced from | Coerced to |
 |---------------|--------------|------------|
 | `date` / `datetime` | text (`"2026-01-01"`) | datetime64 |
 | `bool` | `TRUE`/`FALSE`, `Y`/`N`, `YES`/`NO` text, or `1`/`0` (incl. the `1.0`/`0.0` a nulled numeric column comes back as) | pandas `"boolean"` |
-| `str` | anything — a reference inferred as `int64`, a whole number widened to `float64` by a blank cell | pandas' text dtype |
+| `str` | a reference inferred as `int64`, a whole number widened to `float64` by a blank cell | pandas' text dtype |
 | `int` | numeric text (`"42"`), or a `float64` holding whole numbers | nullable `Int64` |
 | `float` | numeric text (`"3.14"`), or an integer column | `float64` |
-| `str` / `int` / `float` **already carrying an accepted dtype** | — | left exactly as they are |
 
 Boolean encodings are compared **case-folded and whitespace-stripped**, so
 `true`, `True` and `TRUE ` all map.
@@ -172,6 +172,12 @@ leaves alone is by construction what the validator accepts, and the two halves
 cannot drift apart. `date` / `datetime` / `bool` are not guarded that way: a
 datetime64 column can still hold the wrong instant and a numeric boolean the
 wrong encoding, so those arms always run.
+
+The `str` arm inherits that check's limits along with its guarantee. `object` is
+unconditionally a string dtype to pandas, so a declared `str` column holding
+Python `int`s is skipped by the coercer — and then accepted by the validator,
+which has always accepted it. Nothing has drifted; the arm simply reaches what
+the validator would refuse, not everything that is not text.
 
 A `bool` lands as pandas' **nullable `"boolean"`** dtype, not numpy `bool`. The
 reason is that numpy `bool` has no null, so a gap would have to be invented as
@@ -257,8 +263,10 @@ value rules, and imported from `framework.core` with them. Its `cast` is
 rule is — and it **wins over the built-in path** for that column, so it is an
 override as well as an extension: `Annotated[date, Coerce(parse_uk_dates)]`
 reads a source that spells its dates `05/08/2026`, which the built-in ISO-only
-path refuses on purpose. A cast that raises `TypeError`/`ValueError` is reported
-as an ordinary located coercion failure (`column 'amount' declared coercion
+path refuses on purpose. A cast that raises `TypeError`, `ValueError` or
+`ArithmeticError` — the last because the `series.map(Decimal)` above raises
+`decimal.InvalidOperation` on a bad value — is reported as an ordinary located
+coercion failure (`column 'amount' declared coercion
 failed (...)`); anything else keeps its own traceback, because that is a bug in
 the cast rather than a problem with the data.
 
@@ -269,13 +277,10 @@ nullability and the field's value rules still apply to it in full.
 
 ### One operational consequence
 
-**The coerce step sits *above* quarantine.** Row-level quarantine routes rows
-aside on a *value rule*, and value rules run in the validator — after the cast.
-So declaring `int` or `float` makes a single unparseable value **fatal to the
-whole run**, not a diverted row. That is the right default for a column whose
-type is load-bearing. A feed that would rather keep the run alive and divert the
-offending row declares the column `str` and gates it with a value rule
-(`Pattern(r"\d+")`) instead.
+**The coerce step sits *above* quarantine**, so declaring `int` or `float` makes
+a single unparseable value fatal to the whole run rather than a diverted row.
+That trade, and the escape hatch for a feed that would rather divert the row, are
+set out in [ADR-0006](adr/0006-graduated-schema-enforcement.md).
 
 ## Composing the boundary — coerce, then enforce
 
