@@ -584,6 +584,9 @@ p.run(context=context)
 - Run pipelines through the framework when upstream requirements matter:
   `python -m cli run pipelines/selection --base-dir /tmp/demo --run-date 2026-05-29`
   checks declared upstream run history before Selection executes.
+- `pipelines/complaint_selection/` is the **deployed** Selection group over the
+  SAS complaints export (Complaints A/B/C), alongside the demo above — see
+  [`selection.md`](selection.md#complaint-selection--a-deployed-selection-group).
 
 ### Assemble silver into gold outputs
 

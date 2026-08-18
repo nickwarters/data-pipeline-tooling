@@ -27,4 +27,8 @@ def build_pipeline_sets():
                 ),
             ),
         ),
+        PipelineSet(
+            "selection",
+            (ScheduledPipeline("pipelines/complaint_selection", Schedule.daily()),),
+        ),
     )

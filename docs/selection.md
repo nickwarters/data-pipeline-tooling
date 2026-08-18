@@ -299,3 +299,43 @@ duplicating them — over the CLI, `python -m cli run pipelines/selection
 `as_of` date is fixed so the working-day window lines up with the sample feed and
 the run is deterministic. Each pipeline can also be run directly with a default
 run context (`python -m pipelines.ingest.pipeline /tmp/demo`).
+
+## Complaint Selection — a deployed Selection group
+
+`pipelines/complaint_selection/` is the same shape put to real use: Complaints
+A/B/C are one SAS complaints export split three ways, each its own Case Type
+ingest (source -> raw -> silver, no gold — CONTEXT.md's Selection group entry
+treats the three as one group). `SELECTION_GROUP` in
+`pipelines/complaint_selection/pipeline.py` is the one place a Case Type joins
+the group: a Shared Reader over its silver, its natural-key column, and its
+priority rule.
+
+The group's output does not belong to any one Case Type's medallion, so it
+lands in its own plain namespace store under `<base_dir>/selection_output/` —
+`complaint_selection.db` (`selection_pool` + `selection_trace`) plus
+`selection_pool.json`, i.e. `CWD/data/selection_output` under the dev default.
+The JSON file is an inspection artifact, not a second copy of history: it holds
+only the latest run's pool (`Refresh`, overwritten every run), beside a database
+that accumulates one row per run per Case selected (`AccumulateByRun`) — the two
+intentionally differ once a base directory has more than one run behind it.
+
+The freshness Caution above is resolved here by widening: `UPSTREAMS` requires
+each Case Type's ingest within `max_age_days=10` (the export is weekly, so
+weekly plus slack), not same-day. That requirement resolves against the
+**bare** run-history label each ingest records under (`complaints_a`, and its
+siblings) — the label `python -m cli run pipelines/complaints_a` records, not
+the subject-qualified label (`complaints_a/complaints_a`) an ingest run via its
+own `python -m pipelines.complaints_a.pipeline` module-main records instead. So
+the complaints ingests must be run path-addressed for the requirement to ever
+resolve against real history; run any other way, it is stuck on the silent
+first-run "allow" fallback forever. `orchestrate --app case_review.schedules`
+schedules `complaint_selection` itself but does not run the three ingests —
+they are not on any schedule — so something else (an operator, a separate job)
+still has to run them path-addressed for this requirement to mean anything.
+
+The deployed group is threshold-gated today — a fixed `PRIORITY_THRESHOLD`, no
+volume target, composition split, or Hopper yet, unlike the plans-per-group
+model the rest of this doc describes. And until the three complaints feeds have
+run at least once in a base directory, its daily schedule warns first-run (no
+upstream history) and then fails outright once it tries to read a silver
+database that does not exist yet — expected until ingest history exists.
