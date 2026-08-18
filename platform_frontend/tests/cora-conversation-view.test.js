@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
 import { registerCaseType } from '../case-types/manifest.js';
-import { fireEvent, getByRole } from './helpers/semantic-dom.js';
+import { fireEvent, getByRole, queryByRole } from './helpers/semantic-dom.js';
 import { makeCaseRow } from './helpers/fixtures.js';
 
 installDom();
@@ -85,7 +85,7 @@ test('conversation panel exposes a close control only when onClose is passed', (
     onSend() {},
   });
   assert.equal(
-    withoutClose.querySelector('.cora-conversation-close'),
+    queryByRole(withoutClose, 'button', { name: 'Close conversation panel' }),
     null,
     'omitting onClose renders no close button'
   );

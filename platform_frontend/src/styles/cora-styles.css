@@ -1688,7 +1688,13 @@
 [data-cora-root] .cora-conversation-close {
   background: transparent;
   border: none;
-  padding: var(--cora-space-1) var(--cora-space-2);
+  /* Explicit box: padding alone leaves it under the 24px minimum target. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   color: var(--cora-color-text-muted);
 }
 
