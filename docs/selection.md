@@ -204,6 +204,10 @@ SelectionPool write. A first run with no upstream history is allowed, but a
 > needs — it cannot size the **Hopper** without today's unallocated count. Which
 > of the two is right is **not yet decided**; do not copy this paragraph into a
 > new feed without choosing.
+>
+> `pipelines/complaint_selection` has since decided, for itself: it takes
+> **both** branches, deliberately, rather than one instead of the other — see
+> its own section below.
 
 ## Explainability — why each Case was (or wasn't) selected
 
@@ -319,26 +323,53 @@ only the latest run's pool (`Refresh`, overwritten every run), beside a database
 that accumulates one row per run per Case selected (`AccumulateByRun`) — the two
 intentionally differ once a base directory has more than one run behind it.
 
-The freshness Caution above is resolved here by widening: `UPSTREAMS` requires
-each Case Type's ingest within `max_age_days=10` (the export is weekly, so
-weekly plus slack), not same-day. That requirement resolves against the
-**bare** run-history label each ingest records under (`complaints_a`, and its
-siblings) — the label `python -m cli run pipelines/complaints_a` records, not
-the subject-qualified label (`complaints_a/complaints_a`) an ingest run via its
-own `python -m pipelines.complaints_a.pipeline` module-main records instead. So
-the complaints ingests must be run path-addressed for the requirement to ever
-resolve against real history; run any other way, it is stuck on the silent
-first-run "allow" fallback forever. `orchestrate --app case_review.schedules`
-schedules `complaint_selection` itself but does not run the three ingests —
-they are not on any schedule — so something else (an operator, a separate job)
-still has to run them path-addressed for this requirement to mean anything.
+The freshness Caution above is resolved here by taking **both** branches, for
+two different reasons that happen to sit in the one `UPSTREAMS` tuple. Each
+Case Type's ingest is widened: `max_age_days=10` (the export is weekly, so
+weekly plus slack), not same-day. `sharepoint_cases` is **not** widened —
+its default `max_age_days=0` ("succeeded today") stands, because this run
+sizes the **Hopper** from today's unallocated count (see the Hopper section
+below) and a cap must not be sized against a number that might already be
+stale. `sharepoint_cases` is orchestrated daily in the `case_management`
+schedule set ahead of `complaint_selection`'s own `selection` set, and
+`reviewer_activity` already depends on the same bare label, so this resolves
+in production; the default first-run policy (warn) still lets a fresh
+environment — no `sharepoint_cases` history at all yet — run, where "no
+history seen, fill to the declared depth" is genuinely correct.
 
-The deployed group is threshold-gated today — a fixed `PRIORITY_THRESHOLD`, no
-volume target, composition split, or Hopper yet, unlike the plans-per-group
-model the rest of this doc describes. And until the three complaints feeds have
-run at least once in a base directory, its daily schedule warns first-run (no
-upstream history) and then fails outright once it tries to read a silver
-database that does not exist yet — expected until ingest history exists.
+Every requirement here resolves against the **bare** run-history label each
+upstream records under (`complaints_a`, `sharepoint_cases`, and siblings) —
+the label `python -m cli run pipelines/complaints_a` records, not the
+subject-qualified label (`complaints_a/complaints_a`) an ingest run via its own
+`python -m pipelines.complaints_a.pipeline` module-main records instead. So
+the complaints ingests must be run path-addressed for their requirement to
+ever resolve against real history; run any other way, it is stuck on the
+silent first-run "allow" fallback forever. `orchestrate --app
+case_review.schedules` schedules `complaint_selection` itself but does not run
+the three ingests — they are not on any schedule — so something else (an
+operator, a separate job) still has to run them path-addressed for that
+requirement to mean anything.
+
+The deployed group narrows in two ways today: a fixed-threshold `Filter`
+(`PRIORITY_THRESHOLD`) and a Hopper cap (`HOPPER_DEPTH`, see below) — still no
+volume target or composition split, unlike the plans-per-group model the rest
+of this doc describes. And until the three complaints feeds have run at least
+once in a base directory, its daily schedule warns first-run (no upstream
+history) and then fails outright once it tries to read a silver database that
+does not exist yet — expected until ingest history exists.
+
+### Hopper cap — ADR-0021, a declared starting depth
+
+`HOPPER_DEPTH = 60` is a declared placeholder for the ADR's sizing rule, `3D`
+(three times the group's daily *assignment* rate) — monitoring real throughput
+and adjusting the constant from it is the recorded follow-up, not yet done.
+Each run tops the cap up from a **direct count** of the group's unallocated
+Cases (`unallocated_case_count`): In-progress, with no assigned reviewer, and
+joined by title to the Cases *this pool has already selected* — never
+`target − completed − voided` (ADR-0021, CONTEXT.md's **Hopper** entry): a
+Case that is assigned but not yet finished has left the Hopper without
+reaching any terminal state, so that arithmetic overstates what is actually
+sitting there.
 
 ### Void replacement — ADR-0021, in reduced form
 
@@ -371,20 +402,41 @@ are parsed to timezone-aware `datetime`s before comparing (never string
 comparison — a naive-vs-offset string compare sorts on the separator character
 alone and can silently drop a same-day void).
 
-A missing or unreadable `sharepoint_cases` gold means **no voids are visible**
-— a considered choice, not an oversight. Complaint Selection declares no
-`FreshnessRequirement("sharepoint_cases")`, so a stale or absent sync degrades
-safely to "no voids seen this run" rather than blocking or failing; the
-soft-dependency read (`voided_cases`) catches exactly the reader's own
-`sqlite3.OperationalError` and returns no voids.
+**The two failure directions are handled differently, deliberately.** A
+*stale* `sharepoint_cases` — history exists, but not from today — **blocks the
+run outright**, via the same-day `FreshnessRequirement` above: a cap must not
+be sized against a number that might already be wrong, so over-filling is the
+failure that requirement exists to prevent. An *absent* `sharepoint_cases` — a
+fresh environment with no sync history at all yet — degrades safely instead:
+the freshness guard's first-run policy (warn) lets the run through, and the
+soft-dependency reads (`voided_cases`, `unallocated_case_count`) each catch
+exactly the reader's own `sqlite3.OperationalError` and answer "no voids seen"
+/ "0 unallocated" — correct there, since filling to the declared depth with no
+signal otherwise is the right default for an environment with no history to
+read.
 
 The ADR's other change — **rung-first sort** (void-replacement rung, then
-oldest by related date, as the single sort choosing every Case) — is
-**deferred**: with a ladder, rung is a relation between one void and one
-candidate, not a single column every row can be ranked by, and nothing
-downstream consumes pool order today (no Hopper, no volume target) to make
-that ordering matter. The existing `Sort("priority_score", ascending=False)`
-is unchanged.
+oldest by related date, as the single sort choosing every Case) is no longer
+fully deferred: **queue order is consumed now**, by the Hopper. Ahead of the
+`hopper` gate, `replacements_first` reorders the pool — this run's
+replacements lead, oldest void first — with priority-desc standing in for
+"oldest by related date" while `related_date` stays dormant (not a second sort
+over the whole pool: with a ladder, rung is a relation between one void and
+one candidate, not a column every row can be ranked by). The `hopper` gate
+then cuts the queue at its remaining capacity; a Case it cuts still lands in
+the trace with its score (`excluded by gate 'hopper'`) — the gate the trace
+observes, never a limit on the read (ADR-0021). `rank` in `selection_trace`
+now records **queue position**, so a replacement can rank above a Case that
+scored higher than it. A replacement past capacity is cut like any other
+Case, but rarely: the oldest voids' replacements lead the queue and so survive
+first, and only a shortfall smaller than the number of replacements themselves
+reaches one at all, cutting the *youngest* voids' first. The run's printed
+`voids: ... replaced, ... lapsed` counts from the landed pool, so a
+replacement that *was* matched but didn't survive the cut is indistinguishable
+there from one that never matched at all — both read as "not replaced" in the
+summary, even though only the latter is a lapse in ADR-0021's sense (no
+candidate at all). The existing `Sort("priority_score", ascending=False)` is
+unchanged; queue order sits downstream of it.
 
 Voids are matched by **title**, which `readers.sharepoint_cases` hands back as
 the sync feed's own Case title — joined here as the Complaint Selection
