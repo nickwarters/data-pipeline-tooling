@@ -73,4 +73,13 @@ identity (`logical_run_id`, `load_date`, `pipeline_run_id`).
   follow-up.
 - Attribution is **stage-positional**: a Case is attributed to the first stage that
   drops it, so the id column must survive every stage for the trace to hold.
+- `RowTrace.consider` seeds the considered population from the first
+  `ReadNode` executed alone, which assumes one source. A Selection whose
+  reads have been collapsed into a single governing transform — several
+  sources feeding one function, no per-stage `Filter`/`Score`/`Sort` nodes to
+  attribute to — cannot use `.explain()` at all and has to build its own
+  `verdict`/`reason`/`rank`/`score` columns directly (`pipelines/complaint_selection`,
+  see `docs/selection.md`). Losing `.explain()` also drops the one
+  chunk-safety refusal it carries, so such a pipeline is not blocked from
+  becoming streamable later the way an `.explain()`-based one is.
 </content>

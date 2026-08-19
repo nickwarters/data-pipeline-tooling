@@ -578,7 +578,11 @@ p.run(context=context)
 - **Reference Data** (the Adviser hierarchy, product codes) is read-only to Case
   Types and joined in Python — never written by them.
 - **`.explain()`** uses the framework's generic **RowTrace** mechanics to land a
-  case-review selection trace (why each Case was/wasn't chosen) as a sibling table.
+  case-review selection trace (why each Case was/wasn't chosen) as a sibling
+  table — for a Selection with **one** source feeding it. `RowTrace.consider`
+  seeds the considered population from the first `ReadNode` executed alone, so
+  a Selection with several reads feeding one transform (`pipelines/complaint_selection`,
+  below) cannot use it and builds its own trace columns instead.
 - The SelectionPool reaches the review platform as a **Deliverable** (a later
   slice); the returned **Review Outcomes** come back via **Sync**, not here.
 - Run pipelines through the framework when upstream requirements matter:

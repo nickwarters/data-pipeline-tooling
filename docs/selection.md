@@ -311,8 +311,37 @@ A/B/C are one SAS complaints export split three ways, each its own Case Type
 ingest (source -> raw -> silver, no gold — CONTEXT.md's Selection group entry
 treats the three as one group). `SELECTION_GROUP` in
 `pipelines/complaint_selection/pipeline.py` is the one place a Case Type joins
-the group: a Shared Reader over its silver, its natural-key column, and its
-priority rule.
+the group: a Shared Reader over its silver, its natural key, its priority
+rule, and its Case Details columns (below).
+
+Unlike the demo above, this pipeline does not compose `Filter`/`Score`/
+`Sort`/`Stamp`/`SelectColumns` nodes, and it does not use `.explain()`. It
+wires four reads — one per group member plus one for Sync's current Cases —
+into **one** transform, `select_complaints`, that does the whole job: score,
+gate, replace voids, queue, and cap. One filter (`selected`) and three small
+named projections turn its one output into the SelectionPool row, the trace
+row, and the JSON deliverable row. The pool row and the JSON row carry the
+same `POOL_COLUMNS`; they differ only in that the pool table's `details` is
+serialised to JSON text while the deliverable keeps it as a nested object. This is a deliberate simplification over an earlier shape
+that chained framework primitives together — a maintainer could not read what
+Selection actually *did* without first understanding `Score`/`Filter`/`Sort`/
+`Stamp`/`SelectColumns`'s and `RowTrace`'s semantics; `select_complaints` is
+one function a maintainer reads top to bottom.
+
+**Why no `.explain()`.** ADR-0008's `RowTrace` seeds its considered
+population from the *first* `ReadNode` executed (`RowTrace.consider`, called
+once, on whichever read happens to run first) and follows it stage by stage
+from there. That is sound for a pipeline with one source. This one has four —
+three Case Types plus Sync — feeding a single transform, and there is no
+sense in which "the first read's rows" is the considered population; all four
+are. The primitive has no way to express a multi-read considered population,
+so `select_complaints` builds its own trace columns (`verdict`, `reason`,
+`rank`, `score`) directly, and the `trace` node projects them off its single
+output rather than off a `.explain()` node. One upside falls out of this for
+free: `.explain()` is one of the pairings the builder refuses under a
+streamed (chunked) read, because a row-level trace has to hold every row it
+has seen — removing it lifts that refusal, so this pipeline is not blocked
+from becoming streamable later the way an `.explain()`-based one would be.
 
 The group's output does not belong to any one Case Type's medallion, so it
 lands in its own plain namespace store under `<base_dir>/selection_output/` —
@@ -328,14 +357,14 @@ two different reasons that happen to sit in the one `UPSTREAMS` tuple. Each
 Case Type's ingest is widened: `max_age_days=10` (the export is weekly, so
 weekly plus slack), not same-day. `sharepoint_cases` is **not** widened —
 its default `max_age_days=0` ("succeeded today") stands, because this run
-sizes the **Hopper** from today's unallocated count (see the Hopper section
-below) and a cap must not be sized against a number that might already be
-stale. `sharepoint_cases` is orchestrated daily in the `case_management`
-schedule set ahead of `complaint_selection`'s own `selection` set, and
-`reviewer_activity` already depends on the same bare label, so this resolves
-in production; the default first-run policy (warn) still lets a fresh
-environment — no `sharepoint_cases` history at all yet — run, where "no
-history seen, fill to the declared depth" is genuinely correct.
+sizes the **Hopper** from today's unallocated count (see below) and a cap
+must not be sized against a number that might already be stale.
+`sharepoint_cases` is orchestrated daily in the `case_management` schedule set
+ahead of `complaint_selection`'s own `selection` set, and `reviewer_activity`
+already depends on the same bare label, so this resolves in production; the
+default first-run policy (warn) still lets a fresh environment — no
+`sharepoint_cases` history at all yet — run, where "no history seen, fill to
+the declared depth" is genuinely correct.
 
 Every requirement here resolves against the **bare** run-history label each
 upstream records under (`complaints_a`, `sharepoint_cases`, and siblings) —
@@ -350,13 +379,32 @@ the three ingests — they are not on any schedule — so something else (an
 operator, a separate job) still has to run them path-addressed for that
 requirement to mean anything.
 
-The deployed group narrows in two ways today: a fixed-threshold `Filter`
-(`PRIORITY_THRESHOLD`) and a Hopper cap (`HOPPER_DEPTH`, see below) — still no
+The deployed group narrows in two ways today: a fixed priority threshold
+(`PRIORITY_THRESHOLD`) and a Hopper cap (`HOPPER_DEPTH`, below) — still no
 volume target or composition split, unlike the plans-per-group model the rest
 of this doc describes. And until the three complaints feeds have run at least
 once in a base directory, its daily schedule warns first-run (no upstream
 history) and then fails outright once it tries to read a silver database that
 does not exist yet — expected until ingest history exists.
+
+### Case Details — per source, landed as one JSON field
+
+Each `SelectionGroupMember` declares `detail_columns`: the columns from its
+*own* silver this Case Type surfaces as Case Details. Each column name **is**
+the frontend's `detailFields[].key` for that Case Type
+(`platform_frontend/docs/case-type-onboarding.md`) — not a pipeline-side
+name, so renaming a detail column here is a cross-project change, not a local
+one. `select_complaints` builds each source's `details` dict before any
+concat (a numeric column would otherwise upcast across sources with
+differing dtypes, and every row would gain the other sources' keys as NaN —
+invalid JSON `json.dumps` cannot emit, which is why `allow_nan=False` is
+passed: a residual NaN fails the run rather than shipping something the
+frontend's `JSON.parse` would reject). The landed shape mirrors Sync's own
+`details` (see `docs/data-dictionary-sharepoint-cases.md`): unparsed JSON
+text in the SelectionPool table (the migration's declared type), a native
+nested object in the JSON deliverable — the same underlying dict, serialised
+once for the durable table and left alone for the file a person or another
+system reads directly.
 
 ### Hopper cap — ADR-0021, a declared starting depth
 
@@ -364,16 +412,29 @@ does not exist yet — expected until ingest history exists.
 (three times the group's daily *assignment* rate) — monitoring real throughput
 and adjusting the constant from it is the recorded follow-up, not yet done.
 Each run tops the cap up from a **direct count** of the group's unallocated
-Cases (`unallocated_case_count`): Cases in `To-allocate` — the status the
-platform creates a Case in and the one its allocation claim replaces — joined
-by title to the Cases *this pool has already selected*. One status equality on
-the sync gold, per CONTEXT.md's **Hopper** entry: no scan for a blank assigned
-reviewer, which would reintroduce the by-elimination read the platform's
-`To-allocate` status (`platform_frontend/docs/adr/0051-to-allocate-is-the-status-a-case-starts-in.md`)
+Cases (`unallocated_count`): Cases in `To-allocate` — the status the platform
+creates a Case in and the one its allocation claim replaces — joined by title
+to *this run's own candidates*. One status equality on the sync gold, per
+CONTEXT.md's **Hopper** entry: no scan for a blank assigned reviewer, which
+would reintroduce the by-elimination read the platform's `To-allocate` status
+(`platform_frontend/docs/adr/0051-to-allocate-is-the-status-a-case-starts-in.md`)
 exists to remove. Never `target − completed − voided` either (ADR-0021): a
 Case that is assigned but not yet finished has left the Hopper without
 reaching any terminal state, so that arithmetic overstates what is actually
 sitting there.
+
+The count's scope is the group's **candidate population**, not the
+historical SelectionPool table (a behaviour change from an earlier shape that
+read the pool back to answer this). A group Case sitting in `To-allocate`
+that no past run happened to select now counts, which reads closer to
+ADR-0021's "direct count of unallocated Cases" than joining against what a
+run previously chose to write down: whether this run *could* select a Case is
+what makes it this run's capacity to count, not whether an earlier run did.
+
+Capacity now lives in the **trace reason**, not a separate console clause: a
+Case the Hopper cuts is recorded `excluded by gate 'hopper' (capacity N)`,
+so the number that decided it is part of the durable record rather than
+something only a person watching the console that day ever saw.
 
 ### Void replacement — ADR-0021, in reduced form
 
@@ -383,6 +444,15 @@ successful run is made good like-for-like, and a currently-voided Case is never
 itself re-selected (CONTEXT.md's **Void replacement**). `MATCH_LADDER` in
 `pipelines/complaint_selection/pipeline.py` is the configured, ordered set of
 match attempts and the one place to change like-for-like matching.
+
+A pending void's ladder attributes are resolved from **this run's candidate
+population**, not a historical SelectionPool row: the voided Case is itself a
+candidate (its silver row is unaffected by its Sync status), so its
+`attribute_a`/`case_type` are read straight off that row before the voided
+gate removes it. Resolving after the gate would strip every void's
+attributes and silently degrade every match to the fallback rung — a real
+correction from an earlier shape that read the accumulated pool table for
+this instead.
 
 Say this plainly so nobody mistakes it for a live attribute match:
 `attribute_a` and `related_date` are **dormant placeholders**, all-`None` until
@@ -412,41 +482,47 @@ run outright**, via the same-day `FreshnessRequirement` above: a cap must not
 be sized against a number that might already be wrong, so over-filling is the
 failure that requirement exists to prevent. An *absent* `sharepoint_cases` — a
 fresh environment with no sync history at all yet — degrades safely instead:
-the freshness guard's first-run policy (warn) lets the run through, and the
-soft-dependency reads (`voided_cases`, `unallocated_case_count`) each catch
-exactly the reader's own `sqlite3.OperationalError` and answer "no voids seen"
-/ "0 unallocated" — correct there, since filling to the declared depth with no
-signal otherwise is the right default for an environment with no history to
-read.
+the freshness guard's first-run policy (warn) lets the run through, and
+`CurrentCasesOrEmpty` (a thin wrapper `ReadNode` calls, not a change to the
+Shared Reader itself — that would change behaviour for every other consumer)
+catches exactly the reader's own `sqlite3.OperationalError` and returns an
+empty, correctly-columned read. No voids seen, 0 unallocated: correct there,
+since filling to the declared depth with no signal otherwise is the right
+default for an environment with no history to read.
 
-The ADR's other change — **rung-first sort** (void-replacement rung, then
-oldest by related date, as the single sort choosing every Case) is no longer
-fully deferred: **queue order is consumed now**, by the Hopper. Ahead of the
-`hopper` gate, `replacements_first` reorders the pool — this run's
-replacements lead, oldest void first — with priority-desc standing in for
-"oldest by related date" while `related_date` stays dormant (not a second sort
-over the whole pool: with a ladder, rung is a relation between one void and
-one candidate, not a column every row can be ranked by). The `hopper` gate
-then cuts the queue at its remaining capacity; a Case it cuts still lands in
-the trace with its score (`excluded by gate 'hopper'`) — the gate the trace
-observes, never a limit on the read (ADR-0021). `rank` in `selection_trace`
-now records **queue position**, so a replacement can rank above a Case that
-scored higher than it. A replacement past capacity is cut like any other
-Case, but rarely: the oldest voids' replacements lead the queue and so survive
-first, and only a shortfall smaller than the number of replacements themselves
-reaches one at all, cutting the *youngest* voids' first. The run's printed
-`voids: ... replaced, ... lapsed` counts from the landed pool, so a
-replacement that *was* matched but didn't survive the cut is indistinguishable
-there from one that never matched at all — both read as "not replaced" in the
-summary, even though only the latter is a lapse in ADR-0021's sense (no
-candidate at all). The existing `Sort("priority_score", ascending=False)` is
-unchanged; queue order sits downstream of it.
+**Queue order is consumed, by the Hopper.** This is the ADR's other change —
+void-replacement rung first, then oldest by related date, as the single order
+choosing every Case — reduced the same way the ladder is: `select_complaints`
+puts this run's replacements first (oldest void first), with priority-desc
+standing in for "oldest by related date" while `related_date` stays dormant
+(not a second sort over the whole pool: with a ladder, rung is a relation
+between one void and one candidate, not a column every row can be ranked by).
+The Hopper cap then cuts at that queue's remaining capacity; a Case it cuts
+still lands in the trace with its score — the gate the trace observes, never
+a limit on the read (ADR-0021). `rank` in `selection_trace` now records
+**queue position**, so a replacement can rank above a Case that scored higher
+than it. A replacement past capacity is cut like any other Case, but rarely:
+the oldest voids' replacements lead the queue and so survive first, and only
+a shortfall smaller than the number of replacements themselves reaches one at
+all, cutting the *youngest* voids' first.
 
 Voids are matched by **title**, which `readers.sharepoint_cases` hands back as
 the sync feed's own Case title — joined here as the Complaint Selection
 `case_ref`. A Case Reference is unique only *within* a Case Type, which is
 sound here only because Complaints A/B/C share one id space by construction;
-a void whose title matches nothing in *this* pool (another Case Type entirely,
-or a Case never selected) is dropped rather than guessed at — CONTEXT.md's "a
-void with no candidate lapses, never carries forward" reading applies equally
-to a void this pool never had a stake in.
+a void whose title matches nothing in *this run's candidates* (another Case
+Type entirely, or a Case this run does not offer) is dropped rather than
+guessed at — CONTEXT.md's "a void with no candidate lapses, never carries
+forward" reading applies equally to a void this pool never had a stake in.
+
+### Migrating — 0002 must run before the next deploy
+
+`migrations/selection_output/complaint_selection/0002_add_details_to_selection_pool.sql`
+adds the `details` column (`0001` is merged and immutable; a shape change is
+always a new numbered file, never an edit to a checked-in one). `python -m
+cli migrate` must be run against a base directory before the next
+`complaint_selection` run there: an unmigrated `selection_pool` table
+**errors** on the write rather than degrading — nothing wires `migrate
+--check` into `run`/`orchestrate` by design (see the *Commands* section of
+`CLAUDE.md`), so this is an operator step, not something the pipeline
+verifies for itself.
