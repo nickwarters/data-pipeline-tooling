@@ -1356,8 +1356,45 @@ recent successful attempt, `RunRegistry.latest_success(...)` accepts either a
 summary; task addresses read from successful non-`run` step records. Date
 filters are based on the record `timestamp` emitted by `RunLog`.
 
+### Eager steps — the default authoring model
+`read` / `transform` / `validate` / `write` (plus `coerce`, `enforce`,
+`quarantine` and `step`) each do their work **when called** and return an
+ordinary `Dataset`, so a pipeline is a plain Python function:
+
+```python
+def run(context):
+    med = medallion(StoreRegistry(context.base_dir), "cases")
+    data = read(CsvReader(path))                     # breakpoint here; data is real
+    data = coerce(CaseRow, data)                     # step over; watch it change
+    validate(RowCountValidator(minimum=1), data)
+    write(med.silver.writer("cases", strategy), data)
+```
+
+That is the point: the deferred builder below executes from the leaves backwards
+*after* the graph is wired, so a breakpoint on an author's own line shows a
+`TransformNode` rather than their rows. These steps run in written order, so a
+debugger tells the truth
+([ADR-0027](adr/0027-eager-steps-are-the-default-authoring-model.md)).
+
+Nothing observable is traded away. Each step emits exactly the run-log record the
+equivalent node emits — one per step, with timing, row counts either side, warn
+hits, data locations and whether it committed — against the ambient `RunContext`
+the runner establishes, so replay, `RunRegistry`, freshness and `cli status` are
+unchanged. `write` and `quarantine` skip their commit under a dry-run context.
+Step names are derived (`read`/`write` take the verb; `transform`/`validate` take
+the component's name, repeats suffixed `-2`) and `name=` overrides. With **no**
+ambient context the steps do their work and record nothing, so `read(...)` can be
+called in a scratch file with no ceremony.
+
+`enforce(schema, data, reject_writer=...)` is the coerce → quarantine → validate
+sequence in the order that makes it correct, each part still recording its own
+step. `transform` and `validate` remain primitives: a validation need not follow
+a coercion.
+
 ### `Pipeline` — the deferred DAG builder
-A `Pipeline` describes a feed's path and runs **nothing** until `.run()`:
+Kept for graphs that genuinely fan in, and for pipelines not yet converted to
+the eager steps above. A `Pipeline` describes a feed's path and runs **nothing**
+until `.run()`:
 
 ```python
 p = Pipeline("cases")

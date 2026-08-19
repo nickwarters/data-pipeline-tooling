@@ -24,10 +24,10 @@ of the suite, mirroring the source layout) — wired together and ready to run:
 pipelines/orders/
   __init__.py
   schema.py            # @dataclass OrdersRow — the column/dtype contract
-  pipeline.py          # raw_/silver_/gold_builder compose each hop; run()/main wire the real ones
+  pipeline.py          # raw_/silver_/gold_hop, one per hop; run()/main wire the real ones
   sample_data/orders.csv
 tests/pipelines/
-  test_orders.py       # drives raw_builder() with sample rows + a recording writer
+  test_orders.py       # drives raw_hop() with sample rows + a recording writer
 migrations/orders/
   raw/0001_create_initial_tables.sql         # the feed's baseline DDL, one per
   silver/0001_create_initial_tables.sql      # database it writes — including
@@ -107,47 +107,51 @@ schema says what a row means, `SELECT_RAW_COLUMNS` says what silver keeps, and
 the migration says what the table is.
 
 `pipeline.py` follows the framework's canonical pipeline contract: it exposes a
-`run(context: RunContext, *, describe: bool = False) -> Dataset` callable (and an
+`run(context: RunContext) -> Dataset` callable (and an
 `UPSTREAMS` tuple of freshness requirements — empty for a source feed). The
 framework addresses the pipeline by its path — `python -m cli run
 pipelines/orders` imports `pipelines.orders.pipeline` and executes
 `run(context)`. Each medallion hop is factored into its own
-`*_builder(reader, writer, run_log=None) -> Pipeline` returning the composed
-(not-yet-run) pipeline — the *one* definition of what that hop does:
+`*_hop(reader, writer) -> Dataset` — the *one* definition of what that hop does:
 
-- **`raw_builder`** gates the source with a `ColumnValidator` and lands a
+- **`raw_hop`** gates the source with a `ColumnValidator` and lands a
   faithful copy.
-- **`silver_builder`** renames source columns to the schema's vocabulary
-  (`RENAME`), casts each declared column to its declared type
-  (`SchemaCoercion`), partitions bad rows into a quarantine dataset
-  (`SchemaValueRulePartitioner`), and validates the declared schema
-  (`SchemaValidator`).
-- **`gold_builder`** is a passthrough to start — reads silver, writes gold — with
+- **`silver_hop`** narrows the source columns (`SELECT_RAW_COLUMNS`), renames
+  them to the schema's vocabulary (`RENAME`), then `enforce`s the declared
+  schema — casting each declared column to its declared type, partitioning bad
+  rows into quarantine, and validating what remains, in that order.
+- **`gold_hop`** is a passthrough to start — reads silver, writes gold — with
   a `TODO` to build the assembly, because *what* gold means is per-feed. For a
   worked example of a real one, see
   `pipelines/sharepoint_cases/gold.py`: a current-state reduce with a declared
   grain, plus six aggregates, all refreshed whole on every run.
 
-### Each hop is wired where you can see it
+### Each hop runs where you can see it
 
-Every builder wires its own hop inline. There is no shared recipe to look
-through, and nothing to subclass — a generated `raw_builder` is the whole hop:
+The hops are written with the **eager steps** ([ADR-0027](adr/0027-eager-steps-are-the-default-authoring-model.md)):
+every line does its work when it is reached and returns the rows themselves. Put
+a breakpoint on one, step over it, and the variable holds the actual data at that
+point in the feed. There is no shared recipe to look through and nothing to
+subclass — a generated `raw_hop` is the whole hop:
 
 ```python
-def raw_builder(reader, writer, run_log=None):
-    p = Pipeline(f"{FEED_NAME}:raw", run_log=run_log)
-    node = p.read(reader, name="read")
+def raw_hop(reader, writer):
+    data = read(reader)
     expected = [f.name for f in fields(OrdersRow)]
-    node = p.validate(ColumnValidator(expected), node, name="columns")
-    p.write(writer, node, name="write")
-    return p
+    validate(ColumnValidator(expected), data)
+    return write(writer, data)
 ```
+
+Each step still emits exactly one run-log record — its timing, the row counts
+either side, whether it committed — so the run registry, freshness and
+`cli status` see no difference between a feed written this way and one written
+with the deferred `Pipeline` builder.
 
 To change what the hop does, edit those lines. The cost of that is real and
 accepted: a policy change to "the standard raw hop" is now a change in each
 feed, not one. It buys a feed a junior developer can read top to bottom.
 
-A builder takes the hop's **ports** — a `Reader` and a `Writer` — rather than a
+A hop takes its **ports** — a `Reader` and a `Writer` — rather than a
 medallion profile, for two reasons: the *source* end of a raw hop isn't a
 medallion layer at all, and injecting the ports is what lets the generated test
 drive the real hop in memory against a `RecordingWriter`. `run()` wires the real
@@ -156,16 +160,18 @@ medallion layer Writers.
 `run()` wires the real `CsvReader` and the subject's layer Writers (deriving the
 raw/silver `AccumulateByRun` strategy from the `RunContext`, so re-drives under
 the same logical run id replace rather than duplicate), then runs the three hops
-in order and returns the gold `Dataset`. Pass `describe=True` (CLI `--describe`)
-to print each pipeline's plan before it runs. `main()` is the thin entry for
-running the module directly — it parses args with `argparse` (an optional
-`base_dir`, `--env`, and `--describe`), builds a default `RunContext`, then
-catches the
+in order and returns the gold `Dataset`. Use `cli run --dry-run` to preview a
+run: every step reports its real columns, dtypes and a bounded row sample, and
+no write commits. `main()` is the thin entry for running the module directly —
+which is what a PyCharm run configuration does. It parses args with `argparse`
+(`--base-dir`, `--env`), then hands the handler to the **same** `run_pipeline`
+the operator CLI uses, so a run started here records under the same identity as
+one started with `cli run`. It catches the
 `PipelineError` family and prints `framework.core.format_failure(exc)` to
 `stderr` with a non-zero exit, so an expected fail-fast abort (a failed check)
 reads as a clear message rather than an unhandled traceback (a genuine bug is not
 a `PipelineError` and keeps its trace). The generated `test_orders.py` calls
-`raw_builder` directly with sample rows (`given_rows`) and a `RecordingWriter`, so
+`raw_hop` directly with sample rows (`given_rows`) and a `RecordingWriter`, so
 the first test exercises the real hop rather than a hand-rebuilt copy of it — a
 second test runs the full `run(context)` filesystem path against the bundled
 sample and asserts it refines through to gold.
@@ -208,7 +214,7 @@ Then **customise**: edit `schema.py`'s fields to your source columns (and add
 `Annotated` value rules as needed — see
 [schema-enforcement.md](schema-enforcement.md)), replace the sample CSV, swap
 `CsvReader` for another Reader (next section) if the source isn't a CSV, fill in
-the `silver_builder` `RENAME` and build out the `gold_builder`
+the `silver_hop` `RENAME` and build out the `gold_hop`
 (`def assemble_gold`). grow `test_<feed>.py` to assert the rows and processors you add. The
 silver hop already enforces the schema (`SchemaCoercion` + `SchemaValidator` — see
 [`schema-enforcement.md`](schema-enforcement.md)); the gold hop is a passthrough
@@ -245,7 +251,7 @@ When a header name **isn't already a clean identifier** (spaces, punctuation,
 capitals — e.g. `Case Number`), it can't be a dataclass field, so the scaffold
 emits the verbatim source names as a `RAW_FEED_COLUMNS` constant and gates the raw
 hop's `ColumnValidator` on **those** rather than the schema's fields. It also fills
-in the `silver_builder`'s `RENAME` map from each source name to its canonical
+in the `silver_hop`'s `RENAME` map from each source name to its canonical
 field, so the generated feed already does the raw-stays-faithful /
 silver-canonicalises split end-to-end: raw validates and keeps the source's own
 names; silver renames them to the schema's identifier-named shape before coercing
@@ -332,7 +338,7 @@ write `Case Number: str`.
 (The `--from-feed-file` scaffold above handles this split for you when it sees
 non-identifier headers: it gates the raw validator on a `RAW_FEED_COLUMNS`
 constant of the verbatim source names, declares the canonical schema, and fills
-in the `silver_builder`'s `RENAME` map so the generated feed performs the silver
+in the `silver_hop`'s `RENAME` map so the generated feed performs the silver
 step described here. The rest of this section is the manual form of what it
 generates — useful when you're writing or adjusting the silver hop by hand.)
 
@@ -348,7 +354,7 @@ shape-hardening (`schema-enforcement.md`). The step order is:
 2. **`SchemaCoercion`** — cast each declared column to its declared type.
 3. **`SchemaValidator`** (as a post-validator) — check at the silver boundary.
 
-Add a `Rename(RENAME)` node to `silver_builder`, *before* `SchemaCoercion` and
+Add a `transform(Rename(RENAME), data)` step to `silver_hop`, *before* `enforce` and
 the validator, so the renamed columns reach the schema check under their
 canonical names — which is what a feed scaffolded with `--from-feed-file` from a
 spaced header already renders:
@@ -843,7 +849,7 @@ vouching for actually landed.
 The two halves above wired into a real feed: **every** Case list declared in
 `CASE_LISTS`, each polled by its own `Modified` window into the same append-only
 raw and silver tables, then reduced to gold once and checkpointed per list. It
-follows the ordinary scaffold shape — a `*_builder` per hop, driven by
+follows the ordinary scaffold shape — one function per hop, driven by
 `run(context)` — and the first two hops are deliberately thin. Landing the list's rows as immutable
 versions is one job and interpreting them is another: raw and silver do no
 derivation and no parsing, and everything that reads meaning into a Case happens

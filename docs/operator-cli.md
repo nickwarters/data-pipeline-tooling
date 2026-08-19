@@ -211,7 +211,7 @@ from framework.run import RunContext
 
 def run(context: RunContext):
     source_file = context.params["source_file"]
-    return raw_builder(CsvReader(source_file), writer).run(context=context)
+    return raw_hop(CsvReader(source_file), writer)
 ```
 
 Run parameters are recorded on the run summary in the JSONL run log for

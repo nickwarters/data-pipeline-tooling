@@ -19,7 +19,9 @@ import pytest
 from cli import scaffold
 from framework.core import RUN_PROVENANCE_COLUMN
 from framework.run import RunContext
+from framework.run.run_context import active_context
 from tests.framework_testing import (
+    RecordingRunLog,
     RecordingWriter,
     given_rows,
     read_rows,
@@ -93,38 +95,42 @@ def test_the_rendered_hops_are_wired_inline(tmp_path):
         "utf-8"
     )
 
+    rows = [{"record_id": "1", "label": "a", "amount": 1}]
     sys.path.insert(0, str(repo / "pipelines"))
     try:
         pipeline = importlib.import_module("widgets.pipeline")
         importlib.reload(pipeline)
-        reader, writer, rejects = given_rows([]), RecordingWriter(), RecordingWriter()
-        raw_plan = pipeline.raw_builder(reader, writer).describe().splitlines()
-        silver_plan = (
-            pipeline.silver_builder(reader, writer, rejects).describe().splitlines()
-        )
+        writer, rejects = RecordingWriter(), RecordingWriter()
+
+        # The hops are eager, so what a hop *did* is what it recorded. Driving
+        # it is the equivalent of reading a deferred pipeline's plan — and it
+        # proves the steps actually ran rather than merely being wired.
+        raw_log = RecordingRunLog()
+        with active_context(RunContext(pipeline="widgets", run_log=raw_log)):
+            pipeline.raw_hop(given_rows(rows), writer)
+        raw_steps = [record["step"] for record in raw_log.records]
+
+        silver_log = RecordingRunLog()
+        with active_context(RunContext(pipeline="widgets", run_log=silver_log)):
+            pipeline.silver_hop(given_rows(rows), writer, rejects)
+        silver_steps = [record["step"] for record in silver_log.records]
     finally:
         sys.path.remove(str(repo / "pipelines"))
         for name in list(sys.modules):
             if name == "widgets" or name.startswith("widgets."):
                 del sys.modules[name]
 
-    assert raw_plan == [
-        "Pipeline: widgets:raw",
-        "  [Read] read",
-        "  [Validate] columns (depends on: read)",
-        "  [Write] write (depends on: columns)",
-    ]
-    # Scaffolded without a feed file, so RENAME is empty and no rename is planned.
-    # The select is planned either way: silver keeps the declared columns and
-    # drops anything else raw carried, which is what its baseline declares.
-    assert silver_plan == [
-        "Pipeline: widgets:silver",
-        "  [Read] read",
-        "  [Transform] select (depends on: read)",
-        "  [Transform] coerce (depends on: select)",
-        "  [Quarantine] quarantine (depends on: coerce)",
-        "  [Validate] post-validate (depends on: quarantine)",
-        "  [Write] write (depends on: post-validate)",
+    assert raw_steps == ["read", "column_validator", "write"]
+    # Scaffolded without a feed file, so RENAME is empty and no rename runs.
+    # The select runs either way: silver keeps the declared columns and drops
+    # anything else raw carried, which is what its baseline declares.
+    assert silver_steps == [
+        "read",
+        "select_columns",
+        "coerce",
+        "quarantine",
+        "schema_validator",
+        "write",
     ]
 
 
@@ -406,8 +412,8 @@ def test_feed_file_seeds_structural_rejection_rows_missing_a_column(tmp_path):
     assert "invalid_col" not in test_text  # the template sentinel is gone
 
     for name in (
-        "test_raw_builder_gates_source_columns",
-        "test_silver_builder_aborts_on_structural_breaches",
+        "test_raw_hop_gates_source_columns",
+        "test_silver_hop_aborts_on_structural_breaches",
     ):
         body = _function_body(test_text, name)
         assert '"Case Number": "C1"' in body  # seeded with the real feed columns
@@ -415,7 +421,7 @@ def test_feed_file_seeds_structural_rejection_rows_missing_a_column(tmp_path):
 
     # A non-rejection block is seeded with the full rows, dropped column included.
     quarantine = _function_body(
-        test_text, "test_silver_builder_quarantines_value_rule_breaches"
+        test_text, "test_silver_hop_quarantines_value_rule_breaches"
     )
     assert '"Case Number": "C1", "Adviser Name": "Smith"' in quarantine
 
