@@ -216,13 +216,14 @@ def unallocated_case_count(
     Never ``target - completed - voided`` (ADR-0021): a Case assigned but not
     yet finished has left the Hopper without reaching a terminal state, so that
     arithmetic overstates what is actually sitting there. Counted directly
-    instead: In-progress, with no assigned reviewer, and one of *this* pool's
-    own selections (a Case this run doesn't own is not its capacity to count).
-
-    Gold persists a genuinely null reviewer for an unassigned Case -- the
-    ``"(unassigned)"`` string is a *reporting* fill ``case_counts_current``
-    applies, not what lands here -- but a Person column can round-trip as
-    either null or an empty/whitespace string, so both are checked.
+    instead, by one status equality (CONTEXT.md's **Hopper** entry, post-#768):
+    ``To-allocate`` is the status the platform creates a Case in and the one
+    its allocation claim replaces, so unallocated is a predicate on that one
+    indexed column -- never a scan for a blank Assigned Reviewer, which #768
+    removed as a signal (a claim writes ``In-progress`` and the reviewer in one
+    PATCH, so an unclaimed Case is never seen "In-progress" with nothing
+    assigned). Counted only among *this* pool's own selections -- a Case this
+    run doesn't own is not its capacity to count.
 
     Same soft-dependency shape as :func:`voided_cases`: an unreadable sync
     store, or a pool that has not landed yet, counts as 0 unallocated -- a
@@ -236,13 +237,11 @@ def unallocated_case_count(
     except sqlite3.OperationalError:
         return 0
 
-    in_progress = current[current["status"] == "In-progress"]
-    reviewer = in_progress["assigned_reviewer_name"]
-    unassigned = in_progress[reviewer.isna() | (reviewer.astype(str).str.strip() == "")]
-    has_title = unassigned["title"].notna() & (
-        unassigned["title"].astype(str).str.strip() != ""
+    unallocated = current[current["status"] == "To-allocate"]
+    has_title = unallocated["title"].notna() & (
+        unallocated["title"].astype(str).str.strip() != ""
     )
-    titles = set(unassigned.loc[has_title, "title"].astype(str))
+    titles = set(unallocated.loc[has_title, "title"].astype(str))
 
     try:
         pool = pool_reader.read().to_pandas()

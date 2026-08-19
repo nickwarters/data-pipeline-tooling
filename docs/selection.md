@@ -364,9 +364,13 @@ does not exist yet — expected until ingest history exists.
 (three times the group's daily *assignment* rate) — monitoring real throughput
 and adjusting the constant from it is the recorded follow-up, not yet done.
 Each run tops the cap up from a **direct count** of the group's unallocated
-Cases (`unallocated_case_count`): In-progress, with no assigned reviewer, and
-joined by title to the Cases *this pool has already selected* — never
-`target − completed − voided` (ADR-0021, CONTEXT.md's **Hopper** entry): a
+Cases (`unallocated_case_count`): Cases in `To-allocate` — the status the
+platform creates a Case in and the one its allocation claim replaces — joined
+by title to the Cases *this pool has already selected*. One status equality on
+the sync gold, per CONTEXT.md's **Hopper** entry: no scan for a blank assigned
+reviewer, which would reintroduce the by-elimination read the platform's
+`To-allocate` status (`platform_frontend/docs/adr/0051-to-allocate-is-the-status-a-case-starts-in.md`)
+exists to remove. Never `target − completed − voided` either (ADR-0021): a
 Case that is assigned but not yet finished has left the Hopper without
 reaching any terminal state, so that arithmetic overstates what is actually
 sitting there.
