@@ -61,6 +61,31 @@ test('orderCandidatesByAge sorts oldest first and uses one stable tie-break draw
   );
 });
 
+test('orderCandidatesByAge orders by relatedDate in preference to created', () => {
+  const rows = /** @type {any} */ ([
+    { id: 'newest-related', relatedDate: '2026-03-01', created: '2025-01-01' },
+    { id: 'oldest-related', relatedDate: '2026-01-01', created: '2026-12-01' },
+    { id: 'middle-related', relatedDate: '2026-02-01', created: '2024-01-01' },
+  ]);
+  assert.deepEqual(
+    orderCandidatesByAge(rows, () => 0).map((row) => row.id),
+    ['oldest-related', 'middle-related', 'newest-related']
+  );
+});
+
+test('orderCandidatesByAge falls back to created when a Case has no relatedDate', () => {
+  const rows = /** @type {any} */ ([
+    { id: 'dated', relatedDate: '2026-02-01', created: '2020-01-01' },
+    { id: 'null-related', relatedDate: null, created: '2026-01-01' },
+    { id: 'blank-related', relatedDate: '', created: '2026-03-01' },
+    { id: 'undated', created: null },
+  ]);
+  assert.deepEqual(
+    orderCandidatesByAge(rows, () => 0).map((row) => row.id),
+    ['undated', 'null-related', 'dated', 'blank-related']
+  );
+});
+
 test('orderCandidatesByAge accepts its production random source', () => {
   assert.deepEqual(
     orderCandidatesByAge(/** @type {any} */ ([{ id: 'only' }])).map(
