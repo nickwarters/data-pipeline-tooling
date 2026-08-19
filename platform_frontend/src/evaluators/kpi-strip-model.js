@@ -302,8 +302,17 @@ async function buildOwnerLane({ client, capabilities, allCaseSources, now }) {
     const source = allCaseSources.find((s) => s.slug === caseType);
     return source ? [source] : [];
   });
+  // Both statuses in one read: the Owner's two tiles ask about the same Cases
+  // at different points of their life — the ones nobody has claimed, and the
+  // ones a Reviewer is running out of time on — and splitting them into two
+  // fan-outs would double the requests to answer one strip. Only the review
+  // clock tells them apart, and it only runs in `In-progress`, so an
+  // unclaimed Case can never reach the at-risk tile.
   const pool = await listCasesAcrossSources(client, ownedSources, {
-    status: CASE_STATUS.IN_PROGRESS,
+    anyOf: [
+      { status: CASE_STATUS.TO_ALLOCATE },
+      { status: CASE_STATUS.IN_PROGRESS },
+    ],
   });
 
   // The at-risk window is per Case Type, so every test of "about to breach"
@@ -317,7 +326,7 @@ async function buildOwnerLane({ client, capabilities, allCaseSources, now }) {
     isBreachingSoon(caseRow, now, windowFor(caseRow));
 
   const atRisk = pool.filter((c) => isOverdue(c, now) || breachingSoon(c));
-  const unassigned = pool.filter((c) => !c.assignedReviewer);
+  const unallocated = pool.filter((c) => c.status === CASE_STATUS.TO_ALLOCATE);
 
   // `buildTile` only renders sub-reasons when the matched Cases span one Case
   // Type, so this label can name that Type's window.
@@ -352,7 +361,7 @@ async function buildOwnerLane({ client, capabilities, allCaseSources, now }) {
         key: 'unassigned',
         label: 'Unassigned',
         tone: 'unassigned',
-        matched: unassigned,
+        matched: unallocated,
       },
     ],
   });

@@ -492,16 +492,17 @@ export const cases = [
     etag: 'etag-cm5-v1',
   },
   {
-    // The allocation candidate: unallocated (no Assigned Reviewer, no
-    // Responsible Party) and unanswered, so the "Take a Case" flow has
-    // something to offer. Caveat for the demo: `user-reviewer` — the default
+    // The allocation candidate: sitting in `To-allocate` with no Assigned
+    // Reviewer, no Responsible Party and no Answers, so the "Take a Case" flow
+    // has something to offer and the claim can be seen to move it to
+    // `In-progress`. Caveat for the demo: `user-reviewer` — the default
     // persona — already holds more non-held In-progress Cases than
     // `maxInProgressCases: 3`, so they read as at capacity; switch persona to
     // see the Case actually taken.
     id: 'complaints-case-6',
     caseType: 'complaints',
     title: 'Complaint #6',
-    status: 'In-progress',
+    status: 'To-allocate',
     assignedReviewer: '',
     responsibleParty: '',
     answers: {},

@@ -393,7 +393,12 @@ test('loadKpiModel: owner lane splits At risk into sub-reasons and defaults it e
     caseRow({ id: 'od1', caseType: 'lending', dueDate: PAST }),
     caseRow({ id: 'od2', caseType: 'lending', dueDate: PAST }),
     caseRow({ id: 'br1', caseType: 'lending', dueDate: SOON }),
-    caseRow({ id: 'un1', caseType: 'lending', assignedReviewer: '' }),
+    caseRow({
+      id: 'un1',
+      caseType: 'lending',
+      status: 'To-allocate',
+      assignedReviewer: '',
+    }),
     // Completed rows are ignored by the owner pool
     caseRow({
       id: 'done',
@@ -488,7 +493,7 @@ test('loadKpiModel: owner with multiple Case Types splits At risk by Case Type',
   assert.equal(atRisk.breakdown.rows.length, 2);
 });
 
-test('loadKpiModel: owner lane fetches only In-progress cases per owned Case Type source list, server-side', async () => {
+test('loadKpiModel: owner lane fetches the unclaimed and the under-review Cases per owned Case Type source list, server-side', async () => {
   /** @type {any[]} */
   const calls = [];
   await loadKpiModel({
@@ -505,9 +510,12 @@ test('loadKpiModel: owner lane fetches only In-progress cases per owned Case Typ
     allCaseSources: [source('lending'), source('mortgages')],
     now: NOW,
   });
+  const ownerFilter = {
+    anyOf: [{ status: 'To-allocate' }, { status: 'In-progress' }],
+  };
   assert.deepEqual(calls, [
-    [{ status: 'In-progress' }, { listName: 'Cases-lending' }],
-    [{ status: 'In-progress' }, { listName: 'Cases-mortgages' }],
+    [ownerFilter, { listName: 'Cases-lending' }],
+    [ownerFilter, { listName: 'Cases-mortgages' }],
   ]);
 });
 

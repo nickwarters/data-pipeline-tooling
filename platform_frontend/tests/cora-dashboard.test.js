@@ -52,15 +52,15 @@ function context(permissions) {
 
 /**
  * A claimable Case as the allocation claim's own re-read returns it: still
- * unassigned, still under review, and carrying the ETag a single-item read
- * supplies. Only that read produces one, so this is what every allocation stub
- * must answer with for the claim to get as far as its PATCH.
+ * sitting in the pot, still unassigned, and carrying the ETag a single-item
+ * read supplies. Only that read produces one, so this is what every allocation
+ * stub must answer with for the claim to get as far as its PATCH.
  *
  * @param {string} id
  * @param {string} etag
  */
 function claimableRow(id, etag) {
-  return { id, assignedReviewer: '', status: CASE_STATUS.IN_PROGRESS, etag };
+  return { id, assignedReviewer: '', status: CASE_STATUS.TO_ALLOCATE, etag };
 }
 
 /**
@@ -618,6 +618,7 @@ test('dashboard allocation claims a candidate and refreshes reviewer rows throug
     [
       'oldest',
       {
+        status: CASE_STATUS.IN_PROGRESS,
         assignedReviewer: 'u1',
         assignedReviewerManager: null,
         dueDate: '2026-08-21',
@@ -642,7 +643,7 @@ test('dashboard allocation claims with the etag from a re-read, not the empty et
   const listedRow = {
     id: 'oldest',
     assignedReviewer: '',
-    status: CASE_STATUS.IN_PROGRESS,
+    status: CASE_STATUS.TO_ALLOCATE,
     etag: '',
   };
   /** @type {any[]} */
@@ -1152,6 +1153,7 @@ test('dashboard allocation preserves the manager when a stale candidate returns 
       [
         'stale',
         {
+          status: CASE_STATUS.IN_PROGRESS,
           assignedReviewer: 'u1',
           assignedReviewerManager: 'manager-1',
           dueDate: '2026-08-21',
@@ -1161,6 +1163,7 @@ test('dashboard allocation preserves the manager when a stale candidate returns 
       [
         'available',
         {
+          status: CASE_STATUS.IN_PROGRESS,
           assignedReviewer: 'u1',
           assignedReviewerManager: 'manager-1',
           dueDate: '2026-08-21',
@@ -1253,6 +1256,7 @@ test('dashboard allocation retries a non-412 manager write once with null, keeps
       [
         'first',
         {
+          status: CASE_STATUS.IN_PROGRESS,
           assignedReviewer: 'u1',
           assignedReviewerManager: 'manager-1',
           dueDate: '2026-08-20',
@@ -1261,6 +1265,7 @@ test('dashboard allocation retries a non-412 manager write once with null, keeps
       [
         'first',
         {
+          status: CASE_STATUS.IN_PROGRESS,
           assignedReviewer: 'u1',
           assignedReviewerManager: null,
           dueDate: '2026-08-20',
@@ -1269,6 +1274,7 @@ test('dashboard allocation retries a non-412 manager write once with null, keeps
       [
         'second',
         {
+          status: CASE_STATUS.IN_PROGRESS,
           assignedReviewer: 'u1',
           assignedReviewerManager: null,
           dueDate: '2026-08-20',
@@ -1362,6 +1368,7 @@ for (const [label, resolveManagers] of managerLookupCases) {
     });
     assert.equal(managerLookups, 1);
     assert.deepEqual(patches[0][1], {
+      status: CASE_STATUS.IN_PROGRESS,
       assignedReviewer: 'u1',
       assignedReviewerManager: null,
       dueDate: '2026-08-21',
@@ -1377,6 +1384,7 @@ test('dashboard allocation writes null manager when manager lookup rejects', asy
   });
   assert.equal(managerLookups, 1);
   assert.deepEqual(patches[0][1], {
+    status: CASE_STATUS.IN_PROGRESS,
     assignedReviewer: 'u1',
     assignedReviewerManager: null,
     dueDate: '2026-08-21',

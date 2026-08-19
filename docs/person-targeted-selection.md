@@ -41,7 +41,8 @@ CheckCount = {
     "case_type":   str,
     "month":       tuple[int, int],   # (year, month) it became Reportable
     "variations":  str,               # "1" | "2" | "3" | "1+2" | "1+3"
-    "status":      str,               # In-progress | Actions In Progress | Completed | Void
+    "status":      str,               # To-allocate | In-progress | Actions In Progress
+                                      #   | Completed | Void
     "check_count": int,
 }
 

@@ -128,16 +128,16 @@ test('the sent-to-adviser Case names a Responsible Party Manager persona', () =>
 });
 
 test('a mock complaints Case is unallocated, so the allocation flow has a candidate', () => {
-  // "Take a Case" reads the unallocated pool: with every fixture Case already
-  // assigned, the allocation panel demos as permanently empty.
+  // "Take a Case" reads the pot by status: with no fixture Case sitting in
+  // To-allocate, the allocation panel demos as permanently empty.
   const row = mockCases.find(
     (c) =>
       c.caseType === 'complaints' &&
+      c.status === 'To-allocate' &&
       c.assignedReviewer === '' &&
-      c.status === 'In-progress' &&
       Object.keys(c.answers).length === 0
   );
-  assert.ok(row, 'an unallocated, unanswered In-progress Complaints Case');
+  assert.ok(row, 'an unallocated, unanswered To-allocate Complaints Case');
 });
 
 test('the sent-to-adviser Case names a Reviewer Manager persona', () => {

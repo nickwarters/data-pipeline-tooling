@@ -9,7 +9,7 @@ installDom();
 const {
   Allocation,
   getAllocationAvailability,
-  getUnassignedCases,
+  getUnallocatedCases,
   orderCandidatesByAge,
 } = await import('../src/components/sections/cora-allocation.js');
 
@@ -105,10 +105,10 @@ test('orderCandidatesByAge accepts its production random source', () => {
   );
 });
 
-test('getUnassignedCases reads only configured sources, filters assigned rows, and carries listName', async () => {
+test('the candidate read asks each configured source for To-allocate Cases and carries the listName it read them from', async () => {
   /** @type {any[]} */
   const calls = [];
-  const rows = await getUnassignedCases({
+  const rows = await getUnallocatedCases({
     client: /** @type {any} */ ({
       async listCases(/** @type {any} */ filter, /** @type {any} */ options) {
         calls.push([filter, options]);
@@ -117,20 +117,16 @@ test('getUnassignedCases reads only configured sources, filters assigned rows, a
               {
                 id: 'a',
                 created: '2026-01-01',
+                status: 'To-allocate',
                 assignedReviewer: '',
                 etag: '"1"',
-              },
-              {
-                id: 'taken',
-                created: '2025-01-01',
-                assignedReviewer: 'u2',
-                etag: '"2"',
               },
             ]
           : [
               {
                 id: 'b',
                 created: '2026-02-01',
+                status: 'To-allocate',
                 assignedReviewer: '',
                 etag: '"3"',
               },
@@ -151,14 +147,51 @@ test('getUnassignedCases reads only configured sources, filters assigned rows, a
     ]
   );
   assert.deepEqual(calls, [
-    [{ status: 'In-progress' }, { listName: 'Cases-A' }],
-    [{ status: 'In-progress' }, { listName: 'Cases-B' }],
+    [{ status: 'To-allocate' }, { listName: 'Cases-A' }],
+    [{ status: 'To-allocate' }, { listName: 'Cases-B' }],
   ]);
 });
 
-test('getUnassignedCases returns no candidates without a client', async () => {
+test('a Case a Reviewer is already working is never offered, because the pot read never asks for one', async () => {
+  /** @type {any[]} */
+  const filters = [];
+  const rows = await getUnallocatedCases({
+    client: /** @type {any} */ ({
+      async listCases(/** @type {any} */ filter) {
+        filters.push(filter);
+        // Answer the question actually asked, as the list would: a status
+        // filter returns only rows in that status.
+        return [
+          {
+            id: 'unclaimed',
+            created: '2026-01-01',
+            status: 'To-allocate',
+            assignedReviewer: '',
+            etag: '"1"',
+          },
+          {
+            id: 'being-reviewed',
+            created: '2025-01-01',
+            status: 'In-progress',
+            assignedReviewer: 'u2',
+            etag: '"2"',
+          },
+        ].filter((row) => row.status === filter.status);
+      },
+    }),
+    allocationSources: [{ slug: 'a', listName: 'Cases-A' }],
+    random: () => 0,
+  });
   assert.deepEqual(
-    await getUnassignedCases({ client: null, allocationSources: [] }),
+    rows.map((row) => row.id),
+    ['unclaimed']
+  );
+  assert.deepEqual(filters, [{ status: 'To-allocate' }]);
+});
+
+test('the candidate read returns no candidates without a client', async () => {
+  assert.deepEqual(
+    await getUnallocatedCases({ client: null, allocationSources: [] }),
     []
   );
 });
@@ -180,6 +213,7 @@ test('getAllocationAvailability skips at-limit sources and counts only non-held 
           {
             id: 'available-b',
             created: '2026-01-01',
+            status: 'To-allocate',
             assignedReviewer: '',
             etag: '"1"',
           },
@@ -212,8 +246,10 @@ test('getAllocationAvailability skips at-limit sources and counts only non-held 
       { listName: 'Cases-B' },
     ],
   ]);
+  // The capacity count and the candidate read ask different questions: what
+  // this Reviewer is already carrying, and what is waiting for anyone.
   assert.deepEqual(reads, [
-    [{ status: 'In-progress' }, { listName: 'Cases-B' }],
+    [{ status: 'To-allocate' }, { listName: 'Cases-B' }],
   ]);
   assert.deepEqual(
     availability.candidates.map((candidate) => candidate.id),
