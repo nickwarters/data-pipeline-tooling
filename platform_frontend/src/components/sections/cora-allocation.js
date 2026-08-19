@@ -43,13 +43,29 @@ export function Allocation({ isEmpty, isAtCapacity, onRequestNextCase }) {
 }
 
 /**
- * Sorts allocation candidates ascending by `created` (matching the previous
- * string-comparator semantics: `created ?? ''`, so missing/null `created`
- * sorts first). Candidates whose `created` is EXACTLY equal are ordered by a
- * per-candidate draw from `random` — a fresh draw per candidate, taken once
- * up front, so the tie-break is stable within a single call and swappable in
- * tests by stubbing `random` (e.g. a queue of canned return values) to force
- * either tied candidate to win.
+ * The age a candidate is allocated by: its Case Type–specific `relatedDate`,
+ * falling back to `created` when the Case carries no related date. `RelatedDate`
+ * is optional on every Case list, so a Case Type that never populates it — or a
+ * single row that is missing one — keeps a real age and is neither handed out
+ * ahead of every dated Case nor starved behind them. Empty string counts as
+ * absent alongside `null`/`undefined`, because SharePoint reads a blank date
+ * back either way.
+ *
+ * @param {AllocationCandidate} candidate
+ * @returns {string}
+ */
+function allocationAge(candidate) {
+  return candidate.relatedDate || candidate.created || '';
+}
+
+/**
+ * Sorts allocation candidates ascending by `allocationAge` — oldest related
+ * date first — so an undated candidate sorts by when it was created and a
+ * candidate with neither sorts first. Candidates whose age is EXACTLY equal are
+ * ordered by a per-candidate draw from `random` — a fresh draw per candidate,
+ * taken once up front, so the tie-break is stable within a single call and
+ * swappable in tests by stubbing `random` (e.g. a queue of canned return
+ * values) to force either tied candidate to win.
  *
  * @param {AllocationCandidate[]} candidates
  * @param {() => number} [random]
@@ -59,8 +75,8 @@ export function orderCandidatesByAge(candidates, random = Math.random) {
   return candidates
     .map((c) => ({ c, tieBreak: random() }))
     .sort((a, b) => {
-      const av = a.c.created ?? '';
-      const bv = b.c.created ?? '';
+      const av = allocationAge(a.c);
+      const bv = allocationAge(b.c);
       if (av < bv) return -1;
       if (av > bv) return 1;
       return a.tieBreak - b.tieBreak;
