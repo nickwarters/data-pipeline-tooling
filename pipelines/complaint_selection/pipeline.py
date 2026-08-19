@@ -20,10 +20,12 @@ Address it by its location on disk::
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import os
+import sqlite3
 import sys
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from case_review.variation import variation_by_id
 from framework.core import Dataset, PipelineError, SchemaValidator, format_failure
@@ -48,10 +50,12 @@ from framework.transform import (
 from readers.complaints_a import ComplaintsACasesReader
 from readers.complaints_b import ComplaintsBCasesReader
 from readers.complaints_c import ComplaintsCCasesReader
+from readers.sharepoint_cases import CurrentCasesReader
 from tools.environments import known_environments, resolve_base_dir
+from tools.observability.timestamps import local_timezone, parse_timestamp
 from tools.store import StoreRegistry
 
-from .schema import VARIATIONS, SelectedComplaint, SelectionGroupMember
+from .schema import VARIATIONS, PendingVoid, SelectedComplaint, SelectionGroupMember
 
 PIPELINE_NAME = "complaint_selection"
 
@@ -66,6 +70,23 @@ PRIORITY_THRESHOLD = 50
 # The complaints export is weekly (weekly_complaints_export.sas), so a daily
 # schedule needs slack past one week to still find it fresh.
 INGEST_MAX_AGE_DAYS = 10
+
+# ADR-0021's void-replacement ladder: ordered match attempts, tried per void in
+# order until one has an unconsumed candidate. Each field must be a top-level
+# eligible-pool column -- this is the one place to change like-for-like
+# matching. `attribute_a` is a placeholder until a feed carries the real
+# cross-Case-Type attribute the ADR describes; today it is always None, so the
+# live rung is `("case_type",)`.
+MATCH_LADDER: tuple[tuple[str, ...], ...] = (
+    ("attribute_a", "case_type"),
+    ("attribute_a",),
+    ("case_type",),
+)
+
+# The fallback/tie-break ordering field -- "oldest first" among a rung's
+# candidates, and the whole rule once no rung matches. A top-level pool field,
+# None until a feed provides it.
+RELATED_DATE_COLUMN = "related_date"
 
 
 def amount_priority(row: Mapping[str, Any]) -> int:
@@ -125,7 +146,199 @@ def available_complaints(base_dir: str | os.PathLike[str]) -> Dataset:
         dataset = LatestPerKey(key="case_ref", by="load_date")(dataset)
         dataset = Stamp("case_type", member.case_type)(dataset)
         frames.append(dataset.to_pandas())
-    return Dataset.from_pandas(pd.concat(frames, ignore_index=True, sort=False))
+    frame = pd.concat(frames, ignore_index=True, sort=False)
+
+    # Every ladder field plus the tie-break must exist as a top-level column
+    # even before a feed provides it. `case_type` is already stamped above; the
+    # rest are None-filled today and need no change here once a member's
+    # silver grows one -- pd.concat(sort=False) already carries a real value
+    # through.
+    for column in {field for rung in MATCH_LADDER for field in rung} | {
+        RELATED_DATE_COLUMN
+    }:
+        if column not in frame.columns:
+            frame[column] = None
+
+    return Dataset.from_pandas(frame)
+
+
+def voided_cases(
+    base_dir: str | os.PathLike[str],
+) -> tuple[tuple[str, dt.datetime], ...]:
+    """Every currently-voided Case the sync feed shows, as ``(case_ref, voided_at)``.
+
+    A soft dependency, deliberately: Complaint Selection declares no
+    ``FreshnessRequirement`` on ``sharepoint_cases``, so a base dir where that
+    feed's gold is missing or unreadable sees no voids rather than failing.
+    """
+    try:
+        current = CurrentCasesReader(base_dir).read().to_pandas()
+    except sqlite3.OperationalError:
+        return ()
+
+    void = current[current["status"] == "Void"]
+    has_title = void["title"].notna() & (void["title"].astype(str).str.strip() != "")
+    has_voided_at = void["voided_at"].notna()
+    void = void[has_title & has_voided_at]
+
+    return tuple(
+        (str(row["title"]), _local_instant(row["voided_at"]))
+        for row in void.to_dict("records")
+    )
+
+
+def _local_instant(value: str) -> dt.datetime:
+    """Parse a ``voided_at`` stamp to an aware instant.
+
+    Sync's ``voided_at`` round-trips through SQLite as text that may carry an
+    offset or arrive naive; a naive stamp is local wall-clock time and is
+    attached to the local zone the same way
+    ``tools.observability.timestamps.start_of_local_day`` does, rather than
+    string-compared against the timezone-aware run-history instant it is
+    measured against -- a naive-vs-offset string compare silently drops a
+    same-day void (the separator character alone sorts a naive stamp before an
+    offset one, whatever the actual time).
+    """
+    parsed = dt.datetime.fromisoformat(str(value))
+    if parsed.tzinfo is not None:
+        return parsed
+    zone = local_timezone()
+    return parsed.replace(tzinfo=zone) if zone is not None else parsed.astimezone()
+
+
+def previous_run_instant(context: RunContext) -> dt.datetime | None:
+    """The instant this pipeline last succeeded, or ``None`` with no history.
+
+    ``None`` both when there is truly no run registry (a plain ``RunContext``,
+    how a bare ``run()`` call and most tests reach this) and when the registry
+    has never recorded a success -- either way there is no "since" to measure
+    voids against.
+    """
+    if context.run_registry is None:
+        return None
+    record = context.run_registry.latest_success(PIPELINE_NAME)
+    if record is None:
+        return None
+    return parse_timestamp(record["timestamp"])
+
+
+def pending_voids(
+    voided: Sequence[tuple[str, dt.datetime]],
+    since: dt.datetime | None,
+    pool_reader: Reader,
+) -> tuple[PendingVoid, ...]:
+    """Voids since the previous run, joined to what the pool selected them as.
+
+    A void with no candidate lapses rather than carrying forward: a ref absent
+    from the pool was never selected in the first place, so there is nothing
+    here to replace it with.
+    """
+    if since is None:
+        return ()
+    candidates = [(ref, voided_at) for ref, voided_at in voided if voided_at > since]
+    if not candidates:
+        return ()
+
+    try:
+        pool = pool_reader.read().to_pandas()
+    except sqlite3.OperationalError:
+        return ()  # the pool has not landed in this base dir yet
+
+    ladder_fields = sorted({field for rung in MATCH_LADDER for field in rung})
+    if pool.empty or any(field not in pool.columns for field in ladder_fields):
+        return ()
+
+    latest = LatestPerKey(key="case_ref", by="load_date")(Dataset.from_pandas(pool))
+    by_ref = {row["case_ref"]: row for row in latest.to_pandas().to_dict("records")}
+
+    pending: list[PendingVoid] = []
+    for ref, voided_at in candidates:
+        row = by_ref.get(ref)
+        if row is None:
+            continue
+        attributes = {field: row[field] for field in ladder_fields}
+        pending.append(
+            PendingVoid(case_ref=ref, voided_at=voided_at, attributes=attributes)
+        )
+    return tuple(pending)
+
+
+def is_not_voided(voided_refs: frozenset[str]):
+    """Named predicate factory: gate out every currently-voided Case.
+
+    Checked against *every* void the sync feed currently shows, not just the
+    ones inside the replacement window -- a voided Case must never be
+    re-selected regardless of whether it has a replacement.
+    """
+
+    def predicate(row: Mapping[str, Any]) -> bool:
+        return row["case_ref"] not in voided_refs
+
+    return predicate
+
+
+def assign_replacements(pending: Sequence[PendingVoid]):
+    """Pair each pending void with a selected row, oldest void first.
+
+    A plain dataset->dataset transform -- a Processor is any such callable, so
+    this needs no class. For each void, in turn, the first rung in
+    ``MATCH_LADDER`` with an unconsumed candidate wins; within a rung the
+    oldest ``related_date`` wins (nulls last, an all-null tie degrading to the
+    frame's current -- i.e. priority-score -- order); no rung matching falls
+    back to the oldest unconsumed row overall. Each row consumes at most one
+    void, and a void with no unconsumed row left lapses.
+    """
+    import pandas as pd
+
+    def oldest(frame: Any, indices: list[Any]) -> Any:
+        return min(
+            indices,
+            key=lambda idx: (
+                pd.isna(frame.at[idx, RELATED_DATE_COLUMN]),
+                frame.at[idx, RELATED_DATE_COLUMN]
+                if pd.notna(frame.at[idx, RELATED_DATE_COLUMN])
+                else "",
+                idx,
+            ),
+        )
+
+    def transform(dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas()
+        frame["replaces_case_ref"] = None
+        frame["void_match_rung"] = None
+        consumed: set[Any] = set()
+
+        for void in sorted(pending, key=lambda v: v.voided_at):
+            chosen: Any = None
+            rung_label: str | None = None
+            for rung in MATCH_LADDER:
+                matches = [
+                    idx
+                    for idx in frame.index
+                    if idx not in consumed
+                    and all(
+                        pd.notna(void.attributes.get(field))
+                        and pd.notna(frame.at[idx, field])
+                        and void.attributes[field] == frame.at[idx, field]
+                        for field in rung
+                    )
+                ]
+                if matches:
+                    chosen = oldest(frame, matches)
+                    rung_label = ",".join(rung)
+                    break
+            if chosen is None:
+                remaining = [idx for idx in frame.index if idx not in consumed]
+                if not remaining:
+                    continue  # no unconsumed row left -- the void lapses
+                chosen = oldest(frame, remaining)
+                rung_label = "oldest"
+            frame.loc[chosen, "replaces_case_ref"] = void.case_ref
+            frame.loc[chosen, "void_match_rung"] = rung_label
+            consumed.add(chosen)
+        return Dataset.from_pandas(frame)
+
+    return transform
 
 
 def selection_builder(
@@ -133,9 +346,19 @@ def selection_builder(
     pool_writer: Writer,
     trace_writer: Writer,
     json_writer: Writer,
+    pending_voids: Sequence[PendingVoid] = (),
+    voided_refs: frozenset[str] = frozenset(),
     run_log: RunLog | None = None,
 ) -> Pipeline:
-    """Build the Selection flow: score, gate, rank, stamp, validate, explain, write."""
+    """Build the Selection flow: score, gate, rank, replace voids, stamp, write.
+
+    With no voids at all (``pending_voids`` and ``voided_refs`` both empty) this
+    is behaviourally identical to the pipeline before ADR-0021's replacement.
+    There is no second, rung-first sort: with a ladder, rung is a *per-void*
+    relation rather than a single column every row can be ranked by, and
+    nothing downstream consumes pool order today (no Hopper, no volume
+    target), so that half of the ADR is deferred -- see docs/selection.md.
+    """
     # ":pool" distinguishes this inner Pipeline's own run-log label from the
     # runner's outer "complaint_selection" label the same run also records under.
     p = Pipeline(f"{PIPELINE_NAME}:pool", run_log=run_log)
@@ -144,11 +367,27 @@ def selection_builder(
     node = p.read(candidates_reader, name="read")
     node = p.transform(Score("priority_score", complaint_priority), node, name="score")
     node = p.transform(
+        Filter(is_not_voided(voided_refs), name="voided"), node, name="voided"
+    )
+    node = p.transform(
         Filter(meets_priority_threshold, name="priority-threshold"), node, name="filter"
     )
     node = p.transform(Sort("priority_score", ascending=False), node, name="sort")
+    node = p.transform(assign_replacements(pending_voids), node, name="replace-voids")
     node = p.transform(
-        SelectColumns(["case_ref", "case_type", "priority_score"]), node, name="select"
+        SelectColumns(
+            [
+                "case_ref",
+                "case_type",
+                "priority_score",
+                "attribute_a",
+                "related_date",
+                "replaces_case_ref",
+                "void_match_rung",
+            ]
+        ),
+        node,
+        name="select",
     )
     node = p.transform(
         Stamp("question_bank_id", variation.question_bank_id), node, name="stamp"
@@ -174,11 +413,18 @@ def run(context: RunContext, *, describe: bool = False) -> Dataset:
     json_path = Path(context.base_dir) / OUTPUT_SUBJECT / POOL_JSON
 
     candidates = available_complaints(context.base_dir)
+    voided = voided_cases(context.base_dir)
+    since = previous_run_instant(context)
+    pending = pending_voids(voided, since, store.reader(POOL_TABLE))
+    voided_refs = frozenset(ref for ref, _ in voided)
+
     p = selection_builder(
         candidates_reader=DatasetReader(candidates),
         pool_writer=store.writer(POOL_TABLE, strategy),
         trace_writer=store.writer(TRACE_TABLE, strategy),
         json_writer=JsonWriter(json_path, Refresh()),
+        pending_voids=pending,
+        voided_refs=voided_refs,
         run_log=context.run_log,
     )
     if describe:
@@ -189,13 +435,16 @@ def run(context: RunContext, *, describe: bool = False) -> Dataset:
     pool = p.run()[0]
 
     excluded = len(candidates) - len(pool)
+    replaced = int(pool.to_pandas()["replaces_case_ref"].notna().sum())
+    lapsed = len(pending) - replaced
     variation = variation_by_id(VARIATIONS, "v1")
     print(
         f"available complaints: {len(candidates)} -> "
         f"SelectionPool: {len(pool)} cases "
         f"(Question Bank {variation.question_bank_id}, "
         f"logical run {context.logical_run_id}); "
-        f"trace: {len(candidates)} considered, {excluded} excluded with a reason"
+        f"trace: {len(candidates)} considered, {excluded} excluded with a reason; "
+        f"voids: {len(pending)} pending, {replaced} replaced, {lapsed} lapsed"
     )
     return pool
 

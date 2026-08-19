@@ -339,3 +339,58 @@ model the rest of this doc describes. And until the three complaints feeds have
 run at least once in a base directory, its daily schedule warns first-run (no
 upstream history) and then fails outright once it tries to read a silver
 database that does not exist yet — expected until ingest history exists.
+
+### Void replacement — ADR-0021, in reduced form
+
+The group also implements [ADR-0021](adr/0021-selection-plans-per-group-over-the-whole-eligible-pool.md)'s
+**void replacement**: a Case voided since Complaint Selection's own previous
+successful run is made good like-for-like, and a currently-voided Case is never
+itself re-selected (CONTEXT.md's **Void replacement**). `MATCH_LADDER` in
+`pipelines/complaint_selection/pipeline.py` is the configured, ordered set of
+match attempts and the one place to change like-for-like matching.
+
+Say this plainly so nobody mistakes it for a live attribute match:
+`attribute_a` and `related_date` are **dormant placeholders**, all-`None` until
+a feed actually carries them, so today the ladder's first two rungs never
+match anything and the live rung is always `("case_type",)` — the third and
+last. With `related_date` also always `None`, its "oldest first" tie-break has
+nothing to compare and degrades to the pool's existing sorted order (by
+`priority_score`), so the effective rule today is "the highest-priority
+same-case-type Case not already claimed". The pairing a replacement made is
+recorded on the selected pool row itself — `replaces_case_ref` +
+`void_match_rung` — never as an extra or below-threshold selection: steering
+never gates.
+
+The replacement window is **since Complaint Selection's own previous
+successful run**, not the ADR's "since the last working day" — a deliberate
+deviation. It needs no `WorkingDayCalendar` threaded through, and it
+self-corrects across a missed run (a skipped day's voids are still "since the
+previous success" the day it next runs) rather than silently losing them at a
+fixed weekend/holiday boundary. The comparison is **instant-grain**: both ends
+are parsed to timezone-aware `datetime`s before comparing (never string
+comparison — a naive-vs-offset string compare sorts on the separator character
+alone and can silently drop a same-day void).
+
+A missing or unreadable `sharepoint_cases` gold means **no voids are visible**
+— a considered choice, not an oversight. Complaint Selection declares no
+`FreshnessRequirement("sharepoint_cases")`, so a stale or absent sync degrades
+safely to "no voids seen this run" rather than blocking or failing; the
+soft-dependency read (`voided_cases`) catches exactly the reader's own
+`sqlite3.OperationalError` and returns no voids.
+
+The ADR's other change — **rung-first sort** (void-replacement rung, then
+oldest by related date, as the single sort choosing every Case) — is
+**deferred**: with a ladder, rung is a relation between one void and one
+candidate, not a single column every row can be ranked by, and nothing
+downstream consumes pool order today (no Hopper, no volume target) to make
+that ordering matter. The existing `Sort("priority_score", ascending=False)`
+is unchanged.
+
+Voids are matched by **title**, which `readers.sharepoint_cases` hands back as
+the sync feed's own Case title — joined here as the Complaint Selection
+`case_ref`. A Case Reference is unique only *within* a Case Type, which is
+sound here only because Complaints A/B/C share one id space by construction;
+a void whose title matches nothing in *this* pool (another Case Type entirely,
+or a Case never selected) is dropped rather than guessed at — CONTEXT.md's "a
+void with no candidate lapses, never carries forward" reading applies equally
+to a void this pool never had a stake in.
