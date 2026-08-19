@@ -799,28 +799,25 @@ def test_a_replacements_rank_reflects_queue_position_not_score():
     assert "hopper" not in trace["high"]["reason"]
 
 
-def test_unallocated_case_count_counts_in_progress_unassigned_cases_in_the_pool(
-    tmp_path,
-):
+def test_unallocated_case_count_counts_to_allocate_cases_in_the_pool(tmp_path):
+    """Post-#768: one status equality, never a scan for a blank reviewer.
+
+    A Case claimed for review is ``In-progress`` the instant the claim PATCH
+    lands, reviewer included -- there is no window where it is ``In-progress``
+    with nothing assigned, so an unclaimed Case is identified by its own
+    status alone.
+    """
     base_dir = build_databases(tmp_path, "sharepoint_cases/gold")
     _seed_case_current(
         base_dir,
         [
-            {"title": "R1", "status": "In-progress", "assigned_reviewer_name": None},
-            {"title": "R2", "status": "In-progress", "assigned_reviewer_name": "   "},
-            {
-                "title": "R3",
-                "status": "In-progress",
-                "assigned_reviewer_name": "a.khan",
-            },
-            {"title": "R4", "status": "Void", "assigned_reviewer_name": None},
-            {
-                "title": "R5",  # In-progress, unassigned, but not in the pool
-                "status": "In-progress",
-                "assigned_reviewer_name": None,
-            },
-            {"title": None, "status": "In-progress", "assigned_reviewer_name": None},
-            {"title": "", "status": "In-progress", "assigned_reviewer_name": None},
+            {"title": "R1", "status": "To-allocate"},
+            {"title": "R2", "status": "To-allocate"},
+            {"title": "R3", "status": "In-progress"},  # claimed -- not counted
+            {"title": "R4", "status": "Void"},  # a void frees room, not counted
+            {"title": "R5", "status": "To-allocate"},  # not in the pool
+            {"title": None, "status": "To-allocate"},
+            {"title": "", "status": "To-allocate"},
         ],
     )
     pool_reader = given_rows([{"case_ref": ref} for ref in ("R1", "R2", "R3", "R4")])
@@ -835,10 +832,7 @@ def test_unallocated_case_count_is_zero_when_the_sync_store_or_the_pool_is_missi
     assert unallocated_case_count(tmp_path, working_pool) == 0  # no sync gold at all
 
     base_dir = build_databases(tmp_path, "sharepoint_cases/gold")
-    _seed_case_current(
-        base_dir,
-        [{"title": "R1", "status": "In-progress", "assigned_reviewer_name": None}],
-    )
+    _seed_case_current(base_dir, [{"title": "R1", "status": "To-allocate"}])
     # A database file that has never been created (not merely a missing table
     # in one that has): the same "unable to open database file" shape a
     # not-yet-landed pool raises, before its migration has ever run here.
@@ -859,11 +853,7 @@ def test_a_full_hopper_selects_nothing_and_reports_zero_capacity(
     assert len(selected) == 3
 
     _seed_case_current(
-        base_dir,
-        [
-            {"title": ref, "status": "In-progress", "assigned_reviewer_name": None}
-            for ref in selected
-        ],
+        base_dir, [{"title": ref, "status": "To-allocate"} for ref in selected]
     )
     # A fresh, above-threshold candidate for run 2 to consider and be denied.
     _seed_silver(
