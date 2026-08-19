@@ -3,17 +3,21 @@
 The first half of the capstone path the framework exists to make routine: land
 the bundled CSV feed into **raw** (accumulated, stamped ``logical_run_id`` /
 ``load_date``), refine it into **silver** (accumulated, schema enforced), then
-reduce it to a current-only **gold** (one row per Case via
-``DeriveKey`` -> ``LatestPerKey`` -> ``UniqueValidator`` -> ``Refresh``). Gold is
-the CasePool the downstream ``selection`` pipeline reads.
+reduce it to a current-only **gold** (one row per Case). Gold is the CasePool the
+downstream ``selection`` pipeline reads.
+
+Written with the **eager steps** (``read`` / ``transform`` / ``validate`` /
+``write``): every line does its work when it is reached, so putting a breakpoint
+on one and stepping through shows the actual rows changing
+([ADR-0027](../../docs/adr/0027-eager-steps-are-the-default-authoring-model.md)).
 
 Address it by its location on disk::
 
     python -m cli run pipelines/ingest --base-dir /tmp/demo --run-date 2026-05-29
 
-or run the module directly with a default run context::
+or run the module directly -- which is what a PyCharm run configuration does::
 
-    python -m pipelines.ingest.pipeline /tmp/demo
+    python -m pipelines.ingest.pipeline --base-dir /tmp/demo
 """
 
 from __future__ import annotations
@@ -26,8 +30,16 @@ from pathlib import Path
 from case_review.gold import ingest_silver_to_gold
 from framework.core import PipelineError, SchemaValidator, format_failure
 from framework.io import AccumulateByRun, CsvReader
-from framework.run import Pipeline, RunContext
-from framework.transform import Filter, SchemaCoercion
+from framework.run import (
+    RunContext,
+    coerce,
+    read,
+    run_pipeline,
+    transform,
+    validate,
+    write,
+)
+from framework.transform import Filter
 from tools.environments import known_environments, resolve_base_dir
 from tools.medallion import medallion
 from tools.store import StoreRegistry
@@ -49,34 +61,33 @@ def run(context: RunContext):
     """Land the CSV feed and refine it through raw -> silver -> gold.
 
     The accumulation strategy carries the run's logical idempotency key (the
-    business run a re-drive replaces) and its execution id, derived from the
-    shared RunContext so ``--logical-run-id`` flows straight through.
+    business run a re-drive replaces), derived from the shared RunContext so
+    ``--logical-run-id`` flows straight through.
     """
     med = medallion(StoreRegistry(context.base_dir), NAMESPACE)
     strategy = AccumulateByRun.from_context(context)
 
-    p = Pipeline(NAMESPACE)
-    r = p.read(CsvReader(SAMPLE_CSV), name="read")
-    p.write(med.raw.writer(NAMESPACE, strategy), r, name="write")
-    p.run()
+    # --- raw: land the feed exactly as it arrived ---------------------------
+    landed = read(CsvReader(SAMPLE_CSV))
+    write(med.raw.writer(NAMESPACE, strategy), landed, name="write-raw")
 
-    p_silver = Pipeline(NAMESPACE)
-    r_silver = p_silver.read(med.raw.reader(NAMESPACE), name="read")
-    current = r_silver
-    if isinstance(strategy, AccumulateByRun):
-        logical_run_id = strategy.logical_run_id
-        current = p_silver.transform(
-            Filter(lambda row, _rid=logical_run_id: row["logical_run_id"] == _rid),
-            current,
-            name="filter-by-run-id",
-        )
-    coerced = p_silver.transform(SchemaCoercion(ActivityCase), current, name="coerce")
-    validated = p_silver.validate(
-        SchemaValidator(ActivityCase), coerced, name="post-validate"
+    # --- silver: this run's rows, typed and checked -------------------------
+    # raw accumulates every run, so silver takes only the rows this run landed.
+    rows = read(med.raw.reader(NAMESPACE), name="read-raw")
+    rows = transform(
+        Filter(lambda row: row["logical_run_id"] == strategy.logical_run_id),
+        rows,
+        name="filter-by-run-id",
     )
-    p_silver.write(med.silver.writer(NAMESPACE, strategy), validated, name="write")
-    p_silver.run()
+    rows = coerce(ActivityCase, rows)
+    validate(SchemaValidator(ActivityCase), rows)
+    write(med.silver.writer(NAMESPACE, strategy), rows, name="write-silver")
 
+    # --- gold: one current row per Case -------------------------------------
+    # Still the deferred builder: this reduce is shared with demo_fan_out and
+    # the Detail-Table path, so it is converted separately. The two models
+    # interoperate — the hop runs under this same attempt and records against
+    # the same run — which is what the migration period looks like.
     return ingest_silver_to_gold(med, NAMESPACE, NATURAL_KEY, ActivityCase).run()
 
 
@@ -103,11 +114,15 @@ def main(argv: list[str]) -> int:
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1
-    # Direct invocation builds a default run context (fixed AS_OF run date so the
-    # demo is deterministic) and runs the same handler the framework would.
-    context = RunContext(base_dir=base_dir, pipeline="ingest", run_date=AS_OF)
+
+    # Direct invocation goes through the *same* run_pipeline the operator CLI
+    # uses, so a run started from a PyCharm run configuration records under the
+    # same identity — pipeline label, logical_run_id, run log — as one started
+    # with `cli run`. Anything else gives the feed two run histories.
     try:
-        dataset = run(context)
+        dataset = run_pipeline(
+            run, "ingest", base_dir, upstreams=UPSTREAMS, run_date=AS_OF
+        )
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
         return 1

@@ -64,9 +64,12 @@ def test_case_type_variant_refines_to_silver_and_leaves_gold_a_commented_seam(tm
     )
 
     # The settled ingest spine is rendered live: source -> raw -> silver.
-    assert "silver_pipeline = silver_builder(" in pipeline
-    assert "writer=med.silver.writer(" in pipeline
-    assert "from framework.run import Pipeline" in pipeline
+    assert "silver = silver_hop(" in pipeline
+    assert "med.silver.writer(" in pipeline
+    # Rendered against the eager steps, so the hops execute where they're written.
+    assert "from framework.run import (" in pipeline
+    assert "    read," in pipeline
+    assert "    write," in pipeline
 
     # Gold is the author's seam, not a live call, so the scaffold makes no bet
     # on the open snapshot-vs-join assembly decision.
@@ -88,9 +91,7 @@ def test_rendered_case_type_pipeline_runs_and_refines_to_silver(tmp_path):
     try:
         pipeline = importlib.import_module("widgets.pipeline")
         importlib.reload(pipeline)
-        exit_code = pipeline.main(
-            ["prog", "--base-dir", str(tmp_path / "data"), "--describe"]
-        )
+        exit_code = pipeline.main(["prog", "--base-dir", str(tmp_path / "data")])
     finally:
         sys.path.remove(str(repo / "pipelines"))
         for name in list(sys.modules):

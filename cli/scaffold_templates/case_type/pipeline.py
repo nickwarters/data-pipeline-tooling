@@ -9,21 +9,19 @@ into gold — a single-feed current reduce, a multi-feed join enriching one Case
 Type, Detail Tables — is unique per Case Type, so the gold step is left to you.
 Its shape is sketched at the foot of ``run``.
 
-Each medallion hop is its own ``*_builder`` -- a single, editable definition of
-what that hop does, wired inline through the public facades (``framework.core``
-/ ``framework.io`` / ``framework.transform`` / ``framework.run``).
+Every line here **does its work when it is reached**. Put a breakpoint on one,
+step over it, and the variable holds the actual rows at that point in the feed
+([ADR-0027](../../docs/adr/0027-eager-steps-are-the-default-authoring-model.md)).
+Each medallion hop is its own ``*_hop`` function, so a test can drive one with
+sample rows and a recording writer without touching SQLite or the filesystem.
 
-Address it by its location on disk -- the framework imports
-``pipelines.myfeed.pipeline`` and runs its ``run(context)`` callable::
+Address it by its location on disk::
 
     python -m cli run pipelines/myfeed --base-dir BASE_DIR
 
-or run the module directly with a default run context::
+or run the module directly, which is what a PyCharm run configuration does::
 
-    python -m pipelines.myfeed.pipeline [BASE_DIR]
-
-Both run from the repo root so the import-only ``framework`` package resolves on
-``sys.path``.
+    python -m pipelines.myfeed.pipeline --base-dir BASE_DIR
 """
 
 from __future__ import annotations
@@ -33,20 +31,18 @@ import sys
 from dataclasses import fields
 from pathlib import Path
 
-from framework.core import (
-    ColumnValidator,
-    Dataset,
-    PipelineError,
-    SchemaValidator,
-    format_failure,
-)
+from framework.core import ColumnValidator, Dataset, PipelineError, format_failure
 from framework.io import AccumulateByRun, CsvReader, Reader, Writer
-from framework.run import Pipeline, RunContext, RunLog
-from framework.transform import (
-    SchemaCoercion,
-    SchemaValueRulePartitioner,
-    SelectColumns,
+from framework.run import (
+    RunContext,
+    enforce,
+    read,
+    run_pipeline,
+    transform,
+    validate,
+    write,
 )
+from framework.transform import SelectColumns
 from tools.environments import known_environments, resolve_base_dir
 from tools.medallion import medallion
 from tools.store import StoreRegistry
@@ -67,72 +63,48 @@ SELECT_RAW_COLUMNS = [f.name for f in fields(MyfeedRow)]
 UPSTREAMS = ()
 
 
-def raw_builder(
-    reader: Reader,
-    writer: Writer,
-    run_log: RunLog | None = None,
-) -> Pipeline:
-    """Build the raw hop: gate the source's columns, then land it unchanged.
+def raw_hop(reader: Reader, writer: Writer) -> Dataset:
+    """Land the source unchanged, once its columns are as expected.
 
-    Edit these five lines to change the hop.
+    Edit these three lines to change the hop.
     """
-    p = Pipeline(f"{FEED_NAME}:raw", run_log=run_log)
-    node = p.read(reader, name="read")
+    data = read(reader)
     expected = [f.name for f in fields(MyfeedRow)]
-    node = p.validate(ColumnValidator(expected), node, name="columns")
-    p.write(writer, node, name="write")
-    return p
+    validate(ColumnValidator(expected), data)
+    return write(writer, data)
 
 
-def silver_builder(
-    reader: Reader,
-    writer: Writer,
-    reject_writer: Writer | None = None,
-    run_log: RunLog | None = None,
-) -> Pipeline:
-    """Build the silver hop: select, coerce, quarantine value-rule breaches, validate.
+def silver_hop(
+    reader: Reader, writer: Writer, reject_writer: Writer | None = None
+) -> Dataset:
+    """Narrow the source columns, then enforce the declared schema.
 
-    ``reject_writer`` is opt-in: given one, value-rule breaches are routed to
-    quarantine so the good rows still land. Edit these lines to change the hop.
+    ``enforce`` is the coerce -> quarantine -> validate sequence in the order
+    that makes it correct, and each part still records its own step. Given no
+    ``reject_writer`` it is simply coerce -> validate. Edit these lines to change
+    the hop.
     """
-    p = Pipeline(f"{FEED_NAME}:silver", run_log=run_log)
-    node = p.read(reader, name="read")
-    node = p.transform(SelectColumns(SELECT_RAW_COLUMNS), node, name="select")
-    node = p.transform(SchemaCoercion(MyfeedRow), node, name="coerce")
-    if reject_writer is not None:
-        node = p.quarantine(
-            SchemaValueRulePartitioner(MyfeedRow),
-            reject_writer,
-            node,
-            name="quarantine",
-        )
-    node = p.validate(SchemaValidator(MyfeedRow), node, name="post-validate")
-    p.write(writer, node, name="write")
-    return p
+    data = read(reader)
+    data = transform(SelectColumns(SELECT_RAW_COLUMNS), data)
+    data = enforce(MyfeedRow, data, reject_writer=reject_writer)
+    return write(writer, data)
 
 
-def run(context: RunContext, *, describe: bool = False) -> Dataset:
+def run(context: RunContext) -> Dataset:
     """Refine the feed source -> raw -> silver under the run context; return silver."""
     med = medallion(StoreRegistry(context.base_dir), NAMESPACE)
     strategy = AccumulateByRun.from_context(context)
 
     # Fetched by the SAS script or orchestrator
-    raw_pipeline = raw_builder(
-        reader=CsvReader(SAMPLE_CSV), writer=med.raw.writer(FEED_NAME, strategy)
+    raw_hop(
+        CsvReader(SAMPLE_CSV),
+        med.raw.writer(FEED_NAME, strategy),
     )
-    if describe:
-        print(raw_pipeline.describe())
-    raw_pipeline.run()
-
-    silver_pipeline = silver_builder(
-        reader=med.raw.reader(FEED_NAME),
-        writer=med.silver.writer(FEED_NAME, strategy),
-        reject_writer=med.silver.quarantine_writer(FEED_NAME),
-        run_log=context.run_log,
+    silver = silver_hop(
+        med.raw.reader(FEED_NAME),
+        med.silver.writer(FEED_NAME, strategy),
+        med.silver.quarantine_writer(FEED_NAME),
     )
-    if describe:
-        print(silver_pipeline.describe())
-    silver = silver_pipeline.run()
 
     # --- gold is yours to assemble ------------------------------------------
     # How accumulated silver becomes gold is unique per Case Type, so the
@@ -164,11 +136,6 @@ def main(argv: list[str]) -> int:
         help="named environment to resolve base_dir from when no --base-dir is "
         f"given ({', '.join(known_environments())}); defaults to $PIPELINE_ENV or dev",
     )
-    parser.add_argument(
-        "--describe",
-        action="store_true",
-        help="print each pipeline's plan before running it",
-    )
     args = parser.parse_args(argv[1:])
     # An explicit path wins; otherwise resolve base_dir from the named environment.
     try:
@@ -177,17 +144,11 @@ def main(argv: list[str]) -> int:
         print(str(exc), file=sys.stderr)
         return 1
 
-    from framework.run import PipelineRunner
-
-    def handler(ctx: RunContext) -> Dataset:
-        return run(ctx, describe=args.describe)
-
-    runner = PipelineRunner()
-    runner.register(
-        subject=NAMESPACE, pipeline=FEED_NAME, handler=handler, freshness=UPSTREAMS
-    )
+    # The *same* run_pipeline the operator CLI uses, so a run started here and
+    # one started with `cli run` record under one identity — one pipeline label,
+    # one logical_run_id, one run history. Anything else gives the feed two.
     try:
-        silver = runner.run(NAMESPACE, FEED_NAME, base_dir=base_dir)
+        silver = run_pipeline(run, FEED_NAME, base_dir, upstreams=UPSTREAMS)
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
         return 1

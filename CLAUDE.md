@@ -260,19 +260,22 @@ its test as `tests/pipelines/test_<feed>.py`, and its baseline migrations as
 `migrations/<feed>/<database>/0001_create_initial_tables.sql` — one per database
 it writes, quarantine included — from the template under
 `cli/scaffold_templates/feed/`, ready to `migrate` and run. The
-generic feed refines source -> raw -> silver -> gold, one `*_builder` per hop
-(`raw_builder` lands faithfully; `silver_builder` narrows to `SELECT_RAW_COLUMNS` + renames via `RENAME` + coerces + quarantines +
-validates the schema; `gold_builder` is a passthrough stub with a `TODO`) — the
-each builder wires its own hop inline, six or so readable lines you edit in
-place — wired
-in order by `run(context, *, describe=False)` and an argparse `main`. Pass
+generic feed refines source -> raw -> silver -> gold, one `*_hop` per hop
+(`raw_hop` lands faithfully; `silver_hop` narrows to `SELECT_RAW_COLUMNS`, renames via `RENAME`, then
+`enforce`s the schema — coerce, quarantine, validate, in that order; `gold_hop` is a passthrough stub
+with a `TODO`). Each hop is written with the **eager steps**, so every line does its
+work when it is reached and can be stepped through in a debugger
+([ADR-0027](docs/adr/0027-eager-steps-are-the-default-authoring-model.md)) — four
+or so readable lines you edit in place — wired
+in order by `run(context)` and an argparse `main` that routes through the same
+`run_pipeline` the operator CLI uses, so both entry points record one identity. Pass
 `--from-feed-file <path>` to seed the scaffold from a real sample CSV: the header
 becomes the schema's fields (canonicalised to identifiers, dtypes inferred from
 the first rows, capped at 40 columns), the file's contents replace the bundled
 sample, and the test's sample rows are taken from it; when a header name isn't a
 clean identifier (spaces/punctuation/capitals) the source names are emitted as a
 `RAW_FEED_COLUMNS` constant the raw `ColumnValidator` gates on and the
-`silver_builder`'s `RENAME` map is populated to canonicalise them (raw stays
+`silver_hop`'s `RENAME` map is populated to canonicalise them (raw stays
 faithful; silver renames to the schema's canonical shape). Add `--case-type`
 for the Case Type ingest variant: a case-review-flavoured slice from
 `cli/scaffold_templates/case_type/` that additionally declares the Case

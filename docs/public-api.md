@@ -26,7 +26,8 @@ from framework.io import CsvReader, Refresh
 from tools.store import StoreRegistry
 from framework.transform import Filter, VectorizedFilter, SchemaCoercion
 from framework.core import ColumnValidator, SchemaValidator, ValidationError
-from framework.run import Pipeline, PipelineRunner, RunContext
+from framework.run import read, transform, validate, write, RunContext
+from framework.run import Pipeline          # the deferred builder
 from tools.medallion import medallion
 from tools.retry import RetryPolicy
 from tools.calendar import WorkingDayCalendar
@@ -91,7 +92,7 @@ the implementation modules living alongside it:
   `json_shaping` (the JSON blob explodes/flatten), `coercion` (`SchemaCoercion`
   — the *coerce* half of the schema adapter
   markers a schema declares), `quarantine`.
-- `framework/run/` — `builder`, `execution`, `address`,
+- `framework/run/` — `steps`, `builder`, `execution`, `address`,
   `trace`, `runner`, `run_context`, `dry_run` (the preview report behind
   `dry_run_pipeline`). It also re-exports the observability seam
   (`RunLog`, `RunRegistry`) that lives in the sibling `tools.observability`
@@ -184,6 +185,7 @@ Moving data across the boundary. (Where it *lands* — the namespace `Store` /
 
 | Names | What |
 |-------|------|
+| `read`, `transform`, `validate`, `write`, `coerce`, `enforce`, `quarantine`, `step`, `StepError` | The **eager steps** — the default authoring model ([ADR-0027](adr/0027-eager-steps-are-the-default-authoring-model.md)). Each does its work when called and returns a `Dataset`, so a pipeline is an ordinary Python function a debugger steps through line by line. Each emits exactly the run-log record the equivalent builder node emits — timing, row counts either side, warn hits, data locations, whether it committed — against the ambient `RunContext`, so replay, the registry, freshness and `cli status` are unaffected by which model a feed is written in. Step names are derived (`read`/`write` take the verb; `transform`/`validate` take the component's name, repeats suffixed `-2`), with `name=` overriding. `write`/`quarantine` skip their commit under a dry-run context. With no ambient context they do their work and record nothing, so an author can call `read(...)` in a scratch file. `enforce(schema, data, reject_writer=...)` is the coerce → quarantine → validate sequence, each part still its own step; `step(name)` records an author's own block. |
 | `Pipeline` | The deferred DAG builder. Nodes are declared explicitly — `.read` / `.task` / `.validate` / `.write` (plus compatible `.transform`, `.action`, `.profile`, `.explain`, and `.quarantine`) each return a wired node that later steps depend on; `.describe()` renders the pre-run plan and `.run()` walks the graph from its leaves, executing each node after its inputs. A **task** is the preferred public name for a stable named unit of work inside a pipeline. Dataset→dataset work is any `Dataset -> Dataset` callable passed to `.task(name, func, *inputs)`; `.transform(func, *inputs, name=...)` remains supported with the same execution path (`framework.transform` ships `Score` / `Filter` / `JoinWith`). `.profile(profiler, node)` drives an injected `framework.core.DatasetProfiler` (the `tools.observability.profile.DataProfiler` in practice) and records its payload — the framework owns no profiling logic. |
 | `PipelineGraphError` | Raised by `.run()` when the wired graph cannot be executed — today, when every node is an input to another node, so the leaf-first walk has no starting point. A config-category `PipelineError`: the fix is in the wiring. Without it a cyclic graph would execute nothing and report success, under a real run and a dry run alike. |
 | `RunAddress`, `RunAddressError` | A stable address for dependency targets: whole Pipelines (`pipeline`, `subject/pipeline`) or named run steps (`pipeline.step`, `subject/pipeline.step`, for example `pipeline_2.step_4`). The builder wires these onto run-log records as `step_address`; `RunRegistry.records_for_address(...)`, `RunRegistry.has_successful_address(...)`, and `RunRegistry.latest_success(...)` use that key for upstream dependency checks. Use `RunAddress.for_pipeline(...)`, `RunAddress.for_step(...)`, or `RunAddress.parse(label)` when code already has structured pieces or accepts config labels. Invalid labels raise `RunAddressError`, a config-category `PipelineError`. |
