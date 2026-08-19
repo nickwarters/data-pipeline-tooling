@@ -106,8 +106,8 @@ async function allocationManagerFor(client, reviewerId) {
 async function claimableEtagFor(client, candidate) {
   const row = await client.getCase(candidate.id, candidate._listOptions);
   if (!row) return null;
+  if (row.status !== CASE_STATUS.TO_ALLOCATE) return null;
   if (row.assignedReviewer !== '') return null;
-  if (row.status !== CASE_STATUS.IN_PROGRESS) return null;
   if (!row.etag) return null;
   return row.etag;
 }
@@ -565,9 +565,17 @@ export function createRouteSlice(
             reviewSlaWorkingDaysFor(tools.context.caseSources, candidate),
             ENGLAND_WALES_HOLIDAYS
           );
+          // The claim is what moves the Case out of the pot, so the status
+          // moves in the same PATCH as the Reviewer it is being claimed by:
+          // one write, guarded by one `If-Match`, so a row can never be left
+          // holding a Reviewer while still advertising itself as unclaimed.
+          // Deliberately written here and not by the shared assignment stamp —
+          // naming a Reviewer is also how a Case is *reassigned* mid-review,
+          // and that must leave the status exactly where it was.
           let result = await client.patchCase(
             candidate.id,
             {
+              status: CASE_STATUS.IN_PROGRESS,
               assignedReviewer: currentUserId,
               assignedReviewerManager: managerAccount,
               dueDate,
@@ -580,6 +588,7 @@ export function createRouteSlice(
             result = await client.patchCase(
               candidate.id,
               {
+                status: CASE_STATUS.IN_PROGRESS,
                 assignedReviewer: currentUserId,
                 assignedReviewerManager: null,
                 dueDate,

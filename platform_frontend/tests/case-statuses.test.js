@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { CASE_STATUS } from '../src/lib/case-statuses.js';
 
 test('CASE_STATUS exposes the exact persisted Case lifecycle status values', () => {
+  assert.equal(CASE_STATUS.TO_ALLOCATE, 'To-allocate');
   assert.equal(CASE_STATUS.IN_PROGRESS, 'In-progress');
   assert.equal(CASE_STATUS.ACTIONS_IN_PROGRESS, 'Actions In Progress');
   assert.equal(CASE_STATUS.COMPLETED, 'Completed');
@@ -23,11 +24,12 @@ test('CASE_STATUS is frozen (values cannot be reassigned)', () => {
   assert.equal(CASE_STATUS.IN_PROGRESS, 'In-progress');
 });
 
-test('CASE_STATUS has exactly the four case-lifecycle statuses (no accidental extra keys)', () => {
+test('CASE_STATUS holds the case-lifecycle statuses and no accidental extra keys', () => {
   assert.deepEqual(Object.keys(CASE_STATUS).sort(), [
     'ACTIONS_IN_PROGRESS',
     'COMPLETED',
     'IN_PROGRESS',
+    'TO_ALLOCATE',
     'VOID',
   ]);
 });
@@ -86,7 +88,7 @@ function stripComments(source) {
 
 test('contract: no raw case-lifecycle status literals in src/ outside lib/case-statuses.js', () => {
   const forbidden =
-    /['"`](In-progress|Actions In Progress|Completed|Void)['"`]/;
+    /['"`](To-allocate|In-progress|Actions In Progress|Completed|Void)['"`]/;
   /** @type {string[]} */
   const violations = [];
   for (const file of jsFilesUnder(SRC_ROOT)) {

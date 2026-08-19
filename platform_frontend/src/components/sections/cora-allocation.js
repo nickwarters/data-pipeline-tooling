@@ -10,7 +10,7 @@ import { listCasesPerSource } from '../../services/across-sources.js';
 /** @typedef {import('../../setup/resolve-eligible-case-types.js').AllocationSource} AllocationSource */
 
 /**
- * An unassigned Case picked up from one allocation source, tagged with the
+ * An unallocated Case picked up from one allocation source, tagged with the
  * `CaseListOptions` (namely `listName`) of the list it came from — so the
  * later `patchCase` write lands on the same list the row was read from.
  *
@@ -85,6 +85,16 @@ export function orderCandidatesByAge(candidates, random = Math.random) {
 }
 
 /**
+ * The Cases waiting to be claimed, oldest first.
+ *
+ * The status is the whole predicate: a Case waiting for a Reviewer sits in
+ * `To-allocate` and leaves it at the claim, so this asks the list for exactly
+ * the rows it wants. The alternative — reading every `In-progress` row and
+ * discarding the ones that already have a Reviewer — pulls a Case Type's whole
+ * live workload into the browser to find the handful nobody has taken, and the
+ * high-volume Case Types are precisely the ones where that read is largest and
+ * the List View Threshold least forgiving. `Status` is an indexed column.
+ *
  * @param {{
  * client: SharePointClient | null,
  * allocationSources: AllocationSource[],
@@ -92,7 +102,7 @@ export function orderCandidatesByAge(candidates, random = Math.random) {
  * }} props
  * @returns {Promise<AllocationCandidate[]>}
  */
-export async function getUnassignedCases({
+export async function getUnallocatedCases({
   client,
   allocationSources,
   random,
@@ -100,18 +110,16 @@ export async function getUnassignedCases({
   if (!client) return [];
 
   const perSource = await listCasesPerSource(client, allocationSources, {
-    status: CASE_STATUS.IN_PROGRESS,
+    status: CASE_STATUS.TO_ALLOCATE,
   });
   const candidates = perSource.flatMap(({ source, rows }) =>
-    rows
-      .filter((c) => c.assignedReviewer === '')
-      .map(
-        (c) =>
-          /** @type {AllocationCandidate} */ ({
-            ...c,
-            _listOptions: { listName: source.listName },
-          })
-      )
+    rows.map(
+      (c) =>
+        /** @type {AllocationCandidate} */ ({
+          ...c,
+          _listOptions: { listName: source.listName },
+        })
+    )
   );
 
   return orderCandidatesByAge(candidates, random);
@@ -164,7 +172,7 @@ export async function getAllocationAvailability({
   if (availableSources.length === 0) {
     return { candidates: [], isAtCapacity: anySourceAtCapacity };
   }
-  const candidates = await getUnassignedCases({
+  const candidates = await getUnallocatedCases({
     client,
     allocationSources: availableSources,
     random,

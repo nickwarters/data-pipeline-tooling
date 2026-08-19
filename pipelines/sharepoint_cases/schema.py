@@ -54,8 +54,18 @@ CASE_LISTS = (CaseList("complaints", "Cases-Complaints", SITE, UUID(int=0)),)
 NATURAL_KEY = ("case_type", "source_item_id")
 
 # The Case lifecycle states, exactly as the review application persists them --
-# note the hyphen in "In-progress" and that "Actions In Progress" carries none.
-CASE_STATUSES = ("In-progress", "Actions In Progress", "Completed", "Void")
+# note the hyphen in "In-progress" and in "To-allocate", and that "Actions In
+# Progress" carries none. "To-allocate" is where a Case starts, waiting in its
+# list for a Reviewer to claim it; it is in this vocabulary because every
+# unclaimed Case carries it, and a status this feed does not recognise
+# quarantines the row.
+CASE_STATUSES = (
+    "To-allocate",
+    "In-progress",
+    "Actions In Progress",
+    "Completed",
+    "Void",
+)
 
 # The columns every Detail Table repeats onto every exploded row -- exactly
 # NATURAL_KEY's columns plus the provenance needed to join back to the winning

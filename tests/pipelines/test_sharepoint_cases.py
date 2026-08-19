@@ -401,7 +401,7 @@ def test_silver_quarantines_an_unknown_status_while_raw_keeps_every_row():
     assert rejected["source_item_id"] == "102"
     assert rejected["failed_rule"] == (
         "column 'status' has value(s) outside "
-        "{'Actions In Progress', 'Completed', 'In-progress', 'Void'}"
+        "{'Actions In Progress', 'Completed', 'In-progress', 'To-allocate', 'Void'}"
     )
 
 
@@ -2179,8 +2179,8 @@ def test_the_bundled_sample_lands_every_item_across_both_pages(base_dir, capsys)
         "appeal": 2,
         "case_detail": 13,
     }
-    # The fixture exercises all four real statuses, so the whole vocabulary
-    # passes the schema gate rather than only the one a happy path would use.
+    # The fixture exercises every real status, so the whole vocabulary passes
+    # the schema gate rather than only the one a happy path would use.
     assert {row["status"] for row in read_rows(med.silver, "case_version")} == set(
         CASE_STATUSES
     )

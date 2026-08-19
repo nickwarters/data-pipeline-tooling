@@ -17,12 +17,21 @@
  *   `src/evaluators/remediation-status.js`.
  * - `SaveQueue`'s own `'conflict'` status, see `src/services/save-queue.js`.
  *
+ * `TO_ALLOCATE` is where a Case starts: ingested, waiting in its Case Type's
+ * list for a Reviewer to claim it. It is the status the allocation claim reads
+ * and the status the claim replaces with `IN_PROGRESS`, so "nobody has this
+ * yet" is a value on the indexed Status column rather than something inferred
+ * from an empty Assigned Reviewer. It carries no Assigned Reviewer and no
+ * review clock — the Due Date is stamped at the claim — so no review SLA runs
+ * against it.
+ *
  * `VOID` is terminal and has no way back: a Case abandoned mid-review is voided
  * with a reason, freezing it without ever reaching the reportable milestone, so
  * it carries no Outcome and never counts as reviewed work.
  */
 export const CASE_STATUS = Object.freeze(
   /** @type {const} */ ({
+    TO_ALLOCATE: 'To-allocate',
     IN_PROGRESS: 'In-progress',
     ACTIONS_IN_PROGRESS: 'Actions In Progress',
     COMPLETED: 'Completed',

@@ -586,13 +586,15 @@ Rules the fixtures must obey:
   `outcomeAtCompletion`. Step 7's tests pin this, so an outcome-rule change
   that silently invalidates a fixture fails loudly.
 - **`details` keys match `detailFields[].key`** from Step 2.
-- **An unassigned In-progress Case (`assignedReviewer: ''`) is what makes
-  allocation demonstrable** — `cora-allocation` draws the oldest unassigned
-  In-progress Case across the user's eligible sources. "Oldest" is by
-  `relatedDate`, the Case Type–specific reference date, falling back to
-  `created` on a Case that carries no related date — so a Case Type that never
-  populates `RelatedDate` still allocates oldest-created-first, and a fixture
-  that wants to pin the draw order should set `relatedDate`.
+- **A `To-allocate` Case (`status: 'To-allocate'`, `assignedReviewer: ''`) is
+  what makes allocation demonstrable** — `cora-allocation` draws the oldest
+  `To-allocate` Case across the user's eligible sources. The status is the whole
+  predicate, so an unassigned `In-progress` fixture is never offered however
+  empty its Reviewer field. "Oldest" is by `relatedDate`, the Case Type–specific
+  reference date, falling back to `created` on a Case that carries no related
+  date — so a Case Type that never populates `RelatedDate` still allocates
+  oldest-created-first, and a fixture that wants to pin the draw order should
+  set `relatedDate`.
 - **`assignedReviewer` must match a persona `userId`** for assigned-to-me
   surfaces to light up for that persona.
 - `etag` is any unique string (the mock client uses it for optimistic
