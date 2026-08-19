@@ -67,6 +67,12 @@ TRACE_TABLE = "selection_trace"
 POOL_JSON = "selection_pool.json"
 
 PRIORITY_THRESHOLD = 50
+
+# A declared starting depth for the Hopper. ADR-0021 sizes it as 3D (three
+# times the group's daily assignment rate); monitoring throughput and
+# adjusting this from it is deferred.
+HOPPER_DEPTH = 60
+
 # The complaints export is weekly (weekly_complaints_export.sas), so a daily
 # schedule needs slack past one week to still find it fresh.
 INGEST_MAX_AGE_DAYS = 10
@@ -116,9 +122,21 @@ SELECTION_GROUP: tuple[SelectionGroupMember, ...] = (
     ),
 )
 
-UPSTREAMS = tuple(
-    FreshnessRequirement(member.case_type, max_age_days=INGEST_MAX_AGE_DAYS)
-    for member in SELECTION_GROUP
+# The per-member ingest requirements are widened (a weekly export); the
+# trailing sharepoint_cases requirement is not -- its default max_age_days=0
+# means "succeeded today", because this run sizes the Hopper from today's
+# unallocated count and a cap must not be sized against a stale one.
+# sharepoint_cases is orchestrated daily in the case_management set ahead of
+# this pipeline's own schedule slot, and reviewer_activity already depends on
+# the same bare label, so this resolves in production; the default first-run
+# policy (warn) still lets a fresh environment run, where "no history seen,
+# fill to the declared depth" is genuinely correct.
+UPSTREAMS = (
+    *(
+        FreshnessRequirement(member.case_type, max_age_days=INGEST_MAX_AGE_DAYS)
+        for member in SELECTION_GROUP
+    ),
+    FreshnessRequirement("sharepoint_cases"),
 )
 
 _PRIORITY_BY_CASE_TYPE = {
@@ -167,9 +185,12 @@ def voided_cases(
 ) -> tuple[tuple[str, dt.datetime], ...]:
     """Every currently-voided Case the sync feed shows, as ``(case_ref, voided_at)``.
 
-    A soft dependency, deliberately: Complaint Selection declares no
-    ``FreshnessRequirement`` on ``sharepoint_cases``, so a base dir where that
-    feed's gold is missing or unreadable sees no voids rather than failing.
+    A soft dependency at the read level: the same-day ``FreshnessRequirement``
+    on ``sharepoint_cases`` (see ``UPSTREAMS``) already blocks a run whose sync
+    history is stale, so what this still has to catch is only the fresh
+    environment its first-run policy (warn) lets through -- gold missing or
+    unreadable, where "no history, no voids visible" is the correct fallback
+    rather than a crash.
     """
     try:
         current = CurrentCasesReader(base_dir).read().to_pandas()
@@ -185,6 +206,53 @@ def voided_cases(
         (str(row["title"]), _local_instant(row["voided_at"]))
         for row in void.to_dict("records")
     )
+
+
+def unallocated_case_count(
+    base_dir: str | os.PathLike[str], pool_reader: Reader
+) -> int:
+    """A direct count of the group's unallocated Cases -- the Hopper's depth signal.
+
+    Never ``target - completed - voided`` (ADR-0021): a Case assigned but not
+    yet finished has left the Hopper without reaching a terminal state, so that
+    arithmetic overstates what is actually sitting there. Counted directly
+    instead: In-progress, with no assigned reviewer, and one of *this* pool's
+    own selections (a Case this run doesn't own is not its capacity to count).
+
+    Gold persists a genuinely null reviewer for an unassigned Case -- the
+    ``"(unassigned)"`` string is a *reporting* fill ``case_counts_current``
+    applies, not what lands here -- but a Person column can round-trip as
+    either null or an empty/whitespace string, so both are checked.
+
+    Same soft-dependency shape as :func:`voided_cases`: an unreadable sync
+    store, or a pool that has not landed yet, counts as 0 unallocated -- a
+    fresh environment fills to the declared depth. The *stale*-sync direction
+    (history exists but isn't today's) is guarded by the same-day
+    ``FreshnessRequirement`` in ``UPSTREAMS``, not here: a cap must not be sized
+    against a number that might be silently out of date.
+    """
+    try:
+        current = CurrentCasesReader(base_dir).read().to_pandas()
+    except sqlite3.OperationalError:
+        return 0
+
+    in_progress = current[current["status"] == "In-progress"]
+    reviewer = in_progress["assigned_reviewer_name"]
+    unassigned = in_progress[reviewer.isna() | (reviewer.astype(str).str.strip() == "")]
+    has_title = unassigned["title"].notna() & (
+        unassigned["title"].astype(str).str.strip() != ""
+    )
+    titles = set(unassigned.loc[has_title, "title"].astype(str))
+
+    try:
+        pool = pool_reader.read().to_pandas()
+    except sqlite3.OperationalError:
+        return 0
+
+    pool_refs = (
+        set(pool["case_ref"].astype(str)) if "case_ref" in pool.columns else set()
+    )
+    return len(titles & pool_refs)
 
 
 def _local_instant(value: str) -> dt.datetime:
@@ -341,6 +409,62 @@ def assign_replacements(pending: Sequence[PendingVoid]):
     return transform
 
 
+def replacements_first(pending: Sequence[PendingVoid]):
+    """Stable partition: this run's replacements lead, oldest void first.
+
+    Queue order, not a second sort over the whole pool -- void-replacement
+    rung is a relation between one void and one candidate, not a column every
+    row can be ranked by. Only the rows a void actually claimed move: they lead
+    in the order their void was raised, oldest first; every other row keeps
+    whatever order the priority sort already gave it (a stable partition, so
+    that relative order survives). A plain dataset->dataset transform with no
+    trace_role -- it reorders and drops nothing, so it traces, if at all, as an
+    ordinary pass-through stage.
+    """
+    import pandas as pd
+
+    order = {
+        void.case_ref: position
+        for position, void in enumerate(sorted(pending, key=lambda v: v.voided_at))
+    }
+
+    def transform(dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas()
+
+        def key(idx: Any) -> tuple[int, int]:
+            ref = frame.at[idx, "replaces_case_ref"]
+            if pd.notna(ref) and ref in order:
+                return (0, order[ref])
+            return (1, 0)
+
+        ordered = frame.loc[sorted(frame.index, key=key)].reset_index(drop=True)
+        return Dataset.from_pandas(ordered)
+
+    return transform
+
+
+def hopper_gate(capacity: int):
+    """Cut the queue at the Hopper's remaining capacity.
+
+    A gate, never a limit on the read (ADR-0021): every Case still enters the
+    pipeline and is scored, ranked and traced as *considered* -- this is the
+    only place some of them stop short of *selected*, so the trace stays the
+    availability-reporting source it needs to be. Traces as ``excluded by gate
+    'hopper'`` via the ``trace_role``/``trace_name`` attributes the builder
+    reads off any callable, plain function or not. ``capacity`` of 0 lands an
+    empty pool and JSON without error -- a fully-loaded Hopper is not a
+    failure.
+    """
+
+    def gate(dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas()
+        return Dataset.from_pandas(frame.head(capacity).reset_index(drop=True))
+
+    gate.trace_role = "gate"
+    gate.trace_name = "hopper"
+    return gate
+
+
 def selection_builder(
     candidates_reader: Reader,
     pool_writer: Writer,
@@ -348,17 +472,28 @@ def selection_builder(
     json_writer: Writer,
     pending_voids: Sequence[PendingVoid] = (),
     voided_refs: frozenset[str] = frozenset(),
+    hopper_capacity: int | None = None,
     run_log: RunLog | None = None,
 ) -> Pipeline:
-    """Build the Selection flow: score, gate, rank, replace voids, stamp, write.
+    """Build the Selection flow: score, gate, replace voids, queue, cap, write.
 
-    With no voids at all (``pending_voids`` and ``voided_refs`` both empty) this
-    is behaviourally identical to the pipeline before ADR-0021's replacement.
-    There is no second, rung-first sort: with a ladder, rung is a *per-void*
-    relation rather than a single column every row can be ranked by, and
-    nothing downstream consumes pool order today (no Hopper, no volume
-    target), so that half of the ADR is deferred -- see docs/selection.md.
+    With no voids at all (``pending_voids`` and ``voided_refs`` both empty) and
+    the Hopper under no pressure, this is behaviourally identical to the
+    pipeline before ADR-0021. There is still no second, rung-first sort over
+    the whole pool -- with a ladder, rung is a *per-void* relation, not a
+    single column every row can be ranked by. What the ADR calls queue order is
+    instead a lightweight reordering (``replacements_first``) just ahead of the
+    ``hopper`` gate that now consumes it: this run's replacements lead, oldest
+    void first, everything else keeping the priority sort's order.
+
+    ``hopper_capacity`` is resolved from ``HOPPER_DEPTH`` *inside* this body
+    when ``None``, rather than as the default argument value: a default is
+    bound once at import time, which would freeze the constant and defeat a
+    test's monkeypatch of it.
     """
+    if hopper_capacity is None:
+        hopper_capacity = HOPPER_DEPTH
+
     # ":pool" distinguishes this inner Pipeline's own run-log label from the
     # runner's outer "complaint_selection" label the same run also records under.
     p = Pipeline(f"{PIPELINE_NAME}:pool", run_log=run_log)
@@ -374,6 +509,8 @@ def selection_builder(
     )
     node = p.transform(Sort("priority_score", ascending=False), node, name="sort")
     node = p.transform(assign_replacements(pending_voids), node, name="replace-voids")
+    node = p.transform(replacements_first(pending_voids), node, name="queue")
+    node = p.transform(hopper_gate(hopper_capacity), node, name="hopper")
     node = p.transform(
         SelectColumns(
             [
@@ -417,6 +554,8 @@ def run(context: RunContext, *, describe: bool = False) -> Dataset:
     since = previous_run_instant(context)
     pending = pending_voids(voided, since, store.reader(POOL_TABLE))
     voided_refs = frozenset(ref for ref, _ in voided)
+    unallocated = unallocated_case_count(context.base_dir, store.reader(POOL_TABLE))
+    capacity = max(0, HOPPER_DEPTH - unallocated)
 
     p = selection_builder(
         candidates_reader=DatasetReader(candidates),
@@ -425,6 +564,7 @@ def run(context: RunContext, *, describe: bool = False) -> Dataset:
         json_writer=JsonWriter(json_path, Refresh()),
         pending_voids=pending,
         voided_refs=voided_refs,
+        hopper_capacity=capacity,
         run_log=context.run_log,
     )
     if describe:
@@ -444,7 +584,9 @@ def run(context: RunContext, *, describe: bool = False) -> Dataset:
         f"(Question Bank {variation.question_bank_id}, "
         f"logical run {context.logical_run_id}); "
         f"trace: {len(candidates)} considered, {excluded} excluded with a reason; "
-        f"voids: {len(pending)} pending, {replaced} replaced, {lapsed} lapsed"
+        f"voids: {len(pending)} pending, {replaced} replaced, {lapsed} lapsed; "
+        f"hopper: {unallocated} unallocated of {HOPPER_DEPTH} -> "
+        f"selecting up to {capacity}"
     )
     return pool
 

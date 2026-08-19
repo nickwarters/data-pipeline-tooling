@@ -2,8 +2,9 @@
 
 Complaints A/B/C stop at silver, so this pipeline is what turns three separate
 Case Type ingests into one governed Selection group: combine, score, gate,
-replace voids like-for-like (ADR-0021, reduced), rank, stamp, and land both
-the SelectionPool and its explain trace.
+replace voids like-for-like (ADR-0021, reduced), queue replacements ahead of
+the rest, cap the queue at the Hopper's remaining capacity, stamp, and land
+both the SelectionPool and its explain trace.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 
+import pandas as pd
 import pytest
 
 from framework.io import AccumulateByRun, Refresh
@@ -31,6 +33,7 @@ from pipelines.complaint_selection.pipeline import (
     run,
     selection_builder,
     slow_resolution_priority,
+    unallocated_case_count,
     voided_cases,
 )
 from pipelines.complaint_selection.schema import PendingVoid
@@ -40,6 +43,7 @@ from tests.framework_testing import (
     given_rows,
     read_rows,
     read_run_log,
+    rows_of,
 )
 from tools.medallion import medallion
 from tools.observability.run_log import RunLog
@@ -66,7 +70,9 @@ def test_the_plan_is_exactly_the_steps_it_always_has():
         "  [Transform] filter (depends on: voided)",
         "  [Transform] sort (depends on: filter)",
         "  [Transform] replace-voids (depends on: sort)",
-        "  [Transform] select (depends on: replace-voids)",
+        "  [Transform] queue (depends on: replace-voids)",
+        "  [Transform] hopper (depends on: queue)",
+        "  [Transform] select (depends on: hopper)",
         "  [Transform] stamp (depends on: select)",
         "  [Validate] post-validate (depends on: stamp)",
         "  [Explain] explain (depends on: post-validate)",
@@ -205,7 +211,8 @@ def test_freshness_requirement_resolves_against_path_addressed_ingest_history(
     """The bare, path-addressed label -- ``python -m cli run pipelines/complaints_a``
     and its siblings -- is what the declared ``UPSTREAMS`` actually resolve
     against, so a recent run under that label satisfies it as real history, not
-    the silent "no history, allow" first-run fallback.
+    the silent "no history, allow" first-run fallback. ``sharepoint_cases`` is
+    checked the same way, alongside the three ingests.
     """
     base_dir = build_databases(tmp_path, "selection_output")
     _seed_group(base_dir)
@@ -213,7 +220,7 @@ def test_freshness_requirement_resolves_against_path_addressed_ingest_history(
         "tools.observability.run_log.utc_now_iso",
         lambda: "2026-08-18T00:00:00+00:00",
     )
-    for member in ("complaints_a", "complaints_b", "complaints_c"):
+    for member in ("complaints_a", "complaints_b", "complaints_c", "sharepoint_cases"):
         RunLog(base_dir / "_runs" / f"{member}.log").record("seed", member, "run", "ok")
 
     run_pipeline(
@@ -226,11 +233,11 @@ def test_freshness_requirement_resolves_against_path_addressed_ingest_history(
 
     records = read_run_log(base_dir / "_runs" / f"{PIPELINE_NAME}.log")
     freshness = [record for record in records if record["step"] == "freshness"]
-    assert len(freshness) == 3
-    assert [record["status"] for record in freshness] == ["ok", "ok", "ok"]
+    assert len(freshness) == 4
+    assert [record["status"] for record in freshness] == ["ok", "ok", "ok", "ok"]
     # A first-run warn would mean the guard found no history at all -- exactly
     # the failure mode this test guards against.
-    assert [record["warn_hits"] for record in freshness] == [[], [], []]
+    assert [record["warn_hits"] for record in freshness] == [[], [], [], []]
 
 
 def test_a_stale_ingest_beyond_the_widened_window_blocks_the_run(tmp_path, monkeypatch):
@@ -244,6 +251,32 @@ def test_a_stale_ingest_beyond_the_widened_window_blocks_the_run(tmp_path, monke
         RunLog(base_dir / "_runs" / f"{member}.log").record("seed", member, "run", "ok")
 
     with pytest.raises(FreshnessError, match="upstream complaints_a is stale"):
+        run_pipeline(
+            run,
+            PIPELINE_NAME,
+            base_dir,
+            upstreams=UPSTREAMS,
+            run_date=dt.date(2026, 8, 18),
+        )
+
+
+def test_a_stale_sharepoint_cases_record_blocks_the_run_same_day(tmp_path, monkeypatch):
+    """The Hopper's own requirement: same-day, unlike the widened ingests.
+
+    The three ingests are seeded fresh enough for their own (10-day) window, so
+    this isolates the new, stricter ``sharepoint_cases`` requirement -- a
+    cap must not be sized from a number that might already be stale.
+    """
+    base_dir = build_databases(tmp_path, "selection_output")
+    _seed_group(base_dir)
+    monkeypatch.setattr(
+        "tools.observability.run_log.utc_now_iso",
+        lambda: "2026-08-17T00:00:00+00:00",
+    )
+    for member in ("complaints_a", "complaints_b", "complaints_c", "sharepoint_cases"):
+        RunLog(base_dir / "_runs" / f"{member}.log").record("seed", member, "run", "ok")
+
+    with pytest.raises(FreshnessError, match="upstream sharepoint_cases is stale"):
         run_pipeline(
             run,
             PIPELINE_NAME,
@@ -622,3 +655,232 @@ def test_each_row_consumes_at_most_one_void():
 
     assert out.loc[out["case_ref"] == "r1", "replaces_case_ref"].iloc[0] == "V1"
     assert out.loc[out["case_ref"] == "r2", "replaces_case_ref"].iloc[0] == "V2"
+
+
+# ── Hopper cap (ADR-0021) ──────────────────────────────────────────────────
+
+
+def test_hopper_gate_caps_the_queue_and_traces_the_cut_with_its_score():
+    rows = [
+        {
+            "case_ref": f"r{i}",
+            "case_type": "complaints_a",
+            "amount": 100 - i,
+            "attribute_a": None,
+            "related_date": None,
+        }
+        for i in range(5)
+    ]
+    reader = given_rows(rows)
+    pool_writer, trace_writer, json_writer = (
+        RecordingWriter(),
+        RecordingWriter(),
+        RecordingWriter(),
+    )
+
+    p = selection_builder(
+        reader, pool_writer, trace_writer, json_writer, hopper_capacity=3
+    )
+    p.run()
+
+    pool = rows_of(pool_writer)
+    assert [row["case_ref"] for row in pool] == ["r0", "r1", "r2"]
+
+    trace = {row["case_ref"]: row for row in rows_of(trace_writer)}
+    for ref in ("r3", "r4"):
+        assert trace[ref]["verdict"] == "excluded"
+        assert "hopper" in trace[ref]["reason"]
+        assert trace[ref]["score"] is not None
+        # A trace column mixing int ranks with an excluded row's None upcasts
+        # to float, so a dropped rank round-trips as NaN, not None.
+        assert pd.isna(trace[ref]["rank"])
+
+
+def test_a_replacement_jumps_the_queue_ahead_of_a_higher_scorer():
+    rows = [
+        {
+            "case_ref": "high",
+            "case_type": "complaints_b",
+            "priority": "high",
+            "attribute_a": None,
+            "related_date": None,
+        },
+        {
+            "case_ref": "repl",
+            "case_type": "complaints_a",
+            "amount": 55,
+            "attribute_a": None,
+            "related_date": None,
+        },
+    ]
+    pending = (
+        PendingVoid(
+            "V1", _VOIDED_AT, {"attribute_a": None, "case_type": "complaints_a"}
+        ),
+    )
+    reader = given_rows(rows)
+    pool_writer, trace_writer, json_writer = (
+        RecordingWriter(),
+        RecordingWriter(),
+        RecordingWriter(),
+    )
+
+    p = selection_builder(
+        reader,
+        pool_writer,
+        trace_writer,
+        json_writer,
+        pending_voids=pending,
+        hopper_capacity=1,
+    )
+    p.run()
+
+    pool = rows_of(pool_writer)
+    assert [(row["case_ref"], row["replaces_case_ref"]) for row in pool] == [
+        ("repl", "V1")
+    ]
+
+    trace = {row["case_ref"]: row for row in rows_of(trace_writer)}
+    assert trace["high"]["verdict"] == "excluded"
+    assert "hopper" in trace["high"]["reason"]
+    assert trace["high"]["score"] == 100
+
+
+def test_a_replacements_rank_reflects_queue_position_not_score():
+    """``rank`` in the trace now records queue position: a replacement can
+    outrank a higher scorer, and a survivor's reason never mentions the
+    hopper -- survivors only accumulate the filter/join gates they passed.
+    """
+    rows = [
+        {
+            "case_ref": "high",
+            "case_type": "complaints_b",
+            "priority": "high",
+            "attribute_a": None,
+            "related_date": None,
+        },
+        {
+            "case_ref": "repl",
+            "case_type": "complaints_a",
+            "amount": 55,
+            "attribute_a": None,
+            "related_date": None,
+        },
+    ]
+    pending = (
+        PendingVoid(
+            "V1", _VOIDED_AT, {"attribute_a": None, "case_type": "complaints_a"}
+        ),
+    )
+    reader = given_rows(rows)
+    pool_writer, trace_writer, json_writer = (
+        RecordingWriter(),
+        RecordingWriter(),
+        RecordingWriter(),
+    )
+
+    # Capacity 2: both survive, isolating rank from the hopper cut.
+    p = selection_builder(
+        reader,
+        pool_writer,
+        trace_writer,
+        json_writer,
+        pending_voids=pending,
+        hopper_capacity=2,
+    )
+    p.run()
+
+    trace = {row["case_ref"]: row for row in rows_of(trace_writer)}
+    assert trace["repl"]["verdict"] == "selected"
+    assert trace["repl"]["rank"] == 1
+    assert trace["high"]["verdict"] == "selected"
+    assert trace["high"]["rank"] == 2
+    assert "hopper" not in trace["repl"]["reason"]
+    assert "hopper" not in trace["high"]["reason"]
+
+
+def test_unallocated_case_count_counts_in_progress_unassigned_cases_in_the_pool(
+    tmp_path,
+):
+    base_dir = build_databases(tmp_path, "sharepoint_cases/gold")
+    _seed_case_current(
+        base_dir,
+        [
+            {"title": "R1", "status": "In-progress", "assigned_reviewer_name": None},
+            {"title": "R2", "status": "In-progress", "assigned_reviewer_name": "   "},
+            {
+                "title": "R3",
+                "status": "In-progress",
+                "assigned_reviewer_name": "a.khan",
+            },
+            {"title": "R4", "status": "Void", "assigned_reviewer_name": None},
+            {
+                "title": "R5",  # In-progress, unassigned, but not in the pool
+                "status": "In-progress",
+                "assigned_reviewer_name": None,
+            },
+            {"title": None, "status": "In-progress", "assigned_reviewer_name": None},
+            {"title": "", "status": "In-progress", "assigned_reviewer_name": None},
+        ],
+    )
+    pool_reader = given_rows([{"case_ref": ref} for ref in ("R1", "R2", "R3", "R4")])
+
+    assert unallocated_case_count(base_dir, pool_reader) == 2
+
+
+def test_unallocated_case_count_is_zero_when_the_sync_store_or_the_pool_is_missing(
+    tmp_path,
+):
+    working_pool = given_rows([{"case_ref": "R1"}])
+    assert unallocated_case_count(tmp_path, working_pool) == 0  # no sync gold at all
+
+    base_dir = build_databases(tmp_path, "sharepoint_cases/gold")
+    _seed_case_current(
+        base_dir,
+        [{"title": "R1", "status": "In-progress", "assigned_reviewer_name": None}],
+    )
+    # A database file that has never been created (not merely a missing table
+    # in one that has): the same "unable to open database file" shape a
+    # not-yet-landed pool raises, before its migration has ever run here.
+    missing_pool = StoreRegistry(base_dir / "unmigrated").store("x").reader(POOL_TABLE)
+    assert unallocated_case_count(base_dir, missing_pool) == 0
+
+
+def test_a_full_hopper_selects_nothing_and_reports_zero_capacity(
+    tmp_path, monkeypatch, capsys
+):
+    base_dir = build_databases(tmp_path, "sharepoint_cases/gold", "selection_output")
+    _seed_group(base_dir)  # selects B1, R001, C1
+
+    run(RunContext(base_dir=base_dir, pipeline=PIPELINE_NAME))
+
+    store = StoreRegistry(base_dir).store(f"{OUTPUT_SUBJECT}/{PIPELINE_NAME}")
+    selected = [row["case_ref"] for row in read_rows(store, POOL_TABLE)]
+    assert len(selected) == 3
+
+    _seed_case_current(
+        base_dir,
+        [
+            {"title": ref, "status": "In-progress", "assigned_reviewer_name": None}
+            for ref in selected
+        ],
+    )
+    # A fresh, above-threshold candidate for run 2 to consider and be denied.
+    _seed_silver(
+        base_dir,
+        "complaints_a",
+        [{"record_id": "R900", "label": "delta", "amount": 95}],
+        load_date="2026-08-19",
+    )
+    monkeypatch.setattr(
+        "pipelines.complaint_selection.pipeline.HOPPER_DEPTH", len(selected)
+    )
+
+    run(RunContext(base_dir=base_dir, pipeline=PIPELINE_NAME))
+
+    assert read_rows(store, POOL_TABLE) == []
+    trace = {row["case_ref"]: row for row in read_rows(store, TRACE_TABLE)}
+    assert trace["R900"]["verdict"] == "excluded"
+    assert "hopper" in trace["R900"]["reason"]
+
+    assert "selecting up to 0" in capsys.readouterr().out
