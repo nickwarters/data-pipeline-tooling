@@ -23,6 +23,7 @@ from pipelines.sharepoint_cases.gold import (
     DETAIL_GRAIN,
     DETAIL_TABLES,
     GOLD_TABLES,
+    UNKNOWN_BRAND,
 )
 from pipelines.sharepoint_cases.pipeline import FEED_NAME, run
 from pipelines.sharepoint_cases.schema import CASE_LISTS
@@ -240,3 +241,15 @@ def test_the_whole_feed_refines_one_full_nest_case_to_gold_across_two_polls(tmp_
     [throughput] = read_rows(med.gold, "case_throughput_daily")
     assert throughput["terminal_status"] == "Completed"
     assert throughput["case_count"] == 1
+    assert (throughput["brand"], throughput["case_type"]) == (
+        UNKNOWN_BRAND,
+        case["case_type"],
+    )
+    assert throughput["assigned_reviewer_name"] == case["assigned_reviewer_name"]
+
+    # The item fixture carries no AssignedAt, so the winning Case's
+    # age-from-assigned row lands in the unknown bucket -- "never assigned",
+    # not corruption.
+    [age_from_assigned] = read_rows(med.gold, "case_age_from_assigned_buckets_current")
+    assert age_from_assigned["age_bucket"] == "unknown"
+    assert age_from_assigned["case_count"] == 1

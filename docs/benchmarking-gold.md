@@ -48,7 +48,7 @@ finding and the absolute seconds as specific to the machine and the disk.
 | Phase | Reads | Grows with |
 |---|---|---|
 | `case_current` | the **whole** silver history | every observation ever polled — forever |
-| the three `case_current`-sourced aggregates | the resulting current-state frame, already in memory | the **Case count** — bounded by the team's workload |
+| the four `case_current`-sourced aggregates (`case_counts_current`, `case_age_buckets_current`, `case_age_from_assigned_buckets_current`, `case_throughput_daily`) | the resulting current-state frame, already in memory | the **Case count** — bounded by the team's workload |
 
 Silver is append-only, so the first phase has no natural ceiling. The second
 touches one row per Case, and never sees the history at all.
@@ -85,10 +85,11 @@ hour while leaving the phase that actually grows exactly where it is. It would
 also cost a pipeline, a schedule entry, a freshness dependency and a re-read of
 `case_current` from disk that the in-process version gets for free.
 
-There is a second reason, independent of cost. `case_counts_current` and
-`case_age_buckets_current` are *current-state* tables — who is holding what, and
-what is ageing. Publishing them daily while the feed syncs hourly would leave
-them up to a day stale, which defeats the point of syncing hourly.
+There is a second reason, independent of cost. `case_counts_current`,
+`case_age_buckets_current` and `case_age_from_assigned_buckets_current` are
+*current-state* tables — who is holding what, and what is ageing. Publishing
+them daily while the feed syncs hourly would leave them up to a day stale,
+which defeats the point of syncing hourly.
 
 **When it does become a problem, `case_current` is the thing to attack.** Taking
 ~60s per hourly run as the point where the work starts to feel wasteful, that is

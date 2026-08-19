@@ -10,6 +10,7 @@ CREATE TABLE "reviewer_activity_daily" (
 "reviewer_account" TEXT,
   "reportable_date" DATE,
   "case_type" TEXT,
+  "brand" TEXT,
   "count" INTEGER,
   "as_of_utc" TEXT,
   "pipeline_run_id" TEXT

@@ -13,6 +13,7 @@ from framework.run import RunContext
 from framework.transform import CoercionError
 from pipelines.reviewer_activity import pipeline as reviewer_pipeline
 from pipelines.reviewer_activity import report_feed
+from pipelines.reviewer_activity.gold import UNKNOWN_BRAND
 from pipelines.reviewer_activity.pipeline import publish_report_feeds
 from pipelines.reviewer_activity.report_feed import (
     ReportFeedWriter,
@@ -37,6 +38,7 @@ def _row(
         "reviewer_account": account,
         "reportable_date": reportable_date,
         "case_type": case_type,
+        "brand": UNKNOWN_BRAND,
         "count": count,
         "as_of_utc": AS_OF,
     }

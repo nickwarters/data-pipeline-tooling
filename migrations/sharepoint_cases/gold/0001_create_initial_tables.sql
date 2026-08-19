@@ -99,7 +99,22 @@ CREATE TABLE "appeal_outcomes_current" (
 );
 
 CREATE TABLE "case_age_buckets_current" (
-"age_bucket" TEXT,
+"brand" TEXT,
+  "case_type" TEXT,
+  "assigned_reviewer_name" TEXT,
+  "age_bucket" TEXT,
+  "age_bucket_order" INTEGER,
+  "status" TEXT,
+  "case_count" INTEGER,
+  "as_of_utc" TEXT,
+  "pipeline_run_id" TEXT
+);
+
+CREATE TABLE "case_age_from_assigned_buckets_current" (
+"brand" TEXT,
+  "case_type" TEXT,
+  "assigned_reviewer_name" TEXT,
+  "age_bucket" TEXT,
   "age_bucket_order" INTEGER,
   "status" TEXT,
   "case_count" INTEGER,
@@ -108,8 +123,9 @@ CREATE TABLE "case_age_buckets_current" (
 );
 
 CREATE TABLE "case_counts_current" (
-"assigned_reviewer_name" TEXT,
-  "assigned_reviewer_manager_name" TEXT,
+"brand" TEXT,
+  "case_type" TEXT,
+  "assigned_reviewer_name" TEXT,
   "status" TEXT,
   "case_count" INTEGER,
   "as_of_utc" TEXT,
@@ -183,6 +199,9 @@ CREATE TABLE "case_detail" (
 
 CREATE TABLE "case_throughput_daily" (
 "terminal_date" TEXT,
+  "brand" TEXT,
+  "case_type" TEXT,
+  "assigned_reviewer_name" TEXT,
   "terminal_status" TEXT,
   "case_count" INTEGER,
   "as_of_utc" TEXT,

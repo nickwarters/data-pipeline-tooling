@@ -1,14 +1,21 @@
 """Gold for the ``sharepoint_cases`` feed: the current Case, its Detail Tables,
-and five aggregates.
+and six aggregates.
 
 Silver is an append-only history of *observations* across every declared Case
 list. Gold reduces that three ways. Every table is rebuilt whole with
 ``Refresh()`` on every poll, so a re-drive converges rather than accumulating.
 Every table's declared grain is in ``docs/data-dictionary-sharepoint-cases.md``.
 
+Every Case-counting aggregate carries a common floor grain, ``BASE_DIMENSIONS``
+below (brand x case type x assigned reviewer, plus the table's day column where
+the table is daily): any report rolls up from that floor, and extra dimensions
+beyond it are per-metric (status, age bucket). The two Detail-Table aggregates
+below count a different thing (answer/appeal rows, not Cases) and sit outside
+that family.
+
 The Detail Tables, named in ``DETAIL_TABLES`` (derived from ``GOLD_TABLES`` and
 ``DETAIL_GRAIN``), hold the child rows of the Cases' *winning* observation.
-Two of the five aggregates -- ``answer_remediation_current`` and
+Two of the six aggregates -- ``answer_remediation_current`` and
 ``appeal_outcomes_current`` -- reduce from a Detail Table (``answer`` and
 ``appeal`` respectively) rather than from ``case_current``, per
 ``DETAIL_AGGREGATES`` below.
@@ -64,6 +71,7 @@ GOLD_TABLES = (
     "case_detail",
     "case_counts_current",
     "case_age_buckets_current",
+    "case_age_from_assigned_buckets_current",
     "case_throughput_daily",
     "answer_remediation_current",
     "appeal_outcomes_current",
@@ -144,14 +152,24 @@ UNDECIDED = "(undecided)"
 UNRESOLVED = "(unresolved)"
 UNSTATED = "(unstated)"
 
-# The grain of ``case_counts_current``, in the order it groups and sorts by. The
-# Assigned Reviewer leads: the question this table answers is "who is holding
-# what", and the manager is the roll-up over that, not the other way round.
-COUNT_DIMENSIONS = (
-    "assigned_reviewer_name",
-    "assigned_reviewer_manager_name",
-    "status",
-)
+# No source reachable from this feed carries brand yet -- there is no join path
+# to pipelines.ref_lookup, where it exists today. Every Case-counting aggregate
+# still carries the column, filled with this literal, so the grain's shape does
+# not change the day a brand source lands; only this fill does.
+UNKNOWN_BRAND = "(unknown)"
+
+# The floor grain every Case-counting aggregate carries, so any report rolls up
+# from a common base; a table's extra dimensions beyond these are per-metric
+# (status, age bucket). Brand leads: it is the widest roll-up, then Case Type,
+# then who is holding the Case.
+BASE_DIMENSIONS = ("brand", "case_type", "assigned_reviewer_name")
+
+# The grain of ``case_counts_current``, in the order it groups and sorts by.
+COUNT_DIMENSIONS = (*BASE_DIMENSIONS, "status")
+
+# The grain of ``case_throughput_daily``; the day column leads, since it is
+# the extra dimension a daily table adds to the base grain.
+THROUGHPUT_DIMENSIONS = ("terminal_date", *BASE_DIMENSIONS, "terminal_status")
 
 # The grain of ``answer_remediation_current``. ``case_type`` leads: question_ids
 # are drawn from a per-Case-Type question bank, so grouping without it would sum
@@ -275,40 +293,41 @@ def winning_observations(observations: Reader) -> Dataset:
 
 
 def case_counts(dataset: Dataset) -> Dataset:
-    """Count current Cases by reviewer, that reviewer's manager, and status."""
-    # Only the two Person columns are filled; ``status`` is declared non-null in
-    # silver and a null there is a schema breach, not a reporting gap.
+    """Count current Cases by the base grain and status."""
+    # ``status`` is declared non-null in silver and a null there is a schema
+    # breach, not a reporting gap, so only the Person and brand columns fill.
+    frame = dataset.to_pandas().assign(brand=UNKNOWN_BRAND)
     return _counted(
-        dataset.to_pandas(),
+        frame,
         COUNT_DIMENSIONS,
-        fills={
-            "assigned_reviewer_name": UNASSIGNED,
-            "assigned_reviewer_manager_name": UNASSIGNED,
-        },
+        fills={"assigned_reviewer_name": UNASSIGNED},
         measure="case_count",
     )
 
 
-def _age_in_days(created: pd.Timestamp | None, as_of_day: dt.date) -> int | None:
-    """Whole local calendar days from ``created`` to ``as_of_day``, or ``None``.
+def _age_in_days(stamp: pd.Timestamp | None, as_of_day: dt.date) -> int | None:
+    """Whole local calendar days from ``stamp`` to ``as_of_day``, or ``None``.
 
-    Both ends are converted to a **local** calendar date first. Taking ``.date()``
-    off a UTC instant would pass on a UTC box and be a day out for a UK operator
-    in British Summer Time -- the exact confusion ``tools.observability.
-    timestamps`` exists to settle.
+    ``stamp`` is whichever column ``age_buckets``'s ``age_from`` names --
+    ``created`` or ``assigned_at``. Both ends are converted to a **local**
+    calendar date first. Taking ``.date()`` off a UTC instant would pass on a
+    UTC box and be a day out for a UK operator in British Summer Time -- the
+    exact confusion ``tools.observability.timestamps`` exists to settle.
     """
-    if created is None or created is pd.NaT or pd.isna(created):
+    if stamp is None or stamp is pd.NaT or pd.isna(stamp):
         return None
-    return (as_of_day - local_date(created)).days
+    return (as_of_day - local_date(stamp)).days
 
 
 def _age_bucket(age_days: int | None) -> tuple[str, int]:
     """The bucket ``age_days`` falls in, as ``(label, sort order)``.
 
-    A negative age means the Case was created after the window this run is
-    reporting as of, which cannot happen while ``created <= Modified < as_of``.
-    So it is corruption, and it is bucketed as ``unknown`` where someone will see
-    it rather than clamped to zero where nobody will.
+    A negative age means the stamp ``age_days`` was measured from is after the
+    window this run is reporting as of, which cannot happen for either stamp
+    ``age_buckets`` supports (``created <= Modified < as_of``; an Assigned At
+    stamp is written no later than that same window). So it is corruption, and
+    it is bucketed as ``unknown`` where someone will see it rather than
+    clamped to zero where nobody will.
     """
     if age_days is None or age_days < 0:
         return UNKNOWN_AGE_BUCKET
@@ -318,16 +337,30 @@ def _age_bucket(age_days: int | None) -> tuple[str, int]:
     raise AssertionError("the last bucket is open-ended")  # pragma: no cover
 
 
-def age_buckets(dataset: Dataset, *, as_of: dt.datetime) -> Dataset:
-    """Count current Cases by age bucket and status."""
+def age_buckets(
+    dataset: Dataset, *, as_of: dt.datetime, age_from: str = "created"
+) -> Dataset:
+    """Count current Cases by the base grain, age bucket, and status.
+
+    ``age_from`` names the stamp column the age is measured from: ``created``
+    for the age-since-created profile, or ``assigned_at`` for the twin
+    age-since-assigned one. A missing ``created`` is corruption -- every
+    landed Case has one -- whereas a missing ``assigned_at`` is an ordinary
+    never-assigned state, so ``unknown`` means two different things depending
+    on ``age_from``.
+    """
     frame = dataset.to_pandas()
     as_of_day = local_date(as_of)
-    created = pd.to_datetime(
-        frame["created"], utc=True, format="ISO8601", errors="coerce"
-    )
-    buckets = [_age_bucket(_age_in_days(value, as_of_day)) for value in created]
+    stamp = pd.to_datetime(frame[age_from], utc=True, format="ISO8601", errors="coerce")
+    buckets = [_age_bucket(_age_in_days(value, as_of_day)) for value in stamp]
+    # See UNASSIGNED above: without this fill, groupby would drop unassigned
+    # Cases from the total.
     counted = (
         frame.assign(
+            brand=UNKNOWN_BRAND,
+            assigned_reviewer_name=frame["assigned_reviewer_name"].where(
+                frame["assigned_reviewer_name"].notna(), UNASSIGNED
+            ),
             age_bucket=pd.Series(
                 [label for label, _ in buckets], index=frame.index, dtype="object"
             ),
@@ -335,26 +368,30 @@ def age_buckets(dataset: Dataset, *, as_of: dt.datetime) -> Dataset:
                 [order for _, order in buckets], index=frame.index, dtype="int64"
             ),
         )
-        .groupby(["age_bucket", "age_bucket_order", "status"])
+        .groupby([*BASE_DIMENSIONS, "age_bucket", "age_bucket_order", "status"])
         .size()
         .reset_index(name="case_count")
-        .sort_values(["age_bucket_order", "status"], kind="stable")
+        .sort_values([*BASE_DIMENSIONS, "age_bucket_order", "status"], kind="stable")
     )
     return Dataset.from_pandas(counted.reset_index(drop=True))
 
 
 def throughput(dataset: Dataset) -> Dataset:
-    """Count current Cases by the local date their terminal stamp falls on."""
+    """Count current Cases by the base grain and the local date their terminal
+    stamp falls on."""
     frame = dataset.to_pandas()
     terminal = frame[frame["status"].isin(TERMINAL_STATUSES.keys())]
     if terminal.empty:
         # Declared rather than derived, so a poll with nothing terminal in it
-        # still refreshes the table in the shape a populated one has.
+        # still refreshes the table in the shape a populated one has -- built
+        # from THROUGHPUT_DIMENSIONS so it cannot desync from the populated path.
         return Dataset.from_pandas(
             pd.DataFrame(
                 {
-                    "terminal_date": pd.Series(dtype="object"),
-                    "terminal_status": pd.Series(dtype="object"),
+                    **{
+                        column: pd.Series(dtype="object")
+                        for column in THROUGHPUT_DIMENSIONS
+                    },
                     "case_count": pd.Series(dtype="int64"),
                 }
             )
@@ -377,17 +414,16 @@ def throughput(dataset: Dataset) -> Dataset:
         UNSTAMPED if pd.isna(stamp) else local_date(stamp).isoformat()
         for stamp in stamps
     ]
-    counted = (
+    return _counted(
         terminal.assign(
             terminal_date=pd.Series(dates, index=terminal.index, dtype="object"),
             terminal_status=terminal["status"],
-        )
-        .groupby(["terminal_date", "terminal_status"])
-        .size()
-        .reset_index(name="case_count")
-        .sort_values(["terminal_date", "terminal_status"], kind="stable")
+            brand=UNKNOWN_BRAND,
+        ),
+        THROUGHPUT_DIMENSIONS,
+        fills={"assigned_reviewer_name": UNASSIGNED},
+        measure="case_count",
     )
-    return Dataset.from_pandas(counted.reset_index(drop=True))
 
 
 def _counted(
@@ -572,7 +608,7 @@ def publish_gold(
     """Rebuild every gold table from the accumulated silver history.
 
     ``case_current`` is published first and its dataset feeds the Detail
-    Tables and the five aggregates, so silver is read once and each of them
+    Tables and the six aggregates, so silver is read once and each of them
     reduces exactly the current table's own rows. They commit independently,
     in order; a failure part-way leaves the earlier ones refreshed, which is
     safe because the caller has not advanced any watermark and the next run
@@ -620,11 +656,16 @@ def publish_gold(
             sources[table] = dataset
 
     for table, step, transform in (
-        ("case_counts_current", "count-by-reviewer-and-status", case_counts),
+        ("case_counts_current", "count-by-base-grain-and-status", case_counts),
         (
             "case_age_buckets_current",
             "bucket-by-age",
             partial(age_buckets, as_of=as_of),
+        ),
+        (
+            "case_age_from_assigned_buckets_current",
+            "bucket-by-age-from-assigned",
+            partial(age_buckets, as_of=as_of, age_from="assigned_at"),
         ),
         ("case_throughput_daily", "count-by-terminal-date", throughput),
         (

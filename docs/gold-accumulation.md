@@ -317,7 +317,7 @@ the second of any of them for the same Case.
 ### Aggregating a Detail Table
 
 An Aggregate table normally reduces `case_current` (see `case_counts` above).
-Two of `pipelines/sharepoint_cases/gold.py`'s five aggregates —
+Two of `pipelines/sharepoint_cases/gold.py`'s six aggregates —
 `answer_remediation_current` and `appeal_outcomes_current` — reduce from a
 Detail Table instead: `answer` and `appeal` respectively, named in
 `DETAIL_AGGREGATES`.

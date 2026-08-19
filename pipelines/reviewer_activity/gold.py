@@ -28,6 +28,9 @@ SOURCE_COLUMNS = (
     "as_of_utc",
 )
 
+# Same fill, same reason as pipelines.sharepoint_cases.gold.UNKNOWN_BRAND.
+UNKNOWN_BRAND = "(unknown)"
+
 
 def normalize_reviewer_account(value: object) -> str | None:
     """Return the lower-cased bare account represented by a claims login."""
@@ -59,6 +62,7 @@ def _empty_result() -> pd.DataFrame:
             "reviewer_account": pd.Series([], dtype="string"),
             "reportable_date": pd.Series([], dtype="datetime64[ns]"),
             "case_type": pd.Series([], dtype="string"),
+            "brand": pd.Series([], dtype="string"),
             "count": pd.Series([], dtype="int64"),
             "as_of_utc": pd.Series([], dtype="string"),
         }
@@ -66,7 +70,8 @@ def _empty_result() -> pd.DataFrame:
 
 
 def aggregate_reviewer_activity(dataset: Dataset) -> Dataset:
-    """Count non-void current Cases by reviewer, local date, and Case Type."""
+    """Count non-void current Cases by reviewer, local date, Case Type, and
+    brand."""
     frame = dataset.to_pandas().copy()
 
     eligible = frame.loc[frame["status"].ne("Void")].copy()
@@ -88,9 +93,10 @@ def aggregate_reviewer_activity(dataset: Dataset) -> Dataset:
     if eligible.empty:
         return Dataset.from_pandas(_empty_result())
 
+    eligible["brand"] = UNKNOWN_BRAND
     grouped = (
         eligible.groupby(
-            ["reviewer_account", "reportable_date", "case_type"],
+            ["reviewer_account", "reportable_date", "case_type", "brand"],
             sort=True,
             dropna=False,
         )
@@ -106,7 +112,14 @@ def aggregate_reviewer_activity(dataset: Dataset) -> Dataset:
         [as_of] * len(grouped), index=grouped.index, dtype="string"
     )
     result = grouped[
-        ["reviewer_account", "reportable_date", "case_type", "count", "as_of_utc"]
+        [
+            "reviewer_account",
+            "reportable_date",
+            "case_type",
+            "brand",
+            "count",
+            "as_of_utc",
+        ]
     ]
     return Dataset.from_pandas(result.reset_index(drop=True))
 

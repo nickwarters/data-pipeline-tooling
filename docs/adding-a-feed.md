@@ -126,7 +126,7 @@ pipelines/orders` imports `pipelines.orders.pipeline` and executes
   a `TODO` to build the assembly, because *what* gold means is per-feed. For a
   worked example of a real one, see
   `pipelines/sharepoint_cases/gold.py`: a current-state reduce with a declared
-  grain, plus five aggregates, all refreshed whole on every run.
+  grain, plus six aggregates, all refreshed whole on every run.
 
 ### Each hop is wired where you can see it
 
