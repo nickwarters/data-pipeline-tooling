@@ -15,6 +15,14 @@ each anti-joined against its own ledger table. Emits one JSON file per pass into
 the deliverable outbox: an array of objects carrying exactly ``recipients`` /
 ``subject`` / ``body``, one object per Case per trigger. The path is unique per
 pass, so a `Refresh` can never overwrite a file nobody has drained yet.
+
+Every line below **does its work when it is reached**: put a breakpoint on one,
+step over it, and the variable holds the actual rows at that point
+([ADR-0027](../../docs/adr/0027-eager-steps-are-the-default-authoring-model.md)).
+Where a rule takes two inputs -- pairing a thread with its Case, resolving
+recipients against the directory -- it is a plain Python call wrapped in
+``step``, which keeps it a timed, named record in the run log without pretending
+it is a one-input transform.
 """
 
 from __future__ import annotations
@@ -28,14 +36,16 @@ from typing import Callable
 
 import pandas as pd
 
-from framework.core import Dataset, PipelineError, Reader, Writer, format_failure
-from framework.io import AppendOnly, DatasetReader, JsonWriter, Refresh
+from framework.core import Dataset, PipelineError, Writer, format_failure
+from framework.io import AppendOnly, JsonWriter, Refresh
 from framework.run import (
     FreshnessRequirement,
-    Pipeline,
     RunContext,
-    RunLog,
+    read,
     run_pipeline,
+    step,
+    transform,
+    write,
 )
 from framework.transform import AntiJoinWith
 from readers.sharepoint_cases import ConversationMessagesReader, CurrentCasesReader
@@ -321,16 +331,8 @@ def render_notifications(
     return Dataset.from_pandas(pd.DataFrame(rows, columns=list(OUTBOX_COLUMNS)))
 
 
-def ledger_rows(
-    pending: Dataset, *_written: Dataset, ledger_key: tuple[str, ...]
-) -> Dataset:
-    """Project the notified recipients down to a ledger's key.
-
-    Takes the outbox write's result as a further input purely to order the two
-    writes: nobody is recorded as told until the file telling them has landed.
-    A crash between the two costs a duplicate notification, which is the safe
-    direction.
-    """
+def ledger_rows(pending: Dataset, *, ledger_key: tuple[str, ...]) -> Dataset:
+    """Project the notified recipients down to a ledger's key."""
     frame = pending.to_pandas().loc[:, list(ledger_key)].drop_duplicates()
     return Dataset.from_pandas(frame.reset_index(drop=True))
 
@@ -353,108 +355,97 @@ def ledger_reader(
     return read
 
 
-# --- the builders -----------------------------------------------------------
+# --- the passes -------------------------------------------------------------
 
 
-def pending_notifications_builder(
-    messages: Reader,
-    cases: Reader,
-    users: Reader,
+def pending_notifications(
+    messages: Dataset,
+    cases: Dataset,
+    users: Dataset,
     ledger: Callable[[], Dataset],
-    *,
-    run_log: RunLog | None = None,
-) -> Pipeline:
-    """Build the selection half: who is owed a notification they have not had."""
-    p = Pipeline(f"{PIPELINE_NAME}:pending", run_log=run_log)
-    thread = p.transform(
-        last_message_per_case,
-        p.read(messages, name="read-messages"),
-        name="last-message",
-    )
-    live = p.transform(
-        live_cases, p.read(cases, name="read-cases"), name="drop-terminal"
-    )
-    joined = p.transform(join_threads_to_cases, thread, live, name="join-case")
-    resolved = p.transform(
-        recipients_of, joined, p.read(users, name="read-users"), name="recipients"
-    )
-    p.transform(
+) -> Dataset:
+    """Who is owed a new-message notification and has not already had it."""
+    thread = transform(last_message_per_case, messages, name="last-message")
+    live = transform(live_cases, cases, name="drop-terminal")
+
+    # Two inputs, so a plain call rather than a one-input ``transform``. ``step``
+    # keeps it a timed, named record in the run log all the same.
+    with step("join-case", rows_in=len(thread)) as metrics:
+        joined = join_threads_to_cases(thread, live)
+        metrics.rows_out = len(joined)
+
+    with step("recipients", rows_in=len(joined)) as metrics:
+        resolved = recipients_of(joined, users)
+        metrics.rows_out = len(resolved)
+
+    return transform(
         AntiJoinWith(ledger, on=list(LEDGER_KEY), name="already-notified"),
         resolved,
         name="drop-notified",
     )
-    return p
 
 
-def reportable_notifications_builder(
-    cases: Reader,
-    users: Reader,
+def reportable_notifications(
+    cases: Dataset,
+    users: Dataset,
     ledger: Callable[[], Dataset],
-    *,
-    run_log: RunLog | None = None,
-) -> Pipeline:
-    """Build the selection half for the Reportable-with-remediation trigger.
+) -> Dataset:
+    """Who is owed a Reportable-with-remediation notification, and has not had it.
 
     A second, independent selection over the same ``case_current`` -- not a
-    branch of ``pending_notifications_builder``'s graph -- so each trigger
-    anti-joins its own ledger with its own key.
+    branch of :func:`pending_notifications` -- so each trigger anti-joins its own
+    ledger with its own key. Its steps are named apart from the other pass's for
+    the same reason: one run log, two passes, and an operator reading it back
+    should be able to tell which one dropped a row.
     """
-    p = Pipeline(f"{PIPELINE_NAME}:reportable", run_log=run_log)
-    selected = p.transform(
-        reportable_cases, p.read(cases, name="read-cases"), name="select-reportable"
-    )
-    resolved = p.transform(
-        responsible_party_and_manager_of,
-        selected,
-        p.read(users, name="read-users"),
-        name="recipients",
-    )
-    p.transform(
+    selected = transform(reportable_cases, cases, name="select-reportable")
+
+    with step("reportable-recipients", rows_in=len(selected)) as metrics:
+        resolved = responsible_party_and_manager_of(selected, users)
+        metrics.rows_out = len(resolved)
+
+    return transform(
         AntiJoinWith(ledger, on=list(REPORTABLE_LEDGER_KEY), name="already-notified"),
         resolved,
-        name="drop-notified",
+        name="reportable-drop-notified",
     )
-    return p
 
 
-def outbox_builder(
+def publish(
     rendered: Dataset,
     outbox: Writer,
     pending: Dataset,
     ledger: Writer,
     pending_reportable: Dataset,
     reportable_ledger: Writer,
-    *,
-    run_log: RunLog | None = None,
-) -> Pipeline:
-    """Build the publication half: the one file first, then each ledger's rows.
+) -> None:
+    """Write the one outbox file, then each ledger's rows.
 
-    The union happens in plain Python before this is called.
+    The order of these lines *is* the ordering guarantee: nobody is recorded as
+    told until the file telling them has landed. A crash between the two costs a
+    duplicate notification, which is the safe direction. Expressing that used to
+    take an extra graph edge feeding each ledger step the outbox write's result;
+    written out, it is simply which line comes first.
     """
-    p = Pipeline(f"{PIPELINE_NAME}:outbox", run_log=run_log)
-    source = p.read(DatasetReader(rendered), name="read-rendered")
-    written = p.write(outbox, source, name="write-outbox")
-    p.write(
+    write(outbox, rendered, name="write-outbox")
+    write(
         ledger,
-        p.transform(
+        transform(
             functools.partial(ledger_rows, ledger_key=LEDGER_KEY),
-            p.read(DatasetReader(pending), name="read-pending"),
-            written,
+            pending,
             name="ledger-rows",
         ),
         name="write-ledger",
     )
-    p.write(
+    write(
         reportable_ledger,
-        p.transform(
+        transform(
             functools.partial(ledger_rows, ledger_key=REPORTABLE_LEDGER_KEY),
-            p.read(DatasetReader(pending_reportable), name="read-pending-reportable"),
-            written,
+            pending_reportable,
             name="ledger-rows-reportable",
         ),
         name="write-ledger-reportable",
     )
-    return p
 
 
 # --- the run ----------------------------------------------------------------
@@ -466,7 +457,7 @@ def outbox_filename(generated_at: str, pipeline_run_id: str) -> str:
     return f"{stamp}-{pipeline_run_id[:8]}.json"
 
 
-def run(context: RunContext, *, describe: bool = False) -> Dataset:
+def run(context: RunContext) -> Dataset:
     """Select who is owed a notification on either trigger, publish, record.
 
     Returns the union of both triggers' surviving recipients, reduced to
@@ -478,33 +469,25 @@ def run(context: RunContext, *, describe: bool = False) -> Dataset:
     # Everything it reads belongs to someone else and arrives through a reader
     # that knows where it lives.
     ledger_store = medallion(StoreRegistry(base_dir), SUBJECT).gold
-    cases = CurrentCasesReader(base_dir=base_dir)
-    users = UsersReader(base_dir=base_dir)
 
-    selection = pending_notifications_builder(
-        ConversationMessagesReader(base_dir=base_dir),
+    # Both triggers select from the same published current state and the same
+    # directory, so each is read once here and handed to both passes rather than
+    # re-read per pass.
+    cases = read(CurrentCasesReader(base_dir=base_dir), name="read-cases")
+    users = read(UsersReader(base_dir=base_dir), name="read-users")
+    messages = read(ConversationMessagesReader(base_dir=base_dir), name="read-messages")
+
+    pending = pending_notifications(
+        messages,
         cases,
         users,
         ledger_reader(ledger_store, LEDGER_TABLE, LEDGER_KEY),
-        run_log=context.run_log,
     )
-    if describe:
-        print(selection.describe())
-    pending = selection.run(context)
-    if not isinstance(pending, Dataset):
-        raise TypeError("notification selection did not return a Dataset")
-
-    reportable_selection = reportable_notifications_builder(
+    pending_reportable = reportable_notifications(
         cases,
         users,
         ledger_reader(ledger_store, REPORTABLE_LEDGER_TABLE, REPORTABLE_LEDGER_KEY),
-        run_log=context.run_log,
     )
-    if describe:
-        print(reportable_selection.describe())
-    pending_reportable = reportable_selection.run(context)
-    if not isinstance(pending_reportable, Dataset):
-        raise TypeError("reportable selection did not return a Dataset")
 
     # Nobody is owed anything on either trigger: publishing an empty array
     # would put a file in the outbox for the service to drain and find nothing
@@ -546,18 +529,14 @@ def run(context: RunContext, *, describe: bool = False) -> Dataset:
         ),
         Refresh(),
     )
-    publication = outbox_builder(
+    publish(
         rendered,
         outbox,
         pending,
         ledger_store.writer(LEDGER_TABLE, AppendOnly(LEDGER_KEY)),
         pending_reportable,
         ledger_store.writer(REPORTABLE_LEDGER_TABLE, AppendOnly(REPORTABLE_LEDGER_KEY)),
-        run_log=context.run_log,
     )
-    if describe:
-        print(publication.describe())
-    publication.run(context)
     return Dataset.from_pandas(
         pd.concat(
             [
@@ -577,13 +556,16 @@ def main(argv: list[str]) -> int:
         "with remediation.",
     )
     parser.add_argument("--base-dir", default=None)
-    parser.add_argument("--describe", action="store_true")
     args = parser.parse_args(argv[1:])
     base_dir = Path(args.base_dir) if args.base_dir else Path.cwd() / "data"
 
+    # The *same* run_pipeline the operator CLI uses, so a run started here and
+    # one started with `cli run` record under one identity. To see what a pass
+    # would do without doing it, use `cli run pipelines/notifications --dry-run`:
+    # every step still runs, and only the commits are held back.
     try:
         run_pipeline(
-            lambda context: run(context, describe=args.describe),
+            run,
             PIPELINE_NAME,
             base_dir=base_dir,
             upstreams=UPSTREAMS,

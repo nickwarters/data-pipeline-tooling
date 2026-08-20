@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from framework.io import AppendOnly, Refresh
-from framework.run import RunContext
+from framework.run import RunContext, active_context
 from pipelines.notifications import pipeline as notifications
 from pipelines.notifications.pipeline import (
     CASE_LINK_TEMPLATE,
@@ -143,7 +143,11 @@ def _run(base_dir: Path, *, dry_run: bool = False):
     context = RunContext(
         base_dir=base_dir, subject=SUBJECT, pipeline="notifications", dry_run=dry_run
     )
-    return notifications.run(context)
+    # The steps read the *ambient* context, which is what ``run_pipeline`` makes
+    # this for a real run. Driving ``run`` by hand without it would leave
+    # ``dry_run`` unseen and the writes it holds back would land.
+    with active_context(context):
+        return notifications.run(context)
 
 
 def _files(base_dir: Path) -> list[Path]:

@@ -122,19 +122,18 @@ the retrieval is the deliverable here, not a mandated signature.
 
 ## Selection — narrowing the CasePool into the SelectionPool
 
-**Selection is its own pipeline**, and it reuses the `Pipeline` builder so it
-inherits the same fail-fast/atomic run, observability, and gold write as ingest.
-The available cases (a `Dataset`) are fed into the builder through a
-`DatasetReader` — the small bridge that adapts an already-in-memory dataset to
-the `Reader` shape, so Selection composes read → process → write without a SQL
-round-trip:
+**Selection is its own pipeline**, written with the eager steps like every other
+one, so it inherits the same fail-fast run, observability, and gold write as
+ingest. The available cases (a `Dataset`) are fed in through a `DatasetReader` —
+the small bridge that adapts an already-in-memory dataset to the `Reader` shape,
+so Selection composes read → process → write without a SQL round-trip:
 
 ```python
 from typing import Any, Mapping
 
 from case_review.variation import variation_by_id
 from framework.io import AccumulateByRun, DatasetReader
-from framework.run import Pipeline
+from framework.run import read, transform, write
 from framework.transform import Filter, Score, Sort, Stamp
 
 
@@ -147,20 +146,14 @@ def priority_score(row: Mapping[str, Any]) -> int:
 
 
 variation = variation_by_id(VARIATIONS, "v1")
-p = Pipeline("selection")
-r = p.read(DatasetReader(available), name="read")
-scored = p.transform(Score("priority_score", priority_score), r, name="score")
-high = p.transform(Filter(high_value_case, name="high-value"), scored, name="filter")
-ranked = p.transform(Sort("priority_score", ascending=False), high, name="sort")  # top-first
-stamped = p.transform(
-    Stamp("question_bank_id", variation.question_bank_id), ranked, name="stamp"
+pool = read(DatasetReader(available))
+pool = transform(Score("priority_score", priority_score), pool, name="score")
+pool = transform(Filter(high_value_case, name="high-value"), pool, name="filter")
+pool = transform(Sort("priority_score", ascending=False), pool, name="sort")  # top-first
+pool = transform(
+    Stamp("question_bank_id", variation.question_bank_id), pool, name="stamp"
 )
-p.write(
-    med.gold.writer("selection_pool", AccumulateByRun(logical_run_id, load_date)),
-    stamped,
-    name="write",
-)
-p.run()
+write(med.gold.writer("selection_pool", AccumulateByRun(logical_run_id, load_date)), pool)
 ```
 
 The **availability and selection criteria are specific Python processors** —
@@ -221,27 +214,23 @@ reason, never silently drop* shape, pointed at
 **eligibility** rather than **validity**.
 
 ```python
-p = Pipeline("selection")
-r = p.read(DatasetReader(available), name="read")
-scored = p.transform(Score("priority_score", priority_score), r, name="score")
-high = p.transform(Filter(high_value_case, name="high-value"), scored, name="filter")
-ranked = p.transform(Sort("priority_score", ascending=False), high, name="sort")
-stamped = p.transform(
-    Stamp("question_bank_id", variation.question_bank_id), ranked, name="stamp"
-)
-# land a per-Case trace alongside the SelectionPool (a sibling branch of `stamped`)
-p.explain(
+# The explain block accumulates a per-Case verdict as its steps run; write_trace
+# lands it alongside the SelectionPool.
+with explain("case_ref", score_column="priority_score") as trace:
+    pool = read(DatasetReader(available))
+    pool = transform(Score("priority_score", priority_score), pool, name="score")
+    pool = transform(Filter(high_value_case, name="high-value"), pool, name="filter")
+    pool = transform(Sort("priority_score", ascending=False), pool, name="sort")
+    pool = transform(
+        Stamp("question_bank_id", variation.question_bank_id), pool, name="stamp"
+    )
+
+write_trace(
     med.gold.writer("selection_trace", AccumulateByRun(logical_run_id, load_date)),
-    stamped,
-    id_column="case_ref",
-    score_column="priority_score",
+    trace,
+    pool,
 )
-p.write(
-    med.gold.writer("selection_pool", AccumulateByRun(logical_run_id, load_date)),
-    stamped,
-    name="write",
-)
-p.run()
+write(med.gold.writer("selection_pool", AccumulateByRun(logical_run_id, load_date)), pool)
 ```
 
 The framework's generic **RowTrace** mechanics land a case-review selection trace
@@ -261,8 +250,10 @@ kept even for a Case a *later* gate excludes, so a low scorer dropped by a top-N
 cut still shows what it scored. A Case dropped by an **inner** `JoinWith` (e.g.
 an adviser absent from the hierarchy Reference Data) or by an `AntiJoinWith`
 exclusion list is recorded as excluded by that gate, not silently absent. The
-run's `explain` step logs the governance counts —
-considered / selected / excluded (see [`run-log-format.md`](run-log-format.md)).
+`write_trace` step logs the governance counts —
+considered / selected / excluded (see [`run-log-format.md`](run-log-format.md)) —
+in place of its own inputs and outputs, because those are the numbers the
+question is about.
 
 Explainability is the trace of *one run*. Re-deriving what Selection *would* have
 picked "as of" a past date (reproducibility against accumulated silver) is a
@@ -367,17 +358,19 @@ default first-run policy (warn) still lets a fresh environment — no
 the declared depth" is genuinely correct.
 
 Every requirement here resolves against the **bare** run-history label each
-upstream records under (`complaints_a`, `sharepoint_cases`, and siblings) —
-the label `python -m cli run pipelines/complaints_a` records, not the
-subject-qualified label (`complaints_a/complaints_a`) an ingest run via its own
-`python -m pipelines.complaints_a.pipeline` module-main records instead. So
-the complaints ingests must be run path-addressed for their requirement to
-ever resolve against real history; run any other way, it is stuck on the
-silent first-run "allow" fallback forever. `orchestrate --app
-case_review.schedules` schedules `complaint_selection` itself but does not run
-the three ingests — they are not on any schedule — so something else (an
-operator, a separate job) still has to run them path-addressed for that
-requirement to mean anything.
+upstream records under (`complaints_a`, `sharepoint_cases`, and siblings), and
+**both** entry points now record under it. Each ingest's `main()` routes through
+the same `run_pipeline` the operator CLI does, so
+`python -m pipelines.complaints_a.pipeline` and
+`python -m cli run pipelines/complaints_a` are one run history. They were not:
+the module-main registered under a subject and recorded
+`complaints_a/complaints_a`, a label no requirement here names, so an ingest run
+that way left this pipeline stuck on the silent first-run "allow" fallback
+forever ([ADR-0027](adr/0027-eager-steps-are-the-default-authoring-model.md)).
+`orchestrate --app case_review.schedules` schedules `complaint_selection` itself
+but does not run the three ingests — they are not on any schedule — so something
+else (an operator, a separate job) still has to run them for that requirement to
+mean anything; it no longer matters *how*.
 
 The deployed group narrows in two ways today: a fixed priority threshold
 (`PRIORITY_THRESHOLD`) and a Hopper cap (`HOPPER_DEPTH`, below) — still no

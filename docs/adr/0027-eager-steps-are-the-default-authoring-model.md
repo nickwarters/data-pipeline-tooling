@@ -71,6 +71,35 @@ inherits the same ambient context, so both models record against one
 `pipelines/ingest` is deliberately left in that state as the worked example: raw
 and silver eager, the shared gold reduce still deferred.
 
+### Two things the sub-`Pipeline` was carrying
+
+Converting the real pipelines — the SharePoint sync, the complaints Selection
+group, notifications — surfaced two jobs a nested `Pipeline` was doing that were
+nothing to do with deferring execution, and each is now its own step-level word.
+
+**`hop(name)` — grouping.** A step record carries both a `pipeline` and a `step`
+field, and a sub-`Pipeline` put its own name in the first. That is what let the
+sync's ~150 records stay readable: `sharepoint_cases:silver:claims / read` rather
+than `read-17`. Flattened into one namespace, an operator could no longer tell
+which list's read failed. `hop(name)` restores exactly that grouping, written
+where the steps are: the block's records carry `name` in their `pipeline` field
+and their step names restart inside it, while the run's identity — attempt id,
+logical run id, dry-run flag and its report — is inherited unchanged. A feed with
+a handful of steps needs none of it.
+
+**`explain` / `write_trace` — the row trace.** `p.explain(...)` accumulated a
+per-row verdict as the graph ran, answering the governance question a row count
+cannot: *why is this Case not in the pool?* `explain(id_column)` is the same
+`RowTrace`, opened as a block: the first `read` inside seeds it with everything
+considered, each `transform` reports whether a row survived and which stage
+excluded it, and `write_trace(writer, trace, survivors)` ranks and publishes it,
+recording the trace's considered/selected/excluded counts as the step's own.
+
+Ordering between writes needed no replacement at all. `notifications` expressed
+"record nobody as told until the file telling them has landed" as an extra graph
+edge feeding each ledger step the outbox write's result. Written out, it is which
+line comes first, and the parameter that carried the edge is gone.
+
 ### The observable properties are unaffected
 
 Every step emits exactly the record the equivalent node emits — one per step,
@@ -110,9 +139,13 @@ Deliberately out of scope, each its own decision:
 
 - **Removing the deferred builder.** Not proposed. It earns its place where a
   graph fans in.
-- **Converting the remaining 19 pipelines.** Mechanical but not free; the
-  conversion is `p.transform(X, node, name=...)` → `data = transform(X, data)`,
-  which is why the argument order was kept identical.
+- **Converting the remaining pipelines.** Six are converted: `ingest` (part,
+  as the worked example), `complaints_a`/`_b`/`_c`, `sharepoint_cases` (with its
+  `gold.py`), `notifications` and `complaint_selection` — chosen because they are
+  the closest things in the tree to the pipelines the team actually runs. The
+  rest are mechanical but not free; the conversion is
+  `p.transform(X, node, name=...)` → `data = transform(X, data)`, which is why
+  the argument order was kept identical.
 - **Deleting streaming**, dropping quarantine, the `source()` column mapping,
   arrival gating for multi-file feeds, and `context.medallion()`. All recorded in
   [`framework-simplification-review.md`](../framework-simplification-review.md).
@@ -126,7 +159,18 @@ Deliberately out of scope, each its own decision:
   mitigation is that the scaffold renders only one of them, so nobody meets the
   builder unless they open an unconverted pipeline.
 - `Pipeline.describe()` has no eager equivalent. `cli run --dry-run` covers the
-  need it served, with better output.
+  need it served, with better output, and a preview now names each step's kind
+  (`Read` / `Transform` / `Quarantine` / `Validate` / `Write` / `Explain`) as the
+  builder's nodes did. Every `describe()`-based test became a *recording* test:
+  drive the hop and assert what it recorded, which is a stronger pin because it
+  proves the steps ran rather than merely being wired.
+- **`active_context` is now part of the facade.** The steps read the *ambient*
+  context, so a `RunContext(dry_run=True)` handed to `run(context)` by hand and
+  never made active would be ignored — and the writes it was meant to hold back
+  would land. `run_pipeline` does it for every real run; anything driving a
+  `run(context)` or a single hop directly has to say so. Two of the notifications
+  tests failed loudly on exactly this during the conversion, which is the right
+  failure mode, but it is a sharp edge worth knowing about.
 - A pipeline's `main()` now calls the same `run_pipeline` the operator CLI uses.
   Previously the scaffolded `main()` registered with `PipelineRunner` under a
   subject, producing a *different* run label and `logical_run_id` than

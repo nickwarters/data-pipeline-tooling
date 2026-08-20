@@ -145,7 +145,19 @@ _ACTIVE_CONTEXT: contextvars.ContextVar["RunContext | None"] = contextvars.Conte
 
 @contextmanager
 def active_context(context: "RunContext") -> "Iterator[RunContext]":
-    """Make ``context`` the ambient run context for the duration of the block."""
+    """Make ``context`` the ambient run context for the duration of the block.
+
+    ``run_pipeline`` already does this around a pipeline's ``run(context)``, so
+    a pipeline started by the operator CLI, by its own ``main()`` or by the
+    orchestrator never needs it. It is here for the case that has no runner:
+    driving a ``run(context)`` or a single hop by hand, from a test or a scratch
+    script. The eager steps read the *ambient* context, so a
+    ``RunContext(dry_run=True)`` passed as an argument and never made active
+    would be ignored -- and the writes it was meant to hold back would land::
+
+        with active_context(context):
+            run(context)
+    """
     token = _ACTIVE_CONTEXT.set(context)
     try:
         yield context

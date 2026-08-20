@@ -53,7 +53,7 @@ import pandas as pd
 
 from framework.core import Dataset
 from framework.io import DatasetReader, Refresh
-from framework.run import Pipeline
+from framework.run import hop, read, transform, write
 from framework.transform import Stamp
 from pipelines.sharepoint_cases.gold import (
     AS_OF_COLUMN,
@@ -61,7 +61,7 @@ from pipelines.sharepoint_cases.gold import (
     SILVER_TABLE,
     age_buckets,
     case_counts,
-    case_current_builder,
+    case_current_hop,
     throughput,
 )
 from pipelines.sharepoint_cases.schema import CASE_STATUSES, FEED_NAME
@@ -178,7 +178,7 @@ def publish_aggregates(med, current: Dataset, *, as_of: dt.datetime) -> None:
     the Detail-Table-sourced aggregates are out of scope since this script never
     runs the Detail hops.
     """
-    for table, step, transform in (
+    for table, step, reduce in (
         ("case_counts_current", "count-by-base-grain-and-status", case_counts),
         (
             "case_age_buckets_current",
@@ -192,12 +192,11 @@ def publish_aggregates(med, current: Dataset, *, as_of: dt.datetime) -> None:
         ),
         ("case_throughput_daily", "count-by-terminal-date", throughput),
     ):
-        p = Pipeline(f"{FEED_NAME}:gold:{table}")
-        node = p.read(DatasetReader(current), name="read")
-        node = p.transform(transform, node, name=step)
-        node = p.transform(Stamp(AS_OF_COLUMN, as_of.isoformat()), node, name="stamp")
-        p.write(med.gold.writer(table, Refresh()), node, name="write")
-        p.run()
+        with hop(f"{FEED_NAME}:gold:{table}"):
+            data = read(DatasetReader(current))
+            data = transform(reduce, data, name=step)
+            data = transform(Stamp(AS_OF_COLUMN, as_of.isoformat()), data, name="stamp")
+            write(med.gold.writer(table, Refresh()), data)
 
 
 def measure(base_dir: Path, *, lists: int, cases: int, versions: int) -> Timing:
@@ -211,11 +210,11 @@ def measure(base_dir: Path, *, lists: int, cases: int, versions: int) -> Timing:
 
     # A warm pass first, so the timed one measures steady state rather than the
     # first touch of a freshly written database.
-    current = case_current_builder(
+    current = case_current_hop(
         med.silver.reader(SILVER_TABLE),
         med.gold.writer(CURRENT_TABLE, Refresh()),
         as_of=AS_OF,
-    ).run()
+    )
     publish_aggregates(med, current, as_of=AS_OF)
 
     # Reading silver off disk, on its own. Measured separately from the hop it
@@ -226,11 +225,11 @@ def measure(base_dir: Path, *, lists: int, cases: int, versions: int) -> Timing:
     read_seconds = time.perf_counter() - started
 
     started = time.perf_counter()
-    current = case_current_builder(
+    current = case_current_hop(
         med.silver.reader(SILVER_TABLE),
         med.gold.writer(CURRENT_TABLE, Refresh()),
         as_of=AS_OF,
-    ).run()
+    )
     current_seconds = time.perf_counter() - started
 
     started = time.perf_counter()

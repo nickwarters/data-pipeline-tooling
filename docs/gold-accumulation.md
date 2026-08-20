@@ -197,26 +197,20 @@ is on the default rollback journal.)
 
 ## Building a gold hop — compose the write with a strategy
 
-There is no recipe builder for gold; a gold hop is an explicit `Pipeline` whose
-**Writer carries the load strategy** that decides the shape. To *accumulate*
-validated silver into gold stamped by run, compose an `AccumulateByRun` writer:
+There is no recipe for gold; a gold hop is written out, and its **Writer carries
+the load strategy** that decides the shape. To *accumulate* validated silver into
+gold stamped by run, compose an `AccumulateByRun` writer:
 
 ```python
 from framework.io import AccumulateByRun
 from tools.store import StoreRegistry
-from framework.run import Pipeline
+from framework.run import read, write
 from tools.medallion import medallion
 
 med = medallion(StoreRegistry("/path/to/share"), "cases")
 
-p = Pipeline("selection_pool")
-silver = p.read(med.silver.reader("selection_pool"), name="read")
-p.write(
-    med.gold.writer("selection_pool", AccumulateByRun.from_context(context)),
-    silver,
-    name="write",
-)
-p.run()
+silver = read(med.silver.reader("selection_pool"))
+write(med.gold.writer("selection_pool", AccumulateByRun.from_context(context)), silver)
 ```
 
 The `Store` mints the `AccumulateByRunWriter`, which owns the location and the
@@ -296,8 +290,8 @@ is assembled from one coherent snapshot.
 The rule and its precondition — the observation must carry the *whole* parent —
 are recorded in [ADR-0015](adr/0015-detail-tables-reduce-to-the-parents-latest-observation.md).
 
-The implementation is `gold_detail_builder` in `pipelines/sharepoint_cases/gold.py`,
-generic over a per-table grain, declared in `DETAIL_GRAIN` — one builder for every
+The implementation is `gold_detail_hop` in `pipelines/sharepoint_cases/gold.py`,
+generic over a per-table grain, declared in `DETAIL_GRAIN` — one hop for every
 Detail Table rather than a per-table judgement about what "latest" means.
 
 Silver keys a Detail Table's own `AppendOnly` load on a **composite**

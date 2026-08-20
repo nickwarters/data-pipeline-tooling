@@ -23,11 +23,21 @@ import pytest
 
 from framework.core import Dataset, ErrorCategory, Reader, ValidationError
 from framework.io import AppendOnlyConflictError, DatasetReader
-from framework.run import Pipeline, RunContext, RunLog, dry_run_pipeline
+from framework.run import (
+    RunContext,
+    RunLog,
+    active_context,
+    dry_run_pipeline,
+    hop,
+    read,
+    transform,
+    write,
+)
 from framework.transform import JsonShapeError, Stamp
 from pipelines.sharepoint_cases import gold
 from pipelines.sharepoint_cases.gold import (
     ANSWER_REMEDIATION_DIMENSIONS,
+    CURRENT_TABLE,
     DETAIL_GRAIN,
     DETAIL_TABLES,
     GOLD_TABLES,
@@ -41,8 +51,8 @@ from pipelines.sharepoint_cases.gold import (
     answer_remediation,
     appeal_outcomes,
     case_counts,
-    case_current_builder,
-    gold_detail_builder,
+    case_current_hop,
+    gold_detail_hop,
 )
 from pipelines.sharepoint_cases.gold import throughput as throughput_transform
 from pipelines.sharepoint_cases.pipeline import (
@@ -55,18 +65,17 @@ from pipelines.sharepoint_cases.pipeline import (
     LocalJsonListClient,
     NoClientError,
     main,
-    raw_builder,
-    run,
-    silver_answer_action_builder,
-    silver_answer_builder,
-    silver_answer_capture_builder,
-    silver_appeal_builder,
-    silver_builder,
-    silver_case_detail_builder,
-    silver_conversation_message_builder,
-    silver_general_answer_builder,
+    raw_hop,
+    silver_answer_capture_hop,
+    silver_answer_hop,
+    silver_appeal_hop,
+    silver_case_detail_hop,
+    silver_conversation_message_hop,
+    silver_general_answer_hop,
+    silver_hop,
     snake_case,
 )
+from pipelines.sharepoint_cases.pipeline import run as _run
 from pipelines.sharepoint_cases.schema import (
     CASE_LISTS,
     CASE_STATUSES,
@@ -148,6 +157,17 @@ EVERY_HOP = {
 }
 
 
+def run(context: RunContext, **kwargs):
+    """Drive the pipeline with ``context`` ambient, exactly as ``run_pipeline`` does.
+
+    The eager steps read the *ambient* run context, not one passed as an
+    argument -- so a ``RunContext(dry_run=True)`` handed straight to ``run``
+    would be unseen and the writes it is meant to hold back would land.
+    """
+    with active_context(context):
+        return _run(context, **kwargs)
+
+
 def source_reader(
     client: FakeListClient, case_list: CaseList = COMPLAINTS
 ) -> SharePointModifiedReader:
@@ -165,7 +185,7 @@ def source_reader(
 def landed(client: FakeListClient, case_list: CaseList = COMPLAINTS) -> list[dict]:
     """The rows the raw hop would store for ``client``'s response."""
     writer = RecordingWriter()
-    raw_builder(source_reader(client, case_list), writer, case_list).run()
+    raw_hop(source_reader(client, case_list), writer, case_list)
     return rows_of(writer)
 
 
@@ -253,7 +273,7 @@ def test_a_person_column_that_is_neither_an_object_nor_null_is_refused():
     client = FakeListClient(items(item(ResponsibleParty="i:0#.w|CONTOSO\\b.okafor")))
 
     with pytest.raises(SharePointFeedError, match="item 101.*'ResponsibleParty'"):
-        raw_builder(source_reader(client), RecordingWriter(), COMPLAINTS).run()
+        raw_hop(source_reader(client), RecordingWriter(), COMPLAINTS)
 
 
 def test_a_person_with_no_display_name_keeps_the_identity_the_read_returned():
@@ -277,7 +297,7 @@ def test_an_unexpanded_person_is_refused_rather_than_read_as_nobody():
     client = FakeListClient(items(item(ResponsibleParty=deferred)))
 
     with pytest.raises(SharePointFeedError, match="was not expanded"):
-        raw_builder(source_reader(client), RecordingWriter(), COMPLAINTS).run()
+        raw_hop(source_reader(client), RecordingWriter(), COMPLAINTS)
 
 
 def test_the_read_asks_for_the_star_and_expands_every_person():
@@ -302,7 +322,7 @@ def test_raw_reads_a_quiet_window_as_the_declared_shape():
     # of them can be there when there are no rows; the shape is declared anyway.
     writer = RecordingWriter()
 
-    raw_builder(source_reader(FakeListClient(pd.DataFrame())), writer, COMPLAINTS).run()
+    raw_hop(source_reader(FakeListClient(pd.DataFrame())), writer, COMPLAINTS)
 
     assert rows_of(writer) == []
     assert list(writer.writes[0].to_pandas().columns) == list(RAW_FEED_COLUMNS)
@@ -315,7 +335,7 @@ def test_a_populated_response_missing_a_stored_column_is_refused():
     client = FakeListClient(items(item()).drop(columns=["Status"]))
 
     with pytest.raises(SharePointFeedError, match="Status"):
-        raw_builder(source_reader(client), RecordingWriter(), COMPLAINTS).run()
+        raw_hop(source_reader(client), RecordingWriter(), COMPLAINTS)
 
 
 # --- silver ----------------------------------------------------------------
@@ -324,7 +344,7 @@ def test_a_populated_response_missing_a_stored_column_is_refused():
 def test_silver_snake_cases_coerces_and_keeps_the_provenance():
     writer = RecordingWriter()
 
-    silver_builder(given_rows(landed(FakeListClient())), writer, COMPLAINTS).run()
+    silver_hop(given_rows(landed(FakeListClient())), writer, COMPLAINTS)
 
     [row] = rows_of(writer)
     assert row["id"] == 101
@@ -348,7 +368,7 @@ def test_silver_settles_the_case_type_to_the_polled_lists_declared_one(cell):
     )
     writer = RecordingWriter()
 
-    silver_builder(given_rows(raw), writer, OTHER).run()
+    silver_hop(given_rows(raw), writer, OTHER)
 
     assert raw[0]["CaseType"] == cell
     assert rows_of(writer)[0]["case_type"] == "other"
@@ -360,7 +380,7 @@ def test_silver_accepts_a_case_with_no_reference_and_nobody_assigned():
     client = FakeListClient(items(item(Title=None, AssignedReviewer=None)))
     writer = RecordingWriter()
 
-    silver_builder(given_rows(landed(client)), writer, COMPLAINTS).run()
+    silver_hop(given_rows(landed(client)), writer, COMPLAINTS)
 
     [row] = rows_of(writer)
     assert row["title"] is None
@@ -371,11 +391,11 @@ def test_silver_accepts_a_case_with_no_reference_and_nobody_assigned():
 def test_silver_accepts_every_real_status(status):
     writer = RecordingWriter()
 
-    silver_builder(
+    silver_hop(
         given_rows(landed(FakeListClient(items(item(Status=status))))),
         writer,
         COMPLAINTS,
-    ).run()
+    )
 
     assert rows_of(writer)[0]["status"] == status
 
@@ -388,7 +408,8 @@ def test_silver_quarantines_an_unknown_status_while_raw_keeps_every_row():
     writer, rejects = RecordingWriter(), RecordingWriter()
     run_log = RecordingRunLog()
 
-    silver_builder(given_rows(raw), writer, COMPLAINTS, rejects, run_log=run_log).run()
+    with active_context(RunContext(pipeline=FEED_NAME, run_log=run_log)):
+        silver_hop(given_rows(raw), writer, COMPLAINTS, rejects)
 
     quarantine = next(r for r in run_log.records if r["step"] == "quarantine")
     assert quarantine["rows_in"] == 2
@@ -411,7 +432,7 @@ def test_silver_aborts_when_the_id_is_missing():
     reader = given_rows([{column: None for column in RAW_FEED_COLUMNS}])
 
     with pytest.raises(ValidationError, match="'id'"):
-        silver_builder(reader, writer, COMPLAINTS).run()
+        silver_hop(reader, writer, COMPLAINTS)
 
     assert writer.writes == []
 
@@ -430,12 +451,12 @@ def silver_answers(
 ) -> list[dict]:
     """Drive the silver answer hop, in memory, over one observation's `answers`."""
     writer = RecordingWriter()
-    silver_answer_builder(
+    silver_answer_hop(
         given_rows([version(answers=answers_json)]),
         writer,
         case_list,
         reject_writer or RecordingWriter(),
-    ).run()
+    )
     return rows_of(writer)
 
 
@@ -523,13 +544,23 @@ def silver_captures(
     """Drive the silver answer-capture hop, in memory, over one observation's
     `answers`."""
     writer = RecordingWriter()
-    silver_answer_capture_builder(
-        given_rows([version(answers=answers_json)]),
-        writer,
-        case_list,
-        reject_writer or RecordingWriter(),
-        run_log,
-    ).run()
+
+    def drive() -> None:
+        silver_answer_capture_hop(
+            given_rows([version(answers=answers_json)]),
+            writer,
+            case_list,
+            reject_writer or RecordingWriter(),
+        )
+
+    # The steps record against the ambient context, so a test that wants the
+    # records makes one active rather than handing the hop a run log. Without
+    # one the hop still runs and simply records nothing.
+    if run_log is None:
+        drive()
+    else:
+        with active_context(RunContext(pipeline=FEED_NAME, run_log=run_log)):
+            drive()
     return rows_of(writer)
 
 
@@ -674,12 +705,12 @@ def silver_general_answers(
     """Drive the silver general-answer hop, in memory, over one observation's
     `answers`."""
     writer = RecordingWriter()
-    silver_general_answer_builder(
+    silver_general_answer_hop(
         given_rows([version(answers=answers_json)]),
         writer,
         case_list,
         reject_writer or RecordingWriter(),
-    ).run()
+    )
     return rows_of(writer)
 
 
@@ -727,12 +758,12 @@ def silver_conversation_messages(
     """Drive the silver conversation-message hop, in memory, over one
     observation's `conversation`."""
     writer = RecordingWriter()
-    silver_conversation_message_builder(
+    silver_conversation_message_hop(
         given_rows([version(conversation=conversation_json)]),
         writer,
         case_list,
         reject_writer or RecordingWriter(),
-    ).run()
+    )
     return rows_of(writer)
 
 
@@ -776,12 +807,12 @@ def silver_appeals(
 ) -> list[dict]:
     """Drive the silver appeal hop, in memory, over one observation's `appeals`."""
     writer = RecordingWriter()
-    silver_appeal_builder(
+    silver_appeal_hop(
         given_rows([version(appeals=appeals_json)]),
         writer,
         case_list,
         reject_writer or RecordingWriter(),
-    ).run()
+    )
     return rows_of(writer)
 
 
@@ -864,12 +895,12 @@ def silver_case_details(
     """Drive the silver case-detail hop, in memory, over one observation's
     `details`."""
     writer = RecordingWriter()
-    silver_case_detail_builder(
+    silver_case_detail_hop(
         given_rows([version(details=details_json)]),
         writer,
         case_list,
         reject_writer or RecordingWriter(),
-    ).run()
+    )
     return rows_of(writer)
 
 
@@ -950,13 +981,13 @@ def version(**overrides: object) -> dict[str, object]:
 def gold_rows(builder, rows: list[dict], *, as_of: dt.datetime = AS_OF) -> list[dict]:
     """Drive one gold hop in memory and hand back what it would have written."""
     writer = RecordingWriter()
-    builder(given_rows(rows), writer, as_of=as_of).run()
+    builder(given_rows(rows), writer, as_of=as_of)
     return rows_of(writer)
 
 
 def current(*rows: dict) -> list[dict]:
     """The ``case_current`` rows for a silver history."""
-    return gold_rows(case_current_builder, list(rows))
+    return gold_rows(case_current_hop, list(rows))
 
 
 def test_two_versions_of_one_case_reduce_to_the_later_status():
@@ -1183,7 +1214,7 @@ DETAIL_TABLE = "answer"
 def winning_reader(*rows: dict) -> Reader:
     """The gold ``case_current`` a parent observation history would produce.
 
-    Composes the real ``case_current_builder`` rather than hand-building the
+    Composes the real ``case_current_hop`` rather than hand-building the
     winning pairs: the invariant worth testing is that a Detail row agrees with
     whichever observation the parent's own reduction picked, not that an inner
     join drops non-matching rows.
@@ -1218,10 +1249,10 @@ def details(
     *,
     grain: tuple[str, ...] = DETAIL_GRAIN[DETAIL_TABLE],
 ) -> list[dict]:
-    """Drive ``gold_detail_builder`` over a child history, in memory."""
+    """Drive ``gold_detail_hop`` over a child history, in memory."""
     return gold_rows(
         partial(
-            gold_detail_builder,
+            gold_detail_hop,
             grain=grain,
             observations=winners,
             name=f"{FEED_NAME}:gold:detail:{DETAIL_TABLE}",
@@ -1316,14 +1347,14 @@ def test_a_repeated_grain_value_in_the_winning_observation_aborts_the_hop():
     ]
 
     with pytest.raises(ValidationError, match="question_id"):
-        gold_detail_builder(
+        gold_detail_hop(
             given_rows(children),
             writer,
             grain=DETAIL_GRAIN[DETAIL_TABLE],
             observations=winners,
             as_of=AS_OF,
             name=f"{FEED_NAME}:gold:detail:{DETAIL_TABLE}",
-        ).run()
+        )
 
     assert writer.writes == []
 
@@ -1349,26 +1380,27 @@ def given_columns(*names: str) -> Reader:
     return DatasetReader(Dataset.from_pandas(pd.DataFrame(columns=list(names))))
 
 
-def aggregate_pipeline(reader, writer, *, table: str, transform, step: str) -> Pipeline:
-    """Wire one aggregate hop exactly as ``publish_gold``'s loop does."""
-    p = Pipeline(f"{FEED_NAME}:gold:{table}")
-    node = p.read(reader, name="read")
-    node = p.transform(transform, node, name=step)
-    node = p.transform(Stamp("as_of_utc", AS_OF.isoformat()), node, name="stamp-as-of")
-    p.write(writer, node, name="write")
-    return p
+def aggregate_hop(reader, writer, *, table: str, reduce, step: str) -> Dataset:
+    """Drive one aggregate hop exactly as ``publish_gold``'s loop does."""
+    with hop(f"{FEED_NAME}:gold:{table}"):
+        data = read(reader)
+        data = transform(reduce, data, name=step)
+        data = transform(
+            Stamp("as_of_utc", AS_OF.isoformat()), data, name="stamp-as-of"
+        )
+        return write(writer, data)
 
 
-def aggregate(transform, step: str, rows: list[dict]) -> list[dict]:
+def aggregate(reduce, step: str, rows: list[dict]) -> list[dict]:
     """Drive one aggregate hop, as ``publish_gold`` wires it, over ``rows``."""
     writer = RecordingWriter()
-    aggregate_pipeline(
+    aggregate_hop(
         given_rows(rows),
         writer,
         table="table",
-        transform=transform,
+        reduce=reduce,
         step=step,
-    ).run()
+    )
     return rows_of(writer)
 
 
@@ -1857,13 +1889,13 @@ def test_two_case_types_do_not_share_a_question_id():
 
 def test_remediation_is_empty_when_nothing_was_answered():
     writer = RecordingWriter()
-    aggregate_pipeline(
+    aggregate_hop(
         given_columns(*ANSWER_REMEDIATION_DIMENSIONS),
         writer,
         table="table",
-        transform=answer_remediation,
+        reduce=answer_remediation,
         step="count-by-remediation",
-    ).run()
+    )
 
     frame = writer.dataset.to_pandas()
     assert list(frame.columns) == [
@@ -1967,149 +1999,140 @@ def test_an_aggregate_is_never_mistaken_for_a_detail_table():
 # --- the composed plan -----------------------------------------------------
 
 
-def test_all_nine_ingest_hops_plan_exactly_the_steps_they_always_have():
-    reader, writer, rejects = given_rows([]), RecordingWriter(), RecordingWriter()
+@pytest.fixture
+def recorded(base_dir) -> RecordingRunLog:
+    """One real poll, with every step it took captured.
+
+    The hops are eager, so what a hop *did* is what it recorded -- which is both
+    a stronger pin than reading a plan and the thing an operator actually sees.
+    Each hop opens its own ``hop(...)`` scope, so the records group by it.
+    """
+    run_log = RecordingRunLog()
+    run(
+        RunContext(base_dir=base_dir, pipeline=FEED_NAME, run_log=run_log),
+        client=FakeListClient(),
+    )
+    return run_log
+
+
+def steps_of(run_log: RecordingRunLog, hop_name: str) -> list[str]:
+    """The step names one hop recorded, in the order it took them."""
+    return [
+        record["step"] for record in run_log.records if record["pipeline"] == hop_name
+    ]
+
+
+def test_all_nine_ingest_hops_record_exactly_the_steps_they_always_have(recorded):
+    silver = f"{FEED_NAME}:silver:{COMPLAINTS.case_type}"
 
     # No column gate on the raw hop, unlike a file feed: the observation
     # transform projects onto exactly the stored columns, so a presence check
     # below it could never fire. Each hop is named for the list it polled.
-    assert raw_builder(reader, writer, COMPLAINTS).describe().splitlines() == [
-        "Pipeline: sharepoint_cases:raw:complaints",
-        "  [Read] read",
-        "  [Transform] observation (depends on: read)",
-        "  [Write] write (depends on: observation)",
+    assert steps_of(recorded, f"{FEED_NAME}:raw:{COMPLAINTS.case_type}") == [
+        "read",
+        "observation",
+        "write",
     ]
-    assert silver_builder(
-        reader, writer, COMPLAINTS, rejects
-    ).describe().splitlines() == [
-        "Pipeline: sharepoint_cases:silver:complaints",
-        "  [Read] read",
-        "  [Transform] rename (depends on: read)",
-        "  [Transform] case-type (depends on: rename)",
-        "  [Transform] coerce (depends on: case-type)",
-        "  [Quarantine] quarantine (depends on: coerce)",
-        "  [Validate] post-validate (depends on: quarantine)",
-        "  [Write] write (depends on: post-validate)",
+    # coerce / quarantine / schema_validator are ``enforce``'s three steps: it
+    # is shorthand for the sequence, not a step of its own, so the run log reads
+    # exactly as it did when they were written out by hand.
+    assert steps_of(recorded, silver) == [
+        "read",
+        "rename",
+        "case-type",
+        "coerce",
+        "quarantine",
+        "schema_validator",
+        "write",
     ]
-    assert silver_answer_builder(
-        reader, writer, COMPLAINTS, rejects
-    ).describe().splitlines() == [
-        "Pipeline: sharepoint_cases:silver:complaints:answer",
-        "  [Read] read",
-        "  [Transform] explode (depends on: read)",
-        "  [Transform] value-text (depends on: explode)",
-        "  [Transform] coerce (depends on: value-text)",
-        "  [Quarantine] quarantine (depends on: coerce)",
-        "  [Validate] post-validate (depends on: quarantine)",
-        "  [Write] write (depends on: post-validate)",
+    assert steps_of(recorded, f"{silver}:answer") == [
+        "read",
+        "explode",
+        "value-text",
+        "coerce",
+        "quarantine",
+        "schema_validator",
+        "write",
     ]
-    assert silver_answer_capture_builder(
-        reader, writer, COMPLAINTS, rejects
-    ).describe().splitlines() == [
-        "Pipeline: sharepoint_cases:silver:complaints:answer_capture",
-        "  [Read] read",
-        "  [Transform] explode-answers (depends on: read)",
-        "  [Transform] explode-capture (depends on: explode-answers)",
-        "  [Transform] discriminate (depends on: explode-capture)",
-        "  [Transform] coerce (depends on: discriminate)",
-        "  [Quarantine] quarantine (depends on: coerce)",
-        "  [Transform] drop-raw-value (depends on: quarantine)",
-        "  [Validate] post-validate (depends on: drop-raw-value)",
-        "  [Write] write (depends on: post-validate)",
+    # The one hop that cannot use ``enforce``: raw_value is dropped between the
+    # quarantine and the validate, so the three are written out.
+    assert steps_of(recorded, f"{silver}:answer_capture") == [
+        "read",
+        "explode-answers",
+        "explode-capture",
+        "discriminate",
+        "coerce",
+        "quarantine",
+        "drop-raw-value",
+        "schema_validator",
+        "write",
     ]
-    assert silver_answer_action_builder(
-        reader, writer, COMPLAINTS, rejects
-    ).describe().splitlines() == [
-        "Pipeline: sharepoint_cases:silver:complaints:answer_action",
-        "  [Read] read",
-        "  [Transform] explode-answers (depends on: read)",
-        "  [Transform] explode-actions (depends on: explode-answers)",
-        "  [Transform] coerce (depends on: explode-actions)",
-        "  [Quarantine] quarantine (depends on: coerce)",
-        "  [Validate] post-validate (depends on: quarantine)",
-        "  [Write] write (depends on: post-validate)",
+    assert steps_of(recorded, f"{silver}:answer_action") == [
+        "read",
+        "explode-answers",
+        "explode-actions",
+        "coerce",
+        "quarantine",
+        "schema_validator",
+        "write",
     ]
-    assert silver_general_answer_builder(
-        reader, writer, COMPLAINTS, rejects
-    ).describe().splitlines() == [
-        "Pipeline: sharepoint_cases:silver:complaints:general_answer",
-        "  [Read] read",
-        "  [Transform] explode (depends on: read)",
-        "  [Transform] value-text (depends on: explode)",
-        "  [Transform] coerce (depends on: value-text)",
-        "  [Quarantine] quarantine (depends on: coerce)",
-        "  [Validate] post-validate (depends on: quarantine)",
-        "  [Write] write (depends on: post-validate)",
+    assert steps_of(recorded, f"{silver}:general_answer") == [
+        "read",
+        "explode",
+        "value-text",
+        "coerce",
+        "quarantine",
+        "schema_validator",
+        "write",
     ]
-    assert silver_conversation_message_builder(
-        reader, writer, COMPLAINTS, rejects
-    ).describe().splitlines() == [
-        "Pipeline: sharepoint_cases:silver:complaints:conversation_message",
-        "  [Read] read",
-        "  [Transform] explode (depends on: read)",
-        "  [Transform] coerce (depends on: explode)",
-        "  [Quarantine] quarantine (depends on: coerce)",
-        "  [Validate] post-validate (depends on: quarantine)",
-        "  [Write] write (depends on: post-validate)",
+    assert steps_of(recorded, f"{silver}:conversation_message") == [
+        "read",
+        "explode",
+        "coerce",
+        "quarantine",
+        "schema_validator",
+        "write",
     ]
-    assert silver_appeal_builder(
-        reader, writer, COMPLAINTS, rejects
-    ).describe().splitlines() == [
-        "Pipeline: sharepoint_cases:silver:complaints:appeal",
-        "  [Read] read",
-        "  [Transform] explode (depends on: read)",
-        "  [Transform] coerce (depends on: explode)",
-        "  [Quarantine] quarantine (depends on: coerce)",
-        "  [Validate] post-validate (depends on: quarantine)",
-        "  [Write] write (depends on: post-validate)",
+    assert steps_of(recorded, f"{silver}:appeal") == [
+        "read",
+        "explode",
+        "coerce",
+        "quarantine",
+        "schema_validator",
+        "write",
     ]
-    assert silver_case_detail_builder(
-        reader, writer, COMPLAINTS, rejects
-    ).describe().splitlines() == [
-        "Pipeline: sharepoint_cases:silver:complaints:case_detail",
-        "  [Read] read",
-        "  [Transform] explode (depends on: read)",
-        "  [Transform] encode-value (depends on: explode)",
-        "  [Transform] coerce (depends on: encode-value)",
-        "  [Quarantine] quarantine (depends on: coerce)",
-        "  [Validate] post-validate (depends on: quarantine)",
-        "  [Write] write (depends on: post-validate)",
+    assert steps_of(recorded, f"{silver}:case_detail") == [
+        "read",
+        "explode",
+        "encode-value",
+        "coerce",
+        "quarantine",
+        "schema_validator",
+        "write",
     ]
 
 
-def test_the_gold_hops_plan_exactly_the_steps_they_always_have():
-    reader, writer = given_rows([]), RecordingWriter()
-
-    # Only the current hop carries a grain gate; see case_current_builder.
-    assert case_current_builder(
-        reader, writer, as_of=AS_OF
-    ).describe().splitlines() == [
-        f"Pipeline: {FEED_NAME}:gold:case_current",
-        "  [Read] read",
-        "  [Transform] derive-key (depends on: read)",
-        "  [Transform] latest-version (depends on: derive-key)",
-        "  [Transform] flatten-amended-outcome (depends on: latest-version)",
-        "  [Transform] drop-blobs (depends on: flatten-amended-outcome)",
-        "  [Transform] stamp-as-of (depends on: drop-blobs)",
-        "  [Validate] unique-validate (depends on: stamp-as-of)",
-        "  [Write] write (depends on: unique-validate)",
+def test_the_gold_hops_record_exactly_the_steps_they_always_have(recorded):
+    # Only the current hop carries a grain gate; see case_current_hop.
+    assert steps_of(recorded, f"{FEED_NAME}:gold:{CURRENT_TABLE}") == [
+        "read",
+        "derive-key",
+        "latest-version",
+        "flatten-amended-outcome",
+        "drop-blobs",
+        "stamp-as-of",
+        "unique-validate",
+        "write",
     ]
-    assert gold_detail_builder(
-        reader,
-        writer,
-        grain=DETAIL_GRAIN[DETAIL_TABLE],
-        observations=reader,
-        as_of=AS_OF,
-        name=f"{FEED_NAME}:gold:detail",
-    ).describe().splitlines() == [
-        f"Pipeline: {FEED_NAME}:gold:detail",
-        "  [Read] read",
-        "  [Transform] derive-key (depends on: read)",
-        "  [Transform] latest-observation (depends on: derive-key)",
-        "  [Transform] stamp-as-of (depends on: latest-observation)",
-        "  [Validate] unique-validate (depends on: stamp-as-of)",
-        "  [Write] write (depends on: unique-validate)",
-    ]
+    for table in DETAIL_TABLES:
+        assert steps_of(recorded, f"{FEED_NAME}:gold:{table}") == [
+            "read",
+            "derive-key",
+            "latest-observation",
+            "stamp-as-of",
+            "unique-validate",
+            "write",
+        ], table
     for table, step in (
         ("case_counts_current", "count-by-base-grain-and-status"),
         ("case_age_buckets_current", "bucket-by-age"),
@@ -2118,19 +2141,12 @@ def test_the_gold_hops_plan_exactly_the_steps_they_always_have():
         ("answer_remediation_current", "count-by-remediation"),
         ("appeal_outcomes_current", "count-by-outcome"),
     ):
-        assert aggregate_pipeline(
-            reader,
-            writer,
-            table=table,
-            transform=case_counts,
-            step=step,
-        ).describe().splitlines() == [
-            f"Pipeline: {FEED_NAME}:gold:{table}",
-            "  [Read] read",
-            f"  [Transform] {step} (depends on: read)",
-            f"  [Transform] stamp-as-of (depends on: {step})",
-            "  [Write] write (depends on: stamp-as-of)",
-        ]
+        assert steps_of(recorded, f"{FEED_NAME}:gold:{table}") == [
+            "read",
+            step,
+            "stamp-as-of",
+            "write",
+        ], table
 
 
 # --- end to end ------------------------------------------------------------
@@ -2828,7 +2844,7 @@ def test_a_failure_in_current_gold_leaves_no_gold_and_no_checkpoint(
     base_dir, monkeypatch
 ):
     run_log = RecordingRunLog()
-    monkeypatch.setattr(gold, "case_current_builder", explode)
+    monkeypatch.setattr(gold, "case_current_hop", explode)
 
     with pytest.raises(RuntimeError, match="boom"):
         run(

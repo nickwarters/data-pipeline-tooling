@@ -30,7 +30,7 @@ See ``docs/public-api.md``.
 from framework.run.address import RunAddress, RunAddressError
 from framework.run.builder import Pipeline, PipelineGraphError
 from framework.run.dry_run import DryRunReport
-from framework.run.run_context import RunContext
+from framework.run.run_context import RunContext, active_context
 from framework.run.runner import (
     FreshnessError,
     FreshnessRequirement,
@@ -46,12 +46,15 @@ from framework.run.steps import (
     StepError,
     coerce,
     enforce,
+    explain,
+    hop,
     quarantine,
     read,
     step,
     transform,
     validate,
     write,
+    write_trace,
 )
 from tools.observability.run_log import RunLog
 from tools.observability.run_registry import RunRegistry
@@ -66,6 +69,9 @@ __all__ = [
     "enforce",
     "quarantine",
     "step",
+    "hop",
+    "explain",
+    "write_trace",
     "StepError",
     # The deferred builder, for graphs that genuinely fan in.
     "Pipeline",
@@ -79,6 +85,7 @@ __all__ = [
     "dry_run_pipeline",
     "DryRunReport",
     "RunContext",
+    "active_context",
     "RunLog",
     "RunRegistry",
     "Requirement",

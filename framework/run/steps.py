@@ -35,6 +35,7 @@ call :func:`read` on its own, with no ceremony, is a feature.
 
 from __future__ import annotations
 
+import contextvars
 import re
 import time
 from contextlib import contextmanager
@@ -44,17 +45,20 @@ from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError
 from framework.core.protocols import Processor, Reader, Validator, Writer
 from framework.core.validators import ValidationError
-from framework.run.run_context import RunContext, current_context
+from framework.run.run_context import RunContext, active_context, current_context
 
 __all__ = [
     "coerce",
     "enforce",
+    "explain",
+    "hop",
     "quarantine",
     "read",
     "step",
     "transform",
     "validate",
     "write",
+    "write_trace",
 ]
 
 
@@ -162,6 +166,45 @@ def step(
         yield metrics
 
 
+@contextmanager
+def hop(name: str) -> Iterator[RunContext | None]:
+    """Group every step in this block under one hop name in the run log.
+
+    A feed with a handful of steps needs nothing here: its step names are already
+    unique and ``read`` means the read. A feed that drives the *same* shape many
+    times over -- one hop per source list, per Detail Table, per Case Type -- does
+    need it, or the run log reads ``read``, ``read-2`` … ``read-24`` and an
+    operator cannot tell which list's read failed::
+
+        for case_list in CASE_LISTS:
+            with hop(f"silver:{case_list.case_type}:answer"):
+                data = read(reader)          # recorded as silver:claims:answer / read
+                ...
+
+    This is the same grouping ``Pipeline(f"{FEED}:silver:{case_type}")`` gave a
+    sub-pipeline, written where the steps are: the block's records carry ``name``
+    in their ``pipeline`` field and their own step names, while the run's
+    identity -- ``pipeline_run_id``, ``logical_run_id``, the dry-run flag and its
+    report -- is inherited unchanged, so correlation and replay are untouched.
+    Step names restart inside the block, so each hop has exactly one ``read``.
+
+    Outside a run context it does nothing at all, so a hop can still be driven on
+    its own from a test or a scratch script.
+    """
+    context = current_context()
+    if context is None:
+        yield None
+        return
+    child = context.for_nested_pipeline(name)
+    # The hop's own name is what the record's ``pipeline`` field should read --
+    # the exact string ``Pipeline(name)`` used to put there -- rather than the
+    # run's subject-qualified label. Freshness is judged on the parent context
+    # before the handler is ever called, so nothing downstream re-reads this.
+    child.subject = None
+    with active_context(child):
+        yield child
+
+
 def _locations(component: object) -> list[dict[str, str]] | None:
     """What a component reported touching, copied so a later read can't mutate it."""
     locations = getattr(component, "data_locations", None)
@@ -177,10 +220,15 @@ def _drain_retries(component: object) -> list[str]:
 @contextmanager
 def _record(
     name: str,
+    kind: str,
     *,
     rows_in: int | None = None,
 ) -> Iterator[dict[str, Any]]:
     """Time one eager step and emit its single run-log record.
+
+    ``kind`` is the step's node type as a dry-run preview reports it (``Read``,
+    ``Transform``, …), the same word the deferred builder's node puts there, so
+    ``cli run --dry-run`` reads identically against either authoring model.
 
     Yields a mutable dict the caller fills in (``rows_out``, ``committed``,
     ``warn_hits``, ``data_locations``, ``rows_quarantined``, ``note``). One
@@ -191,6 +239,7 @@ def _record(
     outcome: dict[str, Any] = {
         "rows_out": None,
         "rows_quarantined": None,
+        "rows_excluded": None,
         "committed": False,
         "warn_hits": [],
         "data_locations": None,
@@ -222,7 +271,7 @@ def _record(
             warn_hits=outcome["warn_hits"] or None,
         )
         if context.dry_run and context.dry_run_report is not None:
-            context.dry_run_report.observe(unique, "Step", note=f"FAILED: {exc}")
+            context.dry_run_report.observe(unique, kind, note=f"FAILED: {exc}")
         raise
     context.run_log.record(
         context.pipeline_run_id,
@@ -233,6 +282,7 @@ def _record(
         rows_in=rows_in,
         rows_out=outcome["rows_out"],
         rows_quarantined=outcome["rows_quarantined"],
+        rows_excluded=outcome["rows_excluded"],
         duration=time.perf_counter() - started,
         warn_hits=outcome["warn_hits"] or None,
         committed=bool(outcome["committed"]),
@@ -240,8 +290,86 @@ def _record(
     )
     if context.dry_run and context.dry_run_report is not None:
         context.dry_run_report.observe(
-            unique, "Step", outcome["result"], note=outcome["note"]
+            unique, kind, outcome["result"], note=outcome["note"]
         )
+
+
+# --- the row trace ------------------------------------------------------------
+#
+# The ambient trace an ``explain`` block opens. ``transform`` reports every stage
+# to it, exactly as the deferred builder's ``TransformNode`` reports to the
+# session's trace, so a population's per-row verdict is accumulated the same way
+# by either authoring model.
+
+_ACTIVE_TRACE: contextvars.ContextVar[Any] = contextvars.ContextVar(
+    "active_row_trace", default=None
+)
+
+
+@contextmanager
+def explain(id_column: str, *, score_column: str | None = None) -> Iterator[Any]:
+    """Trace, row by row, what every step inside this block did to a population.
+
+    A governance question -- *why is this Case not in the pool?* -- that a row
+    count cannot answer. The first :func:`read` inside the block seeds the ledger
+    with everything considered; each :func:`transform` records whether a row
+    survived it and, when it did not, which stage excluded it. Hand the result to
+    :func:`write_trace` to publish it::
+
+        with explain("case_ref", score_column="priority_score") as trace:
+            pool = read(candidates)
+            pool = transform(Filter(eligible, name="eligibility"), pool)
+            ...
+        write_trace(trace_writer, trace, pool)
+
+    A processor says what it is by carrying ``trace_role`` ("filter", "gate",
+    "score", "join") and ``trace_name``; without them a stage that drops rows is
+    still recorded, named for its own class.
+
+    Yields the :class:`~framework.run.trace.RowTrace` accumulating the verdicts.
+    """
+    from framework.run.trace import RowTrace
+
+    trace = RowTrace(id_column, score_column=score_column)
+    token = _ACTIVE_TRACE.set(trace)
+    try:
+        yield trace
+    finally:
+        _ACTIVE_TRACE.reset(token)
+
+
+def write_trace(
+    writer: Writer,
+    trace: Any,
+    survivors: Dataset,
+    *,
+    name: str = "explain",
+) -> Dataset:
+    """Rank the survivors, publish the trace, and return ``survivors`` unchanged.
+
+    The step's row counts are the *trace's* -- how many were considered, how
+    many survived, how many a gate excluded -- rather than this step's own input
+    and output, because those are the numbers the question is about. Under a dry
+    run the trace is still built, so its shape is previewed, and nothing commits.
+    """
+    survivors = _require_dataset(survivors, "write_trace")
+    context = current_context()
+    with _record(name, "Explain", rows_in=trace.considered) as outcome:
+        traced = trace.finalize(survivors)
+        outcome["rows_in"] = trace.considered
+        outcome["rows_out"] = trace.selected
+        outcome["rows_excluded"] = trace.excluded
+        outcome["result"] = traced
+        if context is not None and context.dry_run:
+            outcome["note"] = (
+                f"would write trace: {len(traced)} row(s) "
+                f"({trace.selected} selected, {trace.excluded} excluded)"
+            )
+            return survivors
+        writer.write(traced)
+        outcome["committed"] = True
+        outcome["data_locations"] = _locations(writer)
+    return survivors
 
 
 def _require_dataset(value: object, verb: str) -> Dataset:
@@ -270,7 +398,7 @@ def read(reader: Reader, *, name: str | None = None) -> Dataset:
     reported touching, so the run log names the file or table the rows came from.
     """
     step_name = name or "read"
-    with _record(step_name) as outcome:
+    with _record(step_name, "Read") as outcome:
         try:
             dataset = reader.read()
         finally:
@@ -278,6 +406,11 @@ def read(reader: Reader, *, name: str | None = None) -> Dataset:
         outcome["rows_out"] = len(dataset)
         outcome["data_locations"] = _locations(reader)
         outcome["result"] = dataset
+    trace = _ACTIVE_TRACE.get()
+    if trace is not None and not trace.considered:
+        # The population entering the traced stages: the first read inside an
+        # ``explain`` block, matching the builder's first read node.
+        trace.consider(dataset)
     return dataset
 
 
@@ -292,11 +425,26 @@ def transform(
     """
     dataset = _require_dataset(dataset, "transform")
     step_name = name or _component_name(processor, "transform")
-    with _record(step_name, rows_in=len(dataset)) as outcome:
+    with _record(step_name, "Transform", rows_in=len(dataset)) as outcome:
         result = processor(dataset)
         outcome["rows_out"] = len(result) if isinstance(result, Dataset) else None
         outcome["result"] = result
+    _observe(processor, step_name, dataset, result)
     return result
+
+
+def _observe(processor: object, step_name: str, before: Dataset, after: object) -> None:
+    """Report one stage to the ambient ``explain`` trace, when there is one."""
+    trace = _ACTIVE_TRACE.get()
+    if trace is None or not isinstance(after, Dataset):
+        return
+    owner = getattr(processor, "__self__", processor)
+    trace.observe(
+        getattr(owner, "trace_role", None),
+        getattr(owner, "trace_name", type(owner).__name__ if owner else step_name),
+        before,
+        after,
+    )
 
 
 def validate(
@@ -316,7 +464,7 @@ def validate(
     """
     dataset = _require_dataset(dataset, "validate")
     step_name = name or _component_name(validator, "validate")
-    with _record(step_name, rows_in=len(dataset)) as outcome:
+    with _record(step_name, "Validate", rows_in=len(dataset)) as outcome:
         try:
             validator.validate(dataset)
         except ValidationError as exc:
@@ -338,7 +486,7 @@ def write(writer: Writer, dataset: Dataset, *, name: str | None = None) -> Datas
     dataset = _require_dataset(dataset, "write")
     step_name = name or "write"
     context = current_context()
-    with _record(step_name, rows_in=len(dataset)) as outcome:
+    with _record(step_name, "Write", rows_in=len(dataset)) as outcome:
         outcome["rows_out"] = len(dataset)
         outcome["result"] = dataset
         if context is not None and context.dry_run:
@@ -370,7 +518,7 @@ def quarantine(
     dataset = _require_dataset(dataset, "quarantine")
     step_name = name or "quarantine"
     context = current_context()
-    with _record(step_name, rows_in=len(dataset)) as outcome:
+    with _record(step_name, "Quarantine", rows_in=len(dataset)) as outcome:
         good, rejected = partitioner.partition(dataset)
         outcome["rows_quarantined"] = len(rejected)
         outcome["rows_out"] = len(good)

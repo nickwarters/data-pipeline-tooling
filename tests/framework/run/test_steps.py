@@ -28,12 +28,15 @@ from framework.run import (
     StepError,
     coerce,
     enforce,
+    explain,
+    hop,
     quarantine,
     read,
     step,
     transform,
     validate,
     write,
+    write_trace,
 )
 from framework.run.run_context import active_context
 from framework.transform import Filter, SchemaValueRulePartitioner
@@ -364,3 +367,159 @@ def test_eager_steps_and_a_deferred_pipeline_share_one_runs_identity():
     run_ids = {record["pipeline_run_id"] for record in run_log.records}
     assert len(run_ids) == 1
     assert run_ids == {context.pipeline_run_id}
+
+
+# --- grouping many hops under one run ----------------------------------------
+
+
+def test_a_hop_groups_its_steps_and_restarts_their_names():
+    """The reason a feed with 20 reads is still readable.
+
+    Without a hop the second read is ``read-2``; with one, each hop has exactly
+    one ``read`` and the hop's own name is what tells them apart.
+    """
+    context, run_log = _context()
+    with active_context(context):
+        for case_type in ("claims", "complaints"):
+            with hop(f"sync:silver:{case_type}"):
+                data = read(given_rows([{"record_id": "a", "amount": 1}]))
+                write(RecordingWriter(), data)
+        # Outside every hop, the run's own label still applies.
+        read(given_rows([{"record_id": "b", "amount": 2}]))
+
+    assert [(record["pipeline"], record["step"]) for record in run_log.records] == [
+        ("sync:silver:claims", "read"),
+        ("sync:silver:claims", "write"),
+        ("sync:silver:complaints", "read"),
+        ("sync:silver:complaints", "write"),
+        ("demo", "read"),
+    ]
+
+
+def test_a_hop_inherits_the_runs_identity_and_its_dry_run():
+    context, run_log = _context(dry_run=True)
+    writer = RecordingWriter()
+    with active_context(context):
+        with hop("sync:gold:case_current"):
+            write(writer, read(given_rows([{"record_id": "a", "amount": 1}])))
+
+    assert writer.writes == []
+    assert {record["pipeline_run_id"] for record in run_log.records} == {
+        context.pipeline_run_id
+    }
+    assert {record["logical_run_id"] for record in run_log.records} == {
+        context.logical_run_id
+    }
+    # The preview accumulates through the nesting, so a dry run still reports
+    # what a hop would have written.
+    assert [preview.name for preview in context.dry_run_report.steps] == [
+        "read",
+        "write",
+    ]
+
+
+def test_a_hop_outside_a_run_context_still_runs_its_steps():
+    writer = RecordingWriter()
+    with hop("sync:raw:claims"):
+        write(writer, read(given_rows([{"record_id": "a", "amount": 1}])))
+
+    assert len(writer.writes) == 1
+
+
+# --- the row trace ------------------------------------------------------------
+
+
+def _gate(capacity: int):
+    """A stage that keeps the first ``capacity`` rows, named for the trace."""
+
+    def gate(dataset: Dataset) -> Dataset:
+        return Dataset.from_pandas(dataset.to_pandas().head(capacity))
+
+    gate.trace_role = "gate"
+    gate.trace_name = "capacity"
+    return gate
+
+
+def test_explain_records_which_stage_excluded_each_row():
+    context, run_log = _context()
+    trace_writer = RecordingWriter()
+    with active_context(context):
+        with explain("record_id") as trace:
+            data = read(
+                given_rows(
+                    [
+                        {"record_id": "a", "amount": 3},
+                        {"record_id": "b", "amount": 2},
+                        {"record_id": "c", "amount": 1},
+                    ]
+                )
+            )
+            data = transform(_gate(2), data, name="hopper")
+        write_trace(trace_writer, trace, data)
+
+    verdicts = {
+        row["record_id"]: row
+        for row in trace_writer.writes[0].to_pandas().to_dict("records")
+    }
+    assert verdicts["a"]["verdict"] == "selected"
+    assert verdicts["c"]["verdict"] == "excluded"
+    assert "capacity" in verdicts["c"]["reason"]
+
+    # The step's counts are the trace's question, not this step's own inputs.
+    [record] = [r for r in run_log.records if r["step"] == "explain"]
+    assert (record["rows_in"], record["rows_out"], record["rows_excluded"]) == (3, 2, 1)
+    assert record["committed"] is True
+
+
+def test_write_trace_returns_the_survivors_so_the_next_line_can_write_them():
+    with explain("record_id") as trace:
+        data = read(given_rows([{"record_id": "a", "amount": 1}]))
+    survivors = write_trace(RecordingWriter(), trace, data)
+
+    assert survivors is data
+
+
+def test_a_dry_run_builds_the_trace_and_commits_nothing():
+    context, _ = _context(dry_run=True)
+    trace_writer = RecordingWriter()
+    with active_context(context):
+        with explain("record_id") as trace:
+            data = read(given_rows([{"record_id": "a", "amount": 1}]))
+        write_trace(trace_writer, trace, data)
+
+    assert trace_writer.writes == []
+    assert context.dry_run_report.step("explain").note == (
+        "would write trace: 1 row(s) (1 selected, 0 excluded)"
+    )
+
+
+def test_a_step_outside_an_explain_block_traces_nothing():
+    # The trace is scoped to its block, so a later transform cannot append to it.
+    with explain("record_id") as trace:
+        data = read(given_rows([{"record_id": "a", "amount": 1}]))
+    transform(_gate(0), data, name="hopper")
+
+    assert trace.selected == 1
+    assert trace.excluded == 0
+
+
+# --- what a dry run calls each step -------------------------------------------
+
+
+def test_a_preview_names_each_steps_kind_as_the_builder_does():
+    context, _ = _context(dry_run=True)
+    rejects = RecordingWriter()
+    with active_context(context):
+        data = read(given_rows([{"record_id": "a", "amount": 1}]))
+        data = transform(Filter(lambda row: True), data)
+        data = quarantine(SchemaValueRulePartitioner(GatedRow), rejects, data)
+        validate(ColumnValidator(["record_id"]), data)
+        write(RecordingWriter(), data)
+
+    assert [preview.node_type for preview in context.dry_run_report.steps] == [
+        "Read",
+        "Transform",
+        "Quarantine",
+        "Validate",
+        "Write",
+    ]
