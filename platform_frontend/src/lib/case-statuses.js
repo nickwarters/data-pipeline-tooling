@@ -42,3 +42,18 @@ export const CASE_STATUS = Object.freeze(
 /**
  * @typedef {(typeof CASE_STATUS)[keyof typeof CASE_STATUS]} CaseStatus
  */
+
+/**
+ * The statuses a Reviewer still holds work in — a review under way, or its
+ * Remediation Actions out with the Responsible Party. Declared once because
+ * every consumer of it must agree: the Outstanding Cases panel queries it and
+ * offers it as filter choices, the workload model counts it, and the Action
+ * Centre's In progress group is grouped by it. A consumer naming one status
+ * fewer silently drops a Case someone is still accountable for.
+ *
+ * @type {CaseStatus[]}
+ */
+export const OUTSTANDING_STATUSES = [
+  CASE_STATUS.IN_PROGRESS,
+  CASE_STATUS.ACTIONS_IN_PROGRESS,
+];

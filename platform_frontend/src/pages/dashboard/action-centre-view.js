@@ -9,7 +9,6 @@ import {
 } from '../../services/across-sources.js';
 import {
   reasonsForCapabilities,
-  visibleReasons,
   activeFilter,
   headlineFilter,
   worstFirstOrder,
@@ -19,7 +18,12 @@ import {
   mergeWorstFirstWindow,
 } from '../../services/action-centre-model.js';
 
-export const COPY = Object.freeze({ heading: 'Action Centre' });
+export const COPY = Object.freeze({
+  heading: 'Action Centre',
+  // Every Case a Reviewer holds is in a group now, so an empty panel means an
+  // empty worklist, not a quiet one.
+  empty: 'Nothing in your worklist right now.',
+});
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../../services/action-centre-model.js').Reason} Reason */
@@ -40,19 +44,16 @@ export function initialActionCentreState(
   caseSources,
   now = new Date()
 ) {
-  const allReasons = reasonsForCapabilities(capabilities);
   return {
     slaDays: Object.fromEntries(
       caseSources.map((s) => [s.slug, s.actionCentreSlaDays])
     ),
-    allReasons,
-    reasons: visibleReasons(allReasons, true),
+    reasons: reasonsForCapabilities(capabilities),
     counts: /** @type {Record<string, number>} */ ({}),
     headline: 0,
     peeks: /** @type {Record<string, CaseRow | null>} */ ({}),
     expanded: new Set(),
     pages: /** @type {Record<string, CaseRow[]>} */ ({}),
-    needsActionNow: true,
     now,
   };
 }
@@ -275,7 +276,6 @@ function groupView(reason, state, handlers) {
 
 /**
  * @typedef {{
- *   onToggleNeedsAction: (value: boolean) => void,
  *   onToggleGroup: (reason: Reason) => void,
  *   onShowMore: (reason: Reason) => void,
  *   onOpenCase: (row: CaseRow) => void,
@@ -304,42 +304,10 @@ export function ActionCentreView(state, handlers) {
         'span',
         { className: 'cora-ac-subtitle' },
         `${caseWord(state.headline)} · grouped by reason`
-      ),
-      h(
-        'div',
-        {
-          className: 'cora-ac-toggle',
-          role: 'group',
-          'aria-label': 'Worklist scope',
-        },
-        h(
-          'button',
-          {
-            type: 'button',
-            className: state.needsActionNow
-              ? 'cora-ac-toggle-btn cora-ac-toggle-btn--on'
-              : 'cora-ac-toggle-btn',
-            'aria-pressed': String(state.needsActionNow),
-            onclick: () => handlers.onToggleNeedsAction(true),
-          },
-          'Needs action now'
-        ),
-        h(
-          'button',
-          {
-            type: 'button',
-            className: !state.needsActionNow
-              ? 'cora-ac-toggle-btn cora-ac-toggle-btn--on'
-              : 'cora-ac-toggle-btn',
-            'aria-pressed': String(!state.needsActionNow),
-            onclick: () => handlers.onToggleNeedsAction(false),
-          },
-          'All'
-        )
       )
     ),
     empty
-      ? EmptyState('Nothing needs your action right now.', {
+      ? EmptyState(COPY.empty, {
           className: 'cora-ac-empty',
         })
       : state.reasons.map((reason) => groupView(reason, state, handlers))

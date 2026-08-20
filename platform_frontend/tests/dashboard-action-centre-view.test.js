@@ -44,7 +44,7 @@ test('Action Centre state derives its reason descriptors from unchanged model fl
   );
   assert.deepEqual(
     reviewer.reasons.map((reason) => reason.id),
-    ['overdue', 'awaitingFrontline', 'onHold']
+    ['overdue', 'awaitingFrontline', 'onHold', 'inProgress']
   );
   const multiRole = initialActionCentreState(
     capabilities({
@@ -58,7 +58,7 @@ test('Action Centre state derives its reason descriptors from unchanged model fl
   // it to the tail of this list when the switch goes.
   assert.deepEqual(
     multiRole.reasons.map((reason) => reason.id),
-    ['overdue', 'awaitingFrontline', 'onHold']
+    ['overdue', 'awaitingFrontline', 'onHold', 'inProgress']
   );
 });
 
@@ -128,7 +128,6 @@ test('Action Centre pure view renders descriptor rows and exposes store callback
   /** @type {string[]} */
   const actions = [];
   const view = ActionCentreView(state, {
-    onToggleNeedsAction: (value) => actions.push(`scope:${value}`),
     onToggleGroup: (item) => actions.push(`group:${item.id}`),
     onShowMore: (item) => actions.push(`more:${item.id}`),
     onOpenCase: (item) => actions.push(`open:${item.id}`),
@@ -141,12 +140,8 @@ test('Action Centre pure view renders descriptor rows and exposes store callback
   );
 
   const buttons = [...view.querySelectorAll('button')];
-  const needs = /** @type {any} */ (
-    buttons.find((button) => button.textContent === 'Needs action now')
-  );
-  const all = /** @type {any} */ (
-    buttons.find((button) => button.textContent === 'All')
-  );
+  // The scope toggle is gone: one view, no control to switch it.
+  assert.equal(view.querySelector('.cora-ac-toggle'), null);
   const group = /** @type {any} */ (
     buttons.find((button) => button.className === 'cora-ac-group-header')
   );
@@ -156,22 +151,16 @@ test('Action Centre pure view renders descriptor rows and exposes store callback
   const more = /** @type {any} */ (
     buttons.find((button) => button.className === 'cora-ac-more')
   );
-  needs?._fire('click', {});
-  all?._fire('click', {});
   group?._fire('click', {});
   open?._fire('click', {});
   more?._fire('click', {});
-  needs?._fire('click', {});
-  all?._fire('click', {});
   group?._fire('click', {});
   open?._fire('click', {});
   more?._fire('click', {});
-  needs?._fire('click', {});
-  all?._fire('click', {});
   group?._fire('click', {});
   open?._fire('click', {});
   more?._fire('click', {});
-  assert.equal(actions.length, 15);
+  assert.equal(actions.length, 9);
   assert.ok(actions.includes(`group:${reason.id}`));
 });
 
@@ -185,7 +174,6 @@ test('Action Centre pure view renders collapsed peeks and the true empty state',
   state.headline = 1;
   state.peeks = { overdue: row('peek') };
   const handlers = {
-    onToggleNeedsAction: () => {},
     onToggleGroup: () => {},
     onShowMore: () => {},
     onOpenCase: () => {},
@@ -200,7 +188,7 @@ test('Action Centre pure view renders collapsed peeks and the true empty state',
     { ...state, counts: {}, headline: 0, peeks: {} },
     handlers
   );
-  assert.match(empty.textContent, /Nothing needs your action right now/);
+  assert.match(empty.textContent, /Nothing in your worklist right now/);
 });
 
 test('Action Centre rows preserve fallback references, secondary reasons, and within-SLA clocks', () => {
@@ -234,7 +222,6 @@ test('Action Centre rows preserve fallback references, secondary reasons, and wi
   state.expanded = new Set(['awaitingFrontline']);
   state.pages = { awaitingFrontline: [awaitingRow] };
   const view = ActionCentreView(state, {
-    onToggleNeedsAction: () => {},
     onToggleGroup: () => {},
     onShowMore: () => {},
     onOpenCase: () => {},
@@ -318,7 +305,6 @@ test('Action Centre renders the On Hold group below Awaiting Frontline with its 
   state.expanded = new Set(['onHold']);
   state.pages = { onHold: [parked] };
   const view = ActionCentreView(state, {
-    onToggleNeedsAction: () => {},
     onToggleGroup: () => {},
     onShowMore: () => {},
     onOpenCase: () => {},
@@ -327,7 +313,12 @@ test('Action Centre renders the On Hold group below Awaiting Frontline with its 
   const groups = [...view.querySelectorAll('.cora-ac-group')].map((group) =>
     group.getAttribute('data-reason')
   );
-  assert.deepEqual(groups, ['overdue', 'awaitingFrontline', 'onHold']);
+  assert.deepEqual(groups, [
+    'overdue',
+    'awaitingFrontline',
+    'onHold',
+    'inProgress',
+  ]);
 
   const holdGroup = [...view.querySelectorAll('.cora-ac-group')].find(
     (group) => group.getAttribute('data-reason') === 'onHold'
@@ -351,6 +342,45 @@ test('Action Centre renders the On Hold group below Awaiting Frontline with its 
   assert.equal(
     holdGroup?.querySelector('.cora-ac-more')?.textContent,
     'Show 5 more on hold →'
+  );
+});
+
+test('Action Centre renders the In progress group with its own tone and wording', () => {
+  const now = new Date('2026-07-04T00:00:00Z');
+  const state = initialActionCentreState(
+    capabilities({ isReviewer: true }),
+    [],
+    now
+  );
+  const held = { ...row('p1'), created: '2026-06-27T00:00:00Z' };
+  state.counts = { inProgress: 3 };
+  state.headline = 3;
+  state.expanded = new Set(['inProgress']);
+  state.pages = { inProgress: [held] };
+  const view = ActionCentreView(state, {
+    onToggleGroup: () => {},
+    onShowMore: () => {},
+    onOpenCase: () => {},
+  });
+
+  const group = [...view.querySelectorAll('.cora-ac-group')].find(
+    (item) => item.getAttribute('data-reason') === 'inProgress'
+  );
+  assert.equal(
+    group?.querySelector('.cora-ac-dot')?.className,
+    'cora-ac-dot cora-ac-dot--progress'
+  );
+  assert.equal(
+    group?.querySelector('.cora-ac-count')?.className,
+    'cora-ac-count cora-ac-count--progress'
+  );
+  assert.match(
+    group?.querySelector('.cora-ac-wait')?.textContent ?? '',
+    /7 days in progress/
+  );
+  assert.equal(
+    group?.querySelector('.cora-ac-more')?.textContent,
+    'Show 2 more in progress →'
   );
 });
 
@@ -386,7 +416,6 @@ test("Action Centre judges a row's wait against its own Case Type's cadence", ()
   };
 
   const view = ActionCentreView(state, {
-    onToggleNeedsAction: () => {},
     onToggleGroup: () => {},
     onShowMore: () => {},
     onOpenCase: () => {},

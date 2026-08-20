@@ -1808,10 +1808,6 @@ test('dashboard reducer composes Controls, Action Centre, and Responsible Party 
     role: 'owner',
     key: 'at-risk',
   });
-  state = slice.reducer(state, {
-    type: 'action-centre/scope-changed',
-    value: false,
-  });
   assert.deepEqual(state.routes.dashboard.actionCentre.counts, {});
   state = slice.reducer(state, {
     type: 'action-centre/counts-loaded',
@@ -1819,11 +1815,7 @@ test('dashboard reducer composes Controls, Action Centre, and Responsible Party 
     peeks: { overdue: null },
     headline: 2,
   });
-  const scopedWithStaleCounts = slice.reducer(state, {
-    type: 'action-centre/scope-changed',
-    value: true,
-  });
-  const scopedView = dashboardView(scopedWithStaleCounts, {
+  const countedView = dashboardView(state, {
     context: ctx,
     dispatch: () => {},
   });
@@ -1876,21 +1868,16 @@ test('dashboard reducer composes Controls, Action Centre, and Responsible Party 
     state.routes.dashboard.expandedKpiTiles.has('owner:at-risk'),
     true
   );
-  assert.equal(state.routes.dashboard.actionCentre.needsActionNow, false);
   assert.equal(
     /** @type {any} */ (state.routes.dashboard.actionCentre.pages).overdue
       .length,
     2
   );
   assert.equal(state.routes.dashboard.actionCentre.counts.overdue, 2);
-  assert.equal(
-    scopedWithStaleCounts.routes.dashboard.actionCentre.counts.overdue,
-    2
-  );
-  assert.equal(scopedWithStaleCounts.routes.dashboard.actionCentre.headline, 2);
+  assert.equal(state.routes.dashboard.actionCentre.headline, 2);
   assert.doesNotMatch(
-    scopedView.querySelector('.cora-action-centre')?.textContent ?? '',
-    /Nothing needs your action right now/
+    countedView.querySelector('.cora-action-centre')?.textContent ?? '',
+    /Nothing in your worklist right now/
   );
   assert.equal(state.routes.dashboard.responsibleParty.filter, 'complaints');
   assert.equal(
@@ -2011,7 +1998,6 @@ test('dashboard pure view composes every real panel for a multi-role user', () =
     context: ctx,
     dispatch: (action) => actions.push(action),
     actionCentreActions: {
-      toggleNeedsAction: (_state, value) => actions.push(['scope', value]),
       toggleGroup: (_state, reason) => actions.push(['group', reason.id]),
       showMore: (_state, reason) => actions.push(['more', reason.id]),
     },
@@ -2044,8 +2030,6 @@ test('dashboard pure view composes every real panel for a multi-role user', () =
   assert.deepEqual(
     actions.filter((action) => Array.isArray(action)),
     [
-      ['scope', true],
-      ['scope', false],
       ['group', reasonIds[0]],
       // Only the first reason is expanded, so only it renders rows and a
       // Show more control.
@@ -2075,7 +2059,7 @@ test('dashboard pure view composes every real panel for a multi-role user', () =
   ].forEach((button) => fireEvent(button, 'click', { bubbles: false }));
 });
 
-test('dashboard Action Centre controller reloads scope, groups, and pages through store actions', async () => {
+test('dashboard Action Centre controller reloads groups and pages through store actions', async () => {
   const ctx = context(
     capabilities({
       isReviewer: true,
@@ -2092,12 +2076,6 @@ test('dashboard Action Centre controller reloads scope, groups, and pages throug
   /** @type {Promise<void>} */
   const initialPage = new Promise((resolve) => {
     markInitialPage = resolve;
-  });
-  /** @type {() => void} */
-  let markScopePage = () => {};
-  /** @type {Promise<void>} */
-  const scopePage = new Promise((resolve) => {
-    markScopePage = resolve;
   });
   const slice = createRouteSlice({}, ctx, {
     listAcrossSources: async () => [],
@@ -2135,7 +2113,6 @@ test('dashboard Action Centre controller reloads scope, groups, and pages throug
     state = slice.reducer(state, action);
     if (action.type === 'action-centre/page-loaded') {
       if (pageLoads === 1) markInitialPage();
-      if (pageLoads === 2) markScopePage();
     }
     return state;
   };
@@ -2153,14 +2130,6 @@ test('dashboard Action Centre controller reloads scope, groups, and pages throug
   await initialPage;
 
   let view = slice.view(state, { context: ctx, dispatch });
-  const all = [...view.querySelectorAll('.cora-ac-toggle-btn')].find(
-    (button) => button.textContent === 'All'
-  );
-  all?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
-  await scopePage;
-  assert.equal(state.routes.dashboard.actionCentre.needsActionNow, false);
-
-  view = slice.view(state, { context: ctx, dispatch });
   view
     .querySelector('.cora-ac-group-header')
     ?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
@@ -2176,15 +2145,8 @@ test('dashboard Action Centre controller reloads scope, groups, and pages throug
     ?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
   await Promise.resolve();
 
-  const needs = [...view.querySelectorAll('.cora-ac-toggle-btn')].find(
-    (button) => button.textContent === 'Needs action now'
-  );
-  needs?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
-  needs?.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
-  await Promise.resolve();
-
-  assert.ok(countLoads >= 2);
-  assert.ok(pageLoads >= 3);
+  assert.ok(countLoads >= 1);
+  assert.ok(pageLoads >= 2);
   dispose?.();
 });
 
@@ -2639,8 +2601,6 @@ test('dashboard Action Centre: the group header and Show more reach the panel’
       context: ctx,
       dispatch: () => {},
       actionCentreActions: {
-        toggleNeedsAction: (/** @type {any} */ panel, value) =>
-          calls.push(['scope', panel === actionCentre, value]),
         toggleGroup: (/** @type {any} */ panel, /** @type {any} */ target) =>
           calls.push(['group', panel === actionCentre, target.id]),
         showMore: (/** @type {any} */ panel, /** @type {any} */ target) =>

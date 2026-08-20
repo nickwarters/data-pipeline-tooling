@@ -531,8 +531,8 @@
 
 /**
  * How long a Case may sit in each Action Centre reason group before its
- * "waiting" chip reads as breached, in whole days, keyed by reason id
- * (`overdue`, `awaitingFrontline`, `appeals`).
+ * "waiting" chip reads as breached, in whole days, keyed by reason id — the ids
+ * in `ACTION_CENTRE_REASONS`, which is the set `npm run verify` accepts.
  *
  * Deliberately **partial**: a Case Type names only the reasons whose cadence
  * differs from the framework's, and every other reason keeps the default that

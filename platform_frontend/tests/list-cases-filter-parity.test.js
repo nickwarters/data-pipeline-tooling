@@ -341,6 +341,39 @@ const SCENARIOS = [
     expected: ['parked', 'queued'],
   },
   {
+    // The Action Centre's In progress group nests an `anyOf` inside the
+    // headline's `anyOf`, and ANDs a person alongside it. Neither engine had a
+    // caller doing that before the group existed.
+    name: 'a nested anyOf, scoped to one reviewer',
+    filter: {
+      anyOf: [
+        {
+          anyOf: [{ status: 'In-progress' }, { status: 'Actions In Progress' }],
+          assignedReviewer: 'rev-a',
+        },
+      ],
+    },
+    rows: [
+      caseRow('mine-open', {
+        status: 'In-progress',
+        assignedReviewer: 'rev-a',
+      }),
+      caseRow('mine-sent', {
+        status: 'Actions In Progress',
+        assignedReviewer: 'rev-a',
+      }),
+      caseRow('mine-done', {
+        status: 'Completed',
+        assignedReviewer: 'rev-a',
+      }),
+      caseRow('theirs-open', {
+        status: 'In-progress',
+        assignedReviewer: 'rev-b',
+      }),
+    ],
+    expected: ['mine-open', 'mine-sent'],
+  },
+  {
     name: 'status and overdue together',
     filter: { status: 'In-progress', overdue: true },
     rows: OVERDUE_ROWS,

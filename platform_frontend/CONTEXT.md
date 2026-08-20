@@ -461,6 +461,23 @@ Controls accepts the outcome was wrong and then authors a case-level **Amended O
 open Appeal per Case; after resolution a new Appeal may be raised (full history kept).
 _Avoid_: Dispute, Complaint, Grievance, Challenge
 
+### Worklists
+
+**Action Centre**:
+The dashboard panel that groups a viewer's worklist by **reason** — one section per
+reason, in fixed priority order: **Overdue**, **Awaiting Frontline**, **On Hold**,
+**Appeals to work**, **In progress**. Each group is one indexed query, so its header
+count is cheap and the panel never holds the backlog. A Case may appear in more than
+one group; the panel's headline counts it once.
+
+**In progress** (Action Centre group):
+Every Case a **Reviewer** currently holds — both **outstanding** statuses, `In-progress`
+and `Actions In Progress` — aged from when the Case was created. Unlike the other
+groups it is not a reason to act but the whole of the work: a Case that is also Overdue
+is in both, and is noted as a second reason where it appears. Its count is **not** the
+same number as the KPI strip's "In progress" tile, which is a narrower client-side
+reading of the same word.
+
 ### Communication
 
 **Conversation**:

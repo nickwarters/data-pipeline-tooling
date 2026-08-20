@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import {
   ACTION_CENTRE_REASONS,
   reasonsForCapabilities,
-  visibleReasons,
   activeFilter,
   headlineFilter,
   worstFirstOrder,
@@ -55,27 +54,38 @@ const NOW = new Date('2026-07-04T00:00:00Z');
 test('ACTION_CENTRE_REASONS: fixed priority order, labels, roles, tones', () => {
   assert.deepEqual(
     ACTION_CENTRE_REASONS.map((r) => r.id),
-    ['overdue', 'awaitingFrontline', 'onHold', 'appeals']
+    ['overdue', 'awaitingFrontline', 'onHold', 'appeals', 'inProgress']
   );
   assert.deepEqual(
     ACTION_CENTRE_REASONS.map((r) => r.label),
-    ['Overdue', 'Awaiting Frontline', 'On Hold', 'Appeals to work']
+    [
+      'Overdue',
+      'Awaiting Frontline',
+      'On Hold',
+      'Appeals to work',
+      'In progress',
+    ]
   );
   assert.deepEqual(
     ACTION_CENTRE_REASONS.map((r) => r.role),
-    ['Reviewer', 'Reviewer', 'Reviewer', 'Controls']
+    ['Reviewer', 'Reviewer', 'Reviewer', 'Controls', 'Reviewer']
   );
   assert.deepEqual(
     ACTION_CENTRE_REASONS.map((r) => r.tone),
-    ['overdue', 'awaiting', 'hold', 'appeal']
+    ['overdue', 'awaiting', 'hold', 'appeal', 'progress']
   );
 });
 
-test('reasonsForCapabilities: reviewer sees the three reviewer reasons', () => {
+test('reasonsForCapabilities: reviewer sees the four reviewer reasons', () => {
   const ids = reasonsForCapabilities(caps({ isReviewer: true })).map(
     (r) => r.id
   );
-  assert.deepEqual(ids, ['overdue', 'awaitingFrontline', 'onHold']);
+  assert.deepEqual(ids, [
+    'overdue',
+    'awaitingFrontline',
+    'onHold',
+    'inProgress',
+  ]);
 });
 
 // Appeals are switched off in this build, so the reason stays in the table —
@@ -104,25 +114,18 @@ test('reasonsForCapabilities: multi-role user sees the union', () => {
   const ids = reasonsForCapabilities(
     caps({ isReviewer: true, isControls: true, ownedCaseTypes: ['complaints'] })
   ).map((r) => r.id);
-  // 'appeals' is absent only because the feature switch is off; restore it to
-  // the tail of this list when the switch goes.
-  assert.deepEqual(ids, ['overdue', 'awaitingFrontline', 'onHold']);
+  // 'appeals' is absent only because the feature switch is off; restore it
+  // ahead of 'inProgress' when the switch goes.
+  assert.deepEqual(ids, [
+    'overdue',
+    'awaitingFrontline',
+    'onHold',
+    'inProgress',
+  ]);
 });
 
 test('reasonsForCapabilities: a visitor sees no reasons', () => {
   assert.deepEqual(reasonsForCapabilities(caps({ isVisitor: true })), []);
-});
-
-test('visibleReasons: with no tail-only reason in the table, both toggle states show the same reasons', () => {
-  const reasons = reasonsForCapabilities(caps({ isReviewer: true }));
-  assert.deepEqual(
-    visibleReasons(reasons, true).map((r) => r.id),
-    ['overdue', 'awaitingFrontline', 'onHold']
-  );
-  assert.deepEqual(
-    visibleReasons(reasons, false).map((r) => r.id),
-    ['overdue', 'awaitingFrontline', 'onHold']
-  );
 });
 
 test('activeFilter: reviewer reasons are scoped to the current reviewer', () => {
@@ -148,6 +151,53 @@ test('worstFirstOrder: On Hold sorts longest-parked first on placedOnHoldAt', ()
     orderBy: 'placedOnHoldAt',
     orderDir: 'asc',
   });
+});
+
+test('activeFilter: In progress is every outstanding status the reviewer holds', () => {
+  assert.deepEqual(activeFilter(reason('inProgress'), 'u1'), {
+    anyOf: [
+      { status: CASE_STATUS.IN_PROGRESS },
+      { status: CASE_STATUS.ACTIONS_IN_PROGRESS },
+    ],
+    assignedReviewer: 'u1',
+  });
+});
+
+test('worstFirstOrder: In progress sorts oldest-held first on created', () => {
+  assert.deepEqual(worstFirstOrder(reason('inProgress')), {
+    orderBy: 'created',
+    orderDir: 'asc',
+  });
+});
+
+test('waitingInfo: the In progress chip counts days held, singular guarded', () => {
+  /** @param {string} created */
+  const chip = (created) =>
+    waitingInfo(caseRow({ created }), reason('inProgress'), NOW);
+
+  assert.deepEqual(chip('2026-07-03T00:00:00Z'), {
+    days: 1,
+    label: '1 day in progress',
+    breached: false,
+  });
+  assert.deepEqual(chip('2026-06-27T00:00:00Z'), {
+    days: 7,
+    label: '7 days in progress',
+    breached: false,
+  });
+  // The placeholder cadence, the same open question On Hold carries.
+  assert.equal(chip('2026-06-20T00:00:00Z').breached, true);
+});
+
+test('secondaryReasons: In progress is not noted as a second reason', () => {
+  // It has no flag of its own, and every Case in another group is in it too,
+  // so noting it would say "also in progress" on every row in the panel.
+  assert.deepEqual(
+    secondaryReasons(caseRow({ overdue: true, onHold: true }), 'overdue').map(
+      (r) => r.id
+    ),
+    ['onHold']
+  );
 });
 
 test('waitingInfo: the On Hold chip counts days on hold, singular guarded', () => {

@@ -17,9 +17,7 @@
  *
  * Reviewer reasons are **scoped to the current reviewer** (`reviewerScoped`), so
  * a reviewer's worklist shows only their own assigned Cases; Controls/Owner
- * reasons stay unscoped. The `tailOnly` seam hides a within-SLA backlog reason
- * from the "Needs action now" toggle; no current reason is tail-only, and the
- * mechanism stays in place for the next backlog-shaped reason.
+ * reasons stay unscoped.
  *
  * @typedef {import('../sharepoint-client.js').CaseRow} CaseRow
  * @typedef {import('../sharepoint-client.js').ListCasesFilter} ListCasesFilter
@@ -32,13 +30,12 @@
  * id: string,
  * label: string,
  * role: string,
- * tone: 'overdue' | 'awaiting' | 'hold' | 'appeal',
- * clockField: 'dueDate' | 'awaitingSince' | 'placedOnHoldAt' | 'appealRaisedAt',
- * flagField: 'overdue' | 'awaitingResponsibleParty' | 'onHold' | 'hasOpenAppeal',
+ * tone: 'overdue' | 'awaiting' | 'hold' | 'appeal' | 'progress',
+ * clockField: 'dueDate' | 'awaitingSince' | 'placedOnHoldAt' | 'appealRaisedAt' | 'created',
+ * flagField?: 'overdue' | 'awaitingResponsibleParty' | 'onHold' | 'hasOpenAppeal',
  * filter: ListCasesFilter,
  * defaultSlaDays: number,
  * reviewerScoped: boolean,
- * tailOnly: boolean,
  * requires: (capabilities: Capabilities) => boolean,
  * waitingLabel: (days: number) => string,
  * subLine: (caseRow: CaseRow) => string,
@@ -46,7 +43,7 @@
  */
 
 import { APPEALS_ENABLED } from '../config/features.js';
-import { CASE_STATUS } from '../lib/case-statuses.js';
+import { CASE_STATUS, OUTSTANDING_STATUSES } from '../lib/case-statuses.js';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -79,8 +76,12 @@ function assigneeSubLine(caseRow) {
 
 /**
  * The reason table, in fixed priority order (Overdue → Awaiting Frontline →
- * On Hold → Appeals). Group ordering is this fixed priority;
+ * On Hold → Appeals → In progress). Group ordering is this fixed priority;
  * the primary reason of a multi-reason case is the earliest match here.
+ * In progress comes last because it is the only group a Case can be in *as
+ * well as* another: it is the whole of a Reviewer's open work, not a reason to
+ * act, so a Case it shares with a group above is noted there as a second
+ * reason rather than being taken out of one of them.
  *
  * `defaultSlaDays` is the framework cadence for a reason — what a Case Type
  * gets when it declares nothing. A Case Type overrides it per reason; it
@@ -99,7 +100,6 @@ export const ACTION_CENTRE_REASONS = [
     filter: { overdue: true },
     defaultSlaDays: 0,
     reviewerScoped: true,
-    tailOnly: false,
     requires: (c) => c.isReviewer,
     waitingLabel: (days) => `${dayCount(days)} over`,
     subLine: assigneeSubLine,
@@ -117,7 +117,6 @@ export const ACTION_CENTRE_REASONS = [
     // stored `remediationDueDate` instead — see `waitingInfo`.
     defaultSlaDays: 7,
     reviewerScoped: true,
-    tailOnly: false,
     requires: (c) => c.isReviewer,
     waitingLabel: (days) => `${dayCount(days)} no reply`,
     subLine: assigneeSubLine,
@@ -139,7 +138,6 @@ export const ACTION_CENTRE_REASONS = [
     // point of a separate non-urgent group.
     defaultSlaDays: 14,
     reviewerScoped: true,
-    tailOnly: false,
     requires: (c) => c.isReviewer,
     waitingLabel: (days) => `${dayCount(days)} on hold`,
     subLine: assigneeSubLine,
@@ -154,7 +152,6 @@ export const ACTION_CENTRE_REASONS = [
     filter: { hasOpenAppeal: true },
     defaultSlaDays: 5,
     reviewerScoped: false,
-    tailOnly: false,
     // Appeals are switched off in this build: nothing sets the flag this group
     // queries, so it would be an empty group on every Controls worklist.
     requires: (c) => {
@@ -162,6 +159,28 @@ export const ACTION_CENTRE_REASONS = [
       return c.isControls;
     },
     waitingLabel: (days) => `raised ${dayCount(days)} ago`,
+    subLine: assigneeSubLine,
+  },
+  {
+    id: 'inProgress',
+    label: 'In progress',
+    role: 'Reviewer',
+    tone: 'progress',
+    // Ages from the Case's own creation, which every Case has and no
+    // transition rewrites, so the oldest thing a Reviewer is sitting on
+    // surfaces first.
+    clockField: 'created',
+    // No flagField: this group is a status, not a state something sets. It is
+    // never the *second* reason on a row either — every Case in another group
+    // is in this one too, so noting it would say "also in progress" on
+    // everything.
+    filter: { anyOf: OUTSTANDING_STATUSES.map((status) => ({ status })) },
+    // A placeholder cadence for "held too long", pending a product answer —
+    // the same open question On Hold carries.
+    defaultSlaDays: 14,
+    reviewerScoped: true,
+    requires: (c) => c.isReviewer,
+    waitingLabel: (days) => `${dayCount(days)} in progress`,
     subLine: assigneeSubLine,
   },
 ];
@@ -185,18 +204,6 @@ function reasonById(id) {
  */
 export function reasonsForCapabilities(capabilities) {
   return ACTION_CENTRE_REASONS.filter((r) => r.requires(capabilities));
-}
-
-/**
- * The reasons visible under the current toggle. "Needs action now" hides any
- * `tailOnly` within-SLA backlog reason; "All" shows everything.
- *
- * @param {Reason[]} reasons
- * @param {boolean} needsActionNow
- * @returns {Reason[]}
- */
-export function visibleReasons(reasons, needsActionNow) {
-  return needsActionNow ? reasons.filter((r) => !r.tailOnly) : reasons;
 }
 
 /**
@@ -409,9 +416,10 @@ export function waitingInfo(
  * @returns {string[]}
  */
 function matchedReasonIds(caseRow) {
-  return ACTION_CENTRE_REASONS.filter((r) => Boolean(caseRow[r.flagField])).map(
-    (r) => r.id
-  );
+  // A reason with no flag of its own is skipped.
+  return ACTION_CENTRE_REASONS.filter(
+    (r) => r.flagField !== undefined && Boolean(caseRow[r.flagField])
+  ).map((r) => r.id);
 }
 
 /**

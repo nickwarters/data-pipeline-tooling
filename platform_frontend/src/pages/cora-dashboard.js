@@ -30,9 +30,8 @@ import {
   loadActionCentreCounts,
   loadActionCentrePage,
 } from './dashboard/action-centre-view.js';
-import { visibleReasons } from '../services/action-centre-model.js';
 import { loadKpiModel } from '../evaluators/kpi-strip-model.js';
-import { CASE_STATUS } from '../lib/case-statuses.js';
+import { CASE_STATUS, OUTSTANDING_STATUSES } from '../lib/case-statuses.js';
 import { listCasesAcrossSources } from '../services/across-sources.js';
 import {
   dataTableView,
@@ -53,18 +52,6 @@ import {
 /** The two table names this page sorts by: used by both the views and the reducer. */
 const REVIEWER_TABLE = 'reviewer';
 const APPEALS_TABLE = 'appeals';
-
-/**
- * What the Outstanding Cases panel means by "outstanding" — the same two
- * statuses the Reviewer workload model counts. Declared once because it has two
- * uses that must not disagree: it is the query the panel fetches *and* the
- * choices its status filter offers. A filter offering a status the fetch never
- * returns is a control that only ever empties the table.
- */
-const OUTSTANDING_STATUSES = [
-  CASE_STATUS.IN_PROGRESS,
-  CASE_STATUS.ACTIONS_IN_PROGRESS,
-];
 
 /**
  * Resolve the manager used by the allocation write. A missing or unusable
@@ -229,23 +216,12 @@ function reviewerCasesView(route, dispatch) {
   );
 }
 
-/** @param {ReturnType<typeof initialActionCentreState>} state @param {boolean} value */
-function actionCentreScopeState(state, value) {
-  return {
-    ...state,
-    needsActionNow: value,
-    reasons: visibleReasons(state.allReasons, value),
-    pages: {},
-  };
-}
-
 /**
  * @param {DashboardState} state
  * @param {{
  *   dispatch: (action: any) => any,
  *   context: import('../setup/register-routes.js').AppContext,
  *   actionCentreActions?: {
- *     toggleNeedsAction: (state: ReturnType<typeof initialActionCentreState>, value: boolean) => void,
  *     toggleGroup: (state: ReturnType<typeof initialActionCentreState>, reason: import('../services/action-centre-model.js').Reason) => void,
  *     showMore: (state: ReturnType<typeof initialActionCentreState>, reason: import('../services/action-centre-model.js').Reason) => void,
  *   },
@@ -269,11 +245,6 @@ export function dashboardView(state, tools) {
       }),
     actionCentre: () =>
       ActionCentreView(route.actionCentre, {
-        onToggleNeedsAction: (value) =>
-          tools.actionCentreActions?.toggleNeedsAction(
-            route.actionCentre,
-            value
-          ),
         onToggleGroup: (reason) =>
           tools.actionCentreActions?.toggleGroup(route.actionCentre, reason),
         onShowMore: (reason) =>
@@ -484,18 +455,6 @@ export function createRouteSlice(
   }
 
   const actionCentreActions = {
-    /** @param {ReturnType<typeof initialActionCentreState>} actionState @param {boolean} value */
-    toggleNeedsAction(actionState, value) {
-      if (!effectTools || actionState.needsActionNow === value) return;
-      const next = actionCentreScopeState(actionState, value);
-      effectTools.dispatch({ type: 'action-centre/scope-changed', value });
-      void refreshActionCounts(next);
-      for (const reason of next.reasons) {
-        if (next.expanded.has(reason.id)) {
-          void refreshActionPage(next, reason, 0);
-        }
-      }
-    },
     /** @param {ReturnType<typeof initialActionCentreState>} actionState @param {import('../services/action-centre-model.js').Reason} reason */
     toggleGroup(actionState, reason) {
       if (!effectTools) return;
@@ -697,14 +656,6 @@ export function createRouteSlice(
         APPEALS_TABLE
       );
       if (appealSort) return patchRoute(state, 'dashboard', { appealSort });
-      if (action.type === 'action-centre/scope-changed') {
-        return patchRoute(state, 'dashboard', {
-          actionCentre: actionCentreScopeState(
-            route.actionCentre,
-            action.value
-          ),
-        });
-      }
       if (action.type === 'action-centre/counts-loaded') {
         return patchRoute(state, 'dashboard', {
           actionCentre: {
