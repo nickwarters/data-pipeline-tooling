@@ -195,6 +195,33 @@ Frontline already overlap: only Overdue was specified as winning. In practice th
 overlap is small — the hold toggle is offered only at `In-progress`, while
 `awaitingResponsibleParty` from Send Actions belongs to `Actions In Progress`.
 
+### Amendment — issue #775, 2026-08-20
+
+**The "Needs action now" / "All" scope toggle is removed**, and with it the
+`tailOnly` / `visibleReasons` seam the issue #515 amendment left standing as having
+"no tail-only reason to hide". The toggle read that seam, and with nothing tail-only
+both of its states rendered the same list: a control that appeared to filter and did
+not. One view now, with no scope to choose.
+
+**A fifth reason, In progress, joins the table last.** It is the whole of a Reviewer's
+open work — the `OUTSTANDING_STATUSES` pair, `In-progress` and `Actions In Progress`,
+which is the same query the Outstanding Cases panel already fetches, moved to
+`lib/case-statuses.js` so both read one declaration. Its clock is `Created`, the one
+date every Case has and no transition rewrites, so the group ages oldest-first without
+a new column or a new writer.
+
+**It is the one group a Case can be in as well as another**, which is why it is last
+and why it carries no flag of its own. Every other reason answers "why must I act";
+this one answers "what am I holding", so a Case that is also Overdue belongs in both,
+noted there as a second reason rather than taken out of one of them. Filtering it down
+to a residue was considered and rejected: it would need `overdue`, `onHold` and
+`awaitingResponsibleParty` negated in the filter, and a negated `Yes/No` column reads
+differently in the two clients (issue #776) — buying an exclusivity the table does not
+otherwise have, at the price of a divergence.
+
+**The cadence is a placeholder**, the same open product question On Hold carries: 14
+days is "held too long" until someone says otherwise.
+
 ## Context
 
 The dashboard Action Centre groups a Reviewer/Controls/Owner worklist by

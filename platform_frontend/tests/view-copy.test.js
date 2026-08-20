@@ -30,6 +30,7 @@ test('view COPY objects expose the exact user-facing strings', () => {
   });
   assert.deepEqual(ACTION_CENTRE_COPY, {
     heading: 'Action Centre',
+    empty: 'Nothing in your worklist right now.',
   });
   assert.deepEqual(CONTROLS_COPY, {
     heading: 'Outstanding Appeals',

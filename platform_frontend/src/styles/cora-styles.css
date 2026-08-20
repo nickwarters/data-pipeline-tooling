@@ -836,14 +836,16 @@
    tables. Each reason carries a tone (mirrors its KPI tile) used for the dot,
    the count badge and the breached "waiting" age. `appeal` has no semantic
    token, so a fixed accessible purple is declared here with a dark variant;
-   `hold` is a deliberately muted neutral — parked is not urgent, and a
-   distinct dot is what makes the group scannable next to its siblings. */
+   `hold` and `progress` are deliberately muted — neither is urgent, and a
+   distinct dot is what makes the group scannable next to its siblings. They
+   are a different hue at the same weight, not a different weight. */
 
 .cora-action-centre {
   --cora-ac-overdue: var(--cora-color-danger);
   --cora-ac-awaiting: var(--cora-color-info);
   --cora-ac-appeal: #6d3fbf;
   --cora-ac-hold: #5b6472;
+  --cora-ac-progress: #2f6a6a;
   display: block;
   background: var(--cora-color-surface);
   border: 1px solid var(--cora-color-border);
@@ -857,17 +859,20 @@
   .cora-action-centre {
     --cora-ac-appeal: #b18cf0;
     --cora-ac-hold: #9aa4b2;
+    --cora-ac-progress: #79b5b5;
   }
 }
 
 :root[data-theme='dark'] .cora-action-centre {
   --cora-ac-appeal: #b18cf0;
   --cora-ac-hold: #9aa4b2;
+  --cora-ac-progress: #79b5b5;
 }
 
 :root[data-theme='light'] .cora-action-centre {
   --cora-ac-appeal: #6d3fbf;
   --cora-ac-hold: #5b6472;
+  --cora-ac-progress: #2f6a6a;
 }
 
 .cora-ac-header {
@@ -889,39 +894,6 @@
   font-size: var(--cora-font-size-sm);
 }
 
-.cora-ac-toggle {
-  margin-left: auto;
-  display: inline-flex;
-  background: var(--cora-color-surface-2);
-  border-radius: var(--cora-radius-pill);
-  padding: var(--cora-space-0-5);
-}
-
-/* The Action Centre's controls are <button>s, so they must out-specify the
-   `[data-cora-root] button` reset (0,1,1) that otherwise paints them solid
-   accent. Scoping each under [data-cora-root] lifts them to 0,2,0, and the
-   hover/focus states are re-declared so the reset's `button:hover` cannot win
-   them back (same technique as the tabs). */
-[data-cora-root] .cora-ac-toggle-btn,
-[data-cora-root] .cora-ac-toggle-btn:hover {
-  border: 0;
-  background: transparent;
-  color: var(--cora-color-text-muted);
-  font: inherit;
-  font-size: var(--cora-font-size-sm);
-  font-weight: var(--cora-font-weight-medium);
-  padding: var(--cora-space-1) var(--cora-space-3);
-  border-radius: var(--cora-radius-pill);
-  cursor: pointer;
-}
-
-[data-cora-root] .cora-ac-toggle-btn--on,
-[data-cora-root] .cora-ac-toggle-btn--on:hover {
-  background: var(--cora-color-on-surface);
-  color: var(--cora-color-surface);
-  font-weight: var(--cora-font-weight-semibold);
-}
-
 .cora-ac-empty {
   padding: var(--cora-space-5);
   color: var(--cora-color-text-muted);
@@ -936,6 +908,11 @@
   border-top: 0;
 }
 
+/* The Action Centre's controls are <button>s, so they must out-specify the
+   `[data-cora-root] button` reset (0,1,1) that otherwise paints them solid
+   accent. Scoping each under [data-cora-root] lifts them to 0,2,0, and the
+   hover/focus states are re-declared so the reset's `button:hover` cannot win
+   them back (same technique as the tabs). */
 [data-cora-root] .cora-ac-group-header,
 [data-cora-root] .cora-ac-group-header:hover {
   display: flex;
@@ -970,6 +947,10 @@
 .cora-ac-dot--awaiting {
   background: var(--cora-ac-awaiting);
 }
+.cora-ac-dot--progress {
+  background: var(--cora-ac-progress);
+}
+
 .cora-ac-dot--hold {
   background: var(--cora-ac-hold);
 }
@@ -999,6 +980,10 @@
 .cora-ac-count--awaiting {
   background: var(--cora-ac-awaiting);
 }
+.cora-ac-count--progress {
+  background: var(--cora-ac-progress);
+}
+
 .cora-ac-count--hold {
   background: var(--cora-ac-hold);
 }
@@ -1064,6 +1049,11 @@
   color: var(--cora-ac-awaiting);
   font-weight: var(--cora-font-weight-semibold);
 }
+.cora-ac-wait--progress {
+  color: var(--cora-ac-progress);
+  font-weight: var(--cora-font-weight-semibold);
+}
+
 .cora-ac-wait--hold {
   color: var(--cora-ac-hold);
   font-weight: var(--cora-font-weight-semibold);
