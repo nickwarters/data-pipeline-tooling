@@ -58,6 +58,13 @@ The eight fan-in nodes live in two files (`notifications`, and the
 a graph** — paying deferred, un-steppable execution everywhere to serve fan-in
 almost nowhere.
 
+Fan-in itself needs no graph, only more than one argument: `transform` takes as
+many datasets as the builder's node took input nodes and calls the processor
+with all of them, so `transform(join_threads_to_cases, threads, cases)` is the
+eager form of `p.transform(join_threads_to_cases, threads, cases, name=...)`.
+What the builder still offers is *deferral* — a node whose inputs are produced
+later in the wiring than they are consumed.
+
 ## Decision
 
 The eager steps in `framework/run/steps.py` are the **default** authoring model,

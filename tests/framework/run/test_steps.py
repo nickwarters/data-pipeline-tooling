@@ -95,6 +95,66 @@ def test_steps_run_with_no_run_context_at_all():
     assert len(transform(Filter(lambda row: True), data)) == 1
 
 
+def _stack(*datasets: Dataset) -> Dataset:
+    """A fan-in: concatenate every input, the shape ``retail_analytics`` uses."""
+    import pandas as pd
+
+    return Dataset.from_pandas(
+        pd.concat([d.to_pandas() for d in datasets], ignore_index=True)
+    )
+
+
+def test_a_transform_takes_as_many_datasets_as_the_builder_node_did():
+    # ``p.transform(func, a, b, name=...)`` called ``func(a, b)``; so does this.
+    # A fan-in written for one model works unchanged in the other, which is what
+    # keeps notifications' join-case and retail_analytics' three-way stack
+    # expressible without dropping out of the steps.
+    left = given_rows([{"record_id": "a", "amount": 1}]).read()
+    right = given_rows([{"record_id": "b", "amount": 2}]).read()
+    third = given_rows([{"record_id": "c", "amount": 3}]).read()
+
+    stacked = transform(_stack, left, right, third)
+
+    assert [row["record_id"] for row in stacked.to_pandas().to_dict("records")] == [
+        "a",
+        "b",
+        "c",
+    ]
+
+
+def test_a_fan_in_counts_rows_in_from_its_first_dataset():
+    # The builder's TransformNode took datasets[0] as "before"; a later input is
+    # the reference side, not the flow, so counting it would misreport the step.
+    context, run_log = _context()
+    flow = given_rows([{"record_id": "a", "amount": 1}]).read()
+    reference = given_rows(
+        [{"record_id": "b", "amount": 2}, {"record_id": "c", "amount": 3}]
+    ).read()
+
+    with active_context(context):
+        transform(_stack, flow, reference, name="stack")
+
+    [record] = run_log.records
+    assert record["step"] == "stack"
+    assert record["rows_in"] == 1  # the flow, not the 2-row reference side
+    assert record["rows_out"] == 3
+
+
+def test_a_transform_given_no_dataset_at_all_says_so():
+    with pytest.raises(StepError, match="needs at least one Dataset"):
+        transform(_stack)
+
+
+def test_a_fan_in_refuses_a_builder_node_in_any_position():
+    # The node check has to cover the reference side too, or a half-converted
+    # fan-in fails inside the processor rather than at the step.
+    pipeline = Pipeline("p")
+    node = pipeline.read(given_rows([{"record_id": "a"}]), name="read")
+    data = given_rows([{"record_id": "a", "amount": 1}]).read()
+    with pytest.raises(StepError, match="expects a Dataset, got ReadNode"):
+        transform(_stack, data, node)
+
+
 def test_passing_a_builder_node_instead_of_data_is_refused_by_name():
     # The commonest slip when converting a deferred pipeline. It must fail at
     # the step with an instruction, not three lines later as an AttributeError.
