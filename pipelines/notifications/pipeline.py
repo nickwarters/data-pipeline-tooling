@@ -43,7 +43,6 @@ from framework.run import (
     RunContext,
     read,
     run_pipeline,
-    step,
     transform,
     write,
 )
@@ -368,15 +367,11 @@ def pending_notifications(
     thread = transform(last_message_per_case, messages, name="last-message")
     live = transform(live_cases, cases, name="drop-terminal")
 
-    # Two inputs, so a plain call rather than a one-input ``transform``. ``step``
-    # keeps it a timed, named record in the run log all the same.
-    with step("join-case", rows_in=len(thread)) as metrics:
-        joined = join_threads_to_cases(thread, live)
-        metrics.rows_out = len(joined)
-
-    with step("recipients", rows_in=len(joined)) as metrics:
-        resolved = recipients_of(joined, users)
-        metrics.rows_out = len(resolved)
+    # Two inputs, passed the way the builder passed two input nodes: the first
+    # is the flow being narrowed and the one ``rows_in`` counts, the rest are the
+    # reference side.
+    joined = transform(join_threads_to_cases, thread, live, name="join-case")
+    resolved = transform(recipients_of, joined, users, name="recipients")
 
     return transform(
         AntiJoinWith(ledger, on=list(LEDGER_KEY), name="already-notified"),
@@ -400,9 +395,12 @@ def reportable_notifications(
     """
     selected = transform(reportable_cases, cases, name="select-reportable")
 
-    with step("reportable-recipients", rows_in=len(selected)) as metrics:
-        resolved = responsible_party_and_manager_of(selected, users)
-        metrics.rows_out = len(resolved)
+    resolved = transform(
+        responsible_party_and_manager_of,
+        selected,
+        users,
+        name="reportable-recipients",
+    )
 
     return transform(
         AntiJoinWith(ledger, on=list(REPORTABLE_LEDGER_KEY), name="already-notified"),

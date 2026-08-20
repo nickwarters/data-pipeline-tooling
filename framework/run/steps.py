@@ -375,21 +375,37 @@ def read(reader: Reader, *, name: str | None = None) -> Dataset:
 
 
 def transform(
-    processor: Processor, dataset: Dataset, *, name: str | None = None
+    processor: Processor, *datasets: Dataset, name: str | None = None
 ) -> Dataset:
-    """Apply ``processor`` to ``dataset`` now and return the result.
+    """Apply ``processor`` to ``datasets`` now and return the result.
 
     The argument order matches the deferred builder's ``p.transform(processor,
     node)``, so converting a pipeline is mechanical: drop the ``p.``, pass the
     data instead of the node, drop the ``name=``.
+
+    **Several datasets go in the same way they did as several input nodes.** The
+    builder called ``func(*datasets)``, and so does this, so a fan-in written for
+    one works unchanged in the other::
+
+        joined = transform(join_threads_to_cases, threads, cases, name="join-case")
+
+    The **first** dataset is the one the record's ``rows_in`` counts and the one
+    an ``explain`` trace treats as the rows entering the stage -- the same
+    convention the builder's ``TransformNode`` used, since a fan-in's later
+    inputs are the reference side rather than the flow being narrowed.
     """
-    dataset = _require_dataset(dataset, "transform")
+    if not datasets:
+        raise StepError(
+            "transform() needs at least one Dataset to work on: write "
+            "`data = transform(processor, data)`."
+        )
+    datasets = tuple(_require_dataset(d, "transform") for d in datasets)
     step_name = name or _component_name(processor, "transform")
-    with _record(step_name, "Transform", rows_in=len(dataset)) as outcome:
-        result = processor(dataset)
+    with _record(step_name, "Transform", rows_in=len(datasets[0])) as outcome:
+        result = processor(*datasets)
         outcome["rows_out"] = len(result) if isinstance(result, Dataset) else None
         outcome["result"] = result
-    _observe(processor, step_name, dataset, result)
+    _observe(processor, step_name, datasets[0], result)
     return result
 
 

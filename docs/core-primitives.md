@@ -1391,6 +1391,21 @@ sequence in the order that makes it correct, each part still recording its own
 step. `transform` and `validate` remain primitives: a validation need not follow
 a coercion.
 
+**`transform` takes as many datasets as the builder's node took input nodes**,
+and calls the processor with all of them — a fan-in is more arguments, not a
+graph::
+
+```python
+joined = transform(join_threads_to_cases, threads, cases, name="join-case")
+stacked = transform(stack_signals, pending, completed, high_value, name="stack")
+```
+
+The **first** dataset is the one `rows_in` counts and the one an `explain` trace
+treats as entering the stage, the same convention `TransformNode` used: a
+fan-in's later inputs are the reference side, not the flow being narrowed. What
+the deferred builder still offers is *deferral* — a node whose inputs are
+produced later in the wiring than they are consumed.
+
 **Telling repeated steps apart is the `name=` argument, not a scope.** A feed
 with a handful of steps needs nothing: the derived names are already unique and
 `read` means the read. A feed that drives the same shape many times over — one
