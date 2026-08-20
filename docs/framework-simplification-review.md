@@ -132,9 +132,36 @@ decision and its consequences.
   coerce → quarantine → validate sequence and hops renamed `*_builder` → `*_hop`.
 - Every scaffolded `main()` routed through `run_pipeline`, closing the
   divergence above.
-- `tests/framework/run/test_steps.py` — 21 tests over what the steps return and
+- `tests/framework/run/test_steps.py` — 29 tests over what the steps return and
   what they record, including the dry-run, warn-severity, no-context and
   builder-interop paths.
+
+Then, in a second pass, the six pipelines closest to what the team actually runs:
+`complaints_a`/`_b`/`_c` (the three Case Type ingests), `sharepoint_cases` and
+its `gold.py` (the Sync), `notifications`, and `complaint_selection` (the
+Selection group). That pass added two words to the step vocabulary, each of them
+a job a nested `Pipeline` had been doing that was nothing to do with deferring
+execution:
+
+- **`hop(name)`** — the grouping a sub-`Pipeline`'s label gave. Sync records ~134
+  step records per poll across 23 hops; flattened into one namespace they read
+  `read`, `read-2` … `read-24`. `hop` puts the name back in the record's
+  `pipeline` field and restarts step names inside the block, inheriting the run's
+  identity and dry-run flag.
+- **`explain(id_column)` / `write_trace(writer, trace, survivors)`** — the row
+  trace `p.explain(...)` accumulated, opened as a block. Same `RowTrace`, same
+  published verdict, same considered/selected/excluded counts on the step.
+
+Two things needed no replacement. Write **ordering** — notifications' "record
+nobody as told until the file telling them has landed" — was an extra graph edge;
+written out it is which line comes first. And a **second read of the same
+source**: both notification passes read `case_current` and the user directory, so
+the eager version reads each once and hands the dataset to both.
+
+`active_context` was added to the facade in the same pass. The steps read the
+*ambient* context, so a `RunContext(dry_run=True)` passed to `run(context)` by
+hand and never made active is ignored — the two notifications dry-run tests
+failed loudly on exactly that, which is the right failure mode but a sharp edge.
 
 Verified end to end: all three scaffold variants (plain, `--from-feed-file`,
 `--case-type`) generate feeds whose tests pass out of the box; `cli run
@@ -162,7 +189,9 @@ Nothing below is implemented. Each is independent of the others.
    three files where one arrives later therefore runs on partial data and
    records success. Silent-partial-success, of exactly the kind
    [`pull-request-review.md`](pull-request-review.md) warns about.
-4. **Convert the remaining 19 pipelines** to eager steps. Mechanical: argument
+4. **Convert the remaining pipelines** to eager steps. Six are done —
+   `ingest` (part), `complaints_a`/`_b`/`_c`, `sharepoint_cases`,
+   `notifications`, `complaint_selection`. The rest are mechanical: argument
    order was kept identical for this reason.
 5. **Delete `PipelineRunner`.** Now used by nothing (the CLI and the
    orchestrator both go `load_pipeline` → `run_pipeline`).

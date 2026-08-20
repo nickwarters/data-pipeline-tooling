@@ -550,7 +550,7 @@ None.
 ### Part D — Quarantine & data quality
 
 - No value rule on this schema can quarantine a row today — see
-  `silver_general_answer_builder`'s docstring for why the quarantine node
+  `silver_general_answer_hop`'s docstring for why the quarantine step
   stays wired anyway.
 - A malformed `answers` blob (text that is not JSON, or JSON that is not an
   object) is a feed defect, not a bad value: `ExplodeJsonMap` raises
@@ -615,8 +615,8 @@ None.
 ### Part D — Quarantine & data quality
 
 - No value rule is declared on this schema, so nothing here quarantines; the
-  quarantine node stays wired anyway, for the same reason
-  `silver_general_answer_builder`'s does.
+  quarantine step stays wired anyway, for the same reason
+  `silver_general_answer_hop`'s does.
 - A malformed `conversation` blob (text that is not JSON, or JSON that is not
   an array) is a feed defect, not a bad value: `ExplodeJsonList` raises
   `JsonShapeError` and aborts the run before anything from that batch commits.
@@ -781,8 +781,8 @@ None.
   the field vocabulary lives in per-Case-Type config this pipeline cannot
   see, so a rule here would quarantine real data to guard a namespace nobody
   has proposed. `{"": "x"}` is legal JSON, so an empty-string `field_key` is
-  possible, lands, and is not ruled against. The quarantine node stays wired
-  anyway, for the same reason `silver_general_answer_builder`'s does.
+  possible, lands, and is not ruled against. The quarantine step stays wired
+  anyway, for the same reason `silver_general_answer_hop`'s does.
 - A malformed `details` blob (text that is not JSON, or JSON that is not an
   object) is a feed defect, not a bad value: `ExplodeJsonMap` raises
   `JsonShapeError` and aborts the run before anything from that batch
@@ -853,7 +853,7 @@ everything.
 Only `case_current` carries a live grain gate (`UniqueValidator("case_id")`);
 each Detail Table carries one too (e.g. `UniqueValidator(("case_id",
 "question_id", "field_key"))` for `answer_capture`, via
-`gold_detail_builder`'s generic `grain=`); the six aggregates get none,
+`gold_detail_hop`'s generic `grain=`); the six aggregates get none,
 because a uniqueness check below the group-by that produced the grain is
 satisfied by construction. Their grain is declared here.
 
@@ -918,7 +918,7 @@ or missing table.
 | **Source** | silver `answer_capture`'s accumulated history, semi-joined to `case_current`'s winning `(case_id, source_observation_id)` pairs |
 | **Columns** | every silver `answer_capture` column, plus `case_id` and `as_of_utc` |
 
-Reduced by the same `gold_detail_builder`, per the same rule as `answer`
+Reduced by the same `gold_detail_hop`, per the same rule as `answer`
 above. The property worth calling out here specifically: the review
 application deletes a question's whole `capture` map, not just individual
 fields, the moment that question stops failing (`remediationRequired` moves
@@ -935,7 +935,7 @@ for it, even though silver still holds the earlier observation's rows forever.
 | **Source** | silver `answer_action`'s accumulated history, semi-joined to `case_current`'s winning `(case_id, source_observation_id)` pairs |
 | **Columns** | every silver `answer_action` column, plus `case_id` and `as_of_utc` |
 
-Reduced by the same `gold_detail_builder`, per the same rule as `answer`
+Reduced by the same `gold_detail_hop`, per the same rule as `answer`
 above. Unticking the last Remediation Action on a question removes the whole
 `remediationActions` list the same way resolving the question removes
 `capture` — the semi-join drops those rows from gold rather than keeping a
@@ -950,7 +950,7 @@ stale action a per-child reduce would have no reason to prefer over.
 | **Source** | silver `general_answer`'s accumulated history, semi-joined to `case_current`'s winning `(case_id, source_observation_id)` pairs |
 | **Columns** | every silver `general_answer` column, plus `case_id` and `as_of_utc` |
 
-Reduced by the same `gold_detail_builder`, per the same rule as `answer`
+Reduced by the same `gold_detail_hop`, per the same rule as `answer`
 above. A General Question answer a reviewer's app pruned between observations
 (the question dropped from the Case Type's config) is genuinely absent from
 the winning observation's map, and the semi-join reads that absence correctly.
@@ -964,7 +964,7 @@ the winning observation's map, and the semi-join reads that absence correctly.
 | **Source** | silver `conversation_message`'s accumulated history, semi-joined to `case_current`'s winning `(case_id, source_observation_id)` pairs |
 | **Columns** | every silver `conversation_message` column, plus `case_id` and `as_of_utc` |
 
-Reduced by the same `gold_detail_builder`, per the same rule as `answer`
+Reduced by the same `gold_detail_hop`, per the same rule as `answer`
 above — the winning observation's full message list, and nothing carried over
 from an earlier one. Because a Conversation only ever grows, this table's
 semi-join has no deletion to read correctly the way the answer-derived tables
@@ -982,7 +982,7 @@ knowing to stop.
 | **Source** | silver `appeal`'s accumulated history, semi-joined to `case_current`'s winning `(case_id, source_observation_id)` pairs |
 | **Columns** | every silver `appeal` column, plus `case_id` and `as_of_utc` |
 
-Reduced by the same `gold_detail_builder`, per the same rule as `answer`
+Reduced by the same `gold_detail_hop`, per the same rule as `answer`
 above. `appeals` is additive and its own elements are never deleted, but an
 Appeal's row still changes shape in place — `raised` gains a full
 `resolution` the moment Controls resolves it — so the semi-join is what
@@ -999,7 +999,7 @@ prefer.
 | **Source** | silver `case_detail`'s accumulated history, semi-joined to `case_current`'s winning `(case_id, source_observation_id)` pairs |
 | **Columns** | every silver `case_detail` column, plus `case_id` and `as_of_utc` |
 
-Reduced by the same `gold_detail_builder`, per the same rule as `answer`
+Reduced by the same `gold_detail_hop`, per the same rule as `answer`
 above. This grain is structurally guaranteed **twice over**, unlike every
 other Detail Table's: a JSON object cannot repeat a key, so silver can never
 carry two rows sharing one observation's `field_key`, and the semi-join keeps
@@ -1259,7 +1259,7 @@ silently drop:
 
 **Stated limitation.** This table cannot be filtered to open Cases. A gold
 Detail row carries nothing from its parent beyond the two winner columns it
-semi-joined on (`gold_detail_builder`'s semi-join is deliberately narrow — see
+semi-joined on (`gold_detail_hop`'s semi-join is deliberately narrow — see
 *Part B*'s `answer` field dictionary above); reading `case_current.status`
 alongside it would need a two-input transform this feed has never needed. A
 consumer wanting "open Cases with an undecided remediation" joins this table

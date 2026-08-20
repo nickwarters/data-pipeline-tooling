@@ -1,9 +1,10 @@
 """Tests for the ``complaints_a`` Case Type ingest.
 
-These tests demonstrate granular, decoupled testability: by separating the
-Pipeline definition into `raw_builder` and `silver_builder`, we can test the
-logic purely in memory. We inject `given_rows` as the Reader and `RecordingWriter`
-as the Writer. This never touches SQLite, the network, or the filesystem.
+Each hop is an ordinary function over a ``Reader`` and a ``Writer`` whose steps
+run where they are written, so a test drives the real hop in memory:
+``given_rows`` stands in for the source and ``RecordingWriter`` captures what
+would be written. This never touches SQLite, the network, or the filesystem —
+and a failing assertion stops on the line that failed.
 """
 
 from __future__ import annotations
@@ -14,8 +15,8 @@ from pathlib import Path
 import pytest
 
 from framework.core import ValidationError
-from framework.run import RunContext
-from pipelines.complaints_a.pipeline import FEED_NAME, raw_builder, run, silver_builder
+from framework.run.run_context import RunContext, active_context
+from pipelines.complaints_a.pipeline import FEED_NAME, raw_hop, run, silver_hop
 from tests.framework_testing import (
     RecordingRunLog,
     RecordingWriter,
@@ -52,44 +53,53 @@ def test_bundled_sample_feed_refines_through_to_silver(tmp_path):
     assert len(silver) == 2
 
 
-def test_both_hops_plan_exactly_the_steps_they_always_have():
-    """Pin the plan, node for node, address for address.
+def test_both_hops_record_exactly_the_steps_they_always_have():
+    """Pin what each hop does, step by step.
 
-    The step names and addresses are what the run log records, so a change to
-    either is a change to how a run is read back.
+    The steps are eager, so what a hop *did* is what it recorded — and the step
+    names are what the run log stores, so a change to either is a change to how
+    a run is read back.
     """
-    reader, writer, rejects = given_rows([]), RecordingWriter(), RecordingWriter()
+    rows = [{"record_id": "R001", "label": "alpha", "amount": 50}]
+    writer, rejects = RecordingWriter(), RecordingWriter()
 
-    assert raw_builder(reader, writer).describe().splitlines() == [
-        "Pipeline: complaints_a:raw",
-        "  [Read] read",
-        "  [Validate] columns (depends on: read)",
-        "  [Write] write (depends on: columns)",
+    raw_log = RecordingRunLog()
+    with active_context(RunContext(pipeline=FEED_NAME, run_log=raw_log)):
+        raw_hop(given_rows(rows), writer)
+
+    silver_log = RecordingRunLog()
+    with active_context(RunContext(pipeline=FEED_NAME, run_log=silver_log)):
+        silver_hop(given_rows(rows), writer, rejects)
+
+    assert [record["step"] for record in raw_log.records] == [
+        "read",
+        "column_validator",
+        "write",
     ]
-    assert silver_builder(reader, writer, rejects).describe().splitlines() == [
-        "Pipeline: complaints_a:silver",
-        "  [Read] read",
-        "  [Transform] coerce (depends on: read)",
-        "  [Quarantine] quarantine (depends on: coerce)",
-        "  [Validate] post-validate (depends on: quarantine)",
-        "  [Write] write (depends on: post-validate)",
+    # ``enforce`` is coerce -> quarantine -> validate, and each part still
+    # records its own step, so the run log reads exactly as it did when the
+    # three were written out by hand.
+    assert [record["step"] for record in silver_log.records] == [
+        "read",
+        "coerce",
+        "quarantine",
+        "schema_validator",
+        "write",
     ]
 
 
-def test_raw_builder_gates_source_columns():
+def test_raw_hop_gates_source_columns():
     writer = RecordingWriter()
     # Missing 'amount' column
     reader = given_rows([{"record_id": "c1", "label": "alpha"}])
 
-    p = raw_builder(reader, writer)
-
     with pytest.raises(ValidationError, match="missing required column.*amount"):
-        p.run()
+        raw_hop(reader, writer)
 
     assert len(writer.writes) == 0
 
 
-def test_silver_builder_quarantines_value_rule_breaches():
+def test_silver_hop_quarantines_value_rule_breaches():
     run_log = RecordingRunLog()
     writer = RecordingWriter()
     reject_writer = RecordingWriter()
@@ -103,8 +113,8 @@ def test_silver_builder_quarantines_value_rule_breaches():
         ]
     )
 
-    p = silver_builder(reader, writer, reject_writer, run_log=run_log)
-    p.run()
+    with active_context(RunContext(pipeline=FEED_NAME, run_log=run_log)):
+        silver_hop(reader, writer, reject_writer)
 
     # The good row reaches the main writer
     assert_rows_equal(
@@ -126,18 +136,16 @@ def test_silver_builder_quarantines_value_rule_breaches():
     assert q_record["rows_quarantined"] == 1
 
 
-def test_silver_builder_aborts_on_structural_breaches():
+def test_silver_hop_aborts_on_structural_breaches():
     writer = RecordingWriter()
     reject_writer = RecordingWriter()
 
     # Missing 'amount', which violates the schema structurally.
     # Structural breaches still abort and bypass quarantine.
-    reader = given_rows([{"record_id": "R001", "label": "alpha"}])
-
-    p = silver_builder(reader, writer, reject_writer)
+    reader = given_rows([{"record_id": "c1", "label": "alpha"}])
 
     with pytest.raises(ValidationError, match="missing column 'amount'"):
-        p.run()
+        silver_hop(reader, writer, reject_writer)
 
     assert len(writer.writes) == 0
     assert len(reject_writer.writes) == 0

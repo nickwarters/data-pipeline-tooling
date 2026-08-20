@@ -1391,6 +1391,50 @@ sequence in the order that makes it correct, each part still recording its own
 step. `transform` and `validate` remain primitives: a validation need not follow
 a coercion.
 
+**`hop(name)`** groups a block's steps under one name in the run log — what
+`Pipeline(f"{FEED}:silver:{case_type}")` gave a sub-pipeline, written where the
+steps are. A feed with a handful of steps needs nothing; a feed that drives the
+same shape many times over (one per source list, per Detail Table, per Case Type)
+does, or the log reads `read`, `read-2` … `read-24` and an operator cannot tell
+which list's read failed. The block's records carry `name` in their `pipeline`
+field and their own step names; the run's identity — `pipeline_run_id`,
+`logical_run_id`, the dry-run flag and its report — is inherited unchanged, and
+step names restart inside the block:
+
+```python
+for case_list in CASE_LISTS:
+    with hop(f"{FEED_NAME}:silver:{case_list.case_type}"):
+        data = read(reader)                  # -> sharepoint_cases:silver:claims / read
+        data = enforce(CaseVersion, data, reject_writer=rejects)
+        write(writer, data)
+```
+
+**`explain(id_column, score_column=...)`** opens a row-level trace: the first
+`read` inside the block seeds it with everything considered, each `transform`
+records whether a row survived and which stage excluded it, and `write_trace`
+ranks the survivors and publishes the verdict. The governance question a row
+count cannot answer — *why is this Case not in the pool?* A processor says what
+it is by carrying `trace_role` (`filter`, `gate`, `score`, `join`) and
+`trace_name`:
+
+```python
+with explain("case_ref", score_column="priority_score") as trace:
+    pool = read(candidates)
+    pool = transform(Filter(meets_threshold, name="priority"), pool)
+    pool = transform(hopper_gate(capacity), pool, name="hopper")
+write_trace(trace_writer, trace, pool)
+write(pool_writer, pool)
+```
+
+The `write_trace` step's row counts are the *trace's* — considered, selected,
+excluded — because those are the numbers the question is about. Under a dry run
+the trace is still built, so its shape is previewed, and nothing commits.
+
+Ordering between writes needs nothing at all: the deferred builder expressed
+"record nobody as told until the file telling them has landed" as an extra graph
+edge feeding the ledger step the outbox write's result. Written out, it is which
+line comes first.
+
 ### `Pipeline` — the deferred DAG builder
 Kept for graphs that genuinely fan in, and for pipelines not yet converted to
 the eager steps above. A `Pipeline` describes a feed's path and runs **nothing**

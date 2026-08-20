@@ -1,107 +1,137 @@
+"""Case Type ingest for the ``complaints_a`` feed: source -> raw -> silver.
+
+Complaints A/B/C are one SAS complaints export split three ways. Each is its own
+Case Type with its own ingest, and ``pipelines/complaint_selection`` is the one
+place the three come back together, as a Selection group.
+
+Every line below **does its work when it is reached**: put a breakpoint on one,
+step over it, and the variable holds the actual rows at that point in the feed
+([ADR-0027](../../docs/adr/0027-eager-steps-are-the-default-authoring-model.md)).
+Each medallion hop is its own ``*_hop`` function, so a test can drive one with
+sample rows and a recording writer without touching SQLite or the filesystem.
+
+Address it by its location on disk, which is the label its run history is
+recorded under -- and so the label a downstream ``FreshnessRequirement`` names::
+
+    python -m cli run pipelines/complaints_a --base-dir BASE_DIR
+
+or run the module directly, which is what a PyCharm run configuration does. It
+routes through the same ``run_pipeline``, so both record one identity::
+
+    python -m pipelines.complaints_a.pipeline --base-dir BASE_DIR
+"""
+
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
-from framework.core import (
-    ColumnValidator,
-    Dataset,
-    PipelineError,
-    SchemaValidator,
-    format_failure,
-)
+from framework.core import ColumnValidator, Dataset, PipelineError, format_failure
 from framework.io import AccumulateByRun, CsvReader, Reader, Writer
-from framework.run import Pipeline, RunContext, RunLog
-from framework.transform import SchemaCoercion, SchemaValueRulePartitioner
+from framework.run import RunContext, enforce, read, run_pipeline, validate, write
+from tools.environments import known_environments, resolve_base_dir
 from tools.medallion import medallion
 from tools.store import StoreRegistry
 
 from .schema import NAMESPACE, ComplaintsARow
 
 FEED_NAME = "complaints_a"
-UPSTREAMS = ()
 
+# Pipelines this feed depends on being fresh before it runs.
+UPSTREAMS = ()
 
 # The columns the raw hop gates on, in the source's own vocabulary.
 SOURCE_COLUMNS = ["record_id", "label", "amount"]
 
 
-def raw_builder(
-    reader: Reader,
-    writer: Writer,
-    run_log: RunLog | None = None,
-) -> Pipeline:
-    """Build the raw hop: gate the source's columns, then land it faithfully."""
-    p = Pipeline(f"{FEED_NAME}:raw", run_log=run_log)
-    node = p.read(reader, name="read")
-    node = p.validate(ColumnValidator(SOURCE_COLUMNS), node, name="columns")
-    p.write(writer, node, name="write")
-    return p
+def raw_hop(reader: Reader, writer: Writer) -> Dataset:
+    """Gate the source's columns, then land the feed faithfully.
+
+    Edit these three lines to change the hop.
+    """
+    data = read(reader)
+    validate(ColumnValidator(SOURCE_COLUMNS), data)
+    return write(writer, data)
 
 
-def silver_builder(
-    reader: Reader,
-    writer: Writer,
-    reject_writer: Writer | None = None,
-    run_log: RunLog | None = None,
-) -> Pipeline:
-    """Build the silver hop: coerce, quarantine value-rule breaches, validate."""
-    p = Pipeline(f"{FEED_NAME}:silver", run_log=run_log)
-    node = p.read(reader, name="read")
-    node = p.transform(SchemaCoercion(ComplaintsARow), node, name="coerce")
-    if reject_writer is not None:
-        node = p.quarantine(
-            SchemaValueRulePartitioner(ComplaintsARow),
-            reject_writer,
-            node,
-            name="quarantine",
-        )
-    node = p.validate(SchemaValidator(ComplaintsARow), node, name="post-validate")
-    p.write(writer, node, name="write")
-    return p
+def silver_hop(
+    reader: Reader, writer: Writer, reject_writer: Writer | None = None
+) -> Dataset:
+    """Enforce the declared schema on this Case Type's accumulated raw rows.
+
+    ``enforce`` is the coerce -> quarantine -> validate sequence in the order
+    that makes it correct, and each part still records its own step. Given no
+    ``reject_writer`` it is simply coerce -> validate.
+    """
+    data = read(reader)
+    data = enforce(ComplaintsARow, data, reject_writer=reject_writer)
+    return write(writer, data)
 
 
 def run(context: RunContext) -> Dataset:
-    """Wire the real readers and writers for the environment and execute."""
+    """Refine the feed source -> raw -> silver under the run context; return silver."""
+    # Where the feed lands follows FEED_NAME, never the identity NAMESPACE:
+    # they are two declarations that happen to coincide today, and a Case
+    # Type renamed must keep writing to the same place on disk.
     med = medallion(StoreRegistry(context.base_dir), FEED_NAME)
     strategy = AccumulateByRun.from_context(context)
 
     # In reality, this CSV is fetched from the SAS server.
-    # To fetch once for all three pipelines, we would orchestrate a fetch step upstream,
-    # and this pipeline would simply use CsvReader on the landed file.
-    landing_dir = Path(context.base_dir) / "landing_zone"
-    feed_csv = landing_dir / f"{FEED_NAME}.csv"
+    # To fetch once for all three pipelines, we would orchestrate a fetch step
+    # upstream, and this pipeline would simply use CsvReader on the landed file.
+    feed_csv = Path(context.base_dir) / "landing_zone" / f"{FEED_NAME}.csv"
 
-    # 1. Run Raw
-    raw_pipeline = raw_builder(
-        reader=CsvReader(feed_csv), writer=med.raw.writer(FEED_NAME, strategy)
+    raw_hop(
+        CsvReader(feed_csv),
+        med.raw.writer(FEED_NAME, strategy),
     )
-    raw_pipeline.run()
-
-    # 2. Run Silver
-    silver_pipeline = silver_builder(
-        reader=med.raw.reader(FEED_NAME),
-        writer=med.silver.writer(FEED_NAME, strategy),
-        reject_writer=med.silver.quarantine_writer(FEED_NAME),
+    return silver_hop(
+        med.raw.reader(FEED_NAME),
+        med.silver.writer(FEED_NAME, strategy),
+        med.silver.quarantine_writer(FEED_NAME),
     )
-    silver = silver_pipeline.run()
-
-    return silver
 
 
 def main(argv: list[str]) -> int:
-    base_dir = Path(argv[1]) if len(argv) > 1 else Path.cwd() / "data"
-    from framework.run import PipelineRunner
-
-    runner = PipelineRunner()
-    runner.register(
-        subject=NAMESPACE, pipeline=FEED_NAME, handler=run, freshness=UPSTREAMS
+    parser = argparse.ArgumentParser(
+        prog="python -m pipelines.complaints_a.pipeline",
+        description="Refine the complaints_a feed source -> raw -> silver.",
     )
+    parser.add_argument(
+        "--base-dir",
+        dest="base_dir",
+        default=None,
+        help="medallion root directory; omit to resolve it from --env",
+    )
+    parser.add_argument(
+        "--env",
+        help="named environment to resolve base_dir from when no --base-dir is "
+        f"given ({', '.join(known_environments())}); defaults to $PIPELINE_ENV or dev",
+    )
+    args = parser.parse_args(argv[1:])
     try:
-        runner.run(NAMESPACE, FEED_NAME, base_dir=base_dir)
+        base_dir = Path(args.base_dir) if args.base_dir else resolve_base_dir(args.env)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    # The *same* run_pipeline the operator CLI uses, so a run started here and
+    # one started with `cli run` record under one identity -- one pipeline
+    # label, one logical_run_id, one run history. Anything else gives the feed
+    # two, and complaint_selection's FreshnessRequirement("complaints_a") only ever
+    # resolves against one of them.
+    try:
+        silver = run_pipeline(run, FEED_NAME, base_dir, upstreams=UPSTREAMS)
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
         return 1
+
+    rows = len(silver) if isinstance(silver, Dataset) else 0
+    print(
+        f"Refined {rows} rows source -> raw -> silver for Case Type "
+        f"'{NAMESPACE}' under {Path(base_dir) / FEED_NAME}."
+    )
     return 0
 
 

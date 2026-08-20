@@ -41,7 +41,7 @@ import pandas as pd
 
 from framework.core import Dataset, Reader, UniqueValidator, Writer
 from framework.io import DatasetReader, Refresh
-from framework.run import Pipeline, RunLog
+from framework.run import hop, read, transform, validate, write
 from framework.transform import (
     DeriveKey,
     DropColumns,
@@ -480,14 +480,13 @@ def appeal_outcomes(dataset: Dataset) -> Dataset:
 # --- the builders -----------------------------------------------------------
 
 
-def case_current_builder(
+def case_current_hop(
     reader: Reader,
     writer: Writer,
     *,
     as_of: dt.datetime,
-    run_log: RunLog | None = None,
-) -> Pipeline:
-    """Build the current-state hop. **Grain: one row per ``case_id``.**
+) -> Dataset:
+    """The current-state hop. **Grain: one row per ``case_id``.**
 
     Reads the whole silver history across every list, derives the deterministic
     ``case_id``, reduces to the latest observation of each Case, stamps the
@@ -513,39 +512,36 @@ def case_current_builder(
     ``amended_outcome``, and ``DETAIL_BLOB_COLUMNS`` are dropped -- see the
     comment there for why.
     """
-    p = Pipeline(f"{FEED_NAME}:gold:{CURRENT_TABLE}", run_log=run_log)
-    r = p.read(reader, name="read")
-    keyed = p.transform(
-        DeriveKey(
-            into=CASE_ID_COLUMN,
-            namespace=FEED_NAME,
-            natural_key=list(NATURAL_KEY),
-        ),
-        r,
-        name="derive-key",
-    )
-    latest = p.transform(latest_case_version, keyed, name="latest-version")
-    # The flatten consumes amended_outcome (drop is the default); the other
-    # four blobs are dropped explicitly -- see DETAIL_BLOB_COLUMNS.
-    flattened = p.transform(
-        FlattenJsonObject(column="amended_outcome", fields=AMENDED_OUTCOME_FIELDS),
-        latest,
-        name="flatten-amended-outcome",
-    )
-    unblobbed = p.transform(
-        DropColumns(list(DETAIL_BLOB_COLUMNS)), flattened, name="drop-blobs"
-    )
-    stamped = p.transform(
-        Stamp(AS_OF_COLUMN, as_of.isoformat()), unblobbed, name="stamp-as-of"
-    )
-    validated = p.validate(
-        UniqueValidator(CASE_ID_COLUMN), stamped, name="unique-validate"
-    )
-    p.write(writer, validated, name="write")
-    return p
+    with hop(f"{FEED_NAME}:gold:{CURRENT_TABLE}"):
+        data = read(reader)
+        data = transform(
+            DeriveKey(
+                into=CASE_ID_COLUMN,
+                namespace=FEED_NAME,
+                natural_key=list(NATURAL_KEY),
+            ),
+            data,
+            name="derive-key",
+        )
+        data = transform(latest_case_version, data, name="latest-version")
+        # The flatten consumes amended_outcome (drop is the default); the other
+        # four blobs are dropped explicitly -- see DETAIL_BLOB_COLUMNS.
+        data = transform(
+            FlattenJsonObject(column="amended_outcome", fields=AMENDED_OUTCOME_FIELDS),
+            data,
+            name="flatten-amended-outcome",
+        )
+        data = transform(
+            DropColumns(list(DETAIL_BLOB_COLUMNS)), data, name="drop-blobs"
+        )
+        data = transform(
+            Stamp(AS_OF_COLUMN, as_of.isoformat()), data, name="stamp-as-of"
+        )
+        validate(UniqueValidator(CASE_ID_COLUMN), data, name="unique-validate")
+        return write(writer, data)
 
 
-def gold_detail_builder(
+def gold_detail_hop(
     reader: Reader,
     writer: Writer,
     *,
@@ -553,9 +549,8 @@ def gold_detail_builder(
     observations: Reader,
     as_of: dt.datetime,
     name: str,
-    run_log: RunLog | None = None,
-) -> Pipeline:
-    """Build one Detail Table's gold hop. **Grain: one row per ``grain``.**
+) -> Dataset:
+    """One Detail Table's gold hop. **Grain: one row per ``grain``.**
 
     Reduces a silver Detail Table's accumulated history to the child rows of
     the Cases' *winning* observation. It never orders and never breaks a tie --
@@ -564,47 +559,38 @@ def gold_detail_builder(
     Detail row's ``case_type`` must be the settled one, or the semi-join
     matches nothing and gold lands zero rows silently.
     """
-    p = Pipeline(name, run_log=run_log)
-    r = p.read(reader, name="read")
-    keyed = p.transform(
-        DeriveKey(
-            into=CASE_ID_COLUMN,
-            namespace=FEED_NAME,
-            natural_key=list(NATURAL_KEY),
-        ),
-        r,
-        name="derive-key",
-    )
-    current = p.transform(
-        JoinWith(
-            partial(winning_observations, observations),
-            on=list(WINNER_COLUMNS),
-            how="inner",
-            name="winning-observations",
-        ),
-        keyed,
-        name="latest-observation",
-    )
-    stamped = p.transform(
-        Stamp(AS_OF_COLUMN, as_of.isoformat()), current, name="stamp-as-of"
-    )
-    validated = p.validate(
-        UniqueValidator(list(grain)), stamped, name="unique-validate"
-    )
-    p.write(writer, validated, name="write")
-    return p
+    with hop(name):
+        data = read(reader)
+        data = transform(
+            DeriveKey(
+                into=CASE_ID_COLUMN,
+                namespace=FEED_NAME,
+                natural_key=list(NATURAL_KEY),
+            ),
+            data,
+            name="derive-key",
+        )
+        data = transform(
+            JoinWith(
+                partial(winning_observations, observations),
+                on=list(WINNER_COLUMNS),
+                how="inner",
+                name="winning-observations",
+            ),
+            data,
+            name="latest-observation",
+        )
+        data = transform(
+            Stamp(AS_OF_COLUMN, as_of.isoformat()), data, name="stamp-as-of"
+        )
+        validate(UniqueValidator(list(grain)), data, name="unique-validate")
+        return write(writer, data)
 
 
 # --- publication ------------------------------------------------------------
 
 
-def publish_gold(
-    med: Medallion,
-    *,
-    as_of: dt.datetime,
-    describe: bool = False,
-    run_log: RunLog | None = None,
-) -> None:
+def publish_gold(med: Medallion, *, as_of: dt.datetime) -> None:
     """Rebuild every gold table from the accumulated silver history.
 
     ``case_current`` is published first and its dataset feeds the Detail
@@ -615,9 +601,9 @@ def publish_gold(
     rebuilds everything. See ``docs/gold-accumulation.md`` for why each source
     is read from memory rather than re-read from disk.
 
-    Each hop runs as a bare ``p.run()``, so it inherits the ambient run context
-    the runner makes active -- which is where a dry run's write-nothing
-    behaviour comes from.
+    Each hop's steps read the ambient run context the runner makes active --
+    which is where a dry run's write-nothing behaviour comes from, and why
+    nothing here is passed a run log by hand.
     """
     # Only a dry run can have any of these silver tables missing; one probe up
     # front, rather than a per-table skip, so a partial silver history cannot
@@ -628,34 +614,26 @@ def publish_gold(
     ):
         return
 
-    current_p = case_current_builder(
+    current = case_current_hop(
         med.silver.reader(SILVER_TABLE),
         med.gold.writer(CURRENT_TABLE, Refresh()),
         as_of=as_of,
-        run_log=run_log,
     )
-    if describe:
-        print(current_p.describe())
-    current = current_p.run()
 
     sources: dict[str, Dataset] = {CURRENT_TABLE: current}
     for table in DETAIL_TABLES:
-        p = gold_detail_builder(
+        dataset = gold_detail_hop(
             med.silver.reader(table),
             med.gold.writer(table, Refresh()),
             grain=DETAIL_GRAIN[table],
             observations=DatasetReader(current),
             as_of=as_of,
             name=f"{FEED_NAME}:gold:{table}",
-            run_log=run_log,
         )
-        if describe:
-            print(p.describe())
-        dataset = p.run()
         if table in DETAIL_AGGREGATES.values():
             sources[table] = dataset
 
-    for table, step, transform in (
+    for table, step_name, reduce in (
         ("case_counts_current", "count-by-base-grain-and-status", case_counts),
         (
             "case_age_buckets_current",
@@ -675,14 +653,11 @@ def publish_gold(
         ),
         ("appeal_outcomes_current", "count-by-outcome", appeal_outcomes),
     ):
-        p = Pipeline(f"{FEED_NAME}:gold:{table}", run_log=run_log)
         source = sources[DETAIL_AGGREGATES.get(table, CURRENT_TABLE)]
-        node = p.read(DatasetReader(source), name="read")
-        node = p.transform(transform, node, name=step)
-        node = p.transform(
-            Stamp(AS_OF_COLUMN, as_of.isoformat()), node, name="stamp-as-of"
-        )
-        p.write(med.gold.writer(table, Refresh()), node, name="write")
-        if describe:
-            print(p.describe())
-        p.run()
+        with hop(f"{FEED_NAME}:gold:{table}"):
+            data = read(DatasetReader(source))
+            data = transform(reduce, data, name=step_name)
+            data = transform(
+                Stamp(AS_OF_COLUMN, as_of.isoformat()), data, name="stamp-as-of"
+            )
+            write(med.gold.writer(table, Refresh()), data)

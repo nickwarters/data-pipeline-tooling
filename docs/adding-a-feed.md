@@ -188,7 +188,6 @@ python -m cli run pipelines/orders --env dev  # resolve base_dir from a named en
 python -m cli run pipelines/orders --base-dir /data --dry-run  # preview each step, write nothing
 python -m pipelines.orders.pipeline --base-dir /data  # or directly: refine the bundled sample to gold
 python -m pipelines.orders.pipeline --env dev    # directly, base_dir from the dev environment
-python -m pipelines.orders.pipeline --base-dir /data --describe  # print each hop's plan, then run it
 python -m pytest tests/pipelines/test_orders.py  # the generated test passes as-is
 ```
 

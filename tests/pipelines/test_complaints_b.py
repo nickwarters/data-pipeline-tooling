@@ -1,9 +1,10 @@
 """Tests for the ``complaints_b`` Case Type ingest.
 
-These tests demonstrate granular, decoupled testability: by separating the
-Pipeline definition into `raw_builder` and `silver_builder`, we can test the
-logic purely in memory. We inject `given_rows` as the Reader and `RecordingWriter`
-as the Writer. This never touches SQLite, the network, or the filesystem.
+Each hop is an ordinary function over a ``Reader`` and a ``Writer`` whose steps
+run where they are written, so a test drives the real hop in memory:
+``given_rows`` stands in for the source and ``RecordingWriter`` captures what
+would be written. This never touches SQLite, the network, or the filesystem —
+and a failing assertion stops on the line that failed.
 """
 
 from __future__ import annotations
@@ -14,8 +15,8 @@ from pathlib import Path
 import pytest
 
 from framework.core import ValidationError
-from framework.run import RunContext
-from pipelines.complaints_b.pipeline import FEED_NAME, raw_builder, run, silver_builder
+from framework.run.run_context import RunContext, active_context
+from pipelines.complaints_b.pipeline import FEED_NAME, raw_hop, run, silver_hop
 from tests.framework_testing import (
     RecordingRunLog,
     RecordingWriter,
@@ -50,20 +51,18 @@ def test_bundled_sample_feed_refines_through_to_silver(tmp_path):
     assert len(silver) == 3
 
 
-def test_raw_builder_gates_source_columns():
+def test_raw_hop_gates_source_columns():
     writer = RecordingWriter()
     # Missing 'priority' column
     reader = given_rows([{"record_id": "c1", "category": "sales"}])
 
-    p = raw_builder(reader, writer)
-
     with pytest.raises(ValidationError, match="missing required column.*priority"):
-        p.run()
+        raw_hop(reader, writer)
 
     assert len(writer.writes) == 0
 
 
-def test_silver_builder_quarantines_value_rule_breaches():
+def test_silver_hop_quarantines_value_rule_breaches():
     run_log = RecordingRunLog()
     writer = RecordingWriter()
     reject_writer = RecordingWriter()
@@ -87,8 +86,8 @@ def test_silver_builder_quarantines_value_rule_breaches():
         ]
     )
 
-    p = silver_builder(reader, writer, reject_writer, run_log=run_log)
-    p.run()
+    with active_context(RunContext(pipeline=FEED_NAME, run_log=run_log)):
+        silver_hop(reader, writer, reject_writer)
 
     # The good row reaches the main writer
     assert_rows_equal(
@@ -113,18 +112,16 @@ def test_silver_builder_quarantines_value_rule_breaches():
     assert q_record["rows_quarantined"] == 1
 
 
-def test_silver_builder_aborts_on_structural_breaches():
+def test_silver_hop_aborts_on_structural_breaches():
     writer = RecordingWriter()
     reject_writer = RecordingWriter()
 
     # Missing 'priority', which violates the schema structurally.
     # Structural breaches still abort and bypass quarantine.
-    reader = given_rows([{"record_id": "R001", "category": "sales"}])
-
-    p = silver_builder(reader, writer, reject_writer)
+    reader = given_rows([{"record_id": "c1", "category": "sales"}])
 
     with pytest.raises(ValidationError, match="missing column 'priority'"):
-        p.run()
+        silver_hop(reader, writer, reject_writer)
 
     assert len(writer.writes) == 0
     assert len(reject_writer.writes) == 0

@@ -38,7 +38,7 @@ than the ladder's total; `--keep` holds all of them, which over the full sweep i
 roughly 1.2GB.
 
 The data is synthetic but shaped like the real silver table, and the hop it times
-is the real `case_current_builder` — not a stand-in. Treat the ratios as the
+is the real `case_current_hop` — not a stand-in. Treat the ratios as the
 finding and the absolute seconds as specific to the machine and the disk.
 
 ## The two phases, and why only one of them grows
@@ -55,8 +55,8 @@ touches one row per Case, and never sees the history at all.
 
 **This script measures neither of the two Detail Table aggregates
 (`answer_remediation_current`, `appeal_outcomes_current`)**: it runs only
-`case_current_builder` and `publish_aggregates`, never the Detail hops
-(`gold_detail_builder`, `publish_gold`) those two aggregates reduce from, so
+`case_current_hop` and `publish_aggregates`, never the Detail hops
+(`gold_detail_hop`, `publish_gold`) those two aggregates reduce from, so
 they are out of scope rather than measured at zero — do not read the numbers
 below as covering them.
 

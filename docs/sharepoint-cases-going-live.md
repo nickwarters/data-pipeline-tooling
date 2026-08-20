@@ -33,12 +33,17 @@ below, the daily failure is hypothetical rather than real.
 Nothing here touches a tenant, and none of it needs the stages below.
 
 ```sh
-python -m pipelines.sharepoint_cases.pipeline --base-dir /tmp/rehearsal --sample --describe
+python -m pipelines.sharepoint_cases.pipeline --base-dir /tmp/rehearsal --sample
 ```
 
-`--sample` replays the bundled fixture pages through the real pipeline;
-`--describe` prints each hop's plan first. Then read the result back with the
-operator commands you will use in anger:
+`--sample` replays the bundled fixture pages through the real pipeline. There is
+no plan to print ahead of it: the steps are eager, so the run log *is* the plan,
+one record per step grouped under the hop that took it. `cli run
+pipelines/sharepoint_cases --dry-run` — every step running, only the commits and
+the watermarks held back — is the preview, and it needs a client, so it becomes
+available at stage 4 rather than here.
+
+Read the result back with the operator commands you will use in anger:
 
 ```sh
 python -m cli status --base-dir /tmp/rehearsal

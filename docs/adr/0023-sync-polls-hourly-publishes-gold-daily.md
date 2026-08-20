@@ -38,7 +38,7 @@ it never touches.
 `O(window)`: silver "normalises the batch just fetched, never the whole raw
 history", and `AppendOnly` makes a re-read of an unchanged row a no-op, so a
 quiet hour costs almost nothing. `publish_gold` is the whole of the expense —
-`case_current_builder` reads the *entire* silver history every time, because "a
+`case_current_hop` reads the *entire* silver history every time, because "a
 Case whose latest version arrived three polls ago is still current". The
 aggregates are innocent: they read the in-memory `DatasetReader(current)`, so
 silver is read once per publish.
