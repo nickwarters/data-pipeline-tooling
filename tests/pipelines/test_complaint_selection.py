@@ -18,7 +18,7 @@ import pytest
 
 from framework.core import Dataset
 from framework.io import AccumulateByRun, Refresh
-from framework.run import FreshnessError, RunContext, run_pipeline
+from framework.run import FreshnessError, RunContext, active_context, run_pipeline
 from pipelines.complaint_selection.pipeline import (
     OUTPUT_SUBJECT,
     PIPELINE_NAME,
@@ -34,7 +34,7 @@ from pipelines.complaint_selection.pipeline import (
     priority_band,
     run,
     select_complaints,
-    selection_builder,
+    select_pool,
     slow_resolution_priority,
     unallocated_count,
     voided_refs,
@@ -42,6 +42,7 @@ from pipelines.complaint_selection.pipeline import (
 )
 from pipelines.complaint_selection.schema import PendingVoid
 from tests.framework_testing import (
+    RecordingRunLog,
     RecordingWriter,
     build_databases,
     given_rows,
@@ -63,41 +64,79 @@ def _current(rows: list[dict]) -> Dataset:
     return make_dataset(rows) if rows else _EMPTY_CURRENT
 
 
-def test_the_plan_is_exactly_the_steps_it_always_has():
-    """Pin the plan, node for node, so a change to it is a deliberate one."""
-    reader = given_rows([])
+def test_the_steps_are_exactly_the_ones_it_always_took():
+    """Pin what it does, step by step, so a change to it is a deliberate one.
+
+    The steps are eager, so what the pipeline *did* is what it recorded -- a
+    stronger pin than reading a plan, because it proves the steps ran rather
+    than merely being wired.
+    """
+    # Real rows, not an empty frame: the steps execute, so each source has to
+    # carry what its own priority rule reads -- and ``load_date``, which the old
+    # plan test could leave out because describing a graph never touched data.
+    reader_a = given_rows(
+        [{"record_id": "R001", "label": "a", "amount": 90, "load_date": "2026-08-18"}]
+    )
+    reader_b = given_rows(
+        [
+            {
+                "record_id": "B1",
+                "category": "sales",
+                "priority": "high",
+                "load_date": "2026-08-18",
+            }
+        ]
+    )
+    reader_c = given_rows(
+        [
+            {
+                "record_id": "C1",
+                "department": "hr",
+                "resolution_days": 70,
+                "load_date": "2026-08-18",
+            }
+        ]
+    )
     pool_w, trace_w, json_w = RecordingWriter(), RecordingWriter(), RecordingWriter()
+    run_log = RecordingRunLog()
 
     class _Empty:
         def read(self) -> Dataset:
             return _EMPTY_CURRENT
 
-    plan = selection_builder(
-        complaints_a=reader,
-        complaints_b=reader,
-        complaints_c=reader,
-        current_cases=_Empty(),
-        pool_writer=pool_w,
-        trace_writer=trace_w,
-        json_writer=json_w,
-    ).describe()
-    assert plan.splitlines() == [
-        "Pipeline: complaint_selection:pool",
-        "  [Read] read-complaints_a",
-        "  [Read] read-complaints_b",
-        "  [Read] read-complaints_c",
-        "  [Read] read-current-cases",
-        "  [Transform] select (depends on: read-complaints_a, read-complaints_b, "
-        "read-complaints_c, read-current-cases)",
-        "  [Transform] selected (depends on: select)",
-        "  [Transform] pool-rows (depends on: selected)",
-        "  [Validate] validate (depends on: pool-rows)",
-        "  [Write] write-pool (depends on: validate)",
-        "  [Transform] trace (depends on: select)",
-        "  [Write] write-trace (depends on: trace)",
-        "  [Transform] json-rows (depends on: selected)",
-        "  [Write] write-json (depends on: json-rows)",
+    with active_context(RunContext(pipeline=PIPELINE_NAME, run_log=run_log)):
+        select_pool(
+            complaints_a=reader_a,
+            complaints_b=reader_b,
+            complaints_c=reader_c,
+            current_cases=_Empty(),
+            pool_writer=pool_w,
+            trace_writer=trace_w,
+            json_writer=json_w,
+        )
+
+    assert [record["step"] for record in run_log.records] == [
+        "read-complaints_a",
+        "read-complaints_b",
+        "read-complaints_c",
+        "read-current-cases",
+        "select",
+        "selected",
+        "pool-rows",
+        "validate",
+        "write-pool",
+        "trace",
+        "write-trace",
+        "json-rows",
+        "write-json",
     ]
+    # One label for the whole run: the grouping is in the step name, not in a
+    # second identity the run also records under.
+    assert {record["pipeline"] for record in run_log.records} == {PIPELINE_NAME}
+    # Line order is the ordering guarantee now the graph is gone: the pool is
+    # written before the trace because that line comes first.
+    committed = [r["step"] for r in run_log.records if r.get("committed")]
+    assert committed == ["write-pool", "write-trace", "write-json"]
 
 
 def _seed_silver(
