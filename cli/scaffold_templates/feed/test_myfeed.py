@@ -1,9 +1,9 @@
 """Tests for the ``myfeed`` feed pipeline.
 
-Because each hop is its own function over a ``Reader`` and a ``Writer``, a test
-drives the real hop in memory: ``given_rows`` stands in for the source and
+Because each step is its own function over a ``Reader`` and a ``Writer``, a test
+drives the real thing in memory: ``given_rows`` stands in for the source and
 ``RecordingWriter`` captures what would be written. This never touches SQLite,
-the network, or the filesystem — and because the steps are eager, the hop runs
+the network, or the filesystem — and because the steps are eager, it runs
 where it is called, so a failing test stops on the line that failed.
 """
 
@@ -24,7 +24,7 @@ from tests.framework_testing import (
 from tools.medallion import medallion
 from tools.store import StoreRegistry
 
-from .pipeline import FEED_NAME, gold_hop, raw_hop, run, silver_hop
+from .pipeline import FEED_NAME, run, to_gold, to_raw, to_silver
 from .schema import MyfeedRow
 
 
@@ -47,7 +47,7 @@ def test_bundled_sample_feed_refines_through_to_gold(tmp_path):
     assert len(gold) == len(landed)
 
 
-def test_raw_hop_lands_the_source_rows():
+def test_to_raw_lands_the_source_rows():
     writer = RecordingWriter()
     reader = given_rows(
         [
@@ -55,16 +55,16 @@ def test_raw_hop_lands_the_source_rows():
         ]
     )
 
-    landed = raw_hop(reader, writer)
+    landed = to_raw(reader, writer)
 
     # Row counts are not asserted: a scaffold seeded with --from-feed-file
-    # replaces these rows with the real feed's, so the hop's contract is what
+    # replaces these rows with the real feed's, so its contract is what
     # holds -- everything read is landed, unchanged.
     assert len(writer.writes) == 1
     assert len(writer.writes[0]) == len(landed)
 
 
-def test_raw_hop_gates_source_columns():
+def test_to_raw_gates_source_columns():
     writer = RecordingWriter()
     # Replace with missing schema columns to test structural rejection
     reader = given_rows(
@@ -74,13 +74,13 @@ def test_raw_hop_gates_source_columns():
     )
 
     with pytest.raises(ValidationError, match="missing required column.*"):
-        raw_hop(reader, writer)
+        to_raw(reader, writer)
 
     assert len(writer.writes) == 0
 
 
 @pytest.mark.skip("add value rules first")
-def test_silver_hop_quarantines_value_rule_breaches():
+def test_to_silver_quarantines_value_rule_breaches():
     writer = RecordingWriter()
     reject_writer = RecordingWriter()
 
@@ -92,13 +92,13 @@ def test_silver_hop_quarantines_value_rule_breaches():
         ]
     )
 
-    silver_hop(reader, writer, reject_writer)
+    to_silver(reader, writer, reject_writer)
 
     assert len(writer.writes) == 1
     assert len(reject_writer.writes) == 1
 
 
-def test_silver_hop_aborts_on_structural_breaches():
+def test_to_silver_aborts_on_structural_breaches():
     writer = RecordingWriter()
     reject_writer = RecordingWriter()
 
@@ -110,13 +110,13 @@ def test_silver_hop_aborts_on_structural_breaches():
     )
 
     with pytest.raises(ValueError, match="(?i)column"):
-        silver_hop(reader, writer, reject_writer)
+        to_silver(reader, writer, reject_writer)
 
     assert len(writer.writes) == 0
     assert len(reject_writer.writes) == 0
 
 
-def test_gold_hop_passes_silver_through():
+def test_to_gold_passes_silver_through():
     writer = RecordingWriter()
     reader = given_rows(
         [
@@ -124,6 +124,6 @@ def test_gold_hop_passes_silver_through():
         ]
     )
 
-    gold_hop(reader, writer)
+    to_gold(reader, writer)
 
     assert len(writer.writes) == 1

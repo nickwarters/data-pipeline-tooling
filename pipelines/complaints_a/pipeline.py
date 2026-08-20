@@ -7,7 +7,7 @@ place the three come back together, as a Selection group.
 Every line below **does its work when it is reached**: put a breakpoint on one,
 step over it, and the variable holds the actual rows at that point in the feed
 ([ADR-0027](../../docs/adr/0027-eager-steps-are-the-default-authoring-model.md)).
-Each medallion hop is its own ``*_hop`` function, so a test can drive one with
+Each medallion step is its own ``to_*`` function, so a test can drive one with
 sample rows and a recording writer without touching SQLite or the filesystem.
 
 Address it by its location on disk, which is the label its run history is
@@ -41,21 +41,21 @@ FEED_NAME = "complaints_a"
 # Pipelines this feed depends on being fresh before it runs.
 UPSTREAMS = ()
 
-# The columns the raw hop gates on, in the source's own vocabulary.
+# The columns ``to_raw`` gates on, in the source's own vocabulary.
 SOURCE_COLUMNS = ["record_id", "label", "amount"]
 
 
-def raw_hop(reader: Reader, writer: Writer) -> Dataset:
+def to_raw(reader: Reader, writer: Writer) -> Dataset:
     """Gate the source's columns, then land the feed faithfully.
 
-    Edit these three lines to change the hop.
+    Edit these three lines to change it.
     """
-    data = read(reader)
-    validate(ColumnValidator(SOURCE_COLUMNS), data)
-    return write(writer, data)
+    data = read(reader, name="raw:read")
+    validate(ColumnValidator(SOURCE_COLUMNS), data, name="raw:column_validator")
+    return write(writer, data, name="raw:write")
 
 
-def silver_hop(
+def to_silver(
     reader: Reader, writer: Writer, reject_writer: Writer | None = None
 ) -> Dataset:
     """Enforce the declared schema on this Case Type's accumulated raw rows.
@@ -63,10 +63,14 @@ def silver_hop(
     ``enforce`` is the coerce -> quarantine -> validate sequence in the order
     that makes it correct, and each part still records its own step. Given no
     ``reject_writer`` it is simply coerce -> validate.
+
+    Every step here names the layer it is landing in, so a run log holding both
+    this and ``to_raw`` says which ``read`` was which rather than ``read`` and
+    ``read-2``.
     """
-    data = read(reader)
-    data = enforce(ComplaintsARow, data, reject_writer=reject_writer)
-    return write(writer, data)
+    data = read(reader, name="silver:read")
+    data = enforce(ComplaintsARow, data, reject_writer=reject_writer, name="silver")
+    return write(writer, data, name="silver:write")
 
 
 def run(context: RunContext) -> Dataset:
@@ -82,11 +86,11 @@ def run(context: RunContext) -> Dataset:
     # upstream, and this pipeline would simply use CsvReader on the landed file.
     feed_csv = Path(context.base_dir) / "landing_zone" / f"{FEED_NAME}.csv"
 
-    raw_hop(
+    to_raw(
         CsvReader(feed_csv),
         med.raw.writer(FEED_NAME, strategy),
     )
-    return silver_hop(
+    return to_silver(
         med.raw.reader(FEED_NAME),
         med.silver.writer(FEED_NAME, strategy),
         med.silver.quarantine_writer(FEED_NAME),

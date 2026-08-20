@@ -1,9 +1,9 @@
 """Tests for the ``myfeed`` Case Type ingest.
 
-Because each hop is its own function over a ``Reader`` and a ``Writer``, a test
-drives the real hop in memory: ``given_rows`` stands in for the source and
+Because each step is its own function over a ``Reader`` and a ``Writer``, a test
+drives the real thing in memory: ``given_rows`` stands in for the source and
 ``RecordingWriter`` captures what would be written. This never touches SQLite,
-the network, or the filesystem — and because the steps are eager, the hop runs
+the network, or the filesystem — and because the steps are eager, it runs
 where it is called, so a failing test stops on the line that failed.
 """
 
@@ -24,7 +24,7 @@ from tests.framework_testing import (
 from tools.medallion import medallion
 from tools.store import StoreRegistry
 
-from .pipeline import FEED_NAME, raw_hop, run, silver_hop
+from .pipeline import FEED_NAME, run, to_raw, to_silver
 from .schema import NAMESPACE, NATURAL_KEY, MyfeedRow
 
 
@@ -50,7 +50,7 @@ def test_source_lands_in_raw_then_conforms_to_silver(tmp_path):
     assert declared.issubset(silver_rows[0].keys())
 
 
-def test_raw_hop_gates_source_columns():
+def test_to_raw_gates_source_columns():
     writer = RecordingWriter()
     # Replace with missing schema columns to test structural rejection
     reader = given_rows(
@@ -60,13 +60,13 @@ def test_raw_hop_gates_source_columns():
     )
 
     with pytest.raises(ValidationError, match="missing required column.*"):
-        raw_hop(reader, writer)
+        to_raw(reader, writer)
 
     assert len(writer.writes) == 0
 
 
 @pytest.mark.skip("add value rules first")
-def test_silver_hop_quarantines_value_rule_breaches():
+def test_to_silver_quarantines_value_rule_breaches():
     writer = RecordingWriter()
     reject_writer = RecordingWriter()
 
@@ -79,13 +79,13 @@ def test_silver_hop_quarantines_value_rule_breaches():
         ]
     )
 
-    silver_hop(reader, writer, reject_writer)
+    to_silver(reader, writer, reject_writer)
 
     assert len(writer.writes) == 1
     assert len(reject_writer.writes) == 1
 
 
-def test_silver_hop_aborts_on_structural_breaches():
+def test_to_silver_aborts_on_structural_breaches():
     writer = RecordingWriter()
     reject_writer = RecordingWriter()
 
@@ -97,7 +97,7 @@ def test_silver_hop_aborts_on_structural_breaches():
     )
 
     with pytest.raises(ValueError, match="(?i)column"):
-        silver_hop(reader, writer, reject_writer)
+        to_silver(reader, writer, reject_writer)
 
     assert len(writer.writes) == 0
     assert len(reject_writer.writes) == 0

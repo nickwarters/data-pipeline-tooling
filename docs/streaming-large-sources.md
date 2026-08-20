@@ -293,11 +293,11 @@ profiling and per-step addresses that a feed at this size needs most.
 
 ## Feeding the rest of the pipeline
 
-A streamed read is the `source → raw` (or `→ silver`) hop where the source is too
+A streamed read is the `source → raw` (or `→ silver`) step where the source is too
 big. Once the bounded ~100K rows are landed, everything downstream (raw → silver
 → gold) is ordinary single-shot builder territory reading via `SqliteReader` —
 including the whole-dataset checks (`UniqueValidator`, `VolumeAnomalyValidator`)
-that the streamed hop had to refuse.
+that the streamed read had to refuse.
 
 ### Fail-fast comes for free
 

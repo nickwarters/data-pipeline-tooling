@@ -84,7 +84,7 @@ value-level gates still *run* (a rule is called with the empty series, as a rule
 author should expect); they simply have nothing to match.
 
 This is why an incremental poll's steady state (an empty window) and an empty
-chunk in a `.read_chunks` stream run the same hops as a busy one, with no
+chunk in a `.read_chunks` stream run the same steps as a busy one, with no
 per-feed casting to get them past the gate.
 
 **The coercer has the other half of the rule.** A dtype the validator waves
@@ -247,9 +247,9 @@ set out in [ADR-0006](adr/0006-graduated-schema-enforcement.md).
 
 ## Composing the boundary — coerce, then enforce
 
-There is no recipe builder for this; the two primitives compose **explicitly**
+There is no shared builder for this; the two primitives compose **explicitly**
 onto a `Pipeline`, so the schema boundary is visible in the pipeline the same way
-every other hop is. The raw→silver hop reads raw, coerces, validates, and writes
+every other step is. The raw→silver step reads raw, coerces, validates, and writes
 silver:
 
 ```python
@@ -297,7 +297,7 @@ and [adding-a-feed.md](adding-a-feed.md).
 
 Gold is validated *on the same footing as silver*: the **same**
 `SchemaValidator` composes as a post-validator onto whatever pipeline builds gold,
-before the gold write. Two deliberate differences from the silver hop:
+before the gold write. Two deliberate differences from the silver step:
 
 - **No `SchemaCoercion`.** Gold reads already-coerced silver, so the round-trip
   repair step is unneeded — only the validator attaches.
@@ -308,8 +308,8 @@ before the gold write. Two deliberate differences from the silver hop:
 
 A breach raises at the validate step, before the writer runs — so a
 failed run writes no gold and leaves prior gold intact. How accumulated silver is
-assembled into gold is an application concern (the `case_review.gold` helpers, and
-the open snapshot-vs-join decision); see
+assembled into gold is an application concern, written out in the feed that
+publishes it rather than shared (the open snapshot-vs-join decision); see
 [`gold-accumulation.md`](gold-accumulation.md).
 
 ## Value-level rules — format / length / uniqueness / value-set

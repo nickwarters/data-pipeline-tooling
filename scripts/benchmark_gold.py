@@ -18,7 +18,7 @@ of silver off disk is timed on its own -- on a network share that read is
 usually most of the cost, and it is the number that changes when this is run
 against a share rather than a local disk.
 
-This script never runs the Detail hops, so the Detail-Table-sourced aggregates
+This script never builds the Detail Tables, so their sourced aggregates
 are out of scope here -- see ``publish_aggregates`` below.
 
 Usage (from the repo root)::
@@ -53,7 +53,7 @@ import pandas as pd
 
 from framework.core import Dataset
 from framework.io import DatasetReader, Refresh
-from framework.run import hop, read, transform, write
+from framework.run import read, transform, write
 from framework.transform import Stamp
 from pipelines.sharepoint_cases.gold import (
     AS_OF_COLUMN,
@@ -61,8 +61,8 @@ from pipelines.sharepoint_cases.gold import (
     SILVER_TABLE,
     age_buckets,
     case_counts,
-    case_current_hop,
     throughput,
+    to_gold_case_current,
 )
 from pipelines.sharepoint_cases.schema import CASE_STATUSES, FEED_NAME
 from tools.medallion import medallion
@@ -176,7 +176,7 @@ def synthetic_silver(*, lists: int, cases: int, versions: int) -> pd.DataFrame:
 def publish_aggregates(med, current: Dataset, *, as_of: dt.datetime) -> None:
     """Mirror the four ``case_current``-sourced aggregates from ``gold.publish_gold``;
     the Detail-Table-sourced aggregates are out of scope since this script never
-    runs the Detail hops.
+    builds the Detail Tables.
     """
     for table, step, reduce in (
         ("case_counts_current", "count-by-base-grain-and-status", case_counts),
@@ -192,11 +192,13 @@ def publish_aggregates(med, current: Dataset, *, as_of: dt.datetime) -> None:
         ),
         ("case_throughput_daily", "count-by-terminal-date", throughput),
     ):
-        with hop(f"{FEED_NAME}:gold:{table}"):
-            data = read(DatasetReader(current))
-            data = transform(reduce, data, name=step)
-            data = transform(Stamp(AS_OF_COLUMN, as_of.isoformat()), data, name="stamp")
-            write(med.gold.writer(table, Refresh()), data)
+        at = f"gold:{table}"
+        data = read(DatasetReader(current), name=f"{at}:read")
+        data = transform(reduce, data, name=f"{at}:{step}")
+        data = transform(
+            Stamp(AS_OF_COLUMN, as_of.isoformat()), data, name=f"{at}:stamp-as-of"
+        )
+        write(med.gold.writer(table, Refresh()), data, name=f"{at}:write")
 
 
 def measure(base_dir: Path, *, lists: int, cases: int, versions: int) -> Timing:
@@ -210,14 +212,14 @@ def measure(base_dir: Path, *, lists: int, cases: int, versions: int) -> Timing:
 
     # A warm pass first, so the timed one measures steady state rather than the
     # first touch of a freshly written database.
-    current = case_current_hop(
+    current = to_gold_case_current(
         med.silver.reader(SILVER_TABLE),
         med.gold.writer(CURRENT_TABLE, Refresh()),
         as_of=AS_OF,
     )
     publish_aggregates(med, current, as_of=AS_OF)
 
-    # Reading silver off disk, on its own. Measured separately from the hop it
+    # Reading silver off disk, on its own. Measured separately from the step it
     # belongs to, so a slow share shows up as a number rather than as a slower
     # total with no explanation.
     started = time.perf_counter()
@@ -225,7 +227,7 @@ def measure(base_dir: Path, *, lists: int, cases: int, versions: int) -> Timing:
     read_seconds = time.perf_counter() - started
 
     started = time.perf_counter()
-    current = case_current_hop(
+    current = to_gold_case_current(
         med.silver.reader(SILVER_TABLE),
         med.gold.writer(CURRENT_TABLE, Refresh()),
         as_of=AS_OF,

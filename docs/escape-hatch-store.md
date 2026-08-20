@@ -227,7 +227,7 @@ mechanical:
    ([processors.md](processors.md)), and the source is landed in raw first — so
    the SQL string disappears into the typed builder.
 4. **Add the schema boundary.** Refine the feed raw → silver by composing
-   `SchemaCoercion(schema)` + `SchemaValidator(schema)` onto the hop, so a declared
+   `SchemaCoercion(schema)` + `SchemaValidator(schema)` onto the step, so a declared
    Case Type contract is enforced at silver
    ([schema-enforcement.md](schema-enforcement.md)).
 5. **Delete `SqliteQueryReader` and `ScratchStore`** once nothing imports them.

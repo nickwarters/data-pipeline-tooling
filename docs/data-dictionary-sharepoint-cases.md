@@ -69,7 +69,7 @@ When we saw it is recorded elsewhere, and is still recoverable: the **run log**
 `data_locations` name the list and every table, and the **ingestion batch id**
 returned on each `ListPoll` identifies the source window that list's poll
 resumed from. The Reader's `observed_at` stamp is an injectable callable and is
-dropped by the raw hop's `observation` transform for the same reason.
+dropped by `to_raw`'s `observation` transform for the same reason.
 
 ## `case_observation` — raw layer
 
@@ -88,7 +88,7 @@ the diagnosable, re-runnable copy of what the list returned.
 | **Is this a Case Type?** | No — an ingest feed; identity is derived at gold |
 | **Natural key → `case_id`** | n/a at this layer |
 | **Source system** | every SharePoint list in `CASE_LISTS` (site and GUIDs: placeholders, see above) |
-| **Reader** | `SharePointModifiedReader` per list, projected by the raw hop's `observation` transform |
+| **Reader** | `SharePointModifiedReader` per list, projected by `to_raw`'s `observation` transform |
 | **Load strategy** | `AppendOnly("source_observation_id")` |
 | **Upstream dependencies** | none — source feed |
 | **Schedule / freshness** | polled; window `end = server_now - 30s`, `start = watermark - 5m` |
@@ -107,7 +107,7 @@ purely mechanical (see **Part B** there).
 
 Two source columns are **not** stored: `Modified` and `odata.etag`. The stamped
 `source_modified_at` and `source_version` carry exactly what they said, in the
-vocabulary every hop below reads.
+vocabulary every step below reads.
 
 | Field | Source column | Type | Nullable | Description |
 |-------|---------------|------|----------|-------------|
@@ -141,7 +141,7 @@ None. Raw is a faithful mirror.
 One row per observed Case version, snake_cased and typed. The change-over-time
 record: a later `Modified` on the same item is a **new row**, never an update.
 
-This hop is the rename and the type contract, and deliberately nothing more.
+This step is the rename and the type contract, and deliberately nothing more.
 There is no derivation, no reshaping and no parsing — the JSON blob columns land
 as the unparsed text the list holds, because parsing them needs the Case Type's
 own question bank and that is a gold concern.
@@ -322,7 +322,7 @@ win an observation.
 | **Reader** | `DatasetReader` over that batch |
 | **Load strategy** | `AppendOnly(("source_observation_id", "question_id"))` — composite, because one observation yields many answer rows |
 | **Upstream dependencies** | none declared — the batch is in memory, not reread from silver |
-| **Schedule / freshness** | with the poll, immediately after `case_version`'s own silver hop |
+| **Schedule / freshness** | with the poll, immediately after `case_version`'s own raw → silver step |
 | **Owner / data steward** | *<team>* |
 | **Source of truth doc** | `pipelines/sharepoint_cases/schema.py` |
 | **Last reviewed** | 2026-08-14 |
@@ -427,7 +427,7 @@ None.
   person)` rule the same way a half-filled person object does.
 - A malformed `answers` or `capture` blob (text that is not JSON, or JSON of
   the wrong shape) is a feed defect, not a bad value: the chained
-  `ExplodeJsonMap` hops raise `JsonShapeError` and abort the run before
+  `ExplodeJsonMap` passes raise `JsonShapeError` and abort the run before
   anything from that batch commits.
 - A structural breach — a missing column, a wrong dtype, a null provenance
   column — still aborts the run.
@@ -550,7 +550,7 @@ None.
 ### Part D — Quarantine & data quality
 
 - No value rule on this schema can quarantine a row today — see
-  `silver_general_answer_hop`'s docstring for why the quarantine step
+  `to_silver_general_answer`'s docstring for why the quarantine step
   stays wired anyway.
 - A malformed `answers` blob (text that is not JSON, or JSON that is not an
   object) is a feed defect, not a bad value: `ExplodeJsonMap` raises
@@ -616,7 +616,7 @@ None.
 
 - No value rule is declared on this schema, so nothing here quarantines; the
   quarantine step stays wired anyway, for the same reason
-  `silver_general_answer_hop`'s does.
+  `to_silver_general_answer`'s does.
 - A malformed `conversation` blob (text that is not JSON, or JSON that is not
   an array) is a feed defect, not a bad value: `ExplodeJsonList` raises
   `JsonShapeError` and aborts the run before anything from that batch commits.
@@ -782,7 +782,7 @@ None.
   see, so a rule here would quarantine real data to guard a namespace nobody
   has proposed. `{"": "x"}` is legal JSON, so an empty-string `field_key` is
   possible, lands, and is not ruled against. The quarantine step stays wired
-  anyway, for the same reason `silver_general_answer_hop`'s does.
+  anyway, for the same reason `to_silver_general_answer`'s does.
 - A malformed `details` blob (text that is not JSON, or JSON that is not an
   object) is a feed defect, not a bad value: `ExplodeJsonMap` raises
   `JsonShapeError` and aborts the run before anything from that batch
@@ -853,7 +853,7 @@ everything.
 Only `case_current` carries a live grain gate (`UniqueValidator("case_id")`);
 each Detail Table carries one too (e.g. `UniqueValidator(("case_id",
 "question_id", "field_key"))` for `answer_capture`, via
-`gold_detail_hop`'s generic `grain=`); the six aggregates get none,
+`to_gold_detail`'s generic `grain=`); the six aggregates get none,
 because a uniqueness check below the group-by that produced the grain is
 satisfied by construction. Their grain is declared here.
 
@@ -918,7 +918,7 @@ or missing table.
 | **Source** | silver `answer_capture`'s accumulated history, semi-joined to `case_current`'s winning `(case_id, source_observation_id)` pairs |
 | **Columns** | every silver `answer_capture` column, plus `case_id` and `as_of_utc` |
 
-Reduced by the same `gold_detail_hop`, per the same rule as `answer`
+Reduced by the same `to_gold_detail`, per the same rule as `answer`
 above. The property worth calling out here specifically: the review
 application deletes a question's whole `capture` map, not just individual
 fields, the moment that question stops failing (`remediationRequired` moves
@@ -935,7 +935,7 @@ for it, even though silver still holds the earlier observation's rows forever.
 | **Source** | silver `answer_action`'s accumulated history, semi-joined to `case_current`'s winning `(case_id, source_observation_id)` pairs |
 | **Columns** | every silver `answer_action` column, plus `case_id` and `as_of_utc` |
 
-Reduced by the same `gold_detail_hop`, per the same rule as `answer`
+Reduced by the same `to_gold_detail`, per the same rule as `answer`
 above. Unticking the last Remediation Action on a question removes the whole
 `remediationActions` list the same way resolving the question removes
 `capture` — the semi-join drops those rows from gold rather than keeping a
@@ -950,7 +950,7 @@ stale action a per-child reduce would have no reason to prefer over.
 | **Source** | silver `general_answer`'s accumulated history, semi-joined to `case_current`'s winning `(case_id, source_observation_id)` pairs |
 | **Columns** | every silver `general_answer` column, plus `case_id` and `as_of_utc` |
 
-Reduced by the same `gold_detail_hop`, per the same rule as `answer`
+Reduced by the same `to_gold_detail`, per the same rule as `answer`
 above. A General Question answer a reviewer's app pruned between observations
 (the question dropped from the Case Type's config) is genuinely absent from
 the winning observation's map, and the semi-join reads that absence correctly.
@@ -964,7 +964,7 @@ the winning observation's map, and the semi-join reads that absence correctly.
 | **Source** | silver `conversation_message`'s accumulated history, semi-joined to `case_current`'s winning `(case_id, source_observation_id)` pairs |
 | **Columns** | every silver `conversation_message` column, plus `case_id` and `as_of_utc` |
 
-Reduced by the same `gold_detail_hop`, per the same rule as `answer`
+Reduced by the same `to_gold_detail`, per the same rule as `answer`
 above — the winning observation's full message list, and nothing carried over
 from an earlier one. Because a Conversation only ever grows, this table's
 semi-join has no deletion to read correctly the way the answer-derived tables
@@ -982,7 +982,7 @@ knowing to stop.
 | **Source** | silver `appeal`'s accumulated history, semi-joined to `case_current`'s winning `(case_id, source_observation_id)` pairs |
 | **Columns** | every silver `appeal` column, plus `case_id` and `as_of_utc` |
 
-Reduced by the same `gold_detail_hop`, per the same rule as `answer`
+Reduced by the same `to_gold_detail`, per the same rule as `answer`
 above. `appeals` is additive and its own elements are never deleted, but an
 Appeal's row still changes shape in place — `raised` gains a full
 `resolution` the moment Controls resolves it — so the semi-join is what
@@ -999,7 +999,7 @@ prefer.
 | **Source** | silver `case_detail`'s accumulated history, semi-joined to `case_current`'s winning `(case_id, source_observation_id)` pairs |
 | **Columns** | every silver `case_detail` column, plus `case_id` and `as_of_utc` |
 
-Reduced by the same `gold_detail_hop`, per the same rule as `answer`
+Reduced by the same `to_gold_detail`, per the same rule as `answer`
 above. This grain is structurally guaranteed **twice over**, unlike every
 other Detail Table's: a JSON object cannot repeat a key, so silver can never
 carry two rows sharing one observation's `field_key`, and the semi-join keeps
@@ -1227,7 +1227,7 @@ the same convention as the other base-grain tables.
 | Attribute | Value |
 |-----------|-------|
 | **Grain** | `case_type` × `question_id` × `remediation_required` × `remediation_status` |
-| **Source** | the published gold `answer` Detail Table, read from that hop's already-materialised dataset — not silver, and not a re-read of gold |
+| **Source** | the published gold `answer` Detail Table, read from that build's already-materialised dataset — not silver, and not a re-read of gold |
 | **Columns** | `case_type`, `question_id`, `remediation_required`, `remediation_status`, `answer_count`, `as_of_utc` |
 
 Counts the winning observation's answer rows (gold `answer`) by the
@@ -1259,7 +1259,7 @@ silently drop:
 
 **Stated limitation.** This table cannot be filtered to open Cases. A gold
 Detail row carries nothing from its parent beyond the two winner columns it
-semi-joined on (`gold_detail_hop`'s semi-join is deliberately narrow — see
+semi-joined on (`to_gold_detail`'s semi-join is deliberately narrow — see
 *Part B*'s `answer` field dictionary above); reading `case_current.status`
 alongside it would need a two-input transform this feed has never needed. A
 consumer wanting "open Cases with an undecided remediation" joins this table
@@ -1270,7 +1270,7 @@ to `case_current` itself.
 | Attribute | Value |
 |-----------|-------|
 | **Grain** | `case_type` × `state` × `resolution_verdict` |
-| **Source** | the published gold `appeal` Detail Table, read from that hop's already-materialised dataset — not silver, and not a re-read of gold |
+| **Source** | the published gold `appeal` Detail Table, read from that build's already-materialised dataset — not silver, and not a re-read of gold |
 | **Columns** | `case_type`, `state`, `resolution_verdict`, `appeal_count`, `as_of_utc` |
 
 Counts the winning observation's Appeal rows (gold `appeal`) by lifecycle

@@ -45,13 +45,12 @@ from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError
 from framework.core.protocols import Processor, Reader, Validator, Writer
 from framework.core.validators import ValidationError
-from framework.run.run_context import RunContext, active_context, current_context
+from framework.run.run_context import RunContext, current_context
 
 __all__ = [
     "coerce",
     "enforce",
     "explain",
-    "hop",
     "quarantine",
     "read",
     "step",
@@ -164,45 +163,6 @@ def step(
         logical_run_id=context.logical_run_id,
     ) as metrics:
         yield metrics
-
-
-@contextmanager
-def hop(name: str) -> Iterator[RunContext | None]:
-    """Group every step in this block under one hop name in the run log.
-
-    A feed with a handful of steps needs nothing here: its step names are already
-    unique and ``read`` means the read. A feed that drives the *same* shape many
-    times over -- one hop per source list, per Detail Table, per Case Type -- does
-    need it, or the run log reads ``read``, ``read-2`` … ``read-24`` and an
-    operator cannot tell which list's read failed::
-
-        for case_list in CASE_LISTS:
-            with hop(f"silver:{case_list.case_type}:answer"):
-                data = read(reader)          # recorded as silver:claims:answer / read
-                ...
-
-    This is the same grouping ``Pipeline(f"{FEED}:silver:{case_type}")`` gave a
-    sub-pipeline, written where the steps are: the block's records carry ``name``
-    in their ``pipeline`` field and their own step names, while the run's
-    identity -- ``pipeline_run_id``, ``logical_run_id``, the dry-run flag and its
-    report -- is inherited unchanged, so correlation and replay are untouched.
-    Step names restart inside the block, so each hop has exactly one ``read``.
-
-    Outside a run context it does nothing at all, so a hop can still be driven on
-    its own from a test or a scratch script.
-    """
-    context = current_context()
-    if context is None:
-        yield None
-        return
-    child = context.for_nested_pipeline(name)
-    # The hop's own name is what the record's ``pipeline`` field should read --
-    # the exact string ``Pipeline(name)`` used to put there -- rather than the
-    # run's subject-qualified label. Freshness is judged on the parent context
-    # before the handler is ever called, so nothing downstream re-reads this.
-    child.subject = None
-    with active_context(child):
-        yield child
 
 
 def _locations(component: object) -> list[dict[str, str]] | None:
@@ -552,10 +512,11 @@ def enforce(
     dataset: Dataset,
     *,
     reject_writer: Writer | None = None,
+    name: str | None = None,
 ) -> Dataset:
     """Coerce to ``schema``, optionally quarantine value-rule breaches, then check it.
 
-    The three-step sequence every silver hop repeats, in the order that makes it
+    The three-step sequence a silver step repeats, in the order that makes it
     correct: coerce the dtypes storage lost, route value-rule breaches to
     quarantine so the good rows still land, then validate the declared schema.
     Getting that order wrong is a real and easy mistake, so it is made once here.
@@ -564,11 +525,21 @@ def enforce(
     ``schema_validator`` -- so the run log and the debugger show the same three
     operations they would if they had been written out by hand. It is shorthand,
     not a black box; write the three calls yourself whenever that reads better.
+
+    ``name`` prefixes all three, for a feed that enforces the same schema several
+    times in one run and needs the log to say which one -- ``claims:coerce``,
+    ``appeals:coerce`` -- rather than ``coerce`` and ``coerce-2``.
     """
     from framework.core.schema import SchemaValidator
     from framework.transform.quarantine import SchemaValueRulePartitioner
 
-    dataset = coerce(schema, dataset)
+    at = f"{name}:" if name else ""
+    dataset = coerce(schema, dataset, name=f"{at}coerce")
     if reject_writer is not None:
-        dataset = quarantine(SchemaValueRulePartitioner(schema), reject_writer, dataset)
-    return validate(SchemaValidator(schema), dataset)
+        dataset = quarantine(
+            SchemaValueRulePartitioner(schema),
+            reject_writer,
+            dataset,
+            name=f"{at}quarantine",
+        )
+    return validate(SchemaValidator(schema), dataset, name=f"{at}schema_validator")

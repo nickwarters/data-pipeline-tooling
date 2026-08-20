@@ -5,13 +5,13 @@ step over it, and the variable holds the actual rows at that point in the feed �
 which is the whole reason the steps are written this way
 ([ADR-0027](../../docs/adr/0027-eager-steps-are-the-default-authoring-model.md)).
 
-Each medallion hop is its own ``*_hop`` function, so a test can drive one with
+Each medallion step is its own ``to_*`` function, so a test can drive one with
 sample rows and a recording writer without touching SQLite, the network, or the
 filesystem. ``run`` calls the three in order.
 
-- ``raw_hop``    reads the source and lands it faithfully (column-gated).
-- ``silver_hop`` narrows and renames the source columns, then enforces the schema.
-- ``gold_hop``   assembles silver into gold — a passthrough to start (see the TODO).
+- ``to_raw``    reads the source and lands it faithfully (column-gated).
+- ``to_silver`` narrows and renames the source columns, then enforces the schema.
+- ``to_gold``   assembles silver into gold — a passthrough to start (see the TODO).
 
 Address it by its location on disk::
 
@@ -69,18 +69,18 @@ SELECT_RAW_COLUMNS = [f.name for f in fields(MyfeedRow)]
 UPSTREAMS = ()
 
 
-def raw_hop(reader: Reader, writer: Writer) -> Dataset:
+def to_raw(reader: Reader, writer: Writer) -> Dataset:
     """Land the source unchanged, once its columns are as expected.
 
-    Edit these three lines to change the hop.
+    Edit these three lines to change it.
     """
-    data = read(reader)
+    data = read(reader, name="raw:read")
     expected = [f.name for f in fields(MyfeedRow)]
-    validate(ColumnValidator(expected), data)
-    return write(writer, data)
+    validate(ColumnValidator(expected), data, name="raw:column_validator")
+    return write(writer, data, name="raw:write")
 
 
-def silver_hop(
+def to_silver(
     reader: Reader, writer: Writer, reject_writer: Writer | None = None
 ) -> Dataset:
     """Narrow and rename the source columns, then enforce the declared schema.
@@ -88,21 +88,25 @@ def silver_hop(
     ``enforce`` is the coerce -> quarantine -> validate sequence in the order
     that makes it correct, and each part still records its own step. Given no
     ``reject_writer`` it is simply coerce -> validate. Edit these lines to change
-    the hop.
+    it.
+
+    Every step names the layer it is landing in, so one run log holding all three
+    of these says which ``read`` was which rather than ``read``, ``read-2``,
+    ``read-3``. ``enforce``'s ``name`` prefixes all three steps it records.
     """
-    data = read(reader)
-    data = transform(SelectColumns(SELECT_RAW_COLUMNS), data)
+    data = read(reader, name="silver:read")
+    data = transform(SelectColumns(SELECT_RAW_COLUMNS), data, name="silver:select")
     if RENAME:
-        data = transform(Rename(RENAME), data)
-    data = enforce(MyfeedRow, data, reject_writer=reject_writer)
-    return write(writer, data)
+        data = transform(Rename(RENAME), data, name="silver:rename")
+    data = enforce(MyfeedRow, data, reject_writer=reject_writer, name="silver")
+    return write(writer, data, name="silver:write")
 
 
-def gold_hop(reader: Reader, writer: Writer) -> Dataset:
+def to_gold(reader: Reader, writer: Writer) -> Dataset:
     """Assemble silver into gold."""
-    data = read(reader)
+    data = read(reader, name="gold:read")
     # TODO: build out the gold assembly (e.g. derive a stable key, reduce, join)
-    return write(writer, data)
+    return write(writer, data, name="gold:write")
 
 
 def run(context: RunContext) -> Dataset:
@@ -110,16 +114,16 @@ def run(context: RunContext) -> Dataset:
     med = medallion(StoreRegistry(context.base_dir), FEED_NAME)
     strategy = AccumulateByRun.from_context(context)
 
-    raw_hop(
+    to_raw(
         CsvReader(SAMPLE_CSV),
         med.raw.writer(FEED_NAME, strategy),
     )
-    silver_hop(
+    to_silver(
         med.raw.reader(FEED_NAME),
         med.silver.writer(FEED_NAME, strategy),
         med.silver.quarantine_writer(FEED_NAME),
     )
-    return gold_hop(
+    return to_gold(
         med.silver.reader(FEED_NAME),
         med.gold.writer(FEED_NAME, Refresh()),
     )

@@ -64,18 +64,21 @@ def test_case_type_variant_refines_to_silver_and_leaves_gold_a_commented_seam(tm
     )
 
     # The settled ingest spine is rendered live: source -> raw -> silver.
-    assert "silver = silver_hop(" in pipeline
+    assert "silver = to_silver(" in pipeline
     assert "med.silver.writer(" in pipeline
-    # Rendered against the eager steps, so the hops execute where they're written.
+    # Rendered against the eager steps, so they execute where they're written.
     assert "from framework.run import (" in pipeline
     assert "    read," in pipeline
     assert "    write," in pipeline
 
     # Gold is the author's seam, not a live call, so the scaffold makes no bet
-    # on the open snapshot-vs-join assembly decision.
-    assert "ingest_silver_to_gold" in pipeline  # shown as guidance...
+    # on the open snapshot-vs-join assembly decision. The seam sketches the
+    # reduction inline rather than pointing at a shared builder -- there isn't
+    # one, deliberately.
+    assert "def to_gold(" in pipeline  # shown as guidance...
+    assert "DeriveKey(" in pipeline
     for line in pipeline.splitlines():
-        if "ingest_silver_to_gold" in line:
+        if "def to_gold(" in line or "DeriveKey(" in line:
             assert line.lstrip().startswith("#"), f"gold step must be inert: {line!r}"
 
 

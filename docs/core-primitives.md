@@ -51,7 +51,7 @@ rename — see CONTEXT.)
 |--------|----------------------------------------|----------------|
 | **raw** | A faithful, schema-light snapshot of the source as landed — the framework's landing zone. | **Full refresh** each run: truncate + reload from the source snapshot, so re-runs are deterministic. |
 | silver | Validated, normalised data: the **schema boundary** — a Case Type's declared columns + dtypes are enforced here as a post-validator before the data lands. Normalising *coercion* (parsing dates, casting booleans) runs as a transform step ahead of that check. | Full refresh from raw. |
-| gold   | Refined ingest outputs **and** the accumulating SelectionPool / Review Outcomes. A gold hop composes an explicit `Pipeline` whose Writer carries the load strategy. | **Current-only** (ingest gold: `Refresh`, one row per Case) **or accumulating** (Selection / Sync: `AccumulateByRun`, stamped with `logical_run_id` / `load_date`, plus the Writer's own `pipeline_run_id` provenance column; idempotent re-run via delete-by-logical-run then insert; [gold-accumulation doc](gold-accumulation.md)). |
+| gold   | Refined ingest outputs **and** the accumulating SelectionPool / Review Outcomes. A gold build is written out step by step, its Writer carrying the load strategy. | **Current-only** (ingest gold: `Refresh`, one row per Case) **or accumulating** (Selection / Sync: `AccumulateByRun`, stamped with `logical_run_id` / `load_date`, plus the Writer's own `pipeline_run_id` provenance column; idempotent re-run via delete-by-logical-run then insert; [gold-accumulation doc](gold-accumulation.md)). |
 
 raw stays schema-light on purpose: it mirrors the source so the landing zone is
 faithful, and schema enforcement arrives at silver and gold.
@@ -62,7 +62,7 @@ faithful, and schema enforcement arrives at silver and gold.
 > `AccumulateByRun.from_context(context)`, `UpsertStrategy(key_columns)`,
 > `InsertOrIgnore()`, `InsertIfAbsent(key_columns)`, or
 > `AppendOnly(key_columns)` when asking the Store
-> for a Writer. This supports both current-state hops and accumulated histories
+> for a Writer. This supports both current-state tables and accumulated histories
 > without baking a universal layer→strategy rule into the Store.
 
 ## The primitives
@@ -683,9 +683,9 @@ Nullability and value-level rules (format / length / uniqueness / encoding)
 extend the same dataclass through `typing.Annotated`.
 
 ### Schema enforcement at the silver boundary
-There is no recipe builder for this; the raw→silver hop composes the primitives
+There is no shared builder for this; the raw→silver step composes the primitives
 **explicitly** onto a `Pipeline` — read the subject's raw, coerce, validate, write
-silver — so the convention is visible in the pipeline like any other hop:
+silver — so the convention is visible in the pipeline like any other step:
 
 ```python
 p = Pipeline("cases")
@@ -746,7 +746,7 @@ date, an unknown boolean encoding, text that is not a number) raises a
 **`CoercionError`** with one located message naming the column and the value; a
 gap is never one of them, because nullability is the validator's question.
 
-The raw→silver hop composes it ahead of the
+The raw→silver step composes it ahead of the
 `SchemaValidator`, so the per-run order is **read → coerce (transform) →
 post-validate (schema) → write**.
 
@@ -1177,8 +1177,8 @@ the warning.
 
 ### `ForEach` — independent per-item builder runs
 `ForEach` (`tools.orchestration`) is the small runnable orchestration
-primitive for repeated runs where each item must stay independent but use the
-same recipe. It sits outside the `Pipeline` builder so the builder keeps its
+primitive for repeated runs where each item must stay independent but follow
+the same shape. It sits outside the `Pipeline` builder so the builder keeps its
 single Reader/single `Dataset`/single Writer contract:
 
 ```python
@@ -1203,7 +1203,7 @@ ForEach(files, pipeline_builder, logical_run_id=item_run_id).run(context)
 ```
 
 For every item, the orchestrator **derives** a per-item `RunContext` from the
-parent (the same `for_nested_pipeline` derivation a bare `p.run()` hop uses,
+parent (the same `for_nested_pipeline` derivation a bare `p.run()` uses,
 with the item's logical run id overriding the parent's), calls
 `pipeline_builder(item, context)`, and runs the returned builder. Deriving rather
 than rebuilding is what keeps the whole context along for the ride: the items
@@ -1391,23 +1391,25 @@ sequence in the order that makes it correct, each part still recording its own
 step. `transform` and `validate` remain primitives: a validation need not follow
 a coercion.
 
-**`hop(name)`** groups a block's steps under one name in the run log — what
-`Pipeline(f"{FEED}:silver:{case_type}")` gave a sub-pipeline, written where the
-steps are. A feed with a handful of steps needs nothing; a feed that drives the
-same shape many times over (one per source list, per Detail Table, per Case Type)
-does, or the log reads `read`, `read-2` … `read-24` and an operator cannot tell
-which list's read failed. The block's records carry `name` in their `pipeline`
-field and their own step names; the run's identity — `pipeline_run_id`,
-`logical_run_id`, the dry-run flag and its report — is inherited unchanged, and
-step names restart inside the block:
+**Telling repeated steps apart is the `name=` argument, not a scope.** A feed
+with a handful of steps needs nothing: the derived names are already unique and
+`read` means the read. A feed that drives the same shape many times over — one
+per source list, per Detail Table, per Case Type — names its steps for what they
+are building, or the log reads `read`, `read-2` … `read-24` and an operator
+cannot tell which list's read failed:
 
 ```python
 for case_list in CASE_LISTS:
-    with hop(f"{FEED_NAME}:silver:{case_list.case_type}"):
-        data = read(reader)                  # -> sharepoint_cases:silver:claims / read
-        data = enforce(CaseVersion, data, reject_writer=rejects)
-        write(writer, data)
+    at = f"silver:{case_list.case_type}"
+    data = read(reader, name=f"{at}:read")            # -> silver:claims:read
+    data = enforce(CaseVersion, data, reject_writer=rejects, name=at)
+    write(writer, data, name=f"{at}:write")
 ```
+
+`enforce` takes the same `name=` and prefixes all three of the steps it records,
+so `coerce` becomes `silver:claims:coerce`. There is no second identity involved:
+a record's `pipeline` field is the run's own label throughout, and the grouping
+lives in the one field that names the step.
 
 **`explain(id_column, score_column=...)`** opens a row-level trace: the first
 `read` inside the block seeds it with everything considered, each `transform`

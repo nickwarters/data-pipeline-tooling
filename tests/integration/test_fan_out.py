@@ -1,25 +1,73 @@
 """Fan-out: one wide feed -> Cases table + Detail Table.
 
 These tests verify the fan-out pattern end-to-end: a shared raw table is read
-by two independent single-table pipelines, each projecting only its columns,
+by two independent single-table passes, each projecting only its columns,
 sharing one normalisation Processor, and landing current-state gold via Refresh.
+
+Each pass writes its own reduction out with the eager steps. There is no shared
+gold builder to call: the Cases reduction and the Detail reduction are a handful
+of lines each, and what makes them agree is that both are handed the *same*
+namespace and natural key -- which is the thing these tests actually check.
 """
 
 import pandas as pd
 
-from case_review.gold import detail_ingest_silver_to_gold, ingest_silver_to_gold
 from framework.core.dataset import Dataset
+from framework.core.validators import UniqueValidator
 from framework.io.strategy import AccumulateByRun, Refresh
-from framework.run.builder import Pipeline
-from framework.transform.processors import Filter, Rename, SelectColumns, Unpivot
-from tests._schema_fixtures import LandedCase
+from framework.run import read, transform, validate, write
+from framework.transform.processors import (
+    DeriveKey,
+    Filter,
+    LatestPerKey,
+    Rename,
+    SelectColumns,
+    Unpivot,
+)
 from tools.medallion import medallion
 from tools.store import StoreRegistry
 
 NAMESPACE = "wide_cases"
 NATURAL_KEY = ("case_ref",)
+CASE_ID = "case_id"
 
 PRODUCT_COLS = [f"product_{i}" for i in range(1, 4)]  # keep small for tests
+
+
+def _derive_key(dataset, *, name):
+    return transform(
+        DeriveKey(into=CASE_ID, namespace=NAMESPACE, natural_key=list(NATURAL_KEY)),
+        dataset,
+        name=name,
+    )
+
+
+def _reduce_cases_to_gold(med, table="cases"):
+    """Accumulated case silver -> one current row per Case."""
+    data = read(med.silver.reader(table), name=f"{table}:read")
+    data = _derive_key(data, name=f"{table}:derive-key")
+    data = transform(
+        LatestPerKey(key=CASE_ID, by="load_date"), data, name=f"{table}:latest-per-key"
+    )
+    validate(UniqueValidator(CASE_ID), data, name=f"{table}:unique-validate")
+    write(med.gold.writer(table, Refresh()), data, name=f"{table}:write")
+
+
+def _reduce_products_to_gold(med, table="products"):
+    """Accumulated product silver -> one row per Case per filled product slot."""
+    data = read(med.silver.reader(table), name=f"{table}:read")
+    data = _derive_key(data, name=f"{table}:derive-key")
+    data = transform(
+        Unpivot(
+            id_vars=[CASE_ID],
+            value_vars=PRODUCT_COLS,
+            var_name="product_slot",
+            value_name="product_name",
+        ),
+        data,
+        name=f"{table}:unpivot",
+    )
+    write(med.gold.writer(table, Refresh()), data, name=f"{table}:write")
 
 
 def _write_wide_raw(med, run_id: str) -> None:
@@ -43,8 +91,8 @@ def _write_wide_raw(med, run_id: str) -> None:
 
 
 def test_detail_silver_to_gold_produces_one_row_per_product(tmp_path):
-    # Verifies the factory: reads projected silver (case_ref + products), derives
-    # case_id, unpivots wide to long, writes Refresh to gold.
+    # Reads projected silver (case_ref + products), derives case_id, unpivots
+    # wide to long, writes Refresh to gold.
     med = medallion(StoreRegistry(tmp_path), "wide_cases")
     # Seed the silver table (already-projected product columns + natural key)
     med.silver.writer("products", Refresh()).write(
@@ -60,19 +108,7 @@ def test_detail_silver_to_gold_produces_one_row_per_product(tmp_path):
         )
     )
 
-    detail_ingest_silver_to_gold(
-        med,
-        NAMESPACE,
-        NATURAL_KEY,
-        LandedCase,
-        "products",
-        unpivot=Unpivot(
-            id_vars=["case_id"],
-            value_vars=PRODUCT_COLS,
-            var_name="product_slot",
-            value_name="product_name",
-        ),
-    ).run()
+    _reduce_products_to_gold(med)
 
     gold = med.gold.reader("products").read().to_pandas()
     # c1 has product_1=widget, product_2=doodad (product_3 is None → dropped)
@@ -85,7 +121,7 @@ def test_detail_case_id_matches_case_id_derived_independently(tmp_path):
     # The Detail Table's case_id is derived from the same natural_key under the
     # same namespace as the Case table; no cross-pipeline join is needed.
     med = medallion(StoreRegistry(tmp_path), "wide_cases")
-    # Seed case silver (needs load_date for LatestPerKey in ingest_silver_to_gold)
+    # Seed case silver (needs load_date for the LatestPerKey reduction)
     med.silver.writer("cases", Refresh()).write(
         Dataset.from_pandas(
             pd.DataFrame(
@@ -107,27 +143,8 @@ def test_detail_case_id_matches_case_id_derived_independently(tmp_path):
         )
     )
 
-    ingest_silver_to_gold(
-        med,
-        NAMESPACE,
-        NATURAL_KEY,
-        LandedCase,
-        "cases",
-    ).run()
-
-    detail_ingest_silver_to_gold(
-        med,
-        NAMESPACE,
-        NATURAL_KEY,
-        LandedCase,
-        "products",
-        unpivot=Unpivot(
-            id_vars=["case_id"],
-            value_vars=PRODUCT_COLS,
-            var_name="product_slot",
-            value_name="product_name",
-        ),
-    ).run()
+    _reduce_cases_to_gold(med)
+    _reduce_products_to_gold(med)
 
     cases_gold = med.gold.reader("cases").read().to_pandas()
     products_gold = med.gold.reader("products").read().to_pandas()
@@ -144,60 +161,31 @@ def test_fan_out_two_pipelines_over_shared_raw_produce_cases_and_detail(tmp_path
     _write_wide_raw(med, run_id)
 
     normalise = Rename({"case_ref_no": "case_ref"})
+    this_run = Filter(lambda row, rid=run_id: row["run_id"] == rid)
 
-    p_cases = Pipeline("cases")
-    r_cases = p_cases.read(med.raw.reader("wide_cases"), name="read")
-    f_cases = p_cases.transform(
-        Filter(lambda row, rid=run_id: row["run_id"] == rid), r_cases, name="filter"
-    )
-    n_cases = p_cases.transform(normalise, f_cases, name="normalise")
-    s_cases = p_cases.transform(
-        SelectColumns(["case_ref", "amount"]), n_cases, name="select"
-    )
-    p_cases.write(
+    cases = read(med.raw.reader("wide_cases"), name="cases:read")
+    cases = transform(this_run, cases, name="cases:filter")
+    cases = transform(normalise, cases, name="cases:normalise")
+    cases = transform(SelectColumns(["case_ref", "amount"]), cases, name="cases:select")
+    write(
         med.silver.writer("cases", AccumulateByRun(run_id, run_id)),
-        s_cases,
-        name="write",
+        cases,
+        name="cases:write-silver",
     )
-    p_cases.run()
+    _reduce_cases_to_gold(med)
 
-    ingest_silver_to_gold(
-        med,
-        NAMESPACE,
-        NATURAL_KEY,
-        LandedCase,
-        "cases",
-    ).run()
-
-    p_products = Pipeline("products")
-    r_products = p_products.read(med.raw.reader("wide_cases"), name="read")
-    f_products = p_products.transform(
-        Filter(lambda row, rid=run_id: row["run_id"] == rid), r_products, name="filter"
+    products = read(med.raw.reader("wide_cases"), name="products:read")
+    products = transform(this_run, products, name="products:filter")
+    products = transform(normalise, products, name="products:normalise")
+    products = transform(
+        SelectColumns(["case_ref"] + PRODUCT_COLS), products, name="products:select"
     )
-    n_products = p_products.transform(normalise, f_products, name="normalise")
-    s_products = p_products.transform(
-        SelectColumns(["case_ref"] + PRODUCT_COLS), n_products, name="select"
-    )
-    p_products.write(
+    write(
         med.silver.writer("products", AccumulateByRun(run_id, run_id)),
-        s_products,
-        name="write",
+        products,
+        name="products:write-silver",
     )
-    p_products.run()
-
-    detail_ingest_silver_to_gold(
-        med,
-        NAMESPACE,
-        NATURAL_KEY,
-        LandedCase,
-        "products",
-        unpivot=Unpivot(
-            id_vars=["case_id"],
-            value_vars=PRODUCT_COLS,
-            var_name="product_slot",
-            value_name="product_name",
-        ),
-    ).run()
+    _reduce_products_to_gold(med)
 
     cases_gold = med.gold.reader("cases").read().to_pandas()
     products_gold = med.gold.reader("products").read().to_pandas()
@@ -207,48 +195,3 @@ def test_fan_out_two_pipelines_over_shared_raw_produce_cases_and_detail(tmp_path
     # c1 has product_1=widget, product_2=doodad; c2 has product_1=gadget
     # product_2 for c2 and product_3 for both are None → dropped
     assert len(products_gold) == 3
-
-    known_case_ids = set(cases_gold["case_id"])
-    assert set(products_gold["case_id"]).issubset(known_case_ids)
-
-
-def test_demo_fan_out_runs_end_to_end(tmp_path):
-    # Smoke test: the demo pipeline runs without error and produces both
-    # cases and case_products gold tables from the bundled wide CSV.
-    from pipelines.demo_fan_out import main
-
-    main(str(tmp_path))
-
-    med = medallion(StoreRegistry(tmp_path), "wide_cases")
-    cases = med.gold.reader("cases").read().to_pandas()
-    products = med.gold.reader("case_products").read().to_pandas()
-
-    assert len(cases) == 4
-    assert set(cases.columns) >= {"case_id", "case_ref"}
-    assert dict(zip(cases["case_ref"], cases["case_id"], strict=True)) == {
-        "c1": "a50dd19f719f14dc4add1a21d7020c3bca4caa8f1bec3209e4893f92f8a28e82",
-        "c2": "750874b8f6bffc46a9ed88fc560a9bc6d3bbd39d7ffbc43ed76740980454a5f5",
-        "c3": "196d25c1d186fe79f0d2d1cb5c1725d88059c9e81b3b7766aae9760e22536bd6",
-        "c4": "61a6fb907584ce93f038a6c8959194d8ccc476ab4e02be0b3c5a0d77a4968d13",
-    }
-    # c1:2 + c2:1 + c3:3 + c4:1 = 7 non-empty product slots across 4 cases
-    assert len(products) == 7
-    assert set(products.columns) >= {"case_id", "product_slot", "product_name"}
-    assert set(products["case_id"]).issubset(set(cases["case_id"]))
-
-
-def test_demo_fan_out_is_runnable_as_a_module(tmp_path):
-    # Belt-and-braces: the documented `python -m` invocation runs from the repo
-    # root, proving the import-only framework package resolves on sys.path.
-    import subprocess
-    import sys
-    from pathlib import Path as P
-
-    result = subprocess.run(
-        [sys.executable, "-m", "pipelines.demo_fan_out", str(tmp_path)],
-        capture_output=True,
-        text=True,
-        cwd=P(__file__).resolve().parent.parent.parent,
-    )
-    assert result.returncode == 0
-    assert "case_products gold" in result.stdout

@@ -64,7 +64,7 @@ UPSTREAMS = ()
 
 
 def raw_builder(reader: Reader, writer: Writer, schema: type) -> Pipeline:
-    """Build a raw hop: gate the source's columns, then land it faithfully."""
+    """Build a source -> raw step: gate the source's columns, land it faithfully."""
     p = Pipeline(f"{SUBJECT}:raw")
     node = p.read(reader, name="read")
     expected = [f.name for f in fields(schema)]
@@ -74,7 +74,7 @@ def raw_builder(reader: Reader, writer: Writer, schema: type) -> Pipeline:
 
 
 def silver_builder(reader: Reader, writer: Writer, schema: type) -> Pipeline:
-    """Build a silver hop: coerce to the schema's dtypes, then validate them.
+    """Build a raw -> silver step: coerce to the schema's dtypes, then validate.
 
     These two feeds declare no value rules, so nothing is quarantined.
     """
@@ -92,7 +92,7 @@ def selection_builder(
     pool_writer: Writer,
     run_log: RunLog | None = None,
 ) -> Pipeline:
-    """Build the selection hop: sales -> SelectCasesToCheck -> validated pool.
+    """Build the selection step: sales -> SelectCasesToCheck -> validated pool.
 
     ``selector`` reads the case-review history itself; the pipeline streams the
     sales feed through it, enforces the deliverable's schema, and writes the

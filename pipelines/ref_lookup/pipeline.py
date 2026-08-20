@@ -1,7 +1,7 @@
 """Reference lookup pipeline: source -> raw -> silver (ref, cases, customers).
 
-Each medallion hop is its own ``*_builder`` — a single, editable definition of
-what that hop does, injected with a ``Reader`` and ``Writer`` so it can be
+Each medallion step is its own ``*_builder`` — a single, editable definition of
+what that step does, injected with a ``Reader`` and ``Writer`` so it can be
 tested purely in memory without touching the filesystem.
 
 - ``raw_builder``       reads the source CSV and lands it faithfully (column-gated).
@@ -12,7 +12,7 @@ tested purely in memory without touching the filesystem.
                         only the case/customer refs and id columns.
 - ``customers_builder`` projects distinct customer refs.
 
-``run`` wires the real readers/writers and executes all four hops in order.
+``run`` wires the real readers/writers and executes all four in order.
 Pass ``describe=True`` to print each pipeline's execution plan before running.
 
 Run from the repo root::
@@ -71,7 +71,7 @@ def raw_builder(
     writer: Writer,
     run_log: RunLog | None = None,
 ) -> Pipeline:
-    """Build the raw hop: faithful landing zone, column-gated."""
+    """Build the source -> raw step: faithful landing zone, column-gated."""
     p = Pipeline(f"{FEED_NAME}:raw", run_log=run_log)
     r = p.read(reader, name="read")
     v = p.validate(ColumnValidator(SOURCE_COLUMNS), r, name="col-validate")
@@ -84,7 +84,7 @@ def ref_builder(
     writer: Writer,
     run_log: RunLog | None = None,
 ) -> Pipeline:
-    """Build the ref hop: unpivot -> dedup -> MD5 id -> write lookup table."""
+    """Build the ref step: unpivot -> dedup -> MD5 id -> write lookup table."""
     p = Pipeline(f"{FEED_NAME}:silver:ref", run_log=run_log)
     r = p.read(reader, name="read")
     unpivoted = p.transform(
@@ -112,7 +112,7 @@ def cases_builder(
     writer: Writer,
     run_log: RunLog | None = None,
 ) -> Pipeline:
-    """Build the cases hop: map ref ids back, project refs + id columns only.
+    """Build the cases step: map ref ids back, project refs + id columns only.
 
     ``ref`` is a materialised ref dataset (already written by ``ref_builder``).
     """
@@ -129,7 +129,7 @@ def customers_builder(
     writer: Writer,
     run_log: RunLog | None = None,
 ) -> Pipeline:
-    """Build the customers hop: project and deduplicate distinct customer refs."""
+    """Build the customers step: project and deduplicate distinct customer refs."""
     p = Pipeline(f"{FEED_NAME}:silver:customers", run_log=run_log)
     r = p.read(reader, name="read")
     s = p.transform(SelectColumns(["cust_ref"]), r, name="select")
@@ -139,7 +139,7 @@ def customers_builder(
 
 
 def run(context: RunContext, *, describe: bool = False) -> Dataset:
-    """Wire real readers/writers and execute all four hops in order."""
+    """Wire real readers/writers and execute all four in order."""
     assert context.base_dir is not None, "RunContext.base_dir is required"
     med = medallion(StoreRegistry(context.base_dir), FEED_NAME)
     strategy = AccumulateByRun.from_context(context)

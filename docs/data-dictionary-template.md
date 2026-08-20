@@ -95,7 +95,7 @@ the section if the table has none.*
 
 #### Part D — Quarantine & data quality
 
-*How invalid rows are handled and any known quality caveats. The silver hop
+*How invalid rows are handled and any known quality caveats. The raw → silver step
 partitions value-rule / row-check rejects into a quarantine table rather than
 aborting the run (`SchemaValueRulePartitioner`); note here which fields most
 commonly send a row to quarantine, and where the quarantine table lands.*

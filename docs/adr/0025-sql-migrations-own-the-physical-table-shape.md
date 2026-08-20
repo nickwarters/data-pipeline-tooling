@@ -173,7 +173,7 @@ cannot describe a gold aggregate, a quarantine reject table or a raw landing
 table, none of which has a dataclass.
 
 **Generating the baselines from the dataclasses, once.** Rejected for the same
-reason one hop down: it needs a declared-type → SQLite-type mapping that models
+reason one layer down: it needs a declared-type → SQLite-type mapping that models
 what `pandas.to_sql` does today, and a hand-kept map of which tables have a
 dataclass — and it still cannot describe the three kinds of table that have
 none. Copying `sqlite_master` needs neither and covers all of them (decision 5).

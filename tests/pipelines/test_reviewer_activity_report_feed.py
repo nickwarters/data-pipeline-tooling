@@ -137,7 +137,7 @@ def base_dir(tmp_path):
 
     These tests seed the subject's own committed gold and publish from it, so
     they have to write into the table its baseline declares — the same table the
-    aggregate hop writes in production. Gold is all they touch, so gold is all
+    aggregate writes in production. Gold is all they touch, so gold is all
     they build.
     """
     return build_databases(tmp_path, "reviewer_activity/gold")

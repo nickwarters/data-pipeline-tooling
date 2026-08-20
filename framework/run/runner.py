@@ -173,8 +173,8 @@ def run_pipeline(
 
     started = time.perf_counter()
     try:
-        # Make the context ambient so a handler's bare ``p.run()`` hops inherit
-        # this attempt's identity (one ``pipeline_run_id`` across every hop's
+        # Make the context ambient so a handler's bare ``p.run()`` calls inherit
+        # this attempt's identity (one ``pipeline_run_id`` across every one's
         # run-log records and the rows they stamp) rather than minting fresh ids.
         with active_context(context):
             for requirement in upstreams:

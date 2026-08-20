@@ -13,8 +13,8 @@ header becomes the schema's fields (names canonicalised to identifiers, dtypes
 inferred from the first rows), the file's contents replace the bundled sample,
 and the test's sample rows are taken from it. When any header name isn't already
 a clean identifier (spaces, punctuation, capitals), the *source* column names are
-emitted as a ``RAW_FEED_COLUMNS`` constant and the raw hop's ColumnValidator gates
-on those raw names rather than the schema's canonical fields; the silver hop's
+emitted as a ``RAW_FEED_COLUMNS`` constant and ``to_raw``'s ColumnValidator gates
+on those raw names rather than the schema's canonical fields; ``to_silver``'s
 ``RENAME`` map is populated from each source name to its canonical field -- raw
 stays faithful to the source, silver renames to the schema's canonical shape.
 
@@ -329,14 +329,14 @@ def _render_pipeline(text: str, feed: str, spec: _FeedSpec) -> str:
     """Gate the raw validator on the source columns when they aren't identifiers.
 
     Only needed when ``needs_raw``: the source names can't be schema fields, so
-    emit them as ``RAW_FEED_COLUMNS`` and gate the raw hop on those. The schema
+    emit them as ``RAW_FEED_COLUMNS`` and gate ``to_raw`` on those. The schema
     fields stay the silver target, and ``RENAME`` maps the faithful source names
     to them, so the schema import is kept (silver coerces/validates against it).
     """
     cls = _pascal(feed) + "Row"
     anchor = f'SAMPLE_CSV = Path(__file__).parent / "sample_data" / "{feed}.csv"\n'
     text = text.replace(anchor, anchor + "\n" + _raw_columns_literal(spec))
-    # Gate the raw hop on RAW_FEED_COLUMNS instead of the schema fields. Anchored
+    # Gate ``to_raw`` on RAW_FEED_COLUMNS instead of the schema fields. Anchored
     # on the assignment, not the comprehension, because SELECT_RAW_COLUMNS uses
     # the same idiom and is replaced separately below.
     text = text.replace(
@@ -394,7 +394,7 @@ def _render_test(text: str, feed: str, spec: _FeedSpec) -> str:
         text,
     )
     if spec.needs_raw:
-        # The raw hop validates the source names, and raw keeps them, so the
+        # ``to_raw`` validates the source names, and raw keeps them, so the
         # *landed* (raw) assertion checks RAW_FEED_COLUMNS. The silver assertion
         # still checks the schema fields -- silver renames to them -- so the
         # ``fields``/schema imports stay.
@@ -497,7 +497,7 @@ def _migration_plan(
     describe.
 
     On a source wider than the cap those two part company, and deliberately: a
-    scaffold is a starting point, not the finished feed. The generated silver hop
+    scaffold is a starting point, not the finished feed. The generated ``to_silver``
     does not project, so a 45-column source would reach silver with columns its
     baseline does not declare — which is the point at which whoever is building
     the feed decides whether to narrow the source, widen the schema, or add a

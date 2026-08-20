@@ -158,8 +158,8 @@ contexts are derived from the dry-run context, so they carry the flag — and th
 one report accumulates the steps of every item.
 
 A dry run **reads against committed data**: it skips the *current* run's writes,
-so a later hop that reads an intermediate store sees what is already on disk, not
-what this dry run would have written. Land the upstream hops for real once, then
+so a later step that reads an intermediate store sees what is already on disk, not
+what this dry run would have written. Land the upstream steps for real once, then
 preview — previewing a brand-new feed whose own raw store does not exist yet only
 previews up to that first read.
 
@@ -211,7 +211,7 @@ from framework.run import RunContext
 
 def run(context: RunContext):
     source_file = context.params["source_file"]
-    return raw_hop(CsvReader(source_file), writer)
+    return to_raw(CsvReader(source_file), writer)
 ```
 
 Run parameters are recorded on the run summary in the JSONL run log for

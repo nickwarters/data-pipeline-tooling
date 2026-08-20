@@ -1,7 +1,7 @@
 """Tests for the ``complaints_b`` Case Type ingest.
 
-Each hop is an ordinary function over a ``Reader`` and a ``Writer`` whose steps
-run where they are written, so a test drives the real hop in memory:
+Each step is an ordinary function over a ``Reader`` and a ``Writer`` whose lines
+run where they are written, so a test drives the real thing in memory:
 ``given_rows`` stands in for the source and ``RecordingWriter`` captures what
 would be written. This never touches SQLite, the network, or the filesystem —
 and a failing assertion stops on the line that failed.
@@ -16,7 +16,7 @@ import pytest
 
 from framework.core import ValidationError
 from framework.run.run_context import RunContext, active_context
-from pipelines.complaints_b.pipeline import FEED_NAME, raw_hop, run, silver_hop
+from pipelines.complaints_b.pipeline import FEED_NAME, run, to_raw, to_silver
 from tests.framework_testing import (
     RecordingRunLog,
     RecordingWriter,
@@ -51,18 +51,18 @@ def test_bundled_sample_feed_refines_through_to_silver(tmp_path):
     assert len(silver) == 3
 
 
-def test_raw_hop_gates_source_columns():
+def test_to_raw_gates_source_columns():
     writer = RecordingWriter()
     # Missing 'priority' column
     reader = given_rows([{"record_id": "c1", "category": "sales"}])
 
     with pytest.raises(ValidationError, match="missing required column.*priority"):
-        raw_hop(reader, writer)
+        to_raw(reader, writer)
 
     assert len(writer.writes) == 0
 
 
-def test_silver_hop_quarantines_value_rule_breaches():
+def test_to_silver_quarantines_value_rule_breaches():
     run_log = RecordingRunLog()
     writer = RecordingWriter()
     reject_writer = RecordingWriter()
@@ -87,7 +87,7 @@ def test_silver_hop_quarantines_value_rule_breaches():
     )
 
     with active_context(RunContext(pipeline=FEED_NAME, run_log=run_log)):
-        silver_hop(reader, writer, reject_writer)
+        to_silver(reader, writer, reject_writer)
 
     # The good row reaches the main writer
     assert_rows_equal(
@@ -106,13 +106,13 @@ def test_silver_hop_quarantines_value_rule_breaches():
     )
 
     # The run log captured the partition statistics
-    q_record = next(r for r in run_log.records if r["step"] == "quarantine")
+    q_record = next(r for r in run_log.records if r["step"] == "silver:quarantine")
     assert q_record["rows_in"] == 2
     assert q_record["rows_out"] == 1
     assert q_record["rows_quarantined"] == 1
 
 
-def test_silver_hop_aborts_on_structural_breaches():
+def test_to_silver_aborts_on_structural_breaches():
     writer = RecordingWriter()
     reject_writer = RecordingWriter()
 
@@ -121,7 +121,7 @@ def test_silver_hop_aborts_on_structural_breaches():
     reader = given_rows([{"record_id": "c1", "category": "sales"}])
 
     with pytest.raises(ValidationError, match="missing column 'priority'"):
-        silver_hop(reader, writer, reject_writer)
+        to_silver(reader, writer, reject_writer)
 
     assert len(writer.writes) == 0
     assert len(reject_writer.writes) == 0

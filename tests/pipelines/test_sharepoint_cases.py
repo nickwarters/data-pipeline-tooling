@@ -28,7 +28,6 @@ from framework.run import (
     RunLog,
     active_context,
     dry_run_pipeline,
-    hop,
     read,
     transform,
     write,
@@ -51,8 +50,8 @@ from pipelines.sharepoint_cases.gold import (
     answer_remediation,
     appeal_outcomes,
     case_counts,
-    case_current_hop,
-    gold_detail_hop,
+    to_gold_case_current,
+    to_gold_detail,
 )
 from pipelines.sharepoint_cases.gold import throughput as throughput_transform
 from pipelines.sharepoint_cases.pipeline import (
@@ -65,15 +64,15 @@ from pipelines.sharepoint_cases.pipeline import (
     LocalJsonListClient,
     NoClientError,
     main,
-    raw_hop,
-    silver_answer_capture_hop,
-    silver_answer_hop,
-    silver_appeal_hop,
-    silver_case_detail_hop,
-    silver_conversation_message_hop,
-    silver_general_answer_hop,
-    silver_hop,
     snake_case,
+    to_raw,
+    to_silver,
+    to_silver_answer,
+    to_silver_answer_capture,
+    to_silver_appeal,
+    to_silver_case_detail,
+    to_silver_conversation_message,
+    to_silver_general_answer,
 )
 from pipelines.sharepoint_cases.pipeline import run as _run
 from pipelines.sharepoint_cases.schema import (
@@ -143,17 +142,20 @@ NEXT_POLL = dt.timedelta(minutes=10)
 AS_OF = SERVER_NOW - SAFETY_LAG
 
 # Every pipeline one poll of one list runs, in the run log's vocabulary.
-EVERY_HOP = {
-    f"{FEED_NAME}:raw:{COMPLAINTS.case_type}",
-    f"{FEED_NAME}:silver:{COMPLAINTS.case_type}",
-    f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:answer",
-    f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:answer_capture",
-    f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:answer_action",
-    f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:general_answer",
-    f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:conversation_message",
-    f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:appeal",
-    f"{FEED_NAME}:silver:{COMPLAINTS.case_type}:case_detail",
-    *(f"{FEED_NAME}:gold:{table}" for table in GOLD_TABLES),
+# The name prefix each step of the feed carries. There is no separate grouping
+# field any more: a step names the table it is building, and the record's
+# ``pipeline`` stays the run's own label throughout.
+EVERY_STEP_PREFIX = {
+    f"raw:{COMPLAINTS.case_type}",
+    f"silver:{COMPLAINTS.case_type}",
+    f"silver:{COMPLAINTS.case_type}:answer",
+    f"silver:{COMPLAINTS.case_type}:answer_capture",
+    f"silver:{COMPLAINTS.case_type}:answer_action",
+    f"silver:{COMPLAINTS.case_type}:general_answer",
+    f"silver:{COMPLAINTS.case_type}:conversation_message",
+    f"silver:{COMPLAINTS.case_type}:appeal",
+    f"silver:{COMPLAINTS.case_type}:case_detail",
+    *(f"gold:{table}" for table in GOLD_TABLES),
 }
 
 
@@ -183,9 +185,9 @@ def source_reader(
 
 
 def landed(client: FakeListClient, case_list: CaseList = COMPLAINTS) -> list[dict]:
-    """The rows the raw hop would store for ``client``'s response."""
+    """The rows ``to_raw`` would store for ``client``'s response."""
     writer = RecordingWriter()
-    raw_hop(source_reader(client, case_list), writer, case_list)
+    to_raw(source_reader(client, case_list), writer, case_list)
     return rows_of(writer)
 
 
@@ -273,7 +275,7 @@ def test_a_person_column_that_is_neither_an_object_nor_null_is_refused():
     client = FakeListClient(items(item(ResponsibleParty="i:0#.w|CONTOSO\\b.okafor")))
 
     with pytest.raises(SharePointFeedError, match="item 101.*'ResponsibleParty'"):
-        raw_hop(source_reader(client), RecordingWriter(), COMPLAINTS)
+        to_raw(source_reader(client), RecordingWriter(), COMPLAINTS)
 
 
 def test_a_person_with_no_display_name_keeps_the_identity_the_read_returned():
@@ -297,7 +299,7 @@ def test_an_unexpanded_person_is_refused_rather_than_read_as_nobody():
     client = FakeListClient(items(item(ResponsibleParty=deferred)))
 
     with pytest.raises(SharePointFeedError, match="was not expanded"):
-        raw_hop(source_reader(client), RecordingWriter(), COMPLAINTS)
+        to_raw(source_reader(client), RecordingWriter(), COMPLAINTS)
 
 
 def test_the_read_asks_for_the_star_and_expands_every_person():
@@ -322,7 +324,7 @@ def test_raw_reads_a_quiet_window_as_the_declared_shape():
     # of them can be there when there are no rows; the shape is declared anyway.
     writer = RecordingWriter()
 
-    raw_hop(source_reader(FakeListClient(pd.DataFrame())), writer, COMPLAINTS)
+    to_raw(source_reader(FakeListClient(pd.DataFrame())), writer, COMPLAINTS)
 
     assert rows_of(writer) == []
     assert list(writer.writes[0].to_pandas().columns) == list(RAW_FEED_COLUMNS)
@@ -335,7 +337,7 @@ def test_a_populated_response_missing_a_stored_column_is_refused():
     client = FakeListClient(items(item()).drop(columns=["Status"]))
 
     with pytest.raises(SharePointFeedError, match="Status"):
-        raw_hop(source_reader(client), RecordingWriter(), COMPLAINTS)
+        to_raw(source_reader(client), RecordingWriter(), COMPLAINTS)
 
 
 # --- silver ----------------------------------------------------------------
@@ -344,7 +346,7 @@ def test_a_populated_response_missing_a_stored_column_is_refused():
 def test_silver_snake_cases_coerces_and_keeps_the_provenance():
     writer = RecordingWriter()
 
-    silver_hop(given_rows(landed(FakeListClient())), writer, COMPLAINTS)
+    to_silver(given_rows(landed(FakeListClient())), writer, COMPLAINTS)
 
     [row] = rows_of(writer)
     assert row["id"] == 101
@@ -368,7 +370,7 @@ def test_silver_settles_the_case_type_to_the_polled_lists_declared_one(cell):
     )
     writer = RecordingWriter()
 
-    silver_hop(given_rows(raw), writer, OTHER)
+    to_silver(given_rows(raw), writer, OTHER)
 
     assert raw[0]["CaseType"] == cell
     assert rows_of(writer)[0]["case_type"] == "other"
@@ -380,7 +382,7 @@ def test_silver_accepts_a_case_with_no_reference_and_nobody_assigned():
     client = FakeListClient(items(item(Title=None, AssignedReviewer=None)))
     writer = RecordingWriter()
 
-    silver_hop(given_rows(landed(client)), writer, COMPLAINTS)
+    to_silver(given_rows(landed(client)), writer, COMPLAINTS)
 
     [row] = rows_of(writer)
     assert row["title"] is None
@@ -391,7 +393,7 @@ def test_silver_accepts_a_case_with_no_reference_and_nobody_assigned():
 def test_silver_accepts_every_real_status(status):
     writer = RecordingWriter()
 
-    silver_hop(
+    to_silver(
         given_rows(landed(FakeListClient(items(item(Status=status))))),
         writer,
         COMPLAINTS,
@@ -409,9 +411,9 @@ def test_silver_quarantines_an_unknown_status_while_raw_keeps_every_row():
     run_log = RecordingRunLog()
 
     with active_context(RunContext(pipeline=FEED_NAME, run_log=run_log)):
-        silver_hop(given_rows(raw), writer, COMPLAINTS, rejects)
+        to_silver(given_rows(raw), writer, COMPLAINTS, rejects)
 
-    quarantine = next(r for r in run_log.records if r["step"] == "quarantine")
+    quarantine = next(r for r in run_log.records if r["step"].endswith(":quarantine"))
     assert quarantine["rows_in"] == 2
     assert quarantine["rows_out"] == 1
     assert quarantine["rows_quarantined"] == 1
@@ -432,7 +434,7 @@ def test_silver_aborts_when_the_id_is_missing():
     reader = given_rows([{column: None for column in RAW_FEED_COLUMNS}])
 
     with pytest.raises(ValidationError, match="'id'"):
-        silver_hop(reader, writer, COMPLAINTS)
+        to_silver(reader, writer, COMPLAINTS)
 
     assert writer.writes == []
 
@@ -449,9 +451,9 @@ def silver_answers(
     case_list: CaseList = COMPLAINTS,
     reject_writer: RecordingWriter | None = None,
 ) -> list[dict]:
-    """Drive the silver answer hop, in memory, over one observation's `answers`."""
+    """Drive ``to_silver_answer``, in memory, over one observation's `answers`."""
     writer = RecordingWriter()
-    silver_answer_hop(
+    to_silver_answer(
         given_rows([version(answers=answers_json)]),
         writer,
         case_list,
@@ -541,12 +543,12 @@ def silver_captures(
     reject_writer: RecordingWriter | None = None,
     run_log: RunLog | None = None,
 ) -> list[dict]:
-    """Drive the silver answer-capture hop, in memory, over one observation's
+    """Drive ``to_silver_answer_capture``, in memory, over one observation's
     `answers`."""
     writer = RecordingWriter()
 
     def drive() -> None:
-        silver_answer_capture_hop(
+        to_silver_answer_capture(
             given_rows([version(answers=answers_json)]),
             writer,
             case_list,
@@ -554,8 +556,8 @@ def silver_captures(
         )
 
     # The steps record against the ambient context, so a test that wants the
-    # records makes one active rather than handing the hop a run log. Without
-    # one the hop still runs and simply records nothing.
+    # records makes one active rather than handing the step a run log. Without
+    # one it still runs and simply records nothing.
     if run_log is None:
         drive()
     else:
@@ -685,7 +687,9 @@ def test_discriminate_capture_value_places_every_shape(
             assert pd.isna(rejected["raw_value"])
         else:
             assert rejected["raw_value"] == rejected_raw_value
-        quarantine = next(r for r in run_log.records if r["step"] == "quarantine")
+        quarantine = next(
+            r for r in run_log.records if r["step"].endswith(":quarantine")
+        )
         assert quarantine["rows_quarantined"] >= 1
     else:
         kind, value_text, login, display = expected
@@ -702,10 +706,10 @@ def silver_general_answers(
     case_list: CaseList = COMPLAINTS,
     reject_writer: RecordingWriter | None = None,
 ) -> list[dict]:
-    """Drive the silver general-answer hop, in memory, over one observation's
+    """Drive ``to_silver_general_answer``, in memory, over one observation's
     `answers`."""
     writer = RecordingWriter()
-    silver_general_answer_hop(
+    to_silver_general_answer(
         given_rows([version(answers=answers_json)]),
         writer,
         case_list,
@@ -755,10 +759,10 @@ def silver_conversation_messages(
     case_list: CaseList = COMPLAINTS,
     reject_writer: RecordingWriter | None = None,
 ) -> list[dict]:
-    """Drive the silver conversation-message hop, in memory, over one
+    """Drive ``to_silver_conversation_message``, in memory, over one
     observation's `conversation`."""
     writer = RecordingWriter()
-    silver_conversation_message_hop(
+    to_silver_conversation_message(
         given_rows([version(conversation=conversation_json)]),
         writer,
         case_list,
@@ -805,9 +809,9 @@ def silver_appeals(
     case_list: CaseList = COMPLAINTS,
     reject_writer: RecordingWriter | None = None,
 ) -> list[dict]:
-    """Drive the silver appeal hop, in memory, over one observation's `appeals`."""
+    """Drive ``to_silver_appeal``, in memory, over one observation's `appeals`."""
     writer = RecordingWriter()
-    silver_appeal_hop(
+    to_silver_appeal(
         given_rows([version(appeals=appeals_json)]),
         writer,
         case_list,
@@ -892,10 +896,10 @@ def silver_case_details(
     case_list: CaseList = COMPLAINTS,
     reject_writer: RecordingWriter | None = None,
 ) -> list[dict]:
-    """Drive the silver case-detail hop, in memory, over one observation's
+    """Drive ``to_silver_case_detail``, in memory, over one observation's
     `details`."""
     writer = RecordingWriter()
-    silver_case_detail_hop(
+    to_silver_case_detail(
         given_rows([version(details=details_json)]),
         writer,
         case_list,
@@ -920,9 +924,9 @@ def test_a_details_map_becomes_one_row_per_field_carrying_the_five_stamps():
         assert len(row["source_observation_id"]) > 0
 
 
-def test_an_empty_details_map_survives_the_whole_hop_as_a_zero_row_frame():
+def test_an_empty_details_map_survives_every_step_as_a_zero_row_frame():
     # ExplodeJsonMap's own suite covers the zero-row output; only this feed's
-    # test shows the whole hop tolerates that zero-row frame downstream.
+    # test shows every step below tolerates that zero-row frame.
     assert silver_case_details("{}") == []
 
 
@@ -979,7 +983,7 @@ def version(**overrides: object) -> dict[str, object]:
 
 
 def gold_rows(builder, rows: list[dict], *, as_of: dt.datetime = AS_OF) -> list[dict]:
-    """Drive one gold hop in memory and hand back what it would have written."""
+    """Drive one gold build in memory and hand back what it would have written."""
     writer = RecordingWriter()
     builder(given_rows(rows), writer, as_of=as_of)
     return rows_of(writer)
@@ -987,7 +991,7 @@ def gold_rows(builder, rows: list[dict], *, as_of: dt.datetime = AS_OF) -> list[
 
 def current(*rows: dict) -> list[dict]:
     """The ``case_current`` rows for a silver history."""
-    return gold_rows(case_current_hop, list(rows))
+    return gold_rows(to_gold_case_current, list(rows))
 
 
 def test_two_versions_of_one_case_reduce_to_the_later_status():
@@ -1214,7 +1218,7 @@ DETAIL_TABLE = "answer"
 def winning_reader(*rows: dict) -> Reader:
     """The gold ``case_current`` a parent observation history would produce.
 
-    Composes the real ``case_current_hop`` rather than hand-building the
+    Composes the real ``to_gold_case_current`` rather than hand-building the
     winning pairs: the invariant worth testing is that a Detail row agrees with
     whichever observation the parent's own reduction picked, not that an inner
     join drops non-matching rows.
@@ -1249,10 +1253,10 @@ def details(
     *,
     grain: tuple[str, ...] = DETAIL_GRAIN[DETAIL_TABLE],
 ) -> list[dict]:
-    """Drive ``gold_detail_hop`` over a child history, in memory."""
+    """Drive ``to_gold_detail`` over a child history, in memory."""
     return gold_rows(
         partial(
-            gold_detail_hop,
+            to_gold_detail,
             grain=grain,
             observations=winners,
             name=f"{FEED_NAME}:gold:detail:{DETAIL_TABLE}",
@@ -1338,7 +1342,7 @@ def test_a_gold_detail_row_is_the_childs_columns_plus_case_id_and_as_of():
     assert "status" not in row
 
 
-def test_a_repeated_grain_value_in_the_winning_observation_aborts_the_hop():
+def test_a_repeated_grain_value_in_the_winning_observation_aborts_the_build():
     winners = winning_reader(version(source_observation_id="obs-1"))
     writer = RecordingWriter()
     children = [
@@ -1347,7 +1351,7 @@ def test_a_repeated_grain_value_in_the_winning_observation_aborts_the_hop():
     ]
 
     with pytest.raises(ValidationError, match="question_id"):
-        gold_detail_hop(
+        to_gold_detail(
             given_rows(children),
             writer,
             grain=DETAIL_GRAIN[DETAIL_TABLE],
@@ -1380,21 +1384,21 @@ def given_columns(*names: str) -> Reader:
     return DatasetReader(Dataset.from_pandas(pd.DataFrame(columns=list(names))))
 
 
-def aggregate_hop(reader, writer, *, table: str, reduce, step: str) -> Dataset:
-    """Drive one aggregate hop exactly as ``publish_gold``'s loop does."""
-    with hop(f"{FEED_NAME}:gold:{table}"):
-        data = read(reader)
-        data = transform(reduce, data, name=step)
-        data = transform(
-            Stamp("as_of_utc", AS_OF.isoformat()), data, name="stamp-as-of"
-        )
-        return write(writer, data)
+def to_gold_aggregate(reader, writer, *, table: str, reduce, step: str) -> Dataset:
+    """Drive one aggregate exactly as ``publish_gold``'s loop does."""
+    at = f"gold:{table}"
+    data = read(reader, name=f"{at}:read")
+    data = transform(reduce, data, name=f"{at}:{step}")
+    data = transform(
+        Stamp("as_of_utc", AS_OF.isoformat()), data, name=f"{at}:stamp-as-of"
+    )
+    return write(writer, data, name=f"{at}:write")
 
 
 def aggregate(reduce, step: str, rows: list[dict]) -> list[dict]:
-    """Drive one aggregate hop, as ``publish_gold`` wires it, over ``rows``."""
+    """Drive one aggregate, as ``publish_gold`` wires it, over ``rows``."""
     writer = RecordingWriter()
-    aggregate_hop(
+    to_gold_aggregate(
         given_rows(rows),
         writer,
         table="table",
@@ -1889,7 +1893,7 @@ def test_two_case_types_do_not_share_a_question_id():
 
 def test_remediation_is_empty_when_nothing_was_answered():
     writer = RecordingWriter()
-    aggregate_hop(
+    to_gold_aggregate(
         given_columns(*ANSWER_REMEDIATION_DIMENSIONS),
         writer,
         table="table",
@@ -2003,9 +2007,10 @@ def test_an_aggregate_is_never_mistaken_for_a_detail_table():
 def recorded(base_dir) -> RecordingRunLog:
     """One real poll, with every step it took captured.
 
-    The hops are eager, so what a hop *did* is what it recorded -- which is both
-    a stronger pin than reading a plan and the thing an operator actually sees.
-    Each hop opens its own ``hop(...)`` scope, so the records group by it.
+    The steps are eager, so what the feed *did* is what it recorded -- which is
+    both a stronger pin than reading a plan and the thing an operator actually
+    sees. Each step name is prefixed with the table it is building, so the
+    records group by that prefix.
     """
     run_log = RecordingRunLog()
     run(
@@ -2015,20 +2020,23 @@ def recorded(base_dir) -> RecordingRunLog:
     return run_log
 
 
-def steps_of(run_log: RecordingRunLog, hop_name: str) -> list[str]:
-    """The step names one hop recorded, in the order it took them."""
+def steps_of(run_log: RecordingRunLog, prefix: str) -> list[str]:
+    """The steps recorded under one name prefix, in the order they were taken."""
     return [
-        record["step"] for record in run_log.records if record["pipeline"] == hop_name
+        record["step"].rsplit(":", 1)[1]
+        for record in run_log.records
+        if record["step"].rsplit(":", 1)[0] == prefix
     ]
 
 
-def test_all_nine_ingest_hops_record_exactly_the_steps_they_always_have(recorded):
-    silver = f"{FEED_NAME}:silver:{COMPLAINTS.case_type}"
+def test_all_nine_ingest_steps_record_exactly_what_they_always_have(recorded):
+    silver = f"silver:{COMPLAINTS.case_type}"
 
-    # No column gate on the raw hop, unlike a file feed: the observation
-    # transform projects onto exactly the stored columns, so a presence check
-    # below it could never fire. Each hop is named for the list it polled.
-    assert steps_of(recorded, f"{FEED_NAME}:raw:{COMPLAINTS.case_type}") == [
+    # No column gate on the source -> raw step, unlike a file feed: the
+    # observation transform projects onto exactly the stored columns, so a
+    # presence check below it could never fire. Each step name carries the list
+    # it polled, which is what keeps 134 records in one poll readable.
+    assert steps_of(recorded, f"raw:{COMPLAINTS.case_type}") == [
         "read",
         "observation",
         "write",
@@ -2054,7 +2062,7 @@ def test_all_nine_ingest_hops_record_exactly_the_steps_they_always_have(recorded
         "schema_validator",
         "write",
     ]
-    # The one hop that cannot use ``enforce``: raw_value is dropped between the
+    # The one that cannot use ``enforce``: raw_value is dropped between the
     # quarantine and the validate, so the three are written out.
     assert steps_of(recorded, f"{silver}:answer_capture") == [
         "read",
@@ -2112,9 +2120,9 @@ def test_all_nine_ingest_hops_record_exactly_the_steps_they_always_have(recorded
     ]
 
 
-def test_the_gold_hops_record_exactly_the_steps_they_always_have(recorded):
-    # Only the current hop carries a grain gate; see case_current_hop.
-    assert steps_of(recorded, f"{FEED_NAME}:gold:{CURRENT_TABLE}") == [
+def test_the_gold_tables_record_exactly_the_steps_they_always_have(recorded):
+    # Only the current table carries a grain gate; see to_gold_case_current.
+    assert steps_of(recorded, f"gold:{CURRENT_TABLE}") == [
         "read",
         "derive-key",
         "latest-version",
@@ -2125,7 +2133,7 @@ def test_the_gold_hops_record_exactly_the_steps_they_always_have(recorded):
         "write",
     ]
     for table in DETAIL_TABLES:
-        assert steps_of(recorded, f"{FEED_NAME}:gold:{table}") == [
+        assert steps_of(recorded, f"gold:{table}") == [
             "read",
             "derive-key",
             "latest-observation",
@@ -2141,7 +2149,7 @@ def test_the_gold_hops_record_exactly_the_steps_they_always_have(recorded):
         ("answer_remediation_current", "count-by-remediation"),
         ("appeal_outcomes_current", "count-by-outcome"),
     ):
-        assert steps_of(recorded, f"{FEED_NAME}:gold:{table}") == [
+        assert steps_of(recorded, f"gold:{table}") == [
             "read",
             step,
             "stamp-as-of",
@@ -2300,9 +2308,9 @@ def test_a_quiet_first_window_still_types_the_columns_it_creates(base_dir):
     assert isinstance(landed[0], int)
 
 
-def test_a_quiet_window_still_runs_and_records_every_hop(base_dir):
+def test_a_quiet_window_still_runs_and_records_every_step(base_dir):
     # A quiet poll is not a different pipeline: an operator reading the run log
-    # still sees every hop, against every table, with zero rows.
+    # still sees every step, against every table, with zero rows.
     log_path = base_dir / "runs.log"
     context = RunContext(
         base_dir=base_dir, pipeline=FEED_NAME, run_log=RunLog(log_path)
@@ -2311,7 +2319,10 @@ def test_a_quiet_window_still_runs_and_records_every_hop(base_dir):
     run(context, client=FakeListClient(pd.DataFrame()))
 
     records = read_run_log(log_path)
-    assert {record["pipeline"] for record in records} == EVERY_HOP
+    assert {record["step"].rsplit(":", 1)[0] for record in records} == EVERY_STEP_PREFIX
+    # One label for the whole poll: the grouping is in the step name, not in a
+    # second identity the run also records under.
+    assert {record["pipeline"] for record in records} == {FEED_NAME}
     locations = [
         location for record in records for location in record["data_locations"]
     ]
@@ -2332,13 +2343,11 @@ def test_a_quiet_window_still_runs_and_records_every_hop(base_dir):
 
     # Gold publishes in GOLD_TABLES's declared order.
     gold_names = [
-        record["pipeline"]
+        record["step"].rsplit(":", 1)[0]
         for record in records
-        if record["pipeline"].startswith(f"{FEED_NAME}:gold:")
+        if record["step"].startswith("gold:")
     ]
-    assert list(dict.fromkeys(gold_names)) == [
-        f"{FEED_NAME}:gold:{table}" for table in GOLD_TABLES
-    ]
+    assert list(dict.fromkeys(gold_names)) == [f"gold:{table}" for table in GOLD_TABLES]
 
 
 def test_nothing_safe_to_poll_returns_nothing_and_writes_nothing(base_dir):
@@ -2456,8 +2465,7 @@ def published_gold(run_log: RecordingRunLog) -> set[str]:
     return {
         location["name"]
         for record in run_log.records
-        if record.get("committed")
-        and record["pipeline"].startswith(f"{FEED_NAME}:gold:")
+        if record.get("committed") and record["step"].startswith("gold:")
         for location in record.get("data_locations") or []
     }
 
@@ -2621,7 +2629,7 @@ def test_the_winning_observation_settles_gold_conversation_message_and_appeal(
 ):
     # conversation_message's key is positional (seq), not a JSON map key or a
     # minted id, so an observation-spanning superset collides on the grain
-    # itself -- without the semi-join, UniqueValidator would abort the hop, so
+    # itself -- without the semi-join, UniqueValidator would abort the build, so
     # a weakened reduction fails loudly here, not silently.
     message_1 = {
         "author": {"loginName": "a.khan", "displayName": "Amira Khan"},
@@ -2751,7 +2759,7 @@ def test_gold_answer_derives_the_same_case_id_as_the_settled_case_type(base_dir,
     [case] = read_rows(med.gold, "case_current")
     [row] = read_rows(med.gold, "answer")
     # Fails with zero rows (the semi-join matches nothing) or an IdentityError
-    # if the answer hop ever reads raw's own CaseType cell instead of the one
+    # if ``to_silver_answer`` ever reads raw's own CaseType cell instead of the one
     # silver settled.
     assert row["case_id"] == case["case_id"]
     assert row["case_type"] == OTHER.case_type
@@ -2844,7 +2852,7 @@ def test_a_failure_in_current_gold_leaves_no_gold_and_no_checkpoint(
     base_dir, monkeypatch
 ):
     run_log = RecordingRunLog()
-    monkeypatch.setattr(gold, "case_current_hop", explode)
+    monkeypatch.setattr(gold, "to_gold_case_current", explode)
 
     with pytest.raises(RuntimeError, match="boom"):
         run(
@@ -3034,7 +3042,7 @@ def test_a_list_with_nothing_safe_to_poll_is_skipped_and_the_others_still_run(ba
 
 def test_a_failure_polling_the_second_list_leaves_no_gold_and_no_watermark(base_dir):
     # Fail fast: the first list's observations are committed (append-only, per
-    # hop), but nothing is published and no watermark moves.
+    # step), but nothing is published and no watermark moves.
     run_log = RecordingRunLog()
     broken = FakeListClient(
         by_list={

@@ -60,8 +60,8 @@ def _plain_pipeline_handler(context: RunContext) -> None:
     _landing_pipeline("a", context).run()
 
 
-def _nested_hops_handler(context: RunContext) -> None:
-    # Two bare p.run() hops of one attempt: each inherits the ambient context.
+def _nested_runs_handler(context: RunContext) -> None:
+    # Two bare p.run() calls in one attempt: each inherits the ambient context.
     _landing_pipeline("a", context).run()
     _landing_pipeline("b", context).run()
 
@@ -76,7 +76,7 @@ def _for_each_continue_on_error_handler(context: RunContext) -> None:
 
 COMPOSITIONS = {
     "pipeline": _plain_pipeline_handler,
-    "nested-hops": _nested_hops_handler,
+    "nested-runs": _nested_runs_handler,
     "for-each": _for_each_handler,
     "for-each-continue-on-error": _for_each_continue_on_error_handler,
 }

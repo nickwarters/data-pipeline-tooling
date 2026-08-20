@@ -100,7 +100,7 @@ class ForEach(Generic[Item]):
     def run(
         self, context: RunContext | None = None
     ) -> list[Dataset] | list[ForEachOutcome[Item]]:
-        """Run the recipe once per item using per-item child contexts."""
+        """Run the built pipeline once per item, using per-item child contexts."""
         parent_context = context or RunContext()
         results: list[Dataset] = []
         outcomes: list[ForEachOutcome[Item]] = []
