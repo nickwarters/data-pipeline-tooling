@@ -1,10 +1,11 @@
 """Tests for ``complaint_selection``: the deployed Complaints A/B/C Selection group.
 
-Complaints A/B/C stop at silver, so this pipeline is what turns three separate
-Case Type ingests into one governed Selection group: combine, score, gate,
-replace voids like-for-like (ADR-0021, reduced), queue replacements ahead of
-the rest, cap the queue at the Hopper's remaining capacity, stamp, and land
-both the SelectionPool and its explain trace.
+Complaints A/B/C stop at silver, so this pipeline reads their current silver
+plus Sync's current Cases and narrows them to the SelectionPool in one
+governed transform, ``select_complaints`` -- score, gate, replace voids
+like-for-like (ADR-0021, reduced), queue replacements ahead of the rest, cap
+the queue at the Hopper's remaining capacity, and land both the SelectionPool
+(with each source's own Case Details) and its trace.
 """
 
 from __future__ import annotations
@@ -15,11 +16,13 @@ import json
 import pandas as pd
 import pytest
 
+from framework.core import Dataset
 from framework.io import AccumulateByRun, Refresh
 from framework.run import FreshnessError, RunContext, run_pipeline
 from pipelines.complaint_selection.pipeline import (
     OUTPUT_SUBJECT,
     PIPELINE_NAME,
+    POOL_COLUMNS,
     POOL_JSON,
     POOL_TABLE,
     TRACE_TABLE,
@@ -27,57 +30,73 @@ from pipelines.complaint_selection.pipeline import (
     amount_priority,
     assign_replacements,
     meets_priority_threshold,
-    pending_voids,
     previous_run_instant,
     priority_band,
     run,
+    select_complaints,
     selection_builder,
     slow_resolution_priority,
-    unallocated_case_count,
-    voided_cases,
+    unallocated_count,
+    voided_refs,
+    voids_since,
 )
 from pipelines.complaint_selection.schema import PendingVoid
 from tests.framework_testing import (
     RecordingWriter,
     build_databases,
     given_rows,
+    make_dataset,
     read_rows,
     read_run_log,
-    rows_of,
 )
 from tools.medallion import medallion
 from tools.observability.run_log import RunLog
 from tools.store import StoreRegistry
 
 _VOIDED_AT = dt.datetime(2026, 8, 18, 9, 0, tzinfo=dt.timezone.utc)
+_EMPTY_CURRENT = Dataset.from_pandas(
+    pd.DataFrame(columns=["title", "status", "voided_at"])
+)
+
+
+def _current(rows: list[dict]) -> Dataset:
+    return make_dataset(rows) if rows else _EMPTY_CURRENT
 
 
 def test_the_plan_is_exactly_the_steps_it_always_has():
     """Pin the plan, node for node, so a change to it is a deliberate one."""
     reader = given_rows([])
-    writer, rejects, json_writer = (
-        RecordingWriter(),
-        RecordingWriter(),
-        RecordingWriter(),
-    )
+    pool_w, trace_w, json_w = RecordingWriter(), RecordingWriter(), RecordingWriter()
 
-    plan = selection_builder(reader, writer, rejects, json_writer).describe()
+    class _Empty:
+        def read(self) -> Dataset:
+            return _EMPTY_CURRENT
+
+    plan = selection_builder(
+        complaints_a=reader,
+        complaints_b=reader,
+        complaints_c=reader,
+        current_cases=_Empty(),
+        pool_writer=pool_w,
+        trace_writer=trace_w,
+        json_writer=json_w,
+    ).describe()
     assert plan.splitlines() == [
         "Pipeline: complaint_selection:pool",
-        "  [Read] read",
-        "  [Transform] score (depends on: read)",
-        "  [Transform] voided (depends on: score)",
-        "  [Transform] filter (depends on: voided)",
-        "  [Transform] sort (depends on: filter)",
-        "  [Transform] replace-voids (depends on: sort)",
-        "  [Transform] queue (depends on: replace-voids)",
-        "  [Transform] hopper (depends on: queue)",
-        "  [Transform] select (depends on: hopper)",
-        "  [Transform] stamp (depends on: select)",
-        "  [Validate] post-validate (depends on: stamp)",
-        "  [Explain] explain (depends on: post-validate)",
-        "  [Write] write (depends on: post-validate)",
-        "  [Write] write-json (depends on: post-validate)",
+        "  [Read] read-complaints_a",
+        "  [Read] read-complaints_b",
+        "  [Read] read-complaints_c",
+        "  [Read] read-current-cases",
+        "  [Transform] select (depends on: read-complaints_a, read-complaints_b, "
+        "read-complaints_c, read-current-cases)",
+        "  [Transform] selected (depends on: select)",
+        "  [Transform] pool-rows (depends on: selected)",
+        "  [Validate] validate (depends on: pool-rows)",
+        "  [Write] write-pool (depends on: validate)",
+        "  [Transform] trace (depends on: select)",
+        "  [Write] write-trace (depends on: trace)",
+        "  [Transform] json-rows (depends on: selected)",
+        "  [Write] write-json (depends on: json-rows)",
     ]
 
 
@@ -135,21 +154,21 @@ def test_narrows_ranks_and_lands_the_group_pool_and_json(tmp_path):
             row["case_ref"],
             row["case_type"],
             row["priority_score"],
-            row["attribute_a"],
-            row["related_date"],
-            row["replaces_case_ref"],
-            row["void_match_rung"],
             row["question_bank_id"],
         )
         for row in pool
     ] == [
-        ("B1", "complaints_b", 100, None, None, None, None, "qb-complaints"),
-        ("R001", "complaints_a", 90, None, None, None, None, "qb-complaints"),
-        ("C1", "complaints_c", 70, None, None, None, None, "qb-complaints"),
+        ("B1", "complaints_b", 100, "qb-complaints"),
+        ("R001", "complaints_a", 90, "qb-complaints"),
+        ("C1", "complaints_c", 70, "qb-complaints"),
     ]
+    assert [row["attribute_a"] for row in pool] == [None, None, None]
 
     landed = json.loads((base_dir / OUTPUT_SUBJECT / POOL_JSON).read_text())
     assert [row["case_ref"] for row in landed] == ["B1", "R001", "C1"]
+    # The deliverable another system reads carries the pool columns and nothing
+    # else -- in particular none of the trace's verdict/reason/rank/score.
+    assert [tuple(row) for row in landed] == [POOL_COLUMNS] * 3
 
 
 def test_an_excluded_case_lands_in_the_trace_with_its_score_and_reason(tmp_path):
@@ -238,6 +257,15 @@ def test_freshness_requirement_resolves_against_path_addressed_ingest_history(
     # A first-run warn would mean the guard found no history at all -- exactly
     # the failure mode this test guards against.
     assert [record["warn_hits"] for record in freshness] == [[], [], [], []]
+
+    # The four reads this pipeline now issues each record their own step.
+    read_steps = {record["step"] for record in records}
+    assert {
+        "read-complaints_a",
+        "read-complaints_b",
+        "read-complaints_c",
+        "read-current-cases",
+    } <= read_steps
 
 
 def test_a_stale_ingest_beyond_the_widened_window_blocks_the_run(tmp_path, monkeypatch):
@@ -344,14 +372,7 @@ def test_a_void_since_the_previous_run_is_replaced_at_the_case_type_rung(
 
     _seed_case_current(
         base_dir,
-        [
-            {
-                "title": "R001",
-                "status": "Void",
-                "voided_at": "2026-08-18 09:30:00",
-                "case_type": "complaints_a",
-            }
-        ],
+        [{"title": "R001", "status": "Void", "voided_at": "2026-08-18 08:30:00"}],
     )
 
     run_pipeline(
@@ -372,120 +393,43 @@ def test_a_void_since_the_previous_run_is_replaced_at_the_case_type_rung(
 
 
 def test_previous_run_instant_is_none_for_a_plain_run_context(tmp_path):
-    """How a bare ``run()`` call and most tests reach ``pending_voids`` -- with
-    no registry there is no "since", so voids never carry forward silently.
+    """How a bare ``run()`` call and most tests reach ``select_complaints`` --
+    with no registry there is no "since", so voids never carry forward
+    silently.
     """
     context = RunContext(base_dir=tmp_path, pipeline=PIPELINE_NAME)
     assert previous_run_instant(context) is None
 
 
-def test_voided_cases_sees_nothing_when_the_sync_feed_is_absent(tmp_path):
-    """The soft dependency: no sharepoint_cases gold, no voids, no failure."""
-    assert voided_cases(tmp_path) == ()
-
-
-def test_voided_cases_drops_blank_titles_and_missing_voided_at(tmp_path):
-    base_dir = build_databases(tmp_path, "sharepoint_cases/gold")
-    _seed_case_current(
-        base_dir,
+def test_voided_refs_and_voids_since_ignore_blank_titles_and_missing_voided_at():
+    current = pd.DataFrame(
         [
-            {
-                "title": "R001",
-                "status": "Void",
-                "voided_at": "2026-08-18 09:30:00",
-                "case_type": "complaints_a",
-            },
-            {
-                "title": None,
-                "status": "Void",
-                "voided_at": "2026-08-18 09:30:00",
-                "case_type": "complaints_a",
-            },
-            {
-                "title": "",
-                "status": "Void",
-                "voided_at": "2026-08-18 09:30:00",
-                "case_type": "complaints_a",
-            },
-            {
-                "title": "R002",
-                "status": "Void",
-                "voided_at": None,
-                "case_type": "complaints_a",
-            },
-            {
-                "title": "R003",
-                "status": "In-progress",
-                "voided_at": None,
-                "case_type": "complaints_a",
-            },
-        ],
-    )
-
-    assert [ref for ref, _ in voided_cases(base_dir)] == ["R001"]
-
-
-def test_pending_voids_is_empty_with_no_previous_run():
-    pool_reader = given_rows(
-        [
-            {
-                "case_ref": "R1",
-                "case_type": "a",
-                "attribute_a": None,
-                "load_date": "2026-08-18",
-            }
+            {"title": "R001", "status": "Void", "voided_at": "2026-08-18 09:30:00"},
+            {"title": None, "status": "Void", "voided_at": "2026-08-18 09:30:00"},
+            {"title": "", "status": "Void", "voided_at": "2026-08-18 09:30:00"},
+            {"title": "R002", "status": "Void", "voided_at": None},
+            {"title": "R003", "status": "In-progress", "voided_at": None},
         ]
     )
 
-    assert (
-        pending_voids(voided=(("R1", _VOIDED_AT),), since=None, pool_reader=pool_reader)
-        == ()
+    assert voided_refs(current) == frozenset({"R001", "R002"})
+
+    since = dt.datetime(2026, 8, 18, 0, 0, tzinfo=dt.timezone.utc)
+    assert [ref for ref, _ in voids_since(current, since)] == ["R001"]
+
+
+def test_voids_since_is_empty_with_no_previous_run():
+    current = pd.DataFrame(
+        [{"title": "R001", "status": "Void", "voided_at": "2026-08-18 08:30:00"}]
     )
-
-
-def test_pending_voids_ignores_a_void_on_or_before_since():
-    since = _VOIDED_AT
-    pool_reader = given_rows(
-        [
-            {
-                "case_ref": "R1",
-                "case_type": "a",
-                "attribute_a": None,
-                "load_date": "2026-08-18",
-            }
-        ]
-    )
-
-    result = pending_voids(
-        voided=(("R1", since),), since=since, pool_reader=pool_reader
-    )
-    assert result == ()
-
-
-def test_pending_voids_drops_a_void_absent_from_the_pool():
-    since = _VOIDED_AT - dt.timedelta(days=1)
-    pool_reader = given_rows(
-        [
-            {
-                "case_ref": "R1",
-                "case_type": "a",
-                "attribute_a": None,
-                "load_date": "2026-08-18",
-            }
-        ]
-    )
-
-    result = pending_voids(
-        voided=(("NOT-IN-POOL", _VOIDED_AT),), since=since, pool_reader=pool_reader
-    )
-    assert result == ()
+    assert voids_since(current, since=None) == ()
 
 
 def test_full_ladder_precedence_from_best_match_to_fallback():
     pending = (PendingVoid("V", _VOIDED_AT, {"attribute_a": "x", "case_type": "a"}),)
 
     def replacement_for(rows: list[dict]) -> tuple[str, str]:
-        out = assign_replacements(pending)(given_rows(rows).read()).to_pandas()
+        out = assign_replacements(pd.DataFrame(rows), pending)
         matched = out.loc[out["replaces_case_ref"] == "V"]
         return matched["case_ref"].iloc[0], matched["void_match_rung"].iloc[0]
 
@@ -573,7 +517,7 @@ def test_within_a_rung_the_oldest_related_date_wins():
         },
     ]
 
-    out = assign_replacements(pending)(given_rows(rows).read()).to_pandas()
+    out = assign_replacements(pd.DataFrame(rows), pending)
 
     assert out.loc[out["case_ref"] == "older", "replaces_case_ref"].iloc[0] == "V"
     assert out.loc[out["case_ref"] == "newer", "replaces_case_ref"].isna().all()
@@ -596,7 +540,7 @@ def test_fallback_degrades_to_the_frames_current_order_when_related_date_is_all_
         },
     ]
 
-    out = assign_replacements(pending)(given_rows(rows).read()).to_pandas()
+    out = assign_replacements(pd.DataFrame(rows), pending)
 
     assert out.loc[out["case_ref"] == "first", "replaces_case_ref"].iloc[0] == "V"
     assert out.loc[out["case_ref"] == "second", "replaces_case_ref"].isna().all()
@@ -620,7 +564,7 @@ def test_a_void_with_no_unconsumed_row_left_lapses():
         }
     ]
 
-    out = assign_replacements(pending)(given_rows(rows).read()).to_pandas()
+    out = assign_replacements(pd.DataFrame(rows), pending)
 
     # V1 (the older void) takes the one row; V2 lapses -- nothing records it.
     assert out.loc[out["case_ref"] == "only", "replaces_case_ref"].iloc[0] == "V1"
@@ -651,7 +595,7 @@ def test_each_row_consumes_at_most_one_void():
         },
     ]
 
-    out = assign_replacements(pending)(given_rows(rows).read()).to_pandas()
+    out = assign_replacements(pd.DataFrame(rows), pending)
 
     assert out.loc[out["case_ref"] == "r1", "replaces_case_ref"].iloc[0] == "V1"
     assert out.loc[out["case_ref"] == "r2", "replaces_case_ref"].iloc[0] == "V2"
@@ -660,189 +604,127 @@ def test_each_row_consumes_at_most_one_void():
 # ── Hopper cap (ADR-0021) ──────────────────────────────────────────────────
 
 
+_EMPTY_C = Dataset.from_pandas(pd.DataFrame(columns=["record_id", "load_date"]))
+
+
 def test_hopper_gate_caps_the_queue_and_traces_the_cut_with_its_score():
     rows = [
         {
-            "case_ref": f"r{i}",
-            "case_type": "complaints_a",
+            "record_id": f"r{i}",
+            "label": "x",
             "amount": 100 - i,
-            "attribute_a": None,
-            "related_date": None,
+            "load_date": "2026-08-18",
         }
         for i in range(5)
     ]
-    reader = given_rows(rows)
-    pool_writer, trace_writer, json_writer = (
-        RecordingWriter(),
-        RecordingWriter(),
-        RecordingWriter(),
-    )
+    a = given_rows(rows).read()
+    b = _EMPTY_C
 
-    p = selection_builder(
-        reader, pool_writer, trace_writer, json_writer, hopper_capacity=3
-    )
-    p.run()
+    out = select_complaints(a, b, _EMPTY_C, _EMPTY_CURRENT, hopper_depth=3).to_pandas()
 
-    pool = rows_of(pool_writer)
-    assert [row["case_ref"] for row in pool] == ["r0", "r1", "r2"]
+    selected = out[out["verdict"] == "selected"].sort_values("rank")
+    assert selected["case_ref"].tolist() == ["r0", "r1", "r2"]
 
-    trace = {row["case_ref"]: row for row in rows_of(trace_writer)}
+    cut = {
+        row["case_ref"]: row for _, row in out[out["verdict"] == "excluded"].iterrows()
+    }
     for ref in ("r3", "r4"):
-        assert trace[ref]["verdict"] == "excluded"
-        assert "hopper" in trace[ref]["reason"]
-        assert trace[ref]["score"] is not None
-        # A trace column mixing int ranks with an excluded row's None upcasts
-        # to float, so a dropped rank round-trips as NaN, not None.
-        assert pd.isna(trace[ref]["rank"])
+        assert cut[ref]["reason"] == "excluded by gate 'hopper' (capacity 3)"
+        assert cut[ref]["score"] is not None
+        assert pd.isna(cut[ref]["rank"])
+
+
+def _replacement_scenario(*, hopper_depth: int) -> pd.DataFrame:
+    """``voided-a`` (complaints_a) is voided; ``repl`` (complaints_a, lower
+    score) is its sole ladder match; ``high`` (complaints_b) is an unrelated,
+    higher-scoring, non-replacement candidate competing for the same slot.
+
+    A void is only resolvable against a candidate this run can still see --
+    its silver row is unaffected by its sync status -- so the voided title
+    must be a real candidate ref, not an arbitrary string.
+    """
+    a = given_rows(
+        [
+            {
+                "record_id": "voided-a",
+                "label": "x",
+                "amount": 70,
+                "load_date": "2026-08-18",
+            },
+            {
+                "record_id": "repl",
+                "label": "x",
+                "amount": 55,
+                "load_date": "2026-08-18",
+            },
+        ]
+    ).read()
+    b = given_rows(
+        [
+            {
+                "record_id": "high",
+                "category": "x",
+                "priority": "high",
+                "load_date": "2026-08-18",
+            }
+        ]
+    ).read()
+    current = _current(
+        [{"title": "voided-a", "status": "Void", "voided_at": "2026-08-18 09:00:00"}]
+    )
+    since = dt.datetime(2026, 8, 18, 8, 0, tzinfo=dt.timezone.utc)
+    return select_complaints(
+        a, b, _EMPTY_C, current, since=since, hopper_depth=hopper_depth
+    ).to_pandas()
 
 
 def test_a_replacement_jumps_the_queue_ahead_of_a_higher_scorer():
-    rows = [
-        {
-            "case_ref": "high",
-            "case_type": "complaints_b",
-            "priority": "high",
-            "attribute_a": None,
-            "related_date": None,
-        },
-        {
-            "case_ref": "repl",
-            "case_type": "complaints_a",
-            "amount": 55,
-            "attribute_a": None,
-            "related_date": None,
-        },
-    ]
-    pending = (
-        PendingVoid(
-            "V1", _VOIDED_AT, {"attribute_a": None, "case_type": "complaints_a"}
-        ),
-    )
-    reader = given_rows(rows)
-    pool_writer, trace_writer, json_writer = (
-        RecordingWriter(),
-        RecordingWriter(),
-        RecordingWriter(),
-    )
+    out = _replacement_scenario(hopper_depth=1)
 
-    p = selection_builder(
-        reader,
-        pool_writer,
-        trace_writer,
-        json_writer,
-        pending_voids=pending,
-        hopper_capacity=1,
-    )
-    p.run()
+    pool = out[out["verdict"] == "selected"]
+    assert pool["case_ref"].tolist() == ["repl"]
+    assert pool["replaces_case_ref"].iloc[0] == "voided-a"
 
-    pool = rows_of(pool_writer)
-    assert [(row["case_ref"], row["replaces_case_ref"]) for row in pool] == [
-        ("repl", "V1")
-    ]
-
-    trace = {row["case_ref"]: row for row in rows_of(trace_writer)}
-    assert trace["high"]["verdict"] == "excluded"
-    assert "hopper" in trace["high"]["reason"]
-    assert trace["high"]["score"] == 100
+    cut = out[(out["verdict"] == "excluded") & (out["case_ref"] == "high")].iloc[0]
+    assert cut["reason"] == "excluded by gate 'hopper' (capacity 1)"
+    assert cut["score"] == 100
 
 
-def test_a_replacements_rank_reflects_queue_position_not_score():
-    """``rank`` in the trace now records queue position: a replacement can
-    outrank a higher scorer, and a survivor's reason never mentions the
-    hopper -- survivors only accumulate the filter/join gates they passed.
+def test_rank_reflects_queue_position_not_score():
+    """``rank`` now records queue position: a replacement can outrank a higher
+    scorer, and a survivor's reason never mentions the hopper.
     """
-    rows = [
-        {
-            "case_ref": "high",
-            "case_type": "complaints_b",
-            "priority": "high",
-            "attribute_a": None,
-            "related_date": None,
-        },
-        {
-            "case_ref": "repl",
-            "case_type": "complaints_a",
-            "amount": 55,
-            "attribute_a": None,
-            "related_date": None,
-        },
-    ]
-    pending = (
-        PendingVoid(
-            "V1", _VOIDED_AT, {"attribute_a": None, "case_type": "complaints_a"}
-        ),
-    )
-    reader = given_rows(rows)
-    pool_writer, trace_writer, json_writer = (
-        RecordingWriter(),
-        RecordingWriter(),
-        RecordingWriter(),
-    )
+    # Capacity 2: both repl and high survive, isolating rank from the cut.
+    out = _replacement_scenario(hopper_depth=2)
 
-    # Capacity 2: both survive, isolating rank from the hopper cut.
-    p = selection_builder(
-        reader,
-        pool_writer,
-        trace_writer,
-        json_writer,
-        pending_voids=pending,
-        hopper_capacity=2,
-    )
-    p.run()
-
-    trace = {row["case_ref"]: row for row in rows_of(trace_writer)}
-    assert trace["repl"]["verdict"] == "selected"
-    assert trace["repl"]["rank"] == 1
-    assert trace["high"]["verdict"] == "selected"
-    assert trace["high"]["rank"] == 2
-    assert "hopper" not in trace["repl"]["reason"]
-    assert "hopper" not in trace["high"]["reason"]
+    by_ref = {row["case_ref"]: row for _, row in out.iterrows()}
+    assert by_ref["repl"]["verdict"] == "selected"
+    assert by_ref["repl"]["rank"] == 1
+    assert by_ref["high"]["verdict"] == "selected"
+    assert by_ref["high"]["rank"] == 2
+    assert "hopper" not in by_ref["repl"]["reason"]
+    assert "hopper" not in by_ref["high"]["reason"]
 
 
-def test_unallocated_case_count_counts_to_allocate_cases_in_the_pool(tmp_path):
-    """Post-#768: one status equality, never a scan for a blank reviewer.
-
-    A Case claimed for review is ``In-progress`` the instant the claim PATCH
-    lands, reviewer included -- there is no window where it is ``In-progress``
-    with nothing assigned, so an unclaimed Case is identified by its own
-    status alone.
-    """
-    base_dir = build_databases(tmp_path, "sharepoint_cases/gold")
-    _seed_case_current(
-        base_dir,
+def test_unallocated_count_counts_to_allocate_cases_among_the_candidates():
+    """Post-#768: one status equality, never a scan for a blank reviewer."""
+    current = pd.DataFrame(
         [
             {"title": "R1", "status": "To-allocate"},
             {"title": "R2", "status": "To-allocate"},
             {"title": "R3", "status": "In-progress"},  # claimed -- not counted
             {"title": "R4", "status": "Void"},  # a void frees room, not counted
-            {"title": "R5", "status": "To-allocate"},  # not in the pool
+            {"title": "R5", "status": "To-allocate"},  # not a candidate this run
             {"title": None, "status": "To-allocate"},
             {"title": "", "status": "To-allocate"},
-        ],
+        ]
     )
-    pool_reader = given_rows([{"case_ref": ref} for ref in ("R1", "R2", "R3", "R4")])
+    candidate_refs = {"R1", "R2", "R3", "R4"}
 
-    assert unallocated_case_count(base_dir, pool_reader) == 2
-
-
-def test_unallocated_case_count_is_zero_when_the_sync_store_or_the_pool_is_missing(
-    tmp_path,
-):
-    working_pool = given_rows([{"case_ref": "R1"}])
-    assert unallocated_case_count(tmp_path, working_pool) == 0  # no sync gold at all
-
-    base_dir = build_databases(tmp_path, "sharepoint_cases/gold")
-    _seed_case_current(base_dir, [{"title": "R1", "status": "To-allocate"}])
-    # A database file that has never been created (not merely a missing table
-    # in one that has): the same "unable to open database file" shape a
-    # not-yet-landed pool raises, before its migration has ever run here.
-    missing_pool = StoreRegistry(base_dir / "unmigrated").store("x").reader(POOL_TABLE)
-    assert unallocated_case_count(base_dir, missing_pool) == 0
+    assert unallocated_count(current, candidate_refs) == 2
 
 
-def test_a_full_hopper_selects_nothing_and_reports_zero_capacity(
-    tmp_path, monkeypatch, capsys
-):
+def test_a_full_hopper_run_lands_zero_and_traces_the_denial(tmp_path, monkeypatch):
     base_dir = build_databases(tmp_path, "sharepoint_cases/gold", "selection_output")
     _seed_group(base_dir)  # selects B1, R001, C1
 
@@ -873,4 +755,120 @@ def test_a_full_hopper_selects_nothing_and_reports_zero_capacity(
     assert trace["R900"]["verdict"] == "excluded"
     assert "hopper" in trace["R900"]["reason"]
 
-    assert "selecting up to 0" in capsys.readouterr().out
+
+# ── Per-source Case Details ─────────────────────────────────────────────────
+
+
+def test_details_reach_the_json_as_a_nested_object_with_native_types(tmp_path):
+    base_dir = build_databases(tmp_path, "selection_output")
+    _seed_silver(
+        base_dir,
+        "complaints_a",
+        [{"record_id": "R001", "label": "alpha", "amount": 90}],
+    )
+    _seed_silver(
+        base_dir,
+        "complaints_b",
+        [{"record_id": "B1", "category": "sales", "priority": "high"}],
+    )
+    _seed_silver(
+        base_dir,
+        "complaints_c",
+        [
+            {"record_id": "C9", "department": "hr", "resolution_days": 1}
+        ],  # below threshold
+    )
+
+    run(RunContext(base_dir=base_dir, pipeline=PIPELINE_NAME))
+
+    landed = {
+        row["case_ref"]: row
+        for row in json.loads((base_dir / OUTPUT_SUBJECT / POOL_JSON).read_text())
+    }
+    assert landed["R001"]["details"] == {"amount": 90, "label": "alpha"}
+    assert isinstance(landed["R001"]["details"]["amount"], int)
+    assert landed["B1"]["details"] == {"category": "sales", "priority": "high"}
+
+
+def test_details_land_as_json_text_in_the_pool_table(tmp_path):
+    base_dir = build_databases(tmp_path, "selection_output")
+    _seed_silver(
+        base_dir,
+        "complaints_a",
+        [{"record_id": "R001", "label": "alpha", "amount": 90}],
+    )
+    _seed_silver(
+        base_dir,
+        "complaints_b",
+        [
+            {"record_id": "B9", "category": "sales", "priority": "low"}
+        ],  # below threshold
+    )
+    _seed_silver(
+        base_dir,
+        "complaints_c",
+        [
+            {"record_id": "C9", "department": "hr", "resolution_days": 1}
+        ],  # below threshold
+    )
+
+    run(RunContext(base_dir=base_dir, pipeline=PIPELINE_NAME))
+
+    store = StoreRegistry(base_dir).store(f"{OUTPUT_SUBJECT}/{PIPELINE_NAME}")
+    [row] = read_rows(store, POOL_TABLE)
+    assert isinstance(row["details"], str)
+    assert json.loads(row["details"]) == {"amount": 90, "label": "alpha"}
+
+
+def test_an_undeclared_silver_column_stays_out_of_details():
+    # amount_priority reads "amount"; a member's own detail_columns are the
+    # only keys `select_complaints` ever copies into `details`.
+    a = given_rows(
+        [
+            {
+                "record_id": "R001",
+                "label": "alpha",
+                "amount": 90,
+                "run_id": "not-a-detail-field",
+                "load_date": "2026-08-18",
+            }
+        ]
+    ).read()
+    b = Dataset.from_pandas(pd.DataFrame(columns=["record_id", "load_date"]))
+    c = Dataset.from_pandas(pd.DataFrame(columns=["record_id", "load_date"]))
+
+    out = select_complaints(a, b, c, _EMPTY_CURRENT).to_pandas()
+
+    assert out.iloc[0]["details"] == {"amount": 90, "label": "alpha"}
+
+
+def test_an_empty_case_type_still_yields_declared_columns():
+    a = given_rows(
+        [
+            {
+                "record_id": "R001",
+                "label": "alpha",
+                "amount": 90,
+                "load_date": "2026-08-18",
+            }
+        ]
+    ).read()
+    b = Dataset.from_pandas(pd.DataFrame(columns=["record_id", "load_date"]))
+    c = Dataset.from_pandas(pd.DataFrame(columns=["record_id", "load_date"]))
+
+    out = select_complaints(a, b, c, _EMPTY_CURRENT).to_pandas()
+
+    assert out.iloc[0]["case_ref"] == "R001"
+    assert "details" in out.columns
+
+
+def test_zero_candidates_overall_runs_clean():
+    """The framework #762 regression: no ``.apply(axis=1)`` anywhere here, so a
+    genuinely empty run never hits pandas' empty-frame probe-call crash.
+    """
+    empty = Dataset.from_pandas(pd.DataFrame(columns=["record_id", "load_date"]))
+
+    out = select_complaints(empty, empty, empty, _EMPTY_CURRENT)
+
+    assert len(out) == 0
+    assert "details" in out.to_pandas().columns

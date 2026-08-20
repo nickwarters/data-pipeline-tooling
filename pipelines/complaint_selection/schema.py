@@ -2,7 +2,7 @@
 
 The Selection group's row contract, plus its one declared Variation, the
 frozen shape a ``SELECTION_GROUP`` member takes, and a pending void as
-``pending_voids`` resolves it against the pool.
+``select_complaints`` resolves it against this run's candidates.
 """
 
 from __future__ import annotations
@@ -29,6 +29,10 @@ class SelectedComplaint:
     related_date: str
     replaces_case_ref: str
     void_match_rung: str
+    # Unparsed JSON text, keyed by this source's `detail_columns` -- the same
+    # relational shape Sync's own `details` lands in (see
+    # docs/data-dictionary-sharepoint-cases.md).
+    details: str
     question_bank_id: str
 
 
@@ -40,6 +44,9 @@ class SelectionGroupMember:
     reader: Callable[..., Reader]
     case_ref_column: str
     priority: Callable[[Mapping[str, Any]], int]
+    # This source's Case Details, by key. Each key IS the frontend's
+    # `detailFields[].key` for this Case Type -- not a pipeline-side name.
+    detail_columns: tuple[str, ...]
 
 
 @dataclass(frozen=True)

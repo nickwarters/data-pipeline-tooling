@@ -19,7 +19,7 @@ The full population of Cases, read from the ingested silver/gold data. It expose
 _Avoid_: repository, dataset (as a name for the CasePool — the capitalised framework primitive `Dataset` is the bulk in-memory carrier, a distinct concept; see Flagged ambiguities), queue
 
 **SelectionPool**:
-The narrowed set of Cases the Selection pipeline produces by pulling from the CasePool and applying filter/score/sort/join — i.e. the Cases actually chosen for review.
+The narrowed set of Cases the Selection pipeline produces by pulling from the CasePool and applying filter/score/sort/join — i.e. the Cases actually chosen for review. A **Selection group** spanning several Case Types (below) carries each source's own per-Case Case Details alongside the shared columns, keyed by that source's declared columns — the same keys the frontend's `detailFields[].key` uses (`platform_frontend/docs/case-type-onboarding.md`), landed as one JSON field per Case (`pipelines/complaint_selection`).
 _Avoid_: shortlist, batch
 
 **Selection trace**:
