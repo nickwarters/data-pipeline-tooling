@@ -321,6 +321,10 @@ src/
     chart-tooltip.js            # delegated HTML-over-SVG tooltip controller for grouped chart marks
     empty-state.js              # EmptyState/LoadingState: the shared "nothing here yet" and
                                 #   in-flight placeholders, one spelling of each
+    format-datetime.js          # THE display spelling of a stored date or instant: a date is
+                                #   dd/mm/yyyy, a timestamp is "18 Jun 2026, 08:00". Spelled out
+                                #   rather than left to toLocaleDateString(), whose format is a
+                                #   property of the reader's browser
     html.js                     # h()/svg() plain-function view primitives
     local-calendar.js           # THE crossing between an instant and a browser-local calendar
                                 #   date: toLocalDateKey/startOfLocalDay plus date-key arithmetic
