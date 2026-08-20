@@ -107,6 +107,17 @@ considered, each `transform` reports whether a row survived and which stage
 excluded it, and `write_trace(writer, trace, survivors)` ranks and publishes it,
 recording the trace's considered/selected/excluded counts as the step's own.
 
+**It has no pipeline consumer today.** `complaint_selection` was the one that
+needed it, and #769 has since collapsed that pipeline's rules into a single
+`select_complaints` and dropped the trace with them, for the reason
+[ADR-0008](0008-selection-explainability.md) records: `RowTrace` seeds its
+considered population from the first read alone, which four reads cannot
+satisfy. `pipelines/selection` still uses the builder's `p.explain()`. So the
+eager pair is the counterpart of a primitive that is currently only reached
+through the builder — kept because the governance question it answers has not
+gone away, but it is covered by framework tests rather than by a live feed, and
+that is worth knowing before relying on it.
+
 Ordering between writes needed no replacement at all. `notifications` expressed
 "record nobody as told until the file telling them has landed" as an extra graph
 edge feeding each ledger step the outbox write's result. Written out, it is which

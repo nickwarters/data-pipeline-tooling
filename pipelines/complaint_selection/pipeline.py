@@ -33,7 +33,15 @@ import pandas as pd
 from case_review.variation import variation_by_id
 from framework.core import Dataset, PipelineError, SchemaValidator, format_failure
 from framework.io import AccumulateByRun, JsonWriter, Reader, Refresh, Writer
-from framework.run import FreshnessRequirement, Pipeline, RunContext, RunLog
+from framework.run import (
+    FreshnessRequirement,
+    RunContext,
+    read,
+    run_pipeline,
+    transform,
+    validate,
+    write,
+)
 from framework.transform import LatestPerKey, Rename
 from readers.complaints_a import ComplaintsACasesReader
 from readers.complaints_b import ComplaintsBCasesReader
@@ -519,7 +527,7 @@ def selected_only(dataset: Dataset) -> Dataset:
     )
 
 
-def selection_builder(
+def select_pool(
     *,
     complaints_a: Reader,
     complaints_b: Reader,
@@ -530,64 +538,68 @@ def selection_builder(
     json_writer: Writer,
     since: dt.datetime | None = None,
     hopper_depth: int | None = None,
-    run_log: RunLog | None = None,
-) -> Pipeline:
-    """Build the Selection flow: four reads, one transform, three projections.
+) -> tuple[Dataset, Dataset]:
+    """The Selection flow: four reads, one decision, three projections.
+
+    Written with the **eager steps**, so every line does its work when it is
+    reached and the variable on the left holds the real rows -- put a breakpoint
+    on ``select`` and step over it to watch the population narrow
+    ([ADR-0027](../../docs/adr/0027-eager-steps-are-the-default-authoring-model.md)).
+
+    ``select`` takes **four** datasets, exactly as the graph node it replaces
+    took four input nodes: a fan-in is more arguments, not a graph.
+
+    Line order is the ordering guarantee. The graph form needed a comment
+    warning that leaf declaration order was load-bearing, because ``p.run()``
+    returned its leaves in the order they were wired; here the pool is written
+    before the trace because that line comes first, which is the same rule
+    without having to know it.
 
     ``hopper_depth`` is resolved from ``HOPPER_DEPTH`` *inside*
     ``select_complaints`` when ``None``, rather than as this function's own
     default argument value: a default is bound once at import time, which
     would freeze the constant and defeat a test's monkeypatch of it.
-    """
-    # ":pool" distinguishes this inner Pipeline's own run-log label from the
-    # runner's outer "complaint_selection" label the same run also records under.
-    p = Pipeline(f"{PIPELINE_NAME}:pool", run_log=run_log)
 
-    read_a = p.read(complaints_a, name="read-complaints_a")
-    read_b = p.read(complaints_b, name="read-complaints_b")
-    read_c = p.read(complaints_c, name="read-complaints_c")
-    read_current = p.read(current_cases, name="read-current-cases")
+    Returns the pool rows and the trace -- what the caller reports on.
+    """
+    a = read(complaints_a, name="read-complaints_a")
+    b = read(complaints_b, name="read-complaints_b")
+    c = read(complaints_c, name="read-complaints_c")
+    current = read(current_cases, name="read-current-cases")
 
     selecting = functools.partial(
         select_complaints, since=since, hopper_depth=hopper_depth
     )
-    select = p.transform(selecting, read_a, read_b, read_c, read_current, name="select")
-    selected = p.transform(selected_only, select, name="selected")
+    select = transform(selecting, a, b, c, current, name="select")
+    selected = transform(selected_only, select, name="selected")
 
-    # Declaration order below is load-bearing: leaf nodes execute and are
-    # returned by p.run() in the order they are declared here, so write-pool
-    # must be declared before write-trace, which must be declared before
-    # write-json -- run() below unpacks p.run() as [pool, trace, json].
-    rows_for_pool = p.transform(pool_rows, selected, name="pool-rows")
-    validated = p.validate(
-        SchemaValidator(SelectedComplaint), rows_for_pool, name="validate"
-    )
-    p.write(pool_writer, validated, name="write-pool")
+    rows_for_pool = transform(pool_rows, selected, name="pool-rows")
+    validate(SchemaValidator(SelectedComplaint), rows_for_pool, name="validate")
+    write(pool_writer, rows_for_pool, name="write-pool")
 
-    trace = p.transform(
+    trace = transform(
         functools.partial(project, columns=TRACE_COLUMNS), select, name="trace"
     )
-    p.write(trace_writer, trace, name="write-trace")
+    write(trace_writer, trace, name="write-trace")
 
-    # Declared last: see the comment above write-pool. The deliverable carries
-    # the same columns as the pool table -- but with ``details`` left as a
-    # native nested object rather than JSON text, which is why it is projected
-    # off ``selected`` rather than reusing ``pool-rows``.
-    rows_for_json = p.transform(
+    # The deliverable carries the same columns as the pool table -- but with
+    # ``details`` left as a native nested object rather than JSON text, which is
+    # why it is projected off ``selected`` rather than reusing ``pool-rows``.
+    rows_for_json = transform(
         functools.partial(project, columns=POOL_COLUMNS), selected, name="json-rows"
     )
-    p.write(json_writer, rows_for_json, name="write-json")
-    return p
+    write(json_writer, rows_for_json, name="write-json")
+    return rows_for_pool, trace
 
 
-def run(context: RunContext, *, describe: bool = False) -> Dataset:
+def run(context: RunContext) -> Dataset:
     """Wire the real readers and writers for the environment and execute."""
     strategy = AccumulateByRun.from_context(context)
     store = StoreRegistry(context.base_dir).store(f"{OUTPUT_SUBJECT}/{PIPELINE_NAME}")
     json_path = Path(context.base_dir) / OUTPUT_SUBJECT / POOL_JSON
     since = previous_run_instant(context)
 
-    p = selection_builder(
+    pool, trace = select_pool(
         complaints_a=ComplaintsACasesReader(context.base_dir),
         complaints_b=ComplaintsBCasesReader(context.base_dir),
         complaints_c=ComplaintsCCasesReader(context.base_dir),
@@ -596,11 +608,7 @@ def run(context: RunContext, *, describe: bool = False) -> Dataset:
         trace_writer=store.writer(TRACE_TABLE, strategy),
         json_writer=JsonWriter(json_path, Refresh()),
         since=since,
-        run_log=context.run_log,
     )
-    if describe:
-        print(p.describe())
-    pool, trace, _json = p.run()
 
     trace_frame = trace.to_pandas()
     considered = len(trace_frame)
@@ -633,11 +641,6 @@ def main(argv: list[str]) -> int:
         help="named environment to resolve base_dir from when no --base-dir is "
         f"given ({', '.join(known_environments())}); defaults to $PIPELINE_ENV or dev",
     )
-    parser.add_argument(
-        "--describe",
-        action="store_true",
-        help="print the pipeline's plan before running it",
-    )
     args = parser.parse_args(argv[1:])
     try:
         base_dir = Path(args.base_dir) if args.base_dir else resolve_base_dir(args.env)
@@ -645,20 +648,12 @@ def main(argv: list[str]) -> int:
         print(str(exc), file=sys.stderr)
         return 1
 
-    from framework.run import PipelineRunner
-
-    def handler(ctx: RunContext) -> Dataset:
-        return run(ctx, describe=args.describe)
-
-    runner = PipelineRunner()
-    # subject=None: this pipeline is path-addressed, not medallion-scoped, so its
-    # run-history label must be the bare pipeline name -- the same label the
-    # declared UPSTREAMS resolve their upstreams under.
-    runner.register(
-        subject=None, pipeline=PIPELINE_NAME, handler=handler, freshness=UPSTREAMS
-    )
+    # The *same* run_pipeline the operator CLI uses, so a run started here and
+    # one started with `cli run` record under one identity -- one pipeline label,
+    # one logical_run_id, one run history. That label is the bare pipeline name,
+    # which is what the declared UPSTREAMS resolve their upstreams under.
     try:
-        runner.run(None, PIPELINE_NAME, base_dir=base_dir)
+        run_pipeline(run, PIPELINE_NAME, base_dir, upstreams=UPSTREAMS)
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
         return 1

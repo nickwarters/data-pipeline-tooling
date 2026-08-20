@@ -153,7 +153,10 @@ that were nothing to do with deferring execution:
   there is one identity to group by rather than two.
 - **`explain(id_column)` / `write_trace(writer, trace, survivors)`** — the row
   trace `p.explain(...)` accumulated, opened as a block. Same `RowTrace`, same
-  published verdict, same considered/selected/excluded counts on the step.
+  published verdict, same considered/selected/excluded counts on the step. Note
+  that #769 has since removed the trace from `complaint_selection`, so the eager
+  pair currently has **no pipeline consumer** — only framework tests. See
+  ADR-0027 for why it was kept anyway.
 
 Two things needed no replacement. Write **ordering** — notifications' "record
 nobody as told until the file telling them has landed" — was an extra graph edge;
