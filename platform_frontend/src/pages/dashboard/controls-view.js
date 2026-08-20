@@ -8,6 +8,7 @@ import {
   caseTypeColumn,
 } from '../../views/case-columns.js';
 import { dataTableView } from '../../views/data-table.js';
+import { formatTimestamp } from '../../lib/format-datetime.js';
 import { openAppealOf } from '../../evaluators/appeal-state.js';
 
 export const COPY = Object.freeze({ heading: 'Outstanding Appeals' });
@@ -75,8 +76,7 @@ export function appealColumns() {
       label: 'Raised',
       sortable: true,
       value: (row) => openAppealOf(row)?.at ?? null,
-      format: (value) =>
-        value ? new Date(String(value)).toLocaleDateString() : '—',
+      format: (value) => formatTimestamp(value),
     },
     {
       key: 'rationale',

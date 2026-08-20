@@ -13,6 +13,7 @@ import {
   caseTypeColumn,
 } from '../../views/case-columns.js';
 import { dataTableView } from '../../views/data-table.js';
+import { formatDate, formatTimestamp } from '../../lib/format-datetime.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 
@@ -222,8 +223,7 @@ function remediationColumns() {
       label: 'Remediation due',
       value: remediationDeadline,
       sortable: true,
-      format: (value) =>
-        value ? new Date(String(value)).toLocaleDateString() : '—',
+      format: (value) => formatDate(value),
     },
     {
       key: 'action',
@@ -247,8 +247,7 @@ function messageColumns(
       label: 'Last message',
       value: (row) => row.conversation.at(-1)?.timestamp ?? null,
       sortable: true,
-      format: (value) =>
-        value ? new Date(String(value)).toLocaleString() : '—',
+      format: (value) => formatTimestamp(value),
     },
     // This button opens the Conversation, not the Case, and the row's
     // Reference cell already links to the Case — so the name has to say which

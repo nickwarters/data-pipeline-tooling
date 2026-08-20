@@ -1,6 +1,7 @@
 // @ts-check
 import { h } from '../lib/html.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
+import { formatDate, formatTimestamp } from '../lib/format-datetime.js';
 
 /**
  * The Case-shaped column descriptors every Case table is built from.
@@ -49,7 +50,8 @@ export const caseStatusColumn = () => ({
 
 /**
  * The Case's own date fields sort as strings, so a missing one is `''` rather
- * than `undefined`.
+ * than `undefined`. Sorting is on that stored value and formatting is display
+ * only, so `dd/mm/yyyy` cells still sort chronologically.
  *
  * @returns {CaseColumn}
  */
@@ -58,6 +60,7 @@ const caseRelatedDateColumn = () => ({
   label: 'Related Date',
   value: (row) => row.relatedDate || '',
   sortable: true,
+  format: (value) => formatDate(value),
 });
 
 /** @returns {CaseColumn} */
@@ -66,6 +69,7 @@ const caseDueDateColumn = () => ({
   label: 'Due Date',
   value: (row) => row.dueDate || '',
   sortable: true,
+  format: (value) => formatDate(value),
 });
 
 /**
@@ -79,6 +83,7 @@ const caseAssignedColumn = () => ({
   label: 'Assigned',
   value: (row) => row.assignedAt || '',
   sortable: true,
+  format: (value) => formatTimestamp(value),
 });
 
 /** @returns {CaseColumn} */

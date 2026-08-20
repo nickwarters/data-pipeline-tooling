@@ -2095,7 +2095,44 @@ test('Details view captions the completedAt date "Completed on"', () => {
     [],
     'Case Details'
   );
-  assert.match(view.textContent, /Completed on2026-05-04/);
+  assert.match(view.textContent, /Completed on4 May 2026/);
+});
+
+test('Details view writes a stored date as a date and a stored instant as a time', () => {
+  const view = caseDetailsView(
+    {
+      .../** @type {any} */ (caseRow),
+      dueDate: '2026-05-04',
+      relatedDate: '2026-04-30',
+      created: '2026-04-28T09:15:00Z',
+    },
+    [{ key: 'complaintDate', label: 'Complaint date' }],
+    'Case Details'
+  );
+  // A due date is a day, so it is written as one; the creation stamp is a
+  // moment, so it keeps its clock. Neither is shown as the ISO text stored.
+  assert.match(view.textContent, /Due date04\/05\/2026/);
+  assert.match(view.textContent, /Related date30\/04\/2026/);
+  assert.match(view.textContent, /Created28 Apr 2026, \d{2}:\d{2}/);
+  assert.doesNotMatch(view.textContent, /2026-0/);
+});
+
+test('a configured Case Details field is formatted only when it holds a date', () => {
+  const view = caseDetailsView(
+    {
+      .../** @type {any} */ (caseRow),
+      details: { complaintDate: '2026-06-18', complaintRef: 'CMP-2026-0001' },
+    },
+    [
+      { key: 'complaintDate', label: 'Complaint date' },
+      { key: 'complaintRef', label: 'Complaint reference' },
+    ],
+    'Case Details'
+  );
+  assert.match(view.textContent, /Complaint date18\/06\/2026/);
+  // A reference that merely starts with digits is not a date and must survive
+  // exactly as stored.
+  assert.match(view.textContent, /Complaint referenceCMP-2026-0001/);
 });
 
 test('Details view takes its heading from the resolved section labels', () => {
