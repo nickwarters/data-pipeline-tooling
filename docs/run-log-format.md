@@ -63,9 +63,9 @@ Run-log `pipeline_run_id` is the concrete attempt being observed. A truly ad hoc
 as `pipeline.pipeline_run_id`; `Pipeline.run(context=...)` uses the supplied
 `RunContext.pipeline_run_id`. A **bare** `p.run()` inside a runner handler (or a
 dry run) inherits the attempt's ambient id instead of minting its own, so a
-handler that runs several hops (raw → silver → gold) with bare `p.run()` calls
-records every hop — and stamps every row those hops write — under the *one*
-attempt-level `pipeline_run_id`, rather than orphaning each hop under a fresh id.
+handler that runs several stages (raw → silver → gold) with bare `p.run()` calls
+records every one — and stamps every row they write — under the *one*
+attempt-level `pipeline_run_id`, rather than orphaning each under a fresh id.
 **Every record of a single execution carries the same `pipeline_run_id`**, so the
 registry can group a run's steps and its summary. Every record *also* carries its
 `logical_run_id`, so the business run a re-drive belongs to is visible in the log

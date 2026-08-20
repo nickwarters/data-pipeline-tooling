@@ -149,10 +149,10 @@ Scaffold a new feed with `python -m cli scaffold <feed>`: it renders the
 feed code as a `pipelines/<feed>/` subpackage (schema, pipeline, sample fixture)
 and its test as `tests/pipelines/test_<feed>.py`, from the template under
 `cli/scaffold_templates/feed/`, ready to run and customise. The
-generic feed refines source -> raw -> silver -> gold, one `*_hop` per hop
-(`raw_hop` lands faithfully; `silver_hop` renames via `RENAME` then `enforce`s the
-schema — coerce, quarantine, validate, in that order; `gold_hop` is a passthrough
-stub with a `TODO`). Each hop is written with the **eager steps**, so every line
+generic feed refines source -> raw -> silver -> gold, one `to_*` function per step
+(`to_raw` lands faithfully; `to_silver` renames via `RENAME` then `enforce`s the
+schema — coerce, quarantine, validate, in that order; `to_gold` is a passthrough
+stub with a `TODO`). Each is written with the **eager steps**, so every line
 does its work when it is reached and can be stepped through in a debugger
 ([ADR-0027](docs/adr/0027-eager-steps-are-the-default-authoring-model.md)) — four
 or so readable lines you edit in place — wired
@@ -164,7 +164,7 @@ the first rows, capped at 40 columns), the file's contents replace the bundled
 sample, and the test's sample rows are taken from it; when a header name isn't a
 clean identifier (spaces/punctuation/capitals) the source names are emitted as a
 `RAW_FEED_COLUMNS` constant the raw `ColumnValidator` gates on and the
-`silver_hop`'s `RENAME` map is populated to canonicalise them (raw stays
+`to_silver`'s `RENAME` map is populated to canonicalise them (raw stays
 faithful; silver renames to the schema's canonical shape). Add `--case-type`
 for the Case Type ingest variant: a case-review-flavoured slice from
 `cli/scaffold_templates/case_type/` that additionally declares the Case

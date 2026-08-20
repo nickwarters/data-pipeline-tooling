@@ -148,7 +148,7 @@ def test_an_empty_chunk_passes_the_schema_gate_and_still_reaches_the_writer():
 
     A source that hands back nothing for a window types its columns as nothing
     can: ``object``. The schema gate has no value to check, so the chunk flows
-    through the same hops as a populated one rather than aborting the drive.
+    through the same steps as a populated one rather than aborting the drive.
     """
 
     class QuietWindowReader:

@@ -195,9 +195,9 @@ out** the single writer's in-place commit instead of erroring — it waits for t
 lock rather than failing fast. (WAL is unavailable over a network share, so this
 is on the default rollback journal.)
 
-## Building a gold hop — compose the write with a strategy
+## Building gold — compose the write with a strategy
 
-There is no recipe for gold; a gold hop is written out, and its **Writer carries
+There is no shared builder for gold; each one is written out, and its **Writer carries
 the load strategy** that decides the shape. To *accumulate* validated silver into
 gold stamped by run, compose an `AccumulateByRun` writer:
 
@@ -231,16 +231,19 @@ accumulated and prior gold rows stay intact.
 
 ### Current-only gold vs accumulation
 
-Not every gold accumulates. **Ingest** gold is *current-only*: the
-`case_review.gold.ingest_silver_to_gold` helper reduces accumulated silver to one
-row per Case (`DeriveKey → LatestPerKey → UniqueValidator → Refresh`), so its gold
-is a current snapshot, not a per-run history. **Sync** gold is current-only for
+Not every gold accumulates. **Ingest** gold is *current-only*: it reduces
+accumulated silver to one row per Case (`DeriveKey → LatestPerKey →
+UniqueValidator → Refresh`), so its gold is a current snapshot, not a per-run
+history. Each feed writes that reduction out — there is no shared builder; see
+[`pipelines/ingest/pipeline.py`](../pipelines/ingest/pipeline.py). **Sync** gold is current-only for
 the same reason and by the same shape — one row per Case under `Refresh()`, its
 change-over-time record held in the accumulated silver beneath it. **Selection**
 gold uses `AccumulateByRun`, where history must survive. *Which* model a Case Type's gold
 takes — and how multiple feeds fan into it (snapshot-vs-join) — is a per-Case-Type
-choice; the `case_review.gold` helpers are where that assembly lives, in the
-application layer rather than the framework.
+choice, and it lives in the feed that publishes the gold — in the application
+layer rather than the framework, and written out rather than shared. Two Case
+Types agree on a Case's identity because both derive it from the same declared
+namespace and natural key, not because both called the same function.
 
 ### Two shapes of current-only reduce, and when `LatestPerKey` is the wrong one
 
@@ -290,8 +293,8 @@ is assembled from one coherent snapshot.
 The rule and its precondition — the observation must carry the *whole* parent —
 are recorded in [ADR-0015](adr/0015-detail-tables-reduce-to-the-parents-latest-observation.md).
 
-The implementation is `gold_detail_hop` in `pipelines/sharepoint_cases/gold.py`,
-generic over a per-table grain, declared in `DETAIL_GRAIN` — one hop for every
+The implementation is `to_gold_detail` in `pipelines/sharepoint_cases/gold.py`,
+generic over a per-table grain, declared in `DETAIL_GRAIN` — one call for every
 Detail Table rather than a per-table judgement about what "latest" means.
 
 Silver keys a Detail Table's own `AppendOnly` load on a **composite**
@@ -316,12 +319,12 @@ Two of `pipelines/sharepoint_cases/gold.py`'s six aggregates —
 Detail Table instead: `answer` and `appeal` respectively, named in
 `DETAIL_AGGREGATES`.
 
-The source is that hop's **in-memory published dataset**, not silver and not
+The source is that step's **in-memory published dataset**, not silver and not
 a re-read of gold — the same reason a Detail Table's own reduction reads
 `observations=DatasetReader(current)` rather than re-reading
 `case_current` from disk (see *And a shape where neither reduce is right:
 Detail Tables*, above). Reading the in-memory dataset means the aggregate
-counts exactly the winning observation's rows the Detail hop just wrote, and
+counts exactly the winning observation's rows the Detail build just wrote, and
 works correctly under a dry run, where `Refresh()` writes nothing and a
 re-read from disk would see a stale or missing table.
 

@@ -198,7 +198,7 @@ def test_coerces_mixed_precision_iso_spellings_in_one_column():
     # writes `.toISOString()` (always milliseconds), a fixture writes `Z` with
     # none. Inference would fit one format to the first value and abort on the
     # other; format="ISO8601" accepts both, so which rows share a batch cannot
-    # decide whether the hop survives.
+    # decide whether the run survives.
     raw = pd.DataFrame(
         {
             "case_ref": ["c1", "c2"],
@@ -379,7 +379,7 @@ def test_the_whole_number_repair_is_column_level_so_one_bad_value_keeps_the_poin
     # The Int64 detour is refused for the *whole* column when any one value
     # resists it — a fraction (ValueError) or an infinity (OverflowError) — by
     # choice: a per-value repair would render two spellings of one column. Both
-    # arms are pinned because the `str` path must never abort a hop: whatever
+    # arms are pinned because the `str` path must never abort a run: whatever
     # the column holds, the fallback is to render the values as they arrived.
     raw = pd.DataFrame({"case_ref": [1234567890.0, resistant]})
 

@@ -12,7 +12,7 @@ Its shape is sketched at the foot of ``run``.
 Every line here **does its work when it is reached**. Put a breakpoint on one,
 step over it, and the variable holds the actual rows at that point in the feed
 ([ADR-0027](../../docs/adr/0027-eager-steps-are-the-default-authoring-model.md)).
-Each medallion hop is its own ``*_hop`` function, so a test can drive one with
+Each medallion step is its own ``to_*`` function, so a test can drive one with
 sample rows and a recording writer without touching SQLite or the filesystem.
 
 Address it by its location on disk::
@@ -63,18 +63,18 @@ SELECT_RAW_COLUMNS = [f.name for f in fields(MyfeedRow)]
 UPSTREAMS = ()
 
 
-def raw_hop(reader: Reader, writer: Writer) -> Dataset:
+def to_raw(reader: Reader, writer: Writer) -> Dataset:
     """Land the source unchanged, once its columns are as expected.
 
-    Edit these three lines to change the hop.
+    Edit these three lines to change it.
     """
-    data = read(reader)
+    data = read(reader, name="raw:read")
     expected = [f.name for f in fields(MyfeedRow)]
-    validate(ColumnValidator(expected), data)
-    return write(writer, data)
+    validate(ColumnValidator(expected), data, name="raw:column_validator")
+    return write(writer, data, name="raw:write")
 
 
-def silver_hop(
+def to_silver(
     reader: Reader, writer: Writer, reject_writer: Writer | None = None
 ) -> Dataset:
     """Narrow the source columns, then enforce the declared schema.
@@ -82,12 +82,16 @@ def silver_hop(
     ``enforce`` is the coerce -> quarantine -> validate sequence in the order
     that makes it correct, and each part still records its own step. Given no
     ``reject_writer`` it is simply coerce -> validate. Edit these lines to change
-    the hop.
+    it.
+
+    Every step names the layer it is landing in, so one run log holding both this
+    and ``to_raw`` says which ``read`` was which rather than ``read`` and
+    ``read-2``. ``enforce``'s ``name`` prefixes all three steps it records.
     """
-    data = read(reader)
-    data = transform(SelectColumns(SELECT_RAW_COLUMNS), data)
-    data = enforce(MyfeedRow, data, reject_writer=reject_writer)
-    return write(writer, data)
+    data = read(reader, name="silver:read")
+    data = transform(SelectColumns(SELECT_RAW_COLUMNS), data, name="silver:select")
+    data = enforce(MyfeedRow, data, reject_writer=reject_writer, name="silver")
+    return write(writer, data, name="silver:write")
 
 
 def run(context: RunContext) -> Dataset:
@@ -96,11 +100,11 @@ def run(context: RunContext) -> Dataset:
     strategy = AccumulateByRun.from_context(context)
 
     # Fetched by the SAS script or orchestrator
-    raw_hop(
+    to_raw(
         CsvReader(SAMPLE_CSV),
         med.raw.writer(FEED_NAME, strategy),
     )
-    silver = silver_hop(
+    silver = to_silver(
         med.raw.reader(FEED_NAME),
         med.silver.writer(FEED_NAME, strategy),
         med.silver.quarantine_writer(FEED_NAME),
@@ -112,10 +116,22 @@ def run(context: RunContext) -> Dataset:
     # same declared namespace and natural key used by any Detail Tables, so
     # their case_ids derive consistently:
     #
-    #     from case_review.gold import ingest_silver_to_gold
-    #     ingest_silver_to_gold(
-    #         med, NAMESPACE, NATURAL_KEY, MyfeedRow
-    #     ).run()  # single-feed current gold
+    #     def to_gold(reader, writer):
+    #         data = read(reader)
+    #         data = transform(
+    #             DeriveKey(into="case_id", namespace=NAMESPACE,
+    #                       natural_key=list(NATURAL_KEY)),
+    #             data, name="derive-key",
+    #         )
+    #         data = transform(LatestPerKey(key="case_id", by="load_date"),
+    #                          data, name="latest-per-key")
+    #         validate(UniqueValidator("case_id"), data)
+    #         return write(writer, data)
+    #
+    # There is deliberately no shared builder to call: with this few Case Types
+    # there is not enough evidence of what a shared reduction should generalise
+    # over. What makes a Case and its Detail rows agree is that both derive
+    # their key from the *same* NAMESPACE and NATURAL_KEY, not a common helper.
     # ------------------------------------------------------------------------
     return silver
 

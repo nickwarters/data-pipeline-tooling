@@ -22,7 +22,7 @@ the SelectionPool. For the domain language behind the terms, see
 
 **Ingest** lands a feed into `raw` (schema-light), refines it into accumulated
 `silver` with the Case Type's schema enforced (`SchemaCoercion` +
-`SchemaValidator` composed onto the hop — see
+`SchemaValidator` composed onto the step — see
 [`schema-enforcement.md`](schema-enforcement.md)), then reduces it into current
 ingested `gold`: the **CasePool**. The separate **Selection** pipeline lands the
 **SelectionPool** in its own gold table, stamped by run.

@@ -87,10 +87,10 @@ def test_render_pascal_cases_a_multi_word_feed_name(tmp_path):
     assert "class ReviewOutcomesRow" in schema
 
 
-def test_the_rendered_hops_are_wired_inline(tmp_path):
+def test_the_rendered_steps_are_wired_inline(tmp_path):
     repo = tmp_path / "repo"
     scaffold.render("widgets", repo)
-    # The hops are wired in the generated feed, not composed from a shared one.
+    # The steps are wired in the generated feed, not composed from a shared one.
     assert "recipe" not in (repo / "pipelines" / "widgets" / "pipeline.py").read_text(
         "utf-8"
     )
@@ -102,17 +102,17 @@ def test_the_rendered_hops_are_wired_inline(tmp_path):
         importlib.reload(pipeline)
         writer, rejects = RecordingWriter(), RecordingWriter()
 
-        # The hops are eager, so what a hop *did* is what it recorded. Driving
+        # The steps are eager, so what the feed *did* is what it recorded. Driving
         # it is the equivalent of reading a deferred pipeline's plan — and it
         # proves the steps actually ran rather than merely being wired.
         raw_log = RecordingRunLog()
         with active_context(RunContext(pipeline="widgets", run_log=raw_log)):
-            pipeline.raw_hop(given_rows(rows), writer)
+            pipeline.to_raw(given_rows(rows), writer)
         raw_steps = [record["step"] for record in raw_log.records]
 
         silver_log = RecordingRunLog()
         with active_context(RunContext(pipeline="widgets", run_log=silver_log)):
-            pipeline.silver_hop(given_rows(rows), writer, rejects)
+            pipeline.to_silver(given_rows(rows), writer, rejects)
         silver_steps = [record["step"] for record in silver_log.records]
     finally:
         sys.path.remove(str(repo / "pipelines"))
@@ -120,17 +120,19 @@ def test_the_rendered_hops_are_wired_inline(tmp_path):
             if name == "widgets" or name.startswith("widgets."):
                 del sys.modules[name]
 
-    assert raw_steps == ["read", "column_validator", "write"]
+    # Every step names the layer it lands in, so the two run logs together read
+    # raw:read / silver:read rather than read / read-2.
+    assert raw_steps == ["raw:read", "raw:column_validator", "raw:write"]
     # Scaffolded without a feed file, so RENAME is empty and no rename runs.
     # The select runs either way: silver keeps the declared columns and drops
     # anything else raw carried, which is what its baseline declares.
     assert silver_steps == [
-        "read",
-        "select_columns",
-        "coerce",
-        "quarantine",
-        "schema_validator",
-        "write",
+        "silver:read",
+        "silver:select",
+        "silver:coerce",
+        "silver:quarantine",
+        "silver:schema_validator",
+        "silver:write",
     ]
 
 
@@ -163,7 +165,7 @@ def test_rendered_pipeline_runs_and_lands_its_sample_feed(tmp_path):
     # raw accumulates under the run context, so landed rows carry the run's
     # stamps (run_id / load_date / ...) on top of the source columns; the source
     # columns themselves land faithfully. The provenance column is left out of
-    # the comparison: raw and gold are separate hops, and with nothing supplying
+    # the comparison: raw and gold are separate steps, and with nothing supplying
     # a shared context each names the run that wrote *it*.
     returned = without_columns(rows_of(dataset), RUN_PROVENANCE_COLUMN)
     source_columns = set(returned[0])
@@ -302,7 +304,7 @@ def test_clean_identifier_columns_keep_the_schema_driven_validator(tmp_path):
 
     pipeline = (tmp_path / "pipelines" / "orders" / "pipeline.py").read_text("utf-8")
     assert "RAW_FEED_COLUMNS" not in pipeline
-    # The raw hop's column gate is driven by the schema's own fields.
+    # ``to_raw``'s column gate is driven by the schema's own fields.
     assert "expected = [f.name for f in fields(OrdersRow)]" in pipeline
 
 
@@ -412,8 +414,8 @@ def test_feed_file_seeds_structural_rejection_rows_missing_a_column(tmp_path):
     assert "invalid_col" not in test_text  # the template sentinel is gone
 
     for name in (
-        "test_raw_hop_gates_source_columns",
-        "test_silver_hop_aborts_on_structural_breaches",
+        "test_to_raw_gates_source_columns",
+        "test_to_silver_aborts_on_structural_breaches",
     ):
         body = _function_body(test_text, name)
         assert '"Case Number": "C1"' in body  # seeded with the real feed columns
@@ -421,7 +423,7 @@ def test_feed_file_seeds_structural_rejection_rows_missing_a_column(tmp_path):
 
     # A non-rejection block is seeded with the full rows, dropped column included.
     quarantine = _function_body(
-        test_text, "test_silver_hop_quarantines_value_rule_breaches"
+        test_text, "test_to_silver_quarantines_value_rule_breaches"
     )
     assert '"Case Number": "C1", "Adviser Name": "Smith"' in quarantine
 
@@ -537,7 +539,7 @@ def test_a_narrow_feed_file_scaffolds_and_runs_against_its_own_migrations(
     tmp_path, monkeypatch
 ):
     # The common --from-feed-file path, end to end: a source inside the cap, so
-    # the schema covers it and every hop's baseline matches what it writes.
+    # the schema covers it and every step's baseline matches what it writes.
     import importlib  # noqa: PLC0415
     import sys  # noqa: PLC0415
 
@@ -564,7 +566,7 @@ def test_a_narrow_feed_file_scaffolds_and_runs_against_its_own_migrations(
 
 def test_a_source_wider_than_the_cap_runs_and_stops_at_raw(tmp_path, monkeypatch):
     # The two halves together: raw keeps all 45 source columns, SELECT_RAW_COLUMNS
-    # narrows silver to the declared 40, and every hop's write matches the table
+    # narrows silver to the declared 40, and every step's write matches the table
     # its baseline declared. Before the select was wired in, this run died on
     # `table wide has no column named Ref Code 40!`.
     import importlib  # noqa: PLC0415

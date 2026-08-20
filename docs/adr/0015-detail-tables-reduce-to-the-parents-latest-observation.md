@@ -52,7 +52,7 @@ even though that is the reduction the table's own shape suggests.
   fragment of each child independently.
 
 - **It is one rule for N tables.** Seven Detail Tables reduce identically,
-  through one generic `gold_detail_hop` driven by a per-table grain
+  through one generic `to_gold_detail` driven by a per-table grain
   registry, rather than a per-table judgement about what "latest" means for
   each.
 

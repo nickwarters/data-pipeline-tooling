@@ -29,11 +29,18 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from case_review.gold import detail_ingest_silver_to_gold, ingest_silver_to_gold
-from framework.core import SchemaValidator
-from framework.io import AccumulateByRun, CsvReader
-from framework.run import Pipeline
-from framework.transform import Filter, Rename, SchemaCoercion, SelectColumns, Unpivot
+from framework.core import SchemaValidator, UniqueValidator
+from framework.io import AccumulateByRun, CsvReader, Refresh
+from framework.run import read, transform, validate, write
+from framework.transform import (
+    DeriveKey,
+    Filter,
+    LatestPerKey,
+    Rename,
+    SchemaCoercion,
+    SelectColumns,
+    Unpivot,
+)
 from tools.medallion import medallion
 from tools.store import StoreRegistry
 
@@ -53,84 +60,94 @@ class CaseSchema:
 NAMESPACE = "wide_cases"
 NATURAL_KEY = ("case_ref",)
 RUN_ID = "2026-05-29"
+# Both gold reductions stamp and key on the same column, so a Case and its
+# products derive the same deterministic id without joining back.
+CASE_ID_COLUMN = "case_id"
 
 
 def main(target_dir: str) -> None:
     sample = Path(__file__).parent / "sample_data" / "wide_cases.csv"
     med = medallion(StoreRegistry(target_dir), NAMESPACE)
+    strategy = AccumulateByRun(RUN_ID, RUN_ID)
 
-    p = Pipeline(NAMESPACE)
-    r = p.read(CsvReader(sample), name="read")
-    p.write(med.raw.writer(NAMESPACE, AccumulateByRun(RUN_ID, RUN_ID)), r, name="write")
-    p.run()
+    # --- raw: the wide feed lands once, shared by both branches -------------
+    landed = read(CsvReader(sample))
+    write(med.raw.writer(NAMESPACE, strategy), landed, name="write-raw")
 
-    # Shared normalisation: the feed uses `case_ref_no`; both pipelines rename
+    # Shared normalisation: the feed uses `case_ref_no`; both branches rename
     # it to the canonical `case_ref` (defined once, reused below).
     normalise = Rename({"case_ref_no": "case_ref"})
+    this_run = Filter(lambda row, rid=RUN_ID: row["logical_run_id"] == rid)
 
-    p_cases = Pipeline("cases")
-    r_cases = p_cases.read(med.raw.reader(NAMESPACE), name="read")
-    f_cases = p_cases.transform(
-        Filter(lambda row, rid=RUN_ID: row["logical_run_id"] == rid),
-        r_cases,
-        name="filter",
-    )
-    n_cases = p_cases.transform(normalise, f_cases, name="normalise")
-    s_cases = p_cases.transform(
+    # --- cases: silver ------------------------------------------------------
+    cases = read(med.raw.reader(NAMESPACE), name="read-raw-cases")
+    cases = transform(this_run, cases, name="filter-cases")
+    cases = transform(normalise, cases, name="normalise-cases")
+    cases = transform(
         SelectColumns(["case_ref", "adviser", "activity_date", "amount"]),
-        n_cases,
-        name="select",
+        cases,
+        name="select-cases",
     )
-    c_cases = p_cases.transform(SchemaCoercion(CaseSchema), s_cases, name="coerce")
-    v_cases = p_cases.validate(SchemaValidator(CaseSchema), c_cases, name="validate")
-    p_cases.write(
-        med.silver.writer("cases", AccumulateByRun(RUN_ID, RUN_ID)),
-        v_cases,
-        name="write",
-    )
-    p_cases.run()
+    cases = transform(SchemaCoercion(CaseSchema), cases, name="coerce-cases")
+    validate(SchemaValidator(CaseSchema), cases, name="validate-cases")
+    write(med.silver.writer("cases", strategy), cases, name="write-silver-cases")
 
-    ingest_silver_to_gold(
-        med,
-        NAMESPACE,
-        NATURAL_KEY,
-        CaseSchema,
-        "cases",
-    ).run()
+    # --- cases: gold, one current row per Case ------------------------------
+    gold_cases = read(med.silver.reader("cases"), name="read-silver-cases")
+    gold_cases = transform(
+        DeriveKey(
+            into=CASE_ID_COLUMN, namespace=NAMESPACE, natural_key=list(NATURAL_KEY)
+        ),
+        gold_cases,
+        name="derive-key-cases",
+    )
+    gold_cases = transform(
+        LatestPerKey(key=CASE_ID_COLUMN, by="load_date"),
+        gold_cases,
+        name="latest-per-key",
+    )
+    validate(UniqueValidator(CASE_ID_COLUMN), gold_cases, name="unique-validate")
+    write(med.gold.writer("cases", Refresh()), gold_cases, name="write-gold-cases")
 
-    p_prods = Pipeline("case_products")
-    r_prods = p_prods.read(med.raw.reader(NAMESPACE), name="read")
-    f_prods = p_prods.transform(
-        Filter(lambda row, rid=RUN_ID: row["logical_run_id"] == rid),
-        r_prods,
-        name="filter",
+    # --- products: silver ---------------------------------------------------
+    prods = read(med.raw.reader(NAMESPACE), name="read-raw-products")
+    prods = transform(this_run, prods, name="filter-products")
+    prods = transform(normalise, prods, name="normalise-products")
+    prods = transform(
+        SelectColumns(["case_ref"] + PRODUCT_COLS), prods, name="select-products"
     )
-    n_prods = p_prods.transform(normalise, f_prods, name="normalise")
-    s_prods = p_prods.transform(
-        SelectColumns(["case_ref"] + PRODUCT_COLS), n_prods, name="select"
+    write(
+        med.silver.writer("case_products", strategy),
+        prods,
+        name="write-silver-products",
     )
-    p_prods.write(
-        med.silver.writer("case_products", AccumulateByRun(RUN_ID, RUN_ID)),
-        s_prods,
-        name="write",
-    )
-    p_prods.run()
 
-    # Pass the same declared namespace and natural key as the Cases builder, so
+    # --- products: gold, wide -> long, linked by case_id --------------------
+    # The *same* namespace and natural key as the Cases reduction above, so
     # product rows carry matching case_ids without joining back to Cases gold.
-    detail_ingest_silver_to_gold(
-        med,
-        NAMESPACE,
-        NATURAL_KEY,
-        CaseSchema,
-        "case_products",
-        unpivot=Unpivot(
-            id_vars=["case_id"],
+    gold_prods = read(med.silver.reader("case_products"), name="read-silver-products")
+    gold_prods = transform(
+        DeriveKey(
+            into=CASE_ID_COLUMN, namespace=NAMESPACE, natural_key=list(NATURAL_KEY)
+        ),
+        gold_prods,
+        name="derive-key-products",
+    )
+    gold_prods = transform(
+        Unpivot(
+            id_vars=[CASE_ID_COLUMN],
             value_vars=PRODUCT_COLS,
             var_name="product_slot",
             value_name="product_name",
         ),
-    ).run()
+        gold_prods,
+        name="unpivot",
+    )
+    write(
+        med.gold.writer("case_products", Refresh()),
+        gold_prods,
+        name="write-gold-products",
+    )
 
     cases_gold = med.gold.reader("cases").read()
     products_gold = med.gold.reader("case_products").read()

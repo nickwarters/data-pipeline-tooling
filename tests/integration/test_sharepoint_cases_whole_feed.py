@@ -2,7 +2,7 @@
 driven through the real `run()` over one fixture Case with every nest
 populated, polled twice.
 
-Proves what `tests/pipelines/test_sharepoint_cases.py`'s per-hop suites
+Proves what `tests/pipelines/test_sharepoint_cases.py`'s per-step suites
 cannot: that every gold Detail Table agrees on the one winning observation for
 one Case, all at once.
 

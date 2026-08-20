@@ -29,7 +29,6 @@ from framework.run import (
     coerce,
     enforce,
     explain,
-    hop,
     quarantine,
     read,
     step,
@@ -369,61 +368,52 @@ def test_eager_steps_and_a_deferred_pipeline_share_one_runs_identity():
     assert run_ids == {context.pipeline_run_id}
 
 
-# --- grouping many hops under one run ----------------------------------------
+# --- telling repeated steps apart -------------------------------------------
 
 
-def test_a_hop_groups_its_steps_and_restarts_their_names():
+def test_repeated_steps_are_told_apart_by_the_name_their_caller_gives_them():
     """The reason a feed with 20 reads is still readable.
 
-    Without a hop the second read is ``read-2``; with one, each hop has exactly
-    one ``read`` and the hop's own name is what tells them apart.
+    There is no grouping scope to open: a step that runs many times over is
+    handed a name carrying what it is building. Left to default, the framework
+    still keeps every record naming exactly one step -- ``read``, ``read-2`` --
+    but only the author knows which list the second one polled, which is why a
+    feed that repeats a shape names its steps and a feed that does not need not.
     """
     context, run_log = _context()
     with active_context(context):
         for case_type in ("claims", "complaints"):
-            with hop(f"sync:silver:{case_type}"):
-                data = read(given_rows([{"record_id": "a", "amount": 1}]))
-                write(RecordingWriter(), data)
-        # Outside every hop, the run's own label still applies.
+            rows = [{"record_id": "a", "amount": 1}]
+            data = read(given_rows(rows), name=f"silver:{case_type}:read")
+            write(RecordingWriter(), data, name=f"silver:{case_type}:write")
         read(given_rows([{"record_id": "b", "amount": 2}]))
+        read(given_rows([{"record_id": "c", "amount": 3}]))
 
     assert [(record["pipeline"], record["step"]) for record in run_log.records] == [
-        ("sync:silver:claims", "read"),
-        ("sync:silver:claims", "write"),
-        ("sync:silver:complaints", "read"),
-        ("sync:silver:complaints", "write"),
+        ("demo", "silver:claims:read"),
+        ("demo", "silver:claims:write"),
+        ("demo", "silver:complaints:read"),
+        ("demo", "silver:complaints:write"),
         ("demo", "read"),
+        ("demo", "read-2"),
     ]
 
 
-def test_a_hop_inherits_the_runs_identity_and_its_dry_run():
-    context, run_log = _context(dry_run=True)
-    writer = RecordingWriter()
+def test_enforce_prefixes_all_three_of_its_steps_with_the_name_it_is_given():
+    # Otherwise a feed enforcing the same schema per list reads coerce,
+    # coerce-2, ... and an operator cannot tell whose value rule was breached.
+    context, run_log = _context()
+    rejects = RecordingWriter()
     with active_context(context):
-        with hop("sync:gold:case_current"):
-            write(writer, read(given_rows([{"record_id": "a", "amount": 1}])))
+        data = read(given_rows([{"record_id": "a", "amount": "5"}]), name="claims:read")
+        enforce(GatedRow, data, reject_writer=rejects, name="claims")
 
-    assert writer.writes == []
-    assert {record["pipeline_run_id"] for record in run_log.records} == {
-        context.pipeline_run_id
-    }
-    assert {record["logical_run_id"] for record in run_log.records} == {
-        context.logical_run_id
-    }
-    # The preview accumulates through the nesting, so a dry run still reports
-    # what a hop would have written.
-    assert [preview.name for preview in context.dry_run_report.steps] == [
-        "read",
-        "write",
+    assert _steps(run_log) == [
+        "claims:read",
+        "claims:coerce",
+        "claims:quarantine",
+        "claims:schema_validator",
     ]
-
-
-def test_a_hop_outside_a_run_context_still_runs_its_steps():
-    writer = RecordingWriter()
-    with hop("sync:raw:claims"):
-        write(writer, read(given_rows([{"record_id": "a", "amount": 1}])))
-
-    assert len(writer.writes) == 1
 
 
 # --- the row trace ------------------------------------------------------------

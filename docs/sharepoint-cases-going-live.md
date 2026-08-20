@@ -38,7 +38,7 @@ python -m pipelines.sharepoint_cases.pipeline --base-dir /tmp/rehearsal --sample
 
 `--sample` replays the bundled fixture pages through the real pipeline. There is
 no plan to print ahead of it: the steps are eager, so the run log *is* the plan,
-one record per step grouped under the hop that took it. `cli run
+one record per step, each named for the table it was building. `cli run
 pipelines/sharepoint_cases --dry-run` — every step running, only the commits and
 the watermarks held back — is the preview, and it needs a client, so it becomes
 available at stage 4 rather than here.
@@ -177,7 +177,7 @@ Run it yourself, once, deliberately. Not through the scheduler.
 python -m cli run pipelines/sharepoint_cases --env prod --dry-run
 ```
 
-Under a dry run each hop's writes are previewed and **the watermark is not
+Under a dry run every write is previewed and **the watermark is not
 committed** — the checkpoint is not a pipeline step, so it is guarded explicitly
 rather than inheriting the ambient skip. This is the real rehearsal: it reaches
 the tenant, exercises the client, and leaves no trace. Check the columns, dtypes
@@ -300,7 +300,7 @@ accumulated data and watermark simply sit there, and a later run resumes from th
 watermark and covers the gap in one wider window.
 
 **Not cleanly reversible: the first run without `--dry-run`** — whether or not it
-succeeds. Each hop commits as it goes and only the checkpoint is held back to
+succeeds. Each step commits as it goes and only the checkpoint is held back to
 last, so a run that fails between the raw write and the commit has already landed
 append-only rows with no watermark seeded. Raw and silver are append-only by
 design, so there is no in-place correction of what they hold.

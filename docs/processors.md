@@ -552,11 +552,11 @@ tied row is the most recently appended). A missing `key`/`by` column raises
 
 ### Worked example — fanning one wide feed into a Case table + Detail Table
 
-These processors are composed both **directly** on a pipeline (`SelectColumns`,
-`Unpivot`) and **inside** the ingest gold builders (`ingest_silver_to_gold` wires
-`DeriveKey → LatestPerKey → UniqueValidator`; `detail_ingest_silver_to_gold`
+These processors are composed directly, in the feed that needs them. A Case
+gold reduction wires `DeriveKey → LatestPerKey → UniqueValidator`; a Detail Table
 wires `DeriveKey → Unpivot`, with **no** `LatestPerKey` because a Detail Table
-keeps many lines per Case). The full path — one wide CSV → a `cases` gold table +
+keeps many lines per Case. There is no shared builder for either: what makes the
+two agree is that both are handed the *same* namespace and natural key. The full path — one wide CSV → a `cases` gold table +
 a `case_products` Detail Table — is the runnable
 [`../pipelines/demo_fan_out.py`](../pipelines/demo_fan_out.py):
 
@@ -565,36 +565,42 @@ python -m pipelines.demo_fan_out /tmp/demo_fan_out
 ```
 
 ```python
-# Cases pipeline: shared raw → project case columns → coerce/validate → silver
-p = Pipeline("cases")
-r = p.read(med.raw.reader(SUBJECT), name="read")
-this_run = p.transform(Filter(lambda row: row["logical_run_id"] == RUN_ID), r, name="filter-run")
-renamed = p.transform(Rename({"case_ref_no": "case_ref"}), this_run, name="rename")  # shared normalisation
-projected = p.transform(
-    SelectColumns(["case_ref", "adviser", "activity_date", "amount"]), renamed, name="select"
+# Cases: shared raw → project case columns → coerce/validate → silver
+cases = read(med.raw.reader(SUBJECT))
+cases = transform(Filter(lambda row: row["logical_run_id"] == RUN_ID), cases, name="filter-run")
+cases = transform(Rename({"case_ref_no": "case_ref"}), cases, name="rename")  # shared normalisation
+cases = transform(
+    SelectColumns(["case_ref", "adviser", "activity_date", "amount"]), cases, name="select"
 )
-coerced = p.transform(SchemaCoercion(CaseSchema), projected, name="coerce")
-validated = p.validate(SchemaValidator(CaseSchema), coerced, name="post-validate")
-p.write(med.silver.writer("cases", AccumulateByRun(RUN_ID, RUN_ID)), validated, name="write")
-p.run()
-# The caller passes the same declared namespace + natural_key to both builders,
-# so they derive the same case_id.
-# Cases gold: DeriveKey → LatestPerKey → UniqueValidator → current-only gold
-ingest_silver_to_gold(
-    med, NAMESPACE, NATURAL_KEY, CaseSchema, "cases"
-).run()
+cases = transform(SchemaCoercion(CaseSchema), cases, name="coerce")
+validate(SchemaValidator(CaseSchema), cases, name="post-validate")
+write(med.silver.writer("cases", AccumulateByRun(RUN_ID, RUN_ID)), cases, name="write-silver")
+
+# Cases gold: DeriveKey → LatestPerKey → UniqueValidator → current-only gold.
+# The *same* NAMESPACE and NATURAL_KEY go into both reductions below, which is
+# the whole reason their case_ids match without a join.
+derive_key = DeriveKey(into="case_id", namespace=NAMESPACE, natural_key=list(NATURAL_KEY))
+
+gold = read(med.silver.reader("cases"), name="read-silver-cases")
+gold = transform(derive_key, gold, name="derive-key-cases")
+gold = transform(LatestPerKey(key="case_id", by="load_date"), gold, name="latest-per-key")
+validate(UniqueValidator("case_id"), gold, name="unique-validate")
+write(med.gold.writer("cases", Refresh()), gold, name="write-gold-cases")
 
 # Products Detail Table gold: DeriveKey (same identity → same key) → Unpivot wide→long
-detail_ingest_silver_to_gold(
-    med, NAMESPACE, NATURAL_KEY, CaseSchema, "case_products",
-    unpivot=Unpivot(id_vars=["case_id"], value_vars=PRODUCT_COLS,
-                    var_name="product_slot", value_name="product_name"),
-).run()
+products = read(med.silver.reader("case_products"), name="read-silver-products")
+products = transform(derive_key, products, name="derive-key-products")
+products = transform(
+    Unpivot(id_vars=["case_id"], value_vars=PRODUCT_COLS,
+            var_name="product_slot", value_name="product_name"),
+    products, name="unpivot",
+)
+write(med.gold.writer("case_products", Refresh()), products, name="write-gold-products")
 ```
 
-Both pipelines read the *same* raw table and share one `Rename` normalisation
+Both branches read the *same* raw table and share one `Rename` normalisation
 instance; each is independently validated and writes its own gold. See
-[gold-accumulation.md](gold-accumulation.md) for the gold builders and
+[gold-accumulation.md](gold-accumulation.md) for how gold accumulates and
 [case identity and the gold grain](adr/0009-case-identity-and-gold-grain.md)
 for the fan-out rationale.
 
@@ -679,7 +685,7 @@ Malformed JSON, or JSON of the wrong shape for the transform reading it, raises
 `JsonShapeError` (a `PipelineError`, category `data`) naming the column and the
 row's 0-based position **within the batch the transform was handed** — under a
 chunked read (`.read_chunks`) that is the chunk, not the whole source. It is a
-fail-fast error, not a quarantine route: what a hop does about a bad blob stays
+fail-fast error, not a quarantine route: what a feed does about a bad blob stays
 the caller's choice.
 
 ### `ExplodeJsonMap` — one row per key of a JSON object

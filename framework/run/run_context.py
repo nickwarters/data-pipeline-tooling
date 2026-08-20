@@ -88,21 +88,21 @@ class RunContext:
     ) -> "RunContext":
         """Derive a child context for a nested ``Pipeline.run()`` of one attempt.
 
-        A handler often runs several ``Pipeline`` hops (raw -> silver -> gold) in
-        one execution. Each ``p.run()`` inherits this context so every hop's
+        A handler often runs several ``Pipeline`` stages (raw -> silver -> gold) in
+        one execution. Each ``p.run()`` inherits this context so every stage's
         run-log records — and the rows its Writers stamp — carry the *same*
         ``pipeline_run_id`` / ``logical_run_id``: the one correlating key the
         three-tier scheme promises. Sharing the identity is the whole point; a
-        fresh id per hop would orphan the step records from the run summary and
+        fresh id per stage would orphan the step records from the run summary and
         the data they wrote.
 
-        The child keeps its **own** run-summary flag so recording a hop's summary
+        The child keeps its **own** run-summary flag so recording a stage's summary
         never marks *this* context recorded — the runner still writes the
         pipeline-level summary its freshness history depends on. The dry-run
         flag and its report are carried over too — the report by reference — so a
         preview stays a preview through every nesting level and accumulates every
-        hop's steps. The run parameters come along for the same reason: a nested
-        hop reads ``context.params`` exactly as the outer handler does.
+        stage's steps. The run parameters come along for the same reason: a nested
+        stage reads ``context.params`` exactly as the outer handler does.
 
         ``name`` defaults to this context's pipeline, for a caller deriving a
         child of the *same* pipeline. ``logical_run_id`` overrides the inherited
@@ -123,7 +123,7 @@ class RunContext:
             params=self.params,
             dry_run=self.dry_run,
         )
-        # Share the parent's report so a dry-run preview captures nested hops.
+        # Share the parent's report so a dry-run preview captures nested stages.
         child.dry_run_report = self.dry_run_report
         return child
 
@@ -135,7 +135,7 @@ def _date_text(value: dt.date | str) -> str:
 # The ambient run context for the current call stack. The runner and a dry run
 # both execute their handler inside ``active_context(ctx)``; a ``Pipeline.run()``
 # invoked with no explicit context inherits it (as a child, via
-# ``for_nested_pipeline``). That means every bare ``p.run()`` hop of one attempt
+# ``for_nested_pipeline``). That means every bare ``p.run()`` of one attempt
 # shares its ``pipeline_run_id`` and run log — and a dry-run flag reaches every
 # nested pipeline — without each call having to thread the context by hand.
 _ACTIVE_CONTEXT: contextvars.ContextVar["RunContext | None"] = contextvars.ContextVar(
@@ -150,7 +150,7 @@ def active_context(context: "RunContext") -> "Iterator[RunContext]":
     ``run_pipeline`` already does this around a pipeline's ``run(context)``, so
     a pipeline started by the operator CLI, by its own ``main()`` or by the
     orchestrator never needs it. It is here for the case that has no runner:
-    driving a ``run(context)`` or a single hop by hand, from a test or a scratch
+    driving a ``run(context)`` or a single step by hand, from a test or a scratch
     script. The eager steps read the *ambient* context, so a
     ``RunContext(dry_run=True)`` passed as an argument and never made active
     would be ignored -- and the writes it was meant to hold back would land::

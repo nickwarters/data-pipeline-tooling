@@ -2,7 +2,7 @@
 
 The script exists to be run against a network share, where a wrong answer is
 expensive to discover. Two things need guarding: the synthetic silver history
-must be shaped like the real one, so the hop under measurement is the real hop
+must be shaped like the real one, so what is measured is the real reduction
 and not a simplified stand-in; and the run must not touch anything in the
 directory an operator points it at.
 
@@ -53,7 +53,7 @@ def test_measure_reduces_the_history_to_one_row_per_case(tmp_path):
     assert timing.total_seconds > 0
 
 
-def test_measure_times_the_read_as_part_of_the_current_hop(tmp_path):
+def test_measure_times_the_read_as_part_of_building_current(tmp_path):
     """``read`` is a component of ``case_current``, not additional to it."""
     timing = _measure(tmp_path)
 

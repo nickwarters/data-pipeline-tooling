@@ -24,10 +24,10 @@ of the suite, mirroring the source layout) — wired together and ready to run:
 pipelines/orders/
   __init__.py
   schema.py            # @dataclass OrdersRow — the column/dtype contract
-  pipeline.py          # raw_/silver_/gold_hop, one per hop; run()/main wire the real ones
+  pipeline.py          # to_raw/to_silver/to_gold, one per medallion step; run()/main wire the real ones
   sample_data/orders.csv
 tests/pipelines/
-  test_orders.py       # drives raw_hop() with sample rows + a recording writer
+  test_orders.py       # drives to_raw() with sample rows + a recording writer
 migrations/orders/
   raw/0001_create_initial_tables.sql         # the feed's baseline DDL, one per
   silver/0001_create_initial_tables.sql      # database it writes — including
@@ -72,7 +72,7 @@ and quarantine describe the dataclass, so they carry the canonical names and the
 cap does apply.
 
 **`SELECT_RAW_COLUMNS` is what keeps those two in step.** The generated silver
-hop opens with a `SelectColumns` over it:
+step opens with a `SelectColumns` over it:
 
 ```python
 SELECT_RAW_COLUMNS = [f.name for f in fields(OrdersRow)]   # or the source's own names
@@ -101,7 +101,7 @@ SELECT_RAW_COLUMNS, and to a migration.
 ```
 
 `SelectColumns` raises if a listed column is absent, so a projection that has
-drifted from the source fails at the hop naming the column rather than landing a
+drifted from the source fails at the step naming the column rather than landing a
 short table. That is also why widening the feed is three edits and not one: the
 schema says what a row means, `SELECT_RAW_COLUMNS` says what silver keeps, and
 the migration says what the table is.
@@ -111,35 +111,35 @@ the migration says what the table is.
 `UPSTREAMS` tuple of freshness requirements — empty for a source feed). The
 framework addresses the pipeline by its path — `python -m cli run
 pipelines/orders` imports `pipelines.orders.pipeline` and executes
-`run(context)`. Each medallion hop is factored into its own
-`*_hop(reader, writer) -> Dataset` — the *one* definition of what that hop does:
+`run(context)`. Each medallion step is factored into its own
+`to_*(reader, writer) -> Dataset` — the *one* definition of what it does:
 
-- **`raw_hop`** gates the source with a `ColumnValidator` and lands a
+- **`to_raw`** gates the source with a `ColumnValidator` and lands a
   faithful copy.
-- **`silver_hop`** narrows the source columns (`SELECT_RAW_COLUMNS`), renames
+- **`to_silver`** narrows the source columns (`SELECT_RAW_COLUMNS`), renames
   them to the schema's vocabulary (`RENAME`), then `enforce`s the declared
   schema — casting each declared column to its declared type, partitioning bad
   rows into quarantine, and validating what remains, in that order.
-- **`gold_hop`** is a passthrough to start — reads silver, writes gold — with
+- **`to_gold`** is a passthrough to start — reads silver, writes gold — with
   a `TODO` to build the assembly, because *what* gold means is per-feed. For a
   worked example of a real one, see
   `pipelines/sharepoint_cases/gold.py`: a current-state reduce with a declared
   grain, plus six aggregates, all refreshed whole on every run.
 
-### Each hop runs where you can see it
+### Each step runs where you can see it
 
-The hops are written with the **eager steps** ([ADR-0027](adr/0027-eager-steps-are-the-default-authoring-model.md)):
+They are written with the **eager steps** ([ADR-0027](adr/0027-eager-steps-are-the-default-authoring-model.md)):
 every line does its work when it is reached and returns the rows themselves. Put
 a breakpoint on one, step over it, and the variable holds the actual data at that
-point in the feed. There is no shared recipe to look through and nothing to
-subclass — a generated `raw_hop` is the whole hop:
+point in the feed. There is no shared definition to look through and nothing to
+subclass — a generated `to_raw` is the whole thing:
 
 ```python
-def raw_hop(reader, writer):
-    data = read(reader)
+def to_raw(reader, writer):
+    data = read(reader, name="raw:read")
     expected = [f.name for f in fields(OrdersRow)]
-    validate(ColumnValidator(expected), data)
-    return write(writer, data)
+    validate(ColumnValidator(expected), data, name="raw:column_validator")
+    return write(writer, data, name="raw:write")
 ```
 
 Each step still emits exactly one run-log record — its timing, the row counts
@@ -147,19 +147,28 @@ either side, whether it committed — so the run registry, freshness and
 `cli status` see no difference between a feed written this way and one written
 with the deferred `Pipeline` builder.
 
-To change what the hop does, edit those lines. The cost of that is real and
-accepted: a policy change to "the standard raw hop" is now a change in each
-feed, not one. It buys a feed a junior developer can read top to bottom.
+**Each step names the layer it lands in**, because all three of a feed's steps
+record into one run log. Left to the derived names, `to_raw`'s and `to_silver`'s
+reads would come back as `read` and `read-2`, and an operator reading a failure
+would have to count. `read`/`write` take the layer as a prefix; `enforce` takes
+the same `name=` and prefixes all three steps it records
+(`silver:coerce`, `silver:quarantine`, `silver:schema_validator`). There is no
+grouping scope in the framework to open — the step's own name is the grouping,
+and a record's `pipeline` field is always the run's own label.
 
-A hop takes its **ports** — a `Reader` and a `Writer` — rather than a
-medallion profile, for two reasons: the *source* end of a raw hop isn't a
+To change what a step does, edit those lines. The cost of that is real and
+accepted: a policy change to "the standard source → raw step" is now a change in
+each feed, not one. It buys a feed a junior developer can read top to bottom.
+
+Each takes its **ports** — a `Reader` and a `Writer` — rather than a
+medallion profile, for two reasons: the *source* end of `to_raw` isn't a
 medallion layer at all, and injecting the ports is what lets the generated test
-drive the real hop in memory against a `RecordingWriter`. `run()` wires the real
-medallion layer Writers.
+drive the real thing in memory against a `RecordingWriter`. `run()` wires the
+real medallion layer Writers.
 
 `run()` wires the real `CsvReader` and the subject's layer Writers (deriving the
 raw/silver `AccumulateByRun` strategy from the `RunContext`, so re-drives under
-the same logical run id replace rather than duplicate), then runs the three hops
+the same logical run id replace rather than duplicate), then runs the three
 in order and returns the gold `Dataset`. Use `cli run --dry-run` to preview a
 run: every step reports its real columns, dtypes and a bounded row sample, and
 no write commits. `main()` is the thin entry for running the module directly —
@@ -171,8 +180,8 @@ one started with `cli run`. It catches the
 `stderr` with a non-zero exit, so an expected fail-fast abort (a failed check)
 reads as a clear message rather than an unhandled traceback (a genuine bug is not
 a `PipelineError` and keeps its trace). The generated `test_orders.py` calls
-`raw_hop` directly with sample rows (`given_rows`) and a `RecordingWriter`, so
-the first test exercises the real hop rather than a hand-rebuilt copy of it — a
+`to_raw` directly with sample rows (`given_rows`) and a `RecordingWriter`, so
+the first test exercises the real step rather than a hand-rebuilt copy of it — a
 second test runs the full `run(context)` filesystem path against the bundled
 sample and asserts it refines through to gold.
 
@@ -206,17 +215,17 @@ counts, a small row sample, and any validation failure (it stops fast on an
 error-severity one, just like a real run). Use it to confirm a schema, a
 `RENAME` map, or a processor reshapes the way you expect before you commit a
 single row. Because it skips the *current* run's writes, preview a feed whose
-upstream hops have already been landed for real — see
+upstream steps have already been landed for real — see
 [the operator CLI's `--dry-run`](operator-cli.md#previewing-a-pipeline----dry-run).
 
 Then **customise**: edit `schema.py`'s fields to your source columns (and add
 `Annotated` value rules as needed — see
 [schema-enforcement.md](schema-enforcement.md)), replace the sample CSV, swap
 `CsvReader` for another Reader (next section) if the source isn't a CSV, fill in
-the `silver_hop` `RENAME` and build out the `gold_hop`
+the `to_silver` `RENAME` and build out the `to_gold`
 (`def assemble_gold`). grow `test_<feed>.py` to assert the rows and processors you add. The
-silver hop already enforces the schema (`SchemaCoercion` + `SchemaValidator` — see
-[`schema-enforcement.md`](schema-enforcement.md)); the gold hop is a passthrough
+`to_silver` already enforces the schema (`SchemaCoercion` + `SchemaValidator` — see
+[`schema-enforcement.md`](schema-enforcement.md)); `to_gold` is a passthrough
 until you shape it.
 
 Finally, **document the feed's tables in a data dictionary** — one entry per
@@ -249,8 +258,8 @@ recording how many) so the generated dataclass stays a usable starting point.
 When a header name **isn't already a clean identifier** (spaces, punctuation,
 capitals — e.g. `Case Number`), it can't be a dataclass field, so the scaffold
 emits the verbatim source names as a `RAW_FEED_COLUMNS` constant and gates the raw
-hop's `ColumnValidator` on **those** rather than the schema's fields. It also fills
-in the `silver_hop`'s `RENAME` map from each source name to its canonical
+`to_raw`'s `ColumnValidator` on **those** rather than the schema's fields. It also fills
+in the `to_silver`'s `RENAME` map from each source name to its canonical
 field, so the generated feed already does the raw-stays-faithful /
 silver-canonicalises split end-to-end: raw validates and keeps the source's own
 names; silver renames them to the schema's identifier-named shape before coercing
@@ -290,7 +299,7 @@ tests/pipelines/
   identity.
 - **It refines through the settled ingest spine** — source → raw (a faithful,
   accumulated copy, the system of record) → silver (schema coerced + validated,
-  wiring `SchemaCoercion` + `SchemaValidator` onto the hop) — the same shape the
+  wiring `SchemaCoercion` + `SchemaValidator` onto the step) — the same shape the
   generic scaffold renders, importing only
   `case_review`, `tools.*` and the public facades, never framework internals.
 
@@ -299,26 +308,33 @@ assembled into **gold** — a single-feed current reduce, a multi-feed *join*
 enriching one Case Type, Detail Tables — is unique per Case Type and is an open
 design decision (snapshot-vs-join, single- vs multi-feed), so the
 gold step is left to you rather than baked into the template. `pipeline.py`
-sketches it as a commented seam with pointers to `ingest_silver_to_gold` (the
-single-feed current-gold reduce) and, for repeated sections / child rows,
-`detail_ingest_silver_to_gold` + [`pipelines/demo_fan_out.py`](../pipelines/demo_fan_out.py).
-Add the gold step by passing those declarations and the row schema explicitly,
-so any Detail Table receives the same identity inputs and derives a matching
+sketches it as a commented seam; [`pipelines/demo_fan_out.py`](../pipelines/demo_fan_out.py)
+is the runnable worked example of a Case table plus a Detail Table.
+
+There is deliberately **no shared gold builder to call**. Two of them existed —
+`ingest_silver_to_gold` and `detail_ingest_silver_to_gold` — and were removed:
+with this few pipelines there is not yet enough evidence of what a shared
+reduction would have to generalise over, and each one is a handful of lines in
+the feed that publishes it. Write it out, passing the feed's own declarations, so
+any Detail Table receives the same identity inputs and derives a matching
 `case_id`:
 
 ```python
-from case_review.gold import ingest_silver_to_gold
-
 from .schema import NATURAL_KEY, NAMESPACE, ClaimsRow
 
-gold = ingest_silver_to_gold(
-    med,
-    NAMESPACE,
-    NATURAL_KEY,
-    ClaimsRow,
+gold = read(med.silver.reader(FEED_NAME), name="read-silver")
+gold = transform(
+    DeriveKey(into="case_id", namespace=NAMESPACE, natural_key=list(NATURAL_KEY)),
+    gold,
+    name="derive-key",
 )
-gold.run()
+gold = transform(LatestPerKey(key="case_id", by="load_date"), gold, name="latest-per-key")
+validate(UniqueValidator("case_id"), gold, name="unique-validate")
+write(med.gold.writer(FEED_NAME, Refresh()), gold, name="write-gold")
 ```
+
+What makes a Case and its Detail rows agree is that both are handed the *same*
+`NAMESPACE` and `NATURAL_KEY` — not that both called one helper.
 
 Reach for the **generic** `scaffold <feed>` when the feed has no Case identity
 (Reference Data, an outbound staging table); reach for `--case-type` when the
@@ -337,9 +353,9 @@ write `Case Number: str`.
 (The `--from-feed-file` scaffold above handles this split for you when it sees
 non-identifier headers: it gates the raw validator on a `RAW_FEED_COLUMNS`
 constant of the verbatim source names, declares the canonical schema, and fills
-in the `silver_hop`'s `RENAME` map so the generated feed performs the silver
+in the `to_silver`'s `RENAME` map so the generated feed performs the silver
 step described here. The rest of this section is the manual form of what it
-generates — useful when you're writing or adjusting the silver hop by hand.)
+generates — useful when you're writing or adjusting `to_silver` by hand.)
 
 The fix is not a workaround — it's the canonicalisation that **raw → silver**
 exists to do. Raw stays faithful to the source (spaced names and all, so the
@@ -353,7 +369,7 @@ shape-hardening (`schema-enforcement.md`). The step order is:
 2. **`SchemaCoercion`** — cast each declared column to its declared type.
 3. **`SchemaValidator`** (as a post-validator) — check at the silver boundary.
 
-Add a `transform(Rename(RENAME), data)` step to `silver_hop`, *before* `enforce` and
+Add a `transform(Rename(RENAME), data)` step to `to_silver`, *before* `enforce` and
 the validator, so the renamed columns reach the schema check under their
 canonical names — which is what a feed scaffolded with `--from-feed-file` from a
 spaced header already renders:
@@ -848,11 +864,11 @@ vouching for actually landed.
 The two halves above wired into a real feed: **every** Case list declared in
 `CASE_LISTS`, each polled by its own `Modified` window into the same append-only
 raw and silver tables, then reduced to gold once and checkpointed per list. It
-follows the ordinary scaffold shape — one function per hop, driven by
-`run(context)` — and the first two hops are deliberately thin. Landing the list's rows as immutable
+follows the ordinary scaffold shape — one function per medallion step, driven by
+`run(context)` — and the first two are deliberately thin. Landing the list's rows as immutable
 versions is one job and interpreting them is another: raw and silver do no
 derivation and no parsing, and everything that reads meaning into a Case happens
-in the third hop (`gold.py`, thirteen tables refreshed whole on every poll — see the
+in the third (`gold.py`, thirteen tables refreshed whole on every poll — see the
 [data dictionary](data-dictionary-sharepoint-cases.md)).
 
 **0. One declaration says what is polled.** `schema.py` holds a frozen
@@ -866,9 +882,9 @@ one `ListPoll` per list polled — a list polled again inside the safety lag is
 skipped, not failed.
 
 **1. The read is narrowed to what raw stores.** `storable_observation` is a
-named transform in the raw hop that projects the response onto the source
+named transform in `to_raw` that projects the response onto the source
 columns plus the stamped metadata. `Modified` and `odata.etag` are dropped — `source_modified_at` and
-`source_version` say the same thing in the vocabulary every hop below reads — and
+`source_version` say the same thing in the vocabulary every step below reads — and
 so is `observed_at`, for the reason in point 4. Note the split it has to make: an
 **empty** window comes back as the declared projection only, and this list is read
 with `$select=*`, so almost every column is there because the client expanded the
@@ -876,7 +892,7 @@ star and none of them can be present when there are no rows. An empty frame is
 therefore reindexed onto the target columns (and cast to object — `reindex` types
 a column it had to invent as float), while a populated one is selected strictly
 and any missing column is named in a `SharePointFeedError`. This transform is
-the feed's only column gate: the raw hop wires no `ColumnValidator`, because a
+the feed's only column gate: `to_raw` wires no `ColumnValidator`, because a
 presence check downstream of a projection that already guarantees the columns
 could never fire.
 
@@ -897,7 +913,7 @@ never expanded and reading it as an empty role would hide a broken read. A
 missing `Title` is *not* an error — only the Responsible Party's display name is
 selected at all, and a directory display name is optional even then.
 
-**2. A quiet window runs the same hops as a busy one**, and the feed no longer
+**2. A quiet window runs the same steps as a busy one**, and the feed no longer
 pays for it below raw. A zero-row batch has no value to breach a declared type,
 so [the silver gate checks presence
 only](schema-enforcement.md#a-zero-row-frame-satisfies-any-declared-schema), and
@@ -909,7 +925,7 @@ workaround came out when both halves of the rule moved into the framework
 (#394), which is where they belong — the next quiet source would have
 rediscovered the same failure. What stays feed-side is the *raw* reindex in point
 1: raw stores what the list returned, so declaring an empty window's columns
-there is the feed's shape decision, not the schema's. Skipping the hop on an
+there is the feed's shape decision, not the schema's. Skipping the step on an
 empty batch would have been the smaller change and the wrong one — a quiet poll
 is not a different pipeline, and an operator reading the run log should see the
 same steps against the same tables, with zero rows.
@@ -940,15 +956,15 @@ and in the returned `ingestion_batch_id` instead.
 
 **5. Every watermark is committed last, after gold.** Advancing one vouches for
 its window having been *published*, not merely fetched — so the commits are the
-final statement of `run`, in one block below every list's hops and every gold
-table. That is why they are not committed per list after its silver hop.
+final statement of `run`, in one block below every list's steps and every gold
+table. That is why they are not committed per list after its silver write.
 
 Each list has its own watermark, keyed on `(site, list_id)`, so a newly onboarded
 list does a first load while the others resume. Where a partial failure lands:
 
 | Failure point | Committed |
 |---|---|
-| A list's raw or silver hop | The lists before it are in raw/silver (append-only, committed per hop). **No gold, no watermark advanced.** The next run re-polls every list from unchanged watermarks, `AppendOnly` no-ops the re-reads, and gold rebuilds whole. |
+| A list's raw or silver step | The lists before it are in raw/silver (append-only, committed per step). **No gold, no watermark advanced.** The next run re-polls every list from unchanged watermarks, `AppendOnly` no-ops the re-reads, and gold rebuilds whole. |
 | A gold table | Earlier gold tables stay refreshed. No watermark advanced — same convergence. |
 | Inside the commit loop | The lists before it advanced; the rest simply re-poll a wider window next time. Gold was already published from the whole history. |
 
@@ -956,7 +972,7 @@ list does a first load while the others resume. Where a partial failure lands:
 batch id and its row counts.
 
 Under a dry run nothing is committed, and the two halves of that come from
-different places. Every hop — raw, silver, and each gold table — is a bare
+different places. Every step — raw, silver, and each gold table — is a bare
 `p.run()`, so it inherits the **ambient** run context the runner makes active
 and previews its writes; nothing in the feed's own code decides that. The
 checkpoint is not a pipeline step, so it has no ambient skip to inherit and is

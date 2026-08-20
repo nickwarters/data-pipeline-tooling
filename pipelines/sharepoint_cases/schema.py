@@ -12,7 +12,7 @@ few non-obvious constraints behind them.
 Alongside the schemas, this module holds the feed's **declarations** -- the
 names it is known by and the identity a Case is keyed on. They live here
 rather than in ``pipeline.py`` because ``gold.py`` needs them and
-``pipeline.py`` imports ``gold.py``; a declaration both hops read belongs
+``pipeline.py`` imports ``gold.py``; a declaration both of them read belongs
 below both.
 """
 
@@ -220,7 +220,7 @@ class AnswerCaptureRow:
     """
 
     # DETAIL_ID_VARS, repeated onto every row by the two chained
-    # ExplodeJsonMap hops -- see its docstring for why this must carry
+    # ExplodeJsonMap passes -- see its docstring for why this must carry
     # NATURAL_KEY's columns.
     case_type: Annotated[str, NonNull()]
     source_item_id: Annotated[str, NonNull()]

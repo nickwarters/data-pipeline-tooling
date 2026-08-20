@@ -68,24 +68,29 @@ in and for the pipelines not yet converted.
 **The two interoperate.** A `Pipeline.run()` inside an eager `run(context)`
 inherits the same ambient context, so both models record against one
 `pipeline_run_id`. A part-converted feed is one run in the registry, not two.
-`pipelines/ingest` is deliberately left in that state as the worked example: raw
-and silver eager, the shared gold reduce still deferred.
 
 ### Two things the sub-`Pipeline` was carrying
 
 Converting the real pipelines — the SharePoint sync, the complaints Selection
 group, notifications — surfaced two jobs a nested `Pipeline` was doing that were
-nothing to do with deferring execution, and each is now its own step-level word.
+nothing to do with deferring execution.
 
-**`hop(name)` — grouping.** A step record carries both a `pipeline` and a `step`
-field, and a sub-`Pipeline` put its own name in the first. That is what let the
-sync's ~150 records stay readable: `sharepoint_cases:silver:claims / read` rather
-than `read-17`. Flattened into one namespace, an operator could no longer tell
-which list's read failed. `hop(name)` restores exactly that grouping, written
-where the steps are: the block's records carry `name` in their `pipeline` field
-and their step names restart inside it, while the run's identity — attempt id,
-logical run id, dry-run flag and its report — is inherited unchanged. A feed with
-a handful of steps needs none of it.
+**Grouping — solved by the step's own name, not a new word.** A step record
+carries both a `pipeline` and a `step` field, and a sub-`Pipeline` put its own
+name in the first. That is what let the sync's ~150 records stay readable:
+`silver:claims / read` rather than `read-17`. Flattened into one namespace, an
+operator could no longer tell which list's read failed.
+
+A `hop(name)` block was tried first and rejected: it reintroduced a second
+identity a record could be grouped under, and it coined a framework noun for
+something the existing `name=` argument already does. What a step is called is
+the author's to say, so a feed that drives the same shape many times over says
+it — `read(reader, name=f"silver:{case_list.case_type}:read")` — and a feed with
+a handful of steps says nothing and gets the derived names. The record's
+`pipeline` field is now always the run's own label, one per run.
+
+`enforce` is the one place that needed help, because it records three steps
+behind one call; it takes the same `name=` and prefixes all three.
 
 **`explain` / `write_trace` — the row trace.** `p.explain(...)` accumulated a
 per-row verdict as the graph ran, answering the governance question a row count
@@ -162,13 +167,13 @@ Deliberately out of scope, each its own decision:
   need it served, with better output, and a preview now names each step's kind
   (`Read` / `Transform` / `Quarantine` / `Validate` / `Write` / `Explain`) as the
   builder's nodes did. Every `describe()`-based test became a *recording* test:
-  drive the hop and assert what it recorded, which is a stronger pin because it
+  drive the step and assert what it recorded, which is a stronger pin because it
   proves the steps ran rather than merely being wired.
 - **`active_context` is now part of the facade.** The steps read the *ambient*
   context, so a `RunContext(dry_run=True)` handed to `run(context)` by hand and
   never made active would be ignored — and the writes it was meant to hold back
   would land. `run_pipeline` does it for every real run; anything driving a
-  `run(context)` or a single hop directly has to say so. Two of the notifications
+  `run(context)` or a single step directly has to say so. Two of the notifications
   tests failed loudly on exactly this during the conversion, which is the right
   failure mode, but it is a sharp edge worth knowing about.
 - A pipeline's `main()` now calls the same `run_pipeline` the operator CLI uses.

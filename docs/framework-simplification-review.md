@@ -129,7 +129,8 @@ decision and its consequences.
 - `pipelines/ingest` converted (raw and silver eager; the shared gold reduce
   left deferred on purpose, as the worked example of the two interoperating).
 - Both scaffold templates render eager pipelines, with `enforce` collapsing the
-  coerce → quarantine → validate sequence and hops renamed `*_builder` → `*_hop`.
+  coerce → quarantine → validate sequence and the medallion steps renamed
+  `*_builder` → `to_raw` / `to_silver` / `to_gold`.
 - Every scaffolded `main()` routed through `run_pipeline`, closing the
   divergence above.
 - `tests/framework/run/test_steps.py` — 29 tests over what the steps return and
@@ -139,15 +140,17 @@ decision and its consequences.
 Then, in a second pass, the six pipelines closest to what the team actually runs:
 `complaints_a`/`_b`/`_c` (the three Case Type ingests), `sharepoint_cases` and
 its `gold.py` (the Sync), `notifications`, and `complaint_selection` (the
-Selection group). That pass added two words to the step vocabulary, each of them
-a job a nested `Pipeline` had been doing that was nothing to do with deferring
-execution:
+Selection group). That pass surfaced two jobs a nested `Pipeline` had been doing
+that were nothing to do with deferring execution:
 
-- **`hop(name)`** — the grouping a sub-`Pipeline`'s label gave. Sync records ~134
-  step records per poll across 23 hops; flattened into one namespace they read
-  `read`, `read-2` … `read-24`. `hop` puts the name back in the record's
-  `pipeline` field and restarts step names inside the block, inheriting the run's
-  identity and dry-run flag.
+- **Step naming** — the grouping a sub-`Pipeline`'s label gave. Sync records ~134
+  step records per poll across 23 tables; flattened into one namespace they read
+  `read`, `read-2` … `read-24`. A `hop(name)` scope was tried and rejected for
+  coining a framework noun the existing `name=` argument already covers. Each
+  step now names what it is building — `silver:claims:read` — and `enforce`
+  prefixes the three steps it records with the same name. One consequence worth
+  having: a record's `pipeline` field is now always the run's own label, so
+  there is one identity to group by rather than two.
 - **`explain(id_column)` / `write_trace(writer, trace, survivors)`** — the row
   trace `p.explain(...)` accumulated, opened as a block. Same `RowTrace`, same
   published verdict, same considered/selected/excluded counts on the step.

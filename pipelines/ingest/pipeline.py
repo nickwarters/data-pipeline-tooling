@@ -27,9 +27,13 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from case_review.gold import ingest_silver_to_gold
-from framework.core import PipelineError, SchemaValidator, format_failure
-from framework.io import AccumulateByRun, CsvReader
+from framework.core import (
+    PipelineError,
+    SchemaValidator,
+    UniqueValidator,
+    format_failure,
+)
+from framework.io import AccumulateByRun, CsvReader, Refresh
 from framework.run import (
     RunContext,
     coerce,
@@ -39,12 +43,17 @@ from framework.run import (
     validate,
     write,
 )
-from framework.transform import Filter
+from framework.transform import DeriveKey, Filter, LatestPerKey
 from tools.environments import known_environments, resolve_base_dir
 from tools.medallion import medallion
 from tools.store import StoreRegistry
 
 from .schema import NAMESPACE, NATURAL_KEY, ActivityCase
+
+# A Case is identified by its ``case_id`` everywhere downstream, so the column
+# DeriveKey stamps, LatestPerKey reduces by and UniqueValidator gates on is the
+# same one. Declared here because this feed's gold is written here.
+CASE_ID_COLUMN = "case_id"
 
 SAMPLE_CSV = Path(__file__).parent / "sample_data" / "activity_cases.csv"
 
@@ -84,11 +93,24 @@ def run(context: RunContext):
     write(med.silver.writer(NAMESPACE, strategy), rows, name="write-silver")
 
     # --- gold: one current row per Case -------------------------------------
-    # Still the deferred builder: this reduce is shared with demo_fan_out and
-    # the Detail-Table path, so it is converted separately. The two models
-    # interoperate — the hop runs under this same attempt and records against
-    # the same run — which is what the migration period looks like.
-    return ingest_silver_to_gold(med, NAMESPACE, NATURAL_KEY, ActivityCase).run()
+    # Silver accumulates every run, so gold re-reads the whole history and keeps
+    # each Case's latest observation. UniqueValidator sits after the reduction,
+    # where it cannot fire — a tripwire on the grain, not a check that does work.
+    cases = read(med.silver.reader(NAMESPACE), name="read-silver")
+    cases = transform(
+        DeriveKey(
+            into=CASE_ID_COLUMN,
+            namespace=NAMESPACE,
+            natural_key=list(NATURAL_KEY),
+        ),
+        cases,
+        name="derive-key",
+    )
+    cases = transform(
+        LatestPerKey(key=CASE_ID_COLUMN, by="load_date"), cases, name="latest-per-key"
+    )
+    validate(UniqueValidator(CASE_ID_COLUMN), cases, name="unique-validate")
+    return write(med.gold.writer(NAMESPACE, Refresh()), cases, name="write-gold")
 
 
 def main(argv: list[str]) -> int:

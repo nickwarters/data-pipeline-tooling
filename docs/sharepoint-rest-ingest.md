@@ -79,7 +79,7 @@ and each keeps its own watermark, so these shapes are per list. Four of them:
   is then rebuilt whole from the accumulated silver history under the rerun's own
   window end. Both paths converge on the same state.
 - **A failure part-way through the lists.** The lists polled before it have
-  their observations in raw and silver (append-only, committed per hop), but
+  their observations in raw and silver (append-only, committed per step), but
   nothing was published to gold and **no** watermark moved. The next run
   re-polls every list from unchanged watermarks, the re-reads no-op, and gold
   rebuilds whole.

@@ -845,7 +845,7 @@ class Pipeline:
         # set by the runner around a handler, or by a dry run — as a child, so a
         # bare ``p.run()`` records under the attempt's shared ``pipeline_run_id``
         # (and stamps the rows it writes with it) instead of minting a fresh id
-        # that would orphan this hop's records. With no ambient context at all
+        # that would orphan this pipeline's records. With no ambient context at all
         # (an author running a lone pipeline) mint a fresh default.
         if context is None:
             ambient = current_context()
@@ -950,7 +950,7 @@ class Pipeline:
 
         The context this run resolved to is made **ambient** for the duration of
         the walk. The runner already does that around a handler, but a pipeline
-        run with an *explicit* context — a script, a test, a hop invoked
+        run with an *explicit* context — a script, a test, a stage invoked
         directly — would otherwise execute with no ambient context at all, and a
         component that reads one (a Writer stamping the run that wrote the row)
         would silently see nothing. One rule instead: while a pipeline is
