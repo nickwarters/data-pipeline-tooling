@@ -684,3 +684,171 @@ test('the Summary shows the resolution details to reviewer-side audiences, as th
   assert.match(root.textContent, /Status: Cancelled/);
   assert.match(root.textContent, /Justification: Customer declined contact/);
 });
+
+/**
+ * A catalogue whose Question Definitions declare the top grouping level, so the
+ * Summary has a Category to show.
+ * @type {import('../src/sharepoint-client.js').QuestionDefinition[]}
+ */
+const CATEGORISED_CATALOGUE = /** @type {any} */ ([
+  {
+    id: 'q-open',
+    text: 'Greeted?',
+    category: 'Conduct',
+    questionGroup: 'Opening',
+    responseType: 'yes-no-na',
+    failureValues: ['No'],
+    deprecated: false,
+  },
+  {
+    id: 'q-needs',
+    text: 'Needs found?',
+    category: 'Compliance',
+    questionGroup: 'Discovery',
+    responseType: 'yes-no-na',
+    failureValues: ['No'],
+    remediationActions: ['Retrain.'],
+    deprecated: false,
+  },
+]);
+
+test('the Questions block groups its counts under the Category headings', () => {
+  const root = rootOf(
+    render({
+      catalogue: CATEGORISED_CATALOGUE,
+      summarySections: ['questions'],
+      answers: { 'q-open': { value: 'No' }, 'q-needs': { value: 'Yes' } },
+    })
+  );
+
+  assert.ok(getByRole(root, 'heading', { name: 'Conduct' }));
+  assert.ok(getByRole(root, 'heading', { name: 'Compliance' }));
+  // The per-group counts are still there — the Category is a level above them,
+  // not a replacement for them.
+  assert.ok(getByText(root, 'Opening: 0 pass, 1 fail'));
+  assert.ok(getByText(root, 'Discovery: 1 pass, 0 fail'));
+});
+
+test('the Questions block files an uncategorised group under General beside the named Categories', () => {
+  const root = rootOf(
+    render({
+      catalogue: /** @type {any} */ ([
+        ...CATEGORISED_CATALOGUE,
+        {
+          id: 'q-bare',
+          text: 'Anything else?',
+          questionGroup: 'Wrap-up',
+          responseType: 'yes-no-na',
+          failureValues: ['No'],
+          deprecated: false,
+        },
+      ]),
+      summarySections: ['questions'],
+      answers: {
+        'q-open': { value: 'No' },
+        'q-needs': { value: 'Yes' },
+        'q-bare': { value: 'Yes' },
+      },
+    })
+  );
+
+  assert.ok(getByRole(root, 'heading', { name: 'General' }));
+  assert.ok(getByText(root, 'Wrap-up: 1 pass, 0 fail'));
+});
+
+test('the Questions block stays a flat list when no question declares a Category', () => {
+  const root = rootOf(
+    render({
+      summarySections: ['questions'],
+      answers: { 'q-open': { value: 'No' } },
+    })
+  );
+
+  const counts = findByClass(root, 'cora-summary-counts');
+  assert.ok(getByText(counts, 'Opening: 0 pass, 1 fail'));
+  assert.equal(counts.querySelectorAll('h4').length, 0);
+});
+
+test('an Issues entry names the Category above the Question Group it contains', () => {
+  const root = rootOf(
+    render({
+      catalogue: CATEGORISED_CATALOGUE,
+      summarySections: ['issues'],
+      answers: { 'q-open': { value: 'No' } },
+    })
+  );
+
+  const issues = getByRole(root, 'heading', { name: 'Issues' }).parentNode;
+  assert.equal(
+    findByClass(issues, 'cora-summary-category').textContent,
+    'Conduct'
+  );
+  // The outer level goes above the card's existing run of lines, which is
+  // ordering the per-class lookups cannot see.
+  assert.deepEqual(paragraphClasses(issues), [
+    'cora-summary-category',
+    'cora-remediation-group',
+    'cora-remediation-question',
+    'cora-remediation-answer',
+  ]);
+  // The Question Group and the wording still say what they said.
+  assert.equal(
+    findByClass(issues, 'cora-remediation-group').textContent,
+    'Opening'
+  );
+  assert.equal(
+    findByClass(issues, 'cora-remediation-question').textContent,
+    'Greeted?'
+  );
+});
+
+test('a Remediation tracking entry names the Category above its Question Group', () => {
+  const root = rootOf(
+    render({
+      catalogue: CATEGORISED_CATALOGUE,
+      summarySections: ['remediation'],
+      answers: {
+        'q-needs': {
+          value: 'No',
+          remediationActions: [{ id: 'ra-1', text: 'Retrain.' }],
+        },
+      },
+    })
+  );
+
+  const remediation = getByRole(root, 'heading', {
+    name: 'Remediation',
+  }).parentNode;
+  assert.equal(
+    findByClass(remediation, 'cora-summary-category').textContent,
+    'Compliance'
+  );
+  // The last, unclassed line is the resolution status the tracking block adds
+  // below every question; the Category is above all three question lines.
+  assert.deepEqual(paragraphClasses(remediation), [
+    'cora-summary-category',
+    'cora-remediation-group',
+    'cora-remediation-question',
+    '',
+  ]);
+  assert.equal(
+    findByClass(remediation, 'cora-remediation-group').textContent,
+    'Discovery'
+  );
+  assert.equal(
+    findByClass(remediation, 'cora-remediation-question').textContent,
+    'Needs found?'
+  );
+});
+
+test('a question with no Category contributes no eyebrow to its Summary entry', () => {
+  const root = rootOf(
+    render({
+      summarySections: ['issues'],
+      answers: { 'q-open': { value: 'No' } },
+    })
+  );
+
+  const issues = getByRole(root, 'heading', { name: 'Issues' }).parentNode;
+  assert.equal(findAllByClass(issues, 'cora-summary-category').length, 0);
+});

@@ -55,8 +55,8 @@ test('buildSummaryModel: pass/fail counts per Question Group over answered, appl
   });
   const model = buildSummaryModel(catalogue, answers);
   assert.deepEqual(model.groupCounts, [
-    { group: 'Opening', pass: 0, fail: 1 },
-    { group: 'Discovery', pass: 1, fail: 1 },
+    { category: undefined, group: 'Opening', pass: 0, fail: 1 },
+    { category: undefined, group: 'Discovery', pass: 1, fail: 1 },
   ]);
 });
 
@@ -90,7 +90,9 @@ test('buildSummaryModel: excludes deprecated questions and unanswered scorable q
   ];
   // q-live answered, q-old deprecated (dropped), q-blank applicable but unanswered.
   const model = buildSummaryModel(cat, { 'q-live': { value: 'Yes' } });
-  assert.deepEqual(model.groupCounts, [{ group: 'A', pass: 1, fail: 0 }]);
+  assert.deepEqual(model.groupCounts, [
+    { category: undefined, group: 'A', pass: 1, fail: 0 },
+  ]);
 });
 
 test('buildSummaryModel: remediationActionCount sums selected actions + free-form across failed answers', () => {
@@ -144,6 +146,7 @@ test('buildSummaryModel: failures list each failed Answer with its selected acti
   assert.deepEqual(model.failures, [
     {
       id: 'q-open',
+      category: undefined,
       questionGroup: 'Opening',
       text: 'Greeted?',
       answer: 'No',
@@ -151,6 +154,7 @@ test('buildSummaryModel: failures list each failed Answer with its selected acti
     },
     {
       id: 'q-resolve',
+      category: undefined,
       questionGroup: 'Discovery',
       text: 'Resolved?',
       answer: 'No',
@@ -183,10 +187,101 @@ test('buildSummaryModel: failure with a multi-choice value joins selections for 
   assert.deepEqual(model.failures, [
     {
       id: 'q-prod',
+      category: undefined,
       questionGroup: undefined,
       text: 'Defects?',
       answer: 'A, B',
       actions: ['Fix B.'],
+    },
+  ]);
+});
+
+test('buildSummaryModel: counts carry the Category their Question Group sits under', () => {
+  /** @type {QuestionDefinition[]} */
+  const cat = [
+    {
+      id: 'q-a',
+      text: 'Greeted?',
+      category: 'Conduct',
+      questionGroup: 'Opening',
+      responseType: 'yes-no-na',
+      failureValues: ['No'],
+      deprecated: false,
+    },
+    {
+      id: 'q-b',
+      text: 'Recorded?',
+      category: 'Compliance',
+      questionGroup: 'Records',
+      responseType: 'yes-no-na',
+      failureValues: ['No'],
+      deprecated: false,
+    },
+  ];
+  const model = buildSummaryModel(cat, {
+    'q-a': { value: 'Yes' },
+    'q-b': { value: 'No' },
+  });
+  assert.deepEqual(model.groupCounts, [
+    { category: 'Conduct', group: 'Opening', pass: 1, fail: 0 },
+    { category: 'Compliance', group: 'Records', pass: 0, fail: 1 },
+  ]);
+});
+
+test('buildSummaryModel: one Question Group name under two Categories counts as two rows', () => {
+  /** @type {QuestionDefinition[]} */
+  const cat = [
+    {
+      id: 'q-a',
+      text: 'Greeted?',
+      category: 'Conduct',
+      questionGroup: 'Checks',
+      responseType: 'yes-no-na',
+      failureValues: ['No'],
+      deprecated: false,
+    },
+    {
+      id: 'q-b',
+      text: 'Recorded?',
+      category: 'Compliance',
+      questionGroup: 'Checks',
+      responseType: 'yes-no-na',
+      failureValues: ['No'],
+      deprecated: false,
+    },
+  ];
+  const model = buildSummaryModel(cat, {
+    'q-a': { value: 'Yes' },
+    'q-b': { value: 'No' },
+  });
+  assert.deepEqual(model.groupCounts, [
+    { category: 'Conduct', group: 'Checks', pass: 1, fail: 0 },
+    { category: 'Compliance', group: 'Checks', pass: 0, fail: 1 },
+  ]);
+});
+
+test('buildSummaryModel: a failure carries the Category of the question that failed', () => {
+  /** @type {QuestionDefinition[]} */
+  const cat = [
+    {
+      id: 'q-a',
+      text: 'Greeted?',
+      category: 'Conduct',
+      questionGroup: 'Opening',
+      responseType: 'yes-no-na',
+      failureValues: ['No'],
+      deprecated: false,
+    },
+  ];
+  const model = buildSummaryModel(cat, { 'q-a': { value: 'No' } });
+  assert.deepEqual(model.failures, [
+    {
+      id: 'q-a',
+      category: 'Conduct',
+      questionGroup: 'Opening',
+      text: 'Greeted?',
+      answer: 'No',
+      actions: [],
     },
   ]);
 });

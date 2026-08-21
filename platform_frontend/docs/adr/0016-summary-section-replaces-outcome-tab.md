@@ -12,7 +12,7 @@ The case-review tab row is **Case Details · Review · Issues · Summary · Reme
 
 ## What Summary is
 
-A first-class **Section** that is **never `edit`** — only `read-only` or `hidden`. It rolls up onto one page: the **Case Details** fields, pass/fail counts per question category, **Remediation Action** counts, each _failed_ **Answer** with its actions, key dates, and the **Current Outcome**. Responsible Parties do not see Summary while the Case is `In-progress`; they see it read-only once the Case is reportable. Case Types may configure other Sections, but an explicit Section config must include Summary because Summary owns the completion control.
+A first-class **Section** that is **never `edit`** — only `read-only` or `hidden`. It rolls up onto one page: the **Case Details** fields, pass/fail counts per **Question Group**, **Remediation Action** counts, each _failed_ **Answer** with its actions, key dates, and the **Current Outcome**. Both grouping levels are shown, as the Review tab shows them: the counts nest under their **Category** heading, and each rolled-up question card names its Category on the line above its **Question Group**. The Category level is rendered only when the Case Type declares one, so a bank that names no Category reads exactly as it did before the level existed. Responsible Parties do not see Summary while the Case is `In-progress`; they see it read-only once the Case is reportable. Case Types may configure other Sections, but an explicit Section config must include Summary because Summary owns the completion control.
 
 ## Configuration: per-Section `showInSummary`
 

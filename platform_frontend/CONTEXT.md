@@ -167,11 +167,11 @@ The curated, per-**Case Type** working set of **Question Definitions** — their
 _Avoid_: Catalogue (reserve for the runtime form — the bank joined to **Answers** to compute applicability), Question pool
 
 **Question Group**:
-The inner of the two grouping levels on a **Question Definition** (`questionGroup` — what the `category` field meant before #390). Progress counts, **Summary** pass/fail counts, and the bulk **Group Outcome** all operate per Question Group. Optional; ungrouped questions fall back to `General` on the case review page and `Uncategorised` in the bank editor.
+The inner of the two grouping levels on a **Question Definition** (`questionGroup` — what the `category` field meant before #390). Progress counts, **Summary** pass/fail counts, and the bulk **Group Outcome** all operate per Question Group; a Summary count is keyed by the **Category**/Question Group _pair_, so one group name declared under two Categories counts as two rows. Optional; ungrouped questions fall back to `General` on the case review page and `Uncategorised` in the bank editor.
 _Avoid_: Section (reserved for the role-gated tab areas), Category (now the level above)
 
 **Category**:
-The top, presentation-only grouping level on a **Question Definition** (`category`, #390). Displayed to **Reviewers** under whatever name the **Case Type** gives it (e.g. "COGG Section") as a heading above its nested **Question Groups**. Never touches applicability or the **Outcome**. Optional.
+The top, presentation-only grouping level on a **Question Definition** (`category`, #390). Displayed to **Reviewers** under whatever name the **Case Type** gives it (e.g. "COGG Section") as a heading above its nested **Question Groups** on the Review tab, and repeated on the **Summary** tab — over the pass/fail counts, and as the top line of each rolled-up **Issue** and **Remediation** entry, above the **Question Group** line those cards already carry. Never touches applicability or the **Outcome**. Optional.
 _Avoid_: COGG Section (a per-Case-Type display label, not a code/domain term), Section
 
 **General Question**:

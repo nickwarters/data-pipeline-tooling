@@ -7,8 +7,8 @@ import { answerRemediation } from './answer-remediation.js';
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
 
 /**
- * @typedef {{ group: string, pass: number, fail: number }} GroupCount
- * @typedef {{ id: string, questionGroup: string | undefined, text: string, answer: string, actions: string[] }} SummaryFailure
+ * @typedef {{ category: string | undefined, group: string, pass: number, fail: number }} GroupCount
+ * @typedef {{ id: string, category: string | undefined, questionGroup: string | undefined, text: string, answer: string, actions: string[] }} SummaryFailure
  * @typedef {{ groupCounts: GroupCount[], remediationActionCount: number, failures: SummaryFailure[] }} SummaryModel
  */
 
@@ -39,9 +39,15 @@ export function buildSummaryModel(catalogue, answers) {
     const v = answer?.value;
     const answered = Array.isArray(v) ? v.length > 0 : !!v;
     if (!answered) continue;
+    // Counts are keyed by the *pair* of grouping levels, not the Question Group
+    // alone: `category` is the level above, so the same group name declared
+    // under two categories is two rows, exactly as the Review tab renders them.
+    const category = q.category || undefined;
     const group = q.questionGroup || 'General';
-    if (!counts.has(group)) counts.set(group, { group, pass: 0, fail: 0 });
-    const entry = /** @type {GroupCount} */ (counts.get(group));
+    const key = `${category ?? ''}\u0000${group}`;
+    if (!counts.has(key))
+      counts.set(key, { category, group, pass: 0, fail: 0 });
+    const entry = /** @type {GroupCount} */ (counts.get(key));
     if (isFailure(q, answer)) entry.fail += 1;
     else entry.pass += 1;
   }
@@ -76,6 +82,7 @@ export function buildSummaryModel(catalogue, answers) {
     if (remediation?.freeForm) actions.push(remediation.freeForm);
     return {
       id: q.id,
+      category: q.category || undefined,
       questionGroup: q.questionGroup,
       text: q.text,
       answer: Array.isArray(v) ? v.join(', ') : v,
