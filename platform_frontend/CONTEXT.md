@@ -480,11 +480,14 @@ uses the candidate Case's ETag to guard the write.
 
 **In progress** (Action Centre group):
 Every Case a **Reviewer** currently holds — both **outstanding** statuses, `In-progress`
-and `Actions In Progress` — aged from when the Case was created. Unlike the other
+and `Actions In Progress` — aged from its current **Allocation** (`assignedAt`). Unlike the other
 groups it is not a reason to act but the whole of the work: a Case that is also Overdue
 is in both, and is noted as a second reason where it appears. Its count is **not** the
 same number as the KPI strip's "In progress" tile, which is a narrower client-side
-reading of the same word.
+reading of the same word. An outstanding row with `AssignedReviewer` must have
+`AssignedAt`; unassigned rows carry null. This does not require completed or void rows
+to carry the clock. Legacy outstanding allocations are backfilled from authoritative
+allocation evidence, never from `Created` as a fallback.
 
 ### Communication
 

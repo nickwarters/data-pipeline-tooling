@@ -116,10 +116,9 @@ function outcomeAnswers(value) {
  * Action Centre (read by ?asUser=action-centre): one row per reason group,
  * carrying the hoisted flags and clocks the real backend would compute.
  *
- * Every assigned Case here was handed to its Reviewer when it was created, so
- * its `assignedAt` repeats its `created`. The unallocated Case carries `null`:
- * nobody holds it, so there is no moment it was handed over — and taking it
- * through "Request next Case" is what visibly stamps one.
+ * Action Centre Cases carry their current allocation time independently of
+ * `created`; one deliberately makes the clocks differ. The unallocated Case
+ * carries `null`, and "Request next Case" visibly stamps it.
  *
  * @type {CaseRow[]}
  */
@@ -609,7 +608,9 @@ export const cases = [
     notes: '',
     completedAt: null,
     dueDate: _yesterday.toISOString(),
-    created: _nineDaysAgo.toISOString(),
+    // Created earlier, then allocated nine days ago: the Action Centre must
+    // show nine days in progress, never the age of the Case itself.
+    created: _twentyDaysAgo.toISOString(),
     assignedAt: _nineDaysAgo.toISOString(),
     etag: 'etag-ac-od1',
   },

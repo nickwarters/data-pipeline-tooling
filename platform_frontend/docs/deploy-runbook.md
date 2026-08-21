@@ -44,13 +44,18 @@ script lives in.
 Nothing in the gate can see SharePoint, so column provisioning is on you and has
 to be done **before** the upload, not after.
 
-- **`AssignedAt`** (Date and Time, not indexed) on **every Case Type list** in
-  the environment you are deploying to — the `uat_`-prefixed lists too. Reads
-  degrade safely without it (the Case read is `$select=*`, so a list lacking the
-  column simply answers without it), but the client writes `AssignedAt` on every
-  PATCH that sets the Assigned Reviewer, and SharePoint answers a PATCH naming an
-  unknown column with a **400**. The allocation claim is exactly such a write, so
-  on a list without the column **"Request next Case" fails outright**.
+- **`AssignedAt`** (Date and Time, **indexed**) on **every Case Type list** in
+  the environment you are deploying to — the `uat_`-prefixed lists too. It is
+  used by the Action Centre's oldest-first query and “N days in progress” wording.
+  If the column is absent, assignment writes fail with **400**, and the entire
+  Action Centre reason/headline read fails because its filter/order names the
+  missing column. Before rollout, use authoritative SharePoint assignment/list
+  version history to backfill legacy outstanding allocations; this evidence
+  check is a predeploy gate. Never substitute `Created`. Verify that every
+  outstanding row with `AssignedReviewer` has `AssignedAt`; unassigned rows carry
+  null. This does not require completed or void rows to carry it. Any unbackfilled
+  outstanding allocation is silently excluded from both the worklist and its
+  headline count. The client stamps new assignments automatically.
 
 See the [Case Type onboarding checklist](./case-type-onboarding.md) for
 the full column schema.

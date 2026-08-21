@@ -155,6 +155,7 @@ test('worstFirstOrder: On Hold sorts longest-parked first on placedOnHoldAt', ()
 
 test('activeFilter: In progress is every outstanding status the reviewer holds', () => {
   assert.deepEqual(activeFilter(reason('inProgress'), 'u1'), {
+    assignedAtPresent: true,
     anyOf: [
       { status: CASE_STATUS.IN_PROGRESS },
       { status: CASE_STATUS.ACTIONS_IN_PROGRESS },
@@ -163,17 +164,27 @@ test('activeFilter: In progress is every outstanding status the reviewer holds',
   });
 });
 
-test('worstFirstOrder: In progress sorts oldest-held first on created', () => {
+test('headlineFilter: In progress keeps the required allocation clock inside its OR branch', () => {
+  assert.deepEqual(headlineFilter([reason('inProgress')], 'u1'), {
+    anyOf: [activeFilter(reason('inProgress'), 'u1')],
+  });
+});
+
+test('worstFirstOrder: In progress sorts oldest allocation first', () => {
   assert.deepEqual(worstFirstOrder(reason('inProgress')), {
-    orderBy: 'created',
+    orderBy: 'assignedAt',
     orderDir: 'asc',
   });
 });
 
 test('waitingInfo: the In progress chip counts days held, singular guarded', () => {
-  /** @param {string} created */
-  const chip = (created) =>
-    waitingInfo(caseRow({ created }), reason('inProgress'), NOW);
+  /** @param {string} assignedAt */
+  const chip = (assignedAt) =>
+    waitingInfo(
+      caseRow({ created: '2026-01-01T00:00:00Z', assignedAt }),
+      reason('inProgress'),
+      NOW
+    );
 
   assert.deepEqual(chip('2026-07-03T00:00:00Z'), {
     days: 1,
@@ -187,6 +198,30 @@ test('waitingInfo: the In progress chip counts days held, singular guarded', () 
   });
   // The placeholder cadence, the same open question On Hold carries.
   assert.equal(chip('2026-06-20T00:00:00Z').breached, true);
+});
+
+test('waitingInfo: In progress never falls back to Created when AssignedAt is invalid', () => {
+  const oldCase = {
+    created: '2020-01-01T00:00:00Z',
+  };
+  for (const assignedAt of [undefined, null, 'not-a-date']) {
+    assert.deepEqual(
+      waitingInfo(
+        caseRow({ ...oldCase, assignedAt }),
+        reason('inProgress'),
+        NOW
+      ),
+      { days: 0, label: '0 days in progress', breached: false }
+    );
+  }
+});
+
+test('waitingInfo: a malformed non-In-progress clock is intentionally normalised to zero days', () => {
+  assert.equal(
+    waitingInfo(caseRow({ dueDate: 'not-a-date' }), reason('overdue'), NOW)
+      .days,
+    0
+  );
 });
 
 test('secondaryReasons: In progress is not noted as a second reason', () => {

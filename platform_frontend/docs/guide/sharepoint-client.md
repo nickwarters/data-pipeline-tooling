@@ -166,7 +166,7 @@ behind the fallback banner. A test fails on exactly that, naming the command.
  * title: string,
  * status: 'In-progress' | 'Actions In Progress' | 'Completed' | 'Void',
  * assignedReviewer: string,
- * assignedAt?: string | null,
+ * assignedAt: string | null,
  * responsibleParty: string,
  * answers: Record<string, Answer>,
  * conversation: Message[],
@@ -183,7 +183,7 @@ behind the fallback banner. A test fails on exactly that, naming the command.
  */
 ```
 
-The full shape (the `Effective*` reporting columns, `Appeals`, etc.) lives in `src/sharepoint-client.js`; the fields above are the storage-relevant subset. `status` widened to three values with the lifecycle change; `reportableAt` / `remediationDueDate` are stamped at Send Actions; `amendedOutcome` carries Controls' post-completion verdict and **replaces the removed `overrides[]` blob**. The client stamps `assignedAt` itself on every write that sets `assignedReviewer` (and clears it when the Reviewer is cleared), so no caller stamps it — but `dueDate` on that same write is stamped by the _caller_, the dashboard allocation claim, because the review SLA it is computed from is per-Case-Type and the client is deliberately list-generic. See the [Case Type onboarding checklist](../case-type-onboarding.md) for the SharePoint columns behind each field.
+The full shape (the `Effective*` reporting columns, `Appeals`, etc.) lives in `src/sharepoint-client.js`; the fields above are the storage-relevant subset. `status` widened to three values with the lifecycle change; `reportableAt` / `remediationDueDate` are stamped at Send Actions; `amendedOutcome` carries Controls' post-completion verdict and **replaces the removed `overrides[]` blob**. The client stamps `assignedAt` itself on every write that sets `assignedReviewer` (and clears it when the Reviewer is cleared), so no caller stamps it. An outstanding row with `AssignedReviewer` must have `AssignedAt`; unassigned rows carry null. This does not require completed or void rows to carry the clock. The Action Centre's In progress filter requires that clock, orders it server-side, and never falls back to `Created`. `dueDate` on the assignment write is stamped by the _caller_, the dashboard allocation claim, because the review SLA it is computed from is per-Case-Type and the client is deliberately list-generic. See the [Case Type onboarding checklist](../case-type-onboarding.md) for the SharePoint columns behind each field.
 
 `answers` and `conversation` are stored as JSON blobs in the SharePoint list. `HttpSharePointClient` handles the serialisation/deserialisation; consumers always receive and send parsed JS objects.
 
@@ -194,7 +194,7 @@ has one list, so every Case read supplies that option explicitly; it is the
 scope of the read, not a row predicate.
 
 `ListCasesFilter` contains only predicates on rows in that list, such as
-`status`, `assignedReviewer`, `completedAfter`, and `titlePrefix`. It has no
+`status`, `assignedReviewer`, `assignedAtPresent`, `completedAfter`, and `titlePrefix`. It has no
 `caseType` field. `CaseRow.caseType` remains returned row data and can be used
 for display, grouping, and downstream role decisions.
 

@@ -206,9 +206,9 @@ not. One view now, with no scope to choose.
 **A fifth reason, In progress, joins the table last.** It is the whole of a Reviewer's
 open work — the `OUTSTANDING_STATUSES` pair, `In-progress` and `Actions In Progress`,
 which is the same query the Outstanding Cases panel already fetches, moved to
-`lib/case-statuses.js` so both read one declaration. Its clock is `Created`, the one
-date every Case has and no transition rewrites, so the group ages oldest-first without
-a new column or a new writer.
+`lib/case-statuses.js` so both read one declaration. The original decision used
+`Created` as its clock; the issue #789 amendment below replaces that choice with
+the current allocation timestamp.
 
 **It is the one group a Case can be in as well as another**, which is why it is last
 and why it carries no flag of its own. Every other reason answers "why must I act";
@@ -221,6 +221,17 @@ otherwise have, at the price of a divergence.
 
 **The cadence is a placeholder**, the same open product question On Hold carries: 14
 days is "held too long" until someone says otherwise.
+
+### Amendment — issue #789, 2026-08-21
+
+The **In progress** reason's age and oldest-first order use `AssignedAt`, the
+timestamp paired with the current Reviewer allocation. Reassignment therefore
+starts the current Reviewer's clock; `Created` is no longer consulted for this
+reason. `AssignedAt` is indexed on every Case Type list. An outstanding row with
+`AssignedReviewer` must have `AssignedAt`; unassigned rows carry null. This does
+not require completed or void rows to carry it. Existing outstanding allocations
+must be backfilled from authoritative allocation evidence before rollout, with no
+`Created` fallback; invalid legacy rows are excluded from the ordered query and count.
 
 ## Context
 

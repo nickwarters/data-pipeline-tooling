@@ -51,13 +51,18 @@ Three things about that schema are provisioning-critical enough to repeat here:
   path resolves the account to the numeric id the `…Id` twin holds. A manager
   column provisioned as text will fail both. Rows speak bare account names;
   columns are Person.
-- **The whole schema must exist before the frontend is deployed.** Reads
-  tolerate a missing column — the Case read is `$select=*`, so the list simply
-  answers without it — but a **write** naming a column the list lacks gets a
-  **400** from SharePoint, which fails the action outright rather than
-  degrading. `AssignedAt` is the sharpest case: the client stamps it on every
-  write that sets the Assigned Reviewer, and the allocation claim behind
-  "Request next Case" is exactly such a write.
+- **The whole schema must exist before the frontend is deployed.** `AssignedAt`
+  is indexed: the client stamps it whenever a write sets the Assigned Reviewer,
+  and the Action Centre orders and ages in-progress Cases from it. If the column
+  is absent, assignment writes fail with **400**, and the entire Action Centre
+  reason/headline read fails because its filter/order names the missing column.
+  Before rollout, use authoritative SharePoint assignment/list version history
+  to backfill legacy outstanding allocations; this evidence check is a predeploy
+  gate. Do not derive it from or fall back to `Created`. Verify that every
+  outstanding row with `AssignedReviewer` has `AssignedAt`; unassigned rows carry
+  null. This does not require completed or void rows to carry it. Any unbackfilled
+  outstanding allocation is silently excluded from both the worklist and its
+  headline count.
 
 `Created` is the SharePoint system column. **Do not provision** the `Overrides`
 / `overrides[]` blob — it is gone; corrected reporting flows from

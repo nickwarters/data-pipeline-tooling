@@ -280,11 +280,9 @@ test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async (
   assert.equal(row?.overdue, false);
 });
 
-test('HttpSharePointClient: a row from a list with no AssignedAt column still reads', async () => {
-  // The read projection is `$select=*`, so a list that has not been given the
-  // column yet simply answers without it. That is what makes deploying the
-  // frontend ahead of the column safe on the *read* side: the row hydrates with
-  // no assignment time rather than failing.
+test('HttpSharePointClient: a legacy row missing AssignedAt hydrates it as null', async () => {
+  // A historical item can omit the value even after the column is provisioned;
+  // hydration normalises that omitted property to the mock's explicit-null shape.
   const client = readsClient(caseRowResponse({ Title: 'Unprovisioned list' }));
 
   const row = await client.getCase('case-1', {
