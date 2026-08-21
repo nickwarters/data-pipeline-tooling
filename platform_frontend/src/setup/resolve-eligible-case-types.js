@@ -40,7 +40,6 @@ import {
  * slug: string,
  * listName: string,
  * displayName: string,
- * maxInProgressCases?: number,
  * actionCentreSlaDays?: import('../sharepoint-client.js').ActionCentreSlaDays,
  * breachWindowHours?: number,
  * reviewSlaWorkingDays?: number
@@ -52,7 +51,7 @@ import {
  * so the later write lands on the same list the row was read from. Structurally
  * a `CaseSource` without the display name.
  *
- * @typedef {{ slug: string, listName: string, maxInProgressCases?: number }} AllocationSource
+ * @typedef {{ slug: string, listName: string }} AllocationSource
  */
 
 /**
@@ -65,7 +64,6 @@ function toCaseSource({
   slug,
   listName,
   displayName,
-  maxInProgressCases,
   actionCentreSlaDays,
   breachWindowHours,
   reviewSlaWorkingDays,
@@ -74,7 +72,6 @@ function toCaseSource({
     slug,
     listName,
     displayName,
-    ...(maxInProgressCases === undefined ? {} : { maxInProgressCases }),
     ...(actionCentreSlaDays === undefined ? {} : { actionCentreSlaDays }),
     ...(breachWindowHours === undefined ? {} : { breachWindowHours }),
     ...(reviewSlaWorkingDays === undefined ? {} : { reviewSlaWorkingDays }),
@@ -82,35 +79,13 @@ function toCaseSource({
 }
 
 /**
- * Projects app-wide Case sources down to allocation sources. A malformed limit
- * disables allocation only for that Case Type: the source remains available to
- * the rest of the app and the other Case Types continue to allocate.
+ * Projects app-wide Case sources down to the list identity allocation needs.
  *
  * @param {CaseSource[]} caseSources
  * @returns {AllocationSource[]}
  */
 export function allocationSourcesFromCaseSources(caseSources) {
-  return caseSources.flatMap(({ slug, listName, maxInProgressCases }) => {
-    if (
-      maxInProgressCases !== undefined &&
-      (!Number.isInteger(maxInProgressCases) || maxInProgressCases <= 0)
-    ) {
-      console.error(
-        '[CORA] Allocation source disabled:',
-        new TypeError(
-          `Case Type "${slug}" maxInProgressCases must be a positive integer.`
-        )
-      );
-      return [];
-    }
-    return [
-      {
-        slug,
-        listName,
-        ...(maxInProgressCases === undefined ? {} : { maxInProgressCases }),
-      },
-    ];
-  });
+  return caseSources.map(({ slug, listName }) => ({ slug, listName }));
 }
 
 /**
@@ -286,7 +261,6 @@ export function resolveCaseSourcesFromCaseTypes(userGroups, caseTypes) {
       slug,
       listName,
       displayName,
-      maxInProgressCases: config.maxInProgressCases,
       actionCentreSlaDays: config.actionCentreSlaDays,
       breachWindowHours: config.breachWindowHours,
       reviewSlaWorkingDays: config.reviewSlaWorkingDays,

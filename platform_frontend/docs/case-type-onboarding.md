@@ -66,9 +66,10 @@ edit does, and a full dev-harness verification tour — see
       PATCH; without `VoidedAt` indexed, the manager's void report reads the
       whole list. `VoidedAt` can only be indexed on an empty list, so on a list
       already past the threshold the report is served unindexed.
-- [ ] Before enabling `maxInProgressCases` on a list that already contains
-      Cases, backfill every unset `OnHold` value to **No**. The allocation count
-      filters on `OnHold = No`, so legacy null values would otherwise be omitted.
+- [ ] Before enabling allocation on a list that already contains Cases,
+      backfill every unset `OnHold` value to **No**. The app-wide capacity count
+      totals only `In-progress` Cases with `OnHold = No` across all Case Type
+      lists, so legacy null values would otherwise be omitted.
 - [ ] Set the Case Type module's `listName` to the new list once list-backed
       reads are wired in (until then the scaffold runs mock-only via `?mock=1`).
 

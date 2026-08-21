@@ -216,7 +216,6 @@ const bank = await loadBank('./banks/widget-review.txt');
  */
 const config = {
   listName: 'Cases-WidgetReview',
-  maxInProgressCases: 3,
   detailFields: [
     { key: 'orderRef', label: 'Order reference' },
     { key: 'customerName', label: 'Customer name' },
@@ -276,10 +275,11 @@ What each field does, and how to choose its value:
   not move when the registry display name is renamed, so a decommissioned group
   would keep granting access (#527). A blanket group (e.g. plain `Reviewers`)
   would open the type to every reviewer — almost never what you want.
-- **`maxInProgressCases`** — optional positive-integer soft limit for allocation.
-  Before claiming a Case, the framework counts this Reviewer's `In-progress`
-  Cases whose `OnHold` value is No. Omit the field to leave allocation
-  unlimited for this Case Type.
+- **Allocation capacity** is app-wide, not Case Type configuration. Before
+  claiming a Case, the framework totals this Reviewer's non-held
+  `In-progress` Cases across every allocation source. At three Cases the
+  Reviewer cannot claim another. `Actions In Progress` and every other status
+  do not consume this capacity.
 - **Review cadence** — four optional thresholds. Each has a framework default,
   and omitting a key means "use the default", never "no threshold".
   - **`actionCentreSlaDays`** — how long a Case may sit in each Action Centre

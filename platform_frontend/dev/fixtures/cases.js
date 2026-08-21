@@ -497,7 +497,7 @@ export const cases = [
     // has something to offer and the claim can be seen to move it to
     // `In-progress`. Caveat for the demo: `user-reviewer` — the default
     // persona — already holds more non-held In-progress Cases than
-    // `maxInProgressCases: 3`, so they read as at capacity; switch persona to
+    // the app-wide maximum of 3, so they read as at capacity; switch persona to
     // see the Case actually taken.
     id: 'complaints-case-6',
     caseType: 'complaints',

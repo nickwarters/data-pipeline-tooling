@@ -196,7 +196,7 @@ test('the candidate read returns no candidates without a client', async () => {
   );
 });
 
-test('getAllocationAvailability skips at-limit sources and counts only non-held In-progress Cases', async () => {
+test('getAllocationAvailability applies one overall limit to non-held In-progress Cases across sources', async () => {
   /** @type {any[]} */
   const counts = [];
   /** @type {any[]} */
@@ -205,7 +205,7 @@ test('getAllocationAvailability skips at-limit sources and counts only non-held 
     client: /** @type {any} */ ({
       async countCases(/** @type {any} */ filter, /** @type {any} */ options) {
         counts.push([filter, options]);
-        return options.listName === 'Cases-A' ? 3 : 2;
+        return options.listName === 'Cases-A' ? 1 : 2;
       },
       async listCases(/** @type {any} */ filter, /** @type {any} */ options) {
         reads.push([filter, options]);
@@ -221,8 +221,8 @@ test('getAllocationAvailability skips at-limit sources and counts only non-held 
       },
     }),
     allocationSources: [
-      { slug: 'a', listName: 'Cases-A', maxInProgressCases: 3 },
-      { slug: 'b', listName: 'Cases-B', maxInProgressCases: 3 },
+      { slug: 'a', listName: 'Cases-A' },
+      { slug: 'b', listName: 'Cases-B' },
     ],
     currentUserId: 'reviewer-1',
     random: () => 0,
@@ -246,24 +246,17 @@ test('getAllocationAvailability skips at-limit sources and counts only non-held 
       { listName: 'Cases-B' },
     ],
   ]);
-  // The capacity count and the candidate read ask different questions: what
-  // this Reviewer is already carrying, and what is waiting for anyone.
-  assert.deepEqual(reads, [
-    [{ status: 'To-allocate' }, { listName: 'Cases-B' }],
-  ]);
-  assert.deepEqual(
-    availability.candidates.map((candidate) => candidate.id),
-    ['available-b']
-  );
-  assert.equal(availability.isAtCapacity, false);
+  assert.deepEqual(reads, []);
+  assert.deepEqual(availability.candidates, []);
+  assert.equal(availability.isAtCapacity, true);
 });
 
-test('getAllocationAvailability reports capacity when every limited source is at or over its limit', async () => {
+test('getAllocationAvailability reads candidates from every source when the overall total is below three', async () => {
   let reads = 0;
   const availability = await getAllocationAvailability({
     client: /** @type {any} */ ({
-      async countCases() {
-        return 4;
+      async countCases(/** @type {any} */ _filter, /** @type {any} */ options) {
+        return options.listName === 'Cases-A' ? 1 : 0;
       },
       async listCases() {
         reads += 1;
@@ -271,45 +264,25 @@ test('getAllocationAvailability reports capacity when every limited source is at
       },
     }),
     allocationSources: [
-      { slug: 'a', listName: 'Cases-A', maxInProgressCases: 3 },
-      { slug: 'b', listName: 'Cases-B', maxInProgressCases: 2 },
+      { slug: 'a', listName: 'Cases-A' },
+      { slug: 'b', listName: 'Cases-B' },
     ],
     currentUserId: 'reviewer-1',
   });
 
   assert.deepEqual(availability.candidates, []);
-  assert.equal(availability.isAtCapacity, true);
-  assert.equal(reads, 0);
+  assert.equal(availability.isAtCapacity, false);
+  assert.equal(reads, 2);
 });
 
-test('getAllocationAvailability reports capacity when capped sources are mixed with empty sources', async () => {
+test('getAllocationAvailability does not count Actions In Progress toward the overall limit', async () => {
+  /** @type {any[]} */
+  const filters = [];
   const availability = await getAllocationAvailability({
     client: /** @type {any} */ ({
-      async countCases(/** @type {any} */ _filter, /** @type {any} */ options) {
-        return options.listName === 'Cases-A' ? 3 : 0;
-      },
-      async listCases() {
-        return [];
-      },
-    }),
-    allocationSources: [
-      { slug: 'a', listName: 'Cases-A', maxInProgressCases: 3 },
-      { slug: 'b', listName: 'Cases-B', maxInProgressCases: 3 },
-    ],
-    currentUserId: 'reviewer-1',
-  });
-
-  assert.deepEqual(availability.candidates, []);
-  assert.equal(availability.isAtCapacity, true);
-});
-
-test('getAllocationAvailability leaves unconfigured sources unlimited', async () => {
-  let counts = 0;
-  const availability = await getAllocationAvailability({
-    client: /** @type {any} */ ({
-      async countCases() {
-        counts += 1;
-        return 99;
+      async countCases(/** @type {any} */ filter) {
+        filters.push(filter);
+        return 0;
       },
       async listCases() {
         return [];
@@ -319,6 +292,13 @@ test('getAllocationAvailability leaves unconfigured sources unlimited', async ()
     currentUserId: 'reviewer-1',
   });
 
-  assert.equal(counts, 0);
+  assert.deepEqual(filters, [
+    {
+      status: 'In-progress',
+      assignedReviewer: 'reviewer-1',
+      onHold: false,
+    },
+  ]);
+  assert.deepEqual(availability.candidates, []);
   assert.equal(availability.isAtCapacity, false);
 });

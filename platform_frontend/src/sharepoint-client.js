@@ -596,7 +596,6 @@
  * breachWindowHours?: number,
  * reviewSlaWorkingDays?: number,
  * remediationSlaWorkingDays?: number,
- * maxInProgressCases?: number,
  * remediationStatuses?: RemediationStatusValue[],
  * voidReasons?: string[],
  * extraAmendmentReasons?: import('./lib/amendment-reasons.js').AmendmentReason[],

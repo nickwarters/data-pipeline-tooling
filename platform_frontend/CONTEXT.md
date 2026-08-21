@@ -470,6 +470,14 @@ reason, in fixed priority order: **Overdue**, **Awaiting Frontline**, **On Hold*
 count is cheap and the panel never holds the backlog. A Case may appear in more than
 one group; the panel's headline counts it once.
 
+**Allocation Capacity**:
+A **Reviewer** may hold at most three non-held **`In-progress` Cases** in total
+across all **Case Types** available to them. The limit is app-wide rather than
+configured per Case Type. **`Actions In Progress`** and every other lifecycle
+status do not consume this capacity. The check is intentionally soft: the app
+totals indexed counts from each Case Type list immediately before a claim, then
+uses the candidate Case's ETag to guard the write.
+
 **In progress** (Action Centre group):
 Every Case a **Reviewer** currently holds — both **outstanding** statuses, `In-progress`
 and `Actions In Progress` — aged from when the Case was created. Unlike the other

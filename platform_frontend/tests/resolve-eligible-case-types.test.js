@@ -48,7 +48,7 @@ test('resolveCaseSourcesFromCaseTypes: grants via the list-access group derived 
   ]);
 });
 
-test('resolveCaseSourcesFromCaseTypes: carries the optional allocation limit from Case Type config', () => {
+test('resolveCaseSourcesFromCaseTypes: allocation policy is not carried per Case Type', () => {
   const sources = resolveCaseSourcesFromCaseTypes(
     ['Reviewers - Complaints'],
     [
@@ -56,7 +56,7 @@ test('resolveCaseSourcesFromCaseTypes: carries the optional allocation limit fro
         slug: 'complaints',
         listName: 'Cases-Complaints',
         displayName: 'Complaints',
-        config: minimalConfig({ maxInProgressCases: 3 }),
+        config: minimalConfig(),
       },
     ]
   );
@@ -66,7 +66,6 @@ test('resolveCaseSourcesFromCaseTypes: carries the optional allocation limit fro
       slug: 'complaints',
       listName: 'Cases-Complaints',
       displayName: 'Complaints',
-      maxInProgressCases: 3,
     },
   ]);
 });
@@ -128,7 +127,7 @@ test('resolveCaseSourcesFromCaseTypes: a Case Type declaring no threshold carrie
   assert.equal(Object.hasOwn(source, 'reviewSlaWorkingDays'), false);
 });
 
-test('allocationSourcesFromCaseSources: isolates an invalid limit to that Case Type', async () => {
+test('allocationSourcesFromCaseSources: projects only allocation list identity', () => {
   const caseSources = resolveCaseSourcesFromCaseTypes(
     ['Reviewer Managers'],
     [
@@ -136,7 +135,7 @@ test('allocationSourcesFromCaseSources: isolates an invalid limit to that Case T
         slug: 'complaints',
         listName: 'Cases-Complaints',
         displayName: 'Complaints',
-        config: minimalConfig({ maxInProgressCases: 0 }),
+        config: minimalConfig(),
       },
       {
         slug: 'example-review',
@@ -147,23 +146,12 @@ test('allocationSourcesFromCaseSources: isolates an invalid limit to that Case T
     ]
   );
 
-  const { result, logged } = await captureConsoleError(() =>
-    allocationSourcesFromCaseSources(caseSources)
-  );
+  const result = allocationSourcesFromCaseSources(caseSources);
 
   assert.deepEqual(result, [
+    { slug: 'complaints', listName: 'Cases-Complaints' },
     { slug: 'example-review', listName: 'Cases-ExampleReview' },
   ]);
-  assert.equal(caseSources.length, 2, 'other app surfaces keep both sources');
-  assert.equal(logged.length, 1, 'the invalid limit is reported once');
-  assert.ok(
-    logged[0].some((arg) =>
-      /Case Type "complaints" maxInProgressCases must be a positive integer/.test(
-        arg?.message ?? ''
-      )
-    ),
-    'the reported error names the Case Type and the constraint'
-  );
 });
 
 test('resolveCaseSourcesFromCaseTypes: a Case Type Owner gets only their Case Type source', () => {
@@ -487,7 +475,6 @@ test('resolveAppCaseSources: a Reviewers - Complaints user is granted the compla
       slug: 'complaints',
       listName: 'Cases-Complaints',
       displayName: 'Complaints',
-      maxInProgressCases: 3,
     },
   ]);
 });

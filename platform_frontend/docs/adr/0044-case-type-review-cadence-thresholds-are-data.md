@@ -97,19 +97,22 @@ Overdue is legitimately breached the moment it lands.
 The Action Centre, the KPI strip and the allocation claim only ever hold
 `CaseSource`. So `resolveCaseSourcesFromCaseTypes()` copies
 `actionCentreSlaDays`, `breachWindowHours` and `reviewSlaWorkingDays` onto the
-source, omitting each when the Case Type declares nothing — the same
-omit-when-undefined shape `maxInProgressCases` already uses. `CaseSource` is not
+source, omitting each when the Case Type declares nothing. `CaseSource` is not
 widened to carry the whole `CaseTypeConfig`.
 
 **This deserves an honest reading rather than a precedent citation.**
 `CaseSource` began as a data-access descriptor: which list, under what slug, by
-what name. `maxInProgressCases` was already a policy value on it, and these
-push it further in that direction — it is becoming a Case-Type policy
-descriptor with a data-access core. That is the decision taken here, taken
-deliberately, and the alternatives were both worse: putting the config object on
-the source would give every dashboard reader every descriptor there is, and
-loading the Case Type module on the dashboard is the coupling ADR-0040 removed
-from Team Cases.
+what name. These thresholds push it further in that direction — it is becoming
+a Case-Type policy descriptor with a data-access core. That is the decision
+taken here, taken deliberately, and the alternatives were both worse: putting
+the config object on the source would give every dashboard reader every
+descriptor there is, and loading the Case Type module on the dashboard is the
+coupling ADR-0040 removed from Team Cases.
+
+`maxInProgressCases` was such a projected policy value when this ADR was
+accepted. It has since been removed: allocation now applies one app-wide limit
+of three non-held `In-progress` Cases across all Case Types, so capacity is no
+longer Case Type data carried by `CaseSource`.
 
 The constraint that keeps this from becoming a dumping ground: **a value is
 projected onto `CaseSource` only when a surface that holds nothing but a
