@@ -130,7 +130,7 @@ provenance — a daily bucket therefore draws one bar, and the current monthly
 bucket can draw both. The y-axis domain is rounded up to a multiple of four so
 counts get whole-number ticks. `headlineStripView()` in
 [`src/pages/my-stats/headline-strip-view.js`](../../src/pages/my-stats/headline-strip-view.js)
-renders the same report's figures beneath the chart row: total (asterisked,
+renders the same report's figures beneath the full-width chart: total (asterisked,
 `* excludes today`), average per working day with its divisor, active days, and
 the busiest day with its count. The average is never labelled "avg/day". A
 failed tail, or a feed older than the clamp, adds one muted line under the
@@ -157,8 +157,8 @@ ranges use monthly buckets. Each descriptor carries its label and grain,
 inclusive `start`, browser-local yesterday as the inclusive totals `end`,
 browser-local `today` as the display endpoint, and ordered inclusive buckets.
 Daily buckets use `YYYY-MM-DD` keys and monthly buckets use `YYYY-MM` keys.
-The final bucket reaches today even though totals stop at yesterday. The left
-column renders a labelled range control group; its buttons dispatch
+The final bucket reaches today even though totals stop at yesterday. A labelled
+range control group sits above the chart; its buttons dispatch
 `my-stats/range-selected` and expose the active range with `aria-pressed`.
 
 Dates are the subtle part. `ReportableAt` is an instant and every key on this

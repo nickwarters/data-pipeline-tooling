@@ -328,9 +328,9 @@ display bucket extends through today. The page owns this range state, defaults
 to Week, and renders labelled controls that dispatch `my-stats/range-selected`.
 
 The feed and the typed tail are merged into one count per calendar day and Case
-Type **once**, and that single derivation feeds the grouped chart, the full-width
-breakdown table, and the four **headline
-figures** beneath it: **Total** (excluding today, carried by the asterisk
+Type **once**, and that single derivation feeds the full-width grouped chart,
+the full-width breakdown table, and the four **headline figures** beneath the
+chart: **Total** (excluding today, carried by the asterisk
 `* excludes today`), **avg per working day** (Mon–Fri minus
 `ENGLAND_WALES_HOLIDAYS` — never shortened to "avg/day", since the two differ
 by about a third), **active days** (days with at least one reportable Case, the

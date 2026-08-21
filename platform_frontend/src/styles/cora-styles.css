@@ -3088,7 +3088,7 @@
 
 [data-cora-root] .cora-my-stats-top-row {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--cora-space-5);
   align-items: start;
 }
@@ -3099,6 +3099,10 @@
 
 [data-cora-root] .cora-my-stats-controls-column {
   min-width: 0;
+}
+
+[data-cora-root] .cora-my-stats-top-row > .cora-grouped-bar-chart {
+  width: 100%;
 }
 
 [data-cora-root] .cora-my-stats-range-controls {
@@ -3243,10 +3247,6 @@
 }
 
 @media (max-width: 52rem) {
-  [data-cora-root] .cora-my-stats-top-row {
-    grid-template-columns: 1fr;
-  }
-
   [data-cora-root] .cora-my-stats-headline__figures {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
