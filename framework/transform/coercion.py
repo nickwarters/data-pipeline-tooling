@@ -4,8 +4,9 @@ The *coerce* half of the schema adapter, and the write-side companion of
 :class:`~framework.core.schema.SchemaValidator`: where the validator *checks*
 dtypes, this *repairs* them, casting each declared column whose dtype the
 validator would not already accept — ``date`` / ``datetime`` / ``bool``, which
-storage loses outright, and ``str`` / ``int`` / ``float``, which a reader's type
-inference is free to land as something else. It lives in
+storage loses outright, and ``str`` / ``int`` / ``float``, which a CSV reader
+lands as text and a still-inferring reader is free to land as something else.
+It lives in
 ``framework.transform`` because it reshapes a column's values rather than gating
 them; it shares the dataclass-annotation reading with the validator via
 :mod:`framework._internal.schema`.
@@ -54,9 +55,10 @@ class SchemaCoercion:
     silver boundary carrying what the schema declared rather than what the
     source happened to encode. ``date`` / ``datetime`` land as text out of
     storage and ``bool`` as ``1``/``0`` or ``TRUE``/``FALSE``; a digits-only
-    reference a CSV reader inferred as ``int64`` is cast back to text, and
-    numeric text to the declared number. A column whose dtype the validator
-    would already accept is left exactly as it is.
+    reference a still-inferring reader landed as ``int64`` — ``SqliteReader``
+    over an ``INTEGER`` column, ``ExcelReader`` over a numeric cell — is cast
+    back to text, and numeric text to the declared number. A column whose dtype
+    the validator would already accept is left exactly as it is.
 
     A gap is the absence of a value, never a bad one: it is excluded from every
     offender report and left for the validator, which owns nullability. A value

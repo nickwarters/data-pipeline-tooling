@@ -1,8 +1,13 @@
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
-from framework.io.readers import StrictCsvParseError, StrictCsvReader
+from framework.io.readers import (
+    CsvReader,
+    StrictCsvParseError,
+    StrictCsvReader,
+)
 
 FIXTURE = Path(__file__).parent.parent.parent.parent / "fixtures" / "strict_cases.csv"
 
@@ -52,6 +57,21 @@ def test_values_are_left_as_text(tmp_path):
         {"id": "1", "amount": "1200.50"},
         {"id": "2", "amount": "0007"},
     ]
+
+
+def test_agrees_with_the_pandas_reader_on_text_but_not_on_a_blank(tmp_path):
+    # Both readers land text now, so that is no longer this one's distinction.
+    # What still differs is the blank: the grammar says a field was present and
+    # empty, so it lands as "", where the pandas readers land a gap.
+    src = tmp_path / "nums.csv"
+    src.write_text("id,amount\n0007,\n", encoding="utf-8")
+
+    strict = _rows(StrictCsvReader(src).read())[0]
+    pandas_read = _rows(CsvReader(src).read())[0]
+
+    assert strict["id"] == pandas_read["id"] == "0007"
+    assert strict["amount"] == ""
+    assert pd.isna(pandas_read["amount"])
 
 
 def test_columns_projection_selects_and_orders():

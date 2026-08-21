@@ -470,7 +470,7 @@ Concrete Readers that ship:
 
 | Reader | Source | Construct with |
 |--------|--------|----------------|
-| `CsvReader(path)` | A CSV file (pandas, with type inference) | the file path |
+| `CsvReader(path)` | A CSV file (pandas; every column lands as **text**, a blank as a gap) | the file path |
 | `StrictCsvReader(path)` | A CSV file that honours the RFC 4180 grammar but defeats pandas / the stdlib `csv` module (embedded delimiters, embedded newlines, doubled-quote escapes) | the file path |
 | `GlobCsvReader(directory, pattern)` | Many local CSV files that together form one Feed snapshot | directory path + glob pattern |
 | `ExcelReader(path, sheet=0)` | One worksheet of an `.xlsx` workbook | path + sheet **name or zero-based index** (default the first sheet) |
@@ -478,6 +478,12 @@ Concrete Readers that ship:
 | `SasReader(script, copy_glob, dest)` | A SAS feed run on a remote box | script name + glob of outputs to copy back + local landing dir |
 | `SharePointReader(site, list_name, auth)` | A SharePoint list, whole (a snapshot) | site URL + list name + auth config |
 | `SharePointModifiedReader(site, list_name, columns, window)` | A SharePoint list, only the items changed in one `Modified` window | site URL + list name + the columns to project + the window |
+
+Because a CSV read is text, anything that does arithmetic on or numerically
+compares one of its columns — a `Filter` on an amount, a derived total — needs a
+`SchemaCoercion(Schema)` node between the read and that step. A pipeline that
+refines through silver already has one; a pipeline that branches straight off
+the source does not, and the failure is a `TypeError` at the first comparison.
 
 `GlobCsvReader` reads every file matching `directory / pattern` in sorted
 deterministic order, concatenates them behind the `Dataset` seam, and returns
@@ -495,8 +501,8 @@ accepts `CR`/`LF`/`CRLF` line endings (line breaks inside a quoted field are
 kept verbatim), tolerates a BOM, defaults to RFC 4180 doubled-quote (`""`)
 escaping but takes an `escapechar` (e.g. `escapechar="\\"`) for feeds that
 escape an inner quote with a preceding character (`\"`), lands every value as
-**text** (no type
-inference — leave dtype to silver's `SchemaCoercion`), supports the same
+**text** (as `CsvReader` does — but an empty field is the empty string here,
+where `CsvReader` lands a gap), supports the same
 `columns=[...]` projection, and raises a located `StrictCsvParseError` on a
 ragged record or an unterminated quote. Reach for it when `CsvReader` mangles a
 source that is, in fact, valid CSV.

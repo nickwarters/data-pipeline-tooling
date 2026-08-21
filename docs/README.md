@@ -464,7 +464,9 @@ need:
 - Use `GlobCsvReader(directory, pattern)` when the files together form one Feed
   snapshot: files are matched with `pathlib.Path.glob`, read in sorted order,
   concatenated into one `Dataset`, then validated/written under one logical run
-  id. Pass `columns=[...]` to project the same way `CsvReader` does.
+  id. Every column lands as text, so the parts cannot disagree about a column's
+  dtype the way independently inferred files would. Pass `columns=[...]` to
+  project the same way `CsvReader` does.
 - Use `ForEach(files, pipeline_builder, ...).run(context)` when each file is its
   own independent run over the same shape. The factory receives
   `pipeline_builder(item, context)`, where `context.logical_run_id` can be

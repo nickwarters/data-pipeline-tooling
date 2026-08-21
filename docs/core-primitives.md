@@ -94,8 +94,12 @@ class Reader(Protocol):
     def read(self) -> Dataset: ...
 ```
 
-`CsvReader(path)` reads one source CSV file (pandas behind the seam, with its
-type inference). `StrictCsvReader(path)` reads one source CSV file too, but
+`CsvReader(path)` reads one source CSV file (pandas behind the seam), landing
+**every column as text** — read-time inference is a guess over the first rows and
+is lossy in ways coercion cannot undo afterwards, so what a value *is* stays the
+declared schema's answer, given at silver by `SchemaCoercion`. A blank field is
+still a gap, not the empty string. `StrictCsvReader(path)` reads one source CSV
+file too, but
 parses it **character by character** through a hand-written RFC 4180 state
 machine for feeds that honour the CSV grammar yet trip pandas / the stdlib
 `csv` module — a quoted field containing the delimiter, an embedded newline, or
@@ -105,10 +109,12 @@ an inner quote with a preceding character instead of doubling it, pass
 escapechar then strips the special meaning of the character that follows it and
 quote-doubling is off. It accepts `CR`/`LF`/`CRLF`
 record endings (preserving line breaks *inside* quoted fields verbatim),
-tolerates a BOM, lands every value as faithful **text** (no type inference —
-dtype decisions stay with silver's `SchemaCoercion`), and raises a located
+tolerates a BOM, and raises a located
 `StrictCsvParseError` on a ragged record or an unterminated quote — the *strict*
-in the name. `GlobCsvReader(directory, pattern)`
+in the name. It lands text like the pandas readers, so that is not what
+distinguishes it; the grammar is, and one value still differs — an empty field
+is the empty string `""` here, because the grammar says a field was present and
+empty, where the pandas readers land a gap. `GlobCsvReader(directory, pattern)`
 reads many local CSV files that together form one logical Feed snapshot: it
 matches files with `pathlib.Path.glob`, reads them in sorted deterministic
 order, concatenates them behind the `Dataset` seam, and raises
@@ -151,7 +157,9 @@ class ChunkReader(Protocol):
 ```
 
 `ChunkedCsvReader(path, columns=...)` streams a local CSV via pandas
-`read_csv(chunksize=…)`. `SasFileReader(path, columns=..., format=...)` streams
+`read_csv(chunksize=…)`, landing every column as text like its whole-file
+siblings — which also makes the dtypes stable across chunks, where inference
+would have been decided afresh per chunk. `SasFileReader(path, columns=..., format=...)` streams
 an **already-landed** `.sas7bdat`/xport file via pandas `read_sas(chunksize=…)`;
 a gzipped extract (`extract.sas7bdat.gz`) is read on the fly (compression
 inferred from the extension), and the SAS format is inferred from the extension
@@ -290,12 +298,12 @@ directions are explicit:
 
 | Source type | Reader | Writer | Notes |
 |-------------|--------|--------|-------|
-| CSV file | `CsvReader`, `StrictCsvReader`, `GlobCsvReader` | `CsvWriter` | `CsvWriter(path, strategy)` emits one CSV file; `StrictCsvReader` is the char-by-char RFC 4180 parser for grammar-correct feeds that defeat pandas; `GlobCsvReader` is read-only because many inbound files together form one logical snapshot. |
+| CSV file | `CsvReader`, `StrictCsvReader`, `GlobCsvReader` | `CsvWriter` | Every reader here lands text; types are the declared schema's answer at silver. `CsvWriter(path, strategy)` emits one CSV file; `StrictCsvReader` is the char-by-char RFC 4180 parser for grammar-correct feeds that defeat pandas (and lands an empty field as `""` where the others land a gap); `GlobCsvReader` is read-only because many inbound files together form one logical snapshot, and text keeps its parts from disagreeing on a column's dtype. |
 | Excel file | `ExcelReader` | `ExcelWriter` | Both target one worksheet (`sheet=...`). |
 | JSON file | _intentionally absent_ | `JsonWriter` | JSON is currently a Reporting Deliverable format only; no inbound JSON Feed has been needed yet. |
 | SQLite table | `SqliteReader` | `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `SqliteInsertOrIgnoreWriter`, `SqliteInsertIfAbsentWriter`, `SqliteAppendOnlyWriter` | The Store mints these over medallion layer databases. |
 | SAS extract (remote) | `SasReader` | _intentionally absent_ | SAS is an inbound-only remote source; the framework lands the remote output then reads local CSV files. |
-| Large source, streamed | `ChunkedCsvReader`, `SasFileReader` | _intentionally absent_ | The `ChunkReader` seam (`chunks(size) -> Iterator[Dataset]`) for sources too big to hold whole — a local CSV or an **already-landed** `.sas7bdat`/xport file (incl. gzipped). Distinct from the remote `SasReader`: no script, no remote run, no copy — read-only by nature. |
+| Large source, streamed | `ChunkedCsvReader`, `SasFileReader` | _intentionally absent_ | The `ChunkReader` seam (`chunks(size) -> Iterator[Dataset]`) for sources too big to hold whole — a local CSV (landed as text, so the dtypes cannot drift between chunks) or an **already-landed** `.sas7bdat`/xport file (incl. gzipped). Distinct from the remote `SasReader`: no script, no remote run, no copy — read-only by nature. |
 | SharePoint list | `SharePointReader` | `SharePointWriter` | Target is **SE on-prem**. Both sides are stubbed behind swappable `SharePointFetcher` / `SharePointPusher` seams until the on-prem SE client (NTLM/Kerberos/REST) lands. `SharePointWriter` emits the canonical Selection Deliverable — one list per Case Type. |
 | SharePoint list, incremental | `SharePointModifiedReader` | _intentionally absent_ | The items whose `Modified` falls in a caller-supplied half-open window, stamped with immutable observation metadata. Configures the organisational client behind the `SharePointListClient` seam; holds no checkpoint. Cannot see a **hard delete** — a deleted item has no `Modified`, so reconciliation against a snapshot is a separate mechanism. |
 | Console (stdout) | _intentionally absent_ | `StdoutWriter` | A terminal sink for *seeing* a result rather than persisting it — e.g. printing a Selection explainer's per-Case trace while driving a feed by hand. Owns no location or load strategy; prints the dataset as a plain-text table to the stream (defaulting to `sys.stdout`). |
@@ -398,9 +406,9 @@ key→surrogate mapping, or existing keys and values, which a whole-file rewrite
 cannot supply — so handing one to a file Writer raises a `TypeError` naming both
 the Writer and the strategy.
 Round-tripping through matching Readers is stable for CSV and Excel at
-the Dataset shape level; exact pandas dtype inference can still differ after a
-file round-trip, so schema-sensitive flows should continue to validate after
-reading.
+the Dataset shape level; dtypes can still differ after a file round-trip — an
+Excel read infers, and a CSV read hands every column back as text whatever was
+written — so schema-sensitive flows should continue to validate after reading.
 
 #### The reserved run-provenance column
 
@@ -729,8 +737,10 @@ Two families of concrete processor ship now.
 *checks* dtypes, the coercer *makes them true*, casting each declared column
 whose dtype the validator would not already accept: `date`/`datetime` (landed as
 text) and `bool` (`TRUE`/`FALSE` text or `1`/`0`), which storage loses outright,
-and `str`/`int`/`float`, which a reader's inference is free to land as something
-else — a digits-only reference read as `int64`, a number read as text. `int`
+and `str`/`int`/`float`, which a reader is free to land as something else — a
+number read as text by any CSV reader, or a digits-only reference read as
+`int64` by the readers that still infer (`SqliteReader` over an `INTEGER`
+column, `ExcelReader` over a numeric cell). `int`
 lands as nullable `Int64` (a gap cannot be held as numpy `int64`), and a column
 already carrying an accepted dtype is skipped by asking the validator's own
 check, so the two halves cannot drift; undeclared columns are left alone. No

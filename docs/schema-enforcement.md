@@ -13,7 +13,7 @@ Enforcement is **graduated** across the medallion:
 
 | Layer | Shape discipline |
 |-------|------------------|
-| **raw** | **Schema-light.** A faithful mirror of the source snapshot as landed — booleans still as `TRUE`/`FALSE` text, dates still unparsed, warts and all. At most a loud column-presence check so a wholesale source change fails immediately. |
+| **raw** | **Schema-light.** A faithful mirror of the source snapshot as landed — booleans still as `TRUE`/`FALSE` text, dates still unparsed, warts and all. From a CSV source it is text outright: the CSV readers decide nothing about a value, so a zero-padded reference reaches raw still zero-padded (what the raw *table* declares is a separate question — SQLite applies column affinity on write). At most a loud column-presence check so a wholesale source change fails immediately. |
 | **silver** | **Validated — the schema boundary.** A Case Type's declared columns + dtypes are enforced here, as a post-validator, before the data lands. This is where "is this data valid and processable?" gets its authoritative answer. |
 | **gold** | **Validated on the same footing as silver** — by composing the same `SchemaValidator` as a post-validator onto the gold-building pipeline (see below). |
 
@@ -136,9 +136,10 @@ one place (`framework._internal.schema`).
 
 A `SchemaValidator` can only *assert* the dtype it is handed, and what it is
 handed is whatever the source and the storage between them decided: a SQLite
-round-trip lands a `date` as text and a `bool` as `1`/`0` or `TRUE`/`FALSE`, and
-a CSV reader's type inference lands a digits-only reference as `int64` and every
-number as text. Without a repair step those columns would fail the validator
+round-trip lands a `date` as text and a `bool` as `1`/`0` or `TRUE`/`FALSE`, a
+CSV read lands *every* column as text, and the readers that do still infer
+(`SqliteReader`, `ExcelReader`) can hand back a digits-only reference as
+`int64`. Without a repair step those columns would fail the validator
 even when the underlying values are perfectly valid. `SchemaCoercion` is that
 repair step — the **write-side companion** of `SchemaValidator`, derived from
 the *same* dataclass:
@@ -158,7 +159,7 @@ cast:
 |---------------|--------------|------------|
 | `date` / `datetime` | text (`"2026-01-01"`) | datetime64 |
 | `bool` | `TRUE`/`FALSE`, `Y`/`N`, `YES`/`NO` text, or `1`/`0` (incl. the `1.0`/`0.0` a nulled numeric column comes back as) | pandas `"boolean"` |
-| `str` | a reference inferred as `int64`, a whole number widened to `float64` by a blank cell | pandas' text dtype |
+| `str` | a reference inferred as `int64` by a still-inferring reader, a whole number widened to `float64` by a blank cell (text from a CSV read is already right, so it is skipped) | pandas' text dtype |
 | `int` | numeric text (`"42"`), or a `float64` holding whole numbers | nullable `Int64` |
 | `float` | numeric text (`"3.14"`), or an integer column | `float64` |
 
@@ -222,8 +223,15 @@ allowed is the *validator's* question (`NonNull()`), and answering it in the
 coercer would blame the feed's data for a declaration. A blank or
 whitespace-only cell counts as a gap on the **numeric and boolean** paths — an
 empty CSV field is how a source spells "nothing here" — but never on the `str`
-path, where the empty string is a value in its own right (`StrictCsvReader`
-lands an empty field as exactly that).
+path, where the empty string is a value in its own right.
+
+Which of the two a blank CSV field arrives as is the reader's decision, and the
+two CSV families answer differently on purpose. The pandas-backed readers
+(`CsvReader`, `ChunkedCsvReader`, `GlobCsvReader`) land a blank as a **gap**:
+they keep pandas' default missing-value set, so `NA`/`NULL`/`N/A`/`None` read as
+gaps too. `StrictCsvReader` lands it as the empty string `""`, because its
+grammar says a field was present and empty. Neither answers whether the gap is
+allowed — that is `NonNull()`'s question at silver.
 
 Two more rules are worth stating outright:
 

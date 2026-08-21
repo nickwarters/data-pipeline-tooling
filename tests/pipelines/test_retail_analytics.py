@@ -23,8 +23,11 @@ from __future__ import annotations
 import pytest
 
 from framework.core import ValidationError
+from framework.io import CsvReader
 from pipelines.retail_analytics.pipeline import (
+    CATALOG_CSV,
     HIGH_VALUE_THRESHOLD,
+    ORDERS_CSV,
     dag_builder,
 )
 from tests.framework_testing import (
@@ -356,3 +359,29 @@ def test_dag_builder_gates_missing_catalog_columns():
         p.run()
 
     assert len(revenue_w.writes) == 0
+
+
+def test_dag_runs_against_the_bundled_sample_csvs():
+    """The real CSV sources drive the graph, not just the typed in-memory rows.
+
+    A CSV lands every column as text, so the arithmetic and numeric comparisons
+    in the branches only work because the source coercion nodes run first —
+    something the ``given_rows`` fixtures, already typed, cannot show.
+    """
+    revenue_w, risk_w, ops_w = RecordingWriter(), RecordingWriter(), RecordingWriter()
+
+    p = dag_builder(
+        orders_reader=CsvReader(ORDERS_CSV),
+        catalog_reader=CsvReader(CATALOG_CSV),
+        revenue_writer=revenue_w,
+        risk_writer=risk_w,
+        ops_writer=ops_w,
+    )
+    p.run()
+
+    revenue = rows_of(revenue_w.writes[0])
+    assert revenue, "the revenue terminus wrote no rows"
+    first = revenue[0]
+    assert first["revenue"] == pytest.approx(first["qty"] * first["unit_price"])
+    assert first["margin"] == pytest.approx(first["revenue"] - first["cost_of_goods"])
+    assert len(risk_w.writes) == 1 and len(ops_w.writes) == 1

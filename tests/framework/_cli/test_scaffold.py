@@ -17,7 +17,7 @@ import sys
 import pytest
 
 from cli import scaffold
-from framework.core import RUN_PROVENANCE_COLUMN
+from framework.io import CsvReader
 from framework.run import RunContext
 from framework.run.run_context import active_context
 from tests.framework_testing import (
@@ -26,7 +26,6 @@ from tests.framework_testing import (
     given_rows,
     read_rows,
     rows_of,
-    without_columns,
 )
 from tools.medallion import medallion
 from tools.store import StoreRegistry
@@ -163,13 +162,16 @@ def test_rendered_pipeline_runs_and_lands_its_sample_feed(tmp_path):
     landed = read_rows(med.raw, "widgets")
     assert len(landed) == len(dataset) > 0
     # raw accumulates under the run context, so landed rows carry the run's
-    # stamps (run_id / load_date / ...) on top of the source columns; the source
-    # columns themselves land faithfully. The provenance column is left out of
-    # the comparison: raw and gold are separate steps, and with nothing supplying
-    # a shared context each names the run that wrote *it*.
-    returned = without_columns(rows_of(dataset), RUN_PROVENANCE_COLUMN)
-    source_columns = set(returned[0])
-    assert [{c: row[c] for c in source_columns} for row in landed] == returned
+    # stamps (run_id / load_date / ...) on top of the source columns. What lands
+    # *faithfully* is the source's own spelling of each value, so the comparison
+    # is against the feed file itself rather than against the returned dataset —
+    # that one has been through silver's coercion and carries the declared types,
+    # which is precisely the difference raw exists to not make yet.
+    source = rows_of(
+        CsvReader(repo / "pipelines" / "widgets" / "sample_data" / "widgets.csv")
+    )
+    source_columns = set(source[0])
+    assert [{c: row[c] for c in source_columns} for row in landed] == source
 
 
 def test_rendered_pipeline_main_runs_and_records_a_run(tmp_path, capsys):

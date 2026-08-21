@@ -141,7 +141,7 @@ row(s)`, `would quarantine N row(s)`, `would run action <name>`).
 $ python -m cli run pipelines/ingest --base-dir /data --run-date 2026-05-29 --dry-run
 dry run — no artifacts were written
   [Read] read: 5 rows
-      columns: case_ref:str, adviser:str, activity_date:str, amount:int64
+      columns: case_ref:str, adviser:str, activity_date:str, amount:str
       case_ref=c1, adviser=adv-a, activity_date=2026-05-29, amount=500
       ...
   [Write] write: 5 rows

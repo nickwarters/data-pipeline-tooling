@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 from collections.abc import Callable, Iterable, Iterator
 from pathlib import Path
 
@@ -68,7 +69,19 @@ class DatasetReader:
 
 
 class CsvReader:
-    """Read a CSV feed from a local file into a Dataset."""
+    """Read a CSV feed from a local file into a Dataset.
+
+    ``dtype=str`` lands *every* column as text — the shared rule for the
+    pandas-backed CSV readers here. Read-time inference is a guess made over the
+    first rows of one file, and it is lossy in ways coercion cannot undo
+    afterwards: a digits-only reference read as ``int64`` has already lost its
+    leading zeros by the time anything downstream sees it. What a value *is* is
+    the declared schema's answer, given at silver by ``SchemaCoercion``.
+
+    ``keep_default_na``/``na_values`` stay at their defaults, so a blank field is
+    still a **gap** (NaN) rather than the empty string — whether a gap is allowed
+    is ``NonNull()``'s question, not the reader's.
+    """
 
     def __init__(
         self,
@@ -84,7 +97,7 @@ class CsvReader:
         kwargs: dict = {}
         if self._columns is not None:
             kwargs["usecols"] = self._columns
-        return Dataset.from_pandas(pd.read_csv(self._path, **kwargs))
+        return Dataset.from_pandas(pd.read_csv(self._path, dtype=str, **kwargs))
 
     def describe(self) -> str:
         return render(self, path=str(self._path), columns=self._columns)
@@ -117,13 +130,12 @@ class StrictCsvReader:
     - The first record is the header. Every data record must have the same
       field count as the header, or a located :class:`StrictCsvParseError` is
       raised naming the offending record — the *strict* in the name.
-    - Values are landed as **text** (no type inference): the job here is
-      faithful tokenisation, leaving dtype decisions to silver coercion
-      (``SchemaCoercion``) the same way the raw layer stays schema-light. A
-      declared ``str`` lands as text there rather than passing through, and a
-      declared number or boolean reads a blank field as a gap. An
-      empty field is the empty string; a doubled-quote empty field ``""`` is
-      likewise the empty string.
+    - Values are landed as **text**, as they are from the pandas-backed CSV
+      readers: the job here is faithful tokenisation, leaving dtype decisions to
+      silver coercion (``SchemaCoercion``). Where this reader *does* still
+      differ is the blank: an empty field is the empty string ``""`` (a
+      doubled-quote empty field ``""`` likewise), because the grammar says a
+      field was present and empty, where the pandas readers land it as a gap.
 
     A BOM is tolerated (default encoding ``utf-8-sig``). Paths are handled with
     :mod:`pathlib`, so it behaves identically on Windows and macOS. Like the
@@ -295,6 +307,11 @@ class ChunkedCsvReader:
     Pass ``columns=[...]`` to project each chunk to just the columns the caller
     needs (pandas ``usecols``), kept in the requested order. A source with no
     data rows (including a header-only file) streams as **zero** chunks.
+
+    Like :class:`CsvReader` every column lands as text, which matters more here
+    than anywhere: inference is per chunk, so a column whose first blank or
+    non-numeric value appears late would otherwise land as ``int64`` in one
+    chunk and text in the next — and the chunks are written separately.
     """
 
     def __init__(
@@ -321,7 +338,7 @@ class ChunkedCsvReader:
         if self._encoding is not None:
             kwargs["encoding"] = self._encoding
         try:
-            reader = pd.read_csv(self._path, **kwargs)
+            reader = pd.read_csv(self._path, dtype=str, **kwargs)
         except pd.errors.EmptyDataError:
             return  # a wholly empty file streams as zero chunks
         with reader:
@@ -437,6 +454,15 @@ class SasFileReader:
         )
 
 
+# The spellings a source plausibly uses for one numeric id: optional sign,
+# ASCII digits, optional fractional part -- so a trailing ``123.`` and a signed
+# ``+123`` read as the integer too. ``1e3``, ``1_000``, ``nan`` and non-ASCII
+# digits merely look numeric to ``int()``/``float()`` and are compared as the
+# text they are. The digit bound is CPython's own limit on int/str conversion:
+# beyond it ``int()`` raises, and no real id is that long.
+_NUMERIC_TEXT = re.compile(r"[+-]?[0-9]{1,4300}(?:\.[0-9]*)?")
+
+
 def _normalize_key(value: object) -> str | None:
     """Coerce one key to a canonical string so membership is type-agnostic.
 
@@ -444,11 +470,22 @@ def _normalize_key(value: object) -> str | None:
     source: a SAS numeric id streams in as a float (``3.0``) while the same id in
     our allow-list is often an ``int`` (``3``); a SAS character id streams in as
     space-padded ``bytes`` (``b'A   '``) while the allow-list holds a ``str``
-    (``"A"``). Both the allow-list and every chunk's key column run through here
-    before comparison, so ``3.0`` matches ``3`` and ``b'A  '`` matches ``"A"``
-    rather than the float-vs-int / bytes-vs-str mismatch silently dropping every
-    row. A missing key (``None``/``NaN``) normalises to ``None`` and never
-    matches.
+    (``"A"``); a CSV id arrives as the text the file holds (``"00123"``,
+    ``"123.0"``) while the allow-list holds an ``int`` (``123``). Both the
+    allow-list and every chunk's key column run through here before comparison,
+    so ``3.0`` matches ``3``, ``b'A  '`` matches ``"A"`` and ``"00123"`` matches
+    ``123`` rather than the mismatch silently dropping every row. A missing key
+    (``None``/``NaN``) normalises to ``None`` and never matches.
+
+    Numeric-looking *text* is read as the number it denotes for the same reason
+    a float is: this decides membership only, never what a chunk lands, so an id
+    is compared by what it means rather than by how its source spelled it. Note
+    the asymmetry that buys: ``"00123"`` matches an allow-list ``123``, the
+    opposite of the rule the readers hold everywhere else, where a leading zero
+    is part of the reference and is preserved. It is the right way round here
+    because the allow-list is *typed* Python values while the chunk is whatever
+    its source spelled, and only the comparison is at stake — no landed value is
+    rewritten.
     """
     if value is None:
         return None
@@ -458,15 +495,36 @@ def _normalize_key(value: object) -> str | None:
     if isinstance(value, bool):
         return str(value)
     if isinstance(value, float):
-        if math.isnan(value):
-            return None
-        # An integral float is the same id as the int: 3.0 -> "3", not "3.0".
-        if value.is_integer():
-            return str(int(value))
-        return repr(value)
+        return _normalize_number(value)
     if isinstance(value, int):
         return str(value)
-    return str(value).strip()
+    text = str(value).strip()
+    if not _NUMERIC_TEXT.fullmatch(text):
+        return text
+    whole, _, fraction = text.partition(".")
+    # Exact integer arithmetic for the whole part: float64 would collide two
+    # 19-digit references that differ in their last digit. A genuine fraction
+    # still goes through float64 and keeps that limit -- an id with one is a
+    # measurement, not a reference.
+    if fraction.strip("0"):
+        return _normalize_number(float(text))
+    return str(int(whole))
+
+
+def _normalize_number(value: float) -> str | None:
+    """Canonicalise one numeric key: ``NaN`` is missing, ``3.0`` is ``"3"``.
+
+    This repeats the float arm of ``framework._internal.identity.canonical_text``
+    deliberately. That one is a frozen on-disk encoding; sharing the code would
+    mean a change to how an identity is written silently re-keys which rows a
+    filter keeps.
+    """
+    if math.isnan(value):
+        return None
+    # An integral float is the same id as the int: 3.0 -> "3", not "3.0".
+    if value.is_integer():
+        return str(int(value))
+    return repr(value)
 
 
 class PredicateChunkReader:
@@ -602,7 +660,12 @@ class KeyFilterChunkReader:
 
 
 class GlobCsvReader:
-    """Read many local CSV files that together form one logical feed snapshot."""
+    """Read many local CSV files that together form one logical feed snapshot.
+
+    Every column lands as text, so the parts agree by construction: two files
+    inferred independently could otherwise contribute an ``int64`` column and a
+    text one to the same concatenation.
+    """
 
     def __init__(
         self,
@@ -626,7 +689,8 @@ class GlobCsvReader:
         if self._columns is not None:
             kwargs["usecols"] = self._columns
         frame = pd.concat(
-            [pd.read_csv(path, **kwargs) for path in paths], ignore_index=True
+            [pd.read_csv(path, dtype=str, **kwargs) for path in paths],
+            ignore_index=True,
         )
         return Dataset.from_pandas(frame)
 
