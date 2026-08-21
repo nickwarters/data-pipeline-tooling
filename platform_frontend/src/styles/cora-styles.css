@@ -3123,6 +3123,61 @@
   color: var(--cora-color-text-muted);
 }
 
+/* The filter boxes wear the People Picker's box, so the row reads as one set of
+   controls rather than a styled Reviewer box standing among native ones — and
+   so every box in the row is the same height and lines up top and bottom. */
+.cora-case-search-input,
+.cora-case-search-select {
+  font: inherit;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  color: inherit;
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  transition: border-color var(--cora-duration-fast) var(--cora-easing-standard);
+}
+
+.cora-case-search-input:focus,
+.cora-case-search-select:focus {
+  outline: none;
+  border-color: var(--cora-color-accent);
+  box-shadow: var(--cora-focus-ring);
+}
+
+/* The People Picker reserves an empty line beneath its box so that whatever
+   sits under it holds still while the directory is being asked. The row is
+   bottom-aligned, so that one reserved line lifted the whole Reviewer field —
+   label, box and all — clear of every other filter. Every filter therefore
+   reserves the same line, and the row lines up on the boxes again. Reserving it
+   rather than taking the picker's line out of the flow is what keeps a status
+   message off the controls when the row wraps onto a second line. */
+.cora-case-search-field:not(:has(.cora-people-picker))::after {
+  content: '';
+  /* The field's own grid gap supplies the space above it, exactly as the
+     picker's status line has a margin above its own. Browsers without `lh`
+     silently drop it, so the token fallback comes immediately before. */
+  min-height: calc(var(--cora-font-size-sm) * var(--cora-line-height-base));
+  min-height: 1lh;
+}
+
+/* The picker's own `margin: space-1 0 0` loses to the scoped `p` reset, which
+   is more specific, so its status line actually sits flush under the box with a
+   paragraph's space beneath it. The row states the intended margin again at a
+   weight that wins, because the reserved line above only lines the boxes up if
+   the Reviewer field's trailing space is the same size as everyone else's. */
+.cora-case-search-filters .cora-people-picker-status {
+  margin: var(--cora-space-1) 0 0;
+}
+
+/* The same reserved line, spelled out: the button has no field around it to
+   carry one, and its own line-height is not the one the line is measured in. */
+.cora-case-search-submit {
+  margin-bottom: calc(
+    var(--cora-space-1) + var(--cora-font-size-sm) *
+      var(--cora-line-height-base)
+  );
+}
+
 .cora-case-search-cap {
   margin: 0 0 var(--cora-space-3);
   padding: var(--cora-space-2) var(--cora-space-3);
