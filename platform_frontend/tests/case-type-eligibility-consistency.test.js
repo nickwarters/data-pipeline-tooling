@@ -129,8 +129,13 @@ test('case types: every manifest config explicitly declares its Case list', asyn
 });
 
 test('mock responsible-party persona uses the current Adviser group', () => {
-  assert.ok(personas['responsible-party'].groups.includes('Advisers'));
-  assert.ok(
-    !personas['responsible-party'].groups.includes('CR-ResponsibleParty')
-  );
+  // The group provisioned in the tenant is `Frontline`; the capability it
+  // grants is still `isAdviser`. Asserting the group name here — rather than
+  // `permissions.adviser` — is deliberate: the point of this test is that the
+  // fixture tracks the *tenant*, so reading the constant would make it pass
+  // against any rename.
+  assert.ok(personas['responsible-party'].groups.includes('Frontline'));
+  for (const retired of ['Advisers', 'CR-ResponsibleParty']) {
+    assert.ok(!personas['responsible-party'].groups.includes(retired));
+  }
 });

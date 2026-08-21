@@ -69,7 +69,14 @@ export function caseTypeGroupNames(displayName) {
 /** @type {PermissionsConfig} */
 export const permissions = {
   reviewer: 'Reviewers',
-  adviser: 'Advisers',
+  // The site-wide frontline base group. Named `Frontline` in the tenant while
+  // the capability it grants stays `isAdviser` and the domain term stays
+  // **Adviser** — this file is the group-name -> capability mapping, and the
+  // two names already differ elsewhere (`maintainer` <- `CORA Owner
+  // Delegates`). Matched by exact equality like every other group here, so the
+  // per-Case-Type `Frontline - <type>` list-access groups are separate groups
+  // and never fold into this one.
+  adviser: 'Frontline',
   controls: 'Controls',
   reviewerManager: 'Reviewer Managers',
   responsiblePartyManager: 'ResponsibleParty-Managers',

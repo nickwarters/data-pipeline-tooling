@@ -120,11 +120,35 @@ as-reviewed question catalogue.
 SharePoint groups fall on two orthogonal axes. For a Case Type whose
 display name is `X` (e.g. `Complaints`, **not** the slug `complaints`), provision:
 
-### Per-type list-access group (the real ACL boundary)
+### Per-type list-access groups (the real ACL boundary)
 
-| Group           | Grants                                                                             |
-| --------------- | ---------------------------------------------------------------------------------- |
-| `Reviewers - X` | Access to the `Cases-{Slug}` list. Membership implies the `isReviewer` capability. |
+Two, one per side of the review — the reviewing side and the frontline side.
+Both are SharePoint ACLs on the `Cases-{Slug}` list.
+
+| Group           | Grants                                                                                                                                                         |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Reviewers - X` | Access to the `Cases-{Slug}` list. Membership implies the `isReviewer` capability.                                                                             |
+| `Frontline - X` | Access to the `Cases-{Slug}` list for the **frontline** side — a **Responsible Party** or their **Manager** on a Case of this type. Implies **no** capability. |
+
+**`Frontline - X` grants list access and nothing else.** Unlike `Reviewers - X`
+it is not read by `permissions.js` and composes no capability: what a frontline
+user may see and do on a Case is decided by the per-Case roles in
+`section-access.js`, which resolve from the Case row's people fields, not from
+group membership. The group exists so those roles have a list to read the Case
+from at all. It is therefore not in `caseTypeGroupNames()` — that function
+composes the three groups the app _reads_.
+
+**Membership is maintained by hand today; the data pipeline now asks for it.**
+The `notifications` pipeline emits an `add_user_group_priviledges_<stamp>.json`
+Deliverable naming each frontline notification recipient's login and the
+`Frontline - X` groups they need, into the `cora_user_group_privileges` outbox —
+so a Responsible Party can be granted access to the Case in the same pass that
+tells them about it. **It is a request, not an application:** the pipeline
+writes the file to a local outbox and stops there, and the **Forwarder** that
+would deliver it is designed but not yet built, so acting on the file is
+currently a manual step. See the data pipeline's
+[`docs/data-dictionary-notifications.md`](../../../docs/data-dictionary-notifications.md).
+Provisioning creates the empty group per Case Type either way.
 
 ### Per-type elevated capability groups
 
@@ -139,9 +163,17 @@ name, not three hand-written strings.
 
 ### Site-wide functional groups (provision once, not per type)
 
-`Reviewers` (base reviewing), `Advisers` (base frontline — eligible Responsible
-Party), `Controls` (resolves Appeals, authors Amended Outcomes — replaces the
-retired QA Reviewer).
+`Reviewers` (base reviewing), `Frontline` (base frontline — eligible Responsible
+Party; the capability it grants is `isAdviser` and the domain term is still
+**Adviser**), `Controls` (resolves Appeals, authors Amended Outcomes — replaces
+the retired QA Reviewer).
+
+`Frontline` and the per-type `Frontline - X` above are **different groups on
+different axes** — site-wide capability vs one list's ACL. Every group match in
+`permissions.js` is exact equality, so neither grants the other; a user who is a
+Responsible Party on a Complaints Case needs **both**. `Frontline` is what puts
+their Cases on `#/my-cases`; `Frontline - Complaints` is what lets SharePoint
+serve the Case itself, including from a notification's deep link.
 
 ---
 

@@ -381,12 +381,38 @@ the Conversation.
 _Avoid_: Subject, owner (ambiguous), reviewee
 
 **Adviser**:
-The **frontline base role** — a SharePoint user in the `Advisers` group, eligible to be
+The **frontline base role** — a SharePoint user in the `Frontline` group, eligible to be
 named as a **Case**'s **Responsible Party**. "Adviser" is the business word for
 this population; **Responsible Party** remains the per-Case role name (the Adviser
 _assigned to_ a Case), mirroring **Reviewer** vs **Assigned Reviewer**. Replaces the old
-`CR-ResponsibleParty` / `Frontline - Complaints` groups.
-_Avoid_: Responsible Party (that is the per-Case role, not the group), Agent (call-centre-specific)
+`CR-ResponsibleParty` group.
+
+**The term and the group are deliberately different words.** The provisioned group is
+`Frontline`; the capability it grants is `isAdviser` and the term stays **Adviser**.
+`permissions.js` is the group-name → capability mapping and several entries already
+differ this way (`maintainer` ← `CORA Owner Delegates`), so renaming the group is one
+config string, not a vocabulary change.
+
+**`Frontline` and `Frontline - <type>` are two different groups on two different axes.**
+`Frontline` is the site-wide functional group saying _what you are_;
+`Frontline - <type>` is the per-Case-Type **list-access** group saying _which
+`Cases-{Slug}` list you may read_ — the frontline counterpart of `Reviewers - <type>`.
+Every group match in `permissions.js` is **exact equality**, so the shared prefix grants
+nothing across the two, and a Responsible Party on a Complaints Case needs **both**:
+`Frontline` is what puts their Cases on `#/my-cases` (it spans every Case Type in
+`resolveCaseSourcesFromCaseTypes`), and `Frontline - Complaints` is what lets SharePoint
+serve the Case at all — including from a Notification's deep link, which has no route
+guard and resolves its list from the Case Type manifest rather than from the user's
+sources. Unlike `Reviewers - <type>` the frontline list-access group implies **no**
+capability and is read by **no** frontend code: what a frontline user may do on a Case is
+decided per-Case by `section-access.js` off the Case row's people fields, and the group
+only gives those roles a list to read the Case from. It is therefore absent from
+`caseTypeGroupNames()`, which composes the three groups the app reads. Its membership is
+what the data pipeline's **User group privileges** Deliverable requests — see the [data
+pipeline's CONTEXT.md](../CONTEXT.md), whose `notifications` pass emits the
+`Frontline - <type>` grants its frontline recipients need alongside the notifications
+themselves.
+_Avoid_: Responsible Party (that is the per-Case role, not the group), Agent (call-centre-specific), Advisers (the retired group name — the group is `Frontline`)
 
 **Journey Owner**:
 The **elevated frontline role** for a **Case Type** — a SharePoint user in
