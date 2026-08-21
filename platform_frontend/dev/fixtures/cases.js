@@ -116,10 +116,9 @@ function outcomeAnswers(value) {
  * Action Centre (read by ?asUser=action-centre): one row per reason group,
  * carrying the hoisted flags and clocks the real backend would compute.
  *
- * Assigned Cases carry the time of their current allocation independently of
- * `created`; the Action Centre demo deliberately makes those clocks differ.
- * The unallocated Case carries `null`: nobody holds it, so there is no moment
- * it was handed over — "Request next Case" visibly stamps one.
+ * Action Centre Cases carry their current allocation time independently of
+ * `created`; one deliberately makes the clocks differ. The unallocated Case
+ * carries `null`, and "Request next Case" visibly stamps it.
  *
  * @type {CaseRow[]}
  */

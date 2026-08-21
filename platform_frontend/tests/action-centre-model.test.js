@@ -216,6 +216,14 @@ test('waitingInfo: In progress never falls back to Created when AssignedAt is in
   }
 });
 
+test('waitingInfo: a malformed non-In-progress clock is intentionally normalised to zero days', () => {
+  assert.equal(
+    waitingInfo(caseRow({ dueDate: 'not-a-date' }), reason('overdue'), NOW)
+      .days,
+    0
+  );
+});
+
 test('secondaryReasons: In progress is not noted as a second reason', () => {
   // It has no flag of its own, and every Case in another group is in it too,
   // so noting it would say "also in progress" on every row in the panel.
@@ -543,26 +551,6 @@ test('mergeWorstFirstWindow: missing clocks sort first and equal clocks keep the
       5
     ).map((c) => c.id),
     ['m1', 'm2', 'e', 't', 'l']
-  );
-});
-
-test('mergeWorstFirstWindow: missing and malformed allocation clocks sort after valid allocations', () => {
-  const allocated = caseRow({
-    id: 'allocated',
-    created: '2020-01-01T00:00:00Z',
-    assignedAt: '2026-06-01T00:00:00Z',
-  });
-  const missing = caseRow({ id: 'missing', assignedAt: null });
-  const malformed = caseRow({ id: 'malformed', assignedAt: 'not-a-date' });
-
-  assert.deepEqual(
-    mergeWorstFirstWindow(
-      [[missing], [allocated], [malformed]],
-      reason('inProgress'),
-      0,
-      3
-    ).map((c) => c.id),
-    ['allocated', 'missing', 'malformed']
   );
 });
 

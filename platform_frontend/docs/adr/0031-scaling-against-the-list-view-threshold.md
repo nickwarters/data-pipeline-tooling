@@ -73,8 +73,10 @@ follow-up task.
 
 `AssignedAt` is indexed because the Action Centre orders the In progress group
 oldest-first on the current allocation clock (issue #789). It must be populated
-for every allocated Case. Legacy allocated rows require a backfill from
-authoritative allocation evidence before rollout; `Created` is not a fallback.
+on every outstanding row with `AssignedReviewer`; unassigned rows carry null.
+This does not require completed or void rows to carry it. Legacy outstanding
+allocations require a backfill from authoritative allocation evidence before
+rollout; `Created` is not a fallback.
 
 (Max 20 indexes/list; we are well under. Compound indexes are available if a future live
 query needs a two-column narrowing.)

@@ -1012,16 +1012,19 @@ function buildFilterExpr(filter) {
   if (filter.titlePrefix) {
     conds.push(`startswith(Title,'${escapeOData(filter.titlePrefix)}')`);
   }
-  if (filter.status) conds.push(`Status eq '${escapeOData(filter.status)}'`);
-  if (filter.assignedAtPresent !== undefined) {
-    conds.push(`AssignedAt ${filter.assignedAtPresent ? 'ne' : 'eq'} null`);
-  }
   // Person columns compare against the numeric id, unquoted: the caller has
   // already turned the account name into one. A quoted value here matches no
   // row at all, which reads as an empty dashboard rather than as an error.
   if (filter.assignedReviewer) {
     conds.push(`AssignedReviewerId eq ${filter.assignedReviewer}`);
   }
+  // The In progress Action Centre query must lead with its indexed reviewer,
+  // narrow to rows carrying the allocation clock, then apply the grouped
+  // outstanding statuses appended through `anyOf` below.
+  if (filter.assignedAtPresent !== undefined) {
+    conds.push(`AssignedAt ${filter.assignedAtPresent ? 'ne' : 'eq'} null`);
+  }
+  if (filter.status) conds.push(`Status eq '${escapeOData(filter.status)}'`);
   if (filter.responsibleParty) {
     conds.push(`ResponsiblePartyId eq ${filter.responsibleParty}`);
   }

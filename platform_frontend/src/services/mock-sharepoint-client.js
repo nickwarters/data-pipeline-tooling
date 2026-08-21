@@ -177,7 +177,7 @@ export class MockSharePointClient {
         return false;
       if (
         filter.assignedAtPresent !== undefined &&
-        (c.assignedAt !== null) !== filter.assignedAtPresent
+        (c.assignedAt != null) !== filter.assignedAtPresent
       )
         return false;
       if (

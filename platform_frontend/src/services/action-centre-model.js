@@ -251,9 +251,9 @@ export function worstFirstOrder(reason) {
 /**
  * The worst-first comparator for a reason: ascending on the reason's own
  * clock field (oldest/most-overdue first), matching `worstFirstOrder`'s
- * `orderBy`/`orderDir`. The allocation clock's missing or malformed legacy
- * values sort last, matching the server query that excludes them. Other reason
- * clocks preserve their established missing-first convention.
+ * `orderBy`/`orderDir`. A missing clock sorts as `''`, i.e. first — the same
+ * convention `MockSharePointClient`/`HttpSharePointClient` use for `orderBy`.
+ * The In progress server query excludes rows without an allocation clock.
  * Shared by the single-list `listCases({ orderBy, orderDir })` request and the
  * client-side merge of several lists' results, so both agree on "worst".
  *
@@ -264,12 +264,6 @@ function reasonOrderComparator(reason) {
   return (a, b) => {
     const av = /** @type {string} */ (a[reason.clockField] ?? '');
     const bv = /** @type {string} */ (b[reason.clockField] ?? '');
-    if (reason.clockField === 'assignedAt') {
-      const aTime = Date.parse(av);
-      const bTime = Date.parse(bv);
-      if (Number.isNaN(aTime)) return Number.isNaN(bTime) ? 0 : 1;
-      if (Number.isNaN(bTime)) return -1;
-    }
     if (av < bv) return -1;
     if (av > bv) return 1;
     return 0;

@@ -3,6 +3,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { HttpSharePointClient } from '../src/services/http-sharepoint-client.js';
 import {
+  ACTION_CENTRE_REASONS,
+  activeFilter,
+  worstFirstOrder,
+} from '../src/services/action-centre-model.js';
+import {
   WEB_URL,
   emptyPageClient,
   makeFetch,
@@ -800,25 +805,35 @@ test('HttpSharePointClient: listCases maps every CaseRow sort key to its interna
   });
 });
 
-test('HttpSharePointClient: assignedAt presence filter excludes legacy rows independently of ordering', async () => {
-  const { client, calls } = emptyPageClient();
+test('HttpSharePointClient: the real In progress reason leads list and count with reviewer, allocation clock, then statuses', async () => {
+  const { fetch, calls } = peopleFilterFetch({ reviewer: 9 }, () => idPage(0));
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+  const reason = ACTION_CENTRE_REASONS.find((item) => item.id === 'inProgress');
+  assert.ok(reason);
+  const filter = activeFilter(reason, 'reviewer');
 
-  await client.listCases(
-    { status: 'In-progress', assignedAtPresent: true },
-    {
-      listName: 'Cases-ExampleReview',
-      top: 1,
-      orderBy: 'assignedAt',
-      orderDir: 'asc',
-    }
-  );
+  await client.listCases(filter, {
+    listName: 'Cases-ExampleReview',
+    top: 1,
+    ...worstFirstOrder(reason),
+  });
+  await client.countCases(filter, { listName: 'Cases-ExampleReview' });
 
-  const url = decodeURIComponent(calls[0].url);
-  assert.ok(
-    url.includes("$filter=Status eq 'In-progress' and AssignedAt ne null")
-  );
-  assert.ok(url.includes('$orderby=AssignedAt'));
-  assert.equal(url.includes('Created'), false);
+  const itemUrls = calls
+    .filter((call) => call.url.includes('/items?'))
+    .map((call) => decodeURIComponent(call.url));
+  assert.equal(itemUrls.length, 2);
+  const expectedFilter =
+    "AssignedReviewerId eq 9 and AssignedAt ne null and ((Status eq 'In-progress') or (Status eq 'Actions In Progress'))";
+  for (const url of itemUrls) {
+    assert.equal(new URL(url).searchParams.get('$filter'), expectedFilter);
+    assert.equal(url.includes('Created'), false);
+  }
+  assert.equal(new URL(itemUrls[0]).searchParams.get('$orderby'), 'AssignedAt');
+  assert.equal(new URL(itemUrls[1]).searchParams.get('$select'), 'Id');
 });
 
 test('HttpSharePointClient: assignedAt ordering alone adds no row predicate', async () => {

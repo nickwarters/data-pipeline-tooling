@@ -74,7 +74,9 @@ Sections should not be loaded if the user does not have permission via the relev
 The Action Centre's “N days in progress” age starts when the Case was allocated
 to its current Reviewer (`AssignedAt`), not when the Case was created. Its oldest-first
 query therefore requires `AssignedAt` to be present and indexed on every Case Type list;
-there is no `Created` fallback.
+there is no `Created` fallback. An outstanding row with `AssignedReviewer` must have
+`AssignedAt`; unassigned rows carry null. This does not require completed or void rows
+to carry the clock.
 
 #### View Outstanding Cases
 

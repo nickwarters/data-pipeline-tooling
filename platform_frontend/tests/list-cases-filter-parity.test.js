@@ -212,10 +212,17 @@ const SCENARIOS = [
   {
     name: 'assignedAtPresent',
     filter: { assignedAtPresent: true },
-    rows: [
-      caseRow('allocated', { assignedAt: MID_PAST }),
-      caseRow('legacy-null', { assignedAt: null }),
-    ],
+    rows: (() => {
+      const omitted = /** @type {Partial<CaseRow>} */ (
+        caseRow('legacy-omitted')
+      );
+      delete omitted.assignedAt;
+      return [
+        caseRow('allocated', { assignedAt: MID_PAST }),
+        caseRow('legacy-null', { assignedAt: null }),
+        /** @type {CaseRow} */ (omitted),
+      ];
+    })(),
     expected: ['allocated'],
   },
   {

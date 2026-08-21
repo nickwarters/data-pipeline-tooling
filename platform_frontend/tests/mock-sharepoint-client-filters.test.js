@@ -23,7 +23,7 @@ import {
 // evaluator. Only mock-specific affordances belong here: list scoping, the 412
 // injection seam, countCases, and the derived-overdue write-through.
 
-test('In-progress Action Centre filter excludes a legacy null allocation from rows and count', async () => {
+test('In-progress Action Centre filter accepts a timestamp and excludes null or omitted allocations from rows and count', async () => {
   const valid = reasonCase('valid-allocation', {
     status: 'In-progress',
     assignedReviewer: 'rev-a',
@@ -34,8 +34,15 @@ test('In-progress Action Centre filter excludes a legacy null allocation from ro
     assignedReviewer: 'rev-a',
     assignedAt: null,
   });
+  const omitted = /** @type {Partial<CaseRow>} */ (
+    reasonCase('legacy-omitted-allocation', {
+      status: 'In-progress',
+      assignedReviewer: 'rev-a',
+    })
+  );
+  delete omitted.assignedAt;
   const client = new MockSharePointClient({
-    lists: { [LIST]: [legacy, valid] },
+    lists: { [LIST]: [/** @type {CaseRow} */ (omitted), legacy, valid] },
     personas: PERSONAS,
   });
   const reason = ACTION_CENTRE_REASONS.find((item) => item.id === 'inProgress');
