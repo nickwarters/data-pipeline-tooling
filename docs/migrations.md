@@ -115,7 +115,14 @@ Three consequences worth stating plainly:
   must be declared before a run can quarantine anything. It is its own file
   (`<subject>/quarantine.db`), so it is its own `migrations/<subject>/quarantine/`
   directory — opt it in separately, or leave it out and it keeps creating tables
-  as it always has.
+  as it always has. **Declare a table for every quarantine Writer the pipeline
+  mints, not only the ones whose schema carries a rule that can fire today.** A
+  reject table nobody has written to yet looks optional and is not: the first
+  breach raises `MissingTableError` mid-run, so every step *after* the one that
+  breached is never reached and its table quietly stops being populated — and
+  because the watermark is not advanced, the next run fails at the same place.
+  `sharepoint_cases` shipped that way: its baseline declared `case_version` and
+  none of the seven Detail Tables beside it.
 - **A missing *column* still reads poorly.** A missing table names itself; a
   column the migration forgot surfaces as SQLite's raw `no such column`. That is
   decision 4 of the epic — fail fast, and do not pay for a pre-write column check

@@ -3143,3 +3143,72 @@ def test_a_dry_run_previews_every_write_and_commits_none_of_them(base_dir):
     assert SharePointCheckpointStore(base_dir).committed_watermark(SOURCE) == (
         SERVER_NOW - SAFETY_LAG
     )
+
+
+def test_a_quarantined_detail_row_is_routed_aside_rather_than_aborting_the_poll(
+    base_dir,
+):
+    # Every Detail Table step is handed a quarantine Writer, and this subject is
+    # under migration control -- so a reject table the migrations forgot is not
+    # a gap in the reject history but a `MissingTableError` that aborts the
+    # whole poll, at `answer`, before `answer_action` and the four tables after
+    # it are ever written. The unit tests above prove each partitioner against a
+    # RecordingWriter, which is exactly the seam that cannot see it: only a real
+    # store can say whether the row has somewhere to land.
+    answers = json.dumps(
+        {
+            "q-bad": {"value": "A", "remediationStatus": {"status": "resolved"}},
+            "q-good": {
+                "value": "B",
+                "remediationRequired": "yes",
+                "remediationActions": [{"id": "q-good-ra-0", "text": "Retrain."}],
+            },
+        }
+    )
+    appeals = json.dumps([appeal(id="appeal-1"), appeal(id="appeal-2", state="lapsed")])
+    client = FakeListClient(items(item(Answers=answers, Appeals=appeals)))
+
+    [poll] = run(RunContext(base_dir=base_dir, pipeline=FEED_NAME), client=client)
+
+    # The breach is routed aside and the poll publishes: the good answer, the
+    # good appeal and -- the table furthest downstream of the first breach --
+    # the action land at silver and gold.
+    assert poll.detail_rows["answer_action"] == 1
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
+    for layer in (med.silver, med.gold):
+        assert [row["question_id"] for row in read_rows(layer, "answer")] == ["q-good"]
+        assert [row["action_id"] for row in read_rows(layer, "answer_action")] == [
+            "q-good-ra-0"
+        ]
+        assert [row["appeal_id"] for row in read_rows(layer, "appeal")] == ["appeal-1"]
+
+    quarantined = quarantine_rows(base_dir)
+    assert [row["question_id"] for row in quarantined["answer"]] == ["q-bad"]
+    assert "remediation_status" in quarantined["answer"][0]["failed_rule"]
+    assert [row["appeal_id"] for row in quarantined["appeal"]] == ["appeal-2"]
+    assert "state" in quarantined["appeal"][0]["failed_rule"]
+
+
+def quarantine_rows(base_dir) -> dict[str, list[dict]]:
+    """Every non-empty reject table of this feed's quarantine database.
+
+    Read with sqlite3 rather than a Store Reader: the quarantine file is a
+    sibling of the layer that writes to it, not a namespace the registry mints.
+    """
+    con = sqlite3.connect(base_dir / FEED_NAME / "quarantine.db")
+    con.row_factory = sqlite3.Row
+    try:
+        tables = [
+            name
+            for (name,) in con.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' "
+                "AND name <> 'schema_migrations' ORDER BY name"
+            )
+        ]
+        landed = {
+            table: [dict(row) for row in con.execute(f'SELECT * FROM "{table}"')]
+            for table in tables
+        }
+    finally:
+        con.close()
+    return {table: rows for table, rows in landed.items() if rows}
