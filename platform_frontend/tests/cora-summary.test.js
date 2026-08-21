@@ -76,6 +76,20 @@ function render(overrides = {}) {
   });
 }
 
+/**
+ * The classes of a card's own lines, top to bottom — the `<p>` children of the
+ * first card in a Summary block. Ordering is the behaviour under test, and the
+ * per-class lookups cannot see it.
+ * @param {any} block
+ * @returns {string[]}
+ */
+function paragraphClasses(block) {
+  const card = findAllByClass(block, 'cora-remediation-group')[0].parentNode;
+  return [...card.childNodes]
+    .filter((node) => node.tagName === 'P')
+    .map((node) => node.className);
+}
+
 /** @param {Node[]} nodes */
 function rootOf(nodes) {
   const root = document.createElement('div');
@@ -246,8 +260,26 @@ test('summaryView renders failures, selected remediation and read-only capture',
 
   const issues = getByRole(root, 'heading', { name: 'Issues' }).parentNode;
   assert.ok(getByText(issues, 'Remediation Actions: 1'));
-  assert.ok(getByText(issues, 'Opening: Greeted?'));
-  assert.ok(getByText(issues, 'Answer: No'));
+  assert.deepEqual(
+    findAllByClass(issues, 'cora-remediation-group').map((p) => p.textContent),
+    ['Opening', 'Discovery']
+  );
+  assert.deepEqual(
+    findAllByClass(issues, 'cora-remediation-question').map(
+      (p) => p.textContent
+    ),
+    ['Greeted?', 'Needs found?']
+  );
+  assert.deepEqual(
+    findAllByClass(issues, 'cora-remediation-answer').map((p) => p.textContent),
+    ['Answer: No', 'Answer: No']
+  );
+  assert.equal(queryAllByText(issues, 'Opening: Greeted?').length, 0);
+  assert.deepEqual(paragraphClasses(issues), [
+    'cora-remediation-group',
+    'cora-remediation-question',
+    'cora-remediation-answer',
+  ]);
   assert.ok(getByText(issues, 'Retrain.'));
   assert.ok(getByText(issues, 'Root cause: Rushed'));
   assert.equal(queryByRole(issues, 'textbox'), null);
@@ -295,6 +327,11 @@ test('summaryView renders an ungrouped failure without invented actions or captu
   const issues = getByRole(root, 'heading', { name: 'Issues' }).parentNode;
   assert.ok(getByText(issues, 'Ungrouped question'));
   assert.equal(queryAllByText(issues, 'General: Ungrouped question').length, 0);
+  assert.equal(findByClass(issues, 'cora-remediation-group'), null);
+  assert.equal(
+    findByClass(issues, 'cora-remediation-question').textContent,
+    'Ungrouped question'
+  );
   assert.equal(queryAllByText(issues, /Root cause:/).length, 0);
   assert.equal(queryByRole(issues, 'textbox'), null);
 });
@@ -585,7 +622,18 @@ test('the Summary remediation block reads the same model as the Remediation tab'
   );
   // Both kinds of remediation the Reviewer can attach, with the Remediation
   // tab's own resolution wording.
-  assert.ok(getByText(remediation, 'Opening: Greeted?'));
+  assert.equal(
+    findByClass(remediation, 'cora-remediation-group').textContent,
+    'Opening'
+  );
+  assert.equal(
+    findByClass(remediation, 'cora-remediation-question').textContent,
+    'Greeted?'
+  );
+  assert.deepEqual(paragraphClasses(remediation).slice(0, 2), [
+    'cora-remediation-group',
+    'cora-remediation-question',
+  ]);
   assert.ok(getByText(remediation, 'Re-issue letter'));
   assert.ok(getByText(remediation, 'Status: Complete'));
   assert.ok(getByText(remediation, 'Call the customer back'));
