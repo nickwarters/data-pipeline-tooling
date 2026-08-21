@@ -16,6 +16,14 @@ the deliverable outbox: an array of objects carrying exactly ``recipients`` /
 ``subject`` / ``body``, one object per Case per trigger. The path is unique per
 pass, so a `Refresh` can never overwrite a file nobody has drained yet.
 
+A pass emits a **second** deliverable, to a destination of its own because it
+has a different consumer: the frontline SharePoint groups its recipients must
+hold to open the Cases they are being told about, as one object per login
+carrying ``login_name`` and an array of ``groups``. It is the two passes'
+frontline recipients reduced together, and it is written *before* the outbox
+file -- a group grant nobody uses costs nothing, an access-denied on a
+notification link costs a support call.
+
 Every line below **does its work when it is reached**: put a breakpoint on one,
 step over it, and the variable holds the actual rows at that point
 ([ADR-0027](../../docs/adr/0027-eager-steps-are-the-default-authoring-model.md)).
@@ -36,7 +44,13 @@ from typing import Callable
 
 import pandas as pd
 
-from framework.core import Dataset, PipelineError, Writer, format_failure
+from framework.core import (
+    Dataset,
+    PipelineError,
+    ValidationError,
+    Writer,
+    format_failure,
+)
 from framework.io import AppendOnly, JsonWriter, Refresh
 from framework.run import (
     FreshnessRequirement,
@@ -50,7 +64,11 @@ from framework.transform import AntiJoinWith
 from readers.sharepoint_cases import ConversationMessagesReader, CurrentCasesReader
 from readers.users import UsersReader
 from shared.account_names import to_bare_account
-from tools.deliverables import NOTIFICATIONS_DESTINATION, get_deliverable_path
+from tools.deliverables import (
+    NOTIFICATIONS_DESTINATION,
+    USER_GROUP_PRIVILEGES_DESTINATION,
+    get_deliverable_path,
+)
 from tools.medallion import medallion
 from tools.observability import timestamps
 from tools.store import Store, StoreRegistry
@@ -85,21 +103,47 @@ TERMINAL_STATUSES = ("Completed", "Void")
 
 # The three keys the notification service reads, in the order it reads them.
 OUTBOX_COLUMNS = ("recipients", "subject", "body")
+
+# The two keys the group-provisioning consumer reads. ``groups`` is a JSON
+# array of group names, not a delimited string like ``recipients`` above -- the
+# two deliverables have different readers and neither is a precedent for the
+# other.
+PRIVILEGES_COLUMNS = ("login_name", "groups")
+
+# Telling a frontline party about a Case is useless if they cannot open it, so
+# every notification owed to one is paired with the per-Case-Type group that
+# grants them access to that Case Type's list.
+FRONTLINE_GROUP_TEMPLATE = "Frontline - {case_type_name}"
+
+# Case Type slug -> the name that appears in a group. Declared, not derived:
+# the slug is this project's identifier and the group name is the Case Review
+# Platform's display name, and nothing guarantees one is a title-cased spelling
+# of the other. Onboarding a Case Type is one entry here, and a Case Type that
+# is missing fails the run rather than composing a group nobody was provisioned
+# into -- a wrong name is granted to nobody and reads as an access bug in the
+# app weeks later, which is the failure worth being loud about.
+CASE_TYPE_NAMES = {"complaints": "Complaints"}
 SUBJECT_LINE = "you have a new message"
 REPORTABLE_SUBJECT_LINE = "a case is reportable and needs remediation attention"
 RECIPIENT_SEPARATOR = ";"
 
 # PLACEHOLDER -- two tenant facts fold into one string: the site collection and
-# the host page the single-page app is served from. Shared by both link
-# constants below so the go-live swap stays a single place.
+# the host page the single-page app is served from. The one place the go-live
+# swap happens.
 _LINK_BASE = "https://sharepoint.invalid/sites/REPLACE-ME/SitePages/REPLACE-ME.aspx"
 
-# The fragment after the base is the app's own registered conversation route, so
-# the recipient lands where they can reply rather than on a read-only list form.
-CASE_LINK_TEMPLATE = _LINK_BASE + "#/conversation/{case_type}/{source_item_id}"
-# The Reportable trigger has no message to reply to, so it links to the Case
-# page itself rather than the conversation deep link above.
-REPORTABLE_CASE_LINK_TEMPLATE = _LINK_BASE + "#/case/{case_type}/{source_item_id}"
+# The fragment after the base is the app's own registered Case route -- one
+# template for both triggers, because both land on the same page.
+#
+# The Conversation trigger used to deep-link `#/conversation/:caseType/:id`, so
+# the recipient arrived where they could reply. That route is being removed for
+# leaking Case content to viewers holding no role on the Case (#790): it has no
+# guard, and it resolves its list from the Case Type manifest rather than the
+# viewer's own sources, so the SharePoint ACL was the only thing standing in the
+# way. `#/case/:caseType/:id` is the gated route to the same thread, via the
+# Case page's Conversation panel. Landing on the Case is the whole requirement;
+# a deep link into the thread was considered and is not wanted.
+CASE_LINK_TEMPLATE = _LINK_BASE + "#/case/{case_type}/{source_item_id}"
 
 _THREAD_COLUMNS = ("case_id", "last_author_login", "message_at")
 _CASE_COLUMNS = (
@@ -109,12 +153,19 @@ _CASE_COLUMNS = (
     "assigned_reviewer_name",
     "responsible_party_name",
 )
+# ``recipient`` is the mailbox the notification goes to; ``recipient_login`` is
+# the same person's bare account name, which is what a group is granted to.
+# ``is_frontline`` records the *role* they were selected for, decided where the
+# roles are still distinguishable -- by the time a row exists, one person
+# holding two roles has already collapsed to one recipient.
 _PENDING_COLUMNS = (
     "case_id",
     "case_type",
     "source_item_id",
     "message_at",
     "recipient",
+    "recipient_login",
+    "is_frontline",
 )
 
 # Reportable selection needs status/reportable_at/had_remediation for the
@@ -128,7 +179,18 @@ _REPORTABLE_CASE_COLUMNS = (
     "reportable_at",
     "had_remediation",
 )
-_REPORTABLE_PENDING_COLUMNS = ("case_id", "case_type", "source_item_id", "recipient")
+# Every recipient of this trigger is frontline, and the column says so rather
+# than leaving the reader of the privileges step to know it: the two passes'
+# pending rows are read by one rule, and a column that is constant here is the
+# price of that rule not branching on which pass it was handed.
+_REPORTABLE_PENDING_COLUMNS = (
+    "case_id",
+    "case_type",
+    "source_item_id",
+    "recipient",
+    "recipient_login",
+    "is_frontline",
+)
 
 
 def _empty(columns: tuple[str, ...]) -> Dataset:
@@ -216,13 +278,16 @@ def recipients_of(threads: Dataset, users: Dataset) -> Dataset:
             party: email_of.get(party, ""),
             manager: email_of.get(manager) or manager_email,
         }
-        emails = sorted(
-            {
-                email
-                for login, email in by_login.items()
-                if login and email and login != author
-            }
-        )
+        # Frontline is a property of the *role*, taken here rather than off the
+        # surviving row: the collapse above has already lost which roles a login
+        # held, and someone who is both this Case's Reviewer and its Responsible
+        # Party still needs the frontline group.
+        frontline = {login for login in (party, manager) if login}
+        surviving = {
+            login: email
+            for login, email in by_login.items()
+            if login and email and login != author
+        }
         rows.extend(
             {
                 "case_id": record["case_id"],
@@ -230,8 +295,10 @@ def recipients_of(threads: Dataset, users: Dataset) -> Dataset:
                 "source_item_id": record["source_item_id"],
                 "message_at": record["message_at"],
                 "recipient": email,
+                "recipient_login": login,
+                "is_frontline": login in frontline,
             }
-            for email in emails
+            for login, email in sorted(surviving.items(), key=lambda pair: pair[1])
         )
     if not rows:
         return _empty(_PENDING_COLUMNS)
@@ -284,21 +351,64 @@ def responsible_party_and_manager_of(cases: Dataset, users: Dataset) -> Dataset:
             party: email_of.get(party, ""),
             manager: email_of.get(manager) or manager_email,
         }
-        emails = sorted({email for login, email in by_login.items() if login and email})
+        surviving = {
+            login: email for login, email in by_login.items() if login and email
+        }
         rows.extend(
             {
                 "case_id": record["case_id"],
                 "case_type": record["case_type"],
                 "source_item_id": record["source_item_id"],
                 "recipient": email,
+                "recipient_login": login,
+                # Both roles this pass selects for are frontline, so the flag is
+                # true by construction rather than by a lookup.
+                "is_frontline": True,
             }
-            for email in emails
+            for login, email in sorted(surviving.items(), key=lambda pair: pair[1])
         )
     if not rows:
         return _empty(_REPORTABLE_PENDING_COLUMNS)
     return Dataset.from_pandas(
         pd.DataFrame(rows, columns=list(_REPORTABLE_PENDING_COLUMNS))
     )
+
+
+def frontline_group_of(case_type: str) -> str:
+    """The group that grants a frontline party access to a Case Type's Cases."""
+    display_name = CASE_TYPE_NAMES.get(case_type)
+    if display_name is None:
+        raise ValidationError(
+            f"no group name is declared for Case Type {case_type!r}, so the "
+            "frontline group it needs cannot be named; add it to "
+            f"CASE_TYPE_NAMES (declared: {', '.join(sorted(CASE_TYPE_NAMES))})"
+        )
+    return FRONTLINE_GROUP_TEMPLATE.format(case_type_name=display_name)
+
+
+def group_privileges(pending: Dataset, pending_reportable: Dataset) -> Dataset:
+    """Reduce both passes' frontline recipients to one row per login.
+
+    Grouped by login rather than emitted per Case, because the consumer grants
+    membership to a *person*: someone owed notifications on two Case Types is
+    one object carrying both groups, not two objects racing each other. The
+    groups a login already holds are not knowable from here, so this is what
+    they must end up with rather than what must be added -- granting a group
+    twice is a no-op, and withholding one is a locked-out recipient.
+    """
+    groups_of: dict[str, set[str]] = {}
+    for dataset in (pending, pending_reportable):
+        for record in dataset.to_pandas().to_dict("records"):
+            if not record["is_frontline"]:
+                continue
+            groups_of.setdefault(record["recipient_login"], set()).add(
+                frontline_group_of(record["case_type"])
+            )
+    rows = [
+        {"login_name": login, "groups": sorted(groups)}
+        for login, groups in sorted(groups_of.items())
+    ]
+    return Dataset.from_pandas(pd.DataFrame(rows, columns=list(PRIVILEGES_COLUMNS)))
 
 
 def render_notifications(
@@ -410,6 +520,8 @@ def reportable_notifications(
 
 
 def publish(
+    privileges: Dataset,
+    privileges_file: Writer,
     rendered: Dataset,
     outbox: Writer,
     pending: Dataset,
@@ -417,14 +529,22 @@ def publish(
     pending_reportable: Dataset,
     reportable_ledger: Writer,
 ) -> None:
-    """Write the one outbox file, then each ledger's rows.
+    """Write the group privileges, then the outbox file, then each ledger's rows.
 
-    The order of these lines *is* the ordering guarantee: nobody is recorded as
-    told until the file telling them has landed. A crash between the two costs a
-    duplicate notification, which is the safe direction. Expressing that used to
-    take an extra graph edge feeding each ledger step the outbox write's result;
-    written out, it is simply which line comes first.
+    The order of these lines *is* the ordering guarantee: nobody is told about a
+    Case before the file asking for their access to it has landed, and nobody is
+    recorded as told until the file telling them has landed. A crash between any
+    two costs a group grant nobody uses, or a duplicate notification -- both the
+    safe direction. Expressing that used to take an extra graph edge feeding each
+    ledger step the outbox write's result; written out, it is simply which line
+    comes first.
+
+    No frontline recipient means no privileges file at all, for the same reason
+    :func:`run` publishes nothing when nobody is owed anything: an empty array is
+    a file its consumer drains and finds nothing in.
     """
+    if len(privileges) > 0:
+        write(privileges_file, privileges, name="write-privileges")
     write(outbox, rendered, name="write-outbox")
     write(
         ledger,
@@ -453,6 +573,23 @@ def outbox_filename(generated_at: str, pipeline_run_id: str) -> str:
     """A per-pass filename that is legal on Windows as well as macOS."""
     stamp = "".join(character for character in generated_at if character.isalnum())
     return f"{stamp}-{pipeline_run_id[:8]}.json"
+
+
+def privileges_filename(generated_at: str) -> str:
+    """The group-privileges filename its consumer asked for, to the second.
+
+    ``priviledges`` is the consumer's own spelling and is deliberate -- the file
+    is named by whoever reads it, so correcting it here would simply stop it
+    being found.
+
+    Stamped from the same instant as :func:`outbox_filename`, so the two files a
+    pass emits pair up by eye, and in **UTC** for the same reason every other
+    instant in the run metadata is. Unlike the outbox name this carries no run
+    id, which is the consumer's format: two passes finishing inside one second
+    would collide, and nothing here schedules them that close.
+    """
+    stamp = timestamps.parse_timestamp(generated_at).strftime("%Y%m%d%H%M%S")
+    return f"add_user_group_priviledges_{stamp}.json"
 
 
 def run(context: RunContext) -> Dataset:
@@ -502,12 +639,16 @@ def run(context: RunContext) -> Dataset:
                     subject=SUBJECT_LINE,
                     link_template=CASE_LINK_TEMPLATE,
                     intro="There is a new message on a case that needs your attention.",
-                    link_text="Open the conversation",
+                    # Not "Open the conversation": the link lands on the Case
+                    # page with the Conversation panel closed, and a link that
+                    # names a thing the recipient then has to go and find reads
+                    # as a broken link rather than an extra click.
+                    link_text="Open the case",
                 ).to_pandas(),
                 render_notifications(
                     pending_reportable,
                     subject=REPORTABLE_SUBJECT_LINE,
-                    link_template=REPORTABLE_CASE_LINK_TEMPLATE,
+                    link_template=CASE_LINK_TEMPLATE,
                     intro=(
                         "A case has become reportable and is carrying remediation "
                         "that needs your attention."
@@ -519,15 +660,35 @@ def run(context: RunContext) -> Dataset:
         )
     )
 
+    # The frontline groups both passes' surviving recipients need, reduced
+    # across the two: a login owed a notification on either trigger appears once
+    # here, carrying every group either one asks for.
+    privileges = transform(
+        group_privileges, pending, pending_reportable, name="group-privileges"
+    )
+
+    # One instant stamps both files, so a pass's two deliverables name the same
+    # moment rather than two readings a few milliseconds apart.
+    generated_at = timestamps.utc_now_iso()
     outbox = JsonWriter(
         get_deliverable_path(
             base_dir,
             NOTIFICATIONS_DESTINATION,
-            outbox_filename(timestamps.utc_now_iso(), context.pipeline_run_id),
+            outbox_filename(generated_at, context.pipeline_run_id),
+        ),
+        Refresh(),
+    )
+    privileges_file = JsonWriter(
+        get_deliverable_path(
+            base_dir,
+            USER_GROUP_PRIVILEGES_DESTINATION,
+            privileges_filename(generated_at),
         ),
         Refresh(),
     )
     publish(
+        privileges,
+        privileges_file,
         rendered,
         outbox,
         pending,

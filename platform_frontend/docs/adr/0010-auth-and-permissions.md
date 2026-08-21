@@ -5,12 +5,15 @@
 Accepted. Still current; [ADR-0022](./0022-two-axis-role-model.md) extends the
 capability model without changing SharePoint ACLs as the security boundary.
 
-> **Amended by [ADR-0022] (Jul 2026).** The group→capability model is reworked onto two
-> axes — **functional** groups (`Reviewers`, `Advisers`, `CaseTypeOwner - <type>`,
-> `JourneyOwner - <type>`, `Controls`) and **list-access** groups (`Reviewers - <type>`,
-> the ACL boundary). `Reviewers - <type>` implies the Reviewer capability. The
-> `QA-Reviewers` group is retired ([ADR-0026]). The "UX-only checks, list ACLs are the
-> real boundary" principle below is unchanged.
+> **Amended by [ADR-0022] (Jul 2026, itself amended Aug 2026).** The group→capability
+> model is reworked onto two axes — **functional** groups (`Reviewers`, `Frontline`,
+> `CaseTypeOwner - <type>`, `JourneyOwner - <type>`, `Controls`) and **list-access**
+> groups (`Reviewers - <type>` and `Frontline - <type>`, the ACL boundary).
+> `Reviewers - <type>` implies the Reviewer capability; `Frontline - <type>` implies
+> none and is read by no frontend code. The `QA-Reviewers` group is retired
+> ([ADR-0026]). The "UX-only checks, list ACLs are the real boundary" principle below
+> is unchanged — and the frontline groups are the clearest case of it, since the whole
+> of a frontline user's access to a Case list is an ACL this app never inspects.
 >
 > [ADR-0022]: ./0022-two-axis-role-model.md
 > [ADR-0026]: ./0026-amend-outcome-case-level-and-qa-retirement.md

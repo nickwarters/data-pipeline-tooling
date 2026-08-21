@@ -386,7 +386,7 @@ test('resolveCaseSourcesFromCaseTypes: Controls get every Case Type source', () 
   );
 });
 
-test('resolveCaseSourcesFromCaseTypes: Advisers get every Case Type source', () => {
+test('resolveCaseSourcesFromCaseTypes: Frontline get every Case Type source', () => {
   const caseTypes = [
     {
       slug: 'complaints',
@@ -403,7 +403,7 @@ test('resolveCaseSourcesFromCaseTypes: Advisers get every Case Type source', () 
   ];
 
   assert.deepEqual(
-    resolveCaseSourcesFromCaseTypes(['Advisers'], caseTypes).map(
+    resolveCaseSourcesFromCaseTypes(['Frontline'], caseTypes).map(
       (source) => source.slug
     ),
     ['complaints', 'example-review']

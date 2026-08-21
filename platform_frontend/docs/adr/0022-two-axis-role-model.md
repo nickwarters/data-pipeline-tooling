@@ -6,6 +6,14 @@ Date: 2026-07-01
 
 Accepted (amends [ADR-0010], [ADR-0011]; supersedes the QA Reviewer role — see [ADR-0026])
 
+**Amended 2026-08-21, on tenant evidence.** Two corrections, both to Axis 1's
+frontline row. The provisioned site-wide frontline group is **`Frontline`**, not
+`Advisers` — `permissions.adviser` now reads `'Frontline'`, while the capability
+stays `isAdviser` and the domain term stays **Adviser**. And `Frontline - <type>`
+is **not** a retired group this one replaced: it is provisioned and working, and
+it belongs on **Axis 2**, as the frontline counterpart of `Reviewers - <type>`.
+Only `CR-ResponsibleParty` was retired. The tables below carry both corrections.
+
 ## Context
 
 Pre-go-live testing forced a rethink of the group model. The recent case-list pivot
@@ -27,25 +35,26 @@ SharePoint groups fall on **two orthogonal axes**. Every group is one or the oth
 
 UX-only capability flags per [ADR-0010]; the real boundary is still list ACLs.
 
-| Group                    | Capability                | Notes                                                                                                                                                                                          |
-| ------------------------ | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Reviewers`              | `isReviewer`              | The reviewing base role.                                                                                                                                                                       |
-| `Advisers`               | `isAdviser`               | The **frontline** base role. An Adviser is eligible to be a Case's **Responsible Party** (CONTEXT.md "Adviser"). Replaces the old `CR-ResponsibleParty` / `Frontline - Complaints` groups.     |
-| `CaseTypeOwner - <type>` | `ownedCaseTypes[]`        | **Elevated reviewing** role for one Case Type — edits that type's Question Bank (CONTEXT.md "Case Type Owner").                                                                                |
-| `JourneyOwner - <type>`  | `ownedJourneyCaseTypes[]` | **Elevated frontline** role for one Case Type — sees the Summary of _every_ Case of its type and raises Appeals where the Case Type configures it (see [ADR-0027]). **Not** a Case Type Owner. |
-| `Controls`               | `isControls`              | Resolves Appeals and authors case-level outcome amendments (see [ADR-0026], [ADR-0027]). Replaces the retired **QA Reviewer**.                                                                 |
+| Group                    | Capability                | Notes                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------ | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Reviewers`              | `isReviewer`              | The reviewing base role.                                                                                                                                                                                                                                                                                                                                       |
+| `Frontline`              | `isAdviser`               | The **frontline** base role. An Adviser is eligible to be a Case's **Responsible Party** (CONTEXT.md "Adviser"). Replaces the old `CR-ResponsibleParty` group. The capability and the domain term keep the word _Adviser_; only the group is named `Frontline`. Distinct from the Axis 2 group `Frontline - <type>`, which shares its prefix and nothing else. |
+| `CaseTypeOwner - <type>` | `ownedCaseTypes[]`        | **Elevated reviewing** role for one Case Type — edits that type's Question Bank (CONTEXT.md "Case Type Owner").                                                                                                                                                                                                                                                |
+| `JourneyOwner - <type>`  | `ownedJourneyCaseTypes[]` | **Elevated frontline** role for one Case Type — sees the Summary of _every_ Case of its type and raises Appeals where the Case Type configures it (see [ADR-0027]). **Not** a Case Type Owner.                                                                                                                                                                 |
+| `Controls`               | `isControls`              | Resolves Appeals and authors case-level outcome amendments (see [ADR-0026], [ADR-0027]). Replaces the retired **QA Reviewer**.                                                                                                                                                                                                                                 |
 
 The two sides mirror each other: **Reviewing** = `Reviewers` (base) → `CaseTypeOwner`
-(elevated); **Frontline** = `Advisers` (base) → `JourneyOwner` (elevated).
+(elevated); **Frontline** = `Frontline` (base) → `JourneyOwner` (elevated).
 
 ### Axis 2 — per-Case-Type list access (which Case's list you can _open_)
 
-| Group                    | Grants                                                                                                                 |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `Reviewers - <type>`     | Access to that Case Type's Cases SharePoint list for reviewing.                                                        |
-| `CaseTypeOwner - <type>` | Access to that Case Type's list for Question Bank ownership and reporting.                                             |
-| `JourneyOwner - <type>`  | Access to that Case Type's list for journey oversight and Appeals.                                                     |
-| Broad functional roles   | Controls, Reviewer Managers, Advisers and ResponsibleParty-Managers span all Case Type lists, with assignment filters. |
+| Group                    | Grants                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Reviewers - <type>`     | Access to that Case Type's Cases SharePoint list for reviewing.                                                                                                                                                                                                                                                                                                                                 |
+| `Frontline - <type>`     | Access to that Case Type's Cases SharePoint list for the **frontline** side — the Responsible Party and their Manager. Implies **no** capability and is read by no frontend code: it is a pure SharePoint ACL, and the per-Case roles that use it resolve from the Case row's people fields. It is therefore absent from `caseTypeGroupNames()`, which composes the three groups the app reads. |
+| `CaseTypeOwner - <type>` | Access to that Case Type's list for Question Bank ownership and reporting.                                                                                                                                                                                                                                                                                                                      |
+| `JourneyOwner - <type>`  | Access to that Case Type's list for journey oversight and Appeals.                                                                                                                                                                                                                                                                                                                              |
+| Broad functional roles   | Controls, Reviewer Managers, Frontline and ResponsibleParty-Managers span all Case Type lists, with assignment filters.                                                                                                                                                                                                                                                                         |
 
 These grants describe the frontend's source selection; SharePoint list ACLs remain
 the real security boundary.
@@ -141,7 +150,7 @@ A user may fetch Case list **X** when they hold one of X's type-scoped roles:
 ```
 
 `config.eligibleGroups` and `config.reviewerGroup` remain supported aliases for
-a type's access groups. Controls, Reviewer Managers, Advisers,
+a type's access groups. Controls, Reviewer Managers, Frontline,
 ResponsibleParty-Managers and Maintainers span **every** source. Maintainers
 need this access to preview sample Cases while editing every Question Bank. Adviser and
 ResponsibleParty-Manager reads remain query-filtered by the Case row's

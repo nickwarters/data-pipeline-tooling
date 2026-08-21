@@ -1,10 +1,11 @@
 # Data dictionary — `notifications`
 
 The `notifications` pipeline reads Sync's **gold** current state and produces
-three things: a **file Deliverable** in the outbox (the notifications
-themselves), two gold **Notified ledger** tables (who has been told what, one
-per trigger), and it consumes one **`users` reference feed** (who a login is,
-and who manages them). Two triggers, each with its own recipient rule: a
+four things: a **file Deliverable** in the outbox (the notifications
+themselves), a second **file Deliverable** in a destination of its own (the
+frontline SharePoint groups those notifications' recipients must hold), two gold
+**Notified ledger** tables (who has been told what, one per trigger), and it
+consumes one **`users` reference feed** (who a login is, and who manages them). Two triggers, each with its own recipient rule: a
 Conversation Message notifies the two Conversation parties who did not author
 the last Message — see
 [ADR-0024](adr/0024-notification-recipients-are-the-two-parties-who-did-not-speak-last.md)
@@ -19,26 +20,40 @@ reads but does not own, the Shared Reader `readers/users.py`.
 
 ## Three things to know before this reaches a tenant
 
-**1. `CASE_LINK_TEMPLATE` and `REPORTABLE_CASE_LINK_TEMPLATE` are placeholders.**
-Both are built from one shared base,
-`https://sharepoint.invalid/sites/REPLACE-ME/SitePages/REPLACE-ME.aspx`, and two
-tenant facts fold into it: the **site collection** holding the review
+**1. `CASE_LINK_TEMPLATE` is a placeholder.** It is built from a base,
+`https://sharepoint.invalid/sites/REPLACE-ME/SitePages/REPLACE-ME.aspx`, into
+which two tenant facts fold: the **site collection** holding the review
 application, and the **host `.aspx` page** the single-page app is served from.
 Neither exists anywhere in this repository to copy — the app derives its own site
-from the page it is served from. The fragment after the base is what differs
-between the two constants: `#/conversation/:caseType/:id` for the Conversation
-trigger, `#/case/:caseType/:id` for the Reportable trigger, and neither fragment
-is a placeholder — both are the app's own registered routes, and the
-Conversation one is deliberately a deep link the recipient can **reply** from
-rather than a `DispForm.aspx` list form. Both tenant unknowns are swapped in one
-place because the two constants share the same base.
+from the page it is served from. The fragment after the base,
+`#/case/:caseType/:id`, is **not** a placeholder: it is the app's own registered
+Case route, and it is deliberately an in-app route rather than a
+`DispForm.aspx` list form.
 
-**2. `sample_data/users.csv` carries example addresses, not people.** Every
+**One template serves both triggers**, because both land on the same page. The
+Conversation trigger used to deep-link `#/conversation/:caseType/:id` so the
+recipient arrived where they could reply; that route is being removed for
+leaking Case content to viewers holding no role on the Case
+([#790](https://github.com/nickwarters/data-pipeline-tooling/issues/790)), and
+`#/case/:caseType/:id` is the gated route to the same thread via the Case page's
+Conversation panel. Landing on the Case is the whole requirement: nothing in the
+URL opens that panel and nothing needs to, so the recipient opens the
+Conversation themselves.
+
+**2. `CASE_TYPE_NAMES` must name every onboarded Case Type.** The privileges
+file below composes a group name from the Case Type's *display* name, and this
+project carries only the slug (`complaints`). The map from one to the other is
+declared, not derived — nothing guarantees a display name is a title-cased
+spelling of its slug — so onboarding a Case Type is an entry here as well as a
+`CaseList` entry in the Sync feed. A Case Type that is missing **fails the run**
+rather than composing a group nobody was provisioned into.
+
+**3. `sample_data/users.csv` carries example addresses, not people.** Every
 address is `@example.invalid` and every login is a fixture name. Going live means
 pointing this feed at a real directory extract with the same four columns; until
 then a notification would be addressed to nobody.
 
-**3. The first run tells everybody, on both triggers.** Each ledger is empty on
+**4. The first run tells everybody, on both triggers.** Each ledger is empty on
 the first pass, so every non-terminal Case with a Conversation produces a
 notification, and every already-Reportable Case carrying remediation produces
 one too. This is accepted, not a defect — the pipeline writes a file into an
@@ -77,7 +92,60 @@ by construction — each trigger's render step builds its frame with
 |-----|------|-------------|---------|
 | `recipients` | `str` | The recipients' email addresses joined by `;`, **with no spaces around the separator**, sorted. Never blank — an object with no recipients is never produced. | `a.khan@example.invalid;e.novak@example.invalid` |
 | `subject` | `str` | One of two literal strings, one per trigger: `SUBJECT_LINE` (`you have a new message`) for the Conversation trigger, `REPORTABLE_SUBJECT_LINE` (`a case is reportable and needs remediation attention`) for the Reportable trigger. Not templated, not per-Case within a trigger. | `you have a new message` |
-| `body` | `str` | A minimal HTML block: one paragraph, then one paragraph holding one `<a href>` — to the Case's conversation for the Conversation trigger, to the Case page for the Reportable trigger. **No `<style>` element, no inline `style=` attribute, no table layout** — the notification system supports HTML but barely any styling. Every interpolated value is `html.escape`d. | `<p>There is a new message…</p>\n<p><a href="…">Open the conversation</a></p>` |
+| `body` | `str` | A minimal HTML block: one paragraph, then one paragraph holding one `<a href>` to the Case page. Both triggers link to the same route; they are told apart by their subject and their prose, never by where they point. **No `<style>` element, no inline `style=` attribute, no table layout** — the notification system supports HTML but barely any styling. Every interpolated value is `html.escape`d. | `<p>There is a new message…</p>\n<p><a href="…">Open the case</a></p>` |
+
+---
+
+## The user-group privileges file — a **Deliverable**, not a table
+
+### Part A — overview
+
+| Attribute | Value |
+|-----------|-------|
+| **Deliverable name** | `deliverables/cora_user_group_privileges/add_user_group_priviledges_<YYYYmmddHHMMSS>.json` |
+| **Destination** | `USER_GROUP_PRIVILEGES_DESTINATION` = `cora_user_group_privileges` (`tools/deliverables.py`) |
+| **Grain** | one object per **login**, not per Case — a person owed notifications on several Cases appears once, carrying the union of the groups those Cases need |
+| **Writer** | `JsonWriter` with `Refresh()`, onto a path stamped to the second |
+| **Upstream dependencies** | the same two passes' surviving recipients; nothing extra is read |
+| **Consumer** | whoever provisions SharePoint group membership — **not** the notification service, which is why this is a destination of its own rather than a second shape inside `cora_notifications`. A consumer that drains a directory cannot be handed two contracts in it. |
+| **Emitted when** | at least one **frontline** recipient survives either trigger's ledger anti-join. A pass that owes notifications only to Reviewers writes no file, for the same reason an empty outbox array is never written. |
+| **Ordering** | written **before** the outbox file. A group grant nobody uses costs nothing; a notification whose link returns access-denied costs a support call. |
+
+**`priviledges` is the consumer's own spelling** and is deliberate — the file is
+named by whoever reads it, so correcting the spelling here would stop it being
+found. The stamp is UTC, taken from the same instant as the outbox file that
+pass emits, so the two pair up by eye. It carries no run id (that is the
+consumer's format), so two passes finishing inside one second would collide;
+nothing schedules them that close.
+
+### Part B — the two keys, verbatim
+
+Held by construction — the step builds its frame with
+`columns=list(PRIVILEGES_COLUMNS)` — and checked by the privileges tests in
+`tests/pipelines/test_notifications.py`.
+
+| Key | Type | Description | Example |
+|-----|------|-------------|---------|
+| `login_name` | `str` | The recipient's **bare** account name, as `shared.account_names.to_bare_account` normalises it — the claims prefix and AD domain stripped. Never blank. | `b.okafor` |
+| `groups` | `list[str]` | A JSON array of SharePoint group names, sorted and de-duplicated. Today always frontline per-Case-Type groups, `Frontline - <Case Type display name>`. Never empty — a login with no group is never produced. | `["Frontline - Complaints"]` |
+
+### Part C — who appears, and who does not
+
+**Frontline recipients only.** The Responsible Party and their Manager are the
+two frontline roles either trigger selects; the **Assigned Reviewer** is
+notified by the Conversation trigger and does **not** appear here — a Reviewer
+holds list access by being a Reviewer, and this file grants the frontline side
+only.
+
+Frontline is decided by the **role a recipient was selected for**, not by who
+they turned out to be. That matters because one person holding both the Reviewer
+and the Responsible Party role on a Case collapses to a single recipient before
+the file is built: the flag is taken while the roles are still distinguishable,
+so such a person still gets their frontline group.
+
+The file says what a login must **end up** holding, not what must be *added*.
+Nothing here can see current group membership, and granting a group twice is a
+no-op while withholding one is a locked-out recipient.
 
 ---
 

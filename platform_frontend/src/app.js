@@ -51,7 +51,7 @@ async function boot() {
 
   // Every route receives only sources the current user's roles may span.
   // Type-scoped owners get their own types; broad roles (Controls,
-  // Reviewer Managers, Advisers, ResponsibleParty-Managers and Maintainers) get the full
+  // Reviewer Managers, Frontline, ResponsibleParty-Managers and Maintainers) get the full
   // manifest. RP surfaces retain their assigned-party query filters.
   // A Case Type module that throws is contained the same way a broken page is:
   // that Case Type is dropped and named in a banner; the app boots.
