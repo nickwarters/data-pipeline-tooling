@@ -192,8 +192,8 @@
  * Case was last handed to whoever holds it. The client stamps it on every write
  * that sets `assignedReviewer`, and clears it to `null` when the Reviewer is
  * cleared — so no caller can forget it, and an unassigned Case never carries a
- * stale assignment time. Deliberately not a filter field: nothing queries on it,
- * it is displayed and sorted client-side.
+ * stale assignment time. The Action Centre queries for its presence, orders on
+ * it server-side and uses it as the current Reviewer's in-progress clock.
  *
  * `assignedReviewerManager` and `responsiblePartyManager` denormalise two
  * org-chart edges onto the row and are **not** equivalent:
@@ -217,7 +217,7 @@
  * title: string,
  * status: import('./lib/case-statuses.js').CaseStatus,
  * assignedReviewer: string,
- * assignedAt?: string | null,
+ * assignedAt: string | null,
  * responsibleParty: string,
  * responsiblePartyDisplayName?: string,
  * answers: Record<string, Answer>,
@@ -375,7 +375,7 @@
  * to its internal column before emitting `$orderby`. Only a key that client maps
  * is sortable — an unmapped one throws there rather than reaching SharePoint.
  *
- * @typedef {{ status?: string, assignedReviewer?: string, responsibleParty?: string, overdue?: boolean, awaitingResponsibleParty?: boolean, onHold?: boolean, hasOpenAppeal?: boolean, assignedReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean, completedAfter?: string, completedBefore?: string, reportableAfter?: string, reportableBefore?: string, voidedAfter?: string, voidedBefore?: string, titlePrefix?: string, anyOf?: ListCasesFilter[] }} ListCasesFilter
+ * @typedef {{ status?: string, assignedReviewer?: string, assignedAtPresent?: boolean, responsibleParty?: string, overdue?: boolean, awaitingResponsibleParty?: boolean, onHold?: boolean, hasOpenAppeal?: boolean, assignedReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean, completedAfter?: string, completedBefore?: string, reportableAfter?: string, reportableBefore?: string, voidedAfter?: string, voidedBefore?: string, titlePrefix?: string, anyOf?: ListCasesFilter[] }} ListCasesFilter
  * @typedef {{ listName?: string, top?: number, skip?: number, orderBy?: string, orderDir?: 'asc' | 'desc' }} CaseListOptions
  */
 

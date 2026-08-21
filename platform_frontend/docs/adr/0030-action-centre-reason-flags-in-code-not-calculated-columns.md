@@ -222,6 +222,16 @@ otherwise have, at the price of a divergence.
 **The cadence is a placeholder**, the same open product question On Hold carries: 14
 days is "held too long" until someone says otherwise.
 
+### Amendment — issue #789, 2026-08-21
+
+The **In progress** reason's age and oldest-first order use `AssignedAt`, the
+timestamp paired with the current Reviewer allocation. Reassignment therefore
+starts the current Reviewer's clock; `Created` is no longer consulted for this
+reason. `AssignedAt` is required and indexed on every Case Type list. Existing
+allocated rows must be backfilled from authoritative allocation evidence before
+rollout, with no `Created` fallback; invalid legacy rows are excluded from the
+ordered query rather than promoted ahead of valid allocations.
+
 ## Context
 
 The dashboard Action Centre groups a Reviewer/Controls/Owner worklist by

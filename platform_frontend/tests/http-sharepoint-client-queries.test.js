@@ -773,6 +773,7 @@ test('HttpSharePointClient: listCases maps every CaseRow sort key to its interna
     ['awaitingSince', 'AwaitingSince'],
     ['placedOnHoldAt', 'PlacedOnHoldAt'],
     ['dueDate', 'DueDate'],
+    ['assignedAt', 'AssignedAt'],
     ['created', 'Created'],
     ['completedAt', 'CompletedAt'],
     ['reportableAt', 'ReportableAt'],
@@ -797,6 +798,40 @@ test('HttpSharePointClient: listCases maps every CaseRow sort key to its interna
       `expected $orderby=${column} for ${pairs[i][0]}, got ${urls[i]}`
     );
   });
+});
+
+test('HttpSharePointClient: assignedAt presence filter excludes legacy rows independently of ordering', async () => {
+  const { client, calls } = emptyPageClient();
+
+  await client.listCases(
+    { status: 'In-progress', assignedAtPresent: true },
+    {
+      listName: 'Cases-ExampleReview',
+      top: 1,
+      orderBy: 'assignedAt',
+      orderDir: 'asc',
+    }
+  );
+
+  const url = decodeURIComponent(calls[0].url);
+  assert.ok(
+    url.includes("$filter=Status eq 'In-progress' and AssignedAt ne null")
+  );
+  assert.ok(url.includes('$orderby=AssignedAt'));
+  assert.equal(url.includes('Created'), false);
+});
+
+test('HttpSharePointClient: assignedAt ordering alone adds no row predicate', async () => {
+  const { client, calls } = emptyPageClient();
+
+  await client.listCases(
+    {},
+    { listName: 'Cases-ExampleReview', top: 1, orderBy: 'assignedAt' }
+  );
+
+  const url = decodeURIComponent(calls[0].url);
+  assert.ok(url.includes('$orderby=AssignedAt'));
+  assert.equal(url.includes('$filter='), false);
 });
 
 test('HttpSharePointClient: listCases rejects an orderBy key with no internal column', async () => {

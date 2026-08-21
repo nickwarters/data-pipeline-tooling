@@ -65,6 +65,7 @@ const ORDER_BY_COLUMNS = {
   title: 'Title',
   status: 'Status',
   created: 'Created',
+  assignedAt: 'AssignedAt',
   dueDate: 'DueDate',
   relatedDate: 'RelatedDate',
   completedAt: 'CompletedAt',
@@ -1012,6 +1013,9 @@ function buildFilterExpr(filter) {
     conds.push(`startswith(Title,'${escapeOData(filter.titlePrefix)}')`);
   }
   if (filter.status) conds.push(`Status eq '${escapeOData(filter.status)}'`);
+  if (filter.assignedAtPresent !== undefined) {
+    conds.push(`AssignedAt ${filter.assignedAtPresent ? 'ne' : 'eq'} null`);
+  }
   // Person columns compare against the numeric id, unquoted: the caller has
   // already turned the account name into one. A quoted value here matches no
   // row at all, which reads as an empty dashboard rather than as an error.

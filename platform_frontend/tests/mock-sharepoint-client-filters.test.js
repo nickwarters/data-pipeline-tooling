@@ -12,11 +12,47 @@ import {
   makeReasonClient,
   MockSharePointClient,
 } from './helpers/mock-sharepoint-client.js';
+import {
+  ACTION_CENTRE_REASONS,
+  activeFilter,
+  worstFirstOrder,
+} from '../src/services/action-centre-model.js';
 
 // Filter-field behaviour is owned by list-cases-filter-parity.test.js, which
 // checks this predicate against hand-written expectations AND a real OData
 // evaluator. Only mock-specific affordances belong here: list scoping, the 412
 // injection seam, countCases, and the derived-overdue write-through.
+
+test('In-progress Action Centre filter excludes a legacy null allocation from rows and count', async () => {
+  const valid = reasonCase('valid-allocation', {
+    status: 'In-progress',
+    assignedReviewer: 'rev-a',
+    assignedAt: '2026-06-01T00:00:00Z',
+  });
+  const legacy = reasonCase('legacy-null-allocation', {
+    status: 'In-progress',
+    assignedReviewer: 'rev-a',
+    assignedAt: null,
+  });
+  const client = new MockSharePointClient({
+    lists: { [LIST]: [legacy, valid] },
+    personas: PERSONAS,
+  });
+  const reason = ACTION_CENTRE_REASONS.find((item) => item.id === 'inProgress');
+  assert.ok(reason);
+  const filter = activeFilter(reason, 'rev-a');
+
+  assert.equal(await client.countCases(filter, { listName: LIST }), 1);
+  assert.deepEqual(
+    (
+      await client.listCases(filter, {
+        listName: LIST,
+        ...worstFirstOrder(reason),
+      })
+    ).map((row) => row.id),
+    ['valid-allocation']
+  );
+});
 
 test('MockSharePointClient: injected 412 returns 412 without writing', async () => {
   const client = makeClient();

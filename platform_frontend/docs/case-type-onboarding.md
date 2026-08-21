@@ -101,7 +101,7 @@ lead with an indexed predicate.
 | `CaseType`                                              | Single line of text                                                                   |         | Slug; constant per list, so not worth indexing.                                                                                                                                                                                                                                                                                                                 |
 | `Status`                                                | Choice (`To-allocate` / `In-progress` / `Actions In Progress` / `Completed` / `Void`) |  **✓**  | Lifecycle state; leading predicate for most live reads, including the allocation pot (`To-allocate`). **Every value must be present in the choice list on every Case Type list, in both environments** — SharePoint rejects a PATCH writing a value the column does not offer, so a missing `To-allocate` breaks ingestion and a missing `Void` breaks voiding. |
 | `AssignedReviewer` (`AssignedReviewerId`)               | Person                                                                                |  **✓**  | The Reviewer the Case is assigned to.                                                                                                                                                                                                                                                                                                                           |
-| `AssignedAt`                                            | Date and Time                                                                         |         | When the Case was last handed to its Reviewer; client-written with `AssignedReviewer`.                                                                                                                                                                                                                                                                          |
+| `AssignedAt`                                            | Date and Time                                                                         |  **✓**  | Required when a Reviewer is assigned; client-written with `AssignedReviewer`. The Action Centre ages and orders “N days in progress” from this current-allocation clock and never falls back to `Created`.                                                                                                                                                      |
 | `ResponsibleParty` (`ResponsiblePartyId`)               | Person                                                                                |  **✓**  | The Responsible Party.                                                                                                                                                                                                                                                                                                                                          |
 | `AssignedReviewerManager` (`AssignedReviewerManagerId`) | Person                                                                                |  **✓**  | Reviewer's manager; Reviewer-Manager team reads lead with it.                                                                                                                                                                                                                                                                                                   |
 | `ResponsiblePartyManager` (`ResponsiblePartyManagerId`) | Person                                                                                |  **✓**  | Responsible Party's manager.                                                                                                                                                                                                                                                                                                                                    |
@@ -166,17 +166,17 @@ list is past the threshold.
 
 ## Indexed columns
 
-The 14 columns to index on the empty `Cases-{slug}` list — the
+The 15 columns to index on the empty `Cases-{slug}` list — the
 lifecycle/date columns, the Action Centre reason flags that live reads lead
 with, the two columns Case search leads with, and the one the data pipeline
 polls on:
 
-`Status`, `DueDate`, `CompletedAt`, `AssignedReviewer`, `ResponsibleParty`,
+`Status`, `DueDate`, `CompletedAt`, `AssignedReviewer`, `AssignedAt`, `ResponsibleParty`,
 `AssignedReviewerManager`, `ResponsiblePartyManager`, `HasOpenAppeal`,
 `AwaitingResponsibleParty`, `OnHold`, `Title`,
 `ReportableAt`, `VoidedAt`, `Modified`.
 
-14 of a maximum 20 indexes per list. Add any promoted detail column (above) to
+15 of a maximum 20 indexes per list. Add any promoted detail column (above) to
 this set only if a live query will lead with it, and keep the total ≤ 20.
 
 `Modified` is a SharePoint built-in, so it needs no creating — but it does need

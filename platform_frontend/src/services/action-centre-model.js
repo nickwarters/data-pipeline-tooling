@@ -31,7 +31,7 @@
  * label: string,
  * role: string,
  * tone: 'overdue' | 'awaiting' | 'hold' | 'appeal' | 'progress',
- * clockField: 'dueDate' | 'awaitingSince' | 'placedOnHoldAt' | 'appealRaisedAt' | 'created',
+ * clockField: 'dueDate' | 'awaitingSince' | 'placedOnHoldAt' | 'appealRaisedAt' | 'assignedAt',
  * flagField?: 'overdue' | 'awaitingResponsibleParty' | 'onHold' | 'hasOpenAppeal',
  * filter: ListCasesFilter,
  * defaultSlaDays: number,
@@ -166,15 +166,17 @@ export const ACTION_CENTRE_REASONS = [
     label: 'In progress',
     role: 'Reviewer',
     tone: 'progress',
-    // Ages from the Case's own creation, which every Case has and no
-    // transition rewrites, so the oldest thing a Reviewer is sitting on
-    // surfaces first.
-    clockField: 'created',
+    // Ages from the current allocation, so reassignment starts the current
+    // Reviewer's in-progress clock when the Case is handed to them.
+    clockField: 'assignedAt',
     // No flagField: this group is a status, not a state something sets. It is
     // never the *second* reason on a row either — every Case in another group
     // is in this one too, so noting it would say "also in progress" on
     // everything.
-    filter: { anyOf: OUTSTANDING_STATUSES.map((status) => ({ status })) },
+    filter: {
+      assignedAtPresent: true,
+      anyOf: OUTSTANDING_STATUSES.map((status) => ({ status })),
+    },
     // A placeholder cadence for "held too long", pending a product answer —
     // the same open question On Hold carries.
     defaultSlaDays: 14,
@@ -249,8 +251,9 @@ export function worstFirstOrder(reason) {
 /**
  * The worst-first comparator for a reason: ascending on the reason's own
  * clock field (oldest/most-overdue first), matching `worstFirstOrder`'s
- * `orderBy`/`orderDir`. A missing clock sorts as `''`, i.e. first — same
- * convention `MockSharePointClient`/`HttpSharePointClient` use for `orderBy`.
+ * `orderBy`/`orderDir`. The allocation clock's missing or malformed legacy
+ * values sort last, matching the server query that excludes them. Other reason
+ * clocks preserve their established missing-first convention.
  * Shared by the single-list `listCases({ orderBy, orderDir })` request and the
  * client-side merge of several lists' results, so both agree on "worst".
  *
@@ -261,6 +264,12 @@ function reasonOrderComparator(reason) {
   return (a, b) => {
     const av = /** @type {string} */ (a[reason.clockField] ?? '');
     const bv = /** @type {string} */ (b[reason.clockField] ?? '');
+    if (reason.clockField === 'assignedAt') {
+      const aTime = Date.parse(av);
+      const bTime = Date.parse(bv);
+      if (Number.isNaN(aTime)) return Number.isNaN(bTime) ? 0 : 1;
+      if (Number.isNaN(bTime)) return -1;
+    }
     if (av < bv) return -1;
     if (av > bv) return 1;
     return 0;
@@ -330,7 +339,9 @@ function daysWaiting(caseRow, reason, now = new Date()) {
     caseRow[reason.clockField]
   );
   if (!at) return 0;
-  const diff = now.getTime() - new Date(at).getTime();
+  const clockTime = Date.parse(at);
+  if (Number.isNaN(clockTime)) return 0;
+  const diff = now.getTime() - clockTime;
   return Math.max(0, Math.floor(diff / MS_PER_DAY));
 }
 

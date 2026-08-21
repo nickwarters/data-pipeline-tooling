@@ -61,6 +61,7 @@ function caseRow(id, over = {}) {
     title: id,
     status: 'In-progress',
     assignedReviewer: '',
+    assignedAt: LONG_PAST,
     responsibleParty: '',
     answers: {},
     conversation: [],
@@ -90,6 +91,7 @@ function toListItem(row) {
     Status: row.status,
     ReportableAt: row.reportableAt ?? null,
     AssignedReviewerId: personId(row.assignedReviewer),
+    AssignedAt: row.assignedAt,
     ResponsiblePartyId: personId(row.responsibleParty),
     AssignedReviewerManagerId: personId(row.assignedReviewerManager),
     DueDate: row.dueDate ?? null,
@@ -206,6 +208,15 @@ const SCENARIOS = [
       caseRow('theirs', { assignedReviewer: 'rev-b' }),
     ],
     expected: ['mine'],
+  },
+  {
+    name: 'assignedAtPresent',
+    filter: { assignedAtPresent: true },
+    rows: [
+      caseRow('allocated', { assignedAt: MID_PAST }),
+      caseRow('legacy-null', { assignedAt: null }),
+    ],
+    expected: ['allocated'],
   },
   {
     name: 'responsibleParty',
@@ -350,6 +361,7 @@ const SCENARIOS = [
         {
           anyOf: [{ status: 'In-progress' }, { status: 'Actions In Progress' }],
           assignedReviewer: 'rev-a',
+          assignedAtPresent: true,
         },
       ],
     },

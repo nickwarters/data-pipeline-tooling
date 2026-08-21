@@ -71,6 +71,11 @@ sections on the page are loaded to take different actions and see different info
 
 Sections should not be loaded if the user does not have permission via the relevant SharePoint User Group.
 
+The Action Centre's “N days in progress” age starts when the Case was allocated
+to its current Reviewer (`AssignedAt`), not when the Case was created. Its oldest-first
+query therefore requires `AssignedAt` to be present and indexed on every Case Type list;
+there is no `Created` fallback.
+
 #### View Outstanding Cases
 
 Reviewers should be able to see their assigned outstanding cases. The cases are stored on SharePoint lists in the same SharePoint.

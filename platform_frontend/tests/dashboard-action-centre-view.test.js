@@ -352,7 +352,11 @@ test('Action Centre renders the In progress group with its own tone and wording'
     [],
     now
   );
-  const held = { ...row('p1'), created: '2026-06-27T00:00:00Z' };
+  const held = {
+    ...row('p1'),
+    created: '2026-01-01T00:00:00Z',
+    assignedAt: '2026-06-27T00:00:00Z',
+  };
   state.counts = { inProgress: 3 };
   state.headline = 3;
   state.expanded = new Set(['inProgress']);

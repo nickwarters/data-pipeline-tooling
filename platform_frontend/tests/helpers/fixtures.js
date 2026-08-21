@@ -50,6 +50,7 @@ export function makeCaseRow(overrides = {}) {
     title: 'Case 1',
     status: CASE_STATUS.IN_PROGRESS,
     assignedReviewer: REVIEWER,
+    assignedAt: '2026-01-01T00:00:00Z',
     responsibleParty: RESPONSIBLE_PARTY,
     answers: {},
     conversation: [],

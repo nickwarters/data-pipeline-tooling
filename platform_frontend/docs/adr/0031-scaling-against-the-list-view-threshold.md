@@ -53,7 +53,7 @@ before it fills** — a one-time, point-and-click list-settings task. The column
 are the ones live queries lead with, i.e. the [ADR-0030] reason flags and lifecycle/date
 columns:
 
-`Status`, `DueDate`, `CompletedAt`, `AssignedReviewer`, `ResponsibleParty`,
+`Status`, `DueDate`, `CompletedAt`, `AssignedReviewer`, `AssignedAt`, `ResponsibleParty`,
 `AssignedReviewerManager`, `ResponsiblePartyManager`, `HasOpenAppeal`,
 `AwaitingResponsibleParty`, `ReviewRequired`, `OnHold`, `Title`,
 `ReportableAt`.
@@ -70,6 +70,11 @@ date window a search leads with. The index-at-creation trap above applies to bot
 softening — a `Cases-{slug}` list already past the threshold cannot gain them, so
 indexing them is a **provisioning precondition** for search on an existing list, not a
 follow-up task.
+
+`AssignedAt` is indexed because the Action Centre orders the In progress group
+oldest-first on the current allocation clock (issue #789). It must be populated
+for every allocated Case. Legacy allocated rows require a backfill from
+authoritative allocation evidence before rollout; `Created` is not a fallback.
 
 (Max 20 indexes/list; we are well under. Compound indexes are available if a future live
 query needs a two-column narrowing.)

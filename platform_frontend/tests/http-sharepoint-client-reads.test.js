@@ -280,7 +280,7 @@ test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async (
   assert.equal(row?.overdue, false);
 });
 
-test('HttpSharePointClient: a row from a list with no AssignedAt column still reads', async () => {
+test('HttpSharePointClient: a legacy row missing AssignedAt maps the required CaseRow field to null', async () => {
   // The read projection is `$select=*`, so a list that has not been given the
   // column yet simply answers without it. That is what makes deploying the
   // frontend ahead of the column safe on the *read* side: the row hydrates with
