@@ -20,19 +20,25 @@ reads but does not own, the Shared Reader `readers/users.py`.
 
 ## Three things to know before this reaches a tenant
 
-**1. `CASE_LINK_TEMPLATE` and `REPORTABLE_CASE_LINK_TEMPLATE` are placeholders.**
-Both are built from one shared base,
-`https://sharepoint.invalid/sites/REPLACE-ME/SitePages/REPLACE-ME.aspx`, and two
-tenant facts fold into it: the **site collection** holding the review
+**1. `CASE_LINK_TEMPLATE` is a placeholder.** It is built from a base,
+`https://sharepoint.invalid/sites/REPLACE-ME/SitePages/REPLACE-ME.aspx`, into
+which two tenant facts fold: the **site collection** holding the review
 application, and the **host `.aspx` page** the single-page app is served from.
 Neither exists anywhere in this repository to copy — the app derives its own site
-from the page it is served from. The fragment after the base is what differs
-between the two constants: `#/conversation/:caseType/:id` for the Conversation
-trigger, `#/case/:caseType/:id` for the Reportable trigger, and neither fragment
-is a placeholder — both are the app's own registered routes, and the
-Conversation one is deliberately a deep link the recipient can **reply** from
-rather than a `DispForm.aspx` list form. Both tenant unknowns are swapped in one
-place because the two constants share the same base.
+from the page it is served from. The fragment after the base,
+`#/case/:caseType/:id`, is **not** a placeholder: it is the app's own registered
+Case route, and it is deliberately an in-app route rather than a
+`DispForm.aspx` list form.
+
+**One template serves both triggers**, because both land on the same page. The
+Conversation trigger used to deep-link `#/conversation/:caseType/:id` so the
+recipient arrived where they could reply; that route is being removed for
+leaking Case content to viewers holding no role on the Case
+([#790](https://github.com/nickwarters/data-pipeline-tooling/issues/790)), and
+`#/case/:caseType/:id` is the gated route to the same thread via the Case page's
+Conversation panel. Landing on the Case is the whole requirement: nothing in the
+URL opens that panel and nothing needs to, so the recipient opens the
+Conversation themselves.
 
 **2. `CASE_TYPE_NAMES` must name every onboarded Case Type.** The privileges
 file below composes a group name from the Case Type's *display* name, and this
@@ -86,7 +92,7 @@ by construction — each trigger's render step builds its frame with
 |-----|------|-------------|---------|
 | `recipients` | `str` | The recipients' email addresses joined by `;`, **with no spaces around the separator**, sorted. Never blank — an object with no recipients is never produced. | `a.khan@example.invalid;e.novak@example.invalid` |
 | `subject` | `str` | One of two literal strings, one per trigger: `SUBJECT_LINE` (`you have a new message`) for the Conversation trigger, `REPORTABLE_SUBJECT_LINE` (`a case is reportable and needs remediation attention`) for the Reportable trigger. Not templated, not per-Case within a trigger. | `you have a new message` |
-| `body` | `str` | A minimal HTML block: one paragraph, then one paragraph holding one `<a href>` — to the Case's conversation for the Conversation trigger, to the Case page for the Reportable trigger. **No `<style>` element, no inline `style=` attribute, no table layout** — the notification system supports HTML but barely any styling. Every interpolated value is `html.escape`d. | `<p>There is a new message…</p>\n<p><a href="…">Open the conversation</a></p>` |
+| `body` | `str` | A minimal HTML block: one paragraph, then one paragraph holding one `<a href>` to the Case page. Both triggers link to the same route; they are told apart by their subject and their prose, never by where they point. **No `<style>` element, no inline `style=` attribute, no table layout** — the notification system supports HTML but barely any styling. Every interpolated value is `html.escape`d. | `<p>There is a new message…</p>\n<p><a href="…">Open the case</a></p>` |
 
 ---
 
