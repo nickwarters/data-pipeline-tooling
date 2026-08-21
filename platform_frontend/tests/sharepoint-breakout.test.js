@@ -79,24 +79,48 @@ test('breakout: the app root owns vertical scroll and clips horizontal overflow'
   assert.match(body, /overflow-x:\s*hidden/, 'no horizontal page scroll');
 });
 
-test('breakout: the scroller reserves room for its own sticky nav bar', () => {
-  // `.cora-app-nav-bar` is sticky at top: 0 *inside* this scroller, so without
-  // scroll-padding-top every scrollIntoView({ block: 'start' }) — "Jump to next
-  // unanswered", the Question Group jumps — parks its target's top edge behind
-  // the nav bar and hides the question wording.
-  const body = ruleBody(styles, '#app[data-cora-root] {');
-  assert.match(
-    body,
-    /scroll-padding-top:\s*calc\(var\(--cora-nav-height\) \+ var\(--cora-space-3\)\)/,
-    'scrolled-to content must clear the sticky nav bar'
-  );
+test('breakout: the nav clearance is measured from the nav bar itself', () => {
+  // Everything that parks against this scroller's top edge measures from one
+  // token, so the two facts it encodes are worth pinning: the nav bar is sticky
+  // at top: 0 *inside* the scroller, and it is --cora-nav-height tall.
   const nav = ruleBody(styles, '[data-cora-root] .cora-app-nav-bar {');
+  assert.match(nav, /position:\s*sticky/);
+  assert.match(nav, /top:\s*0/);
   assert.match(
     nav,
     /height:\s*var\(--cora-nav-height\)/,
-    "the reserved padding must be measured from the nav bar's own height"
+    'the clearance must be measured from the nav bar\u2019s own height'
   );
-  assert.match(nav, /position:\s*sticky/);
+  assert.match(
+    tokens,
+    /--cora-nav-clearance:\s*calc\(var\(--cora-nav-height\)[^;]*\)/,
+    '--cora-nav-clearance must derive from the nav height, not restate it'
+  );
+});
+
+test('breakout: scrolled-to content clears the sticky nav bar', () => {
+  // Without scroll-padding-top every scrollIntoView({ block: 'start' }) — "Jump
+  // to next unanswered", the Question Group jumps — parks its target's top edge
+  // behind the nav bar and hides the question wording.
+  const body = ruleBody(styles, '#app[data-cora-root] {');
+  assert.match(
+    body,
+    /scroll-padding-top:\s*var\(--cora-nav-clearance\)/,
+    'the scroller must reserve room for its own sticky header'
+  );
+});
+
+test('breakout: the Question Group rail sticks below the nav, not behind it', () => {
+  // The rail shares the scroller with the nav bar, which paints over it, so it
+  // must come to rest at the nav's lower edge — otherwise it (and the "Jump to
+  // next unanswered" button it carries) slides behind the nav while scrolling.
+  const rail = ruleBody(styles, '[data-cora-root] .cora-group-progress {');
+  assert.match(rail, /position:\s*sticky/);
+  assert.match(
+    rail,
+    /top:\s*var\(--cora-nav-clearance\)/,
+    'the sticky rail must rest below the nav bar'
+  );
 });
 
 test('breakout: the app-root z-index token exists and is high enough to cover SP chrome', () => {

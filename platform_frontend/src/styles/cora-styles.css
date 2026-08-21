@@ -151,7 +151,7 @@
      reserving room for its own sticky header is the one place that fact
      belongs, so every jump (question card, Question Group heading) clears it
      without repeating the nav's height per target. */
-  scroll-padding-top: calc(var(--cora-nav-height) + var(--cora-space-3));
+  scroll-padding-top: var(--cora-nav-clearance);
 }
 
 /* Centered content wrapper used by all standard routes */
@@ -2415,10 +2415,14 @@
   grid-column: 1 / -1;
 }
 
+/* The rail sticks to the *nav bar's* lower edge, not the scroller's top edge:
+   `.cora-app-nav-bar` is sticky at top: 0 inside the same scroller and paints
+   over it (z-index 100), so a smaller offset let the rail — and the "Jump to
+   next unanswered" button in it — slide behind the nav as the page scrolled. */
 [data-cora-root] .cora-group-progress {
   display: block;
   position: sticky;
-  top: var(--cora-space-5);
+  top: var(--cora-nav-clearance);
   background: var(--cora-color-surface);
   border: 1px solid var(--cora-color-border);
   border-radius: var(--cora-radius-md);
