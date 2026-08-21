@@ -14,7 +14,6 @@ from pipelines.notifications.pipeline import (
     CASE_LINK_TEMPLATE,
     LEDGER_KEY,
     LEDGER_TABLE,
-    REPORTABLE_CASE_LINK_TEMPLATE,
     REPORTABLE_LEDGER_TABLE,
     REPORTABLE_SUBJECT_LINE,
     SUBJECT,
@@ -652,9 +651,7 @@ def test_the_remediation_body_links_to_the_case_rather_than_the_conversation(
     body = notification["body"]
 
     assert notification["subject"] == REPORTABLE_SUBJECT_LINE
-    expected = REPORTABLE_CASE_LINK_TEMPLATE.format(
-        case_type="complaints", source_item_id="42"
-    )
+    expected = CASE_LINK_TEMPLATE.format(case_type="complaints", source_item_id="42")
     assert f'<a href="{expected}"' in body
     assert body.count("<a href=") == 1
     assert body.count("<p>") == 2
@@ -695,8 +692,12 @@ def test_both_triggers_on_one_case_produce_two_objects_and_neither_suppresses_th
     by_subject = {
         notification["subject"]: notification["body"] for notification in payload
     }
-    assert "#/case/" in by_subject[REPORTABLE_SUBJECT_LINE]
-    assert "#/conversation/" in by_subject[SUBJECT_LINE]
+    # Both triggers link to the Case page. They are told apart by their subject
+    # and their prose, not by their route: the Conversation trigger's deep link
+    # was the unguarded `#/conversation/...` route (#790).
+    for body in by_subject.values():
+        assert "#/case/" in body
+        assert "#/conversation/" not in body
     assert any(row["case_id"] == "case-1" for row in _ledger(base_dir))
     assert any(row["case_id"] == "case-1" for row in _reportable_ledger(base_dir))
 

@@ -270,13 +270,12 @@ It reads this feed's gold, so it cannot be pointed at a tenant before this one
 is. Three items, all in
 [`data-dictionary-notifications.md`](data-dictionary-notifications.md):
 
-- [ ] `CASE_LINK_TEMPLATE` **and** `REPORTABLE_CASE_LINK_TEMPLATE` in
-      `pipelines/notifications/pipeline.py` have the real **site collection**
-      and the real **host `.aspx` page** the review application is served from.
-      Both constants share one base, so this is one edit, not two. The
-      `#/conversation/...` and `#/case/...` fragments after the base are the
-      app's own routes and stay as they are. A placeholder link is a
-      notification the recipient cannot act on.
+- [ ] `CASE_LINK_TEMPLATE` in `pipelines/notifications/pipeline.py` has the real
+      **site collection** and the real **host `.aspx` page** the review
+      application is served from — one constant, shared by both triggers, so
+      this is one edit. The `#/case/...` fragment after the base is the app's
+      own route and stays as it is. A placeholder link is a notification the
+      recipient cannot act on.
 - [ ] `readers/sample_data/users.csv` points at a real directory
       extract, not the bundled `@example.invalid` fixture. The four columns are
       `login,email,manager_login,manager_email`; a duplicate `login` aborts the

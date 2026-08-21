@@ -128,16 +128,22 @@ REPORTABLE_SUBJECT_LINE = "a case is reportable and needs remediation attention"
 RECIPIENT_SEPARATOR = ";"
 
 # PLACEHOLDER -- two tenant facts fold into one string: the site collection and
-# the host page the single-page app is served from. Shared by both link
-# constants below so the go-live swap stays a single place.
+# the host page the single-page app is served from. The one place the go-live
+# swap happens.
 _LINK_BASE = "https://sharepoint.invalid/sites/REPLACE-ME/SitePages/REPLACE-ME.aspx"
 
-# The fragment after the base is the app's own registered conversation route, so
-# the recipient lands where they can reply rather than on a read-only list form.
-CASE_LINK_TEMPLATE = _LINK_BASE + "#/conversation/{case_type}/{source_item_id}"
-# The Reportable trigger has no message to reply to, so it links to the Case
-# page itself rather than the conversation deep link above.
-REPORTABLE_CASE_LINK_TEMPLATE = _LINK_BASE + "#/case/{case_type}/{source_item_id}"
+# The fragment after the base is the app's own registered Case route -- one
+# template for both triggers, because both land on the same page.
+#
+# The Conversation trigger used to deep-link `#/conversation/:caseType/:id`, so
+# the recipient arrived where they could reply. That route is being removed for
+# leaking Case content to viewers holding no role on the Case (#790): it has no
+# guard, and it resolves its list from the Case Type manifest rather than the
+# viewer's own sources, so the SharePoint ACL was the only thing standing in the
+# way. `#/case/:caseType/:id` is the gated route to the same thread, via the
+# Case page's Conversation panel. Landing on the Case is the whole requirement;
+# a deep link into the thread was considered and is not wanted.
+CASE_LINK_TEMPLATE = _LINK_BASE + "#/case/{case_type}/{source_item_id}"
 
 _THREAD_COLUMNS = ("case_id", "last_author_login", "message_at")
 _CASE_COLUMNS = (
@@ -633,12 +639,16 @@ def run(context: RunContext) -> Dataset:
                     subject=SUBJECT_LINE,
                     link_template=CASE_LINK_TEMPLATE,
                     intro="There is a new message on a case that needs your attention.",
-                    link_text="Open the conversation",
+                    # Not "Open the conversation": the link lands on the Case
+                    # page with the Conversation panel closed, and a link that
+                    # names a thing the recipient then has to go and find reads
+                    # as a broken link rather than an extra click.
+                    link_text="Open the case",
                 ).to_pandas(),
                 render_notifications(
                     pending_reportable,
                     subject=REPORTABLE_SUBJECT_LINE,
-                    link_template=REPORTABLE_CASE_LINK_TEMPLATE,
+                    link_template=CASE_LINK_TEMPLATE,
                     intro=(
                         "A case has become reportable and is carrying remediation "
                         "that needs your attention."
