@@ -143,6 +143,26 @@
      re-centres — headings and content nudge sideways. Edge/Chromium
      supports scrollbar-gutter. */
   scrollbar-gutter: stable;
+  /* This scroller carries its own sticky header — `.cora-app-nav-bar`, top: 0,
+     one --cora-nav-height tall — so a scrollIntoView with block start parks its
+     target *underneath* the nav bar: the Review tab's "Jump to next unanswered"
+     scrolled the question card up until its legend, the question wording, sat
+     behind the nav and only the answer options were left visible. The scroller
+     reserving room for its own sticky header is the one place that fact
+     belongs, so every jump (question card, Question Group heading) clears it
+     without repeating the nav's height per target.
+
+     Spelled from --cora-nav-height and --cora-space-3 rather than as a new
+     "nav clearance" token, and likewise on the sticky rail below. The tokens
+     are a separate @import — a separate HTTP resource with its own cache
+     lifetime, under filenames the deploy does not fingerprint (ADR-0041) — so a
+     browser holding a warm cache can pair *new* cora-styles.css with a *stale*
+     cora-design-tokens.css. A var() naming a token that copy has never heard of
+     makes the whole declaration invalid at computed-value time, which here
+     would mean scroll-padding-top: auto and, worse, top: auto on the rail:
+     a sticky element with no offsets silently stops sticking. These two tokens
+     are long-standing, so the pairing resolves in any cached copy. */
+  scroll-padding-top: calc(var(--cora-nav-height) + var(--cora-space-3));
 }
 
 /* Centered content wrapper used by all standard routes */
@@ -2406,10 +2426,16 @@
   grid-column: 1 / -1;
 }
 
+/* The rail sticks to the *nav bar's* lower edge, not the scroller's top edge:
+   `.cora-app-nav-bar` is sticky at top: 0 inside the same scroller and paints
+   over it (z-index 100), so a smaller offset let the rail — and the "Jump to
+   next unanswered" button in it — slide behind the nav as the page scrolled.
+   The same clearance the scroller reserves as scroll-padding-top, spelled the
+   same way and for the reason given there. */
 [data-cora-root] .cora-group-progress {
   display: block;
   position: sticky;
-  top: var(--cora-space-5);
+  top: calc(var(--cora-nav-height) + var(--cora-space-3));
   background: var(--cora-color-surface);
   border: 1px solid var(--cora-color-border);
   border-radius: var(--cora-radius-md);

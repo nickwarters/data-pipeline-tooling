@@ -79,6 +79,73 @@ test('breakout: the app root owns vertical scroll and clips horizontal overflow'
   assert.match(body, /overflow-x:\s*hidden/, 'no horizontal page scroll');
 });
 
+// How far below the scroll container's top edge content must sit to clear the
+// sticky nav bar. Spelled out rather than named as its own token on purpose:
+// see the rationale in the #app rule, and the last assertion below.
+const CLEARANCE = /calc\(var\(--cora-nav-height\) \+ var\(--cora-space-3\)\)/;
+
+test('breakout: the nav clearance is measured from the nav bar itself', () => {
+  // Both clearances below are derived from the nav bar rather than hand-tuned,
+  // so the two facts they are derived from are worth pinning: the nav bar is
+  // sticky at top: 0 *inside* the scroller, and it is --cora-nav-height tall.
+  const nav = ruleBody(styles, '[data-cora-root] .cora-app-nav-bar {');
+  assert.match(nav, /position:\s*sticky/);
+  assert.match(nav, /top:\s*0/);
+  assert.match(
+    nav,
+    /height:\s*var\(--cora-nav-height\)/,
+    'the clearance must be measured from the nav bar\u2019s own height'
+  );
+});
+
+test('breakout: scrolled-to content clears the sticky nav bar', () => {
+  // Without scroll-padding-top every scrollIntoView({ block: 'start' }) — "Jump
+  // to next unanswered", the Question Group jumps — parks its target's top edge
+  // behind the nav bar and hides the question wording.
+  const body = ruleBody(styles, '#app[data-cora-root] {');
+  assert.match(
+    body,
+    new RegExp('scroll-padding-top:\\s*' + CLEARANCE.source),
+    'the scroller must reserve room for its own sticky header'
+  );
+});
+
+test('breakout: the Question Group rail sticks below the nav, not behind it', () => {
+  // The rail shares the scroller with the nav bar, which paints over it, so it
+  // must come to rest at the nav's lower edge — otherwise it (and the "Jump to
+  // next unanswered" button it carries) slides behind the nav while scrolling.
+  const rail = ruleBody(styles, '[data-cora-root] .cora-group-progress {');
+  assert.match(rail, /position:\s*sticky/);
+  assert.match(
+    rail,
+    new RegExp('top:\\s*' + CLEARANCE.source),
+    'the sticky rail must rest below the nav bar'
+  );
+});
+
+test('breakout: the clearance names only long-standing tokens', () => {
+  // cora-design-tokens.css is a separate @import under a filename the deploy
+  // does not fingerprint, so a warm browser cache can pair new cora-styles.css
+  // with a stale copy of it. A var() naming a token that copy lacks invalidates
+  // the whole declaration: scroll-padding-top falls back to auto, and the
+  // rail's top does too — a sticky element with no offsets stops sticking, so
+  // the rail scrolls away behind the nav instead of resting under it. Every
+  // token in the clearance must therefore be one a stale copy already has.
+  for (const token of ['--cora-nav-height', '--cora-space-3']) {
+    assert.match(
+      tokens,
+      new RegExp(token + ':\\s*\\S'),
+      `${token} must be declared in the design tokens`
+    );
+  }
+  const introduced = styles.match(/var\(--cora-nav-clearance/);
+  assert.equal(
+    introduced,
+    null,
+    'a freshly introduced token cannot carry a sticky offset — spell the clearance from existing ones'
+  );
+});
+
 test('breakout: the app-root z-index token exists and is high enough to cover SP chrome', () => {
   const match = tokens.match(/--cora-z-app-root:\s*(\d+)/);
   assert.ok(match, '--cora-z-app-root must be defined in the design tokens');
