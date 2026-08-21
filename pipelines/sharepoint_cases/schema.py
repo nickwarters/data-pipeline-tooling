@@ -120,6 +120,8 @@ class CaseVersion:
     # concern, and the numeric twin SharePoint also offers is a transport detail
     # of one site collection rather than an identity.
     assigned_reviewer_name: str
+    # Nullable at ingestion: only outstanding assigned rows require this clock;
+    # unassigned rows carry null, and the Action Centre filters legacy gaps.
     assigned_at: datetime
     responsible_party_name: str
     responsible_party_title: str
