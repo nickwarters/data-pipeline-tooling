@@ -6,6 +6,18 @@
 **#229** with sub-issues **#230–#239**. Open confirmations for Nick are in the
 "Clarifications for Nick" section at the end. Created from live-testing feedback ahead of
 the September go-live.
+
+> **Overtaken on two group names (2026-08-21).** This is a dated record of the
+> 2026-07-01 session and its body is left as written. Two of its group names did
+> not survive contact with the tenant: the site-wide frontline group was
+> provisioned as **`Frontline`**, not `Advisers` (§1a below, D1), and
+> **`Frontline - <type>` was not retired** — it is provisioned, working, and is
+> the frontline **list-access** group on Axis 2, the counterpart of
+> `Reviewers - <type>` (§1's straw-man lists only the reviewing side). Only
+> `CR-ResponsibleParty` was retired. Current model:
+> [ADR-0022](./adr/0022-two-axis-role-model.md) as amended, and the **Adviser**
+> entry in [CONTEXT.md](../CONTEXT.md).
+
 **Created:** 2026-07-01
 **Driver:** Pre-go-live tester feedback + a role/case-list pivot an agent recently
 started (half-landed in `permissions.js`, `section-access.js`, `sharepoint-client.js`,

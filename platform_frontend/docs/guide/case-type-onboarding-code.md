@@ -443,10 +443,12 @@ from it via `caseTypeGroupNames()`:
 | `JourneyOwner - Widget Review`  | Journey Owner capability (journey cases page, raises appeals) |
 
 Groups sit on two orthogonal axes: **functional capability** (what you can do
-anywhere — `Controls`, `Reviewer Managers`, `Advisers`,
+anywhere — `Controls`, `Reviewer Managers`, `Frontline`,
 `ResponsibleParty-Managers`, `CORA Owner Delegates`) and **per-Case-Type list
-access** (which type's Cases you can open — the three derived groups). Two
-rules worth internalising:
+access** (which type's Cases you can open — the three derived groups above, plus
+`Frontline - Widget Review`, which no frontend code reads: it is the frontline
+side's SharePoint ACL on the list, so it is not in `caseTypeGroupNames()` and
+you do not declare it anywhere in code). Two rules worth internalising:
 
 - The five functional roles above span **every** Case source automatically —
   a Controls user sees your new type with no extra group.

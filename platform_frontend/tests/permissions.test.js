@@ -11,7 +11,7 @@ import { CASE_TYPES } from '../case-types/manifest.js';
 /** @type {import('../src/services/permissions.js').PermissionsConfig} */
 const sampleConfig = {
   reviewer: 'Reviewers',
-  adviser: 'Advisers',
+  adviser: 'Frontline',
   controls: 'Controls',
   reviewerManager: 'Reviewer Managers',
   responsiblePartyManager: 'ResponsibleParty-Managers',
@@ -70,11 +70,36 @@ test('resolveCapabilities: multiple Reviewers - <type> groups accumulate list ac
   ]);
 });
 
-test('resolveCapabilities: Advisers group → isAdviser=true', () => {
-  const caps = resolveCapabilities(['Advisers'], sampleConfig);
+test('resolveCapabilities: Frontline group → isAdviser=true', () => {
+  const caps = resolveCapabilities(['Frontline'], sampleConfig);
   assert.equal(caps.isAdviser, true);
   assert.equal(caps.isReviewer, false);
   assert.equal(caps.isVisitor, false);
+});
+
+// `Frontline` (site-wide functional) and `Frontline - <type>` (per-Case-Type
+// list access) share a prefix but are different groups on different axes. Every
+// match in this module is exact equality, and these two tests are what keeps it
+// that way: a prefix or `startsWith` match would make either group silently
+// grant the other's access.
+test('resolveCapabilities: Frontline - <type> does not grant the Frontline capability', () => {
+  const caps = resolveCapabilities(['Frontline - Complaints'], sampleConfig);
+
+  assert.equal(caps.isAdviser, false);
+  // Nor does it grant list access, which is `Reviewers - <type>`'s axis: the
+  // frontline list-access group is a SharePoint ACL this layer never reads.
+  assert.deepEqual(caps.listAccessCaseTypes, []);
+  assert.equal(caps.isReviewer, false);
+  assert.equal(caps.isVisitor, true);
+});
+
+test('resolveCapabilities: Frontline does not grant any per-Case-Type access', () => {
+  const caps = resolveCapabilities(['Frontline'], sampleConfig);
+
+  assert.equal(caps.isAdviser, true);
+  assert.deepEqual(caps.listAccessCaseTypes, []);
+  assert.deepEqual(caps.ownedCaseTypes, []);
+  assert.deepEqual(caps.ownedJourneyCaseTypes, []);
 });
 
 test('resolveCapabilities: Controls group → isControls=true', () => {
@@ -91,7 +116,7 @@ test('resolveCapabilities: only Controls may search across every Case Type', () 
   );
   for (const groups of [
     ['Reviewers'],
-    ['Advisers'],
+    ['Frontline'],
     ['Reviewer Managers'],
     ['ResponsibleParty-Managers'],
     ['CaseTypeOwner - Example Review'],
@@ -197,7 +222,7 @@ test('resolveCapabilities: default config resolves derived per-type group names'
 
 test('permissions: exported config exposes the functional group names and Case Type list', () => {
   assert.equal(permissions.reviewer, 'Reviewers');
-  assert.equal(permissions.adviser, 'Advisers');
+  assert.equal(permissions.adviser, 'Frontline');
   assert.equal(permissions.controls, 'Controls');
   assert.equal(permissions.reviewerManager, 'Reviewer Managers');
   assert.equal(

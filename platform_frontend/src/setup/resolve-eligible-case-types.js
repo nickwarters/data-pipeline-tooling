@@ -214,7 +214,7 @@ async function loadCaseTypeSources(slugs, importers) {
  * where `displayName` is the registry's, and a registered Case Type always has
  * one — so the three derived group names are always contributed.
  *
- * Controls, Reviewer Managers, Advisers, ResponsibleParty-Managers and
+ * Controls, Reviewer Managers, Frontline, ResponsibleParty-Managers and
  * Maintainers span
  * every source. Adviser and manager consumers must still apply their
  * assignment filter to each per-list query. Configured `eligibleGroups` and
