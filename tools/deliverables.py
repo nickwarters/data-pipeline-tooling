@@ -7,10 +7,17 @@ from pathlib import Path, PureWindowsPath
 
 REPORT_FEEDS_DESTINATION = "cora_report_feeds"
 NOTIFICATIONS_DESTINATION = "cora_notifications"
+# A destination of its own rather than a second shape inside the
+# notifications outbox: that outbox is drained by the notification service,
+# which reads every file in it as ``recipients``/``subject``/``body``. The
+# user-group file is read by whoever provisions group membership, and a
+# consumer that drains a directory cannot be handed two contracts in it.
+USER_GROUP_PRIVILEGES_DESTINATION = "cora_user_group_privileges"
 
 __all__ = [
     "REPORT_FEEDS_DESTINATION",
     "NOTIFICATIONS_DESTINATION",
+    "USER_GROUP_PRIVILEGES_DESTINATION",
     "get_deliverable_root",
     "get_deliverable_path",
 ]
