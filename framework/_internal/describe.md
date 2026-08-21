@@ -1,0 +1,43 @@
+```python
+"""Helpers for the opt-in ``describe()`` protocol.
+
+A component renders its own safe summary for ``Pipeline.describe()`` by
+implementing ``describe() -> str``. The builder no longer reflects over a
+component's ``__dict__`` to guess what to show or which attribute names look
+sensitive; each component decides explicitly what is safe to surface, omitting
+the fields it does not want in the plan. These helpers exist only to keep
+that rendering uniform — they introspect nothing.
+"""
+
+from __future__ import annotations
+
+
+def component_summary(component: object) -> str:
+    """Render a component for the plan via its opt-in ``describe()`` protocol.
+
+    Returns the component's own ``describe()`` string when available, its bare
+    class name when not, or ``"none"`` for ``None``. The plan never introspects
+    attributes, so no value can leak into the summary unexpectedly.
+    """
+    if component is None:
+        return "none"
+    describer = getattr(component, "describe", None)
+    if callable(describer):
+        return str(describer())
+    return type(component).__name__
+
+
+def render(component: object, **fields: object) -> str:
+    """Render ``ClassName(key=repr, ...)`` from explicitly chosen fields.
+
+    With no fields the bare class name is returned. Fields whose value is
+    ``None`` are omitted so optional config does not clutter the plan; pass a
+    pre-formatted string if a literal ``None`` is meaningful.
+    """
+    shown = {key: value for key, value in fields.items() if value is not None}
+    if not shown:
+        return type(component).__name__
+    rendered = ", ".join(f"{key}={value!r}" for key, value in shown.items())
+    return f"{type(component).__name__}({rendered})"
+
+```

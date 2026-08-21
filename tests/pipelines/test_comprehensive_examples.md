@@ -1,0 +1,97 @@
+```python
+from framework.core import RUN_PROVENANCE_COLUMN
+from pipelines.comprehensive_examples import (
+    bronze_to_silver,
+    high_risk_or_vulnerable,
+    silver_to_gold,
+)
+from tests.framework_testing import read_rows, without_columns
+from tools.medallion import medallion
+from tools.store import StoreRegistry
+
+
+def test_complex_bronze_to_silver_example_combines_sources_and_validates(tmp_path):
+    bronze_to_silver(tmp_path, logical_run_id="2026-05-29")
+
+    catalog = StoreRegistry(tmp_path)
+    cases = read_rows(medallion(catalog, "complex_cases").silver, "case_snapshot")
+    assert [row["case_ref"] for row in cases] == ["C-100", "C-101", "C-102"]
+    assert (
+        cases[0]
+        | {
+            "case_ref": "C-100",
+            "customer_id": "CU-001",
+            "adviser_id": "ADV-01",
+            "region": "North",
+            "team": "Advice A",
+            "account_status": "open",
+            "risk_band": "high",
+            "open_contact_count": 2,
+            "exposure_amount": 12800,
+        }
+        == cases[0]
+    )
+
+    # The example is intentionally not a one-table toy: silver also carries a
+    # filtered detail table for downstream joins.
+    contacts = read_rows(medallion(catalog, "complex_cases").silver, "open_contacts")
+    assert [(row["case_ref"], row["contact_type"]) for row in contacts] == [
+        ("C-100", "call"),
+        ("C-100", "email"),
+        ("C-101", "letter"),
+    ]
+
+    # Reference data is landed and validated as a separate subject, then joined
+    # read-only by the case pipeline.
+    advisers = read_rows(medallion(catalog, "adviser_reference").silver, "advisers")
+    assert {row["adviser_id"] for row in advisers} == {"ADV-01", "ADV-02"}
+
+
+def test_complex_silver_to_gold_example_assembles_reporting_outputs(tmp_path):
+    bronze_to_silver(tmp_path, logical_run_id="2026-05-29")
+    silver_to_gold(tmp_path, logical_run_id="2026-05-29")
+
+    catalog = StoreRegistry(tmp_path)
+    review_queue = read_rows(
+        medallion(catalog, "complex_reporting").gold, "review_queue"
+    )
+    assert [row["case_ref"] for row in review_queue] == ["C-100", "C-102"]
+    assert [row["review_priority"] for row in review_queue] == [1430, 775]
+    assert {row["logical_run_id"] for row in review_queue} == {"2026-05-29"}
+
+    # Without the run that wrote them: the Writer stamps that on every table it
+    # writes, and it is a fresh id per run rather than part of this aggregate.
+    adviser_summary = without_columns(
+        read_rows(medallion(catalog, "complex_reporting").gold, "adviser_summary"),
+        RUN_PROVENANCE_COLUMN,
+    )
+    assert adviser_summary == [
+        {
+            "adviser_id": "ADV-01",
+            "region": "North",
+            "selected_cases": 1,
+            "total_exposure": 12800,
+            "total_open_contacts": 2,
+            "logical_run_id": "2026-05-29",
+            "load_date": "2026-05-29",
+        },
+        {
+            "adviser_id": "ADV-02",
+            "region": "South",
+            "selected_cases": 1,
+            "total_exposure": 7300,
+            "total_open_contacts": 0,
+            "logical_run_id": "2026-05-29",
+            "load_date": "2026-05-29",
+        },
+    ]
+
+
+def test_complex_example_rules_are_plain_python():
+    assert high_risk_or_vulnerable({"risk_band": "high", "vulnerable_flag": False})
+    assert high_risk_or_vulnerable({"risk_band": "low", "vulnerable_flag": True})
+    assert not high_risk_or_vulnerable(
+        {"risk_band": "medium", "vulnerable_flag": False}
+    )
+
+```
