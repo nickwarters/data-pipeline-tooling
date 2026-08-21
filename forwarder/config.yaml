@@ -1,0 +1,30 @@
+# What the Forwarder does each tick. Only what a task names is acted on.
+#
+# The list actions declare the list they write to, so a queued file carries data
+# alone. Patterns must not overlap: a file matched by two tasks is delivered by
+# the first and gone by the time the second looks.
+#
+# enable_per_item_retry_next_run writes the items that failed back into the
+# queue as "<name>.retry.json" and archives the rest, so a retry does not resend
+# the items that already landed. Without it a part-failed file is retried whole.
+tasks:
+  - action: create_sharepoint_items
+    list_name: Cases-complaints
+    file_pattern: "create-complaints-*.json"
+    enable_per_item_retry_next_run: true
+  - action: create_sharepoint_items
+    list_name: Cases-appeals
+    file_pattern: "create-appeals-*.json"
+    enable_per_item_retry_next_run: true
+  - action: update_sharepoint_items
+    list_name: Cases-complaints
+    file_pattern: "update-complaints-*.json"
+    enable_per_item_retry_next_run: true
+  - action: update_sharepoint_items
+    list_name: Cases-appeals
+    file_pattern: "update-appeals-*.json"
+    enable_per_item_retry_next_run: true
+  - action: copy_file_to_sharepoint
+    file_pattern: "*.xlsx"
+    destination_dir: "Shared Documents/Reports"
+    method: copy

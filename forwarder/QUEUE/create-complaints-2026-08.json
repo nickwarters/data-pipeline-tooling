@@ -1,0 +1,14 @@
+[
+  {
+    "fields": {
+      "Title": "CASE-0001",
+      "Status": "Open"
+    }
+  },
+  {
+    "fields": {
+      "Title": "CASE-0002",
+      "Status": "Open"
+    }
+  }
+]
