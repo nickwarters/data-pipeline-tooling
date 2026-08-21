@@ -262,12 +262,6 @@
   --cora-content-max-width: 80rem; /* 1280px */
   --cora-content-max-width-narrow: 56rem; /*  896px */
   --cora-nav-height: 3.5rem;
-  /* How far below the scroll container's top edge content must sit to clear the
-     sticky nav bar: its height plus a little breathing room. Anything that
-     parks itself against that edge while the page scrolls — a sticky panel's
-     `top`, the scroller's own scroll-padding-top for scrollIntoView targets —
-     measures from here rather than restating the nav's height. */
-  --cora-nav-clearance: calc(var(--cora-nav-height) + var(--cora-space-3));
   --cora-sidebar-width: 15rem; /*  240px */
 
   /* Full-viewport breakout layer. The app root is promoted to a

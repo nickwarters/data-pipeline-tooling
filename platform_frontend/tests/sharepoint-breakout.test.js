@@ -79,10 +79,15 @@ test('breakout: the app root owns vertical scroll and clips horizontal overflow'
   assert.match(body, /overflow-x:\s*hidden/, 'no horizontal page scroll');
 });
 
+// How far below the scroll container's top edge content must sit to clear the
+// sticky nav bar. Spelled out rather than named as its own token on purpose:
+// see the rationale in the #app rule, and the last assertion below.
+const CLEARANCE = /calc\(var\(--cora-nav-height\) \+ var\(--cora-space-3\)\)/;
+
 test('breakout: the nav clearance is measured from the nav bar itself', () => {
-  // Everything that parks against this scroller's top edge measures from one
-  // token, so the two facts it encodes are worth pinning: the nav bar is sticky
-  // at top: 0 *inside* the scroller, and it is --cora-nav-height tall.
+  // Both clearances below are derived from the nav bar rather than hand-tuned,
+  // so the two facts they are derived from are worth pinning: the nav bar is
+  // sticky at top: 0 *inside* the scroller, and it is --cora-nav-height tall.
   const nav = ruleBody(styles, '[data-cora-root] .cora-app-nav-bar {');
   assert.match(nav, /position:\s*sticky/);
   assert.match(nav, /top:\s*0/);
@@ -90,11 +95,6 @@ test('breakout: the nav clearance is measured from the nav bar itself', () => {
     nav,
     /height:\s*var\(--cora-nav-height\)/,
     'the clearance must be measured from the nav bar\u2019s own height'
-  );
-  assert.match(
-    tokens,
-    /--cora-nav-clearance:\s*calc\(var\(--cora-nav-height\)[^;]*\)/,
-    '--cora-nav-clearance must derive from the nav height, not restate it'
   );
 });
 
@@ -105,7 +105,7 @@ test('breakout: scrolled-to content clears the sticky nav bar', () => {
   const body = ruleBody(styles, '#app[data-cora-root] {');
   assert.match(
     body,
-    /scroll-padding-top:\s*var\(--cora-nav-clearance\)/,
+    new RegExp('scroll-padding-top:\\s*' + CLEARANCE.source),
     'the scroller must reserve room for its own sticky header'
   );
 });
@@ -118,8 +118,31 @@ test('breakout: the Question Group rail sticks below the nav, not behind it', ()
   assert.match(rail, /position:\s*sticky/);
   assert.match(
     rail,
-    /top:\s*var\(--cora-nav-clearance\)/,
+    new RegExp('top:\\s*' + CLEARANCE.source),
     'the sticky rail must rest below the nav bar'
+  );
+});
+
+test('breakout: the clearance names only long-standing tokens', () => {
+  // cora-design-tokens.css is a separate @import under a filename the deploy
+  // does not fingerprint, so a warm browser cache can pair new cora-styles.css
+  // with a stale copy of it. A var() naming a token that copy lacks invalidates
+  // the whole declaration: scroll-padding-top falls back to auto, and the
+  // rail's top does too — a sticky element with no offsets stops sticking, so
+  // the rail scrolls away behind the nav instead of resting under it. Every
+  // token in the clearance must therefore be one a stale copy already has.
+  for (const token of ['--cora-nav-height', '--cora-space-3']) {
+    assert.match(
+      tokens,
+      new RegExp(token + ':\\s*\\S'),
+      `${token} must be declared in the design tokens`
+    );
+  }
+  const introduced = styles.match(/var\(--cora-nav-clearance/);
+  assert.equal(
+    introduced,
+    null,
+    'a freshly introduced token cannot carry a sticky offset — spell the clearance from existing ones'
   );
 });
 
