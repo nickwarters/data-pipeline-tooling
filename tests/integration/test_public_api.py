@@ -197,7 +197,7 @@ def test_streaming_readers_are_available_through_the_io_facade(tmp_path):
     kept = [
         r["id"] for c in filtered.chunks(2) for r in c.to_pandas().to_dict("records")
     ]
-    assert kept == [1, 3]
+    assert kept == ["1", "3"]
 
 
 def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_path):
@@ -206,14 +206,24 @@ def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_p
     from framework.core import ColumnValidator
     from framework.io import CsvReader, Refresh
     from framework.run import Pipeline
-    from framework.transform import Filter, Score, VectorizedDerive, VectorizedFilter
+    from framework.transform import (
+        Filter,
+        SchemaCoercion,
+        Score,
+        VectorizedDerive,
+        VectorizedFilter,
+    )
+    from tests._schema_fixtures import FixtureCase
     from tools.store import Store
 
     store = Store(tmp_path / "cases.db")
     p = Pipeline("cases")
     r = p.read(CsvReader(FIXTURE), name="read")
     v = p.validate(ColumnValidator(["amount"]), r, name="validate")
-    s = p.transform(Score("priority", lambda row: row["amount"] * 2), v, name="score")
+    # A CSV read is text, so the declared types come first and the scoring and
+    # filtering below are arithmetic rather than string repetition.
+    c = p.transform(SchemaCoercion(FixtureCase), v, name="coerce")
+    s = p.transform(Score("priority", lambda row: row["amount"] * 2), c, name="score")
     vd = p.transform(
         VectorizedDerive("priority_x2", lambda df: df["priority"] * 2), s, name="derive"
     )
@@ -238,14 +248,16 @@ def test_an_author_can_compose_ordered_stages_through_the_run_facade(tmp_path):
     from framework.core import ColumnValidator
     from framework.io import CsvReader, Refresh
     from framework.run import Pipeline
-    from framework.transform import Score
+    from framework.transform import SchemaCoercion, Score
+    from tests._schema_fixtures import FixtureCase
     from tools.store import Store
 
     store = Store(tmp_path / "cases.db")
     p = Pipeline("cases")
     r = p.read(CsvReader(FIXTURE), name="read")
     v1 = p.validate(ColumnValidator(["amount"]), r, name="validate-source")
-    s = p.transform(Score("priority", lambda row: row["amount"] * 2), v1, name="score")
+    c = p.transform(SchemaCoercion(FixtureCase), v1, name="coerce")
+    s = p.transform(Score("priority", lambda row: row["amount"] * 2), c, name="score")
     v2 = p.validate(ColumnValidator(["priority"]), s, name="validate-scored")
     p.write(store.writer("cases", Refresh()), v2, name="write")
     landed = p.run()

@@ -121,4 +121,40 @@ in the validator, after the cast. So declaring `int` or `float` makes a single
 unparseable value fatal to the whole run rather than a diverted row. That is the
 right default where the type is load-bearing; a feed that would rather divert the
 row declares `str` and gates the column with a value rule.
+
+## Amendment (2026-08-19): the readers stop inferring
+
+The previous amendment widened coercion because "a CSV read is bare type
+inference, so a digits-only reference arrives as `int64`". That premise is now
+removed at its source: the pandas-backed CSV readers (`CsvReader`,
+`ChunkedCsvReader`, `GlobCsvReader`) pass `dtype=str`, landing **every column as
+text**. `keep_default_na` / `na_values` stay at their defaults, so a blank field
+is still a gap rather than the empty string — nullability remains `NonNull()`'s
+question.
+
+Inference was a guess made over the first rows of one file, and it was lossy in
+ways coercion could not undo afterwards: by the time `SchemaCoercion` saw a
+reference read as `int64`, its leading zeros were already gone. It was also
+unstable — inferred per chunk when streaming, and per file when globbing, so two
+parts of one logical snapshot could disagree about a column's dtype.
+
+- **The coercion widening above stands, unchanged.** Coercion is now the *only*
+  place a CSV column's type is decided rather than the second place; and storage
+  still loses dates and booleans, and `SqliteReader` / `ExcelReader` still hand
+  back inferred types. What the `str` arm mostly does on a CSV feed now is
+  nothing, because the column already carries text — which is the point.
+- **A reference wider than `int64` declared `int` now aborts** with a located
+  `CoercionError` where it previously passed as an inferred `uint64`. The coercer
+  is deliberately not widened to accept it: a 20-digit reference declared as a
+  whole number is a mis-declaration, and `str` — which now preserves it exactly —
+  is the right declaration.
+- **`StrictCsvReader` keeps its reason to exist.** It is the RFC 4180 grammar,
+  not the text landing, and one behaviour still differs: an empty field is the
+  empty string there, a gap here.
+
+The declared types a table *stores* are left exactly as they were. A raw column
+declared `INTEGER` still applies SQLite's affinity on write, so `00123` reaches
+raw as text and is stored as `123`; what a feed declares is the feed author's
+call, and `scaffold` seeds a starting point they edit. The reader no longer
+decides it for them, which is the whole change.
 </content>

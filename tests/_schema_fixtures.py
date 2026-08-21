@@ -55,6 +55,18 @@ class CoercedCase:
 
 
 @dataclass
+class FixtureCase:
+    # The declared shape of ``tests/fixtures/cases.csv``. The CSV readers land
+    # every column as text, so a test that does arithmetic or a numeric
+    # comparison on that feed coerces against this first — the same read ->
+    # coerce -> transform order a real pipeline uses.
+    case_id: str
+    advisor: str
+    activity_date: date
+    amount: float
+
+
+@dataclass
 class RuledCase:
     # Value-level rules attached via Annotated on a module that uses
     # `from __future__ import annotations`, so the rule-bearing hints arrive as

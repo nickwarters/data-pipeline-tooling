@@ -7,15 +7,15 @@ sources branch in different directions and reconverge via distinct fan-ins.
 
 Execution graph (simplified)::
 
-    orders ──► validate ──┬─► filter_completed ─┬─► add_margin ──┐
-                          │                     └─► tag_period ──┤
-                          ├─► filter_cancelled ─────────────────┤
-                          ├─► filter_pending ───────────────────┤
-                          └─► filter_high_value ────────────────┤
-                                                                 │
-    catalog ──► validate ─┬─► filter_active ──────────────────── ┤
-                          └─► filter_low_stock ──────────────────┤
-                                                                  │
+    orders ──► validate ──► coerce ──┬─► filter_completed ─┬─► add_margin ──┐
+                                     │                     └─► tag_period ──┤
+                                     ├─► filter_cancelled ─────────────────┤
+                                     ├─► filter_pending ───────────────────┤
+                                     └─► filter_high_value ────────────────┤
+                                                                            │
+    catalog ──► validate ──► coerce ─┬─► filter_active ──────────────────── ┤
+                                     └─► filter_low_stock ──────────────────┤
+                                                                            │
     Fan-in (each ◄ rail feeds one terminus):
     join(add_margin, filter_active) ──► coerce ──► validate ──► write_revenue
     stack(filter_cancelled, filter_low_stock) ──► coerce ──► validate ──► write_risk
@@ -233,29 +233,39 @@ def dag_builder(
         ColumnValidator(_CATALOG_COLUMNS), n_catalog, name="validate_catalog"
     )
 
+    # ── SOURCE COERCION ───────────────────────────────────────────────────────
+    # A CSV source lands as text, so every branch below that multiplies or
+    # compares a quantity needs the declared types first.
+    n_orders_typed = p.transform(
+        SchemaCoercion(OrderRow), n_orders_val, name="coerce_orders"
+    )
+    n_catalog_typed = p.transform(
+        SchemaCoercion(CatalogRow), n_catalog_val, name="coerce_catalog"
+    )
+
     # ── FAN-OUT FROM ORDERS (four branches) ───────────────────────────────────
     #   Branch 1: completed orders — further splits into add_margin + tag_period
     n_completed = p.transform(
         Filter(lambda r: r["status"] == "completed"),
-        n_orders_val,
+        n_orders_typed,
         name="filter_completed",
     )
     #   Branch 2: cancelled orders → risk terminus
     n_cancelled = p.transform(
         Filter(lambda r: r["status"] == "cancelled"),
-        n_orders_val,
+        n_orders_typed,
         name="filter_cancelled",
     )
     #   Branch 3: pending orders → ops terminus
     n_pending = p.transform(
         Filter(lambda r: r["status"] == "pending"),
-        n_orders_val,
+        n_orders_typed,
         name="filter_pending",
     )
     #   Branch 4: high-value orders (any status) → ops terminus
     n_high_value = p.transform(
         Filter(lambda r: r["qty"] * r["unit_price"] > HIGH_VALUE_THRESHOLD),
-        n_orders_val,
+        n_orders_typed,
         name="filter_high_value",
     )
 
@@ -269,13 +279,13 @@ def dag_builder(
     #   Branch 7: in-stock products → revenue terminus (join with completed orders)
     n_active = p.transform(
         Filter(lambda r: r["stock_qty"] > 0),
-        n_catalog_val,
+        n_catalog_typed,
         name="filter_active",
     )
     #   Branch 8: out-of-stock products → risk terminus
     n_low_stock = p.transform(
         Filter(lambda r: r["stock_qty"] == 0),
-        n_catalog_val,
+        n_catalog_typed,
         name="filter_low_stock",
     )
 

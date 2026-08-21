@@ -10,7 +10,7 @@ the frame via ``to_pandas``/``from_pandas``).
 """
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated
 
@@ -25,6 +25,7 @@ from framework.core import (
     ValidationError,
 )
 from framework.core.dataset import Dataset
+from framework.io import CsvReader
 from framework.transform import SchemaCoercion
 from framework.transform.processors import CoercionError
 
@@ -462,16 +463,19 @@ def test_an_unparseable_number_fails_fast_naming_the_column_and_the_value(
     [
         ("3.5", r"score.*not representable as int: '3\.5'"),
         ("1e30", r"score.*not representable as int \("),
+        ("9300000000000000000", r"score.*not representable as int \("),
     ],
-    ids=["fractional", "too-wide"],
+    ids=["fractional", "too-wide", "wider-than-int64"],
 )
 def test_a_value_a_declared_int_cannot_hold_aborts_rather_than_being_rounded(
     value, expected
 ):
-    # Rounding or narrowing would silently change the value. Two arms refuse it
+    # Rounding or narrowing would silently change the value. The arms refuse it
     # and the expected message distinguishes them: 3.5 fails the fractional
     # check, while 1e30 passes it (`1e30 % 1 == 0`) and is caught by the Int64
-    # cast, which will not narrow a float that has no equivalent integer.
+    # cast, which will not narrow a float that has no equivalent integer. A
+    # reference wider than int64 lands in the same place: declared `int` it is a
+    # mis-declaration, and `str` now preserves it exactly.
     raw = pd.DataFrame({"case_ref": ["c1"], "score": [value]})
 
     with pytest.raises(CoercionError, match=expected):
@@ -514,3 +518,40 @@ def test_a_blank_cell_in_a_declared_bool_is_a_gap_not_an_unrecognized_encoding()
 
     SchemaValidator(OptionallyFlaggedCase).validate(coerced)  # does not raise
     assert coerced.to_pandas()["active"].isna().tolist() == [False, True]
+
+
+@dataclass
+class CsvSourcedCase:
+    case_ref: str
+    score: int
+    rating: float
+    active: bool
+    opened: date
+    updated: datetime
+
+
+def test_coerces_every_declared_type_off_a_real_csv_read(tmp_path):
+    # The CSV readers hand every column over as text, so this is the shape the
+    # coercer actually meets between raw and silver — all six declared types at
+    # once, and a wholly blank row that must stay a row of gaps.
+    src = tmp_path / "feed.csv"
+    src.write_text(
+        "case_ref,score,rating,active,opened,updated\n"
+        "00123,42,1.5,TRUE,2026-05-28,2026-05-28T09:30:00\n"
+        ",,,,,\n",
+        encoding="utf-8",
+    )
+
+    coerced = SchemaCoercion(CsvSourcedCase)(CsvReader(src).read())
+
+    SchemaValidator(CsvSourcedCase).validate(coerced)  # does not raise
+    frame = coerced.to_pandas()
+    assert frame.iloc[0].to_dict() == {
+        "case_ref": "00123",  # the reference the reader preserved
+        "score": 42,
+        "rating": 1.5,
+        "active": True,
+        "opened": pd.Timestamp("2026-05-28"),
+        "updated": pd.Timestamp("2026-05-28 09:30:00"),
+    }
+    assert frame.iloc[1].isna().all()

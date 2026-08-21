@@ -151,10 +151,48 @@ def test_missing_key_in_chunk_raises():
         (None, None),
         (float("nan"), None),
         (True, "True"),
+        ("00123", "123"),  # a CSV id is the text the file holds
+        ("123.0", "123"),
+        ("12.5", "12.5"),
+        ("C001", "C001"),  # a non-numeric id is left alone
     ],
 )
 def test_normalize_key_aligns_types(value, expected):
     assert _normalize_key(value) == expected
+
+
+def test_text_that_merely_looks_numeric_is_compared_as_text():
+    # int()/float() accept far more than one numeric id's plausible spellings.
+    # Read through them, an unrelated id 1000 would answer to "1e3" and
+    # "1_000", non-ASCII digits would answer to 123, and the *present* key
+    # "nan" would normalise to missing and be dropped.
+    assert _normalize_key("1e3") == "1e3" != _normalize_key(1000)
+    assert _normalize_key("1_000") == "1_000"
+    assert _normalize_key("\u0661\u0662\u0663") != _normalize_key(123)
+    assert _normalize_key("nan") == "nan"
+
+
+def test_long_references_differing_in_their_last_digit_stay_distinct():
+    # float64 carries ~16 significant digits, so reading these through float()
+    # would round both to the same value and silently merge two ids.
+    assert _normalize_key("1234567890123456789.0") == "1234567890123456789"
+    assert _normalize_key("1234567890123456788.0") == "1234567890123456788"
+
+
+def test_an_absurdly_long_digit_string_is_compared_as_text():
+    # CPython refuses int() beyond 4300 digits. Nothing that long is an id, so
+    # it is compared as the text it is rather than crashing the run.
+    long_digits = "9" * 5000
+    assert _normalize_key(long_digits) == long_digits
+
+
+def test_a_text_key_column_still_matches_a_numeric_allow_list():
+    # The CSV readers land text, so the key column arrives spelled as the file
+    # wrote it; membership is by what the id means, not how it was spelled.
+    rows = [{"id": "00123", "val": 1}, {"id": "123.0", "val": 2}, {"id": "9", "val": 3}]
+    reader = KeyFilterChunkReader(_ListChunkReader(rows), "id", {123})
+
+    assert _column(reader.chunks(2), "val") == [1, 2]
 
 
 # --- general predicate form --------------------------------------------------

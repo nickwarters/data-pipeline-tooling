@@ -187,10 +187,14 @@ print(reader.rows_scanned, reader.rows_kept)   # e.g. 104_000_000  87_431
 **Type alignment is handled, not silently dropped.** The same logical id arrives
 as different Python types per source — a SAS numeric id streams in as a float
 (`3.0`) while the allow-list holds an `int` (`3`); a SAS character id streams in
-as space-padded `bytes` (`b'A   '`) while the allow-list holds a `str` (`"A"`).
-Both sides are normalised before the membership test, so `3.0` matches `3` and
-`b'A  '` matches `"A"` rather than a float-vs-int / bytes-vs-str mismatch
-dropping every row. A missing key (`None`/`NaN`) never matches.
+as space-padded `bytes` (`b'A   '`) while the allow-list holds a `str` (`"A"`);
+a CSV id arrives as the text the file holds (`"00123"`, `"123.0"`) while the
+allow-list holds an `int` (`123`). Both sides are normalised before the
+membership test — numeric-looking text included, so an id is compared by what it
+means rather than by how its source spelled it — so `3.0` matches `3`, `b'A  '`
+matches `"A"` and `"00123"` matches `123` rather than a mismatch dropping every
+row. Normalisation decides membership only; it never changes a landed value. A
+missing key (`None`/`NaN`) never matches.
 
 **Growth is bounded.** The allow-list may grow run-over-run, but it stays an
 in-memory set capped at ~100K — pass the current set in at construction each run;
@@ -203,12 +207,16 @@ The general form `KeyFilterChunkReader` is built on: apply any `ChunkFilter`
 multi-column rule.
 
 ```python
+import pandas as pd
+
 from framework.io import ChunkedCsvReader, PredicateChunkReader
 from framework.core import Dataset
 
 def keep_large_orders(chunk: Dataset) -> Dataset:
+    # A CSV chunk is text, so the threshold is applied to the number the column
+    # denotes rather than compared against a string.
     frame = chunk.to_pandas()
-    return Dataset.from_pandas(frame[frame["total"] > 1000])
+    return Dataset.from_pandas(frame[pd.to_numeric(frame["total"]) > 1000])
 
 reader = PredicateChunkReader(ChunkedCsvReader("orders.csv"), keep_large_orders)
 ```

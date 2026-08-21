@@ -47,7 +47,9 @@ def test_given_csv_writes_a_csv_readable_by_csvreader(tmp_path):
     path = given_csv(tmp_path, [{"case_id": "c1", "amount": 100}])
 
     assert path.exists()
-    assert rows_of(CsvReader(path)) == [{"case_id": "c1", "amount": 100}]
+    # Reading it back gives text, whatever was written: CsvReader lands every
+    # column as text and leaves types to the declared schema.
+    assert rows_of(CsvReader(path)) == [{"case_id": "c1", "amount": "100"}]
 
 
 def test_read_rows_reads_a_landed_table_back(tmp_path):

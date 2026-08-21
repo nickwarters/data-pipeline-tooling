@@ -55,8 +55,8 @@ def test_column_projection_keeps_each_chunk_narrow_and_in_order(tmp_path):
 
     assert [c.columns for c in chunks] == [["name", "id"], ["name", "id"]]
     assert _rows(chunks[0]) == [
-        {"name": "n0", "id": 0},
-        {"name": "n1", "id": 1},
+        {"name": "n0", "id": "0"},
+        {"name": "n1", "id": "1"},
     ]
 
 
@@ -133,3 +133,21 @@ def test_a_wholly_empty_file_still_reports_the_file_it_opened(tmp_path):
 
     assert list(reader.chunks(2)) == []
     assert reader.data_locations == [{"namespace": "file", "name": str(src)}]
+
+
+def test_every_chunk_carries_the_same_dtype_however_late_a_blank_appears(tmp_path):
+    # Inference is per chunk: an id column that only stops looking numeric in
+    # the last chunk would otherwise land as int64 in chunk 1 and text in
+    # chunk 2 — and the chunks are written separately.
+    src = _write_csv(
+        tmp_path / "feed.csv", ["1,10,a", "2,20,b", ",30,c"], header="id,val,name"
+    )
+
+    chunks = list(ChunkedCsvReader(src).chunks(2))
+
+    dtypes = {str(c.to_pandas()["id"].dtype) for c in chunks}
+    assert len(dtypes) == 1
+    assert _rows(chunks[0]) == [
+        {"id": "1", "val": "10", "name": "a"},
+        {"id": "2", "val": "20", "name": "b"},
+    ]
