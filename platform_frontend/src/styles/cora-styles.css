@@ -2047,6 +2047,23 @@
   gap: var(--cora-space-1);
 }
 
+/* Category headings above the counts, rendered only when the Case Type declares
+   the level. Demoted to a quiet eyebrow so the pass/fail lines stay the thing
+   being read; the Review tab's own category heading is a full rule-under-title
+   because there it separates whole screens of questions, not four list rows. */
+[data-cora-root] .cora-summary .cora-summary-counts h4 {
+  margin: var(--cora-space-3) 0 var(--cora-space-1);
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--cora-tracking-wider);
+  color: var(--cora-color-text-muted);
+}
+
+[data-cora-root] .cora-summary .cora-summary-counts h4:first-of-type {
+  margin-top: 0;
+}
+
 /* The count/due lines that sit directly under an Issues / Remediation heading. */
 [data-cora-root] .cora-summary .cora-summary-remediation > p,
 [data-cora-root] .cora-summary .cora-summary-remediation-tracking > p {
@@ -2074,6 +2091,20 @@
 [data-cora-root] .cora-summary .cora-summary-remediation li p,
 [data-cora-root] .cora-summary .cora-summary-remediation-tracking li p {
   margin: 0 0 var(--cora-space-1);
+}
+
+/* A question entry's Category: the level above the Question Group line beneath
+   it. Same eyebrow shape as that line, but in on-surface text against the
+   group's muted grey, so the two read as an outer and an inner level rather
+   than as two of the same thing. A bare class like the Issues tab's own three,
+   so the Summary-scoped `li p` rule above supplies the margin and this rule
+   does not have to restate it. */
+.cora-summary-category {
+  font-size: var(--cora-font-size-xs);
+  font-weight: var(--cora-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--cora-tracking-wider);
+  color: var(--cora-color-on-surface);
 }
 
 /* The configured/sent action lists read as supporting detail. */
