@@ -179,4 +179,20 @@ see the go-live checklist in
 - **The Notified ledger is domain state, not run metadata.** It records what a
   person was told, so it lives in its own subject's gold, not in the Run store.
 - **One person in two roles collapses to one recipient**, because recipients are
-  a set of resolved email addresses rather than a list of roles.
+  keyed by resolved **login** rather than by role. (They were keyed by email
+  until the user-group Deliverable below needed the login; the two differ only
+  where a directory lists one mailbox for two accounts, and keying by login is
+  the more honest answer there — two accounts each need their own group.)
+- **A frontline recipient's group privileges ride along with the
+  notification.** The same pass emits a second Deliverable naming the SharePoint
+  groups its **frontline** recipients — the Responsible Party and their Manager,
+  never the Assigned Reviewer — must hold to open the Case the notification
+  links to, written *before* the outbox file so nobody is told about a Case
+  before the request for their access to it has landed. It is a separate
+  destination, not a fourth key on the notification object: the notification
+  service's contract is the three keys above, and a consumer that drains a
+  directory reads every file in it as one contract. Because the collapse-by-role
+  above has already happened by the time a recipient row exists, "is this
+  recipient frontline?" is decided **where the roles are still
+  distinguishable** — in the recipient rule itself — rather than reconstructed
+  downstream. See [`data-dictionary-notifications.md`](../data-dictionary-notifications.md).

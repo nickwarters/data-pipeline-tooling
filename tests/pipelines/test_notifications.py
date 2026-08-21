@@ -27,7 +27,11 @@ from tests.framework_testing import (
     read_rows,
     rows_of,
 )
-from tools.deliverables import NOTIFICATIONS_DESTINATION, get_deliverable_path
+from tools.deliverables import (
+    NOTIFICATIONS_DESTINATION,
+    USER_GROUP_PRIVILEGES_DESTINATION,
+    get_deliverable_path,
+)
 from tools.medallion import medallion
 from tools.store import StoreRegistry
 
@@ -61,7 +65,7 @@ def _case(
     case_id: str = "case-1",
     *,
     status: str = "In Progress",
-    case_type: str = "claims",
+    case_type: str = "complaints",
     source_item_id: str = "42",
     reviewer: str = REVIEWER,
     party: str = PARTY,
@@ -91,7 +95,7 @@ def _message(
 ) -> dict[str, object]:
     return {
         "case_id": case_id,
-        "case_type": "claims",
+        "case_type": "complaints",
         "source_item_id": "42",
         "source_observation_id": observation,
         "seq": seq,
@@ -165,6 +169,17 @@ def _recipients(base_dir: Path) -> list[str]:
     payload = _payload(base_dir)
     assert len(payload) == 1
     return payload[0]["recipients"].split(";")
+
+
+def _privilege_files(base_dir: Path) -> list[Path]:
+    outbox = get_deliverable_path(base_dir, USER_GROUP_PRIVILEGES_DESTINATION)
+    return sorted(outbox.glob("*.json")) if outbox.exists() else []
+
+
+def _privileges(base_dir: Path) -> list[dict]:
+    files = _privilege_files(base_dir)
+    assert len(files) == 1, f"expected exactly one privileges file, got {files}"
+    return json.loads(files[0].read_text(encoding="utf-8"))
 
 
 def _ledger(base_dir: Path) -> list[dict]:
@@ -425,7 +440,7 @@ def test_the_body_is_a_paragraph_and_one_link_with_no_styling_at_all(
     body = _payload(base_dir)[0]["body"]
 
     assert body.count("<a href=") == 1
-    expected = CASE_LINK_TEMPLATE.format(case_type="claims", source_item_id="42")
+    expected = CASE_LINK_TEMPLATE.format(case_type="complaints", source_item_id="42")
     assert f'<a href="{expected}"' in body
     assert "<style" not in body
     assert "style=" not in body
@@ -638,7 +653,7 @@ def test_the_remediation_body_links_to_the_case_rather_than_the_conversation(
 
     assert notification["subject"] == REPORTABLE_SUBJECT_LINE
     expected = REPORTABLE_CASE_LINK_TEMPLATE.format(
-        case_type="claims", source_item_id="42"
+        case_type="complaints", source_item_id="42"
     )
     assert f'<a href="{expected}"' in body
     assert body.count("<a href=") == 1
@@ -750,7 +765,7 @@ def test_a_responsible_party_who_is_their_own_manager_collapses_to_one_recipient
         [
             {
                 "case_id": "case-1",
-                "case_type": "claims",
+                "case_type": "complaints",
                 "source_item_id": "42",
                 "responsible_party_name": PARTY,
             }
@@ -785,7 +800,7 @@ def _recipients_of(last_author: str, *, party: str = PARTY) -> list[str]:
                 "case_id": "case-1",
                 "last_author_login": last_author,
                 "message_at": "2026-08-04T16:02:00.000Z",
-                "case_type": "claims",
+                "case_type": "complaints",
                 "source_item_id": "42",
                 "assigned_reviewer_name": REVIEWER,
                 "responsible_party_name": party,
@@ -828,3 +843,145 @@ def test_the_outbox_filename_is_unique_per_pass_and_legal_on_windows():
     assert name != other
     assert not set(name) & set(':\\/*?"<>|')
     assert name.endswith(".json")
+
+
+# --- the user-group privileges deliverable ----------------------------------
+
+
+def test_the_privileges_file_names_the_frontline_parties_and_their_group(
+    base_dir, users_csv
+):
+    _seed(base_dir, [_case()], [_message(0, "a.khan", "2026-08-04T16:02:00.000Z")])
+
+    _run(base_dir)
+
+    assert _privileges(base_dir) == [
+        {"login_name": "b.okafor", "groups": ["Frontline - Complaints"]},
+        {"login_name": "e.novak", "groups": ["Frontline - Complaints"]},
+    ]
+
+
+def test_the_reviewer_is_notified_but_gets_no_group(base_dir, users_csv):
+    # The Reviewer did not post, so they are told; they are not frontline, so
+    # the file that grants frontline access does not mention them.
+    _seed(base_dir, [_case()], [_message(0, "b.okafor", "2026-08-04T16:02:00.000Z")])
+
+    _run(base_dir)
+
+    assert REVIEWER_EMAIL in _payload(base_dir)[0]["recipients"]
+    assert [row["login_name"] for row in _privileges(base_dir)] == ["e.novak"]
+
+
+def test_a_login_owed_notifications_on_two_cases_is_one_object(base_dir, users_csv):
+    _seed(
+        base_dir,
+        [_case(), _case("case-2", source_item_id="43")],
+        [
+            _message(0, "a.khan", "2026-08-04T16:02:00.000Z"),
+            _message(0, "a.khan", "2026-08-04T16:03:00.000Z", case_id="case-2"),
+        ],
+    )
+
+    _run(base_dir)
+
+    assert _privileges(base_dir) == [
+        {"login_name": "b.okafor", "groups": ["Frontline - Complaints"]},
+        {"login_name": "e.novak", "groups": ["Frontline - Complaints"]},
+    ]
+
+
+def test_the_reportable_trigger_grants_the_group_too(base_dir, users_csv):
+    _seed(base_dir, [_case(reportable_at=REPORTABLE_AT, had_remediation=1)], [])
+
+    _run(base_dir)
+
+    assert _privileges(base_dir) == [
+        {"login_name": "b.okafor", "groups": ["Frontline - Complaints"]},
+        {"login_name": "e.novak", "groups": ["Frontline - Complaints"]},
+    ]
+
+
+def test_nobody_owed_anything_writes_no_privileges_file(base_dir, users_csv):
+    _seed(
+        base_dir,
+        [_case(status="Completed")],
+        [_message(0, "a.khan", "2026-08-04T16:02:00.000Z")],
+    )
+
+    _run(base_dir)
+
+    assert _privilege_files(base_dir) == []
+
+
+def test_a_notification_owed_to_nobody_frontline_writes_no_privileges_file(
+    base_dir, monkeypatch
+):
+    # Only the Reviewer is left to tell: the Responsible Party posted last and
+    # the directory knows no manager for them. A file holding an empty array
+    # would be one the provisioning consumer drains and finds nothing in.
+    path = base_dir / "no-manager.csv"
+    path.write_text(
+        "login,email,manager_login,manager_email\n"
+        "a.khan,a.khan@example.invalid,m.iqbal,m.iqbal@example.invalid\n"
+        "b.okafor,b.okafor@example.invalid,,\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(users, "_BUNDLED_FEED", path)
+    _seed(base_dir, [_case()], [_message(0, "b.okafor", "2026-08-04T16:02:00.000Z")])
+
+    _run(base_dir)
+
+    assert _recipients(base_dir) == [REVIEWER_EMAIL]
+    assert _privilege_files(base_dir) == []
+
+
+def test_a_dry_run_writes_no_privileges_file(base_dir, users_csv):
+    _seed(base_dir, [_case()], [_message(0, "a.khan", "2026-08-04T16:02:00.000Z")])
+
+    _run(base_dir, dry_run=True)
+
+    assert _privilege_files(base_dir) == []
+
+
+def test_the_privileges_file_lands_beside_the_outbox_not_in_it(base_dir, users_csv):
+    # The notification service drains its own destination and reads every file
+    # in it as recipients/subject/body; a second shape in there would break it.
+    _seed(base_dir, [_case()], [_message(0, "a.khan", "2026-08-04T16:02:00.000Z")])
+
+    _run(base_dir)
+
+    assert len(_files(base_dir)) == 1
+    assert len(_privilege_files(base_dir)) == 1
+    assert _privilege_files(base_dir)[0].parent != _files(base_dir)[0].parent
+
+
+def test_a_case_type_with_no_declared_group_name_fails_the_run(base_dir, users_csv):
+    _seed(
+        base_dir,
+        [_case(case_type="not-onboarded")],
+        [_message(0, "a.khan", "2026-08-04T16:02:00.000Z")],
+    )
+
+    with pytest.raises(Exception, match="not-onboarded"):
+        _run(base_dir)
+
+
+def test_the_privileges_filename_is_the_consumers_own_format():
+    name = notifications.privileges_filename("2026-08-15T12:34:56+00:00")
+
+    assert name == "add_user_group_priviledges_20260815123456.json"
+    assert not set(name) & set(':\\/*?"<>|')
+
+
+def test_the_privileges_file_and_the_outbox_file_stamp_the_same_instant(
+    base_dir, users_csv
+):
+    _seed(base_dir, [_case()], [_message(0, "a.khan", "2026-08-04T16:02:00.000Z")])
+
+    _run(base_dir)
+
+    # The outbox squashes the ISO instant, so it keeps the date/time "T".
+    outbox_stamp = _files(base_dir)[0].name.split("-")[0].replace("T", "")[:14]
+    privileges_stamp = _privilege_files(base_dir)[0].stem.rsplit("_", 1)[1]
+
+    assert outbox_stamp == privileges_stamp
