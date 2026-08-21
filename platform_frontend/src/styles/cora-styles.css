@@ -143,6 +143,15 @@
      re-centres — headings and content nudge sideways. Edge/Chromium
      supports scrollbar-gutter. */
   scrollbar-gutter: stable;
+  /* This scroller carries its own sticky header — `.cora-app-nav-bar`, top: 0,
+     one --cora-nav-height tall — so a scrollIntoView with block start parks its
+     target *underneath* the nav bar: the Review tab's "Jump to next unanswered"
+     scrolled the question card up until its legend, the question wording, sat
+     behind the nav and only the answer options were left visible. The scroller
+     reserving room for its own sticky header is the one place that fact
+     belongs, so every jump (question card, Question Group heading) clears it
+     without repeating the nav's height per target. */
+  scroll-padding-top: calc(var(--cora-nav-height) + var(--cora-space-3));
 }
 
 /* Centered content wrapper used by all standard routes */

@@ -79,6 +79,26 @@ test('breakout: the app root owns vertical scroll and clips horizontal overflow'
   assert.match(body, /overflow-x:\s*hidden/, 'no horizontal page scroll');
 });
 
+test('breakout: the scroller reserves room for its own sticky nav bar', () => {
+  // `.cora-app-nav-bar` is sticky at top: 0 *inside* this scroller, so without
+  // scroll-padding-top every scrollIntoView({ block: 'start' }) — "Jump to next
+  // unanswered", the Question Group jumps — parks its target's top edge behind
+  // the nav bar and hides the question wording.
+  const body = ruleBody(styles, '#app[data-cora-root] {');
+  assert.match(
+    body,
+    /scroll-padding-top:\s*calc\(var\(--cora-nav-height\) \+ var\(--cora-space-3\)\)/,
+    'scrolled-to content must clear the sticky nav bar'
+  );
+  const nav = ruleBody(styles, '[data-cora-root] .cora-app-nav-bar {');
+  assert.match(
+    nav,
+    /height:\s*var\(--cora-nav-height\)/,
+    "the reserved padding must be measured from the nav bar's own height"
+  );
+  assert.match(nav, /position:\s*sticky/);
+});
+
 test('breakout: the app-root z-index token exists and is high enough to cover SP chrome', () => {
   const match = tokens.match(/--cora-z-app-root:\s*(\d+)/);
   assert.ok(match, '--cora-z-app-root must be defined in the design tokens');
