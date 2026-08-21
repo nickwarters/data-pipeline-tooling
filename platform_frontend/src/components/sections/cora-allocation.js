@@ -2,7 +2,12 @@
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
-import { listCasesPerSource } from '../../services/across-sources.js';
+import {
+  countCasesAcrossSources,
+  listCasesPerSource,
+} from '../../services/across-sources.js';
+
+export const MAX_IN_PROGRESS_CASES = 3;
 
 /** @typedef {import('../../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
@@ -126,9 +131,10 @@ export async function getUnallocatedCases({
 }
 
 /**
- * Re-checks the current Reviewer's active workload per limited Case Type before
- * loading allocation candidates. Held Cases do not consume capacity. A source
- * without `maxInProgressCases` remains unlimited and needs no count query.
+ * Re-checks the current Reviewer's active workload across every allocation
+ * source before loading candidates. Held Cases do not consume capacity. Only
+ * the exact `In-progress` lifecycle status consumes the app-wide capacity;
+ * `Actions In Progress` and every other status are deliberately excluded.
  *
  * @param {{
  * client: SharePointClient | null,
@@ -146,40 +152,22 @@ export async function getAllocationAvailability({
 }) {
   if (!client) return { candidates: [], isAtCapacity: false };
 
-  const capacity = await Promise.all(
-    allocationSources.map(async (source) => {
-      if (source.maxInProgressCases === undefined) {
-        return { source, isAtCapacity: false };
-      }
-      const activeCases = await client.countCases(
-        {
-          status: CASE_STATUS.IN_PROGRESS,
-          assignedReviewer: currentUserId,
-          onHold: false,
-        },
-        { listName: source.listName }
-      );
-      return {
-        source,
-        isAtCapacity: activeCases >= source.maxInProgressCases,
-      };
-    })
-  );
-  const availableSources = capacity
-    .filter(({ isAtCapacity }) => !isAtCapacity)
-    .map(({ source }) => source);
-  const anySourceAtCapacity = capacity.some(({ isAtCapacity }) => isAtCapacity);
-  if (availableSources.length === 0) {
-    return { candidates: [], isAtCapacity: anySourceAtCapacity };
+  const activeCases = await countCasesAcrossSources(client, allocationSources, {
+    status: CASE_STATUS.IN_PROGRESS,
+    assignedReviewer: currentUserId,
+    onHold: false,
+  });
+  if (activeCases >= MAX_IN_PROGRESS_CASES) {
+    return { candidates: [], isAtCapacity: true };
   }
   const candidates = await getUnallocatedCases({
     client,
-    allocationSources: availableSources,
+    allocationSources,
     random,
   });
 
   return {
     candidates,
-    isAtCapacity: candidates.length === 0 && anySourceAtCapacity,
+    isAtCapacity: false,
   };
 }

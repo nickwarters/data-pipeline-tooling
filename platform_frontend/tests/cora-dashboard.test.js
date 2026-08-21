@@ -43,7 +43,6 @@ function context(permissions) {
       {
         slug: 'complaints',
         listName: 'Cases-Complaints',
-        maxInProgressCases: 3,
       },
     ],
     appEl: document.createElement('main'),
