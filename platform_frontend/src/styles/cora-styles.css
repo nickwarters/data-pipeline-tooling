@@ -2056,7 +2056,7 @@
   margin: 0 0 var(--cora-space-1);
 }
 
-/* The Answer line and configured/sent action lists read as supporting detail. */
+/* The configured/sent action lists read as supporting detail. */
 [data-cora-root] .cora-summary .cora-summary-remediation li ul,
 [data-cora-root] .cora-summary .cora-summary-remediation-tracking li ul {
   margin: var(--cora-space-1) 0 0;

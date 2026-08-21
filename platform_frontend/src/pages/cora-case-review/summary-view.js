@@ -226,13 +226,10 @@ function renderTrackedRow(row, reviewerSide) {
   return h(
     'li',
     {},
-    h(
-      'p',
-      {},
-      question.questionGroup
-        ? `${question.questionGroup}: ${question.text}`
-        : question.text
-    ),
+    question.questionGroup
+      ? h('p', { className: 'cora-remediation-group' }, question.questionGroup)
+      : null,
+    h('p', { className: 'cora-remediation-question' }, question.text),
     h(
       'ul',
       {},
@@ -265,14 +262,15 @@ function renderFailure(props, failure) {
   return h(
     'li',
     {},
+    failure.questionGroup
+      ? h('p', { className: 'cora-remediation-group' }, failure.questionGroup)
+      : null,
+    h('p', { className: 'cora-remediation-question' }, failure.text),
     h(
       'p',
-      {},
-      failure.questionGroup
-        ? `${failure.questionGroup}: ${failure.text}`
-        : failure.text
+      { className: 'cora-remediation-answer' },
+      `Answer: ${failure.answer}`
     ),
-    h('p', {}, `Answer: ${failure.answer}`),
     failure.actions.length
       ? h('ul', {}, ...failure.actions.map((text) => h('li', {}, text)))
       : null,
