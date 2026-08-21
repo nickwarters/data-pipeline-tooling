@@ -71,6 +71,31 @@ returned on each `ListPoll` identifies the source window that list's poll
 resumed from. The Reader's `observed_at` stamp is an injectable callable and is
 dropped by `to_raw`'s `observation` transform for the same reason.
 
+## Where a quarantined row lands
+
+Every silver step here is handed a quarantine Writer of its own, so a
+value-rule breach in *any* of the eight silver tables is routed aside rather
+than aborting the poll. A reject lands in
+`<base>/sharepoint_cases/quarantine.db`, in a table of the **same name as the
+silver table it was headed for**, carrying the row as it stood at the
+quarantine step plus `failed_rule` (every rule it breached), `logical_run_id`,
+`load_date` and `pipeline_run_id`. `answer_capture`'s reject keeps `raw_value`,
+which its silver step drops only *after* quarantining, so the offending value
+sits beside the reason.
+
+**All eight are declared in `migrations/sharepoint_cases/quarantine/`, including
+the five whose schema carries no rule that can fire yet.** This database is
+under migration control, so a Writer will not create a missing table
+([ADR-0025](adr/0025-sql-migrations-own-the-physical-table-shape.md)): an
+undeclared reject table is not a gap in the reject history but a
+`MissingTableError` that aborts the whole poll at the first breach — leaving
+every table *below* that step unpublished at silver and gold, the watermark
+unadvanced, and the same window failing the same way on every run after it. A
+quarantine step wired ahead of the rule that will one day use it (as
+`general_answer`, `conversation_message`, `case_detail`, `answer_action` and
+`answer_capture`'s docstrings describe) only holds if the table it writes to is
+there before the rule is.
+
 ## `case_observation` — raw layer
 
 The faithful landing zone: one row per *observation of a list item at one
