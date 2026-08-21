@@ -60,12 +60,12 @@ through its own options bag. An aborted read of either is navigation and
 dispatches nothing.
 
 The view derives one report from the feed and the typed live tail, and renders
-it three ways: the grouped chart in a two-column row, the headline figures,
-and a full-width Case Type count/percentage table beneath them. The table uses
-the chart's daily or monthly bucket grain. The left column also renders the
-four range controls; they dispatch `my-stats/range-selected` while the chart
-and table remain derived rather than delivered. There is no separate `chart`
-route field. The route still owns chart tooltip setup and cleanup.
+it three ways: a full-width grouped chart, the headline figures, and a
+full-width Case Type count/percentage table beneath them. The four range
+controls sit above the chart; they dispatch `my-stats/range-selected` while the
+chart and table remain derived rather than delivered. The table uses the
+chart's daily or monthly bucket grain. There is no separate `chart` route
+field. The route still owns chart tooltip setup and cleanup.
 
 The `#/team-stats` route is also a static page import, guarded solely by
 `context.chrome.permissions.isReviewerManager`. A non-manager is redirected to

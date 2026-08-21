@@ -178,6 +178,21 @@ test('my stats view: the table, chart and figures are all rendered', () => {
   assert.ok(getByText(view, 'Headline figures'));
 });
 
+test('my stats view: range controls sit above the full-row chart', () => {
+  const view = myStatsView(viewState());
+  const topRow = view.querySelector('.cora-my-stats-top-row');
+  assert.ok(topRow);
+
+  assert.equal(
+    topRow.childNodes[0],
+    topRow.querySelector('.cora-my-stats-controls-column')
+  );
+  assert.equal(
+    topRow.childNodes[1],
+    topRow.querySelector('.cora-grouped-bar-chart')
+  );
+});
+
 test('my stats view: range controls expose selection and dispatch changes', () => {
   /** @type {any[]} */
   const actions = [];
