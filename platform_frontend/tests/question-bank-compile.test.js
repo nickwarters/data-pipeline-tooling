@@ -11,6 +11,7 @@ import {
   buildPublishArtifacts,
   publishBankEffect,
 } from '../src/pages/question-bank/question-bank-compile.js';
+import { mintBankVersion } from '../src/lib/bank-version.js';
 
 /** Tiny helper to build a bank with one question. */
 function bank(/** @type {any} */ q) {
@@ -221,6 +222,11 @@ test('hashStr: deterministic for the same input', async () => {
 const exportBank = {
   label: 'Hello Review',
   slug: 'hello-review',
+  version: 'hello-v2',
+  history: [
+    { version: 'hello-v1', generatedAt: '2026-01-10T09:00:00.000Z' },
+    { version: 'hello-v2', generatedAt: '2026-03-02T14:30:00.000Z' },
+  ],
   eligibleGroups: ['Reviewers'],
   questions: [
     {
@@ -242,12 +248,12 @@ const exportBank = {
   ],
 };
 
-test('compileExport: returns envelope with slug, label, generatedAt, hash, questions', async () => {
+test('compileExport: returns envelope with slug, label, generatedAt, version, questions', async () => {
   const result = await compileExport(exportBank);
   assert.ok('slug' in result);
   assert.ok('label' in result);
   assert.ok('generatedAt' in result);
-  assert.ok('hash' in result);
+  assert.ok('version' in result);
   assert.ok('questions' in result);
   assert.equal(result.slug, 'hello-review');
   assert.equal(result.label, 'Hello Review');
@@ -258,6 +264,7 @@ test('compileExport: preserves edited question order', async () => {
   const result = await compileExport({
     label: 'L',
     slug: 's',
+    version: 'v1',
     eligibleGroups: [],
     questions: [
       {
@@ -290,24 +297,46 @@ test('compileExport: generatedAt is a valid ISO-8601 string', async () => {
   assert.match(generatedAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
 });
 
-test('compileExport: hash is the full 64-hex digest, with no algorithm prefix', async () => {
-  const { hash } = await compileExport(exportBank);
-  // No prefix: the same value is stamped on a Case row and composed into a
+test("compileExport: the version is the bank's declaration, never computed", async () => {
+  // The envelope carries what the bank says its version is — a hand-entered
+  // identifier is as good as a minted one, and recomputing anything here
+  // would stamp Cases with a value no published file answers to.
+  const { version } = await compileExport(exportBank);
+  assert.equal(version, 'hello-v2');
+});
+
+test('compileExport: a bank declaring no version is refused, not silently hashed', async () => {
+  const { version: _dropped, ...undeclared } = exportBank;
+  await assert.rejects(
+    () => compileExport(/** @type {any} */ (undeclared)),
+    /declares no version/
+  );
+});
+
+test('mintBankVersion: mints the full 64-hex digest, with no algorithm prefix', async () => {
+  // No prefix: the minted value is stamped on a Case row and composed into a
   // filename, and a colon cannot appear in a SharePoint or Windows filename.
-  assert.match(hash, /^[0-9a-f]{64}$/);
+  assert.match(await mintBankVersion(exportBank), /^[0-9a-f]{64}$/);
 });
 
-test('compileExport: same questions+slug, different label/generatedAt → same hash', async () => {
+test('mintBankVersion: same questions+slug, different label/version/history → same mint', async () => {
+  // Only the published content is identity: renaming a bank, or the identifier
+  // it happened to carry before, does not mint a different version.
   const bankA = { ...exportBank, label: 'Label A' };
-  const bankB = { ...exportBank, label: 'Label B' };
+  const bankB = {
+    ...exportBank,
+    label: 'Label B',
+    version: 'something-else',
+    history: [],
+  };
   const [a, b] = await Promise.all([
-    compileExport(bankA),
-    compileExport(bankB),
+    mintBankVersion(bankA),
+    mintBankVersion(bankB),
   ]);
-  assert.equal(a.hash, b.hash);
+  assert.equal(a, b);
 });
 
-test('compileExport: different questions → different hash', async () => {
+test('mintBankVersion: different questions → different mint', async () => {
   const bankA = { ...exportBank };
   const bankB = {
     ...exportBank,
@@ -317,23 +346,23 @@ test('compileExport: different questions → different hash', async () => {
     ],
   };
   const [a, b] = await Promise.all([
-    compileExport(bankA),
-    compileExport(bankB),
+    mintBankVersion(bankA),
+    mintBankVersion(bankB),
   ]);
-  assert.notEqual(a.hash, b.hash);
+  assert.notEqual(a, b);
 });
 
-test('compileExport: different slug → different hash', async () => {
+test('mintBankVersion: different slug → different mint', async () => {
   const bankA = { ...exportBank, slug: 'slug-a' };
   const bankB = { ...exportBank, slug: 'slug-b' };
   const [a, b] = await Promise.all([
-    compileExport(bankA),
-    compileExport(bankB),
+    mintBankVersion(bankA),
+    mintBankVersion(bankB),
   ]);
-  assert.notEqual(a.hash, b.hash);
+  assert.notEqual(a, b);
 });
 
-test('compileExport: outcomeOptions affect the hash', async () => {
+test('mintBankVersion: outcomeOptions affect the mint', async () => {
   const bankA = {
     ...exportBank,
     outcomeOptions: [{ id: 'fail', wording: 'Fail', severity: 100 }],
@@ -349,13 +378,13 @@ test('compileExport: outcomeOptions affect the hash', async () => {
     ],
   };
   const [a, b] = await Promise.all([
-    compileExport(bankA),
-    compileExport(bankB),
+    mintBankVersion(bankA),
+    mintBankVersion(bankB),
   ]);
-  assert.notEqual(a.hash, b.hash);
+  assert.notEqual(a, b);
 });
 
-test('compileExport: defaultOutcomeId affects the hash', async () => {
+test('mintBankVersion: defaultOutcomeId affects the mint', async () => {
   const bankA = {
     ...exportBank,
     outcomeOptions: [{ id: 'good', wording: 'Good Outcome', severity: 0 }],
@@ -367,10 +396,10 @@ test('compileExport: defaultOutcomeId affects the hash', async () => {
     defaultOutcomeId: null,
   };
   const [a, b] = await Promise.all([
-    compileExport(bankA),
-    compileExport(/** @type {any} */ (bankB)),
+    mintBankVersion(bankA),
+    mintBankVersion(/** @type {any} */ (bankB)),
   ]);
-  assert.notEqual(a.hash, b.hash);
+  assert.notEqual(a, b);
 });
 
 test('compileExport: carries defaultOutcomeId in the envelope', async () => {
@@ -383,7 +412,7 @@ test('compileExport: carries defaultOutcomeId in the envelope', async () => {
   assert.equal(result.defaultOutcomeId, 'good');
 });
 
-test('compileExport: key order in question objects does not affect hash', async () => {
+test('mintBankVersion: key order in question objects does not affect the mint', async () => {
   const q = exportBank.questions[0];
   const qReordered = {
     text: q.text,
@@ -399,10 +428,10 @@ test('compileExport: key order in question objects does not affect hash', async 
     questions: [qReordered, exportBank.questions[1]],
   };
   const [a, b] = await Promise.all([
-    compileExport(bankA),
-    compileExport(bankB),
+    mintBankVersion(bankA),
+    mintBankVersion(bankB),
   ]);
-  assert.equal(a.hash, b.hash);
+  assert.equal(a, b);
 });
 
 test('compileExport: excludes computeOutcome, disallowFreeFormRemediation, eligibleGroups', async () => {
@@ -492,7 +521,7 @@ test('compileExport: labelIds are omitted when absent or empty', async () => {
   assert.ok(!('labelIds' in result.questions[1]));
 });
 
-test('compileExport: labelIds on questions affect the hash', async () => {
+test('mintBankVersion: labelIds on questions affect the mint', async () => {
   const bankA = { ...exportBank };
   const bankB = {
     ...exportBank,
@@ -502,10 +531,10 @@ test('compileExport: labelIds on questions affect the hash', async () => {
     ],
   };
   const [a, b] = await Promise.all([
-    compileExport(bankA),
-    compileExport(bankB),
+    mintBankVersion(bankA),
+    mintBankVersion(bankB),
   ]);
-  assert.notEqual(a.hash, b.hash);
+  assert.notEqual(a, b);
 });
 
 test('compileExport: includes labels table in envelope', async () => {
@@ -532,6 +561,7 @@ test('compileExport: absent optional question fields are emitted as null', async
   const minimalBank = {
     label: 'L',
     slug: 's',
+    version: 'v1',
     eligibleGroups: [],
     questions: [
       {
@@ -584,7 +614,7 @@ test('compileExport: deprecated true is preserved', async () => {
   assert.equal(result.questions[0].deprecated, true);
 });
 
-test('compileExport: empty questions array produces deterministic hash', async () => {
+test('mintBankVersion: empty questions array mints deterministically', async () => {
   const emptyBank = {
     label: 'L',
     slug: 'empty',
@@ -592,141 +622,109 @@ test('compileExport: empty questions array produces deterministic hash', async (
     questions: [],
   };
   const [a, b] = await Promise.all([
-    compileExport(emptyBank),
-    compileExport(emptyBank),
+    mintBankVersion(emptyBank),
+    mintBankVersion(emptyBank),
   ]);
-  assert.equal(a.hash, b.hash);
-  assert.equal(a.questions.length, 0);
+  assert.equal(a, b);
 });
 
 // ── buildPublishArtifacts ───────────────────────────────────────────────────
 
-const pubEnvelope = {
+const pubBank = {
   slug: 'test-review',
   label: 'Test Review',
-  generatedAt: '2026-01-10T09:00:00.000Z',
-  hash: 'sha256:' + 'a'.repeat(64),
+  version: 'v2',
+  history: [
+    { version: 'v1', generatedAt: '2025-11-01T00:00:00.000Z' },
+    { version: 'v2', generatedAt: '2026-01-10T09:00:00.000Z' },
+  ],
   questions: [],
 };
 
-const pubEnvelopeWithLabels = {
-  ...pubEnvelope,
-  labels: [{ id: 'lbl-a', name: 'Alpha', color: '#ff0000' }],
+const pubEnvelope = {
+  slug: 'test-review',
+  label: 'Test Review',
+  generatedAt: '2026-03-02T14:30:00.000Z',
+  version: 'v3',
+  questions: [],
 };
 
-test('buildPublishArtifacts: null manifest publishes a no-label envelope', () => {
-  const json = JSON.stringify(pubEnvelope, null, 2);
-  assert.deepEqual(buildPublishArtifacts(pubEnvelope, null), {
-    versionedJson: json,
-    currentJson: json,
-    manifest: {
-      slug: pubEnvelope.slug,
-      versions: [
-        { hash: pubEnvelope.hash, generatedAt: pubEnvelope.generatedAt },
-      ],
-    },
-    isNew: true,
-  });
+test('buildPublishArtifacts: a new version writes its copy and advances the bank', () => {
+  const result = buildPublishArtifacts(pubEnvelope, pubBank);
+
+  assert.equal(result.isNew, true);
+  assert.equal(result.versionedJson, JSON.stringify(pubEnvelope, null, 2));
+  const bank = JSON.parse(result.bankJson);
+  assert.equal(bank.version, 'v3');
+  assert.deepEqual(bank.history, [
+    ...pubBank.history,
+    { version: 'v3', generatedAt: pubEnvelope.generatedAt },
+  ]);
 });
 
-test('buildPublishArtifacts: an empty manifest publishes labels only in current JSON', () => {
-  const { labels: _labels, ...versionedEnvelope } = pubEnvelopeWithLabels;
-  assert.deepEqual(
-    buildPublishArtifacts(pubEnvelopeWithLabels, {
-      slug: pubEnvelope.slug,
-      versions: [],
-    }),
-    {
-      versionedJson: JSON.stringify(versionedEnvelope, null, 2),
-      currentJson: JSON.stringify(pubEnvelopeWithLabels, null, 2),
-      manifest: {
-        slug: pubEnvelope.slug,
-        versions: [
-          { hash: pubEnvelope.hash, generatedAt: pubEnvelope.generatedAt },
-        ],
-      },
-      isNew: true,
-    }
+test('buildPublishArtifacts: a bank with no history starts one', () => {
+  const { history: _none, ...unpublished } = pubBank;
+  const result = buildPublishArtifacts(pubEnvelope, unpublished);
+
+  assert.equal(result.isNew, true);
+  assert.deepEqual(JSON.parse(result.bankJson).history, [
+    { version: 'v3', generatedAt: pubEnvelope.generatedAt },
+  ]);
+});
+
+test('buildPublishArtifacts: labels are published only in the bank, not the version', () => {
+  // Label name/color is presentation, resolved from the current bank so a
+  // rename applies across every historical report; the per-question labelIds
+  // stay frozen in the versioned copy.
+  const labels = [{ id: 'lbl-a', name: 'Alpha', color: '#ff0000' }];
+  const result = buildPublishArtifacts(
+    { ...pubEnvelope, labels },
+    { ...pubBank, labels }
   );
+
+  assert.ok(result.versionedJson);
+  assert.ok(!('labels' in JSON.parse(result.versionedJson)));
+  assert.deepEqual(JSON.parse(result.bankJson).labels, labels);
 });
 
-test('buildPublishArtifacts: an existing hash republishes current JSON only', () => {
-  const version = {
-    hash: pubEnvelope.hash,
-    generatedAt: pubEnvelope.generatedAt,
-  };
-  assert.deepEqual(
-    buildPublishArtifacts(pubEnvelope, {
-      slug: pubEnvelope.slug,
-      versions: [version],
-    }),
-    {
-      versionedJson: null,
-      currentJson: JSON.stringify(pubEnvelope, null, 2),
-      manifest: { slug: pubEnvelope.slug, versions: [version] },
-      isNew: false,
-    }
+test('buildPublishArtifacts: a version already in the history re-publishes nothing', () => {
+  const result = buildPublishArtifacts(
+    { ...pubEnvelope, version: 'v2' },
+    pubBank
   );
+
+  assert.equal(result.isNew, false);
+  assert.equal(result.versionedJson, null);
+  const bank = JSON.parse(result.bankJson);
+  assert.equal(bank.version, 'v2');
+  assert.deepEqual(bank.history, pubBank.history);
 });
 
-test('buildPublishArtifacts: a new hash follows two prior versions without mutating them', () => {
-  const existing = {
-    slug: pubEnvelope.slug,
-    versions: [
-      {
-        hash: 'sha256:' + 'b'.repeat(64),
-        generatedAt: '2026-01-01T00:00:00.000Z',
-      },
-      {
-        hash: 'sha256:' + 'c'.repeat(64),
-        generatedAt: '2026-02-01T00:00:00.000Z',
-      },
-    ],
-  };
-  const before = structuredClone(existing);
-  const result = buildPublishArtifacts(pubEnvelope, existing);
-  assert.deepEqual(result, {
-    versionedJson: JSON.stringify(pubEnvelope, null, 2),
-    currentJson: JSON.stringify(pubEnvelope, null, 2),
-    manifest: {
-      slug: pubEnvelope.slug,
-      versions: [
-        ...existing.versions,
-        { hash: pubEnvelope.hash, generatedAt: pubEnvelope.generatedAt },
-      ],
-    },
-    isNew: true,
-  });
-  assert.deepEqual(existing, before);
+test('buildPublishArtifacts: does not mutate the bank it was handed', () => {
+  const bank = structuredClone(pubBank);
+  buildPublishArtifacts(pubEnvelope, bank);
+  assert.deepEqual(bank, pubBank);
 });
 
-test('publishBankEffect writes byte-identical artifacts from the existing compiler path', async () => {
+test('publishBankEffect mints a new version for the edited bank and writes through the compiler path', async () => {
   /** @type {any[]} */
   const writes = [];
-  const expectedEnvelope = await compileExport(/** @type {any} */ (exportBank));
-  const expected = buildPublishArtifacts(expectedEnvelope, null);
-  const RealDate = Date;
-  /** @type {any} */ (globalThis).Date = class extends RealDate {
-    constructor() {
-      super(expectedEnvelope.generatedAt);
+  const minted = await mintBankVersion(/** @type {any} */ (exportBank));
+
+  const artifacts = await publishBankEffect(
+    /** @type {any} */ (exportBank),
+    async (payload) => {
+      writes.push(payload);
     }
-  };
-  let artifacts;
-  try {
-    artifacts = await publishBankEffect(
-      /** @type {any} */ (exportBank),
-      null,
-      async (payload) => {
-        writes.push(payload);
-      }
-    );
-  } finally {
-    /** @type {any} */ (globalThis).Date = RealDate;
-  }
+  );
 
   assert.equal(writes.length, 1);
   assert.equal(writes[0], artifacts);
-  assert.equal(artifacts.currentJson, expected.currentJson);
-  assert.equal(artifacts.versionedJson, expected.versionedJson);
-  assert.deepEqual(artifacts.manifest, expected.manifest);
+  assert.equal(artifacts.isNew, true);
+  assert.ok(artifacts.versionedJson);
+  const versioned = JSON.parse(artifacts.versionedJson);
+  assert.equal(versioned.version, minted);
+  const bank = JSON.parse(artifacts.bankJson);
+  assert.equal(bank.version, minted);
+  assert.equal(bank.history.at(-1).version, minted);
 });

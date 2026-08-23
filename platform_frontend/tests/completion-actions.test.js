@@ -139,7 +139,7 @@ test('completionPatch freezes outcome and effective columns in the lifecycle PAT
     captureGroups: [],
     generalQuestions: [],
     computeOutcome: () => ({ outcome: 'fail' }),
-    exportHash: 'sha256:v1',
+    bankVersion: 'sha256:v1',
   });
 
   assert.equal(patch?.status, CASE_STATUS.ACTIONS_IN_PROGRESS);
@@ -176,7 +176,7 @@ test('completionPatch chooses the transition from the catalogue CaseMachine stam
     captureGroups: [],
     generalQuestions: [],
     computeOutcome: () => ({ outcome: 'fail' }),
-    exportHash: null,
+    bankVersion: null,
   });
 
   assert.equal(
@@ -205,7 +205,7 @@ test('completionPatch atomically clears hold fields when either transition leave
     captureGroups: [],
     generalQuestions: [],
     computeOutcome: () => ({ outcome: 'pass' }),
-    exportHash: null,
+    bankVersion: null,
   };
 
   const sendActions = completionPatch({
@@ -246,7 +246,7 @@ test('completionPatch rejects incomplete or unauthorised completion and uses fin
     captureGroups: [],
     generalQuestions: [],
     computeOutcome: () => ({ outcome: 'pass' }),
-    exportHash: null,
+    bankVersion: null,
   };
   assert.equal(completionPatch(base), null);
   assert.equal(completionPatch({ ...base, machine: null }), null);
@@ -563,7 +563,7 @@ test('completionControl: no Responsible Party names the gate instead of hiding i
   };
   const patchInput = {
     computeOutcome: () => ({ outcome: /** @type {string} */ ('fail') }),
-    exportHash: null,
+    bankVersion: null,
   };
   const unset = { ...CASE_ROW, responsibleParty: '' };
 
@@ -626,7 +626,7 @@ test('completionPatch: refuses the final close while a remediation row is unreso
       captureGroups: [],
       generalQuestions: [],
       computeOutcome: () => ({ outcome: 'pass' }),
-      exportHash: null,
+      bankVersion: null,
     }),
     null
   );
@@ -654,7 +654,7 @@ test('free-form remediation alone sends the Case down the actions path', () => {
     captureGroups: [],
     generalQuestions: [],
     computeOutcome: () => ({ outcome: 'fail' }),
-    exportHash: null,
+    bankVersion: null,
   });
 
   assert.equal(patch?.status, CASE_STATUS.ACTIONS_IN_PROGRESS);
@@ -711,7 +711,7 @@ test('whitespace-only free-form remediation is not remediation', () => {
       captureGroups: [],
       generalQuestions: [],
       computeOutcome: () => ({ outcome: 'fail' }),
-      exportHash: null,
+      bankVersion: null,
     }),
     null
   );
@@ -750,7 +750,7 @@ test('remediation on a Question that has left the catalogue does not fork the Ca
     const patch = completionPatch({
       ...base,
       computeOutcome: () => ({ outcome: 'fail' }),
-      exportHash: null,
+      bankVersion: null,
     });
     assert.equal(patch?.status, 'Completed');
     assert.equal(patch?.hadRemediation, false);
@@ -887,7 +887,7 @@ test('completionControl: one failure needing remediation still asks, whatever th
     completionPatch({
       ...mixed,
       computeOutcome: () => ({ outcome: 'fail' }),
-      exportHash: null,
+      bankVersion: null,
     }),
     null,
     'and nothing is written while it is outstanding'
@@ -899,7 +899,7 @@ test('completionPatch: a Case needing no remediation completes with no Responsib
     ...preSend({ q1: { value: 'No', remediationRequired: 'no' } }),
     caseRow: { ...CASE_ROW, responsibleParty: '' },
     computeOutcome: () => ({ outcome: 'fail' }),
-    exportHash: null,
+    bankVersion: null,
   });
   assert.equal(patch?.status, 'Completed');
   assert.equal(patch?.hadRemediation, false);
@@ -923,7 +923,7 @@ test('completionPatch: writes nothing while a failed Question is undecided', () 
     completionPatch({
       ...preSend({ q1: { value: 'No' } }),
       computeOutcome: () => ({ outcome: 'fail' }),
-      exportHash: null,
+      bankVersion: null,
     }),
     null
   );
@@ -931,7 +931,7 @@ test('completionPatch: writes nothing while a failed Question is undecided', () 
   const decided = completionPatch({
     ...preSend({ q1: { value: 'No', remediationRequired: 'no' } }),
     computeOutcome: () => ({ outcome: 'fail' }),
-    exportHash: null,
+    bankVersion: null,
   });
   assert.equal(decided?.status, 'Completed');
   assert.equal(decided?.hadRemediation, false);
@@ -968,7 +968,7 @@ test('the close path is untouched by the pre-send decision gate', () => {
       captureGroups: [],
       generalQuestions: [],
       computeOutcome: () => ({ outcome: 'pass' }),
-      exportHash: null,
+      bankVersion: null,
     }),
     { status: 'Completed' }
   );
@@ -1047,7 +1047,7 @@ test('completionControl: the remediation decision is still asked for first', () 
 test('completionPatch: writes nothing while a required capture field is empty', () => {
   const patchInput = {
     computeOutcome: () => ({ outcome: /** @type {const} */ ('fail') }),
-    exportHash: null,
+    bankVersion: null,
   };
   assert.equal(
     completionPatch({ ...withCapture({ origin: 'Sales' }), ...patchInput }),
@@ -1155,7 +1155,7 @@ test('completionControl: a Case Type declaring no General Questions is gated exa
 test('completionPatch: writes nothing while a required General Question is unanswered', () => {
   const patchInput = {
     computeOutcome: () => ({ outcome: /** @type {const} */ ('pass') }),
-    exportHash: null,
+    bankVersion: null,
   };
   assert.equal(
     completionPatch({ ...withGeneral({}), ...patchInput }),

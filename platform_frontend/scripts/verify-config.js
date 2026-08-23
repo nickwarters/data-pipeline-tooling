@@ -28,7 +28,14 @@ import { isVoidReasonKey, VOID_REASONS } from '../src/lib/void-reasons.js';
 import { ACTION_CENTRE_REASONS } from '../src/services/action-centre-model.js';
 import { reviewerResponseOptions } from '../src/lib/response-options.js';
 import { CASE_TYPES, loadCaseTypeConfig } from '../case-types/manifest.js';
-import { classifyBankArtifact } from '../src/lib/bank-artifacts.js';
+import {
+  classifyBankArtifact,
+  versionedExportName,
+} from '../src/lib/bank-artifacts.js';
+import {
+  isBankVersionIdentifier,
+  publishedContent,
+} from '../src/lib/bank-version.js';
 import { resolveRelative } from './module-graph.js';
 
 /** @typedef {import('./verify_build.js').Failure} Failure */
@@ -910,13 +917,23 @@ function checkVoidReasons(slug, file, config) {
 }
 
 /**
- * Check every Question Bank artifact on disk, then check that every registry
- * `bank` thunk names one that exists.
+ * Check every Question Bank artifact on disk, hold every bank to the version it
+ * declares, then check that every registry `bank` thunk names one that exists.
  *
  * The artifacts are found by scanning the directory rather than by walking the
  * registry, so an orphaned or half-renamed file is still parsed. The cross-check
  * runs one direction only — registry to disk — because the manifest explicitly
  * allows a Case Type registered before its bank artifact exists.
+ *
+ * The version check is the one that matters most and is the easiest to get
+ * wrong by hand. A bank **declares** its version; nothing recomputes it, and a
+ * Case is stamped with the declaration as-is. So the gate asks whether the
+ * declaration is true: the version it names is published on disk, and the
+ * published copy still holds what the bank holds now — a bank edited without
+ * declaring a new version would otherwise freeze every Case completed against
+ * it on content the Reviewer never saw. The bank's `history` is held to the
+ * same standard in both directions: every version it records is on disk, and
+ * every version on disk is recorded, so the timeline is the whole timeline.
  *
  * @param {{
  *   artifacts?: string[],
@@ -935,9 +952,14 @@ export function checkBankArtifacts(options = {}) {
 
   /** @type {Failure[]} */
   const failures = [];
+  /** @type {ParsedBankArtifact[]} */
+  const parsed = [];
   for (const file of artifacts) {
-    failures.push(...checkOneBank(file, readText));
+    const result = checkOneBank(file, readText);
+    failures.push(...result.failures);
+    if (result.parsed) parsed.push(result.parsed);
   }
+  failures.push(...checkDeclaredVersions(parsed));
 
   const present = new Set(artifacts);
   for (const { slug, specifier, resolved } of registryBanks(caseTypes)) {
@@ -1040,9 +1062,17 @@ function bankArtifacts() {
 }
 
 /**
+ * @typedef {{
+ *   file: string,
+ *   artifact: import('../src/lib/bank-artifacts.js').BankArtifact,
+ *   bank: any
+ * }} ParsedBankArtifact
+ */
+
+/**
  * @param {string} file
  * @param {(rel: string) => string} readText
- * @returns {Failure[]}
+ * @returns {{ failures: Failure[], parsed: ParsedBankArtifact | null }}
  */
 function checkOneBank(file, readText) {
   /** @type {Failure[]} */
@@ -1054,9 +1084,9 @@ function checkOneBank(file, readText) {
   const artifact = classifyBankArtifact(filename);
   if (!artifact) {
     fail(
-      'is not a name this directory has a meaning for — a bank is `{slug}.txt` and a published version `{slug}.<64 hex digits>.txt`'
+      'is not a name this directory has a meaning for — a bank is `{slug}.txt` and a published version `{slug}.<version>.txt`, where a version is lower-case letters, digits, `-` and `_`'
     );
-    return failures;
+    return { failures, parsed: null };
   }
 
   /** @type {any} */
@@ -1065,13 +1095,14 @@ function checkOneBank(file, readText) {
     bank = JSON.parse(readText(file));
   } catch (error) {
     fail(`is not valid JSON — ${messageOf(error)}`);
-    return failures;
+    return { failures, parsed: null };
   }
 
   if (bank === null || typeof bank !== 'object' || Array.isArray(bank)) {
     fail('does not hold a JSON object');
-    return failures;
+    return { failures, parsed: null };
   }
+  const parsed = { file, artifact, bank };
 
   const expectedSlug = artifact.slug;
   if (!isNonEmptyString(bank.slug)) {
@@ -1083,25 +1114,38 @@ function checkOneBank(file, readText) {
   }
   if (!isNonEmptyString(bank.label)) fail('declares no `label`');
 
-  // A published version is found by name, so its `hash` field and its filename
-  // cannot disagree — the app would otherwise serve content under an identity
-  // that never named it.
-  if (artifact.kind !== 'bank') {
-    if (!isNonEmptyString(bank.hash)) {
-      fail('is an export envelope but declares no `hash`');
-    } else if (bank.hash !== artifact.segment) {
+  if (artifact.kind === 'bank') {
+    // The bank declares its version; that declaration is what a Case is
+    // stamped with, so it has to be there and has to be able to name a file.
+    if (bank.version === undefined) {
       fail(
-        `declares hash "${bank.hash}" but its filename says "${artifact.segment}" — a version is found by name, so the two cannot disagree`
+        'declares no `version` — a Case completed against it would be stamped with nothing; declare the version it is published as (`node scripts/publish-bank.js` mints one)'
+      );
+    } else if (!isBankVersionIdentifier(bank.version)) {
+      fail(
+        `declares version ${JSON.stringify(bank.version)}, which cannot name a file — a version is lower-case letters, digits, \`-\` and \`_\``
+      );
+    }
+    failures.push(...checkHistoryShape(file, bank));
+  } else {
+    // A published version is found by name, so its `version` field and its
+    // filename cannot disagree — the app would otherwise serve content under
+    // an identity that never named it.
+    if (!isNonEmptyString(bank.version)) {
+      fail('is a published version but declares no `version`');
+    } else if (bank.version !== artifact.segment) {
+      fail(
+        `declares version "${bank.version}" but its filename says "${artifact.segment}" — a version is found by name, so the two cannot disagree`
       );
     }
     if (!isNonEmptyString(bank.generatedAt)) {
-      fail('is an export envelope but declares no `generatedAt`');
+      fail('is a published version but declares no `generatedAt`');
     }
   }
 
   if (!Array.isArray(bank.questions)) {
     fail('declares no `questions` array');
-    return failures;
+    return { failures, parsed };
   }
 
   /** @type {Set<string>} */
@@ -1124,7 +1168,159 @@ function checkOneBank(file, readText) {
       );
     }
   }
+  return { failures, parsed };
+}
+
+/**
+ * The shape of a bank's `history`: an array of `{ version, generatedAt }`
+ * entries, oldest first, whose last entry is the version the bank declares.
+ * What those entries name is checked across files in `checkDeclaredVersions`.
+ *
+ * @param {string} file
+ * @param {any} bank
+ * @returns {Failure[]}
+ */
+function checkHistoryShape(file, bank) {
+  /** @type {Failure[]} */
+  const failures = [];
+  /** @param {string} message */
+  const fail = (message) => failures.push({ kind: 'bank', file, message });
+
+  if (bank.history === undefined) {
+    fail(
+      'declares no `history` — the ordered list of every version it has been published as, oldest first, the current one last'
+    );
+    return failures;
+  }
+  if (!Array.isArray(bank.history)) {
+    fail('declares a `history` that is not an array');
+    return failures;
+  }
+  bank.history.forEach((/** @type {any} */ entry, /** @type {number} */ i) => {
+    if (!entry || typeof entry !== 'object') {
+      fail(`history entry ${i} is not an object`);
+      return;
+    }
+    if (!isBankVersionIdentifier(entry.version)) {
+      fail(
+        `history entry ${i} declares version ${JSON.stringify(entry.version)}, which is not a version identifier`
+      );
+    }
+    if (!isNonEmptyString(entry.generatedAt)) {
+      fail(`history entry ${i} declares no \`generatedAt\``);
+    }
+  });
+  const last = bank.history[bank.history.length - 1];
+  if (
+    isBankVersionIdentifier(bank.version) &&
+    (!last || last.version !== bank.version)
+  ) {
+    fail(
+      `declares version "${bank.version}" but its history ends at ${last ? `"${last.version}"` : 'nothing'} — the current version is the last entry of the history`
+    );
+  }
   return failures;
+}
+
+/**
+ * Hold every bank to the version it declares, across the files on disk.
+ *
+ * - The declared version is published, and the published copy holds what the
+ *   bank holds now. That second half is the one a hand-maintained identifier
+ *   invites getting wrong — edit the bank, forget the version — and it is the
+ *   one a Case would suffer for, frozen against content that is not what was
+ *   reviewed.
+ * - Every version the history records is on disk, and every published version
+ *   on disk is in the history, so the history is the timeline and not a
+ *   partial one.
+ *
+ * Content is compared over what a version publishes (`publishedContent`), so a
+ * reformatting of either file changes nothing.
+ *
+ * @param {ParsedBankArtifact[]} parsed every artifact that parsed to an object
+ * @returns {Failure[]}
+ */
+function checkDeclaredVersions(parsed) {
+  /** @type {Failure[]} */
+  const failures = [];
+  /** @type {Map<string, ParsedBankArtifact>} */
+  const versionsByName = new Map();
+  for (const entry of parsed) {
+    if (entry.artifact.kind === 'versioned-export') {
+      versionsByName.set(
+        entry.file.slice(entry.file.lastIndexOf('/') + 1),
+        entry
+      );
+    }
+  }
+
+  for (const { file, artifact, bank } of parsed) {
+    if (artifact.kind !== 'bank') continue;
+    /** @param {string} message */
+    const fail = (message) => failures.push({ kind: 'bank', file, message });
+    const slug = artifact.slug;
+
+    if (isBankVersionIdentifier(bank.version)) {
+      const copy = versionsByName.get(versionedExportName(slug, bank.version));
+      if (!copy) {
+        fail(
+          `declares version "${bank.version}" but no published copy \`${versionedExportName(slug, bank.version)}\` is on disk — a Case completed against it would be stamped with a version nothing serves; run \`node scripts/publish-bank.js\``
+        );
+      } else if (
+        Array.isArray(bank.questions) &&
+        Array.isArray(copy.bank.questions) &&
+        !publishedContentMatches(bank, copy.bank)
+      ) {
+        fail(
+          `has been edited since version "${bank.version}" was published — a Case completed against it would freeze on the published content, not on what was reviewed; declare a new version (\`node scripts/publish-bank.js\` mints one and writes its copy)`
+        );
+      }
+    }
+
+    if (Array.isArray(bank.history)) {
+      /** @type {Set<string>} */
+      const recorded = new Set();
+      for (const entry of bank.history) {
+        if (!entry || !isBankVersionIdentifier(entry.version)) continue;
+        recorded.add(entry.version);
+        if (!versionsByName.has(versionedExportName(slug, entry.version))) {
+          fail(
+            `history records version "${entry.version}" but no published copy \`${versionedExportName(slug, entry.version)}\` is on disk`
+          );
+        }
+      }
+      for (const copy of parsed) {
+        if (
+          copy.artifact.kind === 'versioned-export' &&
+          copy.artifact.slug === slug &&
+          copy.artifact.segment !== null &&
+          !recorded.has(copy.artifact.segment)
+        ) {
+          fail(
+            `history does not record version "${copy.artifact.segment}", which is published on disk — the history is the timeline, so every published version belongs in it`
+          );
+        }
+      }
+    }
+  }
+  return failures;
+}
+
+/**
+ * @param {any} bank
+ * @param {any} published
+ * @returns {boolean}
+ */
+function publishedContentMatches(bank, published) {
+  const expected = publishedContent(bank);
+  return (
+    JSON.stringify(expected) ===
+    JSON.stringify({
+      questions: published.questions,
+      outcomeOptions: published.outcomeOptions ?? [],
+      defaultOutcomeId: published.defaultOutcomeId ?? null,
+    })
+  );
 }
 
 /**

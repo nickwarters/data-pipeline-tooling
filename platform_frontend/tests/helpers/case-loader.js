@@ -22,7 +22,7 @@ export function makeLoader({
     client: /** @type {any} */ ({
       getCase: async () => loadedRow,
       getCurrentUser: async () => ({ id: 'u1', displayName: 'User 1' }),
-      getExportHash: async () => null,
+      getBankVersion: async () => null,
       getVersionedExport: async () => null,
       resolveUsers: async () => ({}),
       ...client,

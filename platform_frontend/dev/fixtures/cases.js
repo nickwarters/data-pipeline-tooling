@@ -521,7 +521,7 @@ export const cases = [
   },
   // ── as-reviewed Question Bank version demo cases ────────────
   // Both were completed against a Question Bank version that has since been
-  // superseded, and each stamps that version's hash. Opening either one shows
+  // superseded, and each stamps that version's identifier. Opening either one shows
   // the questions as they were reviewed, not today's 49 — which is why their
   // Answers name only the ids their own frozen version carries.
   {

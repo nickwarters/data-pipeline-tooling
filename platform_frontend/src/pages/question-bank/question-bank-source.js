@@ -43,9 +43,24 @@ import { QUESTION_BANK_IMPORTERS } from '../../../case-types/manifest.js';
  */
 
 /**
+ * One entry in a bank's published timeline: a version identifier and when that
+ * version was published. Oldest first; the last entry is the current version.
+ *
+ * @typedef {{ version: string, generatedAt: string }} BankHistoryEntry
+ */
+
+/**
+ * `version` is the identifier of the bank's current published version — what a
+ * Case is stamped with at the reportable milestone — and `history` the ordered
+ * list of every version it has been published as. Both are hand-maintained
+ * alongside the content (see `lib/bank-version.js`); a bank in the editor may
+ * not carry them yet.
+ *
  * @typedef {{
  *   label: string,
  *   slug: string,
+ *   version?: string,
+ *   history?: BankHistoryEntry[],
  *   eligibleGroups?: string[],
  *   labels?: Label[],
  *   outcomeOptions?: OutcomeOption[],
@@ -62,6 +77,10 @@ export function normaliseQuestionBank(bank) {
   return {
     label: bank.label,
     slug: bank.slug,
+    ...(bank.version !== undefined ? { version: bank.version } : {}),
+    ...(bank.history !== undefined
+      ? { history: structuredClone(bank.history) }
+      : {}),
     labels: structuredClone(bank.labels ?? []),
     outcomeOptions: structuredClone(bank.outcomeOptions ?? []),
     defaultOutcomeId: bank.defaultOutcomeId,

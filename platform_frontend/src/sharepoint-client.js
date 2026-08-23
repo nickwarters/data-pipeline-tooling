@@ -409,15 +409,18 @@
  */
 
 /**
- * Data-only snapshot of a versioned Question Bank export (`{slug}.{hash}.json`).
- * Contains everything from the compile-time bank except the labels presentation
- * table (label name/color is resolved from the current `{slug}.json` instead).
+ * Data-only snapshot of one published Question Bank version
+ * (`case-types/banks/{slug}.{version}.txt`). Contains everything from the
+ * compile-time bank except the labels presentation table (label name/color is
+ * resolved from the current `{slug}.txt` instead). `version` is the identifier
+ * the file is named by and a Case row is stamped with — opaque, never
+ * recomputed.
  *
  * @typedef {{
  * slug: string,
  * label: string,
  * generatedAt: string,
- * hash: string,
+ * version: string,
  * questions: Array<{
  * id: string,
  * text: string,
@@ -468,8 +471,8 @@
  * searchPeople: (query: string) => Promise<PersonResult[]>,
  * resolveUsers: (accountNames: string[]) => Promise<Record<string, string | null>>,
  * resolveManagers: (accountNames: string[]) => Promise<Record<string, string | null>>,
- * getExportHash: (slug: string) => Promise<string | null>,
- * getVersionedExport: (slug: string, hash: string) => Promise<VersionedExport | null>
+ * getBankVersion: (slug: string) => Promise<string | null>,
+ * getVersionedExport: (slug: string, version: string) => Promise<VersionedExport | null>
  * }} SharePointClient
  */
 

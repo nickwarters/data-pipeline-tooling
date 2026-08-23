@@ -7,7 +7,7 @@ import {
   bankArtifactName as bankName,
   versionedExportName as versionedName,
 } from '../lib/bank-artifacts.js';
-import { bankVersionHash } from '../lib/bank-version.js';
+import { declaredBankVersion } from '../lib/bank-version.js';
 import { loadBank } from '../../case-types/load-bank.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
@@ -27,7 +27,7 @@ export class MockSharePointClient {
    * personas: Record<string, { groups: string[], userId?: string, displayName?: string }>,
    * persona?: string,
    * people?: DirectoryPerson[],
-   * exportHashes?: Record<string, string>,
+   * bankVersions?: Record<string, string>,
    * versionedExports?: Record<string, VersionedExport>,
    * lists?: Record<string, CaseRow[]>,
    * roadmapItems?: RoadmapItem[],
@@ -38,7 +38,7 @@ export class MockSharePointClient {
     personas,
     persona = 'reviewer',
     people = [],
-    exportHashes = /** @type {Record<string, string>} */ ({}),
+    bankVersions = /** @type {Record<string, string>} */ ({}),
     versionedExports = /** @type {Record<string, VersionedExport>} */ ({}),
     lists = /** @type {Record<string, CaseRow[]>} */ ({}),
     roadmapItems = [],
@@ -48,7 +48,7 @@ export class MockSharePointClient {
     this._personas = personas;
     this._persona = persona;
     this._people = people.slice();
-    this._exportHashes = exportHashes;
+    this._bankVersions = bankVersions;
     this._versionedExports = versionedExports;
     this._roadmapItems = roadmapItems.map((item) => ({
       ...item,
@@ -395,38 +395,42 @@ export class MockSharePointClient {
 
   /**
    * The version identity of the Case Type's current Question Bank — what
-   * completion stamps onto a Case row.
+   * completion stamps onto a Case row: the `version` the bank artifact
+   * declares, read and never computed.
    *
    * Falls through to the bank artifact on disk, because there is no such thing
    * as a mock Question Bank: the artifacts ship with the code and are the same
-   * files in the dev loop and in a deploy. A configured hash wins, so a test
-   * can still say what the current version is without an artifact existing.
+   * files in the dev loop and in a deploy. A configured version wins, so a
+   * test can still say what the current version is without an artifact
+   * existing.
    *
    * @param {string} slug
    * @returns {Promise<string | null>}
    */
-  async getExportHash(slug) {
-    if (slug in this._exportHashes) return this._exportHashes[slug];
+  async getBankVersion(slug) {
+    if (slug in this._bankVersions) return this._bankVersions[slug];
     try {
-      return await bankVersionHash(await this._readArtifact(bankName(slug)));
+      return declaredBankVersion(await this._readArtifact(bankName(slug)));
     } catch {
       return null;
     }
   }
 
   /**
-   * One published version, by the hash a Case row stamped. Configured versions
-   * win; otherwise the artifact on disk answers, exactly as it does in a
-   * deploy.
+   * One published version, by the identifier a Case row stamped. Configured
+   * versions win; otherwise the artifact on disk answers, exactly as it does
+   * in a deploy.
    *
    * @param {string} slug
-   * @param {string} hash
+   * @param {string} version
    * @returns {Promise<VersionedExport | null>}
    */
-  async getVersionedExport(slug, hash) {
-    if (hash in this._versionedExports) return this._versionedExports[hash];
+  async getVersionedExport(slug, version) {
+    if (version in this._versionedExports) {
+      return this._versionedExports[version];
+    }
     try {
-      return await this._readArtifact(versionedName(slug, hash));
+      return await this._readArtifact(versionedName(slug, version));
     } catch {
       return null;
     }

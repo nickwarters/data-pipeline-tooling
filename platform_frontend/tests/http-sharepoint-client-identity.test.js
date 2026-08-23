@@ -520,7 +520,7 @@ test('HttpSharePointClient: profile resolution reads again after an in-flight re
   );
 });
 
-// --- getExportHash ---
+// --- getBankVersion ---
 
 test('HttpSharePointClient: getCurrentUserGroups falls back from Title to LoginName to empty string', async () => {
   const { fetch } = makeFetch([

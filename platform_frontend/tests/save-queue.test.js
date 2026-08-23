@@ -124,7 +124,7 @@ function makeClient({ patchResponses = [], getCaseRow } = {}) {
     async resolveManagers() {
       return {};
     },
-    async getExportHash() {
+    async getBankVersion() {
       return null;
     },
     async getVersionedExport() {

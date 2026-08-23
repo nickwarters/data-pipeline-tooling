@@ -204,7 +204,7 @@ export function completionControlView({ control, pending, onComplete }) {
  *   captureGroups: import('../../sharepoint-client.js').CaptureGroup[],
  *   generalQuestions: import('../../sharepoint-client.js').GeneralQuestionField[],
  *   computeOutcome: (answers: Record<string, Answer>) => import('../../sharepoint-client.js').OutcomeResult,
- *   exportHash: string | null,
+ *   bankVersion: string | null,
  * }} input
  * @returns {Partial<import('../../sharepoint-client.js').CaseRow> | null}
  */
@@ -240,7 +240,7 @@ export function completionPatch(input) {
       machine,
       input.computeOutcome,
       input.answers,
-      input.exportHash
+      input.bankVersion
     ) ?? null;
   if (!transitionFields) return null;
   return input.caseRow.onHold === true

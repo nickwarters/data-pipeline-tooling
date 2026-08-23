@@ -307,7 +307,7 @@ test('bank route reducer owns filters, samples, toast, revert, and publish state
     { type: 'publish/requested' },
     {
       type: 'publish/succeeded',
-      artifacts: { currentJson: '{}' },
+      artifacts: { bankJson: '{}' },
       slug: seeded.activeSlug,
       bank: seeded.cases[seeded.activeSlug],
     },

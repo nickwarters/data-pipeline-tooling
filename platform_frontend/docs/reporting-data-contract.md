@@ -37,19 +37,21 @@ document specifies the **format** it reads and the **algorithm** it must apply.
 Two variants live in the deployed `case-types/banks/` folder, beside the bank
 they were compiled from:
 
-| File               | Contents                                                                                                      | When to use                                                                                                                |
-| ------------------ | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `{slug}.txt`       | **Current** bank — the live content, and the current version by definition. Carries the `labels` table.       | In-progress Cases; any report that reads only the latest bank.                                                             |
-| `{slug}.<hex>.txt` | **Versioned** export — immutable snapshot. Carries frozen `labelIds` per question but not the `labels` table. | Completed Cases with a `questionBankVersion` — use this file to get as-reviewed wording, `optionOutcomes`, and `showWhen`. |
+| File                   | Contents                                                                                                      | When to use                                                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `{slug}.txt`           | **Current** bank — the live content, declaring its own `version` and `history`. Carries the `labels` table.   | In-progress Cases; any report that reads only the latest bank.                                                             |
+| `{slug}.<version>.txt` | **Versioned** export — immutable snapshot. Carries frozen `labelIds` per question but not the `labels` table. | Completed Cases with a `questionBankVersion` — use this file to get as-reviewed wording, `optionOutcomes`, and `showWhen`. |
 
 Both hold JSON. The `.txt` extension is deliberate: SharePoint Subscription
 Edition blocks or mis-serves `.json`, so every bank artifact is stored as text
 and parsed explicitly. Parse with `json.loads(...)`, not by trusting a content
 type.
 
-**Deriving the versioned filename from a Case row.** `questionBankVersion` is a
-bare hex digest, and so is the `hash` field inside every export, so the filename
-needs no conversion:
+**Deriving the versioned filename from a Case row.** `questionBankVersion` is
+an opaque identifier — the value the bank declared as its `version` when the
+Case became reportable, echoed by the `version` field inside the matching
+export. Treat it as a label: never recompute it, never parse it (it is usually
+a hash, but nothing may depend on that), and use it in the filename unchanged:
 
 ```python
 filename = f"{slug}.{case['questionBankVersion']}.txt"
@@ -68,7 +70,7 @@ have their own copies).
   "slug": "complaint-review",
   "label": "Complaint Review",
   "generatedAt": "2026-06-05T09:30:00Z",
-  "hash": "1a2b3c4d5e6f…",
+  "version": "1a2b3c4d5e6f…",
   "questions": [
     /* … */
   ],
@@ -77,15 +79,19 @@ have their own copies).
 ```
 
 `labels` is present only in **`{slug}.txt`** (the current bank). Versioned
-files (`{slug}.<hex>.txt`) carry the per-question `labelIds` but not the label
-definitions — see **Label resolution** below.
+files (`{slug}.<version>.txt`) carry the per-question `labelIds` but not the
+label definitions — see **Label resolution** below. The current bank also
+carries its own `version` (the identifier it is published as — what a Case
+completed today is stamped with) and `history` (the ordered list of every
+`{ version, generatedAt }` it has been published as, oldest first — the answer
+to "what was the bank on date X?").
 
 | Field         | Meaning                                                           |
 | ------------- | ----------------------------------------------------------------- |
 | `slug`        | Join key — matches the `caseType` field on a Case row.            |
 | `label`       | Human-readable Case Type name.                                    |
 | `generatedAt` | ISO-8601 timestamp the export was compiled.                       |
-| `hash`        | Content identity (full SHA-256 of questions+slug).                |
+| `version`     | The version identifier — opaque; matches the filename.            |
 | `questions`   | The Case Type's **Question Bank**, as data (below).               |
 | `labels`      | Label definitions — **current file only** (see Label resolution). |
 
@@ -315,7 +321,7 @@ for case in cases_modified_yesterday:           # filter on completedAt
 ## Caveats — read these
 
 1. **Use versioned exports for Completed Cases.** When a Case row carries a
-   `questionBankVersion`, fetch `{slug}.<hex>.txt` for that hash instead of
+   `questionBankVersion`, fetch `{slug}.<version>.txt` for that identifier instead of
    `{slug}.txt`. This gives you the exact questions, wording, and
    `optionOutcomes` / `defaultOutcomeId` that were in force at review time. Cases
    completed before versioned exports existed have no `questionBankVersion`; fall
@@ -345,6 +351,6 @@ for case in cases_modified_yesterday:           # filter on completedAt
 
 ## Provenance
 
-Record the export `hash` (and `generatedAt`) you read alongside each report run.
+Record the export `version` (and `generatedAt`) you read alongside each report run.
 It makes a number reproducible ("derived from `complaint-review.json`
 `1a2b3c4d5e6f`") and is the hook that a future point-in-time mode would use.

@@ -340,10 +340,10 @@ export function createRouteSlice(_params, context, deps = {}) {
       // built from.
       const slug = latestRoute.activeSlug;
       const bank = currentBank(latestRoute);
-      // The supported offline cycle leaves the writer undefined and merges this
-      // candidate entry into the existing append-only manifest before deployment.
-      // Any future runtime writer must source that existing manifest here first.
-      const artifacts = await publishBankEffect(bank, null, write);
+      // Publishing mints a new version for the edited bank and advances the
+      // bank's own history to it; the supported offline cycle leaves the
+      // writer undefined and lands both artifacts by hand before deployment.
+      const artifacts = await publishBankEffect(bank, write);
       if (tools.isActive())
         tools.dispatch({ type: 'publish/succeeded', artifacts, slug, bank });
     } catch (error) {

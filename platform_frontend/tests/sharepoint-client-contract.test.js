@@ -171,7 +171,7 @@ function readHeader(init, name) {
  * construct MockSharePointClient, so both implementations can be driven
  * through identical scenarios.
  *
- * @param {{ cases?: CaseRow[], people?: DirectoryPerson[], exportHashes?: Record<string,string>, versionedExports?: Record<string, unknown> }} seed
+ * @param {{ cases?: CaseRow[], people?: DirectoryPerson[], bankVersions?: Record<string,string>, versionedExports?: Record<string, unknown> }} seed
  */
 function makeSpBackend(seed) {
   const store = new Map((seed.cases ?? []).map((c) => [c.id, { ...c }]));
@@ -193,7 +193,7 @@ function makeSpBackend(seed) {
     userIds.set(account, id);
     return id;
   };
-  const exportHashes = seed.exportHashes ?? {};
+  const bankVersions = seed.bankVersions ?? {};
   const versionedExports = seed.versionedExports ?? {};
   let etagCounter = 1000;
 
@@ -237,7 +237,7 @@ function makeSpBackend(seed) {
     const exportMatch = url.match(/case-types\/([^./]+)\.json$/);
     if (exportMatch) {
       const slug = decodeURIComponent(exportMatch[1]);
-      const hash = exportHashes[slug];
+      const hash = bankVersions[slug];
       if (hash === undefined) return new Response('not found', { status: 404 });
       return new Response(JSON.stringify({ hash }), { status: 200 });
     }
@@ -338,7 +338,7 @@ function decodeFilterExpr(url) {
 // --- the two implementations under test ---------------------------------
 
 /**
- * @typedef {{ cases?: CaseRow[], people?: DirectoryPerson[], exportHashes?: Record<string,string>, versionedExports?: Record<string, unknown> }} Seed
+ * @typedef {{ cases?: CaseRow[], people?: DirectoryPerson[], bankVersions?: Record<string,string>, versionedExports?: Record<string, unknown> }} Seed
  */
 
 // Every Case lives in a named per-Case-Type list store on both
@@ -361,7 +361,7 @@ const clients = [
         lists: { [LIST]: seed.cases ?? [] },
         personas: { reviewer: { groups: [] } },
         people: seed.people ?? [],
-        exportHashes: seed.exportHashes ?? {},
+        bankVersions: seed.bankVersions ?? {},
         versionedExports: /** @type {any} */ (seed.versionedExports ?? {}),
         now: frozenNow,
       }),
@@ -535,9 +535,9 @@ for (const [name, makeClient] of clients) {
       assert.equal(result.__proto__, null);
     });
 
-    test('getExportHash: missing export resolves to null, never throws', async () => {
-      const client = makeClient({ cases: seedCases(), exportHashes: {} });
-      const hash = await client.getExportHash('unknown-slug');
+    test('getBankVersion: missing export resolves to null, never throws', async () => {
+      const client = makeClient({ cases: seedCases(), bankVersions: {} });
+      const hash = await client.getBankVersion('unknown-slug');
       assert.equal(hash, null);
     });
 

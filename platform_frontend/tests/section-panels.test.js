@@ -87,7 +87,7 @@ test('the panel map owns completion on Summary and Void on Case Details', () => 
     allAnswered: true,
     summarySections: [],
     sectionLabels: resolveSectionLabels(null),
-    exportHash: null,
+    bankVersion: null,
     versionWarning: null,
     access: {
       details: 'read-only',

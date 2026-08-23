@@ -4,7 +4,7 @@
  *
  * `CaseLoader`'s freeze behaviour is covered in case-loader.test.js; what is
  * covered here is the dev-loop wiring underneath it, which fails silently. A
- * fixture Case stamped with a hash nothing serves does not break — it falls
+ * fixture Case stamped with a version nothing serves does not break — it falls
  * back to the live bank behind a small warning banner, looking almost exactly
  * like the frozen Case it is supposed to be. Every assertion below exists
  * because that degradation is invisible.
@@ -20,7 +20,10 @@ import { allApplicableAnswered } from '../src/evaluators/applicability-evaluator
 import { personas } from '../dev/fixtures/personas.js';
 import { QUESTION_BANK_IMPORTERS } from '../case-types/manifest.js';
 import { versionedExportName } from '../src/lib/bank-artifacts.js';
-import { bankVersionHash } from '../src/lib/bank-version.js';
+import {
+  declaredBankVersion,
+  publishedContent,
+} from '../src/lib/bank-version.js';
 import { CaseLoader } from '../src/lib/case-loader.js';
 import complaintsConfig from '../case-types/complaints.js';
 import { caps } from './helpers/section-access.js';
@@ -77,7 +80,7 @@ test('every stamped fixture Case resolves to a version the mock serves', async (
       version,
       `Case ${row.id} stamps ${row.questionBankVersion}, which no published version matches — it would silently fall back to the live bank`
     );
-    assert.equal(version.hash, row.questionBankVersion);
+    assert.equal(version.version, row.questionBankVersion);
   }
 });
 
@@ -169,61 +172,76 @@ test('the January version asks a question no later version and no live bank does
   );
 });
 
-test('a published version is a file, named by the hash inside it', async () => {
-  // The app finds a version by composing its filename from the hash on the Case
-  // row. If a file's name and its own `hash` disagreed, the app would serve
-  // content under an identity that never produced it — so the two are checked
-  // against the bytes on disk, not against the loader that read them.
+test('a published version is a file, named by the version inside it', async () => {
+  // The app finds a version by composing its filename from the identifier on
+  // the Case row. If a file's name and its own `version` disagreed, the app
+  // would serve content under an identity that never produced it — so the two
+  // are checked against the bytes on disk, not against the loader that read
+  // them.
   for (const { slug, hash } of PUBLISHED_BANK_VERSIONS) {
     const file = new URL(
       `../case-types/banks/${versionedExportName(slug, hash)}`,
       import.meta.url
     );
     const envelope = JSON.parse(readFileSync(file, 'utf8'));
-    assert.equal(envelope.hash, hash, `${versionedExportName(slug, hash)}`);
+    assert.equal(envelope.version, hash, `${versionedExportName(slug, hash)}`);
     assert.equal(envelope.slug, slug);
     assert.ok(envelope.generatedAt, 'a version records when it was published');
   }
 });
 
-test('the published versions are immutable, so editing the live bank cannot move them', async () => {
-  // The property that makes a version safe to stamp a Case against. The live
-  // bank's identity must be none of the published older versions: if editing the
-  // bank could land on one of their hashes, it would rewrite what an
-  // already-completed Case shows.
+test('the live bank declares a version that is none of the frozen ones', async () => {
+  // The property that makes a version safe to stamp a Case against: the
+  // current declaration must not be one of the older published versions, or a
+  // newly completed Case would resolve to content that is not the live bank.
   const { default: liveBank } = await QUESTION_BANK_IMPORTERS.complaints();
-  const current = await bankVersionHash(liveBank);
+  const current = declaredBankVersion(liveBank);
+  assert.ok(current, 'the live bank declares its version');
   for (const { hash } of PUBLISHED_BANK_VERSIONS) {
     assert.notEqual(current, hash);
   }
 });
 
-test('the current bank has been published', async () => {
-  // There is no pointer to go stale, but there is still something to keep in
-  // step: completing a Case stamps whatever the bank hashes to *now*, and that
-  // version has to exist as a file or the Case falls back to the live bank
-  // behind a warning the moment it is re-opened.
+test('the current bank has been published as the version it declares', async () => {
+  // The declaration is hand-maintained and nothing recomputes it, so this is
+  // the check that keeps it honest in the dev loop: the declared version's
+  // file exists, and it still holds what the bank holds — otherwise completing
+  // a Case stamps a version that resolves to content the Reviewer never saw
+  // (or to nothing, and the fallback banner, the moment it is re-opened).
   const { default: liveBank } = await QUESTION_BANK_IMPORTERS.complaints();
-  const current = await bankVersionHash(liveBank);
+  const current = declaredBankVersion(liveBank);
+  assert.ok(current, 'the live bank declares its version');
   const file = new URL(
-    `../case-types/banks/${versionedExportName('complaints', current)}`,
+    `../case-types/banks/${versionedExportName('complaints', /** @type {string} */ (current))}`,
     import.meta.url
   );
   assert.ok(
     existsSync(file),
-    `the bank has changed since it was last published — run \`node scripts/publish-bank.js\``
+    `the bank declares version ${current} but no published copy exists — run \`node scripts/publish-bank.js\``
+  );
+  const envelope = JSON.parse(readFileSync(file, 'utf8'));
+  assert.deepEqual(
+    {
+      questions: envelope.questions,
+      outcomeOptions: envelope.outcomeOptions ?? [],
+      defaultOutcomeId: envelope.defaultOutcomeId ?? null,
+    },
+    publishedContent(liveBank),
+    `the bank has been edited since version ${current} was published — declare a new version (\`node scripts/publish-bank.js\` mints one)`
   );
 });
 
-test('the current bank version is served under the hash completion stamps', async () => {
+test('the current bank version is served under the identifier completion stamps', async () => {
   const client = mockClient();
 
-  // What completion stamps onto a Case row it completes today.
-  const hash = await client.getExportHash('complaints');
-  assert.match(
-    /** @type {string} */ (hash),
-    /^[0-9a-f]{64}$/,
-    'the stamped identity is the digest alone — no algorithm prefix, because the same value has to be a filename'
+  // What completion stamps onto a Case row it completes today: the bank's own
+  // declaration, verbatim.
+  const hash = await client.getBankVersion('complaints');
+  const { default: liveBank } = await QUESTION_BANK_IMPORTERS.complaints();
+  assert.equal(
+    hash,
+    declaredBankVersion(liveBank),
+    'the stamp is the version the bank declares — read, never computed'
   );
 
   const current = await client.getVersionedExport(
@@ -232,10 +250,9 @@ test('the current bank version is served under the hash completion stamps', asyn
   );
   assert.ok(
     current,
-    'the hash completion stamps must resolve, or every newly completed Case shows the fallback warning'
+    'the version completion stamps must resolve, or every newly completed Case shows the fallback warning'
   );
 
-  const { default: liveBank } = await QUESTION_BANK_IMPORTERS.complaints();
   assert.deepEqual(
     current.questions.map((q) => q.id),
     liveBank.questions.map((q) => q.id),
@@ -302,6 +319,6 @@ test('a version with no artifact reads as unpublished, not as a failure', async 
 test('a Case Type with no bank artifact simply stamps nothing', async () => {
   const client = mockClient();
 
-  assert.equal(await client.getExportHash('never-published'), null);
-  assert.ok(await client.getExportHash('complaints'));
+  assert.equal(await client.getBankVersion('never-published'), null);
+  assert.ok(await client.getBankVersion('complaints'));
 });
