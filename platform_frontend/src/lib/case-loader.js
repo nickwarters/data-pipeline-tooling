@@ -125,7 +125,7 @@ export class CaseLoader {
     this.answers = {};
 
     /** @type {string | null} */
-    this.exportHash = null;
+    this.bankVersion = null;
 
     /**
      * Set only on the fallback path — a Case stamped with an as-reviewed
@@ -169,7 +169,7 @@ export class CaseLoader {
       summarySections: this.summarySections,
       sectionLabels: this.sectionLabels,
       versionWarning: this.versionWarning,
-      exportHash: this.exportHash,
+      bankVersion: this.bankVersion,
       caseListOptions: this.caseListOptions,
     };
   }
@@ -214,20 +214,20 @@ export class CaseLoader {
     // voided after that milestone keeps the snapshot it was stamped with,
     // which is why this asks whether the milestone was reached rather than
     // what the status is now.
-    const versionHash =
+    const stampedVersion =
       reachedReportable(caseRow) && caseRow.questionBankVersion
         ? caseRow.questionBankVersion
         : null;
 
     let config = routeConfig;
-    let exportHash;
+    let bankVersion;
     let versionedExport;
     try {
-      [config, exportHash, versionedExport] = await Promise.all([
+      [config, bankVersion, versionedExport] = await Promise.all([
         config ? Promise.resolve(config) : loadCaseTypeConfig(caseRow.caseType),
-        this.client.getExportHash(caseRow.caseType),
-        versionHash
-          ? this.client.getVersionedExport(caseRow.caseType, versionHash)
+        this.client.getBankVersion(caseRow.caseType),
+        stampedVersion
+          ? this.client.getVersionedExport(caseRow.caseType, stampedVersion)
           : Promise.resolve(null),
       ]);
     } catch (error) {
@@ -241,12 +241,12 @@ export class CaseLoader {
     }
     this.config = config;
     this.sectionLabels = resolveSectionLabels(config);
-    this.exportHash = exportHash;
+    this.bankVersion = bankVersion;
 
     validateCaptureGroups(config.captureGroups);
     validateGeneralQuestions(config.generalQuestions);
 
-    if (versionHash && versionedExport) {
+    if (stampedVersion && versionedExport) {
       // Reportable Case with a published snapshot — freeze the catalogue as-reviewed.
       this.catalogue = versionedExport.questions
         .filter((q) => !q.deprecated)
@@ -279,13 +279,13 @@ export class CaseLoader {
           deprecated: q.deprecated,
         }));
     } else {
-      if (versionHash && !versionedExport) {
+      if (stampedVersion && !versionedExport) {
         // Versioned file was stamped but not published — fall back with a warning.
         this.versionWarning = 'as-reviewed version unavailable';
         // A stamped-but-unpublished version means a publish went wrong. The
         // banner tells the reader; this is the only trace an operator gets.
         console.error(
-          `[CORA] Case ${caseId}: as-reviewed Question Bank version ${versionHash} is stamped on the row but its versioned export could not be loaded. Falling back to the live Question Bank.`
+          `[CORA] Case ${caseId}: as-reviewed Question Bank version ${stampedVersion} is stamped on the row but its versioned export could not be loaded. Falling back to the live Question Bank.`
         );
       }
       this.catalogue = config.questions.filter((q) => !q.deprecated);
@@ -297,7 +297,7 @@ export class CaseLoader {
     // as-reviewed failure semantics hold even if the live config moves on.
     this.catalogue = withDerivedFailureValues(
       this.catalogue,
-      (versionHash && versionedExport
+      (stampedVersion && versionedExport
         ? (versionedExport.defaultOutcomeId ?? config.defaultOutcomeId)
         : config.defaultOutcomeId) ?? ''
     );

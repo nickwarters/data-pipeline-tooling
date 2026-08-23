@@ -3,17 +3,17 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { HttpSharePointClient } from '../src/services/http-sharepoint-client.js';
 import { WEB_URL, makeFetch } from './helpers/http-sharepoint-client.js';
-import { bankVersionHash } from '../src/lib/bank-version.js';
 
-// Capability: versioned Question Bank exports (getExportHash / getVersionedExport).
+// Capability: versioned Question Bank exports (getBankVersion / getVersionedExport).
 
 // --- legacy OData verbose format ---
 
-test('HttpSharePointClient: getExportHash derives the current version from the bank artifact', async () => {
+test('HttpSharePointClient: getBankVersion reads the version the bank artifact declares', async () => {
   /** @type {import('../src/pages/question-bank/question-bank-source.js').QuestionBank} */
   const bank = {
     slug: 'example-review',
     label: 'Example Review',
+    version: 'hand-entered-v7',
     questions: [
       { id: 'q1', text: 'T', responseType: 'yes-no-na', deprecated: false },
     ],
@@ -29,33 +29,34 @@ test('HttpSharePointClient: getExportHash derives the current version from the b
     fetchImpl: fetch,
   });
 
-  const hash = await client.getExportHash('example-review');
+  const version = await client.getBankVersion('example-review');
 
-  // The identity is a fact about the bank's content, so the client and the
-  // publish step reach it through the same function rather than agreeing on a
-  // value written into a file.
-  assert.equal(hash, await bankVersionHash(bank));
-  assert.match(/** @type {string} */ (hash), /^[0-9a-f]{64}$/);
+  // Read, never computed: the bank declares its version and the Case is
+  // stamped with the declaration verbatim. A hand-entered identifier is as
+  // good as a minted one — recomputing anything here would stamp a value no
+  // published file answers to.
+  assert.equal(version, 'hand-entered-v7');
   assert.ok(
     calls[0].url.endsWith('/case-types/banks/example-review.txt'),
     'reads the bank artifact from the deployed banks folder'
   );
 });
 
-test('HttpSharePointClient: getExportHash is stable across calls for unchanged content', async () => {
+test('HttpSharePointClient: getBankVersion is unmoved by key order and formatting on the wire', async () => {
   /** @type {import('../src/pages/question-bank/question-bank-source.js').QuestionBank} */
   const bank = {
     slug: 'example-review',
     label: 'Example Review',
+    version: 'v3',
     questions: [
       { id: 'q1', text: 'T', responseType: 'yes-no-na', deprecated: false },
     ],
   };
-  // Same content, different key order and formatting on the wire: the digest is
-  // over the projected questions rather than the bytes, so neither can move a
-  // version's identity.
+  // Same declaration, different key order and formatting on the wire: the
+  // version is a field read out of the parsed artifact, so neither can move it.
   const reordered = {
     questions: bank.questions,
+    version: bank.version,
     label: bank.label,
     slug: bank.slug,
   };
@@ -73,15 +74,15 @@ test('HttpSharePointClient: getExportHash is stable across calls for unchanged c
     await new HttpSharePointClient({
       webUrl: WEB_URL,
       fetchImpl: first.fetch,
-    }).getExportHash('example-review'),
+    }).getBankVersion('example-review'),
     await new HttpSharePointClient({
       webUrl: WEB_URL,
       fetchImpl: second.fetch,
-    }).getExportHash('example-review')
+    }).getBankVersion('example-review')
   );
 });
 
-test('HttpSharePointClient: getExportHash returns null when the file is not found (404)', async () => {
+test('HttpSharePointClient: getBankVersion returns null when the file is not found (404)', async () => {
   const { fetch } = makeFetch([
     {
       when: (c) => c.method === 'GET',
@@ -93,21 +94,24 @@ test('HttpSharePointClient: getExportHash returns null when the file is not foun
     fetchImpl: fetch,
   });
 
-  const hash = await client.getExportHash('example-review');
+  const hash = await client.getBankVersion('example-review');
   assert.equal(hash, null);
 });
 
-test('HttpSharePointClient: getExportHash returns null when the artifact is not a bank', async () => {
-  // A version identity is only meaningful over bank content. Anything else —
-  // a stray file, an error page served with a 200 — stamps nothing rather than
-  // stamping a hash of whatever arrived.
+test('HttpSharePointClient: getBankVersion returns null when the bank declares no version', async () => {
+  // A bank without a `version` is a bank that has never been published as one.
+  // It stamps nothing rather than blocking completion — the Case simply is not
+  // frozen, the documented pre-versioning state.
   const { fetch } = makeFetch([
     {
       when: (c) => c.method === 'GET',
       respond: () =>
-        new Response(JSON.stringify({ slug: 'example-review' }), {
-          status: 200,
-        }),
+        new Response(
+          JSON.stringify({ slug: 'example-review', questions: [] }),
+          {
+            status: 200,
+          }
+        ),
     },
   ]);
   const client = new HttpSharePointClient({
@@ -115,17 +119,17 @@ test('HttpSharePointClient: getExportHash returns null when the artifact is not 
     fetchImpl: fetch,
   });
 
-  const hash = await client.getExportHash('example-review');
-  assert.equal(hash, null);
+  const version = await client.getBankVersion('example-review');
+  assert.equal(version, null);
 });
 
 // --- getVersionedExport ---
 
-test('HttpSharePointClient: getVersionedExport reads the hash-named artifact and returns its parsed body', async () => {
+test('HttpSharePointClient: getVersionedExport reads the version-named artifact and returns its parsed body', async () => {
   const hash = 'a'.repeat(64);
   const versionedPayload = {
     slug: 'example-review',
-    hash,
+    version: hash,
     generatedAt: '2026-01-10T09:00:00.000Z',
     questions: [
       {
@@ -159,9 +163,9 @@ test('HttpSharePointClient: getVersionedExport reads the hash-named artifact and
   assert.deepEqual(result, versionedPayload);
   assert.ok(calls[0].url.includes('example-review'), 'URL contains the slug');
   assert.ok(
-    // The identity is the digest, so it reaches the filename unchanged.
+    // The stamped identifier reaches the filename unchanged.
     calls[0].url.endsWith(`example-review.${'a'.repeat(64)}.txt`),
-    `expected the hash-named artifact, got ${calls[0].url}`
+    `expected the version-named artifact, got ${calls[0].url}`
   );
 });
 

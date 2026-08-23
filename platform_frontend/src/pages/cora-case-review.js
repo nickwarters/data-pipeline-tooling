@@ -53,7 +53,7 @@ import { voidReasonLabel } from '../lib/void-reasons.js';
  * @property {import('../sharepoint-client.js').QuestionDefinition[]} applicableQuestions
  * @property {boolean} allAnswered
  * @property {import('../services/section-access.js').Section[]} summarySections
- * @property {string | null} exportHash
+ * @property {string | null} bankVersion
  * @property {string | null} versionWarning
  *   Set when the as-reviewed Question Bank was stamped on the row but its
  *   versioned export could not be fetched, so the *live* catalogue is what the
@@ -872,7 +872,7 @@ export function createRouteSlice(params, context) {
         captureGroups: config.captureGroups ?? [],
         generalQuestions: config.generalQuestions ?? [],
         computeOutcome: config.computeOutcome,
-        exportHash: snapshot.exportHash,
+        bankVersion: snapshot.bankVersion,
       });
       if (!patchFields) return;
       tools.dispatch({

@@ -33,7 +33,7 @@ import { loadCaseTypeConfig } from '../case-types/manifest.js';
  * lists?: Record<string, CaseRow[]>,
  * personas?: Record<string, { groups: string[], userId?: string, displayName?: string }>,
  * people?: PersonResult[],
- * exportHashes?: Record<string, string>,
+ * bankVersions?: Record<string, string>,
  * versionedExports?: Record<string, VersionedExport>
  * }} InMemoryListState
  *
@@ -135,7 +135,7 @@ export function createMockClientFromState(state, opts = {}) {
     personas: state.personas ?? DEFAULT_PERSONAS,
     persona: opts.persona ?? 'reviewer',
     people: state.people ?? [],
-    exportHashes: state.exportHashes ?? {},
+    bankVersions: state.bankVersions ?? {},
     versionedExports: state.versionedExports ?? {},
     lists: state.lists ?? {},
   });
@@ -574,7 +574,7 @@ async function clickCompleteCase(loader, caseRow, answers, navigate) {
     captureGroups: loader.config.captureGroups ?? [],
     generalQuestions: loader.config.generalQuestions ?? [],
     computeOutcome: loader.config.computeOutcome,
-    exportHash: loader.exportHash,
+    bankVersion: loader.bankVersion,
   });
 
   const ok = await completeCase({

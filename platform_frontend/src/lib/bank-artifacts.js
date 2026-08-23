@@ -10,14 +10,17 @@
  * Both kinds sit in `case-types/banks/`, and both are **JSON text in a `.txt`
  * file**, because SharePoint Subscription Edition blocks or mis-serves `.json`:
  *
- * | Artifact          | Name                  | Mutability                   |
- * | ----------------- | --------------------- | ---------------------------- |
- * | Current bank      | `{slug}.txt`          | edited freely                |
- * | Published version | `{slug}.{hash}.txt`   | append-only, never rewritten |
+ * | Artifact          | Name                   | Mutability                   |
+ * | ----------------- | ---------------------- | ---------------------------- |
+ * | Current bank      | `{slug}.txt`           | edited freely                |
+ * | Published version | `{slug}.{version}.txt` | append-only, never rewritten |
  *
- * There is no current-version pointer. The bank *is* the current version, and
- * `bank-version.js` says what its identity is.
+ * There is no current-version pointer. The bank *is* the current version and
+ * **declares** its identity in its `version` field; the published copy is
+ * named by that same value. `bank-version.js` says what an identifier is.
  */
+
+import { isBankVersionIdentifier } from './bank-version.js';
 
 /** The directory every bank artifact lives in, relative to `case-types/`. */
 export const BANKS_DIR = 'banks';
@@ -36,14 +39,14 @@ export function bankArtifactName(slug) {
 /**
  * One immutable published version. Never overwritten: a version some reportable
  * Case resolves its questions from has to stay readable for as long as the Case
- * does.
+ * does. `version` is the bank's declared identifier, used as-is.
  *
  * @param {string} slug
- * @param {string} hash
+ * @param {string} version
  * @returns {string}
  */
-export function versionedExportName(slug, hash) {
-  return `${slug}.${hash}.txt`;
+export function versionedExportName(slug, version) {
+  return `${slug}.${version}.txt`;
 }
 
 /**
@@ -55,7 +58,8 @@ export function versionedExportName(slug, hash) {
  * the repository gate can hold each kind to its own shape instead of checking
  * every `.txt` in the directory against the bank contract.
  *
- * A slug carries no `.`, so the first dot separates it from the kind. An
+ * A slug carries no `.`, so the first dot separates it from the version; what
+ * follows has to be a version identifier as `bank-version.js` defines one. An
  * unrecognised name yields `null` rather than a guess — the gate reports it as
  * a stray file, which is what a name nothing can classify actually is.
  *
@@ -72,7 +76,7 @@ export function classifyBankArtifact(filename) {
   const slug = stem.slice(0, firstDot);
   const rest = stem.slice(firstDot + 1);
   if (!slug) return null;
-  if (/^[0-9a-f]{64}$/.test(rest)) {
+  if (isBankVersionIdentifier(rest)) {
     return { kind: 'versioned-export', slug, segment: rest };
   }
   return null;

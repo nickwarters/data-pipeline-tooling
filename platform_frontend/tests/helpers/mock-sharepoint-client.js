@@ -102,7 +102,7 @@ export const VERSIONED_EXPORT = {
   slug: 'example-review',
   label: 'Example Review',
   generatedAt: '2026-01-10T09:00:00.000Z',
-  hash: 'a'.repeat(64),
+  version: 'a'.repeat(64),
   questions: [
     {
       id: 'q-v1',

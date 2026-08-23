@@ -1,6 +1,21 @@
 {
   "slug": "complaints",
   "label": "Complaints",
+  "version": "49fee46ee894ffc9f98557f181d8575cadf07d3c58ca072c9b6a1ea38fe69ec4",
+  "history": [
+    {
+      "version": "5b4be525cff4b0321856f70662112ee6bf57d4af8399d9d0a1ae8db8d8a024cd",
+      "generatedAt": "2026-01-12T09:00:00.000Z"
+    },
+    {
+      "version": "943c9dade830929aa91da20a91d34ddd4cf2ccec81b9b9c479a38a8e0ea98d4b",
+      "generatedAt": "2026-04-03T14:30:00.000Z"
+    },
+    {
+      "version": "49fee46ee894ffc9f98557f181d8575cadf07d3c58ca072c9b6a1ea38fe69ec4",
+      "generatedAt": "2026-08-13T15:34:31.259Z"
+    }
+  ],
   "questions": [
     {
       "id": "q-cmp-0001",

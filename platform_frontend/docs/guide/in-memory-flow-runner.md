@@ -78,8 +78,8 @@ Optional state fields:
 
 - `personas`: map of persona key to `{ "userId", "displayName", "groups" }`
 - `people`: directory rows used by person search and account resolution
-- `exportHashes`: current question-bank export hash per Case Type slug
-- `versionedExports`: frozen question-bank exports keyed by hash
+- `bankVersions`: current Question Bank version identifier per Case Type slug
+- `versionedExports`: frozen question-bank exports keyed by version identifier
 
 If `personas` is omitted, the runner provides a minimal `reviewer` persona with
 `userId: "user-reviewer"` and group `Reviewers`.

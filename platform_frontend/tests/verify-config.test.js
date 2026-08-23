@@ -11,6 +11,7 @@ import {
 } from '../scripts/verify-config.js';
 import { CASE_TYPES } from '../case-types/manifest.js';
 import { routeTable } from '../src/setup/register-routes.js';
+import { exportQuestions } from '../src/lib/bank-version.js';
 
 /**
  * A config the real `loadCaseTypeConfig` accepts, so every fixture goes through
@@ -609,6 +610,40 @@ test('checkCaseTypes passes over the live Case Type registry', async () => {
   assert.deepEqual(await checkCaseTypes({ caseTypes: CASE_TYPES }), []);
 });
 
+/**
+ * A version-clean fixture: each bank declares `version: 'v1'` with a matching
+ * history entry, published beside it as `{slug}.v1.txt` holding the same
+ * content — so a test measuring some other failure is not also measuring
+ * these. Returns the flat `readText` file map.
+ *
+ * @param {Record<string, any>} banks keyed by slug
+ * @returns {Record<string, string>}
+ */
+function publishedFixture(banks) {
+  /** @type {Record<string, string>} */
+  const files = {};
+  for (const [slug, bank] of Object.entries(banks)) {
+    const declared = {
+      ...bank,
+      version: 'v1',
+      history: [{ version: 'v1', generatedAt: '2026-01-01T00:00:00Z' }],
+    };
+    files[`case-types/banks/${slug}.txt`] = JSON.stringify(declared);
+    files[`case-types/banks/${slug}.v1.txt`] = JSON.stringify({
+      slug: bank.slug ?? slug,
+      label: bank.label ?? slug,
+      generatedAt: '2026-01-01T00:00:00Z',
+      version: 'v1',
+      questions: Array.isArray(bank.questions)
+        ? exportQuestions(/** @type {any} */ (declared))
+        : [],
+      outcomeOptions: bank.outcomeOptions ?? [],
+      defaultOutcomeId: bank.defaultOutcomeId ?? null,
+    });
+  }
+  return files;
+}
+
 test('checkBankArtifacts fails a bank artifact that is not JSON, naming the file', () => {
   const failures = checkBankArtifacts({
     artifacts: ['case-types/banks/broken.txt'],
@@ -634,48 +669,52 @@ test('checkBankArtifacts fails a bank whose top level is not an object', () => {
 });
 
 test('checkBankArtifacts fails a missing questions array, label, question id and unknown responseType', () => {
-  /** @type {Record<string, string>} */
-  const files = {
-    'case-types/banks/noquestions.txt': JSON.stringify({
+  /** @type {Record<string, any>} */
+  const banks = {
+    noquestions: {
       slug: 'noquestions',
       label: 'No Questions',
-    }),
-    'case-types/banks/nolabel.txt': JSON.stringify({
+    },
+    nolabel: {
       slug: 'nolabel',
       questions: [],
-    }),
-    'case-types/banks/noid.txt': JSON.stringify({
+    },
+    noid: {
       slug: 'noid',
       label: 'No Id',
       questions: [{ text: 'Q', responseType: 'yes-no-na' }],
-    }),
-    'case-types/banks/badtype.txt': JSON.stringify({
+    },
+    badtype: {
       slug: 'badtype',
       label: 'Bad Type',
       questions: [{ id: 'q-1', text: 'Q', responseType: 'freeform' }],
-    }),
-    'case-types/banks/notext.txt': JSON.stringify({
+    },
+    notext: {
       slug: 'notext',
       label: 'No Text',
       questions: [{ id: 'q-1', responseType: 'yes-no-na' }],
-    }),
-    'case-types/banks/dupid.txt': JSON.stringify({
+    },
+    dupid: {
       slug: 'dupid',
       label: 'Dup Id',
       questions: [
         { id: 'q-1', text: 'A', responseType: 'yes-no-na' },
         { id: 'q-1', text: 'B', responseType: 'yes-no-na' },
       ],
-    }),
+    },
   };
+  const files = publishedFixture(banks);
 
+  // The published copies replicate the broken questions, so the copy files
+  // fail the same question checks; the shape checks under test are read off
+  // the bank files alone.
   const failures = checkBankArtifacts({
     artifacts: Object.keys(files),
     readText: (rel) => files[rel],
     caseTypes: [],
-  });
+  }).filter((f) => !f.file.includes('.v1.'));
 
-  assert.equal(failures.length, 6);
+  assert.equal(failures.length, 6, joined(failures));
   const text = joined(failures);
   assert.match(text, /noquestions\.txt.*questions/);
   assert.match(text, /nolabel\.txt.*label/);
@@ -686,20 +725,170 @@ test('checkBankArtifacts fails a missing questions array, label, question id and
 });
 
 test('checkBankArtifacts fails a bank slug that disagrees with its filename', () => {
+  const files = publishedFixture({
+    complaints: {
+      slug: 'grievances',
+      label: 'Grievances',
+      questions: [],
+    },
+  });
+  // The published copy carries the same wrong slug; the check under test is
+  // read off the bank file alone.
   const failures = checkBankArtifacts({
-    artifacts: ['case-types/banks/complaints.txt'],
-    readText: () =>
-      JSON.stringify({
-        slug: 'grievances',
-        label: 'Grievances',
-        questions: [],
-      }),
+    artifacts: Object.keys(files),
+    readText: (rel) => files[rel],
+    caseTypes: [],
+  }).filter((f) => !f.file.includes('.v1.'));
+
+  assert.equal(failures.length, 1, joined(failures));
+  assert.match(failures[0].message, /grievances/);
+  assert.match(failures[0].message, /complaints/);
+});
+
+test('checkBankArtifacts fails a bank that declares no version or no history', () => {
+  // The version is what a Case is stamped with, so a bank without one stamps
+  // nothing — silently. The history is the timeline; without it "what was the
+  // bank in March?" has no answer.
+  /** @type {Record<string, string>} */
+  const files = {
+    'case-types/banks/undeclared.txt': JSON.stringify({
+      slug: 'undeclared',
+      label: 'Undeclared',
+      questions: [],
+    }),
+  };
+  const failures = checkBankArtifacts({
+    artifacts: Object.keys(files),
+    readText: (rel) => files[rel],
     caseTypes: [],
   });
 
-  assert.equal(failures.length, 1);
-  assert.match(failures[0].message, /grievances/);
-  assert.match(failures[0].message, /complaints/);
+  const text = joined(failures);
+  assert.match(text, /declares no `version`/);
+  assert.match(text, /declares no `history`/);
+});
+
+test('checkBankArtifacts fails a version that could not name a file', () => {
+  const files = publishedFixture({
+    badversion: {
+      slug: 'badversion',
+      label: 'Bad Version',
+      questions: [],
+    },
+  });
+  const bank = JSON.parse(files['case-types/banks/badversion.txt']);
+  files['case-types/banks/badversion.txt'] = JSON.stringify({
+    ...bank,
+    version: 'sha256:ABC',
+  });
+  const failures = checkBankArtifacts({
+    artifacts: Object.keys(files),
+    readText: (rel) => files[rel],
+    caseTypes: [],
+  });
+
+  assert.match(joined(failures), /cannot name a file/);
+});
+
+test('checkBankArtifacts fails a declared version with no published copy on disk', () => {
+  const files = publishedFixture({
+    orphan: { slug: 'orphan', label: 'Orphan', questions: [] },
+  });
+  delete files['case-types/banks/orphan.v1.txt'];
+  const failures = checkBankArtifacts({
+    artifacts: Object.keys(files),
+    readText: (rel) => files[rel],
+    caseTypes: [],
+  });
+
+  const text = joined(failures);
+  assert.match(text, /no published copy `orphan\.v1\.txt` is on disk/);
+  assert.match(text, /history records version "v1"/);
+});
+
+test('checkBankArtifacts fails a bank edited since its declared version was published', () => {
+  // The one mistake a hand-maintained identifier invites: edit the questions,
+  // forget the version. Every Case completed against the bank would freeze on
+  // the published content, not on what was reviewed.
+  const files = publishedFixture({
+    edited: {
+      slug: 'edited',
+      label: 'Edited',
+      questions: [
+        { id: 'q-1', text: 'Original wording', responseType: 'yes-no-na' },
+      ],
+    },
+  });
+  const bank = JSON.parse(files['case-types/banks/edited.txt']);
+  bank.questions[0].text = 'Reworded since publishing';
+  files['case-types/banks/edited.txt'] = JSON.stringify(bank);
+  const failures = checkBankArtifacts({
+    artifacts: Object.keys(files),
+    readText: (rel) => files[rel],
+    caseTypes: [],
+  });
+
+  assert.equal(failures.length, 1, joined(failures));
+  assert.match(failures[0].message, /edited since version "v1" was published/);
+});
+
+test('checkBankArtifacts fails a history whose last entry is not the declared version', () => {
+  const files = publishedFixture({
+    stale: { slug: 'stale', label: 'Stale', questions: [] },
+  });
+  const bank = JSON.parse(files['case-types/banks/stale.txt']);
+  bank.history.push({ version: 'v2', generatedAt: '2026-02-01T00:00:00Z' });
+  files['case-types/banks/stale.txt'] = JSON.stringify(bank);
+  files['case-types/banks/stale.v2.txt'] = files[
+    'case-types/banks/stale.v1.txt'
+  ].replace('"v1"', '"v2"');
+  const failures = checkBankArtifacts({
+    artifacts: Object.keys(files),
+    readText: (rel) => files[rel],
+    caseTypes: [],
+  });
+
+  assert.equal(failures.length, 1, joined(failures));
+  assert.match(failures[0].message, /history ends at "v2"/);
+});
+
+test('checkBankArtifacts fails a published version the history does not record', () => {
+  const files = publishedFixture({
+    partial: { slug: 'partial', label: 'Partial', questions: [] },
+  });
+  files['case-types/banks/partial.v0.txt'] = files[
+    'case-types/banks/partial.v1.txt'
+  ].replace('"v1"', '"v0"');
+  const failures = checkBankArtifacts({
+    artifacts: Object.keys(files),
+    readText: (rel) => files[rel],
+    caseTypes: [],
+  });
+
+  assert.equal(failures.length, 1, joined(failures));
+  assert.match(
+    failures[0].message,
+    /history does not record version "v0", which is published on disk/
+  );
+});
+
+test('checkBankArtifacts fails a published version whose field disagrees with its filename', () => {
+  const files = publishedFixture({
+    twofaced: { slug: 'twofaced', label: 'Two Faced', questions: [] },
+  });
+  files['case-types/banks/twofaced.v1.txt'] = files[
+    'case-types/banks/twofaced.v1.txt'
+  ].replace('"version":"v1"', '"version":"v9"');
+  const failures = checkBankArtifacts({
+    artifacts: Object.keys(files),
+    readText: (rel) => files[rel],
+    caseTypes: [],
+  });
+
+  assert.match(
+    joined(failures),
+    /declares version "v9" but its filename says "v1"/
+  );
 });
 
 test('checkBankArtifacts fails a registry bank thunk whose artifact is absent', () => {

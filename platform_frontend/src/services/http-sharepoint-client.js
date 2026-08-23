@@ -11,7 +11,7 @@ import {
   bankArtifactName,
   versionedExportName,
 } from '../lib/bank-artifacts.js';
-import { bankVersionHash } from '../lib/bank-version.js';
+import { declaredBankVersion } from '../lib/bank-version.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
@@ -527,32 +527,30 @@ export class HttpSharePointClient {
    * The version identity of the Case Type's **current** Question Bank — what
    * completion stamps onto a Case row.
    *
-   * Derived from the bank artifact rather than read out of a pointer file
-   * beside it. The bank is the current version, so its identity is a fact about
-   * its content; a stored pointer would be a second copy of that fact, and a
-   * bank edited without republishing would go on claiming the old version.
+   * **Read off the bank artifact, never computed.** The bank declares its
+   * version (`version` in `{slug}.txt`), the published copy of that version
+   * carries the same value in its name, and a Case is stamped with the
+   * declaration verbatim. Recomputing it here — hashing the bank on the way
+   * through — would make the stamp depend on this code agreeing byte-for-byte
+   * with whatever minted the identifier, and it need not: the identifier may
+   * have been typed by hand or minted by a Python script. It is an opaque
+   * label. See `lib/bank-version.js`.
    *
    * Deliberately reads the artifact rather than the Case Type config: the
-   * config exposes the bank's fields, but the publish step hashes the *file*,
-   * and a Case Type free to reshape what it exposes could otherwise produce an
-   * identity no published version answers to.
+   * artifact is where the version is declared, and a Case Type free to reshape
+   * what it exposes has no business in between.
    *
-   * Returns null when the artifact is absent or unreadable — a Case Type with
-   * no bank stamps no version rather than blocking completion.
+   * Returns null when the artifact is absent, unreadable or declares no
+   * version — a Case Type with no versioned bank stamps no version rather than
+   * blocking completion.
    *
    * @param {string} slug
    * @returns {Promise<string | null>}
    */
-  async getExportHash(slug) {
-    const bank = await this._readBankArtifact(bankArtifactName(slug));
-    if (!bank || typeof bank !== 'object' || !Array.isArray(bank.questions)) {
-      return null;
-    }
-    try {
-      return await bankVersionHash(bank);
-    } catch {
-      return null;
-    }
+  async getBankVersion(slug) {
+    return declaredBankVersion(
+      await this._readBankArtifact(bankArtifactName(slug))
+    );
   }
 
   /**
@@ -562,11 +560,13 @@ export class HttpSharePointClient {
    * live-fallback path instead of breaking the Case.
    *
    * @param {string} slug
-   * @param {string} hash
+   * @param {string} version
    * @returns {Promise<import('../sharepoint-client.js').VersionedExport | null>}
    */
-  async getVersionedExport(slug, hash) {
-    const body = await this._readBankArtifact(versionedExportName(slug, hash));
+  async getVersionedExport(slug, version) {
+    const body = await this._readBankArtifact(
+      versionedExportName(slug, version)
+    );
     if (!body || typeof body !== 'object') return null;
     return /** @type {import('../sharepoint-client.js').VersionedExport} */ (
       body

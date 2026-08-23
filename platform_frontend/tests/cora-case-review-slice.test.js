@@ -124,7 +124,7 @@ function snapshot() {
     allAnswered: false,
     summarySections: ['details', 'questions', 'issues'],
     machine: null,
-    exportHash: null,
+    bankVersion: null,
     caseListOptions: {},
     access: {
       details: 'read-only',
@@ -188,7 +188,7 @@ function renderShippedState(
       client: {
         getCase: () => never,
         getCurrentUser: () => never,
-        getExportHash: () => never,
+        getBankVersion: () => never,
         resolveUsers: () => never,
         searchPeople: () => never,
         ...contextOverrides.client,
@@ -478,7 +478,7 @@ function renderCaptureSearchRoute(searchPeople) {
   const client = /** @type {any} */ ({
     getCase: () => never,
     getCurrentUser: async () => chrome.currentUser,
-    getExportHash: async () => null,
+    getBankVersion: async () => null,
     resolveUsers: async () => ({}),
     searchPeople,
   });
@@ -596,7 +596,7 @@ function renderResponsiblePartyRoute(searchPeople, responsibleParty = '') {
   const client = /** @type {any} */ ({
     getCase: () => never,
     getCurrentUser: async () => chrome.currentUser,
-    getExportHash: async () => null,
+    getBankVersion: async () => null,
     resolveUsers: async () => ({}),
     searchPeople,
     async patchCase(/** @type {string} */ _id, /** @type {any} */ fields) {
@@ -2462,9 +2462,9 @@ test('action: completion flushes saves and persists only the CaseMachine transit
     transitionToCompleted: (
       /** @type {Function} */ computeOutcome,
       /** @type {Record<string, any>} */ answers,
-      /** @type {string} */ exportHash
+      /** @type {string} */ bankVersion
     ) => {
-      calls.push(['transition', computeOutcome(answers).outcome, exportHash]);
+      calls.push(['transition', computeOutcome(answers).outcome, bankVersion]);
       return transitionPatch;
     },
   });
@@ -2472,7 +2472,7 @@ test('action: completion flushes saves and persists only the CaseMachine transit
     ...snapshot(),
     machine,
     allAnswered: true,
-    exportHash: 'bank-hash',
+    bankVersion: 'bank-hash',
   };
   const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
     type: 'case/load-finished',
@@ -2538,7 +2538,7 @@ test('action: completion folds the persisted transition into the store Case Row'
       transitionToCompleted: () => transitionPatch,
     }),
     allAnswered: true,
-    exportHash: 'bank-hash',
+    bankVersion: 'bank-hash',
   };
   const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
     type: 'case/load-finished',
@@ -2627,7 +2627,7 @@ test('action: the Send Actions transition folds into the store Case Row too', as
       transitionToActionsInProgress: () => transitionPatch,
     }),
     allAnswered: true,
-    exportHash: 'bank-hash',
+    bankVersion: 'bank-hash',
   };
   const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
     type: 'case/load-finished',
@@ -3715,7 +3715,7 @@ test('route: mock-mode store shell keeps Review working at the existing URL', as
     async getCurrentUser() {
       return chrome.currentUser;
     },
-    async getExportHash() {
+    async getBankVersion() {
       return null;
     },
     async resolveUsers() {
@@ -3947,7 +3947,7 @@ test('route: a rejected save surfaces the conflict banner in the mounted page', 
     async getCurrentUser() {
       return chrome.currentUser;
     },
-    async getExportHash() {
+    async getBankVersion() {
       return null;
     },
     async resolveUsers() {
@@ -4044,7 +4044,7 @@ test('route: the Remediation tab resolves a Question through the store seam', as
     async getCurrentUser() {
       return chrome.currentUser;
     },
-    async getExportHash() {
+    async getBankVersion() {
       return null;
     },
     async resolveUsers() {
@@ -4146,7 +4146,7 @@ test('route: a read-only Reviewer on a reportable Case writes no Answer', async 
     async getCurrentUser() {
       return chrome.currentUser;
     },
-    async getExportHash() {
+    async getBankVersion() {
       return null;
     },
     async getVersionedExport() {
@@ -4247,7 +4247,7 @@ test('route: sequential Answer edits accumulate', async () => {
     async getCurrentUser() {
       return chrome.currentUser;
     },
-    async getExportHash() {
+    async getBankVersion() {
       return null;
     },
     async resolveUsers() {
@@ -4340,7 +4340,7 @@ test('route: the Remediation Required decision writes through the single Answer 
     async getCurrentUser() {
       return chrome.currentUser;
     },
-    async getExportHash() {
+    async getBankVersion() {
       return null;
     },
     async resolveUsers() {
@@ -4613,7 +4613,7 @@ test('a Case with a resolved as-reviewed snapshot renders no warning', () => {
   const resolved = snapshot();
   resolved.caseRow = { ...resolved.caseRow, status: 'Reported' };
   resolved.versionWarning = null;
-  resolved.exportHash = 'abc123';
+  resolved.bankVersion = 'abc123';
   const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
     type: 'case/load-finished',
     snapshot: resolved,
@@ -4641,7 +4641,7 @@ test('an In-progress Case renders no version warning', () => {
 function startPendingLoadRoute(clientOverrides) {
   const client = /** @type {any} */ ({
     getCurrentUser: async () => chrome.currentUser,
-    getExportHash: async () => null,
+    getBankVersion: async () => null,
     getVersionedExport: async () => null,
     resolveUsers: async () => ({}),
     searchPeople: async () => [],
@@ -5016,7 +5016,7 @@ test('case review slice: the read carries the signal while the write path keeps 
         return readRow;
       },
       getCurrentUser: async () => ({ id: 'reviewer', groups: [] }),
-      getExportHash: async () => null,
+      getBankVersion: async () => null,
     },
     // Writes are never cancelled: the queue is handed the Case Row
     // by the loader and holds the boot-built client, not the read wrapper.

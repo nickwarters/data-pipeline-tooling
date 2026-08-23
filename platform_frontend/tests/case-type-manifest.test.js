@@ -379,7 +379,7 @@ test('CaseLoader.load(): unknown primary Case Type slug sets a clear user-facing
             etag: 'e1',
           }),
         getCurrentUser: async () => ({ id: 'u1', displayName: 'User 1' }),
-        getExportHash: async () => null,
+        getBankVersion: async () => null,
         resolveUsers: async () => ({}),
       }),
       saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),

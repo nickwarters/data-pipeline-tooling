@@ -140,7 +140,7 @@ test('Question Bank artifacts are read from the deployed banks folder, not a dec
     fetchImpl: fetch,
   });
 
-  await client.getExportHash('example-review');
+  await client.getBankVersion('example-review');
   await client.getVersionedExport('example-review', 'abc123');
 
   assert.ok(
@@ -164,7 +164,7 @@ test('a missing or unreadable artifact reads as "not published", never a throw',
     webUrl: WEB_URL,
     fetchImpl: missing.fetch,
   });
-  assert.equal(await notPublished.getExportHash('example-review'), null);
+  assert.equal(await notPublished.getBankVersion('example-review'), null);
   assert.equal(
     await notPublished.getVersionedExport('example-review', 'abc123'),
     null
@@ -175,7 +175,7 @@ test('a missing or unreadable artifact reads as "not published", never a throw',
     webUrl: WEB_URL,
     fetchImpl: garbled.fetch,
   });
-  assert.equal(await broken.getExportHash('example-review'), null);
+  assert.equal(await broken.getBankVersion('example-review'), null);
   assert.equal(
     await broken.getVersionedExport('example-review', 'abc123'),
     null
@@ -186,5 +186,5 @@ test('a missing or unreadable artifact reads as "not published", never a throw',
     webUrl: WEB_URL,
     fetchImpl: notABank.fetch,
   });
-  assert.equal(await shapeless.getExportHash('example-review'), null);
+  assert.equal(await shapeless.getBankVersion('example-review'), null);
 });

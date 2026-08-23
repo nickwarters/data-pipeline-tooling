@@ -69,12 +69,12 @@ test('toStoreSnapshot: the loader hands over Answers and the derived applicable 
   );
 });
 
-// --- exportHash loading ---
+// --- bankVersion loading ---
 
-test('CaseLoader.load() calls getExportHash with the case type slug and stores it as exportHash', async () => {
+test('CaseLoader.load() calls getBankVersion with the case type slug and stores it as bankVersion', async () => {
   const loader = makeLoader({
     client: {
-      getExportHash: async (/** @type {string} */ slug) =>
+      getBankVersion: async (/** @type {string} */ slug) =>
         slug === 'example-review' ? 'sha256:testHash' : null,
     },
   });
@@ -82,9 +82,9 @@ test('CaseLoader.load() calls getExportHash with the case type slug and stores i
   await loader.load();
 
   assert.equal(
-    loader.exportHash,
+    loader.bankVersion,
     'sha256:testHash',
-    'exportHash is stored from getExportHash result'
+    'bankVersion is stored from getBankVersion result'
   );
 });
 
@@ -133,12 +133,12 @@ test('CaseLoader.load() resolves route caseType to listName for getCase and Save
   assert.deepEqual(loader.caseListOptions, { listName: 'Cases-ExampleReview' });
 });
 
-test('CaseLoader.load() stores null exportHash when getExportHash returns null', async () => {
+test('CaseLoader.load() stores null bankVersion when getBankVersion returns null', async () => {
   const loader = makeLoader();
 
   await loader.load();
 
-  assert.equal(loader.exportHash, null);
+  assert.equal(loader.bankVersion, null);
 });
 
 // --- versioned catalogue loading ---

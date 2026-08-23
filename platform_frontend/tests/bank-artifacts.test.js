@@ -57,16 +57,27 @@ test('every name the writers produce is classified back as what it is', () => {
   );
 });
 
+test('a version is an identifier, not a digest — any identifier-shaped segment classifies', () => {
+  // Nothing turns on how a version was produced: a hand-entered `v2` or `0001`
+  // names a published copy exactly as a 64-hex mint does. The rule asks only
+  // that the segment can be an identifier (lower-case letters, digits, `-`,
+  // `_`), not where it came from.
+  for (const segment of ['v2', '0001', 'abc123', '2026-01-12_a']) {
+    assert.deepEqual(classifyBankArtifact(`complaints.${segment}.txt`), {
+      kind: 'versioned-export',
+      slug: 'complaints',
+      segment,
+    });
+  }
+});
+
 test('a name nothing produced is refused rather than guessed at', () => {
   // The gate reports an unclassifiable name as a stray file. Guessing would let
   // a half-renamed version sit in the directory looking like a bank.
   for (const name of [
     'complaints.json', // the extension SharePoint mis-serves
-    'complaints.abc123.txt', // a truncated digest
-    `complaints.sha256:${HEX}.txt`, // the identity, unconverted
-    `complaints.sha256-${HEX}.txt`, // the algorithm prefix, left in
-    `complaints.${HEX.toUpperCase()}.txt`, // a digest that is not lower-case
-    'complaints.export.txt', // the retired current-version pointer
+    `complaints.sha256:${HEX}.txt`, // an identity with a `:` no filename can hold
+    `complaints.${HEX.toUpperCase()}.txt`, // upper case — two of these could name one file on Windows/SharePoint
     'complaints.export.json',
     '.txt',
     `.${HEX}.txt`, // a version with no slug in front of it
@@ -76,9 +87,15 @@ test('a name nothing produced is refused rather than guessed at', () => {
   }
 });
 
-test('a slug carrying its own dots is not silently split', () => {
+test('a slug carrying its own dots reads as a versioned export of the first segment', () => {
   // The rule reads everything before the first dot as the slug, so a dotted
-  // slug would classify as some other Case Type's export. No Case Type slug has
-  // a dot, and this is what says that is a requirement rather than a habit.
-  assert.deepEqual(classifyBankArtifact('example.review.txt'), null);
+  // slug would classify as some other Case Type's published version — and the
+  // gate would then fail it for declaring none of a version's fields. No Case
+  // Type slug has a dot, and this is what says that is a requirement rather
+  // than a habit.
+  assert.deepEqual(classifyBankArtifact('example.review.txt'), {
+    kind: 'versioned-export',
+    slug: 'example',
+    segment: 'review',
+  });
 });

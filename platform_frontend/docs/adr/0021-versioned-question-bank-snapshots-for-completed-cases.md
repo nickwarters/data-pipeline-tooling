@@ -6,6 +6,45 @@ Date: 2026-06-25
 
 Accepted (amended by [ADR-0023], Jul 2026)
 
+> **Amendment (2026-08-23, the version is declared, not derived).** The
+> stamping path used to _recompute_ the identity: `getExportHash` hashed the
+> current bank artifact at the moment a Case became reportable. That reintroduced
+> exactly what rule 4 below existed to prevent — the stamp depended on the
+> hashing code agreeing byte-for-byte with whatever produced the published
+> files, and with the Question Bank editor's publish flow not yet live the
+> versions are maintained by hand, where no such agreement can be assumed. A
+> hand-published version (or one minted by a Python script) would never match a
+> JS recomputation, so a freshly completed Case could stamp an identity no file
+> answers to while the files sat right there.
+>
+> The identity is now **declared on the bank**. `{slug}.txt` carries a
+> `version` field — the identifier of the version it is currently published as
+> — and the reportable milestone stamps that declaration verbatim
+> (`getBankVersion`); nothing anywhere on the read or stamp path computes
+> anything. `mintBankVersion` (a content hash) remains as a _generator_ used by
+> `scripts/publish-bank.js` to coin fresh identifiers, but a hand-entered one
+> is exactly as valid: the version is just an identifier, and how it was
+> produced is nobody's business but the publisher's.
+>
+> The bank also carries its **`history`** — the ordered, append-only list of
+> `{ version, generatedAt }` it has been published as, oldest first, the
+> current one last. This is the manifest this ADR originally specified,
+> relocated into the one hand-maintained artifact instead of a second file
+> beside it; the 2026-08-13 amendment's "the versions on disk are the timeline"
+> lost the ordering an identifier cannot carry, and this restores it. The
+> published version files rename their `hash` field to `version` to match.
+>
+> What keeps a declaration honest is no longer arithmetic but the repository
+> gate (`scripts/verify-config.js`, run by `verify_build` and the tests): a
+> bank must declare a version; the declared version's file must exist and still
+> hold what the bank holds (the mistake hand maintenance invites — edit the
+> questions, forget the version); and the history must record exactly the
+> versions on disk, in both directions. "Derive the identity so nothing can go
+> stale" (the 2026-08-13 amendment's pointer argument) is superseded: deriving
+> traded staleness for recomputation, and recomputation is the worse failure —
+> a stale declaration is caught by the gate, while a recomputed identity fails
+> silently at the moment of stamping.
+
 > **Amendment (2026-08-13, artifact layout).** The artifacts below are stored
 > **beside the bank they belong to**, in `case-types/banks/`, as JSON in `.txt`
 > files — not as `.json` in a separate `/Style Library/case-review/case-types/`
