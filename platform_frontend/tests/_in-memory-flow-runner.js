@@ -143,23 +143,28 @@ export function createMockClientFromState(state, opts = {}) {
 
 /**
  * @param {InMemoryListState} state
- * @param {{ persona?: string }} [opts]
+ * @param {{ persona?: string, client?: MockSharePointClient }} [opts]
  * @returns {InMemoryFlowRunner}
  */
 export function createInMemoryFlowRunner(state, opts = {}) {
   const persona = opts.persona ?? 'reviewer';
-  const client = createMockClientFromState(
-    {
-      ...state,
-      personas: state.personas
-        ? {
-            ...state.personas,
-            [persona]: state.personas[persona] ?? DEFAULT_PERSONAS.reviewer,
-          }
-        : DEFAULT_PERSONAS,
-    },
-    { persona }
-  );
+  // A caller may hand the runner a ready-made client — e.g. one whose bank
+  // artifacts resolve to a test-owned directory — and then owns its persona
+  // and list wiring; `state` is ignored in that case.
+  const client =
+    opts.client ??
+    createMockClientFromState(
+      {
+        ...state,
+        personas: state.personas
+          ? {
+              ...state.personas,
+              [persona]: state.personas[persona] ?? DEFAULT_PERSONAS.reviewer,
+            }
+          : DEFAULT_PERSONAS,
+      },
+      { persona }
+    );
   const saveQueue = new SaveQueue(client, { debounceMs: 0 });
   /** @type {CaseLoader | null} */
   let caseLoader = null;
