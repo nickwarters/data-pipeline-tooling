@@ -386,14 +386,14 @@ The deployed group narrows in two ways today: a maximum age (`MAX_AGE_DAYS`
 explicitly as `missing-received-date` rather than given an invented age) and
 a Hopper cap (`HOPPER_DEPTH`, below) — still no volume target or composition
 split, unlike the plans-per-group model the rest of this doc describes.
-Every selected row is stamped with the group's one declared Question Bank
-reference, `QUESTION_BANK_ID` in `pipelines/complaint_selection/schema.py`:
-the review platform owns the bank's *content* and reads only this id off the
-pool row to know which bank to present (CONTEXT.md's Question Bank entry).
-The group declares no `Variation` — one bank serves all three Case Types, so
-the per-Variation declaration (`case_review.variation`, as the demo above
-uses) is the shape to reintroduce only when the group's Case Types genuinely
-vary. And until the three complaints feeds have run at least
+The pool carries **no Question Bank reference**. The review platform derives
+which bank to present from its own Case Type configuration; nothing
+Selection knows feeds that choice, so an earlier shape that stamped a
+hardcoded `question_bank_id` onto every selected row was removed — the
+column is dropped by migration `0003_drop_question_bank_id`, and the group
+declares no `Variation`. (The per-Variation declaration the demo above uses,
+`case_review.variation`, remains for a Selection whose *criteria* genuinely
+vary by Variation — a bank reference is not what would bring it back.) And until the three complaints feeds have run at least
 once in a base directory, its daily schedule warns first-run (no upstream
 history) and then fails outright once it tries to read a silver database that
 does not exist yet — expected until ingest history exists.

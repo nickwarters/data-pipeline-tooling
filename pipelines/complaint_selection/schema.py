@@ -1,8 +1,12 @@
 """Declared schema for the ``complaint_selection`` SelectionPool.
 
-The Selection group's row contract, its one declared Question Bank reference,
-the frozen shape a ``SELECTION_GROUP`` member takes, and a pending void as
-``select_complaints`` resolves it against this run's candidates.
+The Selection group's row contract, the frozen shape a ``SELECTION_GROUP``
+member takes, and a pending void as ``select_complaints`` resolves it against
+this run's candidates.
+
+No Question Bank reference: the review platform derives which bank to
+present from its own Case Type configuration, so nothing Selection delivers
+feeds that choice (CONTEXT.md's Question Bank ownership entry).
 """
 
 from __future__ import annotations
@@ -12,14 +16,6 @@ from datetime import datetime
 from typing import Any, Callable, Mapping
 
 from framework.io import Reader
-
-# The Question Bank reference stamped onto every selected Case, so the review
-# platform knows which bank to present the Reviewer (CONTEXT.md: the platform
-# owns the bank's content; the pipeline carries only this id). One bank for
-# the whole group today -- the day the group's Case Types genuinely vary, the
-# per-Variation declaration (``case_review.variation``) is the shape to
-# reintroduce, carrying real differences rather than one hardcoded lookup.
-QUESTION_BANK_ID = "qb-complaints"
 
 
 @dataclass
@@ -38,7 +34,6 @@ class SelectedComplaint:
     # relational shape Sync's own `details` lands in (see
     # docs/data-dictionary-sharepoint-cases.md).
     details: str
-    question_bank_id: str
 
 
 @dataclass(frozen=True)

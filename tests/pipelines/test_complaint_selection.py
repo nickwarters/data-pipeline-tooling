@@ -232,18 +232,15 @@ def test_narrows_ranks_and_lands_the_group_pool_and_json(tmp_path):
     store = StoreRegistry(base_dir).store(f"{OUTPUT_SUBJECT}/{PIPELINE_NAME}")
     pool = read_rows(store, POOL_TABLE)
     assert [
-        (
-            row["case_ref"],
-            row["case_type"],
-            row["priority_score"],
-            row["question_bank_id"],
-        )
-        for row in pool
+        (row["case_ref"], row["case_type"], row["priority_score"]) for row in pool
     ] == [
-        ("B1", "complaints_b", 48, "qb-complaints"),
-        ("R001", "complaints_a", 34, "qb-complaints"),
-        ("C1", "complaints_c", 17, "qb-complaints"),
+        ("B1", "complaints_b", 48),
+        ("R001", "complaints_a", 34),
+        ("C1", "complaints_c", 17),
     ]
+    # No Question Bank reference on the pool row: the platform derives the
+    # bank from its own Case Type config, and migration 0003 drops the column.
+    assert all("question_bank_id" not in row for row in pool)
     assert [row["attribute_a"] for row in pool] == [None, None, None]
     # ``related_date`` is live: each pool row carries its complaint's received
     # date -- the same date the age score above was computed from.
