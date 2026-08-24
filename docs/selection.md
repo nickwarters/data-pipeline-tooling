@@ -305,8 +305,8 @@ treats the three as one group). `SELECTION_GROUP` in
 the group: a Shared Reader over its silver, its natural key, its
 received-date column, and its Case Details columns (below). The group shares
 **one** priority rule rather than a rule per member — oldest complaint first,
-`age_in_days` measured from the run date (`RunContext.run_date`, so a re-drive
-of a past run date recomputes the same scores) — and a member's contribution
+the age in days measured from the run date (`RunContext.run_date`, so a
+re-drive of a past run date recomputes the same scores) — and a member's contribution
 to the queue is its `received_date` and nothing else. Nothing outside
 `SELECTION_GROUP` names a member either: `select_pool` mints one read per
 group entry, so adding a Case Type is one entry, and a second Selection group
@@ -315,17 +315,33 @@ generalisation of this one.
 
 Unlike the demo above, this pipeline does not compose `Filter`/`Score`/
 `Sort`/`Stamp`/`SelectColumns` nodes, and it does not use `.explain()`. It
-wires four reads — one per group member plus one for Sync's current Cases —
-into **one** transform, `select_complaints`, that does the whole job: score,
-gate, replace voids, queue, and cap. One filter (`selected`) and three small
-named projections turn its one output into the SelectionPool row, the trace
-row, and the JSON deliverable row. The pool row and the JSON row carry the
-same `POOL_COLUMNS`; they differ only in that the pool table's `details` is
-serialised to JSON text while the deliverable keeps it as a nested object. This is a deliberate simplification over an earlier shape
-that chained framework primitives together — a maintainer could not read what
-Selection actually *did* without first understanding `Score`/`Filter`/`Sort`/
-`Stamp`/`SelectColumns`'s and `RowTrace`'s semantics; `select_complaints` is
-one function a maintainer reads top to bottom.
+wires the reads — one per group member plus one for Sync's current Cases —
+through a chain of **domain-named steps**, each its own transform in the run
+log: `candidates` (combine and score, vectorised), `gate-voided` and
+`gate-max-age` (vectorised verdict masks), `replace-voids` (the ladder and
+queue order, row-wise over the *eligible slice only*), and `hopper` (the
+capacity cut, vectorised). A gate settles `verdict`/`reason` columns rather
+than dropping rows, so one considered frame flows through every step and
+every excluded Case still reaches the trace. One filter (`selected`), a
+`details` step, and three small named projections turn that into the
+SelectionPool row, the trace row, and the JSON deliverable row. The pool row
+and the JSON row carry the same `POOL_COLUMNS`; they differ only in that the
+pool table's `details` is serialised to JSON text while the deliverable
+keeps it as a nested object.
+
+The order is a performance decision as much as a readability one. The
+candidate population is *every complaint the feeds have ever landed* (each
+run reconsiders the latest observation of each), and most of it ages out —
+that excluded majority only grows with time. So the two big filters run
+first and are vectorised masks, and the work that is genuinely per-row — the
+void ladder's rung matching, the per-source Case Details dicts — only ever
+touches what survives them: the eligible slice is bounded by the age window,
+and the details are built for at most a Hopper's worth of survivors. The
+steps are named for the domain decision each one makes, not the framework
+primitive that implements it — which keeps the earlier lesson (an early
+shape chained five generic primitives, and a maintainer could not read what
+Selection actually *did* without learning each one's semantics) without
+collapsing back into one function that does everything.
 
 **Why no `.explain()`.** ADR-0008's `RowTrace` seeds its considered
 population from the *first* `ReadNode` executed (`RowTrace.consider`, called
@@ -334,9 +350,10 @@ from there. That is sound for a pipeline with one source. This one has four —
 three Case Types plus Sync — feeding a single transform, and there is no
 sense in which "the first read's rows" is the considered population; all four
 are. The primitive has no way to express a multi-read considered population,
-so `select_complaints` builds its own trace columns (`verdict`, `reason`,
-`rank`, `score`) directly, and the `trace` node projects them off its single
-output rather than off a `.explain()` node. One upside falls out of this for
+so the gate and hopper steps settle the trace columns (`verdict`, `reason`,
+`rank`, `score`) directly on the considered frame, and the `trace` node
+projects them off the `hopper` step's output rather than off a `.explain()`
+node. One upside falls out of this for
 free: `.explain()` is one of the pairings the builder refuses under a
 streamed (chunked) read, because a row-level trace has to hold every row it
 has seen — removing it lifts that refusal, so this pipeline is not blocked
@@ -405,12 +422,15 @@ Each `SelectionGroupMember` declares `detail_columns`: the columns from its
 the frontend's `detailFields[].key` for that Case Type
 (`platform_frontend/docs/case-type-onboarding.md`) — not a pipeline-side
 name, so renaming a detail column here is a cross-project change, not a local
-one. `select_complaints` builds each source's `details` dict before any
-concat (a numeric column would otherwise upcast across sources with
-differing dtypes, and every row would gain the other sources' keys as NaN —
-invalid JSON `json.dumps` cannot emit, which is why `allow_nan=False` is
-passed: a residual NaN fails the run rather than shipping something the
-frontend's `JSON.parse` would reject). The landed shape mirrors Sync's own
+one. The `details` step (`attach_details`) builds each source's dict *after*
+every gate and the Hopper cut, and only for the selected rows — the
+dict-building never loops over the excluded majority — and per source, from
+that member's own latest rows, so each dict keeps only its own keys with
+native types (one concat'd frame would upcast numeric columns across sources
+and gain the other sources' keys as NaN — invalid JSON `json.dumps` cannot
+emit, which is why `allow_nan=False` is passed: a residual NaN fails the run
+rather than shipping something the frontend's `JSON.parse` would reject).
+The landed shape mirrors Sync's own
 `details` (see `docs/data-dictionary-sharepoint-cases.md`): unparsed JSON
 text in the SelectionPool table (the migration's declared type), a native
 nested object in the JSON deliverable — the same underlying dict, serialised
@@ -504,7 +524,7 @@ default for an environment with no history to read.
 
 **Queue order is consumed, by the Hopper.** This is the ADR's other change —
 void-replacement rung first, then oldest by related date, as the single order
-choosing every Case — reduced the same way the ladder is: `select_complaints`
+choosing every Case — reduced the same way the ladder is: `replace-voids`
 puts this run's replacements first (oldest void first), with the remaining
 queue in priority-desc order — which **is** "oldest by related date", now
 the score is the complaint's age in days (not a second sort over the whole
