@@ -54,7 +54,9 @@ def test_bundled_sample_feed_refines_through_to_silver(tmp_path):
 def test_to_raw_gates_source_columns():
     writer = RecordingWriter()
     # Missing 'resolution_days' column
-    reader = given_rows([{"record_id": "c1", "department": "finance"}])
+    reader = given_rows(
+        [{"record_id": "c1", "department": "finance", "received_date": "2026-07-20"}]
+    )
 
     with pytest.raises(
         ValidationError, match="missing required column.*resolution_days"
@@ -77,12 +79,14 @@ def test_to_silver_quarantines_value_rule_breaches():
                 "record_id": "R001",
                 "department": "finance",
                 "resolution_days": 10,
+                "received_date": "2026-07-20",
                 "run_id": "1",
             },
             {
                 "record_id": "R002",
                 "department": "hr",
                 "resolution_days": 500,
+                "received_date": "2026-07-20",
                 "run_id": "1",
             },
         ]
@@ -94,7 +98,14 @@ def test_to_silver_quarantines_value_rule_breaches():
     # The good row reaches the main writer
     assert_rows_equal(
         writer,
-        [{"record_id": "R001", "department": "finance", "resolution_days": 10}],
+        [
+            {
+                "record_id": "R001",
+                "department": "finance",
+                "resolution_days": 10,
+                "received_date": "2026-07-20",
+            }
+        ],
         ignoring=["run_id"],
     )
 
@@ -117,7 +128,9 @@ def test_to_silver_aborts_on_structural_breaches():
 
     # Missing 'resolution_days', which violates the schema structurally.
     # Structural breaches still abort and bypass quarantine.
-    reader = given_rows([{"record_id": "R001", "department": "finance"}])
+    reader = given_rows(
+        [{"record_id": "R001", "department": "finance", "received_date": "2026-07-20"}]
+    )
 
     with pytest.raises(ValidationError, match="missing column 'resolution_days'"):
         to_silver(reader, writer, reject_writer)

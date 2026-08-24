@@ -60,7 +60,14 @@ def test_both_steps_record_exactly_the_steps_they_always_have():
     names are what the run log stores, so a change to either is a change to how
     a run is read back.
     """
-    rows = [{"record_id": "R001", "label": "alpha", "amount": 50}]
+    rows = [
+        {
+            "record_id": "R001",
+            "label": "alpha",
+            "amount": 50,
+            "received_date": "2026-07-20",
+        }
+    ]
     writer, rejects = RecordingWriter(), RecordingWriter()
 
     raw_log = RecordingRunLog()
@@ -93,7 +100,9 @@ def test_both_steps_record_exactly_the_steps_they_always_have():
 def test_to_raw_gates_source_columns():
     writer = RecordingWriter()
     # Missing 'amount' column
-    reader = given_rows([{"record_id": "c1", "label": "alpha"}])
+    reader = given_rows(
+        [{"record_id": "c1", "label": "alpha", "received_date": "2026-07-20"}]
+    )
 
     with pytest.raises(ValidationError, match="missing required column.*amount"):
         to_raw(reader, writer)
@@ -110,8 +119,20 @@ def test_to_silver_quarantines_value_rule_breaches():
     # R002 breaches the Range(minimum=0, maximum=100) rule (amount=250)
     reader = given_rows(
         [
-            {"record_id": "R001", "label": "alpha", "amount": 50, "run_id": "1"},
-            {"record_id": "R002", "label": "beta", "amount": 250, "run_id": "1"},
+            {
+                "record_id": "R001",
+                "label": "alpha",
+                "amount": 50,
+                "received_date": "2026-07-20",
+                "run_id": "1",
+            },
+            {
+                "record_id": "R002",
+                "label": "beta",
+                "amount": 250,
+                "received_date": "2026-07-20",
+                "run_id": "1",
+            },
         ]
     )
 
@@ -121,7 +142,14 @@ def test_to_silver_quarantines_value_rule_breaches():
     # The good row reaches the main writer
     assert_rows_equal(
         writer,
-        [{"record_id": "R001", "label": "alpha", "amount": 50}],
+        [
+            {
+                "record_id": "R001",
+                "label": "alpha",
+                "amount": 50,
+                "received_date": "2026-07-20",
+            }
+        ],
         ignoring=["run_id"],
     )
 
@@ -144,7 +172,9 @@ def test_to_silver_aborts_on_structural_breaches():
 
     # Missing 'amount', which violates the schema structurally.
     # Structural breaches still abort and bypass quarantine.
-    reader = given_rows([{"record_id": "c1", "label": "alpha"}])
+    reader = given_rows(
+        [{"record_id": "c1", "label": "alpha", "received_date": "2026-07-20"}]
+    )
 
     with pytest.raises(ValidationError, match="missing column 'amount'"):
         to_silver(reader, writer, reject_writer)

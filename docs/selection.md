@@ -302,8 +302,16 @@ A/B/C are one SAS complaints export split three ways, each its own Case Type
 ingest (source -> raw -> silver, no gold — CONTEXT.md's Selection group entry
 treats the three as one group). `SELECTION_GROUP` in
 `pipelines/complaint_selection/pipeline.py` is the one place a Case Type joins
-the group: a Shared Reader over its silver, its natural key, its priority
-rule, and its Case Details columns (below).
+the group: a Shared Reader over its silver, its natural key, its
+received-date column, and its Case Details columns (below). The group shares
+**one** priority rule rather than a rule per member — oldest complaint first,
+`age_in_days` measured from the run date (`RunContext.run_date`, so a re-drive
+of a past run date recomputes the same scores) — and a member's contribution
+to the queue is its `received_date` and nothing else. Nothing outside
+`SELECTION_GROUP` names a member either: `select_pool` mints one read per
+group entry, so adding a Case Type is one entry, and a second Selection group
+arriving later is this pipeline's shape with a different group tuple, not a
+generalisation of this one.
 
 Unlike the demo above, this pipeline does not compose `Filter`/`Score`/
 `Sort`/`Stamp`/`SelectColumns` nodes, and it does not use `.explain()`. It
@@ -372,10 +380,20 @@ but does not run the three ingests — they are not on any schedule — so somet
 else (an operator, a separate job) still has to run them for that requirement to
 mean anything; it no longer matters *how*.
 
-The deployed group narrows in two ways today: a fixed priority threshold
-(`PRIORITY_THRESHOLD`) and a Hopper cap (`HOPPER_DEPTH`, below) — still no
-volume target or composition split, unlike the plans-per-group model the rest
-of this doc describes. And until the three complaints feeds have run at least
+The deployed group narrows in two ways today: a maximum age (`MAX_AGE_DAYS`
+— only a complaint **younger** than it is selectable, traced as the
+`max-age` filter; a missing or unparseable `received_date` is excluded
+explicitly as `missing-received-date` rather than given an invented age) and
+a Hopper cap (`HOPPER_DEPTH`, below) — still no volume target or composition
+split, unlike the plans-per-group model the rest of this doc describes.
+Every selected row is stamped with the group's one declared Question Bank
+reference, `QUESTION_BANK_ID` in `pipelines/complaint_selection/schema.py`:
+the review platform owns the bank's *content* and reads only this id off the
+pool row to know which bank to present (CONTEXT.md's Question Bank entry).
+The group declares no `Variation` — one bank serves all three Case Types, so
+the per-Variation declaration (`case_review.variation`, as the demo above
+uses) is the shape to reintroduce only when the group's Case Types genuinely
+vary. And until the three complaints feeds have run at least
 once in a base directory, its daily schedule warns first-run (no upstream
 history) and then fails outright once it tries to read a silver database that
 does not exist yet — expected until ingest history exists.
@@ -448,13 +466,14 @@ correction from an earlier shape that read the accumulated pool table for
 this instead.
 
 Say this plainly so nobody mistakes it for a live attribute match:
-`attribute_a` and `related_date` are **dormant placeholders**, all-`None` until
-a feed actually carries them, so today the ladder's first two rungs never
-match anything and the live rung is always `("case_type",)` — the third and
-last. With `related_date` also always `None`, its "oldest first" tie-break has
-nothing to compare and degrades to the pool's existing sorted order (by
-`priority_score`), so the effective rule today is "the highest-priority
-same-case-type Case not already claimed". The pairing a replacement made is
+`attribute_a` is a **dormant placeholder**, all-`None` until a feed actually
+carries it, so today the ladder's first two rungs never match anything and
+the live rung is always `("case_type",)` — the third and last.
+`related_date` is **live**: it carries each candidate's `received_date`, the
+same date the age score is computed from, so within a rung the oldest
+complaint genuinely wins and the effective rule today is "the oldest
+same-case-type Case not already claimed" — one date feeding both the queue's
+priority order and the ladder's tie-break, by construction. The pairing a replacement made is
 recorded on the selected pool row itself — `replaces_case_ref` +
 `void_match_rung` — never as an extra or below-threshold selection: steering
 never gates.
@@ -486,10 +505,11 @@ default for an environment with no history to read.
 **Queue order is consumed, by the Hopper.** This is the ADR's other change —
 void-replacement rung first, then oldest by related date, as the single order
 choosing every Case — reduced the same way the ladder is: `select_complaints`
-puts this run's replacements first (oldest void first), with priority-desc
-standing in for "oldest by related date" while `related_date` stays dormant
-(not a second sort over the whole pool: with a ladder, rung is a relation
-between one void and one candidate, not a column every row can be ranked by).
+puts this run's replacements first (oldest void first), with the remaining
+queue in priority-desc order — which **is** "oldest by related date", now
+the score is the complaint's age in days (not a second sort over the whole
+pool: with a ladder, rung is a relation between one void and one candidate,
+not a column every row can be ranked by).
 The Hopper cap then cuts at that queue's remaining capacity; a Case it cuts
 still lands in the trace with its score — the gate the trace observes, never
 a limit on the read (ADR-0021). `rank` in `selection_trace` now records

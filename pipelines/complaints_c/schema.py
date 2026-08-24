@@ -16,3 +16,5 @@ class ComplaintsCRow:
     record_id: str
     department: str
     resolution_days: Annotated[int, Range(minimum=0, maximum=365)]
+    # ISO date the complaint arrived; the Selection group's age rule reads it.
+    received_date: str
