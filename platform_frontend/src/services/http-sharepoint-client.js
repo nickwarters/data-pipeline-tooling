@@ -962,6 +962,32 @@ function orderByColumn(key) {
  */
 
 /**
+ * The condition for one of the Action Centre's Yes/No flag columns.
+ *
+ * The `true` case is the plain equality. The `false` case has to tolerate a
+ * **null** column as well as an explicit `No`, because `Col eq 0` does not match
+ * a null one and null is the normal state of a freshly claimed Case: the claim
+ * write sets Status, Assigned Reviewer, that Reviewer's Manager and the Due Date
+ * and touches none of these three columns. Without the null branch a negated
+ * flag silently answers "no rows" on a list whose column was provisioned without
+ * a default, while the mock — which reads an unset column as `No` — answers in
+ * full, so the divergence only shows up in production.
+ *
+ * `(Col eq 0 or Col eq null)` is also the reading the rest of the app already
+ * takes: `rowFromItem` maps a null column to `undefined`, i.e. not flagged.
+ * The same null-tolerant shape `DueDate eq null` uses in the `overdue: false`
+ * branch above.
+ *
+ * @param {string} column
+ * @param {boolean} value
+ * @returns {string}
+ */
+function flagCond(column, value) {
+  if (value) return `${column} eq 1`;
+  return `(${column} eq 0 or ${column} eq null)`;
+}
+
+/**
  * Build the OData `$filter` expression for a resolved filter.
  * Shared by `listCases` and `countCases` so a paged read and its count are
  * always the same server-side query. Scalar fields AND together; `anyOf` ORs
@@ -1059,14 +1085,14 @@ function buildFilterExpr(filter) {
   // row so a reason count is a cheap `$count`, never a blob parse.
   if (filter.awaitingResponsibleParty !== undefined) {
     conds.push(
-      `AwaitingResponsibleParty eq ${filter.awaitingResponsibleParty ? 1 : 0}`
+      flagCond('AwaitingResponsibleParty', filter.awaitingResponsibleParty)
     );
   }
   if (filter.onHold !== undefined) {
-    conds.push(`OnHold eq ${filter.onHold ? 1 : 0}`);
+    conds.push(flagCond('OnHold', filter.onHold));
   }
   if (filter.hasOpenAppeal !== undefined) {
-    conds.push(`HasOpenAppeal eq ${filter.hasOpenAppeal ? 1 : 0}`);
+    conds.push(flagCond('HasOpenAppeal', filter.hasOpenAppeal));
   }
   // Bounded server-side report query by the corrected result. The
   // column is indexed, so the RP-team / true-result reports stay one $filter

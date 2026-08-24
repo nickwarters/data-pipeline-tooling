@@ -225,6 +225,16 @@ Search and Team Cases may accept a `caseType` value in their own service or
 URL state to choose which source lists to query. Those services translate that
 selection into `listName`; they do not pass it as a `ListCasesFilter` field.
 
+**A `false` on one of the three Action Centre reason flags —
+`awaitingResponsibleParty`, `onHold`, `hasOpenAppeal` — means "not flagged", and
+that includes a column nobody has written.** The app writes these only on the
+lifecycle transition that sets them, so a Case that has never made that
+transition carries null rather than `No`; `Col eq 0` alone would exclude it,
+which is the opposite of what the filter asks for and is why the query emits
+`(Col eq 0 or Col eq null)`. A `true` is the plain equality. `outcomeOverridden`
+is not one of these: it is written on every outcome save, so it has no unset
+state and keeps `eq 0`.
+
 ### `Answer`
 
 ```js

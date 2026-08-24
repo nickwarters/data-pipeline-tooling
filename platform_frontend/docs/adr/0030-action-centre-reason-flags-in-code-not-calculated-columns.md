@@ -233,6 +233,33 @@ not require completed or void rows to carry it. Existing outstanding allocations
 must be backfilled from authoritative allocation evidence before rollout, with no
 `Created` fallback; invalid legacy rows are excluded from the ordered query and count.
 
+### Amendment — issue #776, 2026-08-24
+
+**A negated reason flag matches an unset column as well as an explicit `No`.**
+The three state booleans this ADR provisions as plain `Yes/No` columns —
+`AwaitingResponsibleParty`, `OnHold`, `HasOpenAppeal` — are written by the app on
+transition and by nothing else, so a Case that has never made that transition
+carries **null**, not `No`, unless the column happened to be provisioned with a
+default. `Col eq 0` does not match a null column, so a filter asking for "not
+awaiting" was answering "no rows" on exactly the population it was meant to
+return, while the mock — which reads an unset column as `No` — answered in full.
+The divergence was therefore invisible in the dev loop.
+
+The `false` case now emits `(Col eq 0 or Col eq null)`, the same null-tolerant
+shape the `overdue: false` branch already used for `DueDate eq null`, and the
+same reading the rest of the app takes: `rowFromItem` maps a null column to
+`undefined`, i.e. not flagged. `true` keeps the plain equality — a null column is
+not the flag being set.
+
+This is a **behaviour change, not only a correctness fix**: the `maxInProgressCases`
+allocation capacity count sends `onHold: false` and had been counting nothing
+where the column is null-bearing. It now counts, so the cap starts biting where it
+previously did not.
+
+`OutcomeOverridden` is deliberately left on the plain equality. It is not a
+reason flag: it is written on every outcome save, so it has no unset state to
+tolerate.
+
 ## Context
 
 The dashboard Action Centre groups a Reviewer/Controls/Owner worklist by

@@ -73,6 +73,17 @@ function caseRow(id, over = {}) {
 }
 
 /**
+ * A Yes/No column's stored value: 1, 0, or null when the row never set it.
+ *
+ * @param {boolean | undefined} value
+ * @returns {number | null}
+ */
+function flagColumn(value) {
+  if (value === undefined) return null;
+  return value ? 1 : 0;
+}
+
+/**
  * Project a Case row into the SharePoint list item the server would hold for
  * it. Written out by hand on purpose: deriving it from the client's own column
  * mapping would make the server-side half of every assertion agree with the
@@ -99,9 +110,15 @@ function toListItem(row) {
     VoidedAt: row.voidedAt ?? null,
     EffectiveOutcome: row.effectiveOutcome ?? null,
     OutcomeOverridden: row.outcomeOverridden ? 1 : 0,
-    AwaitingResponsibleParty: row.awaitingResponsibleParty ? 1 : 0,
-    OnHold: row.onHold ? 1 : 0,
-    HasOpenAppeal: row.hasOpenAppeal ? 1 : 0,
+    // The three reason flags project their *unset* state as null rather than
+    // 0, because that is what the list holds for them: the claim write never
+    // touches these columns, so a freshly claimed Case carries null unless the
+    // column was provisioned with a default. Flattening absent to 0 here would
+    // make the unset column unmodellable and hide the one case a negated flag
+    // gets wrong.
+    AwaitingResponsibleParty: flagColumn(row.awaitingResponsibleParty),
+    OnHold: flagColumn(row.onHold),
+    HasOpenAppeal: flagColumn(row.hasOpenAppeal),
   };
 }
 
@@ -305,6 +322,31 @@ const SCENARIOS = [
     filter: { hasOpenAppeal: true },
     rows: [caseRow('appealed', { hasOpenAppeal: true }), caseRow('accepted')],
     expected: ['appealed'],
+  },
+  {
+    // The exposure the two engines used to disagree on: an unset Yes/No column
+    // is "not on hold" to every other part of the app, and the negated filter
+    // has to say the same. `OnHold eq 0` alone matches only the explicit No and
+    // drops the unset row, which on a list provisioned without a default is
+    // most of the list.
+    name: 'onHold negated matches an unset column as well as an explicit No',
+    filter: { onHold: false },
+    rows: [
+      caseRow('parked', { onHold: true }),
+      caseRow('explicit-no', { onHold: false }),
+      caseRow('never-set'),
+    ],
+    expected: ['explicit-no', 'never-set'],
+  },
+  {
+    name: 'awaitingResponsibleParty and hasOpenAppeal negated over unset columns',
+    filter: { awaitingResponsibleParty: false, hasOpenAppeal: false },
+    rows: [
+      caseRow('waiting', { awaitingResponsibleParty: true }),
+      caseRow('appealed', { hasOpenAppeal: true }),
+      caseRow('never-set'),
+    ],
+    expected: ['never-set'],
   },
   {
     name: 'completedAfter',
