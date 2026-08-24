@@ -613,7 +613,7 @@ test('HttpSharePointClient: countCases maps the reason flags to indexed boolean 
 
   const url = decodeURIComponent(calls[0].url);
   assert.ok(url.includes('AwaitingResponsibleParty eq 1'));
-  assert.ok(url.includes('HasOpenAppeal eq 0'));
+  assert.ok(url.includes('(HasOpenAppeal eq 0 or HasOpenAppeal eq null)'));
 });
 
 test('HttpSharePointClient: countCases maps non-held capacity to the indexed OnHold column', async () => {
@@ -639,7 +639,7 @@ test('HttpSharePointClient: countCases maps non-held capacity to the indexed OnH
   );
   assert.ok(url.includes("Status eq 'In-progress'"));
   assert.ok(url.includes('AssignedReviewerId eq 9'));
-  assert.ok(url.includes('OnHold eq 0'));
+  assert.ok(url.includes('(OnHold eq 0 or OnHold eq null)'));
 });
 
 test('HttpSharePointClient: countCases with anyOf builds an OR of parenthesised sub-filters', async () => {
@@ -1001,7 +1001,7 @@ test('HttpSharePointClient: _getAllPages falls back to [] for an unrecognised pa
   assert.deepEqual(rows, []);
 });
 
-test('HttpSharePointClient: countCases with every reason flag false renders every OData boolean as 0', async () => {
+test('HttpSharePointClient: a false reason flag matches an unset column as well as an explicit No', async () => {
   const { fetch, calls } = makeFetch([
     {
       when: (c) => c.method === 'GET',
@@ -1023,8 +1023,14 @@ test('HttpSharePointClient: countCases with every reason flag false renders ever
   );
 
   const url = decodeURIComponent(calls[0].url);
-  assert.ok(url.includes('AwaitingResponsibleParty eq 0'));
+  assert.ok(
+    url.includes(
+      '(AwaitingResponsibleParty eq 0 or AwaitingResponsibleParty eq null)'
+    )
+  );
   assert.ok(url.includes('HasOpenAppeal eq 1'));
+  // Not a reason flag: `OutcomeOverridden` is written on every outcome save, so
+  // it has no null state to tolerate and keeps the plain equality.
   assert.ok(url.includes('OutcomeOverridden eq 0'));
 });
 
