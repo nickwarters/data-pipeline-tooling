@@ -24,3 +24,5 @@ class ComplaintsARow:
     record_id: str
     label: str
     amount: Annotated[int, Range(minimum=0, maximum=100)]
+    # ISO date the complaint arrived; the Selection group's age rule reads it.
+    received_date: str

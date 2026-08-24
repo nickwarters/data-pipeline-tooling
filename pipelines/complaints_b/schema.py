@@ -24,3 +24,5 @@ class ComplaintsBRow:
     record_id: str
     category: str
     priority: Annotated[str, OneOf("low", "medium", "high")]
+    # ISO date the complaint arrived; the Selection group's age rule reads it.
+    received_date: str

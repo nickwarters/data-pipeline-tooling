@@ -27,18 +27,16 @@ from pipelines.complaint_selection.pipeline import (
     POOL_TABLE,
     TRACE_TABLE,
     UPSTREAMS,
-    amount_priority,
+    age_in_days,
     assign_replacements,
-    meets_priority_threshold,
     previous_run_instant,
-    priority_band,
     run,
     select_complaints,
     select_pool,
-    slow_resolution_priority,
     unallocated_count,
     voided_refs,
     voids_since,
+    within_max_age,
 )
 from pipelines.complaint_selection.schema import PendingVoid
 from tests.framework_testing import (
@@ -55,6 +53,8 @@ from tools.observability.run_log import RunLog
 from tools.store import StoreRegistry
 
 _VOIDED_AT = dt.datetime(2026, 8, 18, 9, 0, tzinfo=dt.timezone.utc)
+# The fixed run date every scoring test measures ages against.
+_RUN_DATE = dt.date(2026, 8, 18)
 _EMPTY_CURRENT = Dataset.from_pandas(
     pd.DataFrame(columns=["title", "status", "voided_at"])
 )
@@ -72,10 +72,19 @@ def test_the_steps_are_exactly_the_ones_it_always_took():
     than merely being wired.
     """
     # Real rows, not an empty frame: the steps execute, so each source has to
-    # carry what its own priority rule reads -- and ``load_date``, which the old
+    # carry what the shared age rule reads -- ``received_date`` -- and
+    # ``load_date``, which the old
     # plan test could leave out because describing a graph never touched data.
     reader_a = given_rows(
-        [{"record_id": "R001", "label": "a", "amount": 90, "load_date": "2026-08-18"}]
+        [
+            {
+                "record_id": "R001",
+                "label": "a",
+                "amount": 90,
+                "received_date": "2026-07-15",
+                "load_date": "2026-08-18",
+            }
+        ]
     )
     reader_b = given_rows(
         [
@@ -83,6 +92,7 @@ def test_the_steps_are_exactly_the_ones_it_always_took():
                 "record_id": "B1",
                 "category": "sales",
                 "priority": "high",
+                "received_date": "2026-07-15",
                 "load_date": "2026-08-18",
             }
         ]
@@ -93,6 +103,7 @@ def test_the_steps_are_exactly_the_ones_it_always_took():
                 "record_id": "C1",
                 "department": "hr",
                 "resolution_days": 70,
+                "received_date": "2026-07-15",
                 "load_date": "2026-08-18",
             }
         ]
@@ -106,9 +117,7 @@ def test_the_steps_are_exactly_the_ones_it_always_took():
 
     with active_context(RunContext(pipeline=PIPELINE_NAME, run_log=run_log)):
         select_pool(
-            complaints_a=reader_a,
-            complaints_b=reader_b,
-            complaints_c=reader_c,
+            member_readers=[reader_a, reader_b, reader_c],
             current_cases=_Empty(),
             pool_writer=pool_w,
             trace_writer=trace_w,
@@ -153,29 +162,63 @@ def _seed_case_current(base_dir, rows: list[dict]) -> None:
 
 
 def _seed_group(base_dir) -> None:
-    """One row above and one below threshold, in each of the three Case Types."""
+    """One row inside and one outside the age window, in each Case Type.
+
+    Ages at the ``_RUN_DATE`` run date: B1 48d, R001 34d, C1 17d -- selected,
+    oldest first; R002/B2/C2 are past ``MAX_AGE_DAYS`` and excluded.
+    """
     _seed_silver(
         base_dir,
         "complaints_a",
         [
-            {"record_id": "R001", "label": "alpha", "amount": 90},
-            {"record_id": "R002", "label": "beta", "amount": 10},
+            {
+                "record_id": "R001",
+                "label": "alpha",
+                "amount": 90,
+                "received_date": "2026-07-15",
+            },
+            {
+                "record_id": "R002",
+                "label": "beta",
+                "amount": 10,
+                "received_date": "2026-06-01",
+            },
         ],
     )
     _seed_silver(
         base_dir,
         "complaints_b",
         [
-            {"record_id": "B1", "category": "sales", "priority": "high"},
-            {"record_id": "B2", "category": "sales", "priority": "low"},
+            {
+                "record_id": "B1",
+                "category": "sales",
+                "priority": "high",
+                "received_date": "2026-07-01",
+            },
+            {
+                "record_id": "B2",
+                "category": "sales",
+                "priority": "low",
+                "received_date": "2026-05-01",
+            },
         ],
     )
     _seed_silver(
         base_dir,
         "complaints_c",
         [
-            {"record_id": "C1", "department": "hr", "resolution_days": 70},
-            {"record_id": "C2", "department": "hr", "resolution_days": 5},
+            {
+                "record_id": "C1",
+                "department": "hr",
+                "resolution_days": 70,
+                "received_date": "2026-08-01",
+            },
+            {
+                "record_id": "C2",
+                "department": "hr",
+                "resolution_days": 5,
+                "received_date": "2026-06-20",
+            },
         ],
     )
 
@@ -184,7 +227,7 @@ def test_narrows_ranks_and_lands_the_group_pool_and_json(tmp_path):
     base_dir = build_databases(tmp_path, "selection_output")
     _seed_group(base_dir)
 
-    run(RunContext(base_dir=base_dir, pipeline=PIPELINE_NAME))
+    run(RunContext(base_dir=base_dir, pipeline=PIPELINE_NAME, run_date=_RUN_DATE))
 
     store = StoreRegistry(base_dir).store(f"{OUTPUT_SUBJECT}/{PIPELINE_NAME}")
     pool = read_rows(store, POOL_TABLE)
@@ -197,11 +240,18 @@ def test_narrows_ranks_and_lands_the_group_pool_and_json(tmp_path):
         )
         for row in pool
     ] == [
-        ("B1", "complaints_b", 100, "qb-complaints"),
-        ("R001", "complaints_a", 90, "qb-complaints"),
-        ("C1", "complaints_c", 70, "qb-complaints"),
+        ("B1", "complaints_b", 48, "qb-complaints"),
+        ("R001", "complaints_a", 34, "qb-complaints"),
+        ("C1", "complaints_c", 17, "qb-complaints"),
     ]
     assert [row["attribute_a"] for row in pool] == [None, None, None]
+    # ``related_date`` is live: each pool row carries its complaint's received
+    # date -- the same date the age score above was computed from.
+    assert [row["related_date"] for row in pool] == [
+        "2026-07-01",
+        "2026-07-15",
+        "2026-08-01",
+    ]
 
     landed = json.loads((base_dir / OUTPUT_SUBJECT / POOL_JSON).read_text())
     assert [row["case_ref"] for row in landed] == ["B1", "R001", "C1"]
@@ -214,19 +264,19 @@ def test_an_excluded_case_lands_in_the_trace_with_its_score_and_reason(tmp_path)
     base_dir = build_databases(tmp_path, "selection_output")
     _seed_group(base_dir)
 
-    run(RunContext(base_dir=base_dir, pipeline=PIPELINE_NAME))
+    run(RunContext(base_dir=base_dir, pipeline=PIPELINE_NAME, run_date=_RUN_DATE))
 
     store = StoreRegistry(base_dir).store(f"{OUTPUT_SUBJECT}/{PIPELINE_NAME}")
     trace = {row["case_ref"]: row for row in read_rows(store, TRACE_TABLE)}
 
     excluded = trace["R002"]
     assert excluded["verdict"] == "excluded"
-    assert "priority-threshold" in excluded["reason"]
-    assert excluded["score"] == 10
+    assert "max-age" in excluded["reason"]
+    assert excluded["score"] == 78
 
     selected = trace["R001"]
     assert selected["verdict"] == "selected"
-    assert selected["score"] == 90
+    assert selected["score"] == 34
 
 
 def test_latest_per_key_keeps_only_the_most_recent_observation(tmp_path):
@@ -234,33 +284,62 @@ def test_latest_per_key_keeps_only_the_most_recent_observation(tmp_path):
     _seed_silver(
         base_dir,
         "complaints_a",
-        [{"record_id": "R001", "label": "alpha", "amount": 10}],
+        [
+            {
+                "record_id": "R001",
+                "label": "alpha",
+                "amount": 10,
+                "received_date": "2026-06-01",
+            }
+        ],
         load_date="2026-08-10",
     )
     _seed_silver(
         base_dir,
         "complaints_a",
-        [{"record_id": "R001", "label": "alpha", "amount": 90}],
+        [
+            {
+                "record_id": "R001",
+                "label": "alpha",
+                "amount": 90,
+                "received_date": "2026-07-15",
+            }
+        ],
         load_date="2026-08-17",
     )
     _seed_silver(
         base_dir,
         "complaints_b",
-        [{"record_id": "B9", "category": "sales", "priority": "low"}],
+        [
+            {
+                "record_id": "B9",
+                "category": "sales",
+                "priority": "low",
+                "received_date": "2026-05-01",
+            }
+        ],
     )
     _seed_silver(
         base_dir,
         "complaints_c",
-        [{"record_id": "C9", "department": "hr", "resolution_days": 1}],
+        [
+            {
+                "record_id": "C9",
+                "department": "hr",
+                "resolution_days": 1,
+                "received_date": "2026-05-01",
+            }
+        ],
     )
 
-    run(RunContext(base_dir=base_dir, pipeline=PIPELINE_NAME))
+    run(RunContext(base_dir=base_dir, pipeline=PIPELINE_NAME, run_date=_RUN_DATE))
 
     store = StoreRegistry(base_dir).store(f"{OUTPUT_SUBJECT}/{PIPELINE_NAME}")
     pool = read_rows(store, POOL_TABLE)
-    # B9 and C9 are both below threshold, so only the later R001 observation
-    # (amount=90, not the superseded amount=10) can appear at all.
-    assert [(row["case_ref"], row["priority_score"]) for row in pool] == [("R001", 90)]
+    # B9 and C9 are both outside the age window, so only the later R001
+    # observation (received 2026-07-15, not the superseded 2026-06-01 -- which
+    # would itself be outside the window) can appear at all.
+    assert [(row["case_ref"], row["priority_score"]) for row in pool] == [("R001", 34)]
 
 
 def test_freshness_requirement_resolves_against_path_addressed_ingest_history(
@@ -353,15 +432,47 @@ def test_a_stale_sharepoint_cases_record_blocks_the_run_same_day(tmp_path, monke
         )
 
 
-def test_pure_scorers_and_threshold_are_named_testable_functions():
-    assert amount_priority({"amount": 42}) == 42
-    assert priority_band({"priority": "high"}) == 100
-    assert priority_band({"priority": "medium"}) == 50
-    assert priority_band({"priority": "low"}) == 10
-    assert slow_resolution_priority({"resolution_days": 7}) == 7
+def test_age_rule_and_max_age_gate_are_named_testable_functions():
+    assert age_in_days("2026-07-29", dt.date(2026, 8, 18)) == 20
+    # Sync-style datetime text is tolerated; only the date part is read.
+    assert age_in_days("2026-08-18 09:30:00", dt.date(2026, 8, 18)) == 0
+    assert age_in_days(None, dt.date(2026, 8, 18)) is None
+    assert age_in_days("not-a-date", dt.date(2026, 8, 18)) is None
 
-    assert meets_priority_threshold({"priority_score": 50}) is True
-    assert meets_priority_threshold({"priority_score": 49}) is False
+    # "Only include younger than": the boundary age itself is excluded.
+    assert within_max_age({"priority_score": 49}) is True
+    assert within_max_age({"priority_score": 50}) is False
+
+
+def test_a_missing_received_date_is_excluded_not_guessed():
+    a = given_rows(
+        [
+            {
+                "record_id": "R001",
+                "label": "x",
+                "amount": 10,
+                "received_date": None,
+                "load_date": "2026-08-18",
+            },
+            {
+                "record_id": "R002",
+                "label": "y",
+                "amount": 10,
+                "received_date": "2026-08-01",
+                "load_date": "2026-08-18",
+            },
+        ]
+    ).read()
+    empty = Dataset.from_pandas(pd.DataFrame(columns=["record_id", "load_date"]))
+
+    out = select_complaints(
+        a, empty, empty, _EMPTY_CURRENT, run_date=_RUN_DATE
+    ).to_pandas()
+
+    by_ref = {row["case_ref"]: row for _, row in out.iterrows()}
+    assert by_ref["R001"]["verdict"] == "excluded"
+    assert by_ref["R001"]["reason"] == "excluded by filter 'missing-received-date'"
+    assert by_ref["R002"]["verdict"] == "selected"
 
 
 # ── Void replacement (ADR-0021, reduced) ──────────────────────────────────
@@ -382,19 +493,43 @@ def test_a_void_since_the_previous_run_is_replaced_at_the_case_type_rung(
         base_dir,
         "complaints_a",
         [
-            {"record_id": "R001", "label": "alpha", "amount": 90},
-            {"record_id": "R003", "label": "gamma", "amount": 60},
+            {
+                "record_id": "R001",
+                "label": "alpha",
+                "amount": 90,
+                "received_date": "2026-07-15",
+            },
+            {
+                "record_id": "R003",
+                "label": "gamma",
+                "amount": 60,
+                "received_date": "2026-07-10",
+            },
         ],
     )
     _seed_silver(
         base_dir,
         "complaints_b",
-        [{"record_id": "B1", "category": "x", "priority": "high"}],
+        [
+            {
+                "record_id": "B1",
+                "category": "x",
+                "priority": "high",
+                "received_date": "2026-07-01",
+            }
+        ],
     )
     _seed_silver(
         base_dir,
         "complaints_c",
-        [{"record_id": "C1", "department": "hr", "resolution_days": 70}],
+        [
+            {
+                "record_id": "C1",
+                "department": "hr",
+                "resolution_days": 70,
+                "received_date": "2026-08-01",
+            }
+        ],
     )
 
     monkeypatch.setattr(
@@ -407,7 +542,7 @@ def test_a_void_since_the_previous_run_is_replaced_at_the_case_type_rung(
 
     store = StoreRegistry(base_dir).store(f"{OUTPUT_SUBJECT}/{PIPELINE_NAME}")
     after_run_1 = {row["case_ref"] for row in read_rows(store, POOL_TABLE)}
-    assert {"R001", "R003"} <= after_run_1  # both cleared threshold in run 1
+    assert {"R001", "R003"} <= after_run_1  # both inside the age window in run 1
 
     _seed_case_current(
         base_dir,
@@ -647,11 +782,13 @@ _EMPTY_C = Dataset.from_pandas(pd.DataFrame(columns=["record_id", "load_date"]))
 
 
 def test_hopper_gate_caps_the_queue_and_traces_the_cut_with_its_score():
+    # r0 is the oldest (received 2026-07-01, 48 days) and leads the queue.
     rows = [
         {
             "record_id": f"r{i}",
             "label": "x",
-            "amount": 100 - i,
+            "amount": 10,
+            "received_date": f"2026-07-0{i + 1}",
             "load_date": "2026-08-18",
         }
         for i in range(5)
@@ -659,7 +796,9 @@ def test_hopper_gate_caps_the_queue_and_traces_the_cut_with_its_score():
     a = given_rows(rows).read()
     b = _EMPTY_C
 
-    out = select_complaints(a, b, _EMPTY_C, _EMPTY_CURRENT, hopper_depth=3).to_pandas()
+    out = select_complaints(
+        a, b, _EMPTY_C, _EMPTY_CURRENT, hopper_depth=3, run_date=_RUN_DATE
+    ).to_pandas()
 
     selected = out[out["verdict"] == "selected"].sort_values("rank")
     assert selected["case_ref"].tolist() == ["r0", "r1", "r2"]
@@ -674,9 +813,10 @@ def test_hopper_gate_caps_the_queue_and_traces_the_cut_with_its_score():
 
 
 def _replacement_scenario(*, hopper_depth: int) -> pd.DataFrame:
-    """``voided-a`` (complaints_a) is voided; ``repl`` (complaints_a, lower
-    score) is its sole ladder match; ``high`` (complaints_b) is an unrelated,
-    higher-scoring, non-replacement candidate competing for the same slot.
+    """``voided-a`` (complaints_a) is voided; ``repl`` (complaints_a, younger
+    and so lower-scoring) is its sole ladder match; ``high`` (complaints_b) is
+    an unrelated, older (higher-scoring) non-replacement candidate competing
+    for the same slot.
 
     A void is only resolvable against a candidate this run can still see --
     its silver row is unaffected by its sync status -- so the voided title
@@ -688,12 +828,14 @@ def _replacement_scenario(*, hopper_depth: int) -> pd.DataFrame:
                 "record_id": "voided-a",
                 "label": "x",
                 "amount": 70,
+                "received_date": "2026-07-20",
                 "load_date": "2026-08-18",
             },
             {
                 "record_id": "repl",
                 "label": "x",
                 "amount": 55,
+                "received_date": "2026-08-01",
                 "load_date": "2026-08-18",
             },
         ]
@@ -704,6 +846,7 @@ def _replacement_scenario(*, hopper_depth: int) -> pd.DataFrame:
                 "record_id": "high",
                 "category": "x",
                 "priority": "high",
+                "received_date": "2026-07-01",
                 "load_date": "2026-08-18",
             }
         ]
@@ -713,7 +856,13 @@ def _replacement_scenario(*, hopper_depth: int) -> pd.DataFrame:
     )
     since = dt.datetime(2026, 8, 18, 8, 0, tzinfo=dt.timezone.utc)
     return select_complaints(
-        a, b, _EMPTY_C, current, since=since, hopper_depth=hopper_depth
+        a,
+        b,
+        _EMPTY_C,
+        current,
+        since=since,
+        hopper_depth=hopper_depth,
+        run_date=_RUN_DATE,
     ).to_pandas()
 
 
@@ -726,7 +875,7 @@ def test_a_replacement_jumps_the_queue_ahead_of_a_higher_scorer():
 
     cut = out[(out["verdict"] == "excluded") & (out["case_ref"] == "high")].iloc[0]
     assert cut["reason"] == "excluded by gate 'hopper' (capacity 1)"
-    assert cut["score"] == 100
+    assert cut["score"] == 48
 
 
 def test_rank_reflects_queue_position_not_score():
@@ -767,7 +916,7 @@ def test_a_full_hopper_run_lands_zero_and_traces_the_denial(tmp_path, monkeypatc
     base_dir = build_databases(tmp_path, "sharepoint_cases/gold", "selection_output")
     _seed_group(base_dir)  # selects B1, R001, C1
 
-    run(RunContext(base_dir=base_dir, pipeline=PIPELINE_NAME))
+    run(RunContext(base_dir=base_dir, pipeline=PIPELINE_NAME, run_date=_RUN_DATE))
 
     store = StoreRegistry(base_dir).store(f"{OUTPUT_SUBJECT}/{PIPELINE_NAME}")
     selected = [row["case_ref"] for row in read_rows(store, POOL_TABLE)]
@@ -776,18 +925,25 @@ def test_a_full_hopper_run_lands_zero_and_traces_the_denial(tmp_path, monkeypatc
     _seed_case_current(
         base_dir, [{"title": ref, "status": "To-allocate"} for ref in selected]
     )
-    # A fresh, above-threshold candidate for run 2 to consider and be denied.
+    # A fresh, in-window candidate for run 2 to consider and be denied.
     _seed_silver(
         base_dir,
         "complaints_a",
-        [{"record_id": "R900", "label": "delta", "amount": 95}],
+        [
+            {
+                "record_id": "R900",
+                "label": "delta",
+                "amount": 95,
+                "received_date": "2026-08-10",
+            }
+        ],
         load_date="2026-08-19",
     )
     monkeypatch.setattr(
         "pipelines.complaint_selection.pipeline.HOPPER_DEPTH", len(selected)
     )
 
-    run(RunContext(base_dir=base_dir, pipeline=PIPELINE_NAME))
+    run(RunContext(base_dir=base_dir, pipeline=PIPELINE_NAME, run_date=_RUN_DATE))
 
     assert read_rows(store, POOL_TABLE) == []
     trace = {row["case_ref"]: row for row in read_rows(store, TRACE_TABLE)}
@@ -803,22 +959,41 @@ def test_details_reach_the_json_as_a_nested_object_with_native_types(tmp_path):
     _seed_silver(
         base_dir,
         "complaints_a",
-        [{"record_id": "R001", "label": "alpha", "amount": 90}],
+        [
+            {
+                "record_id": "R001",
+                "label": "alpha",
+                "amount": 90,
+                "received_date": "2026-07-15",
+            }
+        ],
     )
     _seed_silver(
         base_dir,
         "complaints_b",
-        [{"record_id": "B1", "category": "sales", "priority": "high"}],
+        [
+            {
+                "record_id": "B1",
+                "category": "sales",
+                "priority": "high",
+                "received_date": "2026-07-01",
+            }
+        ],
     )
     _seed_silver(
         base_dir,
         "complaints_c",
         [
-            {"record_id": "C9", "department": "hr", "resolution_days": 1}
-        ],  # below threshold
+            {
+                "record_id": "C9",
+                "department": "hr",
+                "resolution_days": 1,
+                "received_date": "2026-06-01",
+            }
+        ],  # outside the age window
     )
 
-    run(RunContext(base_dir=base_dir, pipeline=PIPELINE_NAME))
+    run(RunContext(base_dir=base_dir, pipeline=PIPELINE_NAME, run_date=_RUN_DATE))
 
     landed = {
         row["case_ref"]: row
@@ -834,24 +1009,41 @@ def test_details_land_as_json_text_in_the_pool_table(tmp_path):
     _seed_silver(
         base_dir,
         "complaints_a",
-        [{"record_id": "R001", "label": "alpha", "amount": 90}],
+        [
+            {
+                "record_id": "R001",
+                "label": "alpha",
+                "amount": 90,
+                "received_date": "2026-07-15",
+            }
+        ],
     )
     _seed_silver(
         base_dir,
         "complaints_b",
         [
-            {"record_id": "B9", "category": "sales", "priority": "low"}
-        ],  # below threshold
+            {
+                "record_id": "B9",
+                "category": "sales",
+                "priority": "low",
+                "received_date": "2026-05-01",
+            }
+        ],  # outside the age window
     )
     _seed_silver(
         base_dir,
         "complaints_c",
         [
-            {"record_id": "C9", "department": "hr", "resolution_days": 1}
-        ],  # below threshold
+            {
+                "record_id": "C9",
+                "department": "hr",
+                "resolution_days": 1,
+                "received_date": "2026-06-01",
+            }
+        ],  # outside the age window
     )
 
-    run(RunContext(base_dir=base_dir, pipeline=PIPELINE_NAME))
+    run(RunContext(base_dir=base_dir, pipeline=PIPELINE_NAME, run_date=_RUN_DATE))
 
     store = StoreRegistry(base_dir).store(f"{OUTPUT_SUBJECT}/{PIPELINE_NAME}")
     [row] = read_rows(store, POOL_TABLE)
@@ -860,14 +1052,16 @@ def test_details_land_as_json_text_in_the_pool_table(tmp_path):
 
 
 def test_an_undeclared_silver_column_stays_out_of_details():
-    # amount_priority reads "amount"; a member's own detail_columns are the
-    # only keys `select_complaints` ever copies into `details`.
+    # The age rule reads ``received_date``; a member's own detail_columns are
+    # the only keys `select_complaints` ever copies into `details`, so neither
+    # it nor an undeclared silver column leaks in.
     a = given_rows(
         [
             {
                 "record_id": "R001",
                 "label": "alpha",
                 "amount": 90,
+                "received_date": "2026-08-01",
                 "run_id": "not-a-detail-field",
                 "load_date": "2026-08-18",
             }
@@ -876,7 +1070,7 @@ def test_an_undeclared_silver_column_stays_out_of_details():
     b = Dataset.from_pandas(pd.DataFrame(columns=["record_id", "load_date"]))
     c = Dataset.from_pandas(pd.DataFrame(columns=["record_id", "load_date"]))
 
-    out = select_complaints(a, b, c, _EMPTY_CURRENT).to_pandas()
+    out = select_complaints(a, b, c, _EMPTY_CURRENT, run_date=_RUN_DATE).to_pandas()
 
     assert out.iloc[0]["details"] == {"amount": 90, "label": "alpha"}
 
@@ -888,6 +1082,7 @@ def test_an_empty_case_type_still_yields_declared_columns():
                 "record_id": "R001",
                 "label": "alpha",
                 "amount": 90,
+                "received_date": "2026-08-01",
                 "load_date": "2026-08-18",
             }
         ]
@@ -895,7 +1090,7 @@ def test_an_empty_case_type_still_yields_declared_columns():
     b = Dataset.from_pandas(pd.DataFrame(columns=["record_id", "load_date"]))
     c = Dataset.from_pandas(pd.DataFrame(columns=["record_id", "load_date"]))
 
-    out = select_complaints(a, b, c, _EMPTY_CURRENT).to_pandas()
+    out = select_complaints(a, b, c, _EMPTY_CURRENT, run_date=_RUN_DATE).to_pandas()
 
     assert out.iloc[0]["case_ref"] == "R001"
     assert "details" in out.columns

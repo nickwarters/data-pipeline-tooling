@@ -8,8 +8,9 @@ the sync feed's current Cases, then narrows the combined candidates to the
 SelectionPool in one governed transform, ``select_complaints``.
 
 To add a Case Type to this selection group, add one member to
-``SELECTION_GROUP`` -- its Shared Reader, its natural key, its priority rule,
-and its Case Details columns.
+``SELECTION_GROUP`` -- its Shared Reader, its natural key, its received-date
+column, and its Case Details columns. The group shares one priority rule:
+oldest complaint first, within ``MAX_AGE_DAYS``.
 
 Address it by its location on disk::
 
@@ -30,7 +31,6 @@ from typing import Any, Mapping, Sequence
 
 import pandas as pd
 
-from case_review.variation import variation_by_id
 from framework.core import Dataset, PipelineError, SchemaValidator, format_failure
 from framework.io import AccumulateByRun, JsonWriter, Reader, Refresh, Writer
 from framework.run import (
@@ -51,7 +51,12 @@ from tools.environments import known_environments, resolve_base_dir
 from tools.observability import timestamps
 from tools.store import StoreRegistry
 
-from .schema import VARIATIONS, PendingVoid, SelectedComplaint, SelectionGroupMember
+from .schema import (
+    QUESTION_BANK_ID,
+    PendingVoid,
+    SelectedComplaint,
+    SelectionGroupMember,
+)
 
 PIPELINE_NAME = "complaint_selection"
 
@@ -62,7 +67,9 @@ POOL_TABLE = "selection_pool"
 TRACE_TABLE = "selection_trace"
 POOL_JSON = "selection_pool.json"
 
-PRIORITY_THRESHOLD = 50
+# The group's one gate on age: only a complaint *younger* than this many days
+# is selectable. A declared starting value, expected to be tuned.
+MAX_AGE_DAYS = 50
 
 # A declared starting depth for the Hopper. ADR-0021 sizes it as 3D (three
 # times the group's daily assignment rate); monitoring throughput and
@@ -93,8 +100,9 @@ MATCH_LADDER: tuple[tuple[str, ...], ...] = (
 )
 
 # The fallback/tie-break ordering field -- "oldest first" among a rung's
-# candidates, and the whole rule once no rung matches. A top-level candidate
-# field, None until a feed provides it.
+# candidates, and the whole rule once no rung matches. Carries each member's
+# received date, so the ladder's tie-break and the queue's priority order
+# read the same date.
 RELATED_DATE_COLUMN = "related_date"
 
 # The landed SelectionPool's columns, in declaration order -- also what a
@@ -122,23 +130,26 @@ TRACE_COLUMNS: tuple[str, ...] = ("case_ref", "verdict", "reason", "rank", "scor
 _ROW_COLUMNS: tuple[str, ...] = tuple(dict.fromkeys((*POOL_COLUMNS, *TRACE_COLUMNS)))
 
 
-def amount_priority(row: Mapping[str, Any]) -> int:
-    """Complaints A: the larger the amount, the higher the priority."""
-    return int(row["amount"])
+def age_in_days(received_date: Any, run_date: dt.date) -> int | None:
+    """The group's one priority rule: days since the complaint arrived.
+
+    Older is a higher score, so the pool's priority-desc sort is oldest first.
+    ``run_date`` (not the wall clock) is the measuring point, so a re-drive of
+    a past run date recomputes the same ages. ``None`` for a missing or
+    unparseable date -- the caller excludes that row explicitly rather than
+    inventing an age for it.
+    """
+    if received_date is None or pd.isna(received_date):
+        return None
+    try:
+        received = dt.date.fromisoformat(str(received_date)[:10])
+    except ValueError:
+        return None
+    return (run_date - received).days
 
 
-def priority_band(row: Mapping[str, Any]) -> int:
-    """Complaints B: its own declared band, mapped onto the shared score."""
-    return {"high": 100, "medium": 50, "low": 10}[row["priority"]]
-
-
-def slow_resolution_priority(row: Mapping[str, Any]) -> int:
-    """Complaints C: the longer a complaint has been open, the higher the priority."""
-    return int(row["resolution_days"])
-
-
-def meets_priority_threshold(row: Mapping[str, Any]) -> bool:
-    return row["priority_score"] >= PRIORITY_THRESHOLD
+def within_max_age(row: Mapping[str, Any]) -> bool:
+    return row["priority_score"] < MAX_AGE_DAYS
 
 
 SELECTION_GROUP: tuple[SelectionGroupMember, ...] = (
@@ -146,21 +157,21 @@ SELECTION_GROUP: tuple[SelectionGroupMember, ...] = (
         "complaints_a",
         ComplaintsACasesReader,
         "record_id",
-        amount_priority,
+        "received_date",
         ("amount", "label"),
     ),
     SelectionGroupMember(
         "complaints_b",
         ComplaintsBCasesReader,
         "record_id",
-        priority_band,
+        "received_date",
         ("category", "priority"),
     ),
     SelectionGroupMember(
         "complaints_c",
         ComplaintsCCasesReader,
         "record_id",
-        slow_resolution_priority,
+        "received_date",
         ("department", "resolution_days"),
     ),
 )
@@ -378,6 +389,7 @@ def select_complaints(
     group: tuple[SelectionGroupMember, ...] = SELECTION_GROUP,
     since: dt.datetime | None = None,
     hopper_depth: int | None = None,
+    run_date: dt.date | None = None,
 ) -> Dataset:
     """Combine, score, gate, replace voids, queue, cap -- the whole Selection.
 
@@ -407,6 +419,8 @@ def select_complaints(
     """
     if hopper_depth is None:
         hopper_depth = HOPPER_DEPTH
+    if run_date is None:
+        run_date = dt.date.today()
 
     *member_datasets, current_dataset = datasets
     current = current_dataset.to_pandas()
@@ -420,9 +434,15 @@ def select_complaints(
             {
                 "case_ref": record["case_ref"],
                 "case_type": member.case_type,
-                "priority_score": int(member.priority(record)),
+                "priority_score": age_in_days(
+                    record[member.received_date_column], run_date
+                ),
                 "attribute_a": None,
-                RELATED_DATE_COLUMN: None,
+                RELATED_DATE_COLUMN: (
+                    None
+                    if pd.isna(record[member.received_date_column])
+                    else str(record[member.received_date_column])
+                ),
                 "details": {column: record[column] for column in member.detail_columns},
             }
             for record in latest.to_pandas().to_dict("records")
@@ -444,9 +464,14 @@ def select_complaints(
 
     considered = []
     for row in candidates.to_dict("records"):
+        # A missing age travelled through the candidate frame as NaN (the
+        # column upcasts to float); normalise it back to None so one check
+        # below reads it, and the trace lands NULL rather than NaN.
+        score = None if pd.isna(row["priority_score"]) else int(row["priority_score"])
         row = {
             **row,
-            "score": row["priority_score"],
+            "priority_score": score,
+            "score": score,
             "replaces_case_ref": None,
             "void_match_rung": None,
             "rank": None,
@@ -455,9 +480,12 @@ def select_complaints(
         if row["case_ref"] in v_refs:
             row["verdict"] = "excluded"
             row["reason"] = "excluded by filter 'voided'"
-        elif not meets_priority_threshold(row):
+        elif row["priority_score"] is None:
             row["verdict"] = "excluded"
-            row["reason"] = "excluded by filter 'priority-threshold'"
+            row["reason"] = "excluded by filter 'missing-received-date'"
+        elif not within_max_age(row):
+            row["verdict"] = "excluded"
+            row["reason"] = "excluded by filter 'max-age'"
         else:
             row["verdict"] = None  # still eligible; resolved after the hopper cut
             row["reason"] = None
@@ -466,6 +494,7 @@ def select_complaints(
     settled = [row for row in considered if row["verdict"] is not None]
     eligible_rows = [row for row in considered if row["verdict"] is None]
     eligible = pd.DataFrame(eligible_rows, columns=_ROW_COLUMNS)
+    # Descending age: the oldest complaint leads the queue.
     eligible = eligible.sort_values(
         "priority_score", ascending=False, kind="stable"
     ).reset_index(drop=True)
@@ -476,14 +505,13 @@ def select_complaints(
     unallocated = unallocated_count(current, candidate_refs)
     capacity = max(0, hopper_depth - unallocated)
 
-    variation = variation_by_id(VARIATIONS, "v1")
     queued = eligible.to_dict("records")
     for position, row in enumerate(queued):
         if position < capacity:
             row["verdict"] = "selected"
-            row["reason"] = "passed voided, priority-threshold"
+            row["reason"] = "passed voided, max-age"
             row["rank"] = position + 1
-            row["question_bank_id"] = variation.question_bank_id
+            row["question_bank_id"] = QUESTION_BANK_ID
         else:
             row["verdict"] = "excluded"
             row["reason"] = f"excluded by gate 'hopper' (capacity {capacity})"
@@ -522,32 +550,40 @@ def selected_only(dataset: Dataset) -> Dataset:
     differ only in whether ``details`` is serialised.
     """
     frame = dataset.to_pandas()
-    return Dataset.from_pandas(
-        frame[frame["verdict"] == "selected"].reset_index(drop=True)
-    )
+    frame = frame[frame["verdict"] == "selected"].reset_index(drop=True)
+    # The combined considered frame upcasts scores to float when any row has
+    # no age (a missing received date is a None score); every survivor has
+    # one, so land the declared integer rather than ``39.0``.
+    frame["priority_score"] = frame["priority_score"].astype(int)
+    return Dataset.from_pandas(frame)
 
 
 def select_pool(
     *,
-    complaints_a: Reader,
-    complaints_b: Reader,
-    complaints_c: Reader,
+    member_readers: Sequence[Reader],
     current_cases: Reader,
     pool_writer: Writer,
     trace_writer: Writer,
     json_writer: Writer,
     since: dt.datetime | None = None,
     hopper_depth: int | None = None,
+    run_date: dt.date | None = None,
+    group: tuple[SelectionGroupMember, ...] = SELECTION_GROUP,
 ) -> tuple[Dataset, Dataset]:
-    """The Selection flow: four reads, one decision, three projections.
+    """The Selection flow: one read per member plus Sync, one decision, three
+    projections.
 
     Written with the **eager steps**, so every line does its work when it is
     reached and the variable on the left holds the real rows -- put a breakpoint
     on ``select`` and step over it to watch the population narrow
     ([ADR-0027](../../docs/adr/0027-eager-steps-are-the-default-authoring-model.md)).
 
-    ``select`` takes **four** datasets, exactly as the graph node it replaces
-    took four input nodes: a fan-in is more arguments, not a graph.
+    ``member_readers`` aligns positionally with ``group`` -- the same order
+    ``select_complaints`` receives the datasets in. Nothing here names a
+    member: adding a Case Type to the group is one ``SELECTION_GROUP`` entry,
+    and this function follows. ``select`` takes every read as a dataset
+    argument, exactly as the graph node it replaces took input nodes: a fan-in
+    is more arguments, not a graph.
 
     Line order is the ordering guarantee. The graph form needed a comment
     warning that leaf declaration order was load-bearing, because ``p.run()``
@@ -558,19 +594,26 @@ def select_pool(
     ``hopper_depth`` is resolved from ``HOPPER_DEPTH`` *inside*
     ``select_complaints`` when ``None``, rather than as this function's own
     default argument value: a default is bound once at import time, which
-    would freeze the constant and defeat a test's monkeypatch of it.
+    would freeze the constant and defeat a test's monkeypatch of it. A ``None``
+    ``run_date`` resolves the same way (to today), matching what a bare
+    ``RunContext`` would have supplied.
 
     Returns the pool rows and the trace -- what the caller reports on.
     """
-    a = read(complaints_a, name="read-complaints_a")
-    b = read(complaints_b, name="read-complaints_b")
-    c = read(complaints_c, name="read-complaints_c")
+    reads = [
+        read(reader, name=f"read-{member.case_type}")
+        for member, reader in zip(group, member_readers, strict=True)
+    ]
     current = read(current_cases, name="read-current-cases")
 
     selecting = functools.partial(
-        select_complaints, since=since, hopper_depth=hopper_depth
+        select_complaints,
+        group=group,
+        since=since,
+        hopper_depth=hopper_depth,
+        run_date=run_date,
     )
-    select = transform(selecting, a, b, c, current, name="select")
+    select = transform(selecting, *reads, current, name="select")
     selected = transform(selected_only, select, name="selected")
 
     rows_for_pool = transform(pool_rows, selected, name="pool-rows")
@@ -600,25 +643,23 @@ def run(context: RunContext) -> Dataset:
     since = previous_run_instant(context)
 
     pool, trace = select_pool(
-        complaints_a=ComplaintsACasesReader(context.base_dir),
-        complaints_b=ComplaintsBCasesReader(context.base_dir),
-        complaints_c=ComplaintsCCasesReader(context.base_dir),
+        member_readers=[member.reader(context.base_dir) for member in SELECTION_GROUP],
         current_cases=CurrentCasesOrEmpty(context.base_dir),
         pool_writer=store.writer(POOL_TABLE, strategy),
         trace_writer=store.writer(TRACE_TABLE, strategy),
         json_writer=JsonWriter(json_path, Refresh()),
         since=since,
+        run_date=context.run_date,
     )
 
     trace_frame = trace.to_pandas()
     considered = len(trace_frame)
     excluded = int((trace_frame["verdict"] == "excluded").sum())
     replaced = int(pool.to_pandas()["replaces_case_ref"].notna().sum())
-    variation = variation_by_id(VARIATIONS, "v1")
     print(
         f"considered: {considered} -> "
         f"SelectionPool: {len(pool)} cases "
-        f"(Question Bank {variation.question_bank_id}, "
+        f"(Question Bank {QUESTION_BANK_ID}, "
         f"logical run {context.logical_run_id}); "
         f"excluded: {excluded}; replaced: {replaced}"
     )

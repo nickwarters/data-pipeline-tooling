@@ -1,7 +1,7 @@
 """Declared schema for the ``complaint_selection`` SelectionPool.
 
-The Selection group's row contract, plus its one declared Variation, the
-frozen shape a ``SELECTION_GROUP`` member takes, and a pending void as
+The Selection group's row contract, its one declared Question Bank reference,
+the frozen shape a ``SELECTION_GROUP`` member takes, and a pending void as
 ``select_complaints`` resolves it against this run's candidates.
 """
 
@@ -11,10 +11,15 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Mapping
 
-from case_review.variation import Variation
 from framework.io import Reader
 
-VARIATIONS = (Variation(id="v1", question_bank_id="qb-complaints"),)
+# The Question Bank reference stamped onto every selected Case, so the review
+# platform knows which bank to present the Reviewer (CONTEXT.md: the platform
+# owns the bank's content; the pipeline carries only this id). One bank for
+# the whole group today -- the day the group's Case Types genuinely vary, the
+# per-Variation declaration (``case_review.variation``) is the shape to
+# reintroduce, carrying real differences rather than one hardcoded lookup.
+QUESTION_BANK_ID = "qb-complaints"
 
 
 @dataclass
@@ -38,12 +43,15 @@ class SelectedComplaint:
 
 @dataclass(frozen=True)
 class SelectionGroupMember:
-    """One Case Type's contribution to the group: its reader, key, and rule."""
+    """One Case Type's contribution to the group: its reader, key, and dates."""
 
     case_type: str
     reader: Callable[..., Reader]
     case_ref_column: str
-    priority: Callable[[Mapping[str, Any]], int]
+    # The silver column carrying the ISO date the complaint arrived. The
+    # group's one shared priority rule (oldest first, within the age window)
+    # reads it, and it lands on the pool row as ``related_date``.
+    received_date_column: str
     # This source's Case Details, by key. Each key IS the frontend's
     # `detailFields[].key` for this Case Type -- not a pipeline-side name.
     detail_columns: tuple[str, ...]

@@ -1,5 +1,5 @@
-record_id,label,amount
-R001,alpha,100
-R002,beta,250
-R003,gamma,75
-R004,delta,-10
+record_id,label,amount,received_date
+R001,alpha,100,2026-07-20
+R002,beta,250,2026-07-21
+R003,gamma,75,2026-07-28
+R004,delta,-10,2026-07-30

@@ -42,7 +42,7 @@ FEED_NAME = "complaints_b"
 UPSTREAMS = ()
 
 # The columns ``to_raw`` gates on, in the source's own vocabulary.
-SOURCE_COLUMNS = ["record_id", "category", "priority"]
+SOURCE_COLUMNS = ["record_id", "category", "priority", "received_date"]
 
 
 def to_raw(reader: Reader, writer: Writer) -> Dataset:
