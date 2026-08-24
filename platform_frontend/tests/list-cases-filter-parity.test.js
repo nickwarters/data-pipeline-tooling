@@ -275,14 +275,45 @@ const SCENARIOS = [
     expected: ['open-early', 'open-undated', 'sent-late', 'done-late'],
   },
   {
-    name: 'onHold with overdue negated (the Action Centre On Hold group)',
-    filter: { onHold: true, overdue: false },
+    name: 'onHold with the two groups above it negated (the Action Centre On Hold group)',
+    filter: { onHold: true, overdue: false, awaitingResponsibleParty: false },
     rows: [
       caseRow('parked', { onHold: true, dueDate: LONG_FUTURE }),
       caseRow('parked-late', { onHold: true, dueDate: LONG_PAST }),
+      caseRow('parked-waiting', {
+        onHold: true,
+        awaitingResponsibleParty: true,
+        dueDate: LONG_FUTURE,
+      }),
       caseRow('running-late', { dueDate: LONG_PAST }),
     ],
     expected: ['parked'],
+  },
+  {
+    // The Action Centre In progress group: the residue of the three Reviewer
+    // groups above it, so a Case that is overdue, awaiting the Frontline or
+    // parked is somewhere else and this group holds only what is left.
+    name: 'the In progress residue excludes every group above it',
+    filter: {
+      assignedAtPresent: true,
+      overdue: false,
+      awaitingResponsibleParty: false,
+      onHold: false,
+      anyOf: [{ status: 'In-progress' }, { status: 'Actions In Progress' }],
+    },
+    rows: [
+      caseRow('working', { dueDate: LONG_FUTURE }),
+      caseRow('working-unset-flags'),
+      caseRow('late', { dueDate: LONG_PAST }),
+      caseRow('waiting', {
+        awaitingResponsibleParty: true,
+        dueDate: LONG_FUTURE,
+      }),
+      caseRow('parked', { onHold: true, dueDate: LONG_FUTURE }),
+      caseRow('done', { status: 'Completed', dueDate: LONG_FUTURE }),
+      caseRow('unallocated', { assignedAt: null, dueDate: LONG_FUTURE }),
+    ],
+    expected: ['working', 'working-unset-flags'],
   },
   {
     name: 'effectiveOutcome',

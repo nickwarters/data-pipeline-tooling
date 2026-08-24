@@ -76,12 +76,30 @@ function assigneeSubLine(caseRow) {
 
 /**
  * The reason table, in fixed priority order (Overdue → Awaiting Frontline →
- * On Hold → Appeals → In progress). Group ordering is this fixed priority;
- * the primary reason of a multi-reason case is the earliest match here.
- * In progress comes last because it is the only group a Case can be in *as
- * well as* another: it is the whole of a Reviewer's open work, not a reason to
- * act, so a Case it shares with a group above is noted there as a second
- * reason rather than being taken out of one of them.
+ * On Hold → Appeals → In progress).
+ *
+ * The Reviewer groups are **mutually exclusive**: a Case appears in exactly one
+ * of Overdue, Awaiting Frontline, On Hold and In progress, the first it matches
+ * in that order. Each group below the first therefore negates every Reviewer
+ * flag above it, and In progress — which sets no flag of its own — is the
+ * residue: the outstanding work that is none of the three. So the four counts
+ * sum to the Reviewer's whole worklist and never double-count a Case, and the
+ * question "where is this Case?" has one answer.
+ *
+ * The exclusivity lives in the **filter**, never at render time, so a group's
+ * header count, its collapsed one-line peek and its paged rows are all answers
+ * to the same query. That costs three negated `Yes/No` predicates, which is
+ * only sound because a negated flag matches an unset column as well as an
+ * explicit No; while it did not, these groups would have been full in the mock
+ * and empty on live.
+ *
+ * A flag above the group a Case is shown in is still worth saying, and
+ * `secondaryReasons` still says it: an overdue Case that is also parked reads
+ * "also on hold" under Overdue, which is what explains its absence from the On
+ * Hold group.
+ *
+ * Appeals is a Controls group, not a Reviewer one, and sits outside this
+ * ordering.
  *
  * `defaultSlaDays` is the framework cadence for a reason — what a Case Type
  * gets when it declares nothing. A Case Type overrides it per reason; it
@@ -111,7 +129,9 @@ export const ACTION_CENTRE_REASONS = [
     tone: 'awaiting',
     clockField: 'awaitingSince',
     flagField: 'awaitingResponsibleParty',
-    filter: { awaitingResponsibleParty: true },
+    // Overdue wins, the same way it wins over On Hold below: a Case whose
+    // review date has passed is urgent whoever the ball is with.
+    filter: { awaitingResponsibleParty: true, overdue: false },
     // The 7-day cadence and "no reply" wording apply to Conversation-flagged
     // rows. An `Actions In Progress` row is judged and worded from its
     // stored `remediationDueDate` instead — see `waitingInfo`.
@@ -128,11 +148,12 @@ export const ACTION_CENTRE_REASONS = [
     tone: 'hold',
     clockField: 'placedOnHoldAt',
     flagField: 'onHold',
-    // Overdue wins: a parked Case that has also blown its review date is
-    // urgent, not parked, and belongs in exactly one group. Expressed in the
-    // filter rather than at render time so the header count, the collapsed
-    // peek and the paged rows all agree.
-    filter: { onHold: true, overdue: false },
+    // Everything above On Hold wins: a parked Case that has also blown its
+    // review date is urgent, not parked, and one that is out with the
+    // Frontline is waiting on someone, not parked. Expressed in the filter
+    // rather than at render time so the header count, the collapsed peek and
+    // the paged rows all agree.
+    filter: { onHold: true, overdue: false, awaitingResponsibleParty: false },
     // A placeholder cadence for "parked too long", pending a product answer.
     // Zero would read every parked Case as breached, which would defeat the
     // point of a separate non-urgent group.
@@ -169,13 +190,15 @@ export const ACTION_CENTRE_REASONS = [
     // Ages from the current allocation, so reassignment starts the current
     // Reviewer's in-progress clock when the Case is handed to them.
     clockField: 'assignedAt',
-    // No flagField: this group is a status, not a state something sets. It is
-    // never the *second* reason on a row either — every Case in another group
-    // is in this one too, so noting it would say "also in progress" on
-    // everything.
+    // No flagField: this group is a status, not a state something sets, and as
+    // the residue of the three above it can never be a *second* reason on a row
+    // either — a Case in another group is by construction not in this one.
     filter: {
       assignedAtPresent: true,
       anyOf: OUTSTANDING_STATUSES.map((status) => ({ status })),
+      overdue: false,
+      awaitingResponsibleParty: false,
+      onHold: false,
     },
     // A placeholder cadence for "held too long", pending a product answer —
     // the same open question On Hold carries.
@@ -417,6 +440,10 @@ export function waitingInfo(
  * The reason ids a Case row matches, by its hoisted flags, in priority order.
  * Used to pick a primary reason and note the rest inline ("also overdue").
  *
+ * In progress is absent by construction — it carries no flag, being the residue
+ * of the three that do — so "also in progress" is unsayable, which is right: a
+ * Case in another group is not in the In progress one.
+ *
  * @param {CaseRow} caseRow
  * @returns {string[]}
  */
@@ -429,8 +456,14 @@ function matchedReasonIds(caseRow) {
 
 /**
  * The secondary reasons a Case qualifies for beyond the group it is shown in —
- * the inline "also …" note on a deduped row. Empty when the case only has the
- * one reason.
+ * the inline "also …" note on its row. Empty when the case only has the one
+ * reason.
+ *
+ * The Reviewer groups are mutually exclusive, so this is no longer a note about
+ * a row that could have been in two places. It is the opposite: the row is in
+ * exactly one group, and this says which flags it *also* carries — which is
+ * what accounts for its absence from the groups those flags name. An overdue,
+ * parked Case appears under Overdue reading "also on hold", and is nowhere else.
  *
  * @param {CaseRow} caseRow
  * @param {string} primaryReasonId

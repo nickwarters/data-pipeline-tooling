@@ -844,6 +844,9 @@
 [data-cora-root] .cora-kpi-strip .cora-kpi-tile--awaiting {
   --cora-kpi-tone: var(--cora-color-accent);
 }
+[data-cora-root] .cora-kpi-strip .cora-kpi-tile--hold {
+  --cora-kpi-tone: var(--cora-ac-hold);
+}
 [data-cora-root] .cora-kpi-strip .cora-kpi-tile--progress {
   --cora-kpi-tone: var(--cora-color-border);
 }

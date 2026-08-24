@@ -826,10 +826,35 @@ test('HttpSharePointClient: the real In progress reason leads list and count wit
     .filter((call) => call.url.includes('/items?'))
     .map((call) => decodeURIComponent(call.url));
   assert.equal(itemUrls.length, 2);
-  const expectedFilter =
-    "AssignedReviewerId eq 9 and AssignedAt ne null and ((Status eq 'In-progress') or (Status eq 'Actions In Progress'))";
   for (const url of itemUrls) {
-    assert.equal(new URL(url).searchParams.get('$filter'), expectedFilter);
+    const expr = String(new URL(url).searchParams.get('$filter'));
+    // The two most selective predicates lead, in this order: the Person column
+    // that cuts the list to one Reviewer, then the allocation clock.
+    assert.ok(
+      expr.startsWith('AssignedReviewerId eq 9 and AssignedAt ne null and '),
+      expr
+    );
+    // Then the exclusivity negations that make this group the residue, and the
+    // status group it is scoped to. The overdue negation carries a `new Date()`
+    // the builder stamps as it runs, so its shape is asserted rather than a
+    // literal that would only pass at one instant.
+    assert.match(
+      expr,
+      /\(Status ne 'In-progress' or DueDate eq null or DueDate ge '[^']+'\)/
+    );
+    assert.ok(
+      expr.includes(
+        '(AwaitingResponsibleParty eq 0 or AwaitingResponsibleParty eq null)'
+      ),
+      expr
+    );
+    assert.ok(expr.includes('(OnHold eq 0 or OnHold eq null)'), expr);
+    assert.ok(
+      expr.endsWith(
+        "((Status eq 'In-progress') or (Status eq 'Actions In Progress'))"
+      ),
+      expr
+    );
     assert.equal(url.includes('Created'), false);
   }
   assert.equal(new URL(itemUrls[0]).searchParams.get('$orderby'), 'AssignedAt');

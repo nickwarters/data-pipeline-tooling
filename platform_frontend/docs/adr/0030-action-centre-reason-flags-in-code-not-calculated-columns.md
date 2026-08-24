@@ -260,6 +260,44 @@ previously did not.
 reason flag: it is written on every outcome save, so it has no unset state to
 tolerate.
 
+### Amendment — issues #801 and #778, 2026-08-24
+
+**The Reviewer groups are mutually exclusive.** Overdue → Awaiting Frontline →
+On Hold → In progress, and a Case is in the first that claims it and no other.
+Each group below the first negates the flag of every Reviewer group above it,
+and In progress — which sets no flag — is the residue. The four counts therefore
+partition a Reviewer's worklist and cannot double-count.
+
+This **reverses the #775 amendment's decision** to let In progress overlap.
+That decision rejected a residue on one stated ground: it would need three
+negated `Yes/No` predicates, and a negated flag then read differently in the two
+clients. The #776 amendment above removes that ground — the negation is now
+null-tolerant and both clients answer the same — so the price the rejection was
+weighed against is no longer being paid. What remains is the argument for it: a
+group called On Hold that already excluded overdue Cases while a group called
+In progress included them was not one rule, and "where is this Case?" had no
+single answer.
+
+The exclusivity stays in the **filter**, never at render time, so a group's
+header count, its collapsed peek and its paged rows are all answers to one query.
+
+**`secondaryReasons` survives, with its meaning inverted.** It was the "this row
+could have been in two places" note; it is now the opposite — the row is in
+exactly one group, and the note names the flags it _also_ carries, which is what
+accounts for its absence from the groups those flags name. An overdue, parked
+Case reads "also on hold" under Overdue and appears nowhere else.
+
+**The KPI strip's Reviewer lane is these same four groups.** It had three tiles
+over a pool scoped to `In-progress`, splitting them by the Conversation tail —
+a second, client-side reading of "In progress" and "Awaiting", which is what put
+two different numbers under one word on one page. The lane now reads both
+outstanding statuses and the stored flags, in this priority order, so each tile
+and its group are two renderings of one number. Two consequences worth naming:
+an `Actions In Progress` Case reached **no** tile in that lane before, its
+Overdue and Awaiting tiles included; and the lane gained an **On Hold** tile,
+without which a parked Case would still have been filed differently by the two
+panels.
+
 ## Context
 
 The dashboard Action Centre groups a Reviewer/Controls/Owner worklist by
