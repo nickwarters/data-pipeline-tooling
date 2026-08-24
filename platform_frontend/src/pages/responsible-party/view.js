@@ -249,9 +249,11 @@ function messageColumns(
       sortable: true,
       format: (value) => formatTimestamp(value),
     },
-    // This button opens the Conversation, not the Case, and the row's
-    // Reference cell already links to the Case — so the name has to say which
-    // is which.
+    // The Conversation is a Section of the Case Review page, not a route of
+    // its own (#790), so this button and the row's Reference cell now resolve
+    // to the same Case. The name still says what the reader came for, and the
+    // Case Review page opens its Conversation panel when that is the only
+    // Section they may see.
     //
     // No handler, no button. The standalone #/my-cases route deliberately
     // keeps the historic no-navigation behaviour and passes none, and a

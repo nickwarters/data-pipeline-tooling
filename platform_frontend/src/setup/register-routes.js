@@ -6,7 +6,6 @@ import * as homePage from '../pages/home.js';
 import * as dashboardPage from '../pages/cora-dashboard.js';
 import * as myStatsPage from '../pages/cora-my-stats.js';
 import * as teamStatsPage from '../pages/cora-team-stats.js';
-import * as conversationPage from '../pages/cora-conversation-view.js';
 import * as caseReviewPage from '../pages/cora-case-review.js';
 import * as teamCasesPage from '../pages/cora-team-cases.js';
 import * as responsiblePartyPage from '../pages/cora-responsible-party-dashboard.js';
@@ -92,10 +91,6 @@ export function routeTable(context) {
         redirectTo('#/');
         return false;
       },
-    },
-    conversation: {
-      paths: ['#/conversation/:caseType/:id', '#/conversation/:id'],
-      page: conversationPage,
     },
     'question-bank': {
       paths: ['#/question-bank'],

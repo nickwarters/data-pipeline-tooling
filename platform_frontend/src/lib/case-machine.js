@@ -59,8 +59,9 @@ export class CaseMachine {
    *   stamped as. Omitting it means *no Questions*, so the Remediation
    *   Section resolves `hidden` and a transition stamps
    *   `hadRemediation: false`: build a CaseMachine without one only when you
-   *   need neither, as `cora-conversation-view.js` does for the Conversation
-   *   cell alone.
+   *   need neither. No production caller does — `CaseLoader` always supplies
+   *   it, and the one that did not built a machine for the Conversation cell
+   *   alone, on the standalone Conversation page removed in #790.
    */
   constructor(caseRow, currentUser, capabilities, config, options = {}) {
     this.caseRow = caseRow;

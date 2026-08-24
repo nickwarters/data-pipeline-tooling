@@ -312,6 +312,53 @@ test('state: the Conversation panel starts collapsed on every load', () => {
   assert.equal(state.routes.caseReview.conversationHidden, true);
 });
 
+test('state: the Conversation opens on load when it is the only Section the viewer may see', () => {
+  // A Responsible Party on a pre-reportable Case: every tabbed Section resolves
+  // `hidden`, so the page has no tabs and the Conversation is the whole of it.
+  // That viewer arrives from the Responsible Party dashboard's conversation
+  // link, which since #790 opens the Case rather than a route of its own — a
+  // collapsed panel behind no tabs would read as an empty Case.
+  const allHidden = Object.fromEntries(
+    Object.keys(snapshot().access).map((id) => [id, 'hidden'])
+  );
+  const loadSnapshot = (/** @type {any} */ access) => ({
+    ...snapshot(),
+    machine: { canToggleConversation: access.conversation !== 'hidden' },
+    access,
+  });
+
+  const onlyConversation = caseReviewReducer(
+    createInitialCaseReviewState(chrome),
+    {
+      type: 'case/load-finished',
+      snapshot: loadSnapshot({ ...allHidden, conversation: 'read-only' }),
+    }
+  );
+  assert.equal(onlyConversation.routes.caseReview.activeTab, '');
+  assert.equal(onlyConversation.routes.caseReview.conversationHidden, false);
+
+  // The negative the auto-open must not widen: no accessible Section at all
+  // leaves the panel shut. `accessDenied` owns that page, and this reducer
+  // must not be the thing that opens a thread to a role-less viewer.
+  const nothing = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: loadSnapshot(allHidden),
+  });
+  assert.equal(nothing.routes.caseReview.conversationHidden, true);
+
+  // And one visible tab is enough to restore the collapsed default.
+  const withTabs = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: loadSnapshot({
+      ...allHidden,
+      details: 'read-only',
+      conversation: 'read-only',
+    }),
+  });
+  assert.equal(withTabs.routes.caseReview.activeTab, 'details');
+  assert.equal(withTabs.routes.caseReview.conversationHidden, true);
+});
+
 test('On hold reducer: updates both hold fields in the loaded Case snapshot', () => {
   const loaded = caseReviewReducer(createInitialCaseReviewState(chrome), {
     type: 'case/load-finished',

@@ -407,7 +407,6 @@ src/
       appeal-view.js           # CASE-6 pure Appeal request form and history view
       appeal-review-view.js    # CASE-6 pure Controls resolution form and history view
       amend-outcome-view.js    # CASE-6 pure ADR-0026 Amend Outcome form and record view
-    cora-conversation-view.js
     cora-case-search.js           # store-driven #/search slice: URL-held filters, one bounded
                                   #   cross-Case-Type lookup, standard Case columns
     cora-dashboard.js             # store-driven dashboard slice + descriptor-selected panels (GRID-3/4)
