@@ -2044,8 +2044,9 @@ test('dashboard pure view composes every real panel for a multi-role user', () =
   // panel is last in the panel list, so while appeals were on this read
   // '#/case/complaints/c1' — its Open button opens the Case. With the panel
   // switched off, the Responsible Party panel's "Open conversation" is now the
-  // last to navigate. Restore the Case route here when the switch goes.
-  assert.equal(location.hash, '#/conversation/complaints/c1');
+  // last to navigate — and since #790 that opens the Case too, so the expected
+  // hash is the same either way.
+  assert.equal(location.hash, '#/case/complaints/c1');
 
   const withoutController = dashboardView(/** @type {any} */ (state), {
     context: ctx,
@@ -2420,8 +2421,8 @@ test('dashboard slice: a client-less mount with a mount signal renders an empty 
 /*
  * Page-wiring audit — seams deliberately left uncovered here, and why. (The audit's
  * page-wiring assertions live in this file, cora-case-review-slice.test.js,
- * cora-conversation-view.test.js, cora-responsible-party-dashboard-loading.test.js
- * and question-bank-slice.test.js.)
+ * cora-responsible-party-dashboard-loading.test.js and
+ * question-bank-slice.test.js.)
  *
  * - Table sort headers on the Dashboard reviewer + appeals tables, My Team, and
  *   the Responsible Party remediation + unread tables: already asserted
@@ -2667,7 +2668,10 @@ test('dashboard Responsible Party panel: Open conversation navigates to the Conv
     getByRole(view, 'button', { name: 'Open conversation for Unread case' }),
     'click'
   );
-  assert.equal(location.hash, '#/conversation/complaints/c4');
+  // The Conversation is a Section of the Case Review page, not a route (#790):
+  // the button opens the Case, which gates access and opens the Conversation
+  // panel when that is the only Section this reader may see.
+  assert.equal(location.hash, '#/case/complaints/c4');
 });
 
 test('the reviewer status filter offers exactly the statuses the panel fetches', async () => {

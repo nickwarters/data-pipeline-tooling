@@ -2,7 +2,7 @@
 import { ignoreAbortError } from '../lib/abort.js';
 import { withAbortSignal } from '../services/abortable-client.js';
 import { setRoute } from '../core/route-state.js';
-import { conversationRouteFor } from '../lib/case-route-links.js';
+import { caseRouteFor } from '../lib/case-route-links.js';
 import { navigateTo } from '../lib/navigate.js';
 import { listCasesAcrossSources } from '../services/across-sources.js';
 import { reduceTableSort, sortRequested } from '../views/data-table.js';
@@ -70,8 +70,12 @@ export function responsiblePartyPanelView(
     onRemediationSort: (key) =>
       tools.dispatch(sortRequested(REMEDIATION_TABLE, key)),
     onMessageSort: (key) => tools.dispatch(sortRequested(UNREAD_TABLE, key)),
+    // The Conversation is a Section of the Case Review page, not a route of
+    // its own (#790). Opening it means opening the Case — which arrives
+    // through the access gate, and opens its Conversation panel when that is
+    // the only Section the viewer may see.
     onOpenConversation: navigateToConversation
-      ? (row) => navigateTo(conversationRouteFor(row))
+      ? (row) => navigateTo(caseRouteFor(row))
       : undefined,
   });
 }

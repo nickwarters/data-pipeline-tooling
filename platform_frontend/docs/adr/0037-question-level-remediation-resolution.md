@@ -275,8 +275,12 @@ Three call sites had to acquire the resolved catalogue — the live bank while
 `CaseMachine` takes it as a constructor option and hands it to `evaluateAccess`,
 which passes it to the Remediation cells. A CaseMachine built without one sees no
 Questions, so Remediation resolves `hidden` and a transition stamps
-`hadRemediation: false` — correct for `cora-conversation-view.js`, the one caller
-that builds a machine for the Conversation cell alone.
+`hadRemediation: false` — which was correct for `cora-conversation-view.js`, the
+one caller that built a machine for the Conversation cell alone. That page was
+removed in #790 as a second, ungated route to a Case's Conversation, so
+`CaseLoader` is now the only production caller and it always supplies the
+catalogue. The catalogue-less default stands as the safe reading, not as a shape
+the app still exercises.
 
 The fourth surface, the **Responsible Party dashboard**, cannot have a catalogue:
 it lists Cases across every Case Type and loading a bank per row is exactly the

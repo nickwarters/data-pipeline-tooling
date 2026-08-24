@@ -175,7 +175,6 @@ issue **unsignalled** reads and are follow-up work, not oversights:
 | Page                                      | Why it was left                              |
 | ----------------------------------------- | -------------------------------------------- |
 | `pages/cora-case-review.js`               | single-Case load, entangled with `SaveQueue` |
-| `pages/cora-conversation-view.js`         | single-Case load                             |
 | `pages/roadmap.js`                        | `listRoadmapItems()` takes no options bag    |
 | `pages/question-bank/cora-bank-editor.js` | sample/bank loads, not Case reads            |
 

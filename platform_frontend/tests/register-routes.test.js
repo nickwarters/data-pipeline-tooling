@@ -78,8 +78,6 @@ test('registerRoutes: registers the complete public route contract, in order', (
     '#/dashboard',
     '#/my-stats',
     '#/team-stats',
-    '#/conversation/:caseType/:id',
-    '#/conversation/:id',
     '#/question-bank',
     '#/case/:caseType/:id',
     '#/case/:id',

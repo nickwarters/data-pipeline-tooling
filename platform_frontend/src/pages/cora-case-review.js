@@ -190,8 +190,15 @@ export function caseReviewReducer(state, action) {
     return patchRoute(state, 'caseReview', {
       snapshot: action.snapshot,
       activeTab: tabs[0]?.id ?? '',
-      // The Conversation panel starts collapsed on every load.
-      conversationHidden: true,
+      // The Conversation panel starts collapsed on every load — unless it is
+      // the whole page. A Responsible Party on a pre-reportable Case sees no
+      // Section but the Conversation, so a collapsed panel with no tabs beside
+      // it reads as an empty Case; that viewer arrives here from the
+      // dashboard's conversation link, which since #790 opens the Case rather
+      // than a route of its own. This reveals nothing the toggle would not:
+      // the access matrix still decides, and a hidden Conversation stays shut.
+      conversationHidden:
+        tabs.length > 0 || action.snapshot?.access?.conversation === 'hidden',
     });
   }
   if (action.type === 'case/model-changed') {
