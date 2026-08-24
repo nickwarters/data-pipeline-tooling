@@ -135,12 +135,22 @@ test('activeFilter: reviewer reasons are scoped to the current reviewer', () => 
   });
 });
 
-test('activeFilter: On Hold is reviewer-scoped and excludes overdue Cases', () => {
-  // Overdue wins: a Case that is both parked and overdue belongs in the
-  // Overdue group only, so the On Hold filter says `overdue: false` and the
-  // header count, peek and paged rows all agree.
+test('activeFilter: On Hold is reviewer-scoped and excludes the two groups above it', () => {
+  // Everything above wins: a Case that is both parked and overdue belongs in
+  // the Overdue group only, and one that is parked and out with the Frontline
+  // belongs in Awaiting Frontline. Said in the filter, so the header count,
+  // peek and paged rows all agree.
   assert.deepEqual(activeFilter(reason('onHold'), 'u1'), {
     onHold: true,
+    overdue: false,
+    awaitingResponsibleParty: false,
+    assignedReviewer: 'u1',
+  });
+});
+
+test('activeFilter: Awaiting Frontline excludes overdue Cases', () => {
+  assert.deepEqual(activeFilter(reason('awaitingFrontline'), 'u1'), {
+    awaitingResponsibleParty: true,
     overdue: false,
     assignedReviewer: 'u1',
   });
@@ -153,15 +163,52 @@ test('worstFirstOrder: On Hold sorts longest-parked first on placedOnHoldAt', ()
   });
 });
 
-test('activeFilter: In progress is every outstanding status the reviewer holds', () => {
+test('activeFilter: In progress is the outstanding work none of the three above claim', () => {
   assert.deepEqual(activeFilter(reason('inProgress'), 'u1'), {
     assignedAtPresent: true,
     anyOf: [
       { status: CASE_STATUS.IN_PROGRESS },
       { status: CASE_STATUS.ACTIONS_IN_PROGRESS },
     ],
+    overdue: false,
+    awaitingResponsibleParty: false,
+    onHold: false,
     assignedReviewer: 'u1',
   });
+});
+
+test('the Reviewer groups are mutually exclusive: each negates every flag above it', () => {
+  // The rule, not four hand-written filter literals: a Reviewer group must
+  // negate the flag of every Reviewer group ahead of it in the table, so no
+  // Case can satisfy two of them and the four counts partition the worklist.
+  // A reason added to the table without its negations fails here rather than
+  // quietly double-counting on the dashboard.
+  const reviewerReasons = ACTION_CENTRE_REASONS.filter((r) => r.reviewerScoped);
+  assert.ok(reviewerReasons.length >= 4, 'expected the four Reviewer groups');
+
+  /** @type {string[]} */
+  const flagsAbove = [];
+  for (const r of reviewerReasons) {
+    for (const flag of flagsAbove) {
+      assert.equal(
+        r.filter[/** @type {'overdue'} */ (flag)],
+        false,
+        `${r.id} must negate ${flag}, the flag of a group above it`
+      );
+    }
+    if (r.flagField) flagsAbove.push(r.flagField);
+  }
+
+  // And the last group negates all three, so it is the residue rather than a
+  // fourth overlapping reason.
+  const last = reviewerReasons.at(-1);
+  assert.equal(last?.id, 'inProgress');
+  assert.equal(last?.flagField, undefined);
+  assert.deepEqual(flagsAbove, [
+    'overdue',
+    'awaitingResponsibleParty',
+    'onHold',
+  ]);
 });
 
 test('headlineFilter: In progress keeps the required allocation clock inside its OR branch', () => {
@@ -286,7 +333,11 @@ test('headlineFilter: ORs each visible reason under the current reviewer', () =>
   assert.deepEqual(headlineFilter(reasons, 'u1'), {
     anyOf: [
       { overdue: true, assignedReviewer: 'u1' },
-      { awaitingResponsibleParty: true, assignedReviewer: 'u1' },
+      {
+        awaitingResponsibleParty: true,
+        overdue: false,
+        assignedReviewer: 'u1',
+      },
     ],
   });
 });

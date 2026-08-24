@@ -497,8 +497,13 @@ _Avoid_: Dispute, Complaint, Grievance, Challenge
 The dashboard panel that groups a viewer's worklist by **reason** — one section per
 reason, in fixed priority order: **Overdue**, **Awaiting Frontline**, **On Hold**,
 **Appeals to work**, **In progress**. Each group is one indexed query, so its header
-count is cheap and the panel never holds the backlog. A Case may appear in more than
-one group; the panel's headline counts it once.
+count is cheap and the panel never holds the backlog. The **Reviewer** groups are
+**mutually exclusive**: a Case is in the first of Overdue, Awaiting Frontline, On Hold
+and In progress that claims it, and in no other, so the four counts partition that
+Reviewer's worklist. A flag the Case carries beyond the group it is filed under is
+noted on its row ("also on hold"), which is what accounts for its absence from the
+group that flag names. **Appeals to work** is a **Controls** group and sits outside
+that ordering.
 
 **Allocation Capacity**:
 A **Reviewer** may hold at most three non-held **`In-progress` Cases** in total
@@ -509,12 +514,13 @@ totals indexed counts from each Case Type list immediately before a claim, then
 uses the candidate Case's ETag to guard the write.
 
 **In progress** (Action Centre group):
-Every Case a **Reviewer** currently holds — both **outstanding** statuses, `In-progress`
-and `Actions In Progress` — aged from its current **Allocation** (`assignedAt`). Unlike the other
-groups it is not a reason to act but the whole of the work: a Case that is also Overdue
-is in both, and is noted as a second reason where it appears. Its count is **not** the
-same number as the KPI strip's "In progress" tile, which is a narrower client-side
-reading of the same word. An outstanding row with `AssignedReviewer` must have
+The **outstanding** work a **Reviewer** holds — both statuses, `In-progress` and
+`Actions In Progress` — that is **not** Overdue, Awaiting Frontline or On Hold, aged
+from its current **Allocation** (`assignedAt`). It is the residue of the three groups
+above it rather than a reason to act: what is left once each urgent reason has taken
+its own. It therefore sets no flag of its own, and "also in progress" is unsayable.
+The **KPI strip**'s "In progress" tile is the same population, counted the same way, so
+the two numbers agree. An outstanding row with `AssignedReviewer` must have
 `AssignedAt`; unassigned rows carry null. This does not require completed or void rows
 to carry the clock. Legacy outstanding allocations are backfilled from authoritative
 allocation evidence, never from `Created` as a fallback.
@@ -526,7 +532,8 @@ read off the Case row a list query already returns (`onHold`, `conversation`), s
 costs no extra query, and both are facts about the Case rather than about the viewer —
 they mean the same thing on every table they appear on. They are shown in the **Flags**
 column of every Case table, and the bubble alone trails the reference on an
-**Action Centre** row, whose groups already say which Cases are On Hold.
+**Action Centre** row, where a Case's hold is already stated — by the **On Hold** group
+it is in, or, when a group above claimed it first, by the "also on hold" note on its row.
 
 The bubble says a Conversation _exists_, not that anything in it is new: "unread" is a
 per-viewer fact and nothing on the Case row records who has read what.
@@ -536,6 +543,15 @@ pipelines and declined, with the reason recorded here rather than left silent: t
 introduce no new data. `OnHold` and `Conversation` are existing `Cases-{slug}` columns
 that already flow, no field is added to a list schema, and no field is added inside a
 JSON blob — the marks are a rendering of what both sides of the model already hold.
+**KPI strip**:
+The band of role-scoped tiles above the **Action Centre**. The **Reviewer** lane's
+tiles are that panel's four Reviewer groups — **Overdue**, **Awaiting Frontline**,
+**On Hold**, **In progress** — over the same population, in the same priority order,
+read off the same stored flags. A tile and its group are two renderings of one
+number, not two readings of one word: the lane holds every Case the Reviewer has in
+an **outstanding** status, and its tiles partition it, so they sum to the lane's own
+headline. The **Controls** and **Owner** lanes answer different questions and have no
+Action Centre counterpart.
 
 ### Communication
 

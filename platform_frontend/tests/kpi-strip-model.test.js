@@ -61,6 +61,17 @@ function applyFilter(rows, filter) {
       Boolean(c.hasOpenAppeal) !== filter.hasOpenAppeal
     )
       return false;
+    // `anyOf` ORs its branches, as both real clients do. Without it a lane that
+    // scopes itself by an OR of statuses would appear to filter here and in
+    // fact return every row, so a test asserting a tile count would be
+    // measuring nothing.
+    if (
+      filter.anyOf !== undefined &&
+      !filter.anyOf.some(
+        (/** @type {any} */ sub) => applyFilter([c], sub).length === 1
+      )
+    )
+      return false;
     return true;
   });
 }
@@ -199,32 +210,17 @@ test('loadKpiModel: a visitor with no roles produces no lanes', async () => {
 
 // ===== Reviewer lane =====
 
-test('loadKpiModel: reviewer lane buckets cases into overdue / awaiting RP / in progress, deduped', async () => {
+test('loadKpiModel: reviewer lane partitions cases across the four Action Centre groups, deduped', async () => {
   const rows = [
     caseRow({ id: 'o1', caseType: 'complaints', dueDate: PAST }),
     caseRow({ id: 'o2', caseType: 'conduct', dueDate: PAST }),
     caseRow({
       id: 'a1',
       caseType: 'complaints',
-      conversation: [
-        {
-          author: { loginName: 'me', displayName: 'Me Reviewer' },
-          timestamp: PAST,
-          body: 'ping',
-        },
-      ],
+      awaitingResponsibleParty: true,
     }),
-    caseRow({
-      id: 'p1',
-      caseType: 'complaints',
-      conversation: [
-        {
-          author: { loginName: 'rp', displayName: 'Rae Party' },
-          timestamp: PAST,
-          body: 'reply',
-        },
-      ],
-    }),
+    caseRow({ id: 'h1', caseType: 'complaints', onHold: true }),
+    caseRow({ id: 'p1', caseType: 'complaints' }),
     caseRow({ id: 'p2', caseType: 'conduct' }),
     // out of scope — no source for this list, never fetched
     caseRow({ id: 'x1', caseType: 'lending', dueDate: PAST }),
@@ -245,9 +241,74 @@ test('loadKpiModel: reviewer lane buckets cases into overdue / awaiting RP / in 
   assert.equal(rev.scopeLabel, 'Complaints, Conduct');
   assert.equal(tile(rev, 'overdue').count, 2);
   assert.equal(tile(rev, 'awaiting-rp').count, 1);
+  assert.equal(tile(rev, 'on-hold').count, 1);
   assert.equal(tile(rev, 'in-progress').count, 2);
-  // 5 in scope, deduped by case
-  assert.equal(rev.totalItems, 5);
+  // 6 in scope, deduped by case — and the four tiles sum to it, because the
+  // lane partitions the pool rather than overlapping it.
+  assert.equal(rev.totalItems, 6);
+  assert.equal(
+    rev.tiles.reduce(
+      (/** @type {number} */ sum, /** @type {any} */ t) => sum + t.count,
+      0
+    ),
+    rev.totalItems
+  );
+});
+
+test('loadKpiModel: the reviewer tiles apply the Action Centre priority order', async () => {
+  // Every flag at once on one Case: it belongs in the first group that claims
+  // it and nowhere else, the same answer its Action Centre filters give.
+  const rows = [
+    caseRow({
+      id: 'all',
+      caseType: 'complaints',
+      dueDate: PAST,
+      awaitingResponsibleParty: true,
+      onHold: true,
+    }),
+    caseRow({
+      id: 'waiting-parked',
+      caseType: 'complaints',
+      awaitingResponsibleParty: true,
+      onHold: true,
+    }),
+  ];
+  const lanes = await loadKpiModel({
+    client: /** @type {any} */ (makeClient(() => rows)),
+    currentUserId: 'me',
+    capabilities: defaultCapabilities({ isReviewer: true }),
+    caseSources: [source('complaints')],
+    now: NOW,
+  });
+  const rev = lane(lanes, 'reviewer');
+  assert.equal(tile(rev, 'overdue').count, 1);
+  assert.equal(tile(rev, 'awaiting-rp').count, 1);
+  assert.equal(tile(rev, 'on-hold').count, 0);
+  assert.equal(tile(rev, 'in-progress').count, 0);
+});
+
+test('loadKpiModel: an Actions In Progress case reaches the reviewer lane', async () => {
+  // Its hand-off wrote the awaiting flag, so it lands in Awaiting Frontline —
+  // and, before the pool widened past `In-progress`, it reached no tile at all.
+  const lanes = await loadKpiModel({
+    client: /** @type {any} */ (
+      makeClient(() => [
+        caseRow({
+          id: 's1',
+          caseType: 'complaints',
+          status: 'Actions In Progress',
+          awaitingResponsibleParty: true,
+        }),
+      ])
+    ),
+    currentUserId: 'me',
+    capabilities: defaultCapabilities({ isReviewer: true }),
+    caseSources: [source('complaints')],
+    now: NOW,
+  });
+  const rev = lane(lanes, 'reviewer');
+  assert.equal(rev.totalItems, 1);
+  assert.equal(tile(rev, 'awaiting-rp').count, 1);
 });
 
 test('loadKpiModel: reviewer overdue tile splits by Case Type, zero-suppressed and sorted', async () => {
@@ -275,10 +336,12 @@ test('loadKpiModel: reviewer overdue tile splits by Case Type, zero-suppressed a
   assert.equal(overdue.defaultExpanded, false);
 });
 
-test('loadKpiModel: reviewer treats a case with no conversation as in progress', async () => {
+test('loadKpiModel: reviewer treats a case with no flags set as in progress', async () => {
   const row = caseRow({ id: 'p1', caseType: 'complaints' });
-  // A row that never carried a conversation array at all.
-  delete (/** @type {any} */ (row).conversation);
+  // A row carrying neither flag column, which is what a freshly claimed Case
+  // holds: unset reads as not-flagged, so it is simply in progress.
+  delete (/** @type {any} */ (row).awaitingResponsibleParty);
+  delete (/** @type {any} */ (row).onHold);
   const lanes = await loadKpiModel({
     client: /** @type {any} */ (makeClient(() => [row])),
     currentUserId: 'me',
@@ -324,7 +387,7 @@ test('loadKpiModel: reviewer lane with no caseSources produces an empty pool', a
   assert.equal(rev.scopeLabel, '');
 });
 
-test('loadKpiModel: reviewer lane sends an assignedReviewer + In-progress filter per source list', async () => {
+test('loadKpiModel: reviewer lane sends an assignedReviewer + outstanding-status filter per source list', async () => {
   /** @type {any[]} */
   const calls = [];
   await loadKpiModel({
@@ -339,9 +402,15 @@ test('loadKpiModel: reviewer lane sends an assignedReviewer + In-progress filter
     caseSources: [source('complaints')],
     now: NOW,
   });
+  // Both outstanding statuses: a Case out with the Frontline is still this
+  // Reviewer's, and scoping the pool to `In-progress` dropped it from every
+  // tile in the lane, not only from the In progress one.
   assert.deepEqual(calls, [
     [
-      { status: 'In-progress', assignedReviewer: 'me' },
+      {
+        assignedReviewer: 'me',
+        anyOf: [{ status: 'In-progress' }, { status: 'Actions In Progress' }],
+      },
       { listName: 'Cases-complaints' },
     ],
   ]);

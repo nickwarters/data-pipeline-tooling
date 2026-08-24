@@ -2,7 +2,7 @@
 import { isOverdue, OVERDUE_STATUSES } from './overdue-evaluator.js';
 import { APPEALS_ENABLED } from '../config/features.js';
 import { permissions } from '../services/permissions.js';
-import { CASE_STATUS } from '../lib/case-statuses.js';
+import { CASE_STATUS, OUTSTANDING_STATUSES } from '../lib/case-statuses.js';
 import {
   listCasesAcrossSources,
   countCasesAcrossSources,
@@ -110,18 +110,6 @@ export function breachingSoonLabel(windowHours) {
 }
 
 /**
- * The login name of whoever wrote the last Conversation message on a Case, or
- * null when the Conversation is empty. Used to detect a Reviewer waiting on the
- * Responsible Party (the last word was the Reviewer's).
- *
- * @param {CaseRow} caseRow
- * @returns {string | null}
- */
-function lastMessageAuthor(caseRow) {
-  return caseRow.conversation?.at(-1)?.author?.loginName ?? null;
-}
-
-/**
  * Join Case Type slugs into a display scope label ("Complaints, Conduct").
  *
  * @param {string[]} slugs
@@ -215,18 +203,43 @@ async function buildReviewerLane({ client, currentUserId, caseSources, now }) {
   // flatten rather than fetching unscoped and filtering in JS (issue: no
   // default Case list — every read carries an explicit `listName`, and a Case
   // lives in exactly one list, so per-list pools simply flatten together).
+  //
+  // Both outstanding statuses, not just `In-progress`: a Case whose Remediation
+  // Actions are out with the Frontline is still work this Reviewer holds, and
+  // scoping the pool to one status dropped it from the whole lane — its Overdue
+  // and Awaiting tiles included — not merely from the third tile.
   const pool = await listCasesAcrossSources(client, caseSources, {
-    status: CASE_STATUS.IN_PROGRESS,
     assignedReviewer: currentUserId,
+    anyOf: OUTSTANDING_STATUSES.map((status) => ({ status })),
   });
 
-  const overdue = pool.filter((c) => isOverdue(c, now));
-  const awaiting = pool.filter(
-    (c) => !isOverdue(c, now) && lastMessageAuthor(c) === currentUserId
-  );
-  const inProgress = pool.filter(
-    (c) => !isOverdue(c, now) && lastMessageAuthor(c) !== currentUserId
-  );
+  // The four buckets are the Action Centre's four Reviewer groups, in its
+  // priority order and read off the same flags, so a tile count and its group
+  // count are answers to one question. They partition the pool: each `else`
+  // below is the negation the corresponding group's filter sends to the server.
+  //
+  // Awaiting is the stored `awaitingResponsibleParty` flag, not the Conversation
+  // tail. The tail was a second, client-side reading of the same word, and
+  // reading it here is what made this tile disagree with its Action Centre
+  // group. Sending the Remediation Actions writes that flag as part of the same
+  // hand-off that sets `Actions In Progress` (`awaitingFrontlineSent`), so an
+  // out-with-the-Frontline Case lands here by the flag its own transition wrote
+  // — one rule, on both panels, rather than the status on one and the flag on
+  // the other.
+  /** @type {CaseRow[]} */
+  const overdue = [];
+  /** @type {CaseRow[]} */
+  const awaiting = [];
+  /** @type {CaseRow[]} */
+  const onHold = [];
+  /** @type {CaseRow[]} */
+  const inProgress = [];
+  for (const c of pool) {
+    if (isOverdue(c, now)) overdue.push(c);
+    else if (c.awaitingResponsibleParty) awaiting.push(c);
+    else if (c.onHold) onHold.push(c);
+    else inProgress.push(c);
+  }
 
   return assembleLane({
     role: 'reviewer',
@@ -237,10 +250,11 @@ async function buildReviewerLane({ client, currentUserId, caseSources, now }) {
       { key: 'overdue', label: 'Overdue', tone: 'overdue', matched: overdue },
       {
         key: 'awaiting-rp',
-        label: 'Awaiting RP',
+        label: 'Awaiting Frontline',
         tone: 'awaiting',
         matched: awaiting,
       },
+      { key: 'on-hold', label: 'On Hold', tone: 'hold', matched: onHold },
       {
         key: 'in-progress',
         label: 'In progress',
