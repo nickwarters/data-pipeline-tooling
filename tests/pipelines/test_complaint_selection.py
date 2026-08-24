@@ -1,11 +1,11 @@
 """Tests for ``complaint_selection``: the deployed Complaints A/B/C Selection group.
 
 Complaints A/B/C stop at silver, so this pipeline reads their current silver
-plus Sync's current Cases and narrows them to the SelectionPool in one
-governed transform, ``select_complaints`` -- score, gate, replace voids
-like-for-like (ADR-0021, reduced), queue replacements ahead of the rest, cap
-the queue at the Hopper's remaining capacity, and land both the SelectionPool
-(with each source's own Case Details) and its trace.
+plus Sync's current Cases and narrows them to the SelectionPool through a
+chain of named steps -- score, gate (vectorised), replace voids like-for-like
+(ADR-0021, reduced), queue replacements ahead of the rest, cap the queue at
+the Hopper's remaining capacity -- landing both the SelectionPool (with each
+source's own Case Details, attached to survivors only) and its trace.
 """
 
 from __future__ import annotations
@@ -25,18 +25,23 @@ from pipelines.complaint_selection.pipeline import (
     POOL_COLUMNS,
     POOL_JSON,
     POOL_TABLE,
+    SELECTION_GROUP,
     TRACE_TABLE,
     UPSTREAMS,
-    age_in_days,
+    apply_hopper,
     assign_replacements,
+    attach_details,
+    gate_max_age,
+    gate_voided,
     previous_run_instant,
+    replace_voids,
     run,
-    select_complaints,
+    score_candidates,
     select_pool,
+    selected_only,
     unallocated_count,
     voided_refs,
     voids_since,
-    within_max_age,
 )
 from pipelines.complaint_selection.schema import PendingVoid
 from tests.framework_testing import (
@@ -62,6 +67,20 @@ _EMPTY_CURRENT = Dataset.from_pandas(
 
 def _current(rows: list[dict]) -> Dataset:
     return make_dataset(rows) if rows else _EMPTY_CURRENT
+
+
+def _run_steps(member_datasets, current, *, since=None, hopper_depth=None):
+    """Drive the decision steps in wiring order over in-memory datasets.
+
+    ``member_datasets`` aligns with the first ``len(member_datasets)`` group
+    members, exactly as ``select_pool`` aligns its reads with ``group``.
+    """
+    group = SELECTION_GROUP[: len(member_datasets)]
+    out = score_candidates(*member_datasets, group=group, run_date=_RUN_DATE)
+    out = gate_voided(out, current)
+    out = gate_max_age(out)
+    out = replace_voids(out, current, since=since)
+    return apply_hopper(out, current, hopper_depth=hopper_depth)
 
 
 def test_the_steps_are_exactly_the_ones_it_always_took():
@@ -129,8 +148,13 @@ def test_the_steps_are_exactly_the_ones_it_always_took():
         "read-complaints_b",
         "read-complaints_c",
         "read-current-cases",
-        "select",
+        "candidates",
+        "gate-voided",
+        "gate-max-age",
+        "replace-voids",
+        "hopper",
         "selected",
+        "details",
         "pool-rows",
         "validate",
         "write-pool",
@@ -429,47 +453,68 @@ def test_a_stale_sharepoint_cases_record_blocks_the_run_same_day(tmp_path, monke
         )
 
 
-def test_age_rule_and_max_age_gate_are_named_testable_functions():
-    assert age_in_days("2026-07-29", dt.date(2026, 8, 18)) == 20
-    # Sync-style datetime text is tolerated; only the date part is read.
-    assert age_in_days("2026-08-18 09:30:00", dt.date(2026, 8, 18)) == 0
-    assert age_in_days(None, dt.date(2026, 8, 18)) is None
-    assert age_in_days("not-a-date", dt.date(2026, 8, 18)) is None
-
-    # "Only include younger than": the boundary age itself is excluded.
-    assert within_max_age({"priority_score": 49}) is True
-    assert within_max_age({"priority_score": 50}) is False
-
-
-def test_a_missing_received_date_is_excluded_not_guessed():
+def test_scoring_is_age_in_days_measured_from_the_run_date():
     a = given_rows(
         [
             {
-                "record_id": "R001",
-                "label": "x",
-                "amount": 10,
-                "received_date": None,
+                "record_id": "R1",
+                "received_date": "2026-07-29",
                 "load_date": "2026-08-18",
             },
+            # Sync-style datetime text is tolerated; only the date part counts.
             {
-                "record_id": "R002",
-                "label": "y",
-                "amount": 10,
-                "received_date": "2026-08-01",
+                "record_id": "R2",
+                "received_date": "2026-08-18 09:30:00",
                 "load_date": "2026-08-18",
             },
         ]
     ).read()
-    empty = Dataset.from_pandas(pd.DataFrame(columns=["record_id", "load_date"]))
 
-    out = select_complaints(
-        a, empty, empty, _EMPTY_CURRENT, run_date=_RUN_DATE
-    ).to_pandas()
+    out = score_candidates(a, group=SELECTION_GROUP[:1], run_date=_RUN_DATE).to_pandas()
 
     by_ref = {row["case_ref"]: row for _, row in out.iterrows()}
-    assert by_ref["R001"]["verdict"] == "excluded"
-    assert by_ref["R001"]["reason"] == "excluded by filter 'missing-received-date'"
-    assert by_ref["R002"]["verdict"] == "selected"
+    assert by_ref["R1"]["priority_score"] == 20
+    assert by_ref["R2"]["priority_score"] == 0
+    # ``related_date`` carries the same date the score was computed from.
+    assert by_ref["R1"]["related_date"] == "2026-07-29"
+
+
+def test_max_age_gate_settles_old_missing_and_unparseable_dates_vectorised():
+    a = given_rows(
+        [
+            {
+                "record_id": "young",  # 49 days -- inside the window
+                "received_date": "2026-06-30",
+                "load_date": "2026-08-18",
+            },
+            {
+                "record_id": "boundary",  # exactly MAX_AGE_DAYS -- excluded
+                "received_date": "2026-06-29",
+                "load_date": "2026-08-18",
+            },
+            {
+                "record_id": "missing",
+                "received_date": None,
+                "load_date": "2026-08-18",
+            },
+            {
+                "record_id": "junk",
+                "received_date": "not-a-date",
+                "load_date": "2026-08-18",
+            },
+        ]
+    ).read()
+
+    scored = score_candidates(a, group=SELECTION_GROUP[:1], run_date=_RUN_DATE)
+    out = gate_max_age(scored).to_pandas()
+
+    by_ref = {row["case_ref"]: row for _, row in out.iterrows()}
+    # "Only include younger than": the boundary age itself is excluded.
+    assert by_ref["young"]["verdict"] is None  # still eligible
+    assert by_ref["boundary"]["reason"] == "excluded by filter 'max-age'"
+    # A missing or unparseable date is excluded explicitly, never guessed.
+    assert by_ref["missing"]["reason"] == "excluded by filter 'missing-received-date'"
+    assert by_ref["junk"]["reason"] == "excluded by filter 'missing-received-date'"
 
 
 # ── Void replacement (ADR-0021, reduced) ──────────────────────────────────
@@ -564,9 +609,8 @@ def test_a_void_since_the_previous_run_is_replaced_at_the_case_type_rung(
 
 
 def test_previous_run_instant_is_none_for_a_plain_run_context(tmp_path):
-    """How a bare ``run()`` call and most tests reach ``select_complaints`` --
-    with no registry there is no "since", so voids never carry forward
-    silently.
+    """How a bare ``run()`` call and most tests reach the steps -- with no
+    registry there is no "since", so voids never carry forward silently.
     """
     context = RunContext(base_dir=tmp_path, pipeline=PIPELINE_NAME)
     assert previous_run_instant(context) is None
@@ -791,10 +835,9 @@ def test_hopper_gate_caps_the_queue_and_traces_the_cut_with_its_score():
         for i in range(5)
     ]
     a = given_rows(rows).read()
-    b = _EMPTY_C
 
-    out = select_complaints(
-        a, b, _EMPTY_C, _EMPTY_CURRENT, hopper_depth=3, run_date=_RUN_DATE
+    out = _run_steps(
+        [a, _EMPTY_C, _EMPTY_C], _EMPTY_CURRENT, hopper_depth=3
     ).to_pandas()
 
     selected = out[out["verdict"] == "selected"].sort_values("rank")
@@ -852,14 +895,8 @@ def _replacement_scenario(*, hopper_depth: int) -> pd.DataFrame:
         [{"title": "voided-a", "status": "Void", "voided_at": "2026-08-18 09:00:00"}]
     )
     since = dt.datetime(2026, 8, 18, 8, 0, tzinfo=dt.timezone.utc)
-    return select_complaints(
-        a,
-        b,
-        _EMPTY_C,
-        current,
-        since=since,
-        hopper_depth=hopper_depth,
-        run_date=_RUN_DATE,
+    return _run_steps(
+        [a, b, _EMPTY_C], current, since=since, hopper_depth=hopper_depth
     ).to_pandas()
 
 
@@ -1049,9 +1086,9 @@ def test_details_land_as_json_text_in_the_pool_table(tmp_path):
 
 
 def test_an_undeclared_silver_column_stays_out_of_details():
-    # The age rule reads ``received_date``; a member's own detail_columns are
-    # the only keys `select_complaints` ever copies into `details`, so neither
-    # it nor an undeclared silver column leaks in.
+    # The score reads ``received_date``; a member's own detail_columns are
+    # the only keys ``attach_details`` ever copies into ``details``, so
+    # neither it nor an undeclared silver column leaks in.
     a = given_rows(
         [
             {
@@ -1067,7 +1104,8 @@ def test_an_undeclared_silver_column_stays_out_of_details():
     b = Dataset.from_pandas(pd.DataFrame(columns=["record_id", "load_date"]))
     c = Dataset.from_pandas(pd.DataFrame(columns=["record_id", "load_date"]))
 
-    out = select_complaints(a, b, c, _EMPTY_CURRENT, run_date=_RUN_DATE).to_pandas()
+    considered = _run_steps([a, b, c], _EMPTY_CURRENT)
+    out = attach_details(selected_only(considered), a, b, c).to_pandas()
 
     assert out.iloc[0]["details"] == {"amount": 90, "label": "alpha"}
 
@@ -1087,7 +1125,8 @@ def test_an_empty_case_type_still_yields_declared_columns():
     b = Dataset.from_pandas(pd.DataFrame(columns=["record_id", "load_date"]))
     c = Dataset.from_pandas(pd.DataFrame(columns=["record_id", "load_date"]))
 
-    out = select_complaints(a, b, c, _EMPTY_CURRENT, run_date=_RUN_DATE).to_pandas()
+    considered = _run_steps([a, b, c], _EMPTY_CURRENT)
+    out = attach_details(selected_only(considered), a, b, c).to_pandas()
 
     assert out.iloc[0]["case_ref"] == "R001"
     assert "details" in out.columns
@@ -1099,7 +1138,8 @@ def test_zero_candidates_overall_runs_clean():
     """
     empty = Dataset.from_pandas(pd.DataFrame(columns=["record_id", "load_date"]))
 
-    out = select_complaints(empty, empty, empty, _EMPTY_CURRENT)
+    considered = _run_steps([empty, empty, empty], _EMPTY_CURRENT)
 
-    assert len(out) == 0
-    assert "details" in out.to_pandas().columns
+    assert len(considered) == 0
+    out = attach_details(selected_only(considered), empty, empty, empty).to_pandas()
+    assert "details" in out.columns

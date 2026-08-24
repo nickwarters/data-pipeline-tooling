@@ -5,7 +5,11 @@ own Case Type ingest (source -> raw -> silver, no gold -- see
 ``pipelines/complaints_a`` and its siblings). This pipeline is the one place
 the three become a **Selection group**: it reads each Case Type's silver and
 the sync feed's current Cases, then narrows the combined candidates to the
-SelectionPool in one governed transform, ``select_complaints``.
+SelectionPool through a chain of domain-named steps -- score, gate, replace
+voids, cap -- each its own transform in the run log. The gates run first and
+are vectorised: the excluded population grows with the feeds' history, so
+the per-row work (the void ladder, Case Details) only ever touches the
+eligible slice.
 
 To add a Case Type to this selection group, add one member to
 ``SELECTION_GROUP`` -- its Shared Reader, its natural key, its received-date
@@ -27,7 +31,7 @@ import os
 import sqlite3
 import sys
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Sequence
 
 import pandas as pd
 
@@ -117,33 +121,16 @@ POOL_COLUMNS: tuple[str, ...] = (
 # The selection trace's declared columns (ADR-0008) -- exactly these five.
 TRACE_COLUMNS: tuple[str, ...] = ("case_ref", "verdict", "reason", "rank", "score")
 
-# Every field select_complaints carries per considered Case, pool and trace
-# columns together, before either write projects it down. Passed explicitly
-# to every intermediate pd.DataFrame(...) so an empty source or an empty
-# candidate population still yields these columns rather than none.
-_ROW_COLUMNS: tuple[str, ...] = tuple(dict.fromkeys((*POOL_COLUMNS, *TRACE_COLUMNS)))
-
-
-def age_in_days(received_date: Any, run_date: dt.date) -> int | None:
-    """The group's one priority rule: days since the complaint arrived.
-
-    Older is a higher score, so the pool's priority-desc sort is oldest first.
-    ``run_date`` (not the wall clock) is the measuring point, so a re-drive of
-    a past run date recomputes the same ages. ``None`` for a missing or
-    unparseable date -- the caller excludes that row explicitly rather than
-    inventing an age for it.
-    """
-    if received_date is None or pd.isna(received_date):
-        return None
-    try:
-        received = dt.date.fromisoformat(str(received_date)[:10])
-    except ValueError:
-        return None
-    return (run_date - received).days
-
-
-def within_max_age(row: Mapping[str, Any]) -> bool:
-    return row["priority_score"] < MAX_AGE_DAYS
+# Every column a considered Case carries through the gates -- pool and trace
+# columns together, ``details`` excepted: Case Details are attached to
+# survivors only (``attach_details``), so the wide candidate path never
+# builds them. Declared explicitly so an empty source or an empty candidate
+# population still yields these columns rather than none.
+_CANDIDATE_COLUMNS: tuple[str, ...] = tuple(
+    column
+    for column in dict.fromkeys((*POOL_COLUMNS, *TRACE_COLUMNS))
+    if column != "details"
+)
 
 
 SELECTION_GROUP: tuple[SelectionGroupMember, ...] = (
@@ -378,138 +365,216 @@ def queue_order(frame: pd.DataFrame, pending: Sequence[PendingVoid]) -> pd.DataF
     return frame.loc[sorted(frame.index, key=key)].reset_index(drop=True)
 
 
-def select_complaints(
-    *datasets: Dataset,
+def _latest_member_rows(member: SelectionGroupMember, dataset: Dataset) -> pd.DataFrame:
+    """One row per Case for one member: renamed key, latest observation."""
+    renamed = Rename({member.case_ref_column: "case_ref"})(dataset)
+    return LatestPerKey(key="case_ref", by="load_date")(renamed).to_pandas()
+
+
+def score_candidates(
+    *member_datasets: Dataset,
     group: tuple[SelectionGroupMember, ...] = SELECTION_GROUP,
-    since: dt.datetime | None = None,
-    hopper_depth: int | None = None,
     run_date: dt.date | None = None,
 ) -> Dataset:
-    """Combine, score, gate, replace voids, queue, cap -- the whole Selection.
+    """Every Case the group can see, scored -- one vectorised frame.
 
-    ``datasets`` arrive positionally in wiring order: one per ``group`` member,
-    Sync's current Cases last. Returns **one row per considered Case**,
-    carrying both the SelectionPool columns and the trace columns
-    (``POOL_COLUMNS`` and ``TRACE_COLUMNS``) together -- every write downstream
-    is a projection of this one dataset. The trace is built here rather than
-    via ``.explain()`` because ``RowTrace.consider()`` seeds the considered
-    population from the first ``ReadNode`` executed alone; with four reads
-    feeding one transform, the framework's trace primitive has no way to see
-    all four as one population (see docs/selection.md and ADR-0008).
-
-    Order matters and two steps are load-bearing:
-
-    - Each source's ``details`` dict is built *before* the concat below. After
-      concat a numeric column upcasts across sources with differing dtypes
-      (``amount`` becomes ``90.0``) and every row gains the other sources'
-      keys as NaN -- ``json.dumps`` would then emit a bare, invalid ``NaN``
-      into a field the frontend's ``JSON.parse`` rejects. Building it
-      per-source keeps native types and only that source's own keys.
-    - A pending void's ladder attributes are resolved from the candidate
-      population *before* the voided gate runs -- the voided Case is itself a
-      candidate row, and the gate removes it; resolving after would strip
-      every void's attributes and silently degrade every match to the
-      fallback rung.
+    One row per member Case (its latest observation), carrying the shared
+    ``_CANDIDATE_COLUMNS`` only. The score is the group's one priority rule:
+    the complaint's age in days, ``received_date`` measured against
+    ``run_date`` (not the wall clock, so a re-drive of a past run date
+    recomputes the same scores; ``None`` resolves to today, matching a bare
+    ``RunContext``). A missing or unparseable date scores NaN -- the max-age
+    gate excludes those rows explicitly rather than inventing an age.
+    ``related_date`` carries the same received date, so the void ladder's
+    tie-break reads the date the queue is ordered by. Case Details are
+    deliberately absent: they are attached to survivors only, in
+    ``attach_details``.
     """
-    if hopper_depth is None:
-        hopper_depth = HOPPER_DEPTH
     if run_date is None:
         run_date = dt.date.today()
-
-    *member_datasets, current_dataset = datasets
-    current = current_dataset.to_pandas()
-    ladder_fields = sorted({field for rung in MATCH_LADDER for field in rung})
-
     frames = []
     for member, dataset in zip(group, member_datasets, strict=True):
-        renamed = Rename({member.case_ref_column: "case_ref"})(dataset)
-        latest = LatestPerKey(key="case_ref", by="load_date")(renamed)
-        rows = [
+        latest = _latest_member_rows(member, dataset)
+        if latest.empty:
+            continue
+        received_text = latest[member.received_date_column]
+        # ISO8601 accepts a bare date and Sync-style datetime text alike (a
+        # single inferred format would coerce whichever shape came second to
+        # NaT); anything non-ISO coerces to NaT and the max-age gate excludes
+        # it. normalize() drops the time part: ages are whole calendar days.
+        received = pd.to_datetime(
+            received_text, errors="coerce", format="ISO8601"
+        ).dt.normalize()
+        age = (pd.Timestamp(run_date) - received).dt.days
+        frame = pd.DataFrame(
             {
-                "case_ref": record["case_ref"],
+                "case_ref": latest["case_ref"].astype(str),
                 "case_type": member.case_type,
-                "priority_score": age_in_days(
-                    record[member.received_date_column], run_date
-                ),
+                "priority_score": age,
                 "attribute_a": None,
-                RELATED_DATE_COLUMN: (
-                    None
-                    if pd.isna(record[member.received_date_column])
-                    else str(record[member.received_date_column])
-                ),
-                "details": {column: record[column] for column in member.detail_columns},
+                RELATED_DATE_COLUMN: received_text.where(received_text.notna(), None),
+                "replaces_case_ref": None,
+                "void_match_rung": None,
+                "verdict": None,
+                "reason": None,
+                "rank": None,
+                "score": age,
             }
-            for record in latest.to_pandas().to_dict("records")
-        ]
-        frames.append(pd.DataFrame(rows, columns=_ROW_COLUMNS))
-    candidates = pd.concat(frames, ignore_index=True, sort=False)
+        )
+        frames.append(frame[list(_CANDIDATE_COLUMNS)])
+    if not frames:
+        return Dataset.from_pandas(pd.DataFrame(columns=list(_CANDIDATE_COLUMNS)))
+    return Dataset.from_pandas(pd.concat(frames, ignore_index=True))
 
-    candidate_by_ref = {row["case_ref"]: row for row in candidates.to_dict("records")}
-    v_refs = voided_refs(current)
+
+def gate_voided(candidates: Dataset, current_cases: Dataset) -> Dataset:
+    """Exclude every currently-voided Case -- one vectorised mask.
+
+    First gate on purpose: a voided Case's verdict wins over any other
+    reason the row might also have been excluded for.
+    """
+    frame = candidates.to_pandas().copy()
+    voided = frame["case_ref"].isin(voided_refs(current_cases.to_pandas()))
+    frame.loc[voided, "verdict"] = "excluded"
+    frame.loc[voided, "reason"] = "excluded by filter 'voided'"
+    return Dataset.from_pandas(frame)
+
+
+def gate_max_age(candidates: Dataset) -> Dataset:
+    """The age window, vectorised: only a complaint *younger* than
+    ``MAX_AGE_DAYS`` stays eligible, and a missing or unparseable received
+    date is excluded explicitly rather than given an invented age.
+
+    Early and vectorised deliberately: the excluded population only grows as
+    the feeds accumulate history (every complaint ever landed is considered
+    each run, and most age out), so the per-row work downstream -- the void
+    ladder, Case Details -- must never loop over it.
+    """
+    frame = candidates.to_pandas().copy()
+    open_rows = frame["verdict"].isna()
+    missing = open_rows & frame["priority_score"].isna()
+    frame.loc[missing, "verdict"] = "excluded"
+    frame.loc[missing, "reason"] = "excluded by filter 'missing-received-date'"
+    too_old = open_rows & ~missing & (frame["priority_score"] >= MAX_AGE_DAYS)
+    frame.loc[too_old, "verdict"] = "excluded"
+    frame.loc[too_old, "reason"] = "excluded by filter 'max-age'"
+    return Dataset.from_pandas(frame)
+
+
+def replace_voids(
+    candidates: Dataset,
+    current_cases: Dataset,
+    *,
+    since: dt.datetime | None = None,
+) -> Dataset:
+    """Order the eligible queue and pair pending voids with replacements.
+
+    The eligible slice is sorted oldest first (descending age, a stable
+    sort), each void since the previous run is paired like-for-like by
+    ``assign_replacements``, and the claimed rows jump the queue via
+    ``queue_order``. Only that slice is processed row-wise -- its size is
+    bounded by the age window, while the settled rows pass through untouched
+    (they still land in the trace).
+
+    A pending void's ladder attributes are resolved from the *whole*
+    candidate frame, not the eligible slice: the voided Case is itself a
+    candidate row the voided gate has already settled, and its attributes
+    are what the ladder matches a replacement against.
+    """
+    frame = candidates.to_pandas()
+    current = current_cases.to_pandas()
+
+    ladder_fields = sorted({field for rung in MATCH_LADDER for field in rung})
+    by_ref = frame.drop_duplicates("case_ref", keep="last").set_index("case_ref")
     pending = tuple(
         PendingVoid(
             ref,
             voided_at,
-            {field: candidate_by_ref[ref][field] for field in ladder_fields},
+            {field: by_ref.at[ref, field] for field in ladder_fields},
         )
         for ref, voided_at in voids_since(current, since)
-        if ref in candidate_by_ref  # never a candidate this run -- not ours to replace
+        if ref in by_ref.index  # never a candidate this run -- not ours to replace
     )
 
-    considered = []
-    for row in candidates.to_dict("records"):
-        # A missing age travelled through the candidate frame as NaN (the
-        # column upcasts to float); normalise it back to None so one check
-        # below reads it, and the trace lands NULL rather than NaN.
-        score = None if pd.isna(row["priority_score"]) else int(row["priority_score"])
-        row = {
-            **row,
-            "priority_score": score,
-            "score": score,
-            "replaces_case_ref": None,
-            "void_match_rung": None,
-            "rank": None,
-        }
-        if row["case_ref"] in v_refs:
-            row["verdict"] = "excluded"
-            row["reason"] = "excluded by filter 'voided'"
-        elif row["priority_score"] is None:
-            row["verdict"] = "excluded"
-            row["reason"] = "excluded by filter 'missing-received-date'"
-        elif not within_max_age(row):
-            row["verdict"] = "excluded"
-            row["reason"] = "excluded by filter 'max-age'"
-        else:
-            row["verdict"] = None  # still eligible; resolved after the hopper cut
-            row["reason"] = None
-        considered.append(row)
-
-    settled = [row for row in considered if row["verdict"] is not None]
-    eligible_rows = [row for row in considered if row["verdict"] is None]
-    eligible = pd.DataFrame(eligible_rows, columns=_ROW_COLUMNS)
-    # Descending age: the oldest complaint leads the queue.
-    eligible = eligible.sort_values(
-        "priority_score", ascending=False, kind="stable"
-    ).reset_index(drop=True)
+    settled = frame[frame["verdict"].notna()]
+    eligible = (
+        frame[frame["verdict"].isna()]
+        # Descending age: the oldest complaint leads the queue.
+        .sort_values("priority_score", ascending=False, kind="stable")
+        .reset_index(drop=True)
+    )
     eligible = assign_replacements(eligible, pending)
     eligible = queue_order(eligible, pending)
+    return Dataset.from_pandas(pd.concat([settled, eligible], ignore_index=True))
 
-    candidate_refs = set(candidates["case_ref"].astype(str))
-    unallocated = unallocated_count(current, candidate_refs)
-    capacity = max(0, hopper_depth - unallocated)
 
-    queued = eligible.to_dict("records")
-    for position, row in enumerate(queued):
-        if position < capacity:
-            row["verdict"] = "selected"
-            row["reason"] = "passed voided, max-age"
-            row["rank"] = position + 1
-        else:
-            row["verdict"] = "excluded"
-            row["reason"] = f"excluded by gate 'hopper' (capacity {capacity})"
-            row["rank"] = None
+def apply_hopper(
+    candidates: Dataset,
+    current_cases: Dataset,
+    *,
+    hopper_depth: int | None = None,
+) -> Dataset:
+    """Cap the queue at the Hopper's remaining capacity; settle every verdict.
 
-    return Dataset.from_pandas(pd.DataFrame(settled + queued, columns=_ROW_COLUMNS))
+    Capacity is the declared depth minus a direct count of the group's own
+    Cases sitting in ``To-allocate`` (``unallocated_count``). The first
+    ``capacity`` rows of the queue are selected and ranked by queue position,
+    vectorised; the rest are cut with the capacity recorded in the trace
+    reason. ``hopper_depth`` resolves from ``HOPPER_DEPTH`` *here* when
+    ``None``, rather than as a caller's default argument value: a default is
+    bound once at import time, which would freeze the constant and defeat a
+    test's monkeypatch of it.
+    """
+    if hopper_depth is None:
+        hopper_depth = HOPPER_DEPTH
+    frame = candidates.to_pandas().copy()
+    current = current_cases.to_pandas()
+
+    candidate_refs = set(frame["case_ref"].astype(str))
+    capacity = max(0, hopper_depth - unallocated_count(current, candidate_refs))
+
+    eligible = frame["verdict"].isna()
+    position = eligible.cumsum() - 1  # queue position, as replace_voids ordered it
+    selected = eligible & (position < capacity)
+    cut = eligible & ~selected
+    frame.loc[selected, "verdict"] = "selected"
+    frame.loc[selected, "reason"] = "passed voided, max-age"
+    frame.loc[selected, "rank"] = position[selected] + 1
+    frame.loc[cut, "verdict"] = "excluded"
+    frame.loc[cut, "reason"] = f"excluded by gate 'hopper' (capacity {capacity})"
+    return Dataset.from_pandas(frame)
+
+
+def attach_details(
+    selected: Dataset,
+    *member_datasets: Dataset,
+    group: tuple[SelectionGroupMember, ...] = SELECTION_GROUP,
+) -> Dataset:
+    """Attach each survivor's Case Details, per source, as a native dict.
+
+    Built here -- after every gate and the Hopper cut -- and never for the
+    considered majority: the survivor count is bounded by the Hopper depth,
+    while the candidate population grows with the feeds' history. Built
+    per source, from that member's own latest rows, so each dict carries
+    only that source's declared ``detail_columns`` with their native types
+    (one concat'd frame would upcast numeric columns across sources and gain
+    the other sources' keys as NaN -- invalid JSON ``json.dumps`` cannot
+    emit).
+    """
+    frame = selected.to_pandas().copy()
+    details: dict[str, dict[str, Any]] = {}
+    for member, dataset in zip(group, member_datasets, strict=True):
+        refs = set(frame.loc[frame["case_type"] == member.case_type, "case_ref"])
+        if not refs:
+            continue
+        latest = _latest_member_rows(member, dataset)
+        rows = latest[latest["case_ref"].astype(str).isin(refs)]
+        for record in rows.to_dict("records"):  # bounded by the Hopper depth
+            details[str(record["case_ref"])] = {
+                column: record[column] for column in member.detail_columns
+            }
+    frame["details"] = frame["case_ref"].map(details)
+    return Dataset.from_pandas(frame)
 
 
 def project(dataset: Dataset, columns: Sequence[str]) -> Dataset:
@@ -519,13 +584,12 @@ def project(dataset: Dataset, columns: Sequence[str]) -> Dataset:
 
 
 def pool_rows(dataset: Dataset) -> Dataset:
-    """Narrow ``select_complaints``'s considered population to the landed pool.
+    """Project the detailed survivors down to the landed pool row.
 
-    Only survivors reach the pool; ``details`` is serialised to JSON text here
-    (the pool table's declared type, and the migration's), with
-    ``allow_nan=False`` so a residual float NaN fails the run rather than
-    shipping invalid JSON. The JSON deliverable keeps the dict -- see
-    ``select_complaints``.
+    ``details`` is serialised to JSON text here (the pool table's declared
+    type, and the migration's), with ``allow_nan=False`` so a residual float
+    NaN fails the run rather than shipping invalid JSON. The JSON deliverable
+    keeps the dict -- see ``attach_details``.
     """
     projected = project(dataset, POOL_COLUMNS).to_pandas()
     projected["details"] = projected["details"].map(
@@ -535,7 +599,7 @@ def pool_rows(dataset: Dataset) -> Dataset:
 
 
 def selected_only(dataset: Dataset) -> Dataset:
-    """Narrow ``select_complaints``'s considered population to the survivors.
+    """Narrow the considered population to the survivors.
 
     The shared parent of both deliverable projections: the pool row and the
     JSON row are the same selected Cases, projected to the same columns, and
@@ -543,9 +607,9 @@ def selected_only(dataset: Dataset) -> Dataset:
     """
     frame = dataset.to_pandas()
     frame = frame[frame["verdict"] == "selected"].reset_index(drop=True)
-    # The combined considered frame upcasts scores to float when any row has
-    # no age (a missing received date is a None score); every survivor has
-    # one, so land the declared integer rather than ``39.0``.
+    # The considered frame's score column is float when any row has no age
+    # (a missing received date scores NaN); every survivor has one, so land
+    # the declared integer rather than ``39.0``.
     frame["priority_score"] = frame["priority_score"].astype(int)
     return Dataset.from_pandas(frame)
 
@@ -562,20 +626,23 @@ def select_pool(
     run_date: dt.date | None = None,
     group: tuple[SelectionGroupMember, ...] = SELECTION_GROUP,
 ) -> tuple[Dataset, Dataset]:
-    """The Selection flow: one read per member plus Sync, one decision, three
-    projections.
+    """The Selection flow: reads, five named decisions, three projections.
 
     Written with the **eager steps**, so every line does its work when it is
-    reached and the variable on the left holds the real rows -- put a breakpoint
-    on ``select`` and step over it to watch the population narrow
+    reached and the variable on the left holds the real rows -- put a
+    breakpoint on any step and watch the population narrow
     ([ADR-0027](../../docs/adr/0027-eager-steps-are-the-default-authoring-model.md)).
+    Each step is named for the domain decision it makes -- ``candidates``,
+    ``gate-voided``, ``gate-max-age``, ``replace-voids``, ``hopper`` -- not
+    for a framework primitive. The gates are vectorised and run first; the
+    row-wise work (the void ladder, Case Details) only ever touches what
+    survives them. A gate settles verdict/reason columns rather than dropping
+    rows, so one considered frame flows through every step and the trace is a
+    projection of the ``hopper`` step's output.
 
-    ``member_readers`` aligns positionally with ``group`` -- the same order
-    ``select_complaints`` receives the datasets in. Nothing here names a
-    member: adding a Case Type to the group is one ``SELECTION_GROUP`` entry,
-    and this function follows. ``select`` takes every read as a dataset
-    argument, exactly as the graph node it replaces took input nodes: a fan-in
-    is more arguments, not a graph.
+    ``member_readers`` aligns positionally with ``group``. Nothing here names
+    a member: adding a Case Type to the group is one ``SELECTION_GROUP``
+    entry, and this function follows.
 
     Line order is the ordering guarantee. The graph form needed a comment
     warning that leaf declaration order was load-bearing, because ``p.run()``
@@ -583,11 +650,11 @@ def select_pool(
     before the trace because that line comes first, which is the same rule
     without having to know it.
 
-    ``hopper_depth`` is resolved from ``HOPPER_DEPTH`` *inside*
-    ``select_complaints`` when ``None``, rather than as this function's own
-    default argument value: a default is bound once at import time, which
-    would freeze the constant and defeat a test's monkeypatch of it. A ``None``
-    ``run_date`` resolves the same way (to today), matching what a bare
+    ``hopper_depth`` is resolved from ``HOPPER_DEPTH`` inside ``apply_hopper``
+    when ``None``, rather than as this function's own default argument value:
+    a default is bound once at import time, which would freeze the constant
+    and defeat a test's monkeypatch of it. A ``None`` ``run_date`` resolves
+    the same way (to today, in ``score_candidates``), matching what a bare
     ``RunContext`` would have supplied.
 
     Returns the pool rows and the trace -- what the caller reports on.
@@ -598,22 +665,37 @@ def select_pool(
     ]
     current = read(current_cases, name="read-current-cases")
 
-    selecting = functools.partial(
-        select_complaints,
-        group=group,
-        since=since,
-        hopper_depth=hopper_depth,
-        run_date=run_date,
+    candidates = transform(
+        functools.partial(score_candidates, group=group, run_date=run_date),
+        *reads,
+        name="candidates",
     )
-    select = transform(selecting, *reads, current, name="select")
-    selected = transform(selected_only, select, name="selected")
+    candidates = transform(gate_voided, candidates, current, name="gate-voided")
+    candidates = transform(gate_max_age, candidates, name="gate-max-age")
+    candidates = transform(
+        functools.partial(replace_voids, since=since),
+        candidates,
+        current,
+        name="replace-voids",
+    )
+    considered = transform(
+        functools.partial(apply_hopper, hopper_depth=hopper_depth),
+        candidates,
+        current,
+        name="hopper",
+    )
+
+    selected = transform(selected_only, considered, name="selected")
+    selected = transform(
+        functools.partial(attach_details, group=group), selected, *reads, name="details"
+    )
 
     rows_for_pool = transform(pool_rows, selected, name="pool-rows")
     validate(SchemaValidator(SelectedComplaint), rows_for_pool, name="validate")
     write(pool_writer, rows_for_pool, name="write-pool")
 
     trace = transform(
-        functools.partial(project, columns=TRACE_COLUMNS), select, name="trace"
+        functools.partial(project, columns=TRACE_COLUMNS), considered, name="trace"
     )
     write(trace_writer, trace, name="write-trace")
 
