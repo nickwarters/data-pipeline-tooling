@@ -51,12 +51,7 @@ from tools.environments import known_environments, resolve_base_dir
 from tools.observability import timestamps
 from tools.store import StoreRegistry
 
-from .schema import (
-    QUESTION_BANK_ID,
-    PendingVoid,
-    SelectedComplaint,
-    SelectionGroupMember,
-)
+from .schema import PendingVoid, SelectedComplaint, SelectionGroupMember
 
 PIPELINE_NAME = "complaint_selection"
 
@@ -117,7 +112,6 @@ POOL_COLUMNS: tuple[str, ...] = (
     "replaces_case_ref",
     "void_match_rung",
     "details",
-    "question_bank_id",
 )
 
 # The selection trace's declared columns (ADR-0008) -- exactly these five.
@@ -475,7 +469,6 @@ def select_complaints(
             "replaces_case_ref": None,
             "void_match_rung": None,
             "rank": None,
-            "question_bank_id": None,
         }
         if row["case_ref"] in v_refs:
             row["verdict"] = "excluded"
@@ -511,7 +504,6 @@ def select_complaints(
             row["verdict"] = "selected"
             row["reason"] = "passed voided, max-age"
             row["rank"] = position + 1
-            row["question_bank_id"] = QUESTION_BANK_ID
         else:
             row["verdict"] = "excluded"
             row["reason"] = f"excluded by gate 'hopper' (capacity {capacity})"
@@ -659,8 +651,7 @@ def run(context: RunContext) -> Dataset:
     print(
         f"considered: {considered} -> "
         f"SelectionPool: {len(pool)} cases "
-        f"(Question Bank {QUESTION_BANK_ID}, "
-        f"logical run {context.logical_run_id}); "
+        f"(logical run {context.logical_run_id}); "
         f"excluded: {excluded}; replaced: {replaced}"
     )
     return pool
