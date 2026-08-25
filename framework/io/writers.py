@@ -37,18 +37,13 @@ from framework._internal.locations import file_location, table_location
 from framework._internal.schema_control import under_migration_control
 from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError
-from framework.core.protocols import RUN_PROVENANCE_COLUMN, ChunkWritable, Writer
+from framework.core.protocols import RUN_PROVENANCE_COLUMN, Writer
 from framework.io.sql import quote_identifier
 from framework.io.strategy import LoadStrategy
 
-# ``Writer``/``ChunkWritable`` are imported only to be re-exported through
-# ``framework.io``; listing them in ``__all__`` marks them as intentional public
-# surface so lint won't strip them.
+# ``Writer`` is imported only to be re-exported through ``framework.io``.
 __all__ = [
     "Writer",
-    "ChunkWritable",
-    "writing_chunks",
-    "supports_chunk_writes",
     "CsvWriter",
     "ExcelWriter",
     "JsonWriter",
@@ -167,83 +162,6 @@ def _ensure_provenance_column(con: sqlite3.Connection, table: str) -> None:
         f"ALTER TABLE {quote_identifier(table)} "
         f"ADD COLUMN {quote_identifier(RUN_PROVENANCE_COLUMN)} TEXT"
     )
-
-
-def supports_chunk_writes(writer: object) -> bool:
-    """Whether ``writer`` can take one source's rows as a sequence of writes.
-
-    The wire-time predicate behind the refusal below: a graph that streams a
-    source can ask this before a byte is read, so an unusable pairing is a
-    wiring error rather than a target quietly left holding only the last chunk.
-    """
-    return callable(getattr(writer, "writing_chunks", None))
-
-
-def writing_chunks(writer: object):
-    """Open ``writer``'s chunk-write session, or refuse by name.
-
-    Returns the context manager the Writer opens for a chunked load — the one
-    place a caller streaming chunks goes, so it never has to know which Writers
-    replace their target and which append. A Writer that offers no such session
-    raises here, naming itself and why, instead of silently doing its
-    whole-dataset thing once per chunk.
-
-    Every chunk of one drive carries the same run in its provenance column. The
-    Writers that hand back *themselves* get that for free: the ambient run
-    context is established once around the whole graph walk, so each chunk's
-    write reads the same id. The two that hand back a helper — the accumulating
-    and quarantine sessions — resolve it once when the session opens, because
-    their later chunks take a path that would otherwise not stamp at all.
-    """
-    if not supports_chunk_writes(writer):
-        raise TypeError(
-            f"{type(writer).__name__} cannot take a chunked load: it offers no "
-            "writing_chunks session, so each chunk would be written as if it "
-            "were the whole dataset — the target would end up holding only the "
-            "last chunk. Land the source with a Writer that accumulates "
-            "(AccumulateByRun, InsertOrIgnore, UpsertStrategy, InsertIfAbsent, "
-            "AppendOnly)."
-        )
-    return writer.writing_chunks()
-
-
-class _AppendingChunkWriter:
-    """A Writer that appends each chunk of an open chunk-write session.
-
-    Held by the session rather than by the Writer so the Writer itself stays
-    stateless: whatever must happen once per load has already happened when the
-    session opened, and everything from here is an append.
-
-    ``prepare`` is the per-chunk frame hook, and the session binds whatever it
-    resolved **once** — including the run that owns the drive — so every chunk
-    of one load is stamped identically rather than each re-deriving it.
-    """
-
-    def __init__(
-        self,
-        db_path: Path,
-        table: str,
-        busy_timeout_ms: int,
-        guard: "_MigrationGuard",
-        prepare: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
-    ) -> None:
-        self._db_path = db_path
-        self._table = table
-        self._busy_timeout_ms = busy_timeout_ms
-        # The opening Writer's guard, not a fresh one: the whole drive shares
-        # its one cached answer rather than re-asking per chunk.
-        self._guard = guard
-        self._prepare = prepare
-        self.data_locations: list[dict[str, str]] = []
-
-    def write(self, dataset: Dataset) -> None:
-        self.data_locations = [table_location(self._db_path, self._table)]
-        frame = dataset.to_pandas()
-        if self._prepare is not None:
-            frame = self._prepare(frame)
-        with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
-            self._guard.require_target(con)
-            frame.to_sql(self._table, con, if_exists="append", index=False)
 
 
 # Every merge Writer names its scratch table the same way. Earlier releases used
@@ -366,22 +284,20 @@ class _MigrationGuard:
     the behaviour it has always had, which is what lets databases convert one at
     a time.
 
-    The answer is resolved **once per Writer instance** and cached. It cannot
-    change underneath a running pipeline — applying a migration is an operator
-    action against a database nothing else is writing to — and the alternative is
-    a ``sqlite_master`` lookup on every chunk of a streamed load.
+    The answer is asked afresh on the connection each write. It was cached per
+    Writer instance while a chunk-write session drove one Writer many times over
+    one source; with that drive gone the cache bought one saved
+    ``sqlite_master`` lookup per extra write, at the price of a Writer that could
+    hold an answer its database had since stopped giving.
     """
 
     def __init__(self, db_path: Path, table: str) -> None:
         self._db_path = db_path
         self._table = table
-        self._under_control: bool | None = None
 
     def under_control(self, con: sqlite3.Connection) -> bool:
-        """Whether this target's database owns its own DDL (cached)."""
-        if self._under_control is None:
-            self._under_control = under_migration_control(con)
-        return self._under_control
+        """Whether this target's database owns its own DDL."""
+        return under_migration_control(con)
 
     def require_target(self, con: sqlite3.Connection) -> None:
         """Refuse to create the target implicitly when its database is migrated.
@@ -658,8 +574,7 @@ class QuarantineWriter:
     def _replace(self, frame: pd.DataFrame) -> None:
         """Clear this logical run's prior rejects, then land ``frame``.
 
-        Takes an already-stamped frame, so the whole-dataset write and the first
-        chunk of a streamed one land by the same statements.
+        Takes an already-stamped frame.
         """
         self.data_locations = [table_location(self._db_path, self._table)]
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
@@ -675,57 +590,8 @@ class QuarantineWriter:
                 # appended as they arrive.
                 frame.to_sql(self._table, con, if_exists="append", index=False)
 
-    @contextmanager
-    def writing_chunks(self) -> Iterator[Writer]:
-        """Take one source's rejects across many chunks as one logical run.
-
-        Same hazard as the accumulating Writer: the delete-by-logical-run that
-        makes a re-drive idempotent must not repeat per chunk, or the last
-        chunk's rejects would be all that survive. The run to clear is named by
-        the rejects themselves, which are only known once some arrive, so the
-        clear happens with the first chunk that has any and every chunk after it
-        appends. A run that rejects nothing writes nothing and clears nothing —
-        exactly what a whole-dataset quarantine of the same run does.
-
-        The run that owns the drive is read **once**, here, and every chunk is
-        stamped with it — including the ones that take the plain append path,
-        which would otherwise land unstamped beside the first chunk's rows.
-        """
-        yield _QuarantineChunkWriter(self, _current_run_id())
-
-    def _append(self, frame: pd.DataFrame) -> None:
-        with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
-            self._guard.require_target(con)
-            if RUN_PROVENANCE_COLUMN in frame.columns:
-                _ensure_provenance_column(con, self._table)
-            frame.to_sql(self._table, con, if_exists="append", index=False)
-
     def describe(self) -> str:
         return render(self, db_path=str(self._db_path), table=self._table)
-
-
-class _QuarantineChunkWriter:
-    """Clear the logical run's prior rejects with the first chunk, then append.
-
-    Stamps every chunk with the run the session opened under, so the appended
-    chunks carry the same provenance as the first one rather than landing
-    unstamped beside it.
-    """
-
-    def __init__(self, inner: "QuarantineWriter", run_id: str | None) -> None:
-        self._inner = inner
-        self._run_id = run_id
-        self._cleared = False
-        self.data_locations: list[dict[str, str]] = []
-
-    def write(self, dataset: Dataset) -> None:
-        frame = _stamp_run_provenance(dataset.to_pandas(), self._run_id)
-        if not self._cleared:
-            self._inner._replace(frame)
-            self._cleared = True
-        else:
-            self._inner._append(frame)
-        self.data_locations = self._inner.data_locations
 
 
 class SqliteUpsertWriter:
@@ -801,18 +667,6 @@ class SqliteUpsertWriter:
                 f"SELECT {merge.columns} FROM {merge.staging}"
             )
 
-    @contextmanager
-    def writing_chunks(self) -> Iterator[Writer]:
-        """Take a chunked load unchanged: each merge is already independent.
-
-        A merge by key touches only the keys it was handed, so running it once
-        per chunk lands the same rows a single whole-dataset merge would (two
-        chunks carrying the same key resolve last-write-wins, exactly as two
-        rows with that key inside one dataset would). Nothing has to happen once
-        per load, so the session is the Writer itself.
-        """
-        yield self
-
     def describe(self) -> str:
         return render(
             self,
@@ -867,17 +721,6 @@ class SqliteInsertOrIgnoreWriter:
                 f"INSERT OR IGNORE INTO {merge.target} ({merge.columns}) "
                 f"SELECT {merge.columns} FROM {merge.staging}"
             )
-
-    @contextmanager
-    def writing_chunks(self) -> Iterator[Writer]:
-        """Take a chunked load unchanged: appending is already per-batch.
-
-        Nothing in the target is replaced, so chunk N+1 appends beside chunk N
-        and the target's own constraints resolve conflicts the same way whether
-        the rows arrived in one batch or fifty. Nothing has to happen once per
-        load, so the session is the Writer itself.
-        """
-        yield self
 
     def describe(self) -> str:
         return render(self, db_path=str(self._db_path), table=self._table)
@@ -986,17 +829,6 @@ class SqliteInsertIfAbsentWriter:
             if RUN_PROVENANCE_COLUMN in new_rows.columns:
                 _ensure_provenance_column(con, self._table)
             new_rows.to_sql(self._table, con, if_exists="append", index=False)
-
-    @contextmanager
-    def writing_chunks(self) -> Iterator[Writer]:
-        """Take a chunked load unchanged: each batch reads the live mapping.
-
-        Every write re-reads the target's key→surrogate mapping before minting,
-        so chunk N+1 sees the keys chunk N just inserted and continues the
-        surrogate sequence rather than reminting from zero. Nothing has to
-        happen once per load, so the session is the Writer itself.
-        """
-        yield self
 
     def describe(self) -> str:
         return render(
@@ -1225,22 +1057,6 @@ class SqliteAppendOnlyWriter:
             rendered += f", ... ({len(shown) - limit} more)"
         return rendered
 
-    @contextmanager
-    def writing_chunks(self) -> Iterator[Writer]:
-        """Take a chunked load unchanged: each batch compares against the target.
-
-        Every write re-reads the target through its own staged comparison, so
-        chunk N+1 sees the keys chunk N just appended and treats them as seen
-        rather than re-appending them. Nothing has to happen once per load, so
-        the session is the Writer itself.
-
-        A chunk that conflicts aborts the stream with the earlier chunks already
-        landed — which is exactly what append-only makes safe: re-driving the
-        source finds those keys unchanged and appends only what is still
-        missing.
-        """
-        yield self
-
     def describe(self) -> str:
         return render(
             self,
@@ -1281,64 +1097,23 @@ class AccumulateByRunWriter:
 
     def write(self, dataset: Dataset) -> None:
         self.data_locations = [table_location(self._db_path, self._table)]
-        frame = self._stamp(dataset.to_pandas(), _current_run_id())
+        frame = self._stamp(dataset.to_pandas())
         with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
             self._guard.require_target(con)
             if RUN_PROVENANCE_COLUMN in frame.columns:
                 _ensure_provenance_column(con, self._table)
             _replace_logical_run(con, self._table, self._logical_run_id, frame)
 
-    @contextmanager
-    def writing_chunks(self) -> Iterator[Writer]:
-        """Land many chunks as one logical run: clear the run once, then append.
-
-        The delete that makes a re-driven run idempotent belongs to the *run*,
-        not to each write. Repeating it per chunk would delete the chunks this
-        very run had already landed, leaving only the last one — the reason a
-        chunked load has to be a session rather than a loop over ``write``. So
-        the clear happens once, when the session opens, and every chunk after it
-        appends. Opening the session with no chunks to follow is therefore still
-        a correct re-drive of a run that now yields nothing.
-
-        The clear commits on entry rather than sharing the chunks' transaction:
-        the whole point of streaming is that the rows are never all in hand at
-        once, so there is no single transaction to hold them. A stream that
-        aborts part-way leaves this run partially landed, which the next drive
-        of the same logical run replaces wholesale.
-        """
-        with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
-            # Refused here rather than on the first chunk: a stream that has
-            # already read half a source before learning its target does not
-            # exist has spent that work for nothing.
-            self._guard.require_target(con)
-            if _table_exists(con, self._table):
-                con.execute(
-                    f"DELETE FROM {quote_identifier(self._table)} "
-                    "WHERE logical_run_id = ?",
-                    (self._logical_run_id,),
-                )
-        # The run that owns the drive is read once, here: every chunk of one
-        # load is stamped with the same value rather than each re-deriving it.
-        run_id = _current_run_id()
-        yield _AppendingChunkWriter(
-            self._db_path,
-            self._table,
-            self._busy_timeout_ms,
-            self._guard,
-            prepare=lambda frame: self._stamp(frame, run_id),
-        )
-
-    def _stamp(self, frame: pd.DataFrame, run_id: str | None) -> pd.DataFrame:
+    def _stamp(self, frame: pd.DataFrame) -> pd.DataFrame:
         """Stamp this run's identity onto ``frame`` in place and return it.
 
         The two columns this Writer owns — the idempotency key it deletes by and
         the business date — plus the provenance column every table-backed Writer
-        sets. ``run_id`` is passed in rather than read here, so a chunked load
-        can resolve it once for the whole session.
+        sets.
         """
         frame["logical_run_id"] = self._logical_run_id
         frame["load_date"] = self._load_date
-        return _stamp_run_provenance(frame, run_id)
+        return _stamp_run_provenance(frame, _current_run_id())
 
     def describe(self) -> str:
         return render(self, db_path=str(self._db_path), table=self._table)

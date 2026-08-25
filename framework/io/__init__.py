@@ -40,7 +40,6 @@ from framework.io.strategy import (
 from framework.io.writers import (
     AccumulateByRunWriter,
     AppendOnlyConflictError,
-    ChunkWritable,
     CsvWriter,
     ExcelWriter,
     JsonWriter,
@@ -53,8 +52,6 @@ from framework.io.writers import (
     SqliteUpsertWriter,
     StdoutWriter,
     Writer,
-    supports_chunk_writes,
-    writing_chunks,
 )
 
 __all__ = [
@@ -67,10 +64,7 @@ __all__ = [
     "ExcelReader",
     "SqliteReader",
     "Writer",
-    "ChunkWritable",
     "RUN_PROVENANCE_COLUMN",
-    "writing_chunks",
-    "supports_chunk_writes",
     "CsvWriter",
     "ExcelWriter",
     "JsonWriter",
