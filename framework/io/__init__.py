@@ -19,16 +19,10 @@ contract, the submodule paths are not. See ``docs/public-api.md``.
 
 from framework.core.protocols import RUN_PROVENANCE_COLUMN
 from framework.io.readers import (
-    DEFAULT_CHUNK_SIZE,
-    ChunkedCsvReader,
-    ChunkFilter,
-    ChunkReader,
     CsvReader,
     DatasetReader,
     ExcelReader,
     GlobCsvReader,
-    KeyFilterChunkReader,
-    PredicateChunkReader,
     Reader,
     SasFileReader,
     SqliteReader,
@@ -66,18 +60,12 @@ from framework.io.writers import (
 
 __all__ = [
     "Reader",
-    "ChunkReader",
-    "DEFAULT_CHUNK_SIZE",
     "DatasetReader",
     "CsvReader",
     "StrictCsvReader",
     "StrictCsvParseError",
     "GlobCsvReader",
-    "ChunkedCsvReader",
     "SasFileReader",
-    "ChunkFilter",
-    "PredicateChunkReader",
-    "KeyFilterChunkReader",
     "ExcelReader",
     "SqliteReader",
     "Writer",
