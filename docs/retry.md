@@ -100,12 +100,6 @@ could plausibly resolve on its own**. If the input or configuration must change
 for the next attempt to succeed, it is not transient — leave it off the
 allowlist so the run fails fast and loud.
 
-## Retrying a streamed source
-
-A `ChunkReader` wraps the same way: `RetryingChunkReader` retries per chunk, so
-a transient blip part-way through a long stream costs one chunk's attempt rather
-than restarting the read. The retry decorators delegate `describe()` to the
-component they wrap, so applying retry keeps the plan line that says where the
-data comes from instead of replacing it with the decorator's own name. See
-[streaming-large-sources.md](streaming-large-sources.md) for how a streamed read
-is wired into a pipeline.
+The retry decorators delegate `describe()` to the component they wrap, so
+applying retry keeps the plan line that says where the data comes from instead
+of replacing it with the decorator's own name.

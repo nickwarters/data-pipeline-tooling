@@ -18,7 +18,6 @@ from framework.run.builder import Pipeline
 from tests.framework_testing import RecordingRunLog
 from tools.observability.run_log import RunLog
 from tools.retry import (
-    RetryingChunkReader,
     RetryingReader,
     RetryingWriter,
     RetryPolicy,
@@ -188,111 +187,6 @@ def test_policy_wraps_a_bare_remote_client_call():
 
 
 # --------------------------------------------------------------------------
-# Streaming: the readers most exposed to a transient failure were the ones
-# retry could not reach, since a ChunkReader has no read() to wrap.
-# --------------------------------------------------------------------------
-
-
-class FlakyChunkReader:
-    """A ChunkReader that fails on its first ``fails`` attempts to open."""
-
-    def __init__(self, error: Exception, fails: int, rows: int = 6) -> None:
-        self._error = error
-        self._fails = fails
-        self._rows = rows
-        self.attempts = 0
-
-    def chunks(self, size: int = 10_000):
-        self.attempts += 1
-        if self.attempts <= self._fails:
-            raise self._error
-        self.data_locations = [_SOURCE]
-        for start in range(0, self._rows, size):
-            frame = pd.DataFrame(
-                {"id": list(range(start, min(start + size, self._rows)))}
-            )
-            yield Dataset.from_pandas(frame)
-
-    def describe(self) -> str:
-        return f"FlakyChunkReader(rows={self._rows})"
-
-
-class BreakingMidStreamReader:
-    """A ChunkReader that yields one chunk and then fails."""
-
-    def __init__(self, error: Exception) -> None:
-        self._error = error
-        self.attempts = 0
-
-    def chunks(self, size: int = 10_000):
-        self.attempts += 1
-        yield Dataset.from_pandas(pd.DataFrame({"id": [1, 2]}))
-        raise self._error
-
-
-def test_a_chunk_reader_that_fails_to_open_is_retried_from_the_start():
-    inner = FlakyChunkReader(ConnectionError("share unreachable"), fails=2)
-    reader = RetryingChunkReader(
-        inner, RetryPolicy(attempts=3, retry_on=(ConnectionError,))
-    )
-
-    rows = sum(len(chunk) for chunk in reader.chunks(size=2))
-
-    assert rows == 6
-    assert inner.attempts == 3
-    assert len(reader.retry_attempts) == 2
-
-
-def test_a_failure_after_the_first_chunk_is_not_retried():
-    """Restarting would re-hand rows a consumer has already written."""
-    inner = BreakingMidStreamReader(ConnectionError("dropped mid-stream"))
-    reader = RetryingChunkReader(
-        inner, RetryPolicy(attempts=3, retry_on=(ConnectionError,))
-    )
-
-    with pytest.raises(ConnectionError):
-        list(reader.chunks(size=10))
-
-    assert inner.attempts == 1
-
-
-def test_a_non_transient_chunk_failure_is_not_retried():
-    inner = FlakyChunkReader(FileNotFoundError("no such extract"), fails=1)
-    reader = RetryingChunkReader(
-        inner, RetryPolicy(attempts=3, retry_on=(ConnectionError,))
-    )
-
-    with pytest.raises(FileNotFoundError):
-        list(reader.chunks(size=10))
-
-    assert inner.attempts == 1
-
-
-def test_a_retried_chunk_reader_still_reports_the_filters_scan():
-    from framework.io.readers import PredicateChunkReader
-
-    inner = PredicateChunkReader(
-        FlakyChunkReader(ConnectionError("x"), fails=0, rows=10),
-        lambda chunk: Dataset.from_pandas(chunk.to_pandas().head(1)),
-    )
-    reader = RetryingChunkReader(inner, RetryPolicy(attempts=2, retry_on=(OSError,)))
-
-    list(reader.chunks(size=5))
-
-    assert reader.rows_scanned == 10
-    assert reader.rows_kept == 2
-
-
-def test_a_plain_retried_reader_reports_no_scan_tally():
-    reader = RetryingChunkReader(
-        FlakyChunkReader(ConnectionError("x"), fails=0),
-        RetryPolicy(attempts=2, retry_on=(OSError,)),
-    )
-
-    assert getattr(reader, "rows_scanned", None) is None
-
-
-# --------------------------------------------------------------------------
 # describe(): retry is an operational concern and must not cost the plan
 # the line saying where the data comes from.
 # --------------------------------------------------------------------------
@@ -307,15 +201,6 @@ def test_the_plan_shows_the_wrapped_reader_through_the_retry_decorator(tmp_path)
     rendered = reader.describe()
     assert rendered.startswith("Retrying(CsvReader(path=")
     assert "attempts=3" in rendered
-
-
-def test_the_plan_shows_the_wrapped_chunk_reader_too():
-    reader = RetryingChunkReader(
-        FlakyChunkReader(ConnectionError("x"), fails=0),
-        RetryPolicy(attempts=2, retry_on=(OSError,)),
-    )
-
-    assert reader.describe() == "Retrying(FlakyChunkReader(rows=6), attempts=2)"
 
 
 def test_the_plan_shows_the_wrapped_writer_through_the_retry_decorator(tmp_path):
@@ -344,42 +229,6 @@ def test_the_pipeline_plan_names_the_source_behind_a_retrying_reader(tmp_path):
     # The node line names the step; the reader's own summary is what retry used
     # to erase, so assert it can still be rendered from the wrapped component.
     assert "CsvReader" in p._nodes[0].reader.describe()
-
-
-# --------------------------------------------------------------------------
-# Retry composes with a chunked load rather than blocking it.
-# --------------------------------------------------------------------------
-
-
-def test_retry_does_not_advertise_a_chunked_load_the_inner_writer_cannot_take(tmp_path):
-    from framework.io.writers import SqliteTruncateReloadWriter, supports_chunk_writes
-
-    writer = RetryingWriter(
-        SqliteTruncateReloadWriter(tmp_path / "raw.db", "feed"),
-        RetryPolicy(attempts=2, retry_on=(OSError,)),
-    )
-
-    assert supports_chunk_writes(writer) is False
-
-
-def test_retry_passes_a_chunked_load_through_to_a_writer_that_takes_one(tmp_path):
-    import sqlite3
-
-    from framework.io.writers import SqliteInsertOrIgnoreWriter, supports_chunk_writes
-
-    inner = SqliteInsertOrIgnoreWriter(tmp_path / "raw.db", "feed")
-    writer = RetryingWriter(inner, RetryPolicy(attempts=2, retry_on=(OSError,)))
-    assert supports_chunk_writes(writer) is True
-
-    from framework.io.writers import writing_chunks
-
-    with writing_chunks(writer) as chunk_writer:
-        for start in (0, 2):
-            frame = pd.DataFrame({"id": [start, start + 1]})
-            chunk_writer.write(Dataset.from_pandas(frame))
-
-    with sqlite3.connect(tmp_path / "raw.db") as con:
-        assert pd.read_sql("SELECT * FROM feed", con)["id"].tolist() == [0, 1, 2, 3]
 
 
 # --------------------------------------------------------------------------
@@ -416,33 +265,6 @@ def test_a_write_node_behind_retry_still_records_the_target():
 
     [record] = run_log.records_for_step("write")
     assert record["data_locations"] == [_TARGET]
-
-
-def test_a_retried_chunk_reader_forwards_what_the_source_reported():
-    inner = FlakyChunkReader(ConnectionError("share unreachable"), fails=1)
-    reader = RetryingChunkReader(
-        inner, RetryPolicy(attempts=3, retry_on=(ConnectionError,))
-    )
-
-    list(reader.chunks(size=2))
-
-    assert reader.data_locations == [_SOURCE]
-
-
-def test_a_nested_chunk_write_session_still_reaches_the_innermost_writer(tmp_path):
-    from framework.io.writers import SqliteInsertOrIgnoreWriter, writing_chunks
-
-    db = tmp_path / "raw.db"
-    writer = RetryingWriter(
-        SqliteInsertOrIgnoreWriter(db, "feed"),
-        RetryPolicy(attempts=2, retry_on=(OSError,)),
-    )
-
-    with writing_chunks(writer) as chunk_writer:
-        chunk_writer.write(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
-        assert chunk_writer.data_locations == [
-            {"namespace": f"sqlite:{db.as_posix()}", "name": "feed"}
-        ]
 
 
 def test_a_wrapped_component_that_reports_nothing_forwards_an_empty_list():
