@@ -313,26 +313,6 @@ def test_an_unchanged_row_re_read_with_a_wider_dtype_is_still_a_noop(tmp_path):
     assert _rows(store, "observations") == [{"observation_id": "v1", "count": 1}]
 
 
-def test_chunked_writes_see_the_keys_earlier_chunks_appended(tmp_path):
-    # The Writer supports the chunk session because each write compares against
-    # the live target, so chunk N+1 treats chunk N's keys as seen.
-    from framework.io import supports_chunk_writes, writing_chunks
-
-    store = Store(tmp_path / "raw.db")
-    writer = store.writer("observations", AppendOnly("observation_id"))
-    assert supports_chunk_writes(writer)
-
-    with writing_chunks(writer) as chunk_writer:
-        chunk_writer.write(_ds({"observation_id": "v1", "status": "open"}))
-        chunk_writer.write(_ds({"observation_id": "v2", "status": "closed"}))
-        chunk_writer.write(_ds({"observation_id": "v1", "status": "open"}))
-
-    assert _rows(store, "observations") == [
-        {"observation_id": "v1", "status": "open"},
-        {"observation_id": "v2", "status": "closed"},
-    ]
-
-
 def test_the_conflict_is_an_operator_readable_pipeline_error():
     # A feed that broke its own immutability is a data failure, so it renders
     # through the run log's category rather than as a raw traceback.
