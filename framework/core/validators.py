@@ -19,7 +19,7 @@ silver and gold is a later, richer Validator of the same shape.
 from __future__ import annotations
 
 import statistics
-from typing import ClassVar, Iterable, Protocol
+from typing import Iterable, Protocol
 
 from framework._internal.describe import render
 from framework.core.dataset import Dataset
@@ -30,25 +30,6 @@ class ValidationError(PipelineError):
     """Raised by a Validator when the data fails its check."""
 
     category = ErrorCategory.DATA
-
-
-#: Set to ``True`` on a Validator whose check is only meaningful over the *whole*
-#: dataset — uniqueness across every row, a run-over-run volume comparison. Such
-#: a check cannot see a chunk boundary: handed a bounded slice of a streamed
-#: source it would answer about that slice and quietly report a pass the data
-#: never earned. A builder streaming a source reads this marker when the graph is
-#: wired and refuses the pairing by name, before a byte is read.
-#:
-#: Absence means chunk-safe, which is the common case: a per-row or per-column
-#: check (required columns, value rules, a column-name diff) reaches the same
-#: verdict on a slice as on the whole. Only a check that genuinely needs the
-#: whole population declares itself.
-WHOLE_DATASET_ATTR = "whole_dataset"
-
-
-def needs_whole_dataset(validator: object) -> bool:
-    """Whether ``validator`` declares that it can only judge the whole dataset."""
-    return bool(getattr(validator, WHOLE_DATASET_ATTR, False))
 
 
 class ColumnValidator:
@@ -120,12 +101,8 @@ class VolumeAnomalyValidator:
     applies. Severity and recording the trip to the ``RunLog`` are owned by the
     builder where this is attached, like any Validator.
 
-    The comparison is against the *run's* volume, so a bounded slice of a
-    streamed source is meaningless to it — every chunk would look like a
-    catastrophic shortfall. It declares itself whole-dataset accordingly.
+    The comparison is against the whole run's volume.
     """
-
-    whole_dataset: ClassVar[bool] = True
 
     def __init__(
         self,
@@ -246,14 +223,8 @@ class UniqueValidator:
     ``columns`` may be a single column name (str) or a list of column names for
     a composite key.
 
-    Duplicates are found by comparing every row against every other, so a
-    bounded slice of a streamed source cannot answer the question: two rows
-    sharing a key in different chunks would each look unique. It declares itself
-    whole-dataset accordingly, and :class:`StreamingUniqueValidator` is the form
-    that does hold across chunks.
+    Duplicates are found by comparing every row against every other.
     """
-
-    whole_dataset: ClassVar[bool] = True
 
     def __init__(self, columns: str | Iterable[str]) -> None:
         if isinstance(columns, str):
@@ -280,72 +251,3 @@ class UniqueValidator:
 
     def describe(self) -> str:
         return render(self, columns=list(self._columns))
-
-
-class StreamingUniqueValidator:
-    """Assert a key is unique across a *streamed* source, chunk after chunk.
-
-    The form of :class:`UniqueValidator` that survives a chunk boundary. It
-    carries the keys it has already seen in a set, so a key repeated in a later
-    chunk is caught even though the two rows were never in memory together —
-    the check the whole-dataset form simply cannot make on a slice.
-
-    That set is the cost, and it is stated rather than hidden: it grows with the
-    number of *distinct* keys, not with the size of the source, so it is
-    affordable exactly when the key space is the bounded thing (the ids we
-    track) and the row space is not. ``max_keys`` makes the bound enforceable —
-    exceeding it raises rather than letting the guard quietly become the memory
-    problem it was meant to avoid. Leave it ``None`` only when the key count is
-    known to be small.
-
-    The set is per streamed read, so :meth:`reset` is called before a drive
-    begins; a validator reused across runs therefore starts clean rather than
-    reporting last run's keys as duplicates.
-    """
-
-    def __init__(
-        self,
-        columns: str | Iterable[str],
-        *,
-        max_keys: int | None = None,
-    ) -> None:
-        self._columns = [columns] if isinstance(columns, str) else list(columns)
-        if not self._columns:
-            raise ValueError("StreamingUniqueValidator requires at least one column")
-        self._max_keys = max_keys
-        self._seen: set[tuple] = set()
-
-    def reset(self) -> None:
-        """Forget every key seen so far — one streamed read starts here."""
-        self._seen = set()
-
-    def validate(self, dataset: Dataset) -> None:
-        frame = dataset.to_pandas(copy=False)
-        missing = [c for c in self._columns if c not in frame.columns]
-        if missing:
-            raise ValidationError(f"missing key column(s): {', '.join(missing)}")
-
-        duplicates: list[tuple] = []
-        for key in zip(*(frame[column] for column in self._columns)):
-            if key in self._seen:
-                duplicates.append(key)
-                continue
-            self._seen.add(key)
-            if self._max_keys is not None and len(self._seen) > self._max_keys:
-                raise ValidationError(
-                    f"distinct key count exceeded max_keys={self._max_keys} on "
-                    f"{self._label()!r}; the uniqueness guard is not affordable "
-                    "for this key space"
-                )
-        if duplicates:
-            shown = ", ".join(
-                str(key[0]) if len(self._columns) == 1 else str(key)
-                for key in dict.fromkeys(duplicates)
-            )
-            raise ValidationError(f"duplicate key(s) on {self._label()!r}: {shown}")
-
-    def _label(self) -> str:
-        return self._columns[0] if len(self._columns) == 1 else str(self._columns)
-
-    def describe(self) -> str:
-        return render(self, columns=list(self._columns), max_keys=self._max_keys)
