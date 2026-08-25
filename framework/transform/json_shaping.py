@@ -60,8 +60,7 @@ def _lift(value: Any, path: str) -> Any:
 def _where(transform: str, column: str, position: int) -> str:
     """The error context every JsonShapeError opens with: who, what, which row.
 
-    The position is relative to the frame the transform was handed, which under
-    a chunked read is one chunk rather than the whole source.
+    The position is relative to the frame the transform was handed.
     """
     return f"{transform}: column {column!r} at row {position}"
 
