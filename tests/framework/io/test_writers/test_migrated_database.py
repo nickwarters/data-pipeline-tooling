@@ -19,7 +19,6 @@ import pandas as pd
 import pytest
 
 from framework.core.dataset import Dataset
-from framework.io import writers as writers_module
 from framework.io.writers import (
     AccumulateByRunWriter,
     MissingTableError,
@@ -241,36 +240,6 @@ def test_a_declared_table_must_carry_every_column_its_writer_writes(tmp_path):
     assert len(_rows(declared, "cases")) == 2
 
 
-def test_a_streamed_load_is_refused_when_the_session_opens(tmp_path):
-    # Not on the first chunk: a stream that has already read half a source
-    # before learning its target does not exist has spent that work for nothing.
-    db = tmp_path / "gold.db"
-    _migrate(db)
-    writer = AccumulateByRunWriter(db, "cases", "r1", "2026-08-15")
-
-    with pytest.raises(MissingTableError, match="'cases'"):
-        with writer.writing_chunks():
-            raise AssertionError("the session should not have opened")
-
-
-def test_a_streamed_load_into_a_declared_table_keeps_its_ddl(tmp_path):
-    db = tmp_path / "gold.db"
-    _migrate(
-        db,
-        "CREATE TABLE cases (case_id TEXT, status TEXT, "
-        "logical_run_id TEXT, load_date TEXT)",
-        "CREATE INDEX idx_cases_run ON cases (logical_run_id)",
-    )
-    writer = AccumulateByRunWriter(db, "cases", "r1", "2026-08-15")
-
-    with writer.writing_chunks() as session:
-        session.write(_cases())
-        session.write(_cases())
-
-    assert len(_rows(db, "cases")) == 4
-    assert "idx_cases_run" in _schema_of(db, "cases")
-
-
 def test_the_quarantine_table_is_declared_like_any_other(tmp_path):
     # Named because it is the easy one to forget: a quarantine reject table is a
     # table in a database like any other, so a migrated quarantine database
@@ -289,30 +258,26 @@ def test_the_quarantine_table_is_declared_like_any_other(tmp_path):
         )
 
 
-def test_the_ledger_check_is_made_once_per_writer(tmp_path, monkeypatch):
-    # The check is a sqlite_master lookup, and a streamed load would otherwise
-    # repeat it per chunk. Resolved once per Writer instance and cached, so
-    # three writes ask once.
+def test_a_writer_asks_the_ledger_afresh_rather_than_remembering_an_old_answer(
+    tmp_path,
+):
+    # The check used to be cached per Writer instance, because a chunk-write
+    # session drove one Writer over many chunks of one source and would
+    # otherwise have repeated the sqlite_master lookup per chunk. With that
+    # drive gone the cache only let a Writer keep an answer its database had
+    # stopped giving. This is what that costs if the cache comes back.
     db = tmp_path / "gold.db"
-    _migrate(
-        db,
-        "CREATE TABLE cases (case_id TEXT, status TEXT, "
-        "logical_run_id TEXT, load_date TEXT)",
-    )
-    lookups = 0
-    real_probe = writers_module.under_migration_control
-
-    def counting_probe(con):
-        nonlocal lookups
-        lookups += 1
-        return real_probe(con)
-
-    monkeypatch.setattr(writers_module, "under_migration_control", counting_probe)
-    writer = AccumulateByRunWriter(db, "cases", "r1", "2026-08-15")
-
+    writer = SqliteTruncateReloadWriter(db, "cases")
     writer.write(_cases())
-    with writer.writing_chunks() as session:
-        session.write(_cases())
-        session.write(_cases())
+    assert len(_rows(db, "cases")) == 2
 
-    assert lookups == 1
+    con = sqlite3.connect(db)
+    try:
+        con.execute("CREATE TABLE schema_migrations (version TEXT PRIMARY KEY)")
+        con.execute("DROP TABLE cases")
+        con.commit()
+    finally:
+        con.close()
+
+    with pytest.raises(MissingTableError, match="'cases'"):
+        writer.write(_cases())

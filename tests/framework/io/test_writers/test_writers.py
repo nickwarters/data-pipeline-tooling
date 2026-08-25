@@ -395,56 +395,6 @@ def test_merge_sweeps_up_a_staging_table_stranded_by_an_older_build(tmp_path):
     assert _table_names(db) == {"entities"}
 
 
-# --------------------------------------------------------------------------
-# The chunk-write session: many writes, one logical load.
-# --------------------------------------------------------------------------
-
-
-def _read_table(db_path, table):
-    with sqlite3.connect(db_path) as con:
-        return pd.read_sql(f"SELECT * FROM {table}", con)
-
-
-def test_a_writer_that_replaces_its_target_offers_no_chunk_write_session(tmp_path):
-    from framework.io.writers import supports_chunk_writes, writing_chunks
-
-    writer = SqliteTruncateReloadWriter(tmp_path / "raw.db", "feed")
-    assert supports_chunk_writes(writer) is False
-
-    with pytest.raises(TypeError) as caught:
-        writing_chunks(writer)
-
-    assert "SqliteTruncateReloadWriter" in str(caught.value)
-    assert "only the last chunk" in str(caught.value)
-
-
-def test_a_file_writer_offers_no_chunk_write_session_either(tmp_path):
-    from framework.io.writers import supports_chunk_writes
-
-    assert supports_chunk_writes(CsvWriter(tmp_path / "out.csv", Refresh())) is False
-
-
-def test_the_accumulating_session_clears_the_run_once_then_appends(tmp_path):
-    from framework.io.writers import writing_chunks
-
-    db = tmp_path / "raw.db"
-    writer = AccumulateByRunWriter(db, "feed", "run-a", "2026-07-27")
-    with writing_chunks(writer) as chunk_writer:
-        for start in (0, 2, 4):
-            frame = pd.DataFrame({"id": [start, start + 1]})
-            chunk_writer.write(Dataset.from_pandas(frame))
-
-    landed = _read_table(db, "feed")
-    assert sorted(landed["id"]) == [0, 1, 2, 3, 4, 5]
-    assert set(landed["logical_run_id"]) == {"run-a"}
-
-    # A second session for the same logical run replaces it wholesale.
-    with writing_chunks(AccumulateByRunWriter(db, "feed", "run-a", "2026-07-28")) as w:
-        w.write(Dataset.from_pandas(pd.DataFrame({"id": [9]})))
-
-    assert _read_table(db, "feed")["id"].tolist() == [9]
-
-
 # --- what a Writer reports having touched -------------------------------------
 
 
@@ -508,32 +458,6 @@ def test_insert_if_absent_reports_its_table_even_when_no_rows_are_new(tmp_path):
 
     assert writer.data_locations == _table(db, "advisers")
     assert fresh.data_locations == _table(db, "advisers")
-
-
-def test_the_appending_chunk_writer_reports_the_table_it_appended_to(tmp_path):
-    from framework.io.writers import writing_chunks
-
-    db = tmp_path / "raw.db"
-    with writing_chunks(AccumulateByRunWriter(db, "feed", "run-a", "2026-07-27")) as w:
-        w.write(_one_row())
-
-        assert w.data_locations == _table(db, "feed")
-
-
-def test_the_quarantine_chunk_writer_forwards_what_it_rejected_to(tmp_path):
-    from framework.io.writers import writing_chunks
-
-    db = tmp_path / "raw.db"
-    quarantine = QuarantineWriter(db, "rejects")
-    with writing_chunks(quarantine) as w:
-        assert w.data_locations == []  # nothing rejected yet, nothing touched
-        w.write(_one_row())
-
-        assert w.data_locations == _table(db, "rejects")
-
-    # A reused Writer starts each session clean rather than reporting the last.
-    with writing_chunks(quarantine) as w:
-        assert w.data_locations == []
 
 
 # --- the reserved run-provenance column ------------------------------------
