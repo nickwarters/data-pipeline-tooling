@@ -40,15 +40,19 @@ Three rules keep that from becoming a second, competing reporting layer:
    a date at or before `complete_through`, even though it easily could. This is
    the invariant that stops the two paths from ever disagreeing about the same
    day.
-2. **Solid versus hollow encodes provenance, and nothing else.** Solid = from
-   the file. Hollow = computed live. It does _not_ mean "excluded".
-3. **Totals and the average exclude today only**, hollow or not, carried by an
-   asterisk (`Total: 47 *` / `* excludes today`). Days that are complete but not
-   yet in the file are real work and count.
+2. **Series order and theme color encode provenance, and nothing else.** The
+   first, on-surface series is from the file. The following, danger-red series
+   is computed live. Both are solid so the distinction stays readable in light
+   and dark themes; the provisional metadata remains available to the tooltip
+   and accessible name. It does _not_ mean "excluded".
+3. **Totals and the average exclude today only**, regardless of series color,
+   carried by an asterisk (`Total: 47 *` / `* excludes today`). Days that are
+   complete but not yet in the file are real work and count.
 
 Rules 2 and 3 are separate on purpose. A day that is finished but unpublished
-and a day still in progress are both hollow, and only one of them is excluded —
-one visual state meaning both would make the page lie about one of them.
+and a day still in progress share the live-tail color, while only one of them
+is excluded. The chart's color communicates source; the totals and accessible
+metadata communicate the remaining distinction.
 
 A fourth rule was added when the tail was built, and it is the one that keeps
 the other three affordable:
@@ -148,7 +152,7 @@ for the four descriptors. Selecting a button dispatches
   "Python owns settled history, the browser owns the unsettled tail" rather than
   "the browser only renders". Recorded here precisely so a future reader does
   not find a list query on a reporting page and assume it was an accident.
-- **A day's number can change when it moves from hollow to solid.** The live
+- **A day's number can change when it moves from danger-red to on-surface.** The live
   read and the pipeline read the same source field on the same current row, so
   they should agree — but a Case reassigned or re-stamped between the two reads
   will shift. The provenance encoding is what makes that legible instead of

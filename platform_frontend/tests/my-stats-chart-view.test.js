@@ -67,15 +67,16 @@ test('stats chart: a bucket draws only the provenance it has days for', () => {
   ]);
 });
 
-test('stats chart: published marks are solid and live ones hollow', () => {
+test('stats chart: completed uses the neutral token and pending uses danger red', () => {
   const [settled, provisional] = byClass(
     statsChartView(report()),
     'cora-grouped-bar-chart__bar'
   );
 
-  assert.equal(settled.getAttribute('fill'), 'var(--cora-color-accent)');
-  assert.equal(provisional.getAttribute('fill'), 'none');
-  assert.equal(provisional.getAttribute('stroke'), 'var(--cora-color-accent)');
+  assert.equal(settled.getAttribute('fill'), 'var(--cora-color-on-surface)');
+  assert.equal(provisional.getAttribute('fill'), 'var(--cora-color-danger)');
+  assert.equal(provisional.getAttribute('stroke'), 'var(--cora-color-danger)');
+  assert.equal(provisional.getAttribute('stroke-width'), '1');
 });
 
 test('stats chart: a bucket spanning the boundary draws both bars', () => {
@@ -92,6 +93,10 @@ test('stats chart: a bucket spanning the boundary draws both bars', () => {
     'August: Settled, 6',
     'August: Provisional, 3, provisional',
   ]);
+  const [settled, provisional] = byClass(chart, 'cora-grouped-bar-chart__bar');
+  assert.ok(
+    Number(settled.getAttribute('x')) < Number(provisional.getAttribute('x'))
+  );
 });
 
 test('stats chart: the y axis counts in whole Cases', () => {

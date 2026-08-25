@@ -255,6 +255,40 @@ test('series slots are sorted by key and remain stable for sparse marks', () => 
   assert.equal(numberAttribute(thirdBars[1], 'x') - groupBand * 2, betaOffset);
 });
 
+test('seriesOrder keeps a preferred status order ahead of alphabetical order', () => {
+  const ordered = GroupedBarChart({
+    data: {
+      groups: [
+        {
+          key: 'one',
+          label: 'One',
+          marks: [
+            { key: 'pending', label: 'Pending', value: 2 },
+            { key: 'completed', label: 'Completed', value: 4 },
+          ],
+        },
+      ],
+    },
+    config: {
+      width: 320,
+      height: 240,
+      ariaLabel: 'Completion counts',
+      seriesOrder: ['completed', 'pending'],
+    },
+  });
+
+  assert.deepEqual(
+    all(ordered, '.cora-grouped-bar-chart__legend-label').map(
+      (label) => label.textContent
+    ),
+    ['Completed', 'Pending']
+  );
+  const [pending, completed] = bars(
+    all(ordered, '.cora-grouped-bar-chart__group')[0]
+  );
+  assert.ok(numberAttribute(completed, 'x') < numberAttribute(pending, 'x'));
+});
+
 test('legend and value-label bands stay above the plot with zero top margin', () => {
   const chartData = {
     groups: [
@@ -521,6 +555,39 @@ test('each mark carries its own accessible identity and provisional hollow encod
     ['Provisional', 'Settled']
   );
   assert.equal(provisional.querySelector('script'), null);
+});
+
+test('provisional metadata can use a solid theme-colored bar', () => {
+  const root = GroupedBarChart({
+    data: {
+      groups: [
+        {
+          key: 'one',
+          label: 'One',
+          marks: [
+            {
+              key: 'pending',
+              label: 'Pending',
+              value: 2,
+              provisional: true,
+              hollow: false,
+              tone: 'danger',
+            },
+          ],
+        },
+      ],
+    },
+    config: { width: 240, height: 220, ariaLabel: 'Pending counts' },
+  });
+  const pending = bars(root)[0];
+
+  assert.equal(pending.getAttribute('fill'), 'var(--cora-color-danger)');
+  assert.equal(pending.getAttribute('stroke-width'), '1');
+  assert.match(pending.getAttribute('aria-label'), /provisional/);
+  assert.equal(
+    pending.getAttribute('class'),
+    'cora-grouped-bar-chart__bar cora-grouped-bar-chart__bar--provisional'
+  );
 });
 
 test('repeated mark keys must keep one label and tone identity', () => {

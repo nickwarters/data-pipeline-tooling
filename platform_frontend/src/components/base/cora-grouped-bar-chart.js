@@ -1,7 +1,7 @@
 // @ts-check
 import { svg } from '../../lib/html.js';
 
-/** @typedef {'accent' | 'success' | 'warning' | 'danger' | 'info'} GroupedBarChartTone */
+/** @typedef {'accent' | 'success' | 'warning' | 'danger' | 'info' | 'neutral'} GroupedBarChartTone */
 
 /**
  * One mark in a grouped bar chart. Marks sharing a key form one series slot
@@ -12,6 +12,7 @@ import { svg } from '../../lib/html.js';
  * @property {string} label
  * @property {number} value
  * @property {boolean} [provisional]
+ * @property {boolean} [hollow] Whether the bar is hollow; defaults to provisional
  * @property {GroupedBarChartTone} [tone]
  */
 
@@ -54,13 +55,14 @@ import { svg } from '../../lib/html.js';
  * @property {number} [tickCount]
  * @property {string} [xAxisLabel]
  * @property {string} [yAxisLabel]
+ * @property {string[]} [seriesOrder] Series keys in their preferred visual order
  * @property {GroupedBarChartValueFormatter} [formatValue]
  * @property {GroupedBarChartGroupLabelFormatter} [formatGroupLabel]
  */
 
 /** @typedef {{ data: GroupedBarChartData, config: GroupedBarChartConfig }} GroupedBarChartProps */
 /** @typedef {{ top: number, right: number, bottom: number, left: number }} ResolvedMargin */
-/** @typedef {{ width: number, height: number, ariaLabel: string, margin: ResolvedMargin, yMax: number, tickCount: number, xAxisLabel?: string, yAxisLabel?: string, formatValue: GroupedBarChartValueFormatter, formatGroupLabel: GroupedBarChartGroupLabelFormatter }} ResolvedConfig */
+/** @typedef {{ width: number, height: number, ariaLabel: string, margin: ResolvedMargin, yMax: number, tickCount: number, xAxisLabel?: string, yAxisLabel?: string, seriesOrder: string[], formatValue: GroupedBarChartValueFormatter, formatGroupLabel: GroupedBarChartGroupLabelFormatter }} ResolvedConfig */
 /** @typedef {{ key: string, label: string, tone: GroupedBarChartTone }} GroupedBarChartSeries */
 
 const DEFAULT_MARGIN = Object.freeze({
@@ -75,6 +77,7 @@ const TONE_TOKENS = Object.freeze({
   warning: 'var(--cora-color-warning)',
   danger: 'var(--cora-color-danger)',
   info: 'var(--cora-color-info)',
+  neutral: 'var(--cora-color-on-surface)',
 });
 const MAX_VISIBLE_X_TICKS = 12;
 const MAX_LEGEND_ROWS = 12;
@@ -172,13 +175,16 @@ function validateData(input) {
       ) {
         throw new TypeError(`mark.provisional must be boolean for ${mark.key}`);
       }
+      if (mark.hollow !== undefined && typeof mark.hollow !== 'boolean') {
+        throw new TypeError(`mark.hollow must be boolean for ${mark.key}`);
+      }
       if (
         mark.tone !== undefined &&
         (typeof mark.tone !== 'string' ||
           !Object.prototype.hasOwnProperty.call(TONE_TOKENS, mark.tone))
       ) {
         throw new TypeError(
-          `mark.tone must be one of accent, success, warning, danger, info for ${mark.key}`
+          `mark.tone must be one of accent, success, warning, danger, info, neutral for ${mark.key}`
         );
       }
     }
@@ -270,6 +276,19 @@ function resolveConfig(input, maxValue) {
   if (config.yAxisLabel !== undefined) {
     requireString(config.yAxisLabel, 'config.yAxisLabel', true);
   }
+  const seriesOrder =
+    config.seriesOrder === undefined ? [] : config.seriesOrder;
+  if (!Array.isArray(seriesOrder)) {
+    throw new TypeError('config.seriesOrder must be an array');
+  }
+  const seriesOrderKeys = new Set();
+  for (const key of seriesOrder) {
+    requireString(key, 'config.seriesOrder item', true);
+    if (seriesOrderKeys.has(key)) {
+      throw new TypeError(`config.seriesOrder values must be unique: ${key}`);
+    }
+    seriesOrderKeys.add(key);
+  }
   if (
     config.formatValue !== undefined &&
     typeof config.formatValue !== 'function'
@@ -293,6 +312,7 @@ function resolveConfig(input, maxValue) {
     tickCount,
     xAxisLabel: config.xAxisLabel,
     yAxisLabel: config.yAxisLabel,
+    seriesOrder: [...seriesOrder],
     formatValue: config.formatValue ?? defaultFormatValue,
     formatGroupLabel: config.formatGroupLabel ?? defaultFormatGroupLabel,
   };
@@ -300,9 +320,10 @@ function resolveConfig(input, maxValue) {
 
 /**
  * @param {GroupedBarChartGroup[]} groups
+ * @param {string[]} preferredOrder
  * @returns {{ slots: GroupedBarChartSeries[], byKey: Map<string, { index: number, series: GroupedBarChartSeries }> }}
  */
-function resolveSeriesSlots(groups) {
+function resolveSeriesSlots(groups, preferredOrder) {
   /** @type {Map<string, GroupedBarChartSeries>} */
   const identities = new Map();
   for (const group of groups) {
@@ -321,9 +342,19 @@ function resolveSeriesSlots(groups) {
     }
   }
 
-  const slots = [...identities.values()].sort((a, b) =>
-    a.key < b.key ? -1 : a.key > b.key ? 1 : 0
+  const preferredIndexes = new Map(
+    preferredOrder.map((key, index) => [key, index])
   );
+  const slots = [...identities.values()].sort((a, b) => {
+    const aPreferred = preferredIndexes.get(a.key);
+    const bPreferred = preferredIndexes.get(b.key);
+    if (aPreferred !== undefined || bPreferred !== undefined) {
+      if (aPreferred === undefined) return 1;
+      if (bPreferred === undefined) return -1;
+      if (aPreferred !== bPreferred) return aPreferred - bPreferred;
+    }
+    return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
+  });
   const byKey = new Map(
     slots.map((series, index) => [series.key, { index, series }])
   );
@@ -455,6 +486,7 @@ function requireDistinctTickLabels(labels) {
 function markView(mark, series, groupLabel, valueLabel, x, y, width, height) {
   const token = TONE_TOKENS[series.tone];
   const provisional = mark.provisional === true;
+  const hollow = mark.hollow ?? provisional;
   const description = `${groupLabel}: ${series.label}, ${valueLabel}${provisional ? ', provisional' : ''}`;
   return svg(
     'g',
@@ -466,9 +498,9 @@ function markView(mark, series, groupLabel, valueLabel, x, y, width, height) {
       y,
       width,
       height,
-      fill: provisional ? 'none' : token,
+      fill: hollow ? 'none' : token,
       stroke: token,
-      'stroke-width': provisional ? 2 : 1,
+      'stroke-width': hollow ? 2 : 1,
       role: 'img',
       'aria-label': description,
       'data-cora-chart-mark': 'true',
@@ -679,8 +711,8 @@ export function GroupedBarChart(props) {
     throw new TypeError('GroupedBarChart expects { data, config }');
   }
   const { data, maxValue } = validateData(props.data);
-  const { slots, byKey } = resolveSeriesSlots(data.groups);
   const config = resolveConfig(props.config, maxValue);
+  const { slots, byKey } = resolveSeriesSlots(data.groups, config.seriesOrder);
   const plotWidth = config.width - config.margin.left - config.margin.right;
   if (plotWidth <= 0) {
     throw new RangeError(
