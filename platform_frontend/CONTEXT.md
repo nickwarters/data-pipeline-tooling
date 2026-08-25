@@ -527,6 +527,12 @@ column of every Case table, and the bubble alone trails the reference on an
 The bubble says a Conversation _exists_, not that anything in it is new: "unread" is a
 per-viewer fact and nothing on the Case row records who has read what.
 
+**No pipeline change follows from the flags.** They were considered against the data
+pipelines and declined, with the reason recorded here rather than left silent: they
+introduce no new data. `OnHold` and `Conversation` are existing `Cases-{slug}` columns
+that already flow, no field is added to a list schema, and no field is added inside a
+JSON blob — the marks are a rendering of what both sides of the model already hold.
+
 ### Communication
 
 **Conversation**:

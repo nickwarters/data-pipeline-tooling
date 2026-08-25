@@ -3,7 +3,7 @@
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
 import { caseRouteFor } from '../../lib/case-route-links.js';
-import { messageCount, messageFlagIcon } from '../../views/case-flags.js';
+import { caseFlagIcon } from '../../views/case-flags.js';
 import {
   listCasesPerSource,
   countCasesAcrossSources,
@@ -159,10 +159,6 @@ function rowView(row, reason, now, slaDays, onOpenCase) {
   const also = secondary.length
     ? `${subline ? ' · ' : ''}also ${secondary.map((item) => item.label).join(', ')}`
     : '';
-  // The same speech bubble the Case tables carry, on the same fact: the Case's
-  // Conversation holds Messages. It sits outside the reference link so the
-  // link's accessible name stays the Case's reference and nothing else.
-  const messages = messageCount(row);
   return h(
     'li',
     { className: 'cora-ac-row' },
@@ -174,7 +170,11 @@ function rowView(row, reason, now, slaDays, onOpenCase) {
         { className: 'cora-ac-row-ref', href: caseRouteFor(row) },
         row.title || row.id
       ),
-      messages > 0 ? messageFlagIcon(messages) : null,
+      // The same speech bubble the Case tables carry, on the same fact: the
+      // Case's Conversation holds Messages. Whether it applies and what it says
+      // are the flag's to decide, not this row's. It sits outside the reference
+      // link so the link's accessible name stays the Case's reference.
+      caseFlagIcon(row, 'messages'),
       h('div', { className: 'cora-ac-row-sub' }, `${subline}${also}`)
     ),
     h('span', { className: 'cora-ac-chip' }, row.caseType),
