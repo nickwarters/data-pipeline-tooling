@@ -113,6 +113,7 @@ test('case search: results render the standard, framework-owned Case columns', (
   const view = viewOf(slice, loaded);
   assert.deepEqual(tableHeaders(view), [
     ['Reference', 'none', true],
+    ['Flags', 'none', false],
     ['Case Type', 'none', true],
     ['Related Date', 'none', true],
     ['Due Date', 'none', true],

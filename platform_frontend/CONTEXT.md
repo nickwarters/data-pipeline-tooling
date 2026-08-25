@@ -515,6 +515,18 @@ reading of the same word. An outstanding row with `AssignedReviewer` must have
 to carry the clock. Legacy outstanding allocations are backfilled from authoritative
 allocation evidence, never from `Created` as a fallback.
 
+**Case Flags**:
+The two drawn marks a Case row carries beside its **Reference** — a clock when the Case
+is **On Hold**, a speech bubble when its **Conversation** holds any **Messages**. Both are
+read off the Case row a list query already returns (`onHold`, `conversation`), so a flag
+costs no extra query, and both are facts about the Case rather than about the viewer —
+they mean the same thing on every table they appear on. They are shown in the **Flags**
+column of every Case table, and the bubble alone trails the reference on an
+**Action Centre** row, whose groups already say which Cases are On Hold.
+
+The bubble says a Conversation _exists_, not that anything in it is new: "unread" is a
+per-viewer fact and nothing on the Case row records who has read what.
+
 ### Communication
 
 **Conversation**:

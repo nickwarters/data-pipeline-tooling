@@ -599,6 +599,46 @@
   font-weight: var(--cora-font-weight-bold);
 }
 
+/* ── Case flag marks ─────────────────────────────────────────────────────────
+   The small at-a-glance icons a Case row carries: a clock when the Case is On
+   Hold, a speech bubble when its Conversation holds Messages. Drawn as inline
+   SVG (views/case-flags.js), so they inherit the row's colour and sit on the
+   text baseline instead of depending on whatever emoji font the box has.
+
+   Muted rather than coloured: neither fact is an alert, and the tables already
+   spend their one loud treatment on the overdue row. The message mark takes the
+   accent on hover so a reader can tell the two apart at a glance. */
+[data-cora-root] .cora-case-flags {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-1);
+}
+
+[data-cora-root] .cora-case-flag {
+  color: var(--cora-color-text-muted);
+  flex: 0 0 auto;
+  vertical-align: text-bottom;
+}
+
+[data-cora-root] .cora-case-flag--messages {
+  color: var(--cora-color-info);
+}
+
+/* In the Action Centre the mark trails the reference link rather than sitting
+   in a column of its own, so it needs the space the table's gap gives it. */
+[data-cora-root] .cora-ac-row-main .cora-case-flag {
+  margin-left: var(--cora-space-2);
+}
+
+/* The flags column is a gutter, not a column of data: `width: 1%` on a
+   collapsed table is the shrink-to-content idiom, so the marks take the space
+   the two of them need and every character of it stays with the Reference
+   column beside them. */
+[data-cora-root] .cora-data-table th.cora-col-flags {
+  width: 1%;
+  white-space: nowrap;
+}
+
 /* Overdue rows, on every Case-shaped table: a tinted cell background plus a
    danger rule down the leading edge. Two class hooks, one treatment.
    `cora-overdue` is what the Responsible Party remediation table puts on a

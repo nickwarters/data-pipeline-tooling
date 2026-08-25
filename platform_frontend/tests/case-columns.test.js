@@ -12,6 +12,7 @@ const {
   caseTypeColumn,
   caseStatusColumn,
   caseActionsColumn,
+  caseFlagsColumn,
   standardCaseColumns,
 } = await import('../src/views/case-columns.js');
 
@@ -103,12 +104,74 @@ test('the Actions column takes an accessible name for openers that are not the C
   assert.equal(button.textContent, 'Open');
 });
 
-test('the standard Case table is the eight columns in their established order', () => {
+test('the Flags column marks an On Hold Case and a Case with Messages', () => {
+  const column = caseFlagsColumn();
+  assert.equal(column.key, 'flags');
+  assert.equal(column.label, 'Flags');
+  // Unsortable: a two-value key would only scramble whatever order the reader
+  // had chosen.
+  assert.equal(column.sortable, undefined);
+  assert.equal(column.href, undefined);
+
+  /** @param {Partial<CaseRow>} overrides */
+  const marksFor = (overrides) => {
+    const subject = row(overrides);
+    const value = /** @type {(row: CaseRow) => unknown} */ (column.value)(
+      subject
+    );
+    const cell = /** @type {any} */ (column.format?.(value, subject));
+    return {
+      value,
+      labels: cell
+        ? [...cell.querySelectorAll('svg')].map((/** @type {any} */ icon) =>
+            icon.getAttribute('aria-label')
+          )
+        : null,
+    };
+  };
+
+  // A Case raising neither flag leaves the cell empty. A dash would read as a
+  // value the Case has.
+  assert.deepEqual(marksFor({ onHold: false, conversation: [] }), {
+    value: '',
+    labels: null,
+  });
+  assert.deepEqual(marksFor({ onHold: true, conversation: [] }), {
+    value: 'hold',
+    labels: ['On hold'],
+  });
+  assert.deepEqual(
+    marksFor({ onHold: false, conversation: [/** @type {any} */ ({})] }),
+    { value: 'messages', labels: ['1 message'] }
+  );
+  // Both, in a fixed order, with the Message count in the accessible name.
+  assert.deepEqual(
+    marksFor({
+      onHold: true,
+      conversation: [/** @type {any} */ ({}), /** @type {any} */ ({})],
+    }),
+    { value: 'hold messages', labels: ['On hold', '2 messages'] }
+  );
+});
+
+test('the Flags column survives a Case row carrying no Conversation at all', () => {
+  const column = caseFlagsColumn();
+  const subject = row();
+  /** @type {any} */ (subject).conversation = undefined;
+  assert.equal(
+    /** @type {(row: CaseRow) => unknown} */ (column.value)(subject),
+    ''
+  );
+  assert.equal(column.format?.('', subject), null);
+});
+
+test('the standard Case table is the nine columns in their established order', () => {
   const columns = standardCaseColumns({ onOpen: () => {} });
   assert.deepEqual(
     columns.map((column) => column.key),
     [
       'reference',
+      'flags',
       'caseType',
       'relatedDate',
       'dueDate',
@@ -122,6 +185,7 @@ test('the standard Case table is the eight columns in their established order', 
     columns.map((column) => column.label),
     [
       'Reference',
+      'Flags',
       'Case Type',
       'Related Date',
       'Due Date',

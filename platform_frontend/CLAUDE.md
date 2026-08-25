@@ -459,6 +459,9 @@ src/
   views/                        # generic store-driven pure renderers
     case-columns.js             # shared Case-table column descriptors (#515): the Case-aware consumer of
                                 #   data-table.js, and the fixed column set for every Case Type (ADR-0040)
+    case-flags.js               # the drawn at-a-glance marks a Case row carries — On Hold (clock) and
+                                #   "the Conversation holds Messages" (bubble); shared by the Case tables'
+                                #   Flags column and the Action Centre's own rows
     data-table.js               # descriptor-driven table view (value, sort, format, links)
 
   services/                     # non-UI modules: data, state, auth

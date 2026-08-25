@@ -2,6 +2,7 @@
 import { h } from '../lib/html.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
 import { formatDate, formatTimestamp } from '../lib/format-datetime.js';
+import { caseFlagIcons, caseFlags } from './case-flags.js';
 
 /**
  * The Case-shaped column descriptors every Case table is built from.
@@ -38,6 +39,28 @@ export const caseTypeColumn = () => ({
   label: 'Case Type',
   value: 'caseType',
   sortable: true,
+});
+
+/**
+ * The at-a-glance marks beside the reference: On Hold, and whether the Case's
+ * Conversation holds any Messages. Both are facts about the Case that no other
+ * column states — `Status` is the lifecycle status and says nothing about a
+ * hold, and the Conversation is not otherwise visible until the Case is opened.
+ *
+ * Unsortable on purpose. Sorting a table by "has a flag" would reorder it around
+ * a two-value key and lose whichever order the reader had chosen; the marks are
+ * there to be scanned down the column, not to reorder it.
+ *
+ * @returns {CaseColumn}
+ */
+export const caseFlagsColumn = () => ({
+  key: 'flags',
+  label: 'Flags',
+  value: (row) =>
+    caseFlags(row)
+      .map((flag) => flag.id)
+      .join(' '),
+  format: (_value, row) => caseFlagIcons(row),
 });
 
 /** @returns {CaseColumn} */
@@ -160,6 +183,7 @@ export const overdueCaseRowClass = (row) =>
 export function standardCaseColumns({ onOpen }) {
   return [
     caseReferenceColumn(),
+    caseFlagsColumn(),
     caseTypeColumn(),
     caseRelatedDateColumn(),
     caseDueDateColumn(),
