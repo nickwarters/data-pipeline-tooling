@@ -28,6 +28,11 @@ implement `__call__`, so they drop straight into `.transform()` with no special
 protocol. There is no fluent processing chain and no separate stage abstraction —
 the graph *is* the structure.
 
+> ~~`read_chunks` drove a graph once per bounded source slice.~~ Withdrawn by
+> [ADR-0028](0028-a-source-too-big-for-memory-is-narrowed-at-the-source.md): a
+> source too large for memory is narrowed upstream, rather than introducing a
+> second execution model into the framework.
+
 ## Why a DAG
 
 - **Multi-input and fan-out are native.** A join is a node with two input nodes; a
