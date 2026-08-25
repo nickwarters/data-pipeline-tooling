@@ -435,3 +435,47 @@ test("Action Centre judges a row's wait against its own Case Type's cadence", ()
     'cora-ac-wait',
   ]);
 });
+
+test('an Action Centre row marks a Case whose Conversation holds Messages', () => {
+  const state = initialActionCentreState(
+    capabilities({ isReviewer: true }),
+    [],
+    new Date('2026-07-04T00:00:00Z')
+  );
+  const quiet = { ...row('quiet'), conversation: [] };
+  const talkative = {
+    ...row('talkative'),
+    conversation: [/** @type {any} */ ({}), /** @type {any} */ ({})],
+  };
+  state.counts = { overdue: 2 };
+  state.headline = 2;
+  state.expanded = new Set(['overdue']);
+  state.pages = { overdue: [quiet, talkative] };
+
+  const view = ActionCentreView(state, {
+    onToggleGroup: () => {},
+    onShowMore: () => {},
+    onOpenCase: () => {},
+  });
+  const overdue = [...view.querySelectorAll('.cora-ac-group')].find(
+    (group) => group.getAttribute('data-reason') === 'overdue'
+  );
+  const rows = [...(overdue?.querySelectorAll('.cora-ac-row') ?? [])];
+  assert.equal(rows.length, 2);
+  // Only the Case with Messages carries the mark, and it names the count.
+  assert.equal(rows[0].querySelector('.cora-case-flag'), null);
+  const mark = rows[1].querySelector('.cora-case-flag');
+  assert.equal(mark?.getAttribute('aria-label'), '2 messages');
+  // Read as an attribute: an SVG element's `className` is a read-only
+  // `SVGAnimatedString`, never the string a caller wrote.
+  assert.equal(
+    mark?.getAttribute('class'),
+    'cora-case-flag cora-case-flag--messages'
+  );
+  // Outside the reference link, so the link still announces just the Case.
+  assert.equal(
+    rows[1].querySelector('.cora-ac-row-ref')?.textContent,
+    'talkative'
+  );
+  assert.equal(rows[1].querySelector('.cora-ac-row-ref svg'), null);
+});

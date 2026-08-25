@@ -364,6 +364,7 @@ test('reviewer worklist preserves the legacy columns, filters, and Open action',
   );
   assert.deepEqual(tableHeaders(unfiltered), [
     ['Reference', 'none', true],
+    ['Flags', 'none', false],
     ['Case Type', 'none', true],
     ['Related Date', 'none', true],
     ['Due Date', 'none', true],
@@ -383,7 +384,17 @@ test('reviewer worklist preserves the legacy columns, filters, and Open action',
   );
   assert.deepEqual(
     tableHeaders(sortedByReference).map((header) => header[1]),
-    ['ascending', 'none', 'none', 'none', 'none', 'none', 'none', 'none']
+    [
+      'ascending',
+      'none',
+      'none',
+      'none',
+      'none',
+      'none',
+      'none',
+      'none',
+      'none',
+    ]
   );
 
   const byCaseType = slice.reducer(loaded, {
@@ -426,7 +437,7 @@ test('reviewer worklist preserves the legacy columns, filters, and Open action',
 
   assert.match(view.textContent, /Beta case/);
   assert.doesNotMatch(view.textContent, /Alpha case/);
-  assert.equal(view.querySelectorAll('th').length, 8);
+  assert.equal(view.querySelectorAll('th').length, 9);
   const textFilter = /** @type {any} */ (
     view.querySelector('[aria-label="Filter cases"]')
   );

@@ -135,6 +135,7 @@ test('team cases view renders the standard Case columns and the Open action', ()
 
   assert.deepEqual(tableHeaders(view), [
     ['Reference', 'descending', true],
+    ['Flags', 'none', false],
     ['Case Type', 'none', true],
     ['Related Date', 'none', true],
     ['Due Date', 'none', true],

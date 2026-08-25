@@ -599,6 +599,54 @@
   font-weight: var(--cora-font-weight-bold);
 }
 
+/* ── Case flag marks ─────────────────────────────────────────────────────────
+   The small at-a-glance icons a Case row carries: a clock when the Case is On
+   Hold, a speech bubble when its Conversation holds Messages. Drawn as inline
+   SVG (views/case-flags.js), so they inherit the row's colour and sit on the
+   text baseline instead of depending on whatever emoji font the box has.
+
+   Both marks take the row's ordinary text colour, and are told apart by their
+   shape rather than by a hue. Neither fact is an alert — a Case being held is
+   the opposite of one — and a Case table already spends its one loud treatment
+   on the overdue row, over links that are brand red. A third colour in that
+   cell would make the softer of the two facts the louder one.
+
+   `--cora-case-flag--messages` therefore carries no colour of its own. It stays
+   as a hook, so a mark can be found and named in a test without matching on
+   what it happens to be painted. */
+[data-cora-root] .cora-case-flags {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-1);
+}
+
+[data-cora-root] .cora-case-flag {
+  color: var(--cora-color-on-surface);
+  flex: 0 0 auto;
+  vertical-align: text-bottom;
+}
+
+/* In the Action Centre the mark trails the reference link rather than sitting
+   in a column of its own, so it needs the space the table's gap gives it. */
+[data-cora-root] .cora-ac-row-main .cora-case-flag {
+  margin-left: var(--cora-space-2);
+}
+
+/* The flags column is a gutter, not a column of data: `width: 1%` on a
+   collapsed table is the shrink-to-content idiom, so the marks take the space
+   the two of them need and every character of it stays with the Reference
+   column beside them.
+
+   The `th` is the only place this hook exists. `views/data-table.js` puts
+   `cora-col-${key}` on the header cell and gives the body cells a key alone, so
+   a rule written for `td.cora-col-flags` would match nothing and drop silently.
+   Size the column from the header, as here, or reach the cell's contents
+   through `.cora-case-flags`. */
+[data-cora-root] .cora-data-table th.cora-col-flags {
+  width: 1%;
+  white-space: nowrap;
+}
+
 /* Overdue rows, on every Case-shaped table: a tinted cell background plus a
    danger rule down the leading edge. Two class hooks, one treatment.
    `cora-overdue` is what the Responsible Party remediation table puts on a
