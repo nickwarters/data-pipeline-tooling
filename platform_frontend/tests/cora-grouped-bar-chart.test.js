@@ -201,7 +201,7 @@ test('x-axis selection is bounded and does not render duplicate labels', () => {
   assert.deepEqual(labels, ['Mon', 'Tue', 'Wed']);
 });
 
-test('series slots are sorted by key and remain stable for sparse marks', () => {
+test('series slots stay stable for multi-mark groups and single marks center', () => {
   const sparse = GroupedBarChart({
     data: {
       groups: [
@@ -250,7 +250,11 @@ test('series slots are sorted by key and remain stable for sparse marks', () => 
     'Beta'
   );
   const groupBand = (360 - 52 - 20) / 3;
-  assert.equal(numberAttribute(secondBars[0], 'x') - groupBand, betaOffset);
+  assert.equal(
+    numberAttribute(secondBars[0], 'x') +
+      numberAttribute(secondBars[0], 'width') / 2,
+    52 + groupBand + groupBand / 2
+  );
   assert.equal(numberAttribute(thirdBars[0], 'x') - groupBand * 2, alphaOffset);
   assert.equal(numberAttribute(thirdBars[1], 'x') - groupBand * 2, betaOffset);
 });
@@ -519,7 +523,7 @@ test('all-zero and empty data use finite positive geometry', () => {
   }
 });
 
-test('each mark carries its own accessible identity and provisional hollow encoding', () => {
+test('each mark carries its own accessible identity and provisional metadata', () => {
   const root = GroupedBarChart({ data, config });
   const provisional = all(root, '.cora-grouped-bar-chart__bar--provisional')[0];
   /** @type {any[]} */
@@ -541,9 +545,9 @@ test('each mark carries its own accessible identity and provisional hollow encod
     'Group: Week <one>: Provisional, 4 cases, provisional'
   );
   assert.equal(provisional.getAttribute('tabindex'), '0');
-  assert.equal(provisional.getAttribute('fill'), 'none');
+  assert.equal(provisional.getAttribute('fill'), 'var(--cora-color-warning)');
   assert.equal(provisional.getAttribute('stroke'), 'var(--cora-color-warning)');
-  assert.equal(provisional.getAttribute('stroke-width'), '2');
+  assert.equal(provisional.getAttribute('stroke-width'), '1');
   assert.equal(
     provisional.getAttribute('aria-label'),
     'Group: Week <one>: Provisional, 4 cases, provisional'
@@ -557,7 +561,7 @@ test('each mark carries its own accessible identity and provisional hollow encod
   assert.equal(provisional.querySelector('script'), null);
 });
 
-test('provisional metadata can use a solid theme-colored bar', () => {
+test('provisional metadata keeps a solid theme-colored bar', () => {
   const root = GroupedBarChart({
     data: {
       groups: [
@@ -570,8 +574,7 @@ test('provisional metadata can use a solid theme-colored bar', () => {
               label: 'Pending',
               value: 2,
               provisional: true,
-              hollow: false,
-              tone: 'danger',
+              tone: 'accent',
             },
           ],
         },
@@ -581,7 +584,7 @@ test('provisional metadata can use a solid theme-colored bar', () => {
   });
   const pending = bars(root)[0];
 
-  assert.equal(pending.getAttribute('fill'), 'var(--cora-color-danger)');
+  assert.equal(pending.getAttribute('fill'), 'var(--cora-color-accent)');
   assert.equal(pending.getAttribute('stroke-width'), '1');
   assert.match(pending.getAttribute('aria-label'), /provisional/);
   assert.equal(
@@ -741,6 +744,20 @@ test('data and geometry validation rejects ambiguous or impossible input', () =>
       /yMax/,
     ],
     [{ ...valid, config: { ...valid.config, tickCount: 1 } }, /tickCount/],
+    [
+      {
+        ...valid,
+        config: { ...valid.config, seriesOrder: 'count' },
+      },
+      /seriesOrder must be an array/,
+    ],
+    [
+      {
+        ...valid,
+        config: { ...valid.config, seriesOrder: ['count', 'count'] },
+      },
+      /seriesOrder values must be unique/,
+    ],
     [
       {
         ...valid,

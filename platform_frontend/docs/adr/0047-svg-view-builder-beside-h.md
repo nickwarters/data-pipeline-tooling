@@ -4,7 +4,8 @@ Date: 2026-08-09
 
 ## Status
 
-Accepted — extends
+Accepted, as amended 2026-08 (chart readability) — see the amendment below;
+extends
 [ADR-0034](./0034-store-driven-views-supersede-component-owned-state.md) and
 [ADR-0039](./0039-view-produces-render-commits.md): a view is still pure,
 returns a tree, and is still committed by `core/render.js`. The tree now
@@ -135,3 +136,15 @@ leaves `h()` alone.
   that seam for the settled-versus-live provenance in ADR-0048 without
   treating hollow as zero or excluded. The provisional class is a semantic
   marker only and has no live CSS rule.
+
+## Amendment (2026-08, chart readability)
+
+The grouped chart's first consumer now uses solid bars for both settled and
+provisional data so the two states remain readable in both themes. `tone` owns
+the visual fill and stroke; `provisional` remains metadata for the accessible
+description, tooltip, and marker class. `GroupedBarChart` therefore no longer
+renders provisional marks as hollow or accepts a separate hollow override.
+ADR-0048 records the page-level provenance colors and ordering; the rest of this
+primitive's SVG and accessibility contract remains unchanged. Multi-mark groups
+still use stable key-based series slots; a singleton group centers its bar on
+the x-axis tick so sparse data aligns with its label.

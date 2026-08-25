@@ -29,7 +29,7 @@ function integerYMax(maxValue) {
  * the Reviewer's report and provisional counts were computed in the browser a
  * moment ago. The settled series is always placed first and uses the theme's
  * neutral on-surface token; the provisional series follows it and uses the
- * danger token as a solid bar while retaining its provisional metadata. The
+ * accent token as a solid bar while retaining its provisional metadata. The
  * colors make the two states readable at a glance; the tooltip and accessible
  * name retain the source detail. A day that is finished but not yet published
  * is real work, and today is not finished at all. What separates those two is
@@ -66,8 +66,7 @@ export function statsChartView(report) {
               label: 'Provisional',
               value: bucket.provisional,
               provisional: true,
-              hollow: false,
-              tone: 'danger',
+              tone: 'accent',
             },
           ]),
     ]),

@@ -242,7 +242,7 @@ test('my stats view: published days and live days reach the chart and the figure
   ]);
 });
 
-test('my stats view: hollow marks begin the day after the report ends', () => {
+test('my stats view: provisional marks begin the day after the report ends', () => {
   const labels = markLabels(myStatsView(viewState()));
 
   assert.equal(

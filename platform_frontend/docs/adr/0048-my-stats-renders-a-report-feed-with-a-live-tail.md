@@ -4,7 +4,8 @@ Date: 2026-08-09
 
 ## Status
 
-Accepted. Consumes the Report Feed defined by the data pipeline's
+Accepted, as amended 2026-08 (chart readability) — see the amendment below.
+Consumes the Report Feed defined by the data pipeline's
 [ADR-0018](../../../docs/adr/0018-report-feeds-published-locally-delivered-outside-the-framework.md),
 with the shared envelope captured by the canonical
 [`123456.txt`](../../dev/fixtures/my-stats/123456.txt) fixture.
@@ -40,19 +41,15 @@ Three rules keep that from becoming a second, competing reporting layer:
    a date at or before `complete_through`, even though it easily could. This is
    the invariant that stops the two paths from ever disagreeing about the same
    day.
-2. **Series order and theme color encode provenance, and nothing else.** The
-   first, on-surface series is from the file. The following, danger-red series
-   is computed live. Both are solid so the distinction stays readable in light
-   and dark themes; the provisional metadata remains available to the tooltip
-   and accessible name. It does _not_ mean "excluded".
-3. **Totals and the average exclude today only**, regardless of series color,
-   carried by an asterisk (`Total: 47 *` / `* excludes today`). Days that are
-   complete but not yet in the file are real work and count.
+2. **Solid versus hollow encodes provenance, and nothing else.** Solid = from
+   the file. Hollow = computed live. It does _not_ mean "excluded".
+3. **Totals and the average exclude today only**, hollow or not, carried by an
+   asterisk (`Total: 47 *` / `* excludes today`). Days that are complete but not
+   yet in the file are real work and count.
 
 Rules 2 and 3 are separate on purpose. A day that is finished but unpublished
-and a day still in progress share the live-tail color, while only one of them
-is excluded. The chart's color communicates source; the totals and accessible
-metadata communicate the remaining distinction.
+and a day still in progress are both hollow, and only one of them is excluded —
+one visual state meaning both would make the page lie about one of them.
 
 A fourth rule was added when the tail was built, and it is the one that keeps
 the other three affordable:
@@ -146,13 +143,25 @@ for the four descriptors. Selecting a button dispatches
   page says so in a line under the figures. An unbounded read is the failure
   this decision was written to prevent; an admitted gap is not.
 
+## Amendment (2026-08, chart readability)
+
+The accepted provenance decision above is amended for the current chart's
+visual presentation. The data model and metadata still distinguish settled
+from provisional counts, but solid versus hollow is no longer used to make that
+distinction visible. `statsChartView()` places the settled series first and
+uses `--cora-color-on-surface`; the provisional series follows and uses the
+red `--cora-color-accent` token. Both series are solid so they remain readable
+in light and dark themes, while the provisional flag remains available to the
+tooltip, accessible name, and marker class. The totals rule is unchanged:
+color does not mean included or excluded.
+
 ## Consequences
 
 - **This is a bend in the MI policy, and it is deliberate.** The split becomes
   "Python owns settled history, the browser owns the unsettled tail" rather than
   "the browser only renders". Recorded here precisely so a future reader does
   not find a list query on a reporting page and assume it was an accident.
-- **A day's number can change when it moves from danger-red to on-surface.** The live
+- **A day's number can change when it moves from hollow to solid.** The live
   read and the pipeline read the same source field on the same current row, so
   they should agree — but a Case reassigned or re-stamped between the two reads
   will shift. The provenance encoding is what makes that legible instead of

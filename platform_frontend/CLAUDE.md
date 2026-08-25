@@ -416,7 +416,7 @@ src/
     my-stats/
       headline-strip-view.js      # pure four-figure strip (total, avg per working day, active days,
                                   #   busiest day); deliberately not the dashboard's KPI strip
-      stats-chart-view.js         # pure report -> grouped bar chart, solid published vs hollow live
+      stats-chart-view.js         # pure report -> grouped bar chart, on-surface published vs red-accent live
       stats-breakdown-table-view.js # pure report -> grain-matched Case Type count/percentage table
     cora-team-stats.js             # store-driven Reviewer Manager-only empty shell
     dashboard/
