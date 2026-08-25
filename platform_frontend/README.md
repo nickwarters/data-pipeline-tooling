@@ -108,10 +108,11 @@ what the page shows until that delivery has happened.
 up to its `complete_through`; the days after it are counted in the browser from
 the Reviewer's own Case lists, one bounded `listCases` call per Case Type and
 never reaching back more than ten calendar days. The unpaged call may follow
-pagination links into multiple HTTP requests. Published days draw solid, live
-days hollow — provenance only, not "excluded". If that read fails, or the file
-is older than ten days, one muted line under the figures says so; the published
-half is never hidden.
+pagination links into multiple HTTP requests. Published days draw first in the
+on-surface theme color, while live days follow in the red accent color; both are
+solid, and provisional provenance remains in the tooltip and accessible name.
+If that read fails, or the file is older than ten days, one muted line under the
+figures says so; the published half is never hidden.
 
 Beneath the chart row sit four figures, all derived from the same merged counts
 as the chart: **Total** (excluding today, carried by `* excludes today`),

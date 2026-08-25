@@ -65,17 +65,25 @@ test('stats chart: a bucket draws only the provenance it has days for', () => {
     'Aug 8: Settled, 3',
     'Aug 9: Provisional, 2, provisional',
   ]);
+  const barCenters = byClass(chart, 'cora-grouped-bar-chart__bar').map(
+    (bar) =>
+      Number(bar.getAttribute('x')) + Number(bar.getAttribute('width')) / 2
+  );
+  const tickCenters = byClass(chart, 'cora-grouped-bar-chart__x-tick').map(
+    (tick) => Number(tick.childNodes[0].getAttribute('x1'))
+  );
+  assert.deepEqual(barCenters, tickCenters);
 });
 
-test('stats chart: completed uses the neutral token and pending uses danger red', () => {
+test('stats chart: completed uses the neutral token and pending uses the red accent', () => {
   const [settled, provisional] = byClass(
     statsChartView(report()),
     'cora-grouped-bar-chart__bar'
   );
 
   assert.equal(settled.getAttribute('fill'), 'var(--cora-color-on-surface)');
-  assert.equal(provisional.getAttribute('fill'), 'var(--cora-color-danger)');
-  assert.equal(provisional.getAttribute('stroke'), 'var(--cora-color-danger)');
+  assert.equal(provisional.getAttribute('fill'), 'var(--cora-color-accent)');
+  assert.equal(provisional.getAttribute('stroke'), 'var(--cora-color-accent)');
   assert.equal(provisional.getAttribute('stroke-width'), '1');
 });
 

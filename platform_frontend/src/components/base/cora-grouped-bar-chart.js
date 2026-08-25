@@ -4,15 +4,16 @@ import { svg } from '../../lib/html.js';
 /** @typedef {'accent' | 'success' | 'warning' | 'danger' | 'info' | 'neutral'} GroupedBarChartTone */
 
 /**
- * One mark in a grouped bar chart. Marks sharing a key form one series slot
- * across the groups; the label and tone must agree wherever that key appears.
+ * One mark in a grouped bar chart. Marks sharing a key form one series
+ * identity across the groups; multi-mark groups use one slot for that series,
+ * while singleton groups center their only bar on the group tick. The label and
+ * tone must agree wherever that key appears.
  *
  * @typedef {Object} GroupedBarChartMark
  * @property {string} key
  * @property {string} label
  * @property {number} value
  * @property {boolean} [provisional]
- * @property {boolean} [hollow] Whether the bar is hollow; defaults to provisional
  * @property {GroupedBarChartTone} [tone]
  */
 
@@ -174,9 +175,6 @@ function validateData(input) {
         typeof mark.provisional !== 'boolean'
       ) {
         throw new TypeError(`mark.provisional must be boolean for ${mark.key}`);
-      }
-      if (mark.hollow !== undefined && typeof mark.hollow !== 'boolean') {
-        throw new TypeError(`mark.hollow must be boolean for ${mark.key}`);
       }
       if (
         mark.tone !== undefined &&
@@ -486,7 +484,6 @@ function requireDistinctTickLabels(labels) {
 function markView(mark, series, groupLabel, valueLabel, x, y, width, height) {
   const token = TONE_TOKENS[series.tone];
   const provisional = mark.provisional === true;
-  const hollow = mark.hollow ?? provisional;
   const description = `${groupLabel}: ${series.label}, ${valueLabel}${provisional ? ', provisional' : ''}`;
   return svg(
     'g',
@@ -498,9 +495,9 @@ function markView(mark, series, groupLabel, valueLabel, x, y, width, height) {
       y,
       width,
       height,
-      fill: hollow ? 'none' : token,
+      fill: token,
       stroke: token,
-      'stroke-width': hollow ? 2 : 1,
+      'stroke-width': 1,
       role: 'img',
       'aria-label': description,
       'data-cora-chart-mark': 'true',
@@ -768,7 +765,12 @@ export function GroupedBarChart(props) {
     { className: 'cora-grouped-bar-chart__bars', key: 'bars' },
     data.groups.map((group, groupIndex) => {
       const groupStart = config.margin.left + groupIndex * groupBand;
-      const markStart = groupStart + groupPadding;
+      // A sparse bucket represents one point on the x-axis, so center its
+      // bar on the tick. Groups with multiple marks retain their stable slots.
+      const markStart =
+        group.marks.length === 1
+          ? groupStart + (groupBand - barWidth) / 2
+          : groupStart + groupPadding;
       return svg(
         'g',
         {
@@ -785,7 +787,8 @@ export function GroupedBarChart(props) {
             mark,
             group
           );
-          const x = markStart + slot.index * (barWidth + markGap);
+          const slotIndex = group.marks.length === 1 ? 0 : slot.index;
+          const x = markStart + slotIndex * (barWidth + markGap);
           const y = barY(mark.value, config.yMax, plotTop, plotHeight);
           const height = barHeight(mark.value, config.yMax, plotHeight);
           return markView(

@@ -317,7 +317,7 @@ tail retain provisional metadata; both are rendered as solid bars on this chart
 so the source states remain readable by color. A day that is finished but
 unpublished is real work and counts, and a day still in progress is excluded
 from the totals. Settled marks are the first series and use the theme's
-`on-surface` token; tail marks follow them and use the theme's danger token, so
+`on-surface` token; tail marks follow them and use the theme's red accent token, so
 the distinction remains readable in both color modes.
 A failed tail, or a feed older than the clamp, is stated in one muted line and
 never hides the published half.

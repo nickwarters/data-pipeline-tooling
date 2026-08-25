@@ -31,24 +31,24 @@ Data uses one key per group and one key per mark within that group:
 ```
 
 Mark keys identify series across groups. A group may omit a mark or list its
-marks in a different order; the chart keeps that mark in the same horizontal
-series slot wherever it appears. Group and mark labels must be non-empty. The
-chart sorts series slots by key for deterministic output unless `seriesOrder`
-names a preferred order. Every occurrence of a repeated key must use the same
-label and effective tone (including the default `accent` tone); a disagreement
-throws `TypeError` rather than silently canonicalising misleading accessible
-text.
+marks in a different order; multi-mark groups keep each mark in the same
+horizontal series slot wherever it appears. A group with one mark centers that
+bar on its x-axis tick so sparse daily data remains aligned with its label.
+Group and mark labels must be non-empty. The chart sorts series slots by key for
+deterministic output unless `seriesOrder` names a preferred order. Every
+occurrence of a repeated key must use the same label and effective tone
+(including the default `accent` tone); a disagreement throws `TypeError` rather
+than silently canonicalising misleading accessible text.
 
 `value` must be finite and non-negative. `tone` is optional and uses an
 existing design-token tone: `accent`, `success`, `warning`, `danger`, `info`, or
-`neutral`. `seriesOrder` places listed keys into stable visual and legend slots;
-unlisted keys follow in key order. A provisional mark is hollow by default
-with a token-backed stroke; callers may set `hollow: false` when the source
-metadata should remain provisional while the visual status is a solid bar. An
-ordinary mark has a token-backed fill and stroke. The provisional bar class is a
-semantic/testing marker only: it intentionally has no live CSS rule, so the
-SVG attributes remain the source of the encoding. This is a visual encoding
-supplied by the caller, not a second data source or an inferred status.
+`neutral`. `seriesOrder` places listed keys into deterministic legend and
+multi-mark visual slots; unlisted keys follow in key order. Every mark has a
+token-backed fill and stroke. A provisional mark keeps its `provisional` flag
+in the accessible description and marker class, but that metadata does not
+change the tone-backed SVG attributes. The class is a semantic/testing marker
+only and intentionally has no live CSS rule. This is a visual encoding supplied
+by the caller, not a second data source or an inferred status.
 
 The required configuration is `width`, `height`, and `ariaLabel`. Optional
 `margin`, `yMax`, `tickCount`, `seriesOrder`, axis labels, `formatValue`, and
@@ -128,11 +128,11 @@ totals window.
 
 That one report feeds all three readings. `statsChartView()` in
 [`src/pages/my-stats/stats-chart-view.js`](../../src/pages/my-stats/stats-chart-view.js)
-maps buckets to groups, drawing a solid `Settled` mark and a solid danger-red
+maps buckets to groups, drawing a solid `Settled` mark and a solid red-accent
 `Provisional` one and omitting either where the bucket has no days of that
 provenance. The provisional metadata remains available to the tooltip and
 accessible name. Settled is always the first series and uses
-`--cora-color-on-surface`, while Provisional uses `--cora-color-danger`; both
+`--cora-color-on-surface`, while Provisional uses `--cora-color-accent`; both
 tokens follow the forced or system theme. A daily bucket therefore draws one
 bar, and the current monthly bucket can draw both. The y-axis domain is rounded
 up to a multiple of four so counts get whole-number ticks. `headlineStripView()` in
