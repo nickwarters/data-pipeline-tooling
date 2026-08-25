@@ -25,12 +25,15 @@ function integerYMax(maxValue) {
 /**
  * The range's counts as a grouped bar chart, one group per bucket.
  *
- * Provenance is the only thing the two series carry: a solid bar was published
- * in the Reviewer's report, a hollow one was counted in the browser a moment
- * ago. Hollow does not mean excluded and does not mean provisional-as-in-wrong
- * — a day that is finished but not yet published is real work, and it is drawn
- * hollow beside today, which is not finished at all. What separates those two
- * is the totals below, not the bar.
+ * Provenance is the only thing the two series carry: settled counts came from
+ * the Reviewer's report and provisional counts were computed in the browser a
+ * moment ago. The settled series is always placed first and uses the theme's
+ * neutral on-surface token; the provisional series follows it and uses the
+ * danger token as a solid bar while retaining its provisional metadata. The
+ * colors make the two states readable at a glance; the tooltip and accessible
+ * name retain the source detail. A day that is finished but not yet published
+ * is real work, and today is not finished at all. What separates those two is
+ * the totals below, not the bar's height.
  *
  * A bucket draws only the series it actually has days for, so a settled day
  * shows one bar rather than one bar and an empty slot. Monthly buckets can hold
@@ -47,7 +50,14 @@ export function statsChartView(report) {
     marks: /** @type {GroupedBarChartMark[]} */ ([
       ...(bucket.settled === null
         ? []
-        : [{ key: 'settled', label: 'Settled', value: bucket.settled }]),
+        : [
+            {
+              key: 'settled',
+              label: 'Settled',
+              value: bucket.settled,
+              tone: 'neutral',
+            },
+          ]),
       ...(bucket.provisional === null
         ? []
         : [
@@ -56,6 +66,8 @@ export function statsChartView(report) {
               label: 'Provisional',
               value: bucket.provisional,
               provisional: true,
+              hollow: false,
+              tone: 'danger',
             },
           ]),
     ]),
@@ -77,6 +89,7 @@ export function statsChartView(report) {
       height: CHART_HEIGHT,
       ariaLabel: `Reportable Cases by ${report.range.grain}, ${report.range.label.toLowerCase()}`,
       yAxisLabel: 'Cases',
+      seriesOrder: ['settled', 'provisional'],
       yMax: integerYMax(maxValue),
     },
   });

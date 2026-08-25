@@ -33,23 +33,27 @@ Data uses one key per group and one key per mark within that group:
 Mark keys identify series across groups. A group may omit a mark or list its
 marks in a different order; the chart keeps that mark in the same horizontal
 series slot wherever it appears. Group and mark labels must be non-empty. The
-chart sorts series slots by key for deterministic output. Every occurrence of a
-repeated key must use the same label and effective tone (including the default
-`accent` tone); a disagreement throws `TypeError` rather than silently
-canonicalising misleading accessible text.
+chart sorts series slots by key for deterministic output unless `seriesOrder`
+names a preferred order. Every occurrence of a repeated key must use the same
+label and effective tone (including the default `accent` tone); a disagreement
+throws `TypeError` rather than silently canonicalising misleading accessible
+text.
 
 `value` must be finite and non-negative. `tone` is optional and uses an
-existing design-token tone: `accent`, `success`, `warning`, `danger`, or
-`info`. A provisional mark is hollow with a token-backed stroke; an ordinary
-mark has a token-backed fill and stroke. The provisional bar class is a
+existing design-token tone: `accent`, `success`, `warning`, `danger`, `info`, or
+`neutral`. `seriesOrder` places listed keys into stable visual and legend slots;
+unlisted keys follow in key order. A provisional mark is hollow by default
+with a token-backed stroke; callers may set `hollow: false` when the source
+metadata should remain provisional while the visual status is a solid bar. An
+ordinary mark has a token-backed fill and stroke. The provisional bar class is a
 semantic/testing marker only: it intentionally has no live CSS rule, so the
 SVG attributes remain the source of the encoding. This is a visual encoding
 supplied by the caller, not a second data source or an inferred status.
 
 The required configuration is `width`, `height`, and `ariaLabel`. Optional
-`margin`, `yMax`, `tickCount`, axis labels, `formatValue`, and
-`formatGroupLabel` control the fixed chart geometry and copy. Invalid keys,
-values, formatters, or geometry throw explicitly. An explicit `yMax` must be
+`margin`, `yMax`, `tickCount`, `seriesOrder`, axis labels, `formatValue`, and
+`formatGroupLabel` control the fixed chart geometry, ordering, and copy. Invalid
+keys, values, formatters, or geometry throw explicitly. An explicit `yMax` must be
 positive and cover every value; derived all-zero and constant data use a
 positive, sensible domain with useful ticks. `tickCount` defaults to five and
 must be at least two. Text and labels are passed as SVG text nodes and
@@ -124,11 +128,14 @@ totals window.
 
 That one report feeds all three readings. `statsChartView()` in
 [`src/pages/my-stats/stats-chart-view.js`](../../src/pages/my-stats/stats-chart-view.js)
-maps buckets to groups, drawing a solid `Settled` mark and a hollow
+maps buckets to groups, drawing a solid `Settled` mark and a solid danger-red
 `Provisional` one and omitting either where the bucket has no days of that
-provenance — a daily bucket therefore draws one bar, and the current monthly
-bucket can draw both. The y-axis domain is rounded up to a multiple of four so
-counts get whole-number ticks. `headlineStripView()` in
+provenance. The provisional metadata remains available to the tooltip and
+accessible name. Settled is always the first series and uses
+`--cora-color-on-surface`, while Provisional uses `--cora-color-danger`; both
+tokens follow the forced or system theme. A daily bucket therefore draws one
+bar, and the current monthly bucket can draw both. The y-axis domain is rounded
+up to a multiple of four so counts get whole-number ticks. `headlineStripView()` in
 [`src/pages/my-stats/headline-strip-view.js`](../../src/pages/my-stats/headline-strip-view.js)
 renders the same report's figures beneath the full-width chart: total (asterisked,
 `* excludes today`), average per working day with its divisor, active days, and

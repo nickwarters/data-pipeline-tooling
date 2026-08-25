@@ -50,11 +50,12 @@ me`, one bounded `$filter` per Case Type list, reusing `team-cases-fetcher.js`
 untouched — rather than by an `anyOf` over a roster carried in the file.
 
 This is the decision that most needs its reasoning preserved, because it is
-**unsound on its own** and sound only in combination. The solid bars are
-attributed by the Staff Hierarchy; the hollow bars by the Case row. Two
-org-chart sources drawn adjacent would make a recent mover appear in one and not
-the other, and would spend ADR-0048's rule 2 — _"solid versus hollow encodes
-provenance, and nothing else"_ — on a second, unstated meaning.
+**unsound on its own** and sound only in combination. The first, on-surface
+bars are attributed by the Staff Hierarchy; the following, danger-red bars by
+the Case row. Two org-chart sources drawn adjacent would make a recent mover
+appear in one and not the other, and would spend ADR-0048's rule 2 — _"series
+order and theme color encode provenance, and nothing else"_ — on a second,
+unstated meaning.
 
 What makes it sound is that **the Case row's `assignedReviewerManager` is
 populated at allocation time**, while the two sources remain distinct. The
@@ -64,10 +65,10 @@ lookup a browser can actually perform. That value is an operational cache for
 the bounded live tail and may be explicitly `null` when the lookup is absent or
 fails; it is not frozen into a Reportable or planned reporting snapshot.
 
-The solid bars remain attributed by the Staff Hierarchy, which is the authority
-for settled history. The hollow bars are filtered by the Case-row cache, so a
-legacy row or a failed allocation lookup can leave the live tail empty without
-changing the settled attribution. A future reconciliation could compare the
+The first bars remain attributed by the Staff Hierarchy, which is the authority
+for settled history. The danger-red bars are filtered by the Case-row cache, so
+a legacy row or a failed allocation lookup can leave the live tail empty
+without changing the settled attribution. A future reconciliation could compare the
 cache with `current_hierarchy` if measured drift justifies it, but no such
 repair is current behavior.
 
@@ -99,8 +100,8 @@ support.
 ### Measures follow ADR-0048 exactly
 
 Non-working days draw as ordinary bars at day grain, so weekend work is visible
-because the bar sits on a Saturday — no distinct fill, which would put a second
-meaning beside solid/hollow. The average is **per working day** for the team as
+because the bar sits on a Saturday — no additional fill meaning is introduced
+beside the settled/live series colors. The average is **per working day** for the team as
 a whole, with the same denominator and the same stated inaccuracy as
 `#/my-stats`, and **Active reviewer-days** beside it as the roster-immune
 figure.
@@ -118,7 +119,7 @@ account ids when the lookup fails. Names stay out of the artifact.
 
 - **The live tail depends on an operational cache.** Allocation writes
   `assignedReviewerManager` from the User Profile lookup, but unresolved or
-  legacy rows can still be absent from the hollow bars. This does not change
+  legacy rows can still be absent from the danger-red bars. This does not change
   the Staff Hierarchy attribution of settled history.
 - **Two manager pages will invite consolidation.** They answer different
   questions from different sources on different cadences, and merging them

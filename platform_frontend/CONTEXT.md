@@ -313,10 +313,14 @@ Its rows are the Reviewer's **Reportable** Cases — `Actions In Progress` or
 as reviewed work — bucketed onto browser-local calendar dates from their
 `reportableAt` instant. The file wins for every day it covers; the tail answers
 only for the days after it. Marks from the file are solid and marks from the
-tail are hollow, which encodes **provenance and nothing else**: a day that is
-finished but unpublished is real work and counts, and a day still in progress
-is also hollow but excluded from the totals. A failed tail, or a feed older
-than the clamp, is stated in one muted line and never hides the published half.
+tail retain provisional metadata; both are rendered as solid bars on this chart
+so the source states remain readable by color. A day that is finished but
+unpublished is real work and counts, and a day still in progress is excluded
+from the totals. Settled marks are the first series and use the theme's
+`on-surface` token; tail marks follow them and use the theme's danger token, so
+the distinction remains readable in both color modes.
+A failed tail, or a feed older than the clamp, is stated in one muted line and
+never hides the published half.
 
 On route creation the page snapshots the browser-local calendar into four
 comparison ranges: the previous complete Monday–Sunday week plus this week
