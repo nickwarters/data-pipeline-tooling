@@ -9,21 +9,12 @@ only to name a type.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
-from contextlib import AbstractContextManager
+from collections.abc import Callable
 from typing import Literal, Protocol, runtime_checkable
 
 from framework.core.dataset import Dataset
 
 Severity = Literal["error", "warn"]
-
-# The default chunk size for a streaming :class:`ChunkReader` — a sensible bound
-# for a feed-shaped row, big enough to amortise per-chunk overhead yet small
-# enough that hundreds of them never approach the memory a whole source would.
-# Defined here with the contract so both the protocol default and every concrete
-# reader share one source of truth (``framework.io`` re-exports it).
-DEFAULT_CHUNK_SIZE = 10_000
-
 
 # The reserved column every table-backed Writer stamps with the run that wrote
 # the row — the row-level counterpart of the run record's ``data_locations``.
@@ -45,53 +36,11 @@ class Reader(Protocol):
 
 
 @runtime_checkable
-class ChunkReader(Protocol):
-    """A source read as a *sequence of bounded Datasets* (streaming).
-
-    The streaming dual of :class:`Reader`: where ``read() -> Dataset`` lands a
-    whole source in memory at once, ``chunks(size)`` yields a lazy iterator of
-    bounded :class:`Dataset`s so a source far too large to materialise (hundreds
-    of GB) can be processed with bounded memory. The in-memory ``Dataset``
-    contract holds *per chunk*, never for the whole source; the
-    concrete chunking engine (pandas ``chunksize``) stays behind the seam and
-    never appears in this signature.
-    """
-
-    def chunks(self, size: int = DEFAULT_CHUNK_SIZE) -> Iterator[Dataset]:
-        """Yield the source as bounded Datasets of at most ``size`` rows each."""
-        ...
-
-
-@runtime_checkable
 class Writer(Protocol):
     """A destination for one feed's data."""
 
     def write(self, dataset: Dataset) -> None:
         """Persist the dataset to this Writer's target."""
-        ...
-
-
-@runtime_checkable
-class ChunkWritable(Protocol):
-    """A Writer that can also take one source's rows as a *sequence* of writes.
-
-    The write-side dual of :class:`ChunkReader`. Handing a plain Writer one chunk
-    at a time is not generally safe: a Writer that replaces its target (a
-    truncate-and-reload, or a delete-then-append keyed by the run) does that
-    replacement on *every* ``write``, so the second chunk would wipe the first.
-    A Writer that can express "these many writes are one logical load" says so by
-    implementing this: ``writing_chunks()`` opens a session and yields the Writer
-    to use for the duration, doing any once-per-load work (the delete of the
-    run's prior rows) exactly once on entry rather than once per chunk.
-
-    Deliberately opt-in and separate from :class:`Writer`. A Writer that cannot
-    express it simply does not implement it, and pairing it with a chunked read
-    is refused when the graph is wired instead of corrupting the target at run
-    time.
-    """
-
-    def writing_chunks(self) -> AbstractContextManager[Writer]:
-        """Open a session whose many writes land as one logical load."""
         ...
 
 
