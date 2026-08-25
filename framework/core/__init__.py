@@ -20,10 +20,7 @@ from framework._internal.schema import RowCheck, ValueRule, row_checks
 from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError, format_failure
 from framework.core.protocols import (
-    DEFAULT_CHUNK_SIZE,
     RUN_PROVENANCE_COLUMN,
-    ChunkReader,
-    ChunkWritable,
     DatasetProfiler,
     Processor,
     Reader,
@@ -55,10 +52,7 @@ from framework.core.value_rules import (
 __all__ = [
     "Dataset",
     "Reader",
-    "ChunkReader",
-    "DEFAULT_CHUNK_SIZE",
     "Writer",
-    "ChunkWritable",
     "RUN_PROVENANCE_COLUMN",
     "Processor",
     "Validator",
