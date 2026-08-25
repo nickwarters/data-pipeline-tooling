@@ -7,7 +7,6 @@ the protocol signature.
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator
 from pathlib import Path
 
 import pandas as pd
@@ -16,7 +15,7 @@ from framework._internal.connection import connect
 from framework._internal.describe import render
 from framework._internal.locations import file_location, table_location
 from framework.core.dataset import Dataset
-from framework.core.protocols import DEFAULT_CHUNK_SIZE, Reader
+from framework.core.protocols import Reader
 from framework.io.sql import quote_identifier
 
 # ``Reader`` is imported only to be re-exported through ``framework.io``.
@@ -27,7 +26,6 @@ __all__ = [
     "StrictCsvReader",
     "StrictCsvParseError",
     "GlobCsvReader",
-    "SasFileReader",
     "ExcelReader",
     "SqliteReader",
 ]
@@ -280,102 +278,6 @@ def _parse_strict_csv(
         fields.append("".join(field))
         records.append(fields)
     return records
-
-
-# Compression suffixes pandas decompresses transparently; stripped before
-# inferring the SAS format so a real feed landed as ``extract.sas7bdat.gz`` is
-# recognised as sas7bdat (pandas reads the gzip on the fly).
-_COMPRESSION_SUFFIXES = {".gz", ".bz2", ".zip", ".xz", ".zst"}
-
-
-def _infer_sas_format(path: Path) -> str:
-    """Infer the SAS on-disk format (``"sas7bdat"`` or ``"xport"``) from a path.
-
-    Any trailing compression suffix is ignored and the SAS extension beneath it
-    decides the format, so ``extract.sas7bdat.gz`` infers ``"sas7bdat"`` and
-    ``extract.xpt.gz`` infers ``"xport"``. Raises :class:`ValueError` naming the
-    file when the extension is neither, so the caller passes ``format=`` instead.
-    """
-    suffixes = [s.lower() for s in path.suffixes]
-    if suffixes and suffixes[-1] in _COMPRESSION_SUFFIXES:
-        suffixes = suffixes[:-1]
-    ext = suffixes[-1] if suffixes else ""
-    if ext == ".sas7bdat":
-        return "sas7bdat"
-    if ext in (".xpt", ".xport"):
-        return "xport"
-    raise ValueError(
-        f"cannot infer SAS format from {path.name!r}; "
-        "pass format='sas7bdat' or format='xport'"
-    )
-
-
-class SasFileReader:
-    """Stream an already-landed SAS-format file as bounded Datasets.
-
-    Reads a ``.sas7bdat`` / xport file that is **already sitting on local disk**
-    via pandas ``read_sas(chunksize=…)``, yielding a lazy iterator of bounded
-    :class:`Dataset`s. Gzip-compressed extracts (``extract.sas7bdat.gz``) are
-    read on the fly — pandas infers the compression from the extension.
-
-    This is deliberately **not** the ``SasReader``: it runs no SAS
-    script, does no remote execution, and copies no file — it only *reads* a
-    landed file. The two are complementary (``SasReader`` lands a file from a
-    remote SAS host; this streams one once it is there) and the distinct name
-    keeps them from being confused.
-
-    The format (sas7bdat vs xport) is inferred from the extension — ignoring any
-    trailing ``.gz``/compression suffix — unless ``format=`` is passed. Reading
-    sas7bdat/xport needs no extra dependency (pandas' SAS reader is pure-Python),
-    so it is first-class on Windows and macOS alike. Pass ``columns=[...]`` to
-    keep each chunk narrow; the projection is applied per chunk (``read_sas``
-    has no ``usecols``) so memory still stays bounded. A source with no rows
-    streams as **zero** chunks.
-    """
-
-    def __init__(
-        self,
-        path: str | os.PathLike[str],
-        columns: list[str] | None = None,
-        *,
-        format: str | None = None,
-        encoding: str | None = None,
-    ) -> None:
-        self._path = Path(path)
-        self._columns = columns
-        self._format = format if format is not None else _infer_sas_format(self._path)
-        self._encoding = encoding
-        self.data_locations: list[dict[str, str]] = []
-
-    def chunks(self, size: int = DEFAULT_CHUNK_SIZE) -> Iterator[Dataset]:
-        if size < 1:
-            raise ValueError("chunk size must be a positive integer")
-        self.data_locations = [file_location(self._path)]
-        kwargs: dict = {"format": self._format, "chunksize": size}
-        if self._encoding is not None:
-            kwargs["encoding"] = self._encoding
-        # compression="infer" (pandas default) reads a gzipped extract on the fly.
-        with pd.read_sas(self._path, **kwargs) as reader:
-            for frame in reader:
-                if len(frame) == 0:
-                    continue  # exhausted boundary -> no chunk
-                if self._columns is not None:
-                    missing = [c for c in self._columns if c not in frame.columns]
-                    if missing:
-                        raise ValueError(
-                            f"{self._path}: requested columns not in source: {missing}"
-                        )
-                    frame = frame[self._columns]
-                yield Dataset.from_pandas(frame)
-
-    def describe(self) -> str:
-        return render(
-            self,
-            path=str(self._path),
-            format=self._format,
-            columns=self._columns,
-            encoding=self._encoding,
-        )
 
 
 class GlobCsvReader:
