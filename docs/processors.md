@@ -94,8 +94,9 @@ same-length boolean mask. `VectorizedDerive` calls its deriver once with the
 whole frame and writes the returned series/scalar/array-like value into one
 column. These processors intentionally expose pandas inside the processor
 callable: they are still engine-confined behind the `Dataset` seam, but trade
-some portability for batch-friendly execution. Chunking/streaming remains
-explicitly deferred.
+some portability for batch-friendly execution. A frame too big to hold whole is
+narrowed at the source, not chunked here
+([ADR-0028](adr/0028-a-source-too-big-for-memory-is-narrowed-at-the-source.md)).
 
 ### Authoring selection rules
 
@@ -683,8 +684,7 @@ upstream is optional.
 
 Malformed JSON, or JSON of the wrong shape for the transform reading it, raises
 `JsonShapeError` (a `PipelineError`, category `data`) naming the column and the
-row's 0-based position **within the batch the transform was handed** — under a
-chunked read (`.read_chunks`) that is the chunk, not the whole source. It is a
+row's 0-based position **within the batch the transform was handed**. It is a
 fail-fast error, not a quarantine route: what a feed does about a bad blob stays
 the caller's choice.
 

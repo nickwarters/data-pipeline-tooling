@@ -120,7 +120,7 @@ appears in the log; `params` is logged but has no column.
 | `step`      | string              | `read`, `pre-validate`, `quarantine`, `process`, `profile`, `explain`, `post-validate`, `write`, `freshness`, or `run` (the summary). |
 | `step_address` | string \| null   | The stable dependency address for this record, supplied by the one place a step is recorded — so it is present identically on the real and the dry-run path. Builder steps are recorded as `<pipeline>.<step>` (for example `pipeline_2.step_4`); the `run` summary is recorded as the pipeline address. The registry stores this field so downstream dependency checks can ask whether a specific upstream step has succeeded. |
 | `status`    | `"ok"` \| `"error"` | Step/run outcome. |
-| `rows_in`   | int \| null         | Rows the step consumed (`null` where N/A, e.g. a one-shot `read`, which consumes nothing). A **streamed** read is the exception: it reports the rows it scanned from the source, so a filtering source's record shows the whole scan rather than only the survivors it passed on. |
+| `rows_in`   | int \| null         | Rows the step consumed (`null` where N/A, e.g. a `read`, which consumes nothing). |
 | `rows_out`  | int \| null         | Rows the step produced. |
 | `rows_quarantined` | int \| null  | Rows routed aside on a `quarantine` step (value-rule breaches); `null` elsewhere. |
 | `rows_excluded` | int \| null     | Cases a gate excluded on an `explain` step (Selection explainability); `null` elsewhere. |
@@ -140,8 +140,6 @@ Known-empty cases for `data_locations`, all of them deliberate:
 - A **failed** read or write records `[]` — the error path carries no metrics.
   A located path may still reach `errors` (the strict CSV reader puts the file
   in its message).
-- A **zero-chunk** streamed drive records nothing at all: the sub-graph below
-  the source never executes.
 - `quarantine` and `explain` steps record `[]` today even though they commit.
 
 ### Instants are UTC, calendar dates are local
@@ -378,22 +376,3 @@ rows read back with those fields empty. `tools.orchestration`'s decision store
 uses the same helper over its own separate declaration — shared machinery, two
 distinct contracts.
 
-## A streamed read records the same shape
-
-`Pipeline.read_chunks(...)` drives the sub-graph below it once per chunk, so each
-step below a streamed source executes many times. That does **not** change this
-format: no field was added for streaming, the key set and key order are
-identical, `step_address` is the usual `<pipeline>.<step>`, and each step still
-emits **exactly one** record. The per-chunk records are folded before they are
-emitted — `rows_in` / `rows_out` / `rows_quarantined` / `rows_excluded` /
-`duration` sum, `warn_hits`, `errors` and `data_locations` concatenate dropping a
-repeat — so the one file every chunk was read from reads once, not fifty times —
-`committed` is true if any chunk committed, `error_category` and `step_address`
-are the step's own, and one failing chunk makes the step's `status` an `error`.
-`profile` is the last chunk's payload, so a profile step under a stream describes
-a chunk rather than the source.
-
-The only thing to read differently is what the numbers *count*: for a filtering
-reader the read step's `rows_in` is the **whole source scanned** and
-`rows_excluded` what the filter dropped, so `rows_in` far exceeds `rows_out` by
-design. See [streaming-large-sources.md](streaming-large-sources.md).

@@ -83,9 +83,8 @@ presence only** — the declared shape is real even when the rows are not. The
 value-level gates still *run* (a rule is called with the empty series, as a rule
 author should expect); they simply have nothing to match.
 
-This is why an incremental poll's steady state (an empty window) and an empty
-chunk in a `.read_chunks` stream run the same steps as a busy one, with no
-per-feed casting to get them past the gate.
+This is why an incremental poll's steady state (an empty window) runs the same
+steps as a busy one, with no per-feed casting to get it past the gate.
 
 **The coercer has the other half of the rule.** A dtype the validator waves
 through still reaches storage, and where a table is *not* declared by a
@@ -227,7 +226,7 @@ path, where the empty string is a value in its own right.
 
 Which of the two a blank CSV field arrives as is the reader's decision, and the
 two CSV families answer differently on purpose. The pandas-backed readers
-(`CsvReader`, `ChunkedCsvReader`, `GlobCsvReader`) land a blank as a **gap**:
+(`CsvReader`, `GlobCsvReader`) land a blank as a **gap**:
 they keep pandas' default missing-value set, so `NA`/`NULL`/`N/A`/`None` read as
 gaps too. `StrictCsvReader` lands it as the empty string `""`, because its
 grammar says a field was present and empty. Neither answers whether the gap is

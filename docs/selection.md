@@ -353,11 +353,7 @@ are. The primitive has no way to express a multi-read considered population,
 so the gate and hopper steps settle the trace columns (`verdict`, `reason`,
 `rank`, `score`) directly on the considered frame, and the `trace` node
 projects them off the `hopper` step's output rather than off a `.explain()`
-node. One upside falls out of this for
-free: `.explain()` is one of the pairings the builder refuses under a
-streamed (chunked) read, because a row-level trace has to hold every row it
-has seen — removing it lifts that refusal, so this pipeline is not blocked
-from becoming streamable later the way an `.explain()`-based one would be.
+node.
 
 The group's output does not belong to any one Case Type's medallion, so it
 lands in its own plain namespace store under `<base_dir>/selection_output/` —
