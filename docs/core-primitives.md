@@ -142,131 +142,6 @@ lets a pipeline read only the columns it needs, leaving `read() -> Dataset`
 unchanged. This is what keeps each single-table pipeline narrow when a wide feed
 (650+ columns) is fanned out into a Case table and its Detail Tables.
 
-#### `ChunkReader` — streaming a source too big to hold whole
-
-`read() -> Dataset` lands a whole source in memory at once — right for a
-feed-sized file, impossible for a multi-hundred-GB extract. `ChunkReader` is the
-**streaming dual**: `chunks(size) -> Iterator[Dataset]` yields a lazy sequence
-of *bounded* Datasets, so the in-memory contract holds **per chunk**,
-never for the whole source. The concrete chunking engine (pandas `chunksize`)
-stays behind the `Dataset` seam exactly as `read()` keeps pandas behind it.
-
-```python
-class ChunkReader(Protocol):
-    def chunks(self, size: int = DEFAULT_CHUNK_SIZE) -> Iterator[Dataset]: ...
-```
-
-`ChunkedCsvReader(path, columns=...)` streams a local CSV via pandas
-`read_csv(chunksize=…)`, landing every column as text like its whole-file
-siblings — which also makes the dtypes stable across chunks, where inference
-would have been decided afresh per chunk. `SasFileReader(path, columns=..., format=...)` streams
-an **already-landed** `.sas7bdat`/xport file via pandas `read_sas(chunksize=…)`;
-a gzipped extract (`extract.sas7bdat.gz`) is read on the fly (compression
-inferred from the extension), and the SAS format is inferred from the extension
-— ignoring any trailing `.gz` — unless `format=` is passed. Reading
-sas7bdat/xport needs **no extra dependency** (pandas' SAS reader is pure-Python),
-so it is first-class on Windows and macOS alike.
-
-`SasFileReader` is deliberately **not** the remote `SasReader`: it runs no SAS
-script, does no remote execution, and copies no file — it only *reads* a file
-already on local disk. The two are complementary — `SasReader` *lands* a file
-from a remote SAS host (see the source-type table below); `SasFileReader` is one
-way to *read* a landed file once it is there — and the distinct name keeps them
-from being confused.
-
-The chunk size is configurable and defaults to `DEFAULT_CHUNK_SIZE` (10,000
-rows). `columns=[...]` projects each chunk so a caller streaming a wide source
-for just a couple of columns keeps every chunk narrow (CSV pushes it into
-`usecols`; SAS slices each chunk, since `read_sas` has no projection). A source
-with no data rows (a header-only CSV, an empty file, a zero-row SAS table)
-streams as **zero** chunks; a small non-empty source as exactly **one**. These
-readers expose `chunks()`, not `read()`, so they are a distinct port from the
-single-shot `Reader` set — deliberately so: unifying them by giving a
-`ChunkReader` a `read()` that materialises everything would be a trap door
-straight back to the memory problem. They wire into the deferred `Pipeline` via
-`read_chunks()` (below), not via `read()`.
-
-**Chunk-level row filtering (allow-list / predicate pushdown).** When a source
-is enormous (100M+ rows) but only a small, known subset is wanted (e.g. <100K
-ids we already track), filtering *after* a whole read is impossible — the rows
-can never be materialised at once. The filter has to be **pushed down into the
-per-chunk loop**, beside where column projection already happens, so both memory
-*and* the landed table stay bounded. Two wrappers over any `ChunkReader` provide
-this:
-
-- `KeyFilterChunkReader(inner, key_column, allowed_keys)` — the id-membership
-  (**semi-join**) case: keep only rows whose `key_column` is in `allowed_keys`,
-  a known set of ids-of-interest. The set grows run-over-run but is bounded
-  (~100K), so it stays an in-memory `set` / `frozenset` for a cheap per-chunk
-  membership test; pass the current set in each run. Keys are **normalised on
-  both sides** before the test (see below), so a SAS numeric id (`3.0`) matches
-  an `int` allow-list entry (`3`) and a space-padded `bytes` id (`b'A  '`)
-  matches a `str` entry (`"A"`) rather than a float-vs-int / bytes-vs-str
-  mismatch silently dropping every row.
-- `PredicateChunkReader(inner, predicate)` — the general form
-  `KeyFilterChunkReader` is built on: apply any `ChunkFilter`
-  (`Callable[[Dataset], Dataset]`) per chunk.
-
-Because the filter runs **per chunk, before concatenation**, a 100M-row source
-with a 100K allow-list lands ~100K rows with memory bounded by one chunk. A
-chunk the filter empties yields **nothing** (consistent with the zero-row-chunk
-skip), and both wrappers expose `rows_scanned` / `rows_kept` for the most recent
-`chunks()` pass so a run can report how much of the source it actually needed
-(ties to the run-observability work). They wrap and compose with
-`ChunkedCsvReader` / `SasFileReader` / any future chunk reader, keeping the
-readers themselves single-purpose.
-
-**`Pipeline.read_chunks(chunk_reader, *, name, chunk_size=DEFAULT_CHUNK_SIZE)`
-is the DAG seam**. It wires a node exactly as `read()` does; what differs
-is the drive — at `.run()` the pipeline executes the whole sub-graph **below**
-that node once per chunk, so a streamed feed keeps the transforms, validators,
-quarantine partitioning, dry run, profiling, run addresses and per-step run-log
-records the builder provides. Only the sub-graph below the streamed source
-forgets its memo between chunks, so a whole-dataset input joined into the stream
-is read once, not per chunk; the per-chunk records are folded into **one record
-per step** with the counts summed; and every Writer below the source spends the
-drive inside a single chunk-write session.
-
-What cannot be made chunk-safe is refused when the graph is *wired*, before a
-byte is read: a Writer that replaces its target (`Refresh`, every file Writer), a
-Validator that declares `whole_dataset` (`UniqueValidator`,
-`VolumeAnomalyValidator` — `StreamingUniqueValidator` is the form that survives a
-boundary), an `explain` step (its row trace remembers every row), and a second
-streamed source in one pipeline. `tools.observability.stream_step` remains as the
-low-level primitive for a feed that wants no graph at all. See
-[`streaming-large-sources.md`](streaming-large-sources.md) for the full pattern.
-
-#### `ChunkWritable` — many writes, one logical load
-
-The write-side dual of `ChunkReader`. Handing a plain `Writer` one chunk at a
-time is not generally safe: a Writer that replaces its target does that on
-*every* `write`, so the second chunk would wipe the first — and the accumulating
-Writer's delete-by-`logical_run_id` would delete the chunks this same run had
-already landed, which is the sharpest correctness hazard in the whole seam.
-
-```python
-class ChunkWritable(Protocol):
-    def writing_chunks(self) -> AbstractContextManager[Writer]: ...
-```
-
-A Writer that can express "these many writes are one logical load" implements it;
-whatever must happen once per load happens when the session opens.
-`AccumulateByRun` clears the run's prior rows **once, on entry**, then appends;
-`InsertOrIgnore` / `UpsertStrategy` / `InsertIfAbsent` / `AppendOnly` are already
-per-batch-independent and take a chunked load unchanged; `QuarantineWriter`
-clears with the first chunk that has rejects. `Refresh` and the file Writers
-offer no session at all, which is what makes the wiring-time refusal possible.
-`framework.io.writing_chunks(writer)` / `supports_chunk_writes(writer)` are the
-helpers.
-
-**Every chunk of one drive carries the same provenance value.** The Writers that
-hand back *themselves* get that for free — the run context is ambient for the
-whole graph walk, so each chunk's write reads the same id. The two that hand
-back a helper (the accumulating and quarantine sessions) resolve the run **once,
-when the session opens**, because their later chunks take an append path that
-would otherwise land unstamped rows beside the first chunk's.
-
-**Table and column names you configure** (the `table` and `columns=[...]` you pass
 to a `SqliteReader`/Writer) accept **any string** — spaces, hyphens, mixed case,
 and SQL reserved words are all fine. Every identifier is double-quoted at the
 SQLite seam through the single `framework.io.sql.quote_identifier` choke point, so
@@ -278,7 +153,7 @@ table or column whatever the source calls it.
 #### Reporting what was touched
 
 A Reader that read a file or a table sets `data_locations` on itself during
-`read()` (or during `chunks()`, on the first `next()`), and the read node drains
+`read()`, and the read node drains
 it into that step's run-log record. Each entry is two-part —
 `{"namespace": "file", "name": "/data/orders.csv"}`,
 `{"namespace": "sqlite:/data/raw.db", "name": "orders"}` — and a `GlobCsvReader`
@@ -303,7 +178,6 @@ directions are explicit:
 | JSON file | _intentionally absent_ | `JsonWriter` | JSON is currently a Reporting Deliverable format only; no inbound JSON Feed has been needed yet. |
 | SQLite table | `SqliteReader` | `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `SqliteInsertOrIgnoreWriter`, `SqliteInsertIfAbsentWriter`, `SqliteAppendOnlyWriter` | The Store mints these over medallion layer databases. |
 | SAS extract (remote) | `SasReader` | _intentionally absent_ | SAS is an inbound-only remote source; the framework lands the remote output then reads local CSV files. |
-| Large source, streamed | `ChunkedCsvReader`, `SasFileReader` | _intentionally absent_ | The `ChunkReader` seam (`chunks(size) -> Iterator[Dataset]`) for sources too big to hold whole — a local CSV (landed as text, so the dtypes cannot drift between chunks) or an **already-landed** `.sas7bdat`/xport file (incl. gzipped). Distinct from the remote `SasReader`: no script, no remote run, no copy — read-only by nature. |
 | SharePoint list | `SharePointReader` | `SharePointWriter` | Target is **SE on-prem**. Both sides are stubbed behind swappable `SharePointFetcher` / `SharePointPusher` seams until the on-prem SE client (NTLM/Kerberos/REST) lands. `SharePointWriter` emits the canonical Selection Deliverable — one list per Case Type. |
 | SharePoint list, incremental | `SharePointModifiedReader` | _intentionally absent_ | The items whose `Modified` falls in a caller-supplied half-open window, stamped with immutable observation metadata. Configures the organisational client behind the `SharePointListClient` seam; holds no checkpoint. Cannot see a **hard delete** — a deleted item has no `Modified`, so reconciliation against a snapshot is a separate mechanism. |
 | Console (stdout) | _intentionally absent_ | `StdoutWriter` | A terminal sink for *seeing* a result rather than persisting it — e.g. printing a Selection explainer's per-Case trace while driving a feed by hand. Owns no location or load strategy; prints the dataset as a plain-text table to the stream (defaulting to `sys.stdout`). |

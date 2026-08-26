@@ -172,6 +172,8 @@ Deliberately out of scope, each its own decision:
 - **Deleting streaming**, dropping quarantine, the `source()` column mapping,
   arrival gating for multi-file feeds, and `context.medallion()`. All recorded in
   [`framework-simplification-review.md`](../framework-simplification-review.md).
+  Streaming has since been deleted, on this ADR's reasoning, by
+  [ADR-0028](0028-a-source-too-big-for-memory-is-narrowed-at-the-source.md).
 
 ## Consequences
 

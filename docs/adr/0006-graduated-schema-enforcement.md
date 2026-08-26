@@ -127,7 +127,7 @@ row declares `str` and gates the column with a value rule.
 The previous amendment widened coercion because "a CSV read is bare type
 inference, so a digits-only reference arrives as `int64`". That premise is now
 removed at its source: the pandas-backed CSV readers (`CsvReader`,
-`ChunkedCsvReader`, `GlobCsvReader`) pass `dtype=str`, landing **every column as
+`GlobCsvReader`) pass `dtype=str`, landing **every column as
 text**. `keep_default_na` / `na_values` stay at their defaults, so a blank field
 is still a gap rather than the empty string — nullability remains `NonNull()`'s
 question.
@@ -135,8 +135,12 @@ question.
 Inference was a guess made over the first rows of one file, and it was lossy in
 ways coercion could not undo afterwards: by the time `SchemaCoercion` saw a
 reference read as `int64`, its leading zeros were already gone. It was also
-unstable — inferred per chunk when streaming, and per file when globbing, so two
-parts of one logical snapshot could disagree about a column's dtype.
+unstable — inferred per file when globbing, so two parts of one logical
+snapshot could disagree about a column's dtype. (This amendment originally cited
+`ChunkedCsvReader`'s per-chunk inference as the other half of the argument;
+that reader was removed by
+[ADR-0028](0028-a-source-too-big-for-memory-is-narrowed-at-the-source.md).
+The `GlobCsvReader` half stands, and with it the decision.)
 
 - **The coercion widening above stands, unchanged.** Coercion is now the *only*
   place a CSV column's type is decided rather than the second place; and storage

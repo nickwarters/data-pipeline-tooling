@@ -293,6 +293,18 @@
     </div>
   </header>
 
+  <div role="note" style="max-width:70ch;margin:24px auto;padding:16px 20px;border:2px solid #b45309;border-radius:8px;background:#fffbeb;color:#7c2d12">
+    <strong>Superseded in part &mdash; the chunked/streaming read seam no longer exists.</strong>
+    <p style="margin:8px 0 0">This plan's Strategy&nbsp;1 and its &ldquo;what to build&rdquo; list are written
+    around <code>ChunkReader</code>, <code>ChunkedCsvReader</code>, <code>SasFileReader</code> and
+    <code>Pipeline.read_chunks</code>. Those were removed by
+    <a href="adr/0028-a-source-too-big-for-memory-is-narrowed-at-the-source.md">ADR-0028</a>: a source too
+    big for memory is narrowed <em>at the source</em> &mdash; a SQL <code>WHERE</code>, a column projection,
+    or a pre-filtered landed file &mdash; and the framework is handed a whole <code>Dataset</code>.
+    The rest of the plan (the monthly-snapshot shape, the customer DB as a queue, the daily enrichment
+    and its scheduling) is unaffected. Kept as the record of what was planned.</p>
+  </div>
+
   <main>
 
     <section id="problem">

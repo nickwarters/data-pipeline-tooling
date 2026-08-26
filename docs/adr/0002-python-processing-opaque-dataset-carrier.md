@@ -78,7 +78,24 @@ never name the engine, and the bulk carrier stays opaque. Only the list of
 acknowledged engine-confined components is corrected.
 </content>
 
-## Amendment, 2026-07-27 (finding `C2`): streaming *was* needed
+## ~~Amendment, 2026-07-27 (finding `C2`): streaming *was* needed~~ — withdrawn
+
+> ~~This amendment recorded a `ChunkReader` family, `Pipeline.read_chunks` and a
+> `ChunkWritable` write session as existing machinery.~~ Withdrawn by
+> [ADR-0028](0028-a-source-too-big-for-memory-is-narrowed-at-the-source.md): the
+> streaming seam never acquired a consumer outside its own tests and contradicted
+> the eager authoring model of
+> [ADR-0027](0027-eager-steps-are-the-default-authoring-model.md), so it was
+> removed. A source too big for memory is narrowed at the source and the
+> framework is handed a whole `Dataset`.
+>
+> The **volume premise this amendment corrected stays corrected** — a feed at
+> 100M-row scale is expected, not hypothetical. What changed back is only where
+> the answer lives: upstream of the framework rather than inside it. The
+> opaque-carrier decision itself was never in question in either direction.
+>
+> The rest of this section is kept as the record of what was decided in
+> July 2026.
 
 The Consequences above say memory is a risk "in principle" but that volumes are
 small (≤ ~1M rows per feed/run), so "no chunking/streaming machinery is needed up
