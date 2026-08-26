@@ -38,4 +38,3 @@ richer adapter.
 - The remote-exec/transfer logic is SAS-specific and not reused by other feed types
   — a deliberate simplicity trade-off over generic remote components. The same seam
   shape serves the SharePoint reader/writer, which is the outbound dual.
-</content>

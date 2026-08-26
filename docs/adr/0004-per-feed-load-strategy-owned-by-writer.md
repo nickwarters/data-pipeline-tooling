@@ -125,4 +125,3 @@ no longer the only one.
   place: a record that changes between logical runs yields one stamped row per run
   that observed it, and its "current" value is `max(load_date)` per business key —
   a read-side derivation in Python, not the Writer's job.
-</content>

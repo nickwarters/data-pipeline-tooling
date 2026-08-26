@@ -46,4 +46,3 @@ the deliverable up front; the enhancement waits for demand.
 - Some up-front abstraction cost is accepted in exchange for cheap, localised
   upgrades later — but only for a seam a present requirement actually crosses, not
   one anticipated speculatively.
-</content>

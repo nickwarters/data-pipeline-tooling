@@ -90,4 +90,3 @@ the graph *is* the structure.
   `subject/pipeline.step`) so logs, declared dependencies, and registry queries
   name the same thing. Keeping every component parameter-constructed is the
   standing discipline that keeps the config-later path real.
-</content>

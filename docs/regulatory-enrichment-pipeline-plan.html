@@ -370,7 +370,16 @@
       <p>Every <code>Reader</code> today does <code>read() → Dataset</code>, and a <code>Dataset</code> is the <strong>bulk in-memory carrier</strong> (pandas behind the seam, ADR-0002). That's fine for a CSV feed; it is impossible for a hundreds-of-GB SAS extract. The engine we lean on is the same one you already use by hand: read in bounded <strong>chunks</strong> (your 10K-row windows). pandas exposes it directly — <code>read_sas(chunksize=10_000)</code> / <code>read_csv(chunksize=…)</code> yield a sequence of bounded frames — so it stays behind the <code>Dataset</code> seam: <strong>each chunk is a small Dataset; the in-memory contract holds per chunk, never for the whole source.</strong></p>
       <p>This is the one genuine new framework primitive the design asks for: a <strong>chunked / streaming read seam</strong> (a reader that yields a sequence of bounded Datasets rather than one). There are two ways to consume it, and which you pick is the central architectural decision here.</p>
 
-      <p style="margin-top:8px"><strong>This seam now exists</strong> (issue #274): the <code>ChunkReader</code> port — <code>chunks(size) → Iterator[Dataset]</code>, default 10,000 rows — with two source adapters, <code>ChunkedCsvReader</code> and <code>SasFileReader</code> (the latter streams an <strong>already-landed</strong> <code>.sas7bdat</code>/xport file, gzip read on the fly; deliberately distinct from the remote ADR-0012 <code>SasReader</code>). The <code>SasReader(...).chunks(...)</code> in the snippets below is the design-time placeholder; in code today it is <code>SasFileReader(extract_path).chunks(10_000)</code> reading the landed extract (<code>extract.sas7bdat.gz</code>). See the <a href="core-primitives.md"><code>ChunkReader</code> section of <code>core-primitives.md</code></a>.</p>
+      <p style="margin-top:8px"><del><strong>This seam now exists</strong> (issue #274): the <code>ChunkReader</code> port &mdash; <code>chunks(size) → Iterator[Dataset]</code>, default 10,000 rows &mdash; with two source adapters, <code>ChunkedCsvReader</code> and <code>SasFileReader</code> (the latter streams an <strong>already-landed</strong> <code>.sas7bdat</code>/xport file, gzip read on the fly; deliberately distinct from the remote ADR-0012 <code>SasReader</code>). The <code>SasReader(...).chunks(...)</code> in the snippets below is the design-time placeholder; in code today it is <code>SasFileReader(extract_path).chunks(10_000)</code> reading the landed extract (<code>extract.sas7bdat.gz</code>).</del></p>
+
+      <p style="margin-top:8px"><strong>Withdrawn.</strong> That update was written in the present tense about machinery that has since been removed by
+      <a href="adr/0028-a-source-too-big-for-memory-is-narrowed-at-the-source.md">ADR-0028</a>. There is no
+      <code>ChunkReader</code> port, no <code>ChunkedCsvReader</code>, no <code>SasFileReader</code> and no
+      <code>Pipeline.read_chunks</code>; <code>core-primitives.md</code> no longer has a section to link to. The
+      remote ADR-0012 <code>SasReader</code> is unaffected. A landed extract too big to hold whole is narrowed
+      before the framework sees it &mdash; a column projection or a pre-filtered file &mdash; and the pipeline
+      reads a whole <code>Dataset</code>. Everything below this line is the July 2026 record of what was planned,
+      not a description of the framework.</p>
 
       <div class="compare">
         <div class="panel">

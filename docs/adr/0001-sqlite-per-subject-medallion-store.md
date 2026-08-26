@@ -101,4 +101,3 @@ contract is the `Reader`/`Writer` ports + load strategies + the `connect` seam;
 Breaking change to the public facade: `store.writer(layer, table, strategy)`
 becomes `store.writer(table, strategy)` on a namespace-scoped Store, and
 `framework.core` no longer exports `Layer`/`RAW`/`SILVER`/`GOLD`.
-</content>

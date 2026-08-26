@@ -104,4 +104,3 @@ Two further corrections ride along:
 - `RunLog` records a `quarantine` step for every run that has quarantine
   configured, with `rows_in`, `rows_out`, and `rows_quarantined` — a row-level
   audit trail without opening the reject database.
-</content>

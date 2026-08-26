@@ -76,7 +76,6 @@ it would touch the readers and writers.
 The decision itself is unchanged: pipeline scripts and the domain layer still
 never name the engine, and the bulk carrier stays opaque. Only the list of
 acknowledged engine-confined components is corrected.
-</content>
 
 ## ~~Amendment, 2026-07-27 (finding `C2`): streaming *was* needed~~ — withdrawn
 

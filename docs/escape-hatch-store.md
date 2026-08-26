@@ -237,5 +237,3 @@ mechanical:
 If you scaffold the real feed with `python -m cli scaffold <feed>`
 ([adding-a-feed.md](adding-a-feed.md)) you get the medallion wiring for free,
 which is usually the cleanest end of a successful spike.
-</content>
-</invoke>
