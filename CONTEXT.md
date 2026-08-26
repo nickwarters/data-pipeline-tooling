@@ -101,7 +101,7 @@ _Avoid_: source (reserved for source *type*: Excel/CSV/SAS/SQLite/SharePoint), i
 
 **Polling Feed**:
 A **Feed** whose source is not handed over as a file but *asked for*, repeatedly, over an API — today the SharePoint REST list read by a `Modified` window. It differs from a file Feed in one way that matters to the language: there is no snapshot boundary, so "the feed" is a sequence of overlapping windows rather than a delivery, and where the polling got to is durable **source control state** (the watermark), not run metadata. Consecutive windows deliberately overlap, so the same row arrives many times and the load must be idempotent.
-_Avoid_: stream (reserved for a **Streamed Feed**, which is about size not arrival), sync (reserved for the **Sync** Pipeline)
+_Avoid_: stream (it says how the data moves, not that the source is asked for repeatedly), sync (reserved for the **Sync** Pipeline)
 
 **Version observation**:
 One row of a **Polling Feed**: what the source said about one item, at one source version, on one read. The unit of an append-only history — a later source version of the same item is a **new** observation, never an update — identified by the list, the item id and the version (`source_observation_id`). *When we saw it* is not part of the observation: an observation is what the source said, so read time lives in the run log and the ingestion batch id rather than in the row.
@@ -588,18 +588,13 @@ plan item. One rule, two presentations: a plan preview whose promise is *this is
 what will happen* cannot describe a block in different words than the run that
 enforces it.
 
-### Streamed Feed
-A **Feed** whose source is too large to hold whole (a 100M-row SAS extract), read
-as a *sequence of bounded `Dataset`s* rather than one. Wired into the deferred
-`Pipeline` with **`.read_chunks(...)`**, which drives the sub-graph below it once
-per chunk, so a Streamed Feed keeps the validators, quarantine, dry run,
-profiling, run addresses and per-step run records an ordinary Feed gets — the
-per-chunk records folded into **one summed record per step**. The in-memory
-`Dataset` contract holds **per chunk**, never for the source; there is
-no lazy carrier. Pairings that cannot be made chunk-safe are refused **at wiring
-time**, before a byte is read: a Writer that replaces its target, a Validator
-that needs the whole population, and the row-level `explain` trace. See
-`docs/streaming-large-sources.md` and the opaque-carrier ADR amendment.
+### Oversized source
+A source that does not fit in memory. It is **narrowed at the source** — a SQL
+`WHERE`, a column projection, or a pre-filtered landed file — and the framework
+is handed a whole `Dataset` like any other Feed. There is no in-framework
+streaming vocabulary: *Streamed Feed* was retired with the chunked-read seam. See
+[ADR-0028](docs/adr/0028-a-source-too-big-for-memory-is-narrowed-at-the-source.md).
+_Avoid_: Streamed Feed, chunk, streaming (all name a seam the framework no longer has)
 
 ## Relationships
 
@@ -691,6 +686,6 @@ held by a test, not by memory — see `CLAUDE.md` for the three that enforce it.
 - **Selection's two writes (gold audit + Deliverable)** — RESOLVED, then superseded in its second half: Selection both writes the **SelectionPool** to its gold (audit trail) and emits it as a **Deliverable**. These are **two pipelines, not one run with two writes** — consistent with the case-identity and gold-grain decision's "single-Writer pipelines over a shared source" (no multi-Writer terminus, no checkpoint required). Mid-run lineage (a `.write()` node placed mid-graph) is a separate, general-purpose feature and is **not** the mechanism here. What has changed is the *second* pipeline's job: it no longer "writes to the SharePoint list". It writes a JSON **Deliverable** into the **Deliverable outbox** and stops; reaching SharePoint is **delivery**, performed by the **Forwarder** outside this framework. The original wording predates the Forwarder decision recorded above and described a push this project no longer owns.
 - **One feed, many tables** — RESOLVED: the old "one feed → one silver table → one gold table" assumption is dropped. A Feed yields **one Case table and zero or more Detail Tables**; the wide feed is fanned out by **N single-table pipelines over the shared raw table**, each projecting its columns and sharing one reusable normalisation `Processor`. No new core seam (rejected a multi-Writer terminus and a splitting Processor — both break the single-Writer/single-Dataset shape). Built through `SelectColumns`, `Unpivot`, `DeriveKey`, `LatestPerKey`, `UniqueValidator`, and the case-review gold helpers.
 - **Case identity** — RESOLVED: a Case's identity is a **deterministic** surrogate `case_id`, a `sha256` hex digest over a canonical JSON encoding of the Case Type's name (the namespace) and the feed's stable natural-key columns — same Case → same id every run/machine, so idempotency holds and the Case ↔ Detail link needs no join. A random `uuid4` is rejected (breaks idempotency); a persistent identity map is the deferred fallback for a feed with no natural key. The encoding hashes the key columns **by name** rather than joining their values, because a joined key is forgeable — a value containing the separator can reproduce another Case's key exactly. It was `uuid5` over a `"|"`-joined key until that flaw was closed.
-- **Streaming vs the small-volume premise** — RESOLVED (opaque-carrier ADR amendment): that ADR's Consequences said volumes were small (≤ ~1M rows/feed/run) so "no chunking/streaming machinery is needed up front. Revisit only if a feed grows large." A feed *did* grow large (~100M rows, ~500MB landed per run, ~1.5GB after three) and the revisit happened in code, but the ADR was never amended and so contradicted both the code and `docs/streaming-large-sources.md` while carrying `status: accepted`. Now amended. The **opaque-carrier decision stands unchanged**: the in-memory contract holds per chunk, there is no lazy `Dataset` variant, and `ChunkReader` is deliberately *not* unified with `Reader` by a materialising `read()`. Only the volume premise is corrected.
+- **Streaming vs the small-volume premise** — RESOLVED, then REVERSED: the opaque-carrier ADR's Consequences said volumes were small (≤ ~1M rows/feed/run) so "no chunking/streaming machinery is needed up front. Revisit only if a feed grows large." A feed did appear to grow large (~100M rows), the revisit happened in code, and the ADR was amended to record a `ChunkReader` family, `Pipeline.read_chunks` and a chunk-write session. That machinery never acquired a consumer outside its own tests, and it contradicted the eager authoring model of [ADR-0027](docs/adr/0027-eager-steps-are-the-default-authoring-model.md), so [ADR-0028](docs/adr/0028-a-source-too-big-for-memory-is-narrowed-at-the-source.md) removed it: an **oversized source** is narrowed at the source and the framework is handed a whole `Dataset`. The **opaque-carrier decision itself stands unchanged** — one in-memory contract, no lazy carrier variant.
 - **Load strategy vs layer** — RESOLVED: load strategy is **per-feed, owned by the Writer**; the Store maps `layer → location` only (no load decision). The global "refresh upstream / accumulate downstream" rule becomes the *default* profile, not a law. Ingest can adopt **history-upstream / current-gold**; Selection/Sync/Reporting keep accumulate-by-run gold. Consequence: where the source is destructive, accumulated raw/silver are a **system of record** (backup matters) and volume grows `records × snapshots`. Built through explicit Writer strategies (`Refresh`, `AccumulateByRun`, `UpsertStrategy`, `InsertOrIgnore`, `InsertIfAbsent`, `AppendOnly`), each of which mints the Writer that implements it.
 - **Atomicity of run artifacts (publish unit)** — RESOLVED: a run's artifacts — **quarantine** rejects, the **Selection trace**, **checkpoints**, and the final output — are **independently committed evidence**, *not* one all-or-nothing publish unit. Atomicity is **per writer, per layer DB** (a single delete+insert), not across writers; an abort *after* an artifact write leaves that artifact on disk. Chosen deliberately: evidence is most valuable when the run then fails. Each run-log step carries a **`committed`** marker so operators can see what landed before an abort — and each step carries exactly one such record. Hardening the per-writer transaction itself is a separate concern.

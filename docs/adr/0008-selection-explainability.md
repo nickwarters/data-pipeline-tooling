@@ -79,7 +79,7 @@ identity (`logical_run_id`, `load_date`, `pipeline_run_id`).
   sources feeding one function, no per-stage `Filter`/`Score`/`Sort` nodes to
   attribute to — cannot use `.explain()` at all and has to build its own
   `verdict`/`reason`/`rank`/`score` columns directly (`pipelines/complaint_selection`,
-  see `docs/selection.md`). Losing `.explain()` also drops the one
-  chunk-safety refusal it carries, so such a pipeline is not blocked from
-  becoming streamable later the way an `.explain()`-based one is.
-</content>
+  see `docs/selection.md`). ~~Losing `.explain()` also drops the one
+  chunk-safety refusal it carries.~~ Withdrawn by
+  [ADR-0028](0028-a-source-too-big-for-memory-is-narrowed-at-the-source.md):
+  there are no chunk-safety refusals, because there is no chunked read.

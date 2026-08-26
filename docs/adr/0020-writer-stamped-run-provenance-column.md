@@ -146,5 +146,7 @@ which are their own contracts (`logical_run_id` is the idempotency key
   target it is one id per row.
 - A consumer that does `SELECT *` sees the column. It is reserved: a feed must
   not declare a field of the same name for its own purposes.
-- The chunked write path stamps once per session, so every chunk of one drive
-  carries the same value.
+- ~~The chunked write path stamps once per session, so every chunk of one drive
+  carries the same value.~~ Withdrawn by
+  [ADR-0028](0028-a-source-too-big-for-memory-is-narrowed-at-the-source.md):
+  Writer chunk-write sessions were removed, so a Writer stamps once per `write`.
