@@ -161,4 +161,3 @@ declared `INTEGER` still applies SQLite's affinity on write, so `00123` reaches
 raw as text and is stored as `123`; what a feed declares is the feed author's
 call, and `scaffold` seeds a starting point they edit. The reader no longer
 decides it for them, which is the whole change.
-</content>

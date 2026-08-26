@@ -99,4 +99,3 @@ even though that is the reduction the table's own shape suggests.
   SharePoint never appears in a `Modified` window at all, so its last
   observation wins forever. That is a reconciliation-sweep concern, out of scope
   here; in-app a Case is Voided, never deleted.
-</content>

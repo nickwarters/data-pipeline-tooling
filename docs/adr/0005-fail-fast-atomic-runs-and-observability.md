@@ -98,4 +98,3 @@ stated once rather than re-derived per Writer.
   the row decode and the console line are all derived from it. A field is
   added there, once; nothing else has a field list to fall behind. The order is a
   live on-disk format — append to it, never reorder it.
-</content>
