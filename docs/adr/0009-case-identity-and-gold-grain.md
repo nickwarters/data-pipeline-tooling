@@ -102,4 +102,3 @@ columns it needs — not by a multi-output node or a splitting transform.
   Tables are **read-side** concerns (Python), not enforced by the store.
 - A feed without a stable natural key falls back to the deferred
   persistent-identity-map option.
-</content>

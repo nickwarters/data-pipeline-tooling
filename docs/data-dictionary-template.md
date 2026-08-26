@@ -177,5 +177,3 @@ from the raw SAS export (`raw.claims`), schema-enforced at this boundary.
   the same change.
 - **Use a Confluence label** (e.g. `data-dictionary`) on every page so the set is
   discoverable as a collection.
-</content>
-</invoke>

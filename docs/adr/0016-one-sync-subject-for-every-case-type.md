@@ -119,4 +119,3 @@ Two details settled in implementation, neither changing the decision:
 - **The store-topology question CONTEXT.md parked** ("revisit the physical
   topology when Sync/Reporting are built") is answered for Sync. Reporting is
   still open.
-</content>

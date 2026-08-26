@@ -58,4 +58,3 @@ gates), not by varying the randomness itself.
   context — they are testable as plain pure functions. They share the same seeded,
   order-invariant draw; `Sample` derives it straight from the configured seed,
   `SamplePerGroup` from a per-group seed hashed off it.
-</content>

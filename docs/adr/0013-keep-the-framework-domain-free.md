@@ -64,4 +64,3 @@ so that lesson is enforced going forward rather than rediscovered.
   building the wrong abstraction, and it is cheaper than a rewrite.
 - This ADR is a **gate on new ADRs**: a proposed decision that can't point at a
   present, failing requirement is demoted to a note until one appears.
-</content>
