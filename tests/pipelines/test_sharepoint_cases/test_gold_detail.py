@@ -12,7 +12,13 @@ from __future__ import annotations
 import pytest
 
 from framework.core import ValidationError
-from pipelines.sharepoint_cases.gold import DETAIL_GRAIN, DETAIL_TABLES, to_gold_detail
+from pipelines.sharepoint_cases.gold import (
+    AS_OF_COLUMN,
+    CASE_ID_COLUMN,
+    DETAIL_GRAIN,
+    DETAIL_TABLES,
+    to_gold_detail,
+)
 from pipelines.sharepoint_cases.pipeline import FEED_NAME
 from tests._sharepoint_cases_fixtures import (
     AS_OF,
@@ -76,9 +82,9 @@ def test_two_cases_do_not_take_each_others_children():
 
     rows = details(children, winners)
 
-    assert len(rows) == 2
-    assert len({row["case_id"] for row in rows}) == 2
     assert {row["source_observation_id"] for row in rows} == {"a-2", "b-2"}
+    assert {row["question_id"] for row in rows} == {"q1"}
+    assert len({row[CASE_ID_COLUMN] for row in rows}) == len(rows) == 2
 
 
 def test_a_gold_detail_row_is_the_childs_columns_plus_case_id_and_as_of():
@@ -88,10 +94,10 @@ def test_a_gold_detail_row_is_the_childs_columns_plus_case_id_and_as_of():
     [row] = details([child(source_observation_id="obs-1")], winners)
 
     assert set(row) == set(child(source_observation_id="obs-1")) | {
-        "case_id",
-        "as_of_utc",
+        CASE_ID_COLUMN,
+        AS_OF_COLUMN,
     }
-    assert "status" not in row
+    assert row[AS_OF_COLUMN] == AS_OF.isoformat()
 
 
 def test_a_repeated_grain_value_in_the_winning_observation_aborts_the_build():
@@ -102,7 +108,8 @@ def test_a_repeated_grain_value_in_the_winning_observation_aborts_the_build():
         child(source_observation_id="obs-1", question_id="q1"),
     ]
 
-    with pytest.raises(ValidationError, match="question_id"):
+    # The grain's own key column is what the error names.
+    with pytest.raises(ValidationError, match=DETAIL_GRAIN[DETAIL_TABLE][-1]):
         to_gold_detail(
             given_rows(children),
             writer,
