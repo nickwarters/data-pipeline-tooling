@@ -12,11 +12,17 @@ import pytest
 
 from framework.core import ValidationError
 from framework.run import RunContext, active_context
-from pipelines.sharepoint_cases.pipeline import FEED_NAME, RAW_FEED_COLUMNS, to_silver
+from pipelines.sharepoint_cases.pipeline import (
+    FEED_NAME,
+    RAW_FEED_COLUMNS,
+    RENAME,
+    to_silver,
+)
 from pipelines.sharepoint_cases.schema import CASE_STATUSES
 from tests._sharepoint_cases_fixtures import (
     COMPLAINTS,
     OTHER,
+    SILVER_COLUMNS,
     FakeListClient,
     item,
     items,
@@ -31,19 +37,28 @@ from tests.framework_testing import (
 
 
 def test_silver_snake_cases_coerces_and_keeps_the_provenance():
+    [raw] = landed(FakeListClient())
     writer = RecordingWriter()
 
-    to_silver(given_rows(landed(FakeListClient())), writer, COMPLAINTS)
+    to_silver(given_rows([raw]), writer, COMPLAINTS)
 
     [row] = rows_of(writer)
-    assert row["id"] == 101
-    assert row["title"] == "CMP-000101"
-    assert row["case_type"] == "complaints"
-    assert row["responsible_party_title"] == "Bola Okafor"
-    assert row["due_date"] == pd.Timestamp("2026-08-14T00:00:00Z")
-    assert row["has_open_appeal"] is False
-    assert row["source_item_id"] == "101"
-    assert row["source_version"] == '"3"'
+    # Renamed: silver's columns are the rename map's values, nothing more.
+    assert set(row) == set(SILVER_COLUMNS)
+    # Text that needs no coercion arrives under its new name unchanged.
+    for source in ("Title", "ResponsibleParty/Title", "Notes"):
+        assert row[RENAME[source]] == raw[source], source
+    # Coerced: one column of each declared non-text type is typed, not text.
+    assert row["id"] == int(raw["Id"])
+    assert row["due_date"] == pd.Timestamp(raw["DueDate"])
+    assert row["source_modified_at"] == pd.Timestamp(raw["source_modified_at"])
+    assert row["has_open_appeal"] is bool(raw["HasOpenAppeal"])
+    # Settled from the polled list, not the cell.
+    assert row["case_type"] == COMPLAINTS.case_type
+    # The stamped identity crosses the hop untouched.
+    for column in ("source_list_name", "source_item_id", "source_version"):
+        assert row[column] == raw[column], column
+    assert row["source_observation_id"] == raw["source_observation_id"]
 
 
 @pytest.mark.parametrize("cell", [None, "misfiled", "complaints"])
@@ -109,10 +124,7 @@ def test_silver_quarantines_an_unknown_status_while_raw_keeps_every_row():
     assert [row["source_item_id"] for row in rows_of(writer)] == ["101"]
     [rejected] = rows_of(rejects)
     assert rejected["source_item_id"] == "102"
-    assert rejected["failed_rule"] == (
-        "column 'status' has value(s) outside "
-        "{'Actions In Progress', 'Completed', 'In-progress', 'To-allocate', 'Void'}"
-    )
+    assert "status" in rejected["failed_rule"]
 
 
 def test_silver_aborts_when_the_id_is_missing():

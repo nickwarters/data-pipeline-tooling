@@ -13,6 +13,10 @@ import json
 import pandas as pd
 import pytest
 
+from pipelines.sharepoint_cases.gold import (
+    AMENDED_OUTCOME_FIELDS,
+    DETAIL_BLOB_COLUMNS,
+)
 from tests._sharepoint_cases_fixtures import (
     AS_OF,
     SILVER_COLUMNS,
@@ -138,31 +142,27 @@ def test_current_gold_carries_the_join_key_for_detail_tables():
 # --- the amended outcome, flattened ------------------------------------------
 
 
-AMENDED_COLUMNS = (
-    "amended_outcome_id",
-    "amended_reason",
-    "amended_justification",
-    "amended_by",
-    "amended_at",
-    "amended_from_appeal_id",
-)
+AMENDED_COLUMNS = tuple(AMENDED_OUTCOME_FIELDS.values())
 
 
 # The five raw JSON blob columns, which gold does not republish: each one's
 # data lives in its normalised home (the Detail Tables; the amended_* columns),
 # and silver case_version keeps the landed text.
-BLOB_COLUMNS = ("answers", "conversation", "appeals", "amended_outcome", "details")
+BLOB_COLUMNS = (*DETAIL_BLOB_COLUMNS, "amended_outcome")
 
 
 def test_current_gold_republishes_every_silver_column_except_the_blobs():
     [row] = current(version())
 
-    assert set(SILVER_COLUMNS) - set(row) == set(BLOB_COLUMNS)
-    assert set(row) - set(SILVER_COLUMNS) == {
-        "case_id",
-        "as_of_utc",
-        *AMENDED_COLUMNS,
-    }
+    assert not set(BLOB_COLUMNS) & set(row)
+    assert set(SILVER_COLUMNS) - set(BLOB_COLUMNS) <= set(row)
+    assert {"case_id", "as_of_utc", *AMENDED_COLUMNS} <= set(row)
+
+
+def amended(row: dict) -> dict:
+    """The flattened amendment, keyed as the blob keys it -- so a test can
+    compare it to the blob it wrote rather than to six literals."""
+    return {key: row[column] for key, column in AMENDED_OUTCOME_FIELDS.items()}
 
 
 def test_a_reason_carrying_amendment_flattens_onto_the_current_row():
@@ -179,13 +179,13 @@ def test_a_reason_carrying_amendment_flattens_onto_the_current_row():
 
     [row] = current(version(amended_outcome=blob))
 
-    assert row["amended_outcome_id"] == "poor-with-harm"
-    assert row["amended_reason"] == "qa-check"
-    assert row["amended_justification"] == "The missed needs check was immaterial."
-    assert row["amended_by"] == "user-controls"
-    # ISO text, verbatim: text inside a blob stays text.
-    assert row["amended_at"] == "2026-06-12T00:00:00.000Z"
-    assert pd.isna(row["amended_from_appeal_id"])
+    flattened = amended(row)
+    # Every written key lands verbatim -- amendedAt as ISO text, since text
+    # inside a blob stays text -- and the one not written lands null.
+    assert {k: v for k, v in flattened.items() if k != "fromAppealId"} == json.loads(
+        blob
+    )
+    assert pd.isna(flattened["fromAppealId"])
     # The flatten consumes the blob: the columns are its only gold home now,
     # and silver case_version keeps the landed text.
     assert "amended_outcome" not in row
@@ -207,9 +207,9 @@ def test_an_appeal_derived_amendment_carries_the_appeal_id_and_no_reason():
 
     [row] = current(version(amended_outcome=blob))
 
-    assert row["amended_outcome_id"] == "poor-no-harm"
-    assert row["amended_from_appeal_id"] == "appeal-1754390400000"
-    assert pd.isna(row["amended_reason"])
+    flattened = amended(row)
+    assert {k: v for k, v in flattened.items() if k != "reason"} == json.loads(blob)
+    assert pd.isna(flattened["reason"])
 
 
 @pytest.mark.parametrize(

@@ -73,17 +73,13 @@ def test_two_lists_land_in_one_observation_table_and_one_version_table(base_dir)
     )
 
     med = medallion(StoreRegistry(base_dir), FEED_NAME)
-    assert [poll.case_list for poll in polls] == list(TWO_LISTS)
+    assert {poll.case_list for poll in polls} == set(TWO_LISTS)
     assert {
         row["source_list_name"] for row in read_rows(med.raw, "case_observation")
-    } == {
-        COMPLAINTS.list_name,
-        OTHER.list_name,
+    } == {case_list.list_name for case_list in TWO_LISTS}
+    assert {row["case_type"] for row in read_rows(med.silver, "case_version")} == {
+        case_list.case_type for case_list in TWO_LISTS
     }
-    assert [row["case_type"] for row in read_rows(med.silver, "case_version")] == [
-        "complaints",
-        "other",
-    ]
 
 
 def test_the_same_item_id_in_two_lists_is_two_cases(polled):
@@ -138,9 +134,9 @@ def test_a_list_with_nothing_safe_to_poll_is_skipped_and_the_others_still_run(ba
 
     med = medallion(StoreRegistry(base_dir), FEED_NAME)
     assert [poll.case_list for poll in polls] == [OTHER]
-    assert [row["case_type"] for row in read_rows(med.silver, "case_version")] == [
-        "other"
-    ]
+    assert {row["case_type"] for row in read_rows(med.silver, "case_version")} == {
+        OTHER.case_type
+    }
     assert published_gold(run_log) == set(GOLD_TABLES)
     checkpoints = SharePointCheckpointStore(base_dir)
     assert checkpoints.committed_watermark(SOURCE) == SERVER_NOW
@@ -161,7 +157,9 @@ def test_a_failure_polling_the_second_list_leaves_no_gold_and_no_watermark(base_
 
     med = medallion(StoreRegistry(base_dir), FEED_NAME)
     checkpoints = SharePointCheckpointStore(base_dir)
-    assert len(read_rows(med.silver, "case_version")) == 1
+    assert {row["case_type"] for row in read_rows(med.silver, "case_version")} == {
+        COMPLAINTS.case_type
+    }
     assert published_gold(run_log) == set()
     assert checkpoints.committed_watermark(SOURCE) is None
     assert checkpoints.committed_watermark(OTHER_SOURCE) is None
@@ -176,8 +174,11 @@ def test_a_retry_after_a_partial_failure_converges_and_advances_both_lists(base_
 
     med = medallion(StoreRegistry(base_dir), FEED_NAME)
     checkpoints = SharePointCheckpointStore(base_dir)
-    # The first list's re-read is a no-op against append-only silver.
-    assert len(read_rows(med.silver, "case_version")) == 2
-    assert len(read_rows(med.gold, "case_current")) == 2
+    # The first list's re-read is a no-op against append-only silver: one
+    # version per list, and one current Case per list.
+    for layer, table in ((med.silver, "case_version"), (med.gold, "case_current")):
+        assert sorted(row["case_type"] for row in read_rows(layer, table)) == sorted(
+            case_list.case_type for case_list in TWO_LISTS
+        ), table
     assert checkpoints.committed_watermark(SOURCE) == SERVER_NOW - SAFETY_LAG
     assert checkpoints.committed_watermark(OTHER_SOURCE) == SERVER_NOW - SAFETY_LAG

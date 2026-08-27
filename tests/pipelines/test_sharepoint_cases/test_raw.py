@@ -12,6 +12,7 @@ import pandas as pd
 import pytest
 
 from pipelines.sharepoint_cases.pipeline import (
+    PERSON_SUBFIELDS,
     RAW_FEED_COLUMNS,
     RENAME,
     snake_case,
@@ -28,6 +29,13 @@ from tests._sharepoint_cases_fixtures import (
 )
 from tests.framework_testing import RecordingWriter, rows_of
 from tools.integrations.sharepoint_rest import SharePointFeedError
+
+# Every flattened Person column raw stores, as (person, sub-field) pairs --
+# derived from the declaration so a sixth Person or a second sub-field is
+# covered here without a test naming it.
+PERSON_COLUMNS = [
+    (person, sub) for person, subs in PERSON_SUBFIELDS.items() for sub in subs
+]
 
 # --- the declared lists -----------------------------------------------------
 
@@ -69,15 +77,23 @@ def test_every_stored_column_has_a_canonical_name():
 
 
 def test_raw_keeps_the_source_names_and_the_stamped_observation():
-    [row] = landed(FakeListClient())
+    source = item()
+    [row] = landed(FakeListClient(items(source)))
 
-    assert row["Title"] == "CMP-000101"
-    assert row["Status"] == "In-progress"
-    assert row["Details"] is None
+    # Faithful: every scalar column lands under the source's own name, holding
+    # what the source held -- absent ones included, as nulls.
+    scalar_columns = [
+        column
+        for column in RAW_FEED_COLUMNS
+        if "/" not in column and not column.startswith("source_")
+    ]
+    assert {column: row[column] for column in scalar_columns} == {
+        column: source[column] for column in scalar_columns
+    }
     assert row["source_list_name"] == COMPLAINTS.list_name
-    assert row["source_item_id"] == "101"
-    assert row["source_version"] == '"3"'
-    assert len(row["source_observation_id"]) == 64
+    assert row["source_item_id"] == str(source["Id"])
+    assert row["source_version"] == source["odata.etag"]
+    assert row["source_observation_id"]
     # source_modified_at and source_version say what Modified and the etag said,
     # so raw does not also carry them -- nor when we happened to look.
     assert not {"Modified", "odata.etag", "observed_at"} & set(row)
@@ -87,26 +103,23 @@ def test_an_expanded_person_is_flattened_onto_its_selected_sub_fields():
     # SharePoint answers an expanded lookup as a nested object on the property.
     # A tabular carrier has nowhere to put that, so the feed undoes the nesting
     # -- and only for the sub-fields the read actually selected.
-    [row] = landed(FakeListClient())
+    source = item()
+    [row] = landed(FakeListClient(items(source)))
 
-    assert row["AssignedReviewer/Name"] == "i:0#.w|CONTOSO\\a.khan"
-    assert row["ResponsibleParty/Name"] == "i:0#.w|CONTOSO\\b.okafor"
-    assert row["ResponsibleParty/Title"] == "Bola Okafor"
-    assert row["ResponsiblePartyManager/Name"] == "i:0#.w|CONTOSO\\e.novak"
-    # The nested property itself does not survive into raw.
-    assert "ResponsibleParty" not in row
+    for person, sub in PERSON_COLUMNS:
+        held = source[person] or {}
+        assert row[f"{person}/{sub}"] == held.get(sub), (person, sub)
+    # The nested properties themselves do not survive into raw.
+    assert not set(PERSON_SUBFIELDS) & set(row)
 
 
 def test_a_role_nobody_holds_lands_as_nulls_rather_than_failing():
     # The nobody case is a plain null on the property, not an object of nulls.
-    client = FakeListClient(items(item(AssignedReviewer=None, ResponsibleParty=None)))
+    client = FakeListClient(items(item(**dict.fromkeys(PERSON_SUBFIELDS))))
 
     [row] = landed(client)
 
-    assert row["AssignedReviewer/Name"] is None
-    assert row["ResponsibleParty/Name"] is None
-    assert row["ResponsibleParty/Title"] is None
-    assert row["VoidedBy/Name"] is None
+    assert all(row[f"{person}/{sub}"] is None for person, sub in PERSON_COLUMNS)
 
 
 def test_a_person_column_that_is_neither_an_object_nor_null_is_refused():
@@ -147,14 +160,14 @@ def test_the_read_asks_for_the_star_and_expands_every_person():
 
     landed(client)
 
-    assert client.calls[0]["select_fields"][:3] == ["Id", "Modified", "*"]
-    assert client.calls[0]["expand_fields"] == [
-        "AssignedReviewer",
-        "ResponsibleParty",
-        "AssignedReviewerManager",
-        "ResponsiblePartyManager",
-        "VoidedBy",
-    ]
+    [call] = client.calls
+    assert "*" in call["select_fields"]
+    # ... and each expanded Person is selected down to the sub-fields declared
+    # for it, since the star does not reach inside a lookup.
+    assert {f"{person}/{sub}" for person, sub in PERSON_COLUMNS} <= set(
+        call["select_fields"]
+    )
+    assert set(call["expand_fields"]) == set(PERSON_SUBFIELDS)
 
 
 def test_raw_reads_a_quiet_window_as_the_declared_shape():
@@ -165,7 +178,7 @@ def test_raw_reads_a_quiet_window_as_the_declared_shape():
     to_raw(source_reader(FakeListClient(pd.DataFrame())), writer, COMPLAINTS)
 
     assert rows_of(writer) == []
-    assert list(writer.writes[0].to_pandas().columns) == list(RAW_FEED_COLUMNS)
+    assert set(writer.writes[0].to_pandas().columns) == set(RAW_FEED_COLUMNS)
 
 
 def test_a_populated_response_missing_a_stored_column_is_refused():

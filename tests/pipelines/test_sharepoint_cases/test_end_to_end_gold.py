@@ -56,17 +56,22 @@ def winning_observation(med) -> str:
 
 def test_a_poll_publishes_every_gold_table_and_then_commits_the_watermark(base_dir):
     run_log = RecordingRunLog()
+    source = item()
     [poll] = run(
         RunContext(base_dir=base_dir, pipeline=FEED_NAME, run_log=run_log),
-        client=FakeListClient(),
+        client=FakeListClient(items(source)),
     )
 
     med = medallion(StoreRegistry(base_dir), FEED_NAME)
     assert poll.window.end == SERVER_NOW - SAFETY_LAG
-    assert poll.ingestion_batch_id == f"{COMPLAINTS.list_id}:first-load"
+    # A first load's batch is named for the list it loaded.
+    assert str(COMPLAINTS.list_id) in poll.ingestion_batch_id
     assert published_gold(run_log) == set(GOLD_TABLES)
     [case] = read_rows(med.gold, "case_current")
-    assert (case["source_item_id"], case["status"]) == ("101", "In-progress")
+    assert (case["source_item_id"], case["status"]) == (
+        str(source["Id"]),
+        source["Status"],
+    )
     assert case["as_of_utc"] == (SERVER_NOW - SAFETY_LAG).isoformat()
     assert SharePointCheckpointStore(base_dir).committed_watermark(SOURCE) == (
         SERVER_NOW - SAFETY_LAG
@@ -91,23 +96,20 @@ def test_a_quiet_first_window_commits_and_publishes_every_gold_table_empty(base_
 
 
 def test_the_winning_observation_settles_gold_answer_and_drops_the_others(base_dir):
+    early = {"q1": {"value": "A"}, "q2": {"value": "X"}}
+    late = {"q1": {"value": "B"}, "q3": {"value": "Y"}}
     two_polls(
         base_dir,
-        [item(Answers=json.dumps({"q1": {"value": "A"}, "q2": {"value": "X"}}))],
-        [
-            later_item(
-                Answers=json.dumps({"q1": {"value": "B"}, "q3": {"value": "Y"}}),
-                Status="Completed",
-            )
-        ],
+        [item(Answers=json.dumps(early))],
+        [later_item(Answers=json.dumps(late), Status="Completed")],
     )
 
     med = medallion(StoreRegistry(base_dir), FEED_NAME)
     # Silver is append-only: it keeps both observations, not just the winner.
-    assert len(read_rows(med.silver, "answer")) == 4
+    assert len(read_rows(med.silver, "answer")) == len(early) + len(late)
 
     gold_answer = read_rows(med.gold, "answer")
-    assert {row["question_id"] for row in gold_answer} == {"q1", "q3"}
+    assert {row["question_id"] for row in gold_answer} == set(late)
     assert {row["source_observation_id"] for row in gold_answer} == {
         winning_observation(med)
     }
@@ -116,31 +118,22 @@ def test_the_winning_observation_settles_gold_answer_and_drops_the_others(base_d
 def test_the_winning_observation_settles_gold_general_answer_and_drops_the_others(
     base_dir,
 ):
+    early = {"general:a": {"value": "first"}, "general:b": {"value": "X"}}
+    late = {"general:a": {"value": "second"}, "general:c": {"value": "Y"}}
     two_polls(
         base_dir,
-        [
-            item(
-                Answers=json.dumps(
-                    {"general:a": {"value": "first"}, "general:b": {"value": "X"}}
-                )
-            )
-        ],
-        [
-            later_item(
-                Answers=json.dumps(
-                    {"general:a": {"value": "second"}, "general:c": {"value": "Y"}}
-                ),
-                Status="Completed",
-            )
-        ],
+        [item(Answers=json.dumps(early))],
+        [later_item(Answers=json.dumps(late), Status="Completed")],
     )
 
     med = medallion(StoreRegistry(base_dir), FEED_NAME)
     # Silver is append-only: it keeps both observations, not just the winner.
-    assert len(read_rows(med.silver, "general_answer")) == 4
+    assert len(read_rows(med.silver, "general_answer")) == len(early) + len(late)
 
     gold_general_answer = read_rows(med.gold, "general_answer")
-    assert {row["general_key"] for row in gold_general_answer} == {"a", "c"}
+    assert {row["general_key"] for row in gold_general_answer} == {
+        key.removeprefix("general:") for key in late
+    }
     assert {row["source_observation_id"] for row in gold_general_answer} == {
         winning_observation(med)
     }
@@ -250,17 +243,16 @@ def test_the_winning_observation_settles_gold_conversation_message_and_appeal(
         },
     }
 
+    early_thread, late_thread = (
+        [message_1, message_2],
+        [message_1, message_2, message_3],
+    )
     two_polls(
         base_dir,
-        [
-            item(
-                Conversation=json.dumps([message_1, message_2]),
-                Appeals=json.dumps([raised]),
-            )
-        ],
+        [item(Conversation=json.dumps(early_thread), Appeals=json.dumps([raised]))],
         [
             later_item(
-                Conversation=json.dumps([message_1, message_2, message_3]),
+                Conversation=json.dumps(late_thread),
                 Appeals=json.dumps([resolved]),
                 Status="Completed",
             )
@@ -268,21 +260,23 @@ def test_the_winning_observation_settles_gold_conversation_message_and_appeal(
     )
 
     med = medallion(StoreRegistry(base_dir), FEED_NAME)
-    assert len(read_rows(med.silver, "conversation_message")) == 5
+    assert len(read_rows(med.silver, "conversation_message")) == len(
+        early_thread
+    ) + len(late_thread)
 
     gold_messages = read_rows(med.gold, "conversation_message")
-    assert [row["seq"] for row in gold_messages] == [0, 1, 2]
+    assert [row["seq"] for row in gold_messages] == list(range(len(late_thread)))
     assert {row["source_observation_id"] for row in gold_messages} == {
         winning_observation(med)
     }
 
-    # Gold holds the Appeal once, resolved, with every resolution_* column filled.
+    # Gold holds the Appeal once, resolved, with the resolution lifted onto it.
     assert len(read_rows(med.silver, "appeal")) == 2
     [gold_appeal] = read_rows(med.gold, "appeal")
-    assert gold_appeal["appeal_id"] == "appeal-1"
-    assert gold_appeal["state"] == "resolved"
-    assert gold_appeal["resolution_verdict"] == "agreed"
-    assert gold_appeal["resolution_resolver"] == "d.reid"
+    assert gold_appeal["appeal_id"] == resolved["id"]
+    assert gold_appeal["state"] == resolved["state"]
+    for key, value in resolved["resolution"].items():
+        assert gold_appeal[f"resolution_{key}"] == value, key
 
 
 def test_the_winning_observation_settles_gold_case_detail_and_drops_the_others(
@@ -291,33 +285,19 @@ def test_the_winning_observation_settles_gold_case_detail_and_drops_the_others(
     # The composite AppendOnly key (source_observation_id, field_key) is under
     # test -- no other end-to-end test exercises this table otherwise, since
     # item()'s default Details cell falls into the absent -> None sweep.
+    early = {"complaintRef": "CMP-000101", "customerName": "Priya Shah"}
+    late = {"customerName": "Priya Shah", "sourceSystem": "legacy-crm"}
     two_polls(
         base_dir,
-        [
-            item(
-                Details=json.dumps(
-                    {"complaintRef": "CMP-000101", "customerName": "Priya Shah"}
-                )
-            )
-        ],
-        [
-            later_item(
-                Details=json.dumps(
-                    {"customerName": "Priya Shah", "sourceSystem": "legacy-crm"}
-                ),
-                Status="Completed",
-            )
-        ],
+        [item(Details=json.dumps(early))],
+        [later_item(Details=json.dumps(late), Status="Completed")],
     )
 
     med = medallion(StoreRegistry(base_dir), FEED_NAME)
-    assert len(read_rows(med.silver, "case_detail")) == 4
+    assert len(read_rows(med.silver, "case_detail")) == len(early) + len(late)
 
     gold_case_detail = read_rows(med.gold, "case_detail")
-    assert {row["field_key"] for row in gold_case_detail} == {
-        "customerName",
-        "sourceSystem",
-    }
+    assert {row["field_key"] for row in gold_case_detail} == set(late)
     assert {row["source_observation_id"] for row in gold_case_detail} == {
         winning_observation(med)
     }
@@ -349,14 +329,9 @@ def test_an_overlap_reread_does_not_double_count_gold(base_dir):
     # The overlap re-presents rows that did not change. Silver no-ops them; gold
     # must not count the Case twice either.
     context = RunContext(base_dir=base_dir, pipeline=FEED_NAME)
+    details = {"complaintRef": "CMP-000101", "customerName": "Priya Shah"}
     client = FakeListClient(
-        items(
-            item(
-                Details=json.dumps(
-                    {"complaintRef": "CMP-000101", "customerName": "Priya Shah"}
-                )
-            )
-        ),
+        items(item(Details=json.dumps(details))),
         advance=NEXT_POLL,
     )
 
@@ -372,4 +347,4 @@ def test_an_overlap_reread_does_not_double_count_gold(base_dir):
     # Proves the composite (source_observation_id, field_key) key: a wrong
     # single-column key would raise an AppendOnly conflict here instead of a
     # clean no-op.
-    assert len(read_rows(med.silver, "case_detail")) == 2
+    assert len(read_rows(med.silver, "case_detail")) == len(details)

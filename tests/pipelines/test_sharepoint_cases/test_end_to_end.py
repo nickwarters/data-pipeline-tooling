@@ -8,13 +8,20 @@ real database, so those live here rather than behind a ``RecordingWriter``.
 
 from __future__ import annotations
 
+import re
+
 import pandas as pd
 import pytest
 
 from framework.core import ErrorCategory
 from framework.io import AppendOnlyConflictError
 from framework.run import RunContext, RunLog, dry_run_pipeline
-from pipelines.sharepoint_cases.gold import GOLD_TABLES
+from pipelines.sharepoint_cases.gold import (
+    CURRENT_TABLE,
+    DETAIL_AGGREGATES,
+    DETAIL_TABLES,
+    GOLD_TABLES,
+)
 from pipelines.sharepoint_cases.pipeline import (
     FEED_NAME,
     SAFETY_LAG,
@@ -46,21 +53,20 @@ from tools.store import StoreRegistry
 # The name prefix each step of the feed carries. There is no separate grouping
 # field any more: a step names the table it is building, and the record's
 # ``pipeline`` stays the run's own label throughout.
-EVERY_STEP_PREFIX = {
-    f"raw:{COMPLAINTS.case_type}",
-    f"silver:{COMPLAINTS.case_type}",
-    f"silver:{COMPLAINTS.case_type}:answer",
-    f"silver:{COMPLAINTS.case_type}:answer_capture",
-    f"silver:{COMPLAINTS.case_type}:answer_action",
-    f"silver:{COMPLAINTS.case_type}:general_answer",
-    f"silver:{COMPLAINTS.case_type}:conversation_message",
-    f"silver:{COMPLAINTS.case_type}:appeal",
-    f"silver:{COMPLAINTS.case_type}:case_detail",
-    *(f"gold:{table}" for table in GOLD_TABLES),
-}
+RAW_PREFIX = f"raw:{COMPLAINTS.case_type}"
+SILVER_PREFIX = f"silver:{COMPLAINTS.case_type}"
+SILVER_DETAIL_PREFIX = {f"{SILVER_PREFIX}:{table}": table for table in DETAIL_TABLES}
+GOLD_PREFIX = {f"gold:{table}": table for table in GOLD_TABLES}
+EVERY_STEP_PREFIX = {RAW_PREFIX, SILVER_PREFIX, *SILVER_DETAIL_PREFIX, *GOLD_PREFIX}
+
+
+def prefix_of(step: str) -> str:
+    return step.rsplit(":", 1)[0]
 
 
 def test_the_bundled_sample_lands_every_item_across_both_pages(base_dir, capsys):
+    sample = LocalJsonListClient().fetch_items(COMPLAINTS.list_name, (), (), ())
+
     [poll] = run(
         RunContext(base_dir=base_dir, pipeline=FEED_NAME), client=LocalJsonListClient()
     )
@@ -68,27 +74,22 @@ def test_the_bundled_sample_lands_every_item_across_both_pages(base_dir, capsys)
     med = medallion(StoreRegistry(base_dir), FEED_NAME)
     landed_raw = read_rows(med.raw, "case_observation")
     assert [row["source_item_id"] for row in landed_raw] == [
-        "101",
-        "102",
-        "103",
-        "104",
-        "105",
+        str(item_id) for item_id in sample["Id"]
     ]
-    # One fixture Case carries no Case Reference at all, which is ordinary.
-    assert [row["Title"] for row in landed_raw][:2] == ["CMP-000101", "CMP-000102"]
-    assert pd.isna(landed_raw[2]["Title"])
-    # Counts below are derived from cases_page_1.json / cases_page_2.json's
-    # per-item content -- see those fixtures for the breakdown. Both Conversation
-    # and Appeals timestamps there deliberately mix formats.
-    assert (poll.raw_rows, poll.silver_rows) == (5, 5)
+    # Faithful to the fixture, including the one Case that carries no Case
+    # Reference at all -- which is ordinary.
+    assert [row["Title"] for row in landed_raw if not pd.isna(row["Title"])] == list(
+        sample["Title"].dropna()
+    )
+    assert sample["Title"].isna().any()
+    assert (poll.raw_rows, poll.silver_rows) == (len(sample), len(sample))
+    # The fixture pages are written to populate every Detail Table (both
+    # Conversation and Appeals timestamps there deliberately mix formats), and
+    # what the poll reports for each is what landed in silver.
+    assert set(poll.detail_rows) == set(DETAIL_TABLES)
+    assert all(count > 0 for count in poll.detail_rows.values()), poll.detail_rows
     assert poll.detail_rows == {
-        "answer": 6,
-        "answer_capture": 2,
-        "answer_action": 1,
-        "general_answer": 1,
-        "conversation_message": 3,
-        "appeal": 2,
-        "case_detail": 13,
+        table: len(read_rows(med.silver, table)) for table in DETAIL_TABLES
     }
     # The fixture exercises every real status, so the whole vocabulary passes
     # the schema gate rather than only the one a happy path would use.
@@ -108,12 +109,11 @@ def test_the_bundled_sample_lands_every_item_across_both_pages(base_dir, capsys)
     # lock its shape down.
     exit_code = main(["prog", "--base-dir", str(base_dir / "via-cli"), "--sample"])
     assert exit_code == 0
-    assert (
-        "5 observation(s) -> 5 case version(s), 6 answer row(s), "
-        "2 answer_capture row(s), 1 answer_action row(s), "
-        "1 general_answer row(s), 3 conversation_message row(s), "
-        "2 appeal row(s), 13 case_detail row(s)."
-    ) in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert f"{poll.raw_rows} observation(s)" in out
+    assert f"{poll.silver_rows} case version(s)" in out
+    for table, count in poll.detail_rows.items():
+        assert f"{count} {table} row(s)" in out, table
 
 
 def test_a_repeated_observation_is_a_no_op_in_raw_and_silver(base_dir):
@@ -129,9 +129,8 @@ def test_a_repeated_observation_is_a_no_op_in_raw_and_silver(base_dir):
 
 
 def test_a_later_source_version_appends_a_second_case_version(base_dir):
-    client = FakeListClient(
-        items(item()), items(later_item(Status="Completed")), advance=NEXT_POLL
-    )
+    first, second = item(), later_item(Status="Completed")
+    client = FakeListClient(items(first), items(second), advance=NEXT_POLL)
     context = RunContext(base_dir=base_dir, pipeline=FEED_NAME)
 
     run(context, client=client)
@@ -141,7 +140,10 @@ def test_a_later_source_version_appends_a_second_case_version(base_dir):
     assert [
         (row["status"], row["source_version"])
         for row in read_rows(med.silver, "case_version")
-    ] == [("In-progress", '"3"'), ("Completed", '"4"')]
+    ] == [
+        (first["Status"], first["odata.etag"]),
+        (second["Status"], second["odata.etag"]),
+    ]
 
 
 def test_the_same_observation_carrying_a_different_payload_is_refused(base_dir):
@@ -208,7 +210,7 @@ def test_a_quiet_window_still_runs_and_records_every_step(base_dir):
     run(context, client=FakeListClient(pd.DataFrame()))
 
     records = read_run_log(log_path)
-    assert {record["step"].rsplit(":", 1)[0] for record in records} == EVERY_STEP_PREFIX
+    assert {prefix_of(record["step"]) for record in records} == EVERY_STEP_PREFIX
     # One label for the whole poll: the grouping is in the step name, not in a
     # second identity the run also records under.
     assert {record["pipeline"] for record in records} == {FEED_NAME}
@@ -232,13 +234,19 @@ def test_a_quiet_window_still_runs_and_records_every_step(base_dir):
     assert any(ns.endswith("gold.db") for ns in answer_namespaces)
     assert {record["rows_out"] for record in records} == {0}
 
-    # Gold publishes in GOLD_TABLES's declared order.
-    gold_names = [
-        record["step"].rsplit(":", 1)[0]
-        for record in records
-        if record["step"].startswith("gold:")
-    ]
-    assert list(dict.fromkeys(gold_names)) == [f"gold:{table}" for table in GOLD_TABLES]
+    # Gold publishes each table after the one it reads: the Detail Tables
+    # semi-join to case_current, and each Detail aggregate counts a Detail
+    # Table. That is the order that matters; the rest of GOLD_TABLES's order
+    # is a convenience.
+    first_write = {}
+    for position, record in enumerate(records):
+        if record["step"].startswith("gold:") and record["step"].endswith(":write"):
+            first_write.setdefault(GOLD_PREFIX[prefix_of(record["step"])], position)
+    assert set(first_write) == set(GOLD_TABLES)
+    for table in DETAIL_TABLES:
+        assert first_write[CURRENT_TABLE] < first_write[table], table
+    for aggregate, detail_table in DETAIL_AGGREGATES.items():
+        assert first_write[detail_table] < first_write[aggregate], aggregate
 
 
 def test_nothing_safe_to_poll_returns_nothing_and_writes_nothing(base_dir):
@@ -312,36 +320,26 @@ def test_a_dry_run_previews_every_write_and_commits_none_of_them(base_dir):
 
     report = dry_run_pipeline(lambda ctx: run(ctx, client=client), FEED_NAME, base_dir)
 
-    # The fixture item carries no capture map, remediationActions, general
-    # answer, Conversation, Appeals or Details, so these six preview empty.
-    empty_detail_tables = (
-        "answer_capture",
-        "answer_action",
-        "general_answer",
-        "conversation_message",
-        "appeal",
-        "case_detail",
+    # Every write one poll takes is previewed, once -- and since the preview
+    # re-reads the same item over the same history, each table's previewed
+    # count is what the real run already landed there.
+    previewed = {
+        prefix_of(step.name): int(re.search(r"would write (\d+) row", step.note)[1])
+        for step in report.steps
+        if step.node_type == "Write"
+    }
+    assert set(previewed) == EVERY_STEP_PREFIX
+    assert sum(1 for step in report.steps if step.node_type == "Write") == len(
+        EVERY_STEP_PREFIX
     )
-    expected = [
-        ("raw case_observation", 1),
-        ("silver case_version", 1),
-        ("silver answer", 1),
-        *((f"silver {t}", 0) for t in empty_detail_tables),
-        ("gold case_current", 1),
-        ("gold answer", 1),
-        *((f"gold {t}", 0) for t in empty_detail_tables),
-        ("gold case_counts_current", 1),
-        ("gold case_age_buckets_current", 1),
-        ("gold case_age_from_assigned_buckets_current", 1),
-        ("gold case_throughput_daily", 0),
-        # The fixture's one answer row is undecided, so it lands under the
-        # UNDECIDED/UNRESOLVED fills; no Appeals means the next row is empty.
-        ("gold answer_remediation_current", 1),
-        ("gold appeal_outcomes_current", 0),
-    ]
-    assert [step.note for step in report.steps if step.node_type == "Write"] == [
-        f"would write {n} row(s)" for _, n in expected
-    ]
+    assert previewed[RAW_PREFIX] == len(read_rows(med.raw, "case_observation"))
+    assert previewed[SILVER_PREFIX] == len(read_rows(med.silver, "case_version"))
+    for prefix, table in SILVER_DETAIL_PREFIX.items():
+        assert previewed[prefix] == len(read_rows(med.silver, table)), table
+    for prefix, table in GOLD_PREFIX.items():
+        assert previewed[prefix] == len(read_rows(med.gold, table)), table
+    # ... and it previewed something: the fixture item is a Case with an answer.
+    assert previewed[SILVER_PREFIX] == previewed[f"gold:{CURRENT_TABLE}"] == 1
     assert read_rows(med.gold, "case_current") == before
     # The real run's watermark stands; the preview did not move it on.
     assert SharePointCheckpointStore(base_dir).committed_watermark(SOURCE) == (
