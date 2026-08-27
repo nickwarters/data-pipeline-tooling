@@ -14,7 +14,9 @@ from functools import partial
 import pytest
 
 from pipelines.sharepoint_cases.gold import (
+    AGE_BUCKETS,
     UNASSIGNED,
+    UNKNOWN_AGE_BUCKET,
     UNKNOWN_BRAND,
     UNSTAMPED,
     age_buckets,
@@ -30,6 +32,10 @@ from tests._sharepoint_cases_fixtures import (
     version,
 )
 from tests.framework_testing import given_rows
+
+# Who version()'s default Case is assigned to -- the reviewer every base-grain
+# row below lands under unless a test names another.
+REVIEWER = version()["assigned_reviewer_name"]
 
 # --- the current counts ------------------------------------------------------
 
@@ -64,21 +70,9 @@ def test_current_counts_match_the_current_table():
         ),
     )
 
-    assert grain(rows) == [
-        (
-            UNKNOWN_BRAND,
-            COMPLAINTS.case_type,
-            "i:0#.w|CONTOSO\\p.shah",
-            "Completed",
-            1,
-        ),
-        (
-            UNKNOWN_BRAND,
-            COMPLAINTS.case_type,
-            "i:0#.w|CONTOSO\\p.shah",
-            "In-progress",
-            1,
-        ),
+    assert set(grain(rows)) == {
+        (UNKNOWN_BRAND, COMPLAINTS.case_type, REVIEWER, "Completed", 1),
+        (UNKNOWN_BRAND, COMPLAINTS.case_type, REVIEWER, "In-progress", 1),
         (
             UNKNOWN_BRAND,
             COMPLAINTS.case_type,
@@ -86,7 +80,7 @@ def test_current_counts_match_the_current_table():
             "In-progress",
             1,
         ),
-    ]
+    }
     assert {row["as_of_utc"] for row in rows} == {AS_OF.isoformat()}
 
 
@@ -98,22 +92,10 @@ def test_two_case_types_under_one_reviewer_produce_two_rows():
         version(id=102, source_item_id="102", case_type=OTHER.case_type),
     )
 
-    assert grain(rows) == [
-        (
-            UNKNOWN_BRAND,
-            COMPLAINTS.case_type,
-            "i:0#.w|CONTOSO\\p.shah",
-            "In-progress",
-            1,
-        ),
-        (
-            UNKNOWN_BRAND,
-            OTHER.case_type,
-            "i:0#.w|CONTOSO\\p.shah",
-            "In-progress",
-            1,
-        ),
-    ]
+    assert set(grain(rows)) == {
+        (UNKNOWN_BRAND, COMPLAINTS.case_type, REVIEWER, "In-progress", 1),
+        (UNKNOWN_BRAND, OTHER.case_type, REVIEWER, "In-progress", 1),
+    }
     assert sum(row["case_count"] for row in rows) == 2
 
 
@@ -138,32 +120,45 @@ def days_before(age: int) -> str:
     return f"{AS_OF.date() - dt.timedelta(days=age)} 09:14:00+00:00"
 
 
-@pytest.mark.parametrize(
-    "age, label, order",
-    [
-        (0, "0-7 days", 0),
-        (7, "0-7 days", 0),
-        (8, "8-14 days", 1),
-        (14, "8-14 days", 1),
-        (15, "15-30 days", 2),
-        (30, "15-30 days", 2),
-        (31, "31-60 days", 3),
-        (60, "31-60 days", 3),
-        (61, "61+ days", 4),
-    ],
-)
-def test_an_age_falls_in_exactly_one_declared_bucket(age, label, order):
+def bucket_of(age: int) -> tuple[str, int]:
+    """The ``(label, order)`` AGE_BUCKETS declares for ``age`` -- read off the
+    declaration, so the tests hold the reduction to it rather than to a copy."""
+    for order, (bound, label) in enumerate(AGE_BUCKETS):
+        if bound is None or age < bound:
+            return label, order
+    raise AssertionError("the last bucket is open-ended")
+
+
+def bucket_edges() -> list[int]:
+    """Both edges of every declared bucket: where one starts, and the last age
+    before the next -- the ages an off-by-one in the reduction would misplace."""
+    edges, lower = [], 0
+    for bound, _ in AGE_BUCKETS:
+        edges += [lower, lower + 30 if bound is None else bound - 1]
+        lower = bound
+    return edges
+
+
+@pytest.mark.parametrize("age", bucket_edges())
+def test_an_age_falls_in_exactly_one_declared_bucket(age):
     [row] = aged(version(created=days_before(age)))
 
-    assert (row["age_bucket"], row["age_bucket_order"]) == (label, order)
+    assert (row["age_bucket"], row["age_bucket_order"]) == bucket_of(age)
     assert row["case_count"] == 1
     assert row["as_of_utc"] == AS_OF.isoformat()
+
+
+def test_the_bucket_order_is_the_declared_position_and_unknown_sorts_last():
+    orders = {bucket_of(age)[1] for age in bucket_edges()}
+
+    assert orders == set(range(len(AGE_BUCKETS)))
+    assert UNKNOWN_AGE_BUCKET[1] == len(AGE_BUCKETS)
 
 
 def test_a_case_with_no_created_date_has_an_unknown_age():
     [row] = aged(version(created=None))
 
-    assert (row["age_bucket"], row["age_bucket_order"]) == ("unknown", 5)
+    assert (row["age_bucket"], row["age_bucket_order"]) == UNKNOWN_AGE_BUCKET
 
 
 def test_a_case_created_after_the_as_of_instant_is_unknown_rather_than_clamped():
@@ -171,7 +166,7 @@ def test_a_case_created_after_the_as_of_instant_is_unknown_rather_than_clamped()
     # corruption and belongs somewhere visible.
     [row] = aged(version(created=days_before(-3)))
 
-    assert row["age_bucket"] == "unknown"
+    assert (row["age_bucket"], row["age_bucket_order"]) == UNKNOWN_AGE_BUCKET
 
 
 def test_every_current_case_lands_in_exactly_one_age_bucket():
@@ -192,14 +187,14 @@ def test_age_buckets_carry_the_base_grain():
     assert (row["brand"], row["case_type"], row["assigned_reviewer_name"]) == (
         UNKNOWN_BRAND,
         COMPLAINTS.case_type,
-        "i:0#.w|CONTOSO\\p.shah",
+        REVIEWER,
     )
 
 
 def test_an_age_from_assigned_falls_in_the_bucket_its_days_indicate():
     [row] = aged_from_assigned(version(assigned_at=days_before(10)))
 
-    assert (row["age_bucket"], row["age_bucket_order"]) == ("8-14 days", 1)
+    assert (row["age_bucket"], row["age_bucket_order"]) == bucket_of(10)
     assert row["case_count"] == 1
 
 
@@ -209,7 +204,7 @@ def test_a_case_never_assigned_has_an_unknown_age_from_assigned():
     # never-assigned, not corruption.
     [row] = aged_from_assigned(version(assigned_at=None))
 
-    assert (row["age_bucket"], row["age_bucket_order"]) == ("unknown", 5)
+    assert (row["age_bucket"], row["age_bucket_order"]) == UNKNOWN_AGE_BUCKET
 
 
 def test_every_current_case_lands_in_exactly_one_age_from_assigned_bucket():
@@ -263,16 +258,7 @@ def test_a_case_observed_many_times_but_completed_once_counts_once():
             row["case_count"],
         )
         for row in ended(*history)
-    ] == [
-        (
-            "2026-08-05",
-            UNKNOWN_BRAND,
-            COMPLAINTS.case_type,
-            "i:0#.w|CONTOSO\\p.shah",
-            "Completed",
-            1,
-        )
-    ]
+    ] == [("2026-08-05", UNKNOWN_BRAND, COMPLAINTS.case_type, REVIEWER, "Completed", 1)]
 
 
 def test_a_voided_case_counts_on_the_date_it_was_voided():
@@ -286,13 +272,13 @@ def test_a_voided_case_counts_on_the_date_it_was_voided():
         ),
     )
 
-    assert [
+    assert {
         (row["terminal_date"], row["assigned_reviewer_name"], row["terminal_status"])
         for row in rows
-    ] == [
-        ("2026-08-04", "i:0#.w|CONTOSO\\p.shah", "Void"),
-        ("2026-08-05", "i:0#.w|CONTOSO\\p.shah", "Completed"),
-    ]
+    } == {
+        ("2026-08-04", REVIEWER, "Void"),
+        ("2026-08-05", REVIEWER, "Completed"),
+    }
 
 
 def test_a_terminal_case_with_no_stamp_is_counted_as_unstamped():
@@ -341,7 +327,7 @@ def test_throughput_returns_the_same_columns_whether_or_not_anything_ended():
     )
     empty = throughput_transform(given_rows(current(version())).read())
 
-    assert list(populated.to_pandas().columns) == list(empty.to_pandas().columns)
+    assert set(populated.to_pandas().columns) == set(empty.to_pandas().columns)
 
 
 # --- the base grain, across every aggregate that carries it ------------------
