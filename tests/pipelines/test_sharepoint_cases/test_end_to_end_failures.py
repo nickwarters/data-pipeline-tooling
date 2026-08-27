@@ -102,9 +102,10 @@ def test_a_failure_in_the_last_aggregate_leaves_the_earlier_gold_and_no_checkpoi
 ):
     # Gold Writers commit independently, so an earlier table stays refreshed.
     # That is acceptable evidence: the watermark did not move, so the next run
-    # rebuilds everything from the same history and converges. appeal_outcomes
-    # is the last table GOLD_TABLES declares.
+    # rebuilds everything from the same history and converges.
     run_log = RecordingRunLog()
+    failed_table = GOLD_TABLES[-1]
+    assert failed_table == "appeal_outcomes_current", "the reduce patched below"
     monkeypatch.setattr(gold, "appeal_outcomes", explode)
 
     with pytest.raises(RuntimeError, match="boom"):
@@ -114,7 +115,8 @@ def test_a_failure_in_the_last_aggregate_leaves_the_earlier_gold_and_no_checkpoi
         )
 
     checkpoints = SharePointCheckpointStore(base_dir)
-    assert published_gold(run_log) == set(GOLD_TABLES) - {"appeal_outcomes_current"}
+    # Everything before the failure was published; the failed table was not.
+    assert published_gold(run_log) == set(GOLD_TABLES) - {failed_table}
     assert checkpoints.committed_watermark(SOURCE) is None
     assert not checkpoints.path.exists()
 
@@ -179,14 +181,18 @@ def test_a_quarantined_detail_row_is_routed_aside_rather_than_aborting_the_poll(
     assert poll.detail_rows["answer_action"] == 1
     med = medallion(StoreRegistry(base_dir), FEED_NAME)
     for layer in (med.silver, med.gold):
-        assert [row["question_id"] for row in read_rows(layer, "answer")] == ["q-good"]
-        assert [row["action_id"] for row in read_rows(layer, "answer_action")] == [
+        assert {row["question_id"] for row in read_rows(layer, "answer")} == {"q-good"}
+        assert {row["action_id"] for row in read_rows(layer, "answer_action")} == {
             "q-good-ra-0"
-        ]
-        assert [row["appeal_id"] for row in read_rows(layer, "appeal")] == ["appeal-1"]
+        }
+        assert {row["appeal_id"] for row in read_rows(layer, "appeal")} == {"appeal-1"}
 
+    # Only the two breached tables have rejects, and each names the rule.
     quarantined = quarantine_rows(base_dir)
-    assert [row["question_id"] for row in quarantined["answer"]] == ["q-bad"]
-    assert "remediation_status" in quarantined["answer"][0]["failed_rule"]
-    assert [row["appeal_id"] for row in quarantined["appeal"]] == ["appeal-2"]
-    assert "state" in quarantined["appeal"][0]["failed_rule"]
+    assert set(quarantined) == {"answer", "appeal"}
+    [bad_answer] = quarantined["answer"]
+    assert bad_answer["question_id"] == "q-bad"
+    assert "remediation_status" in bad_answer["failed_rule"]
+    [bad_appeal] = quarantined["appeal"]
+    assert bad_appeal["appeal_id"] == "appeal-2"
+    assert "state" in bad_appeal["failed_rule"]
