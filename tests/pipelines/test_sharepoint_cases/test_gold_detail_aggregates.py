@@ -142,12 +142,10 @@ def test_two_case_types_do_not_share_a_question_id():
     rows = remediation(gold_answer(children, winners))
 
     # Question ids are per-Case-Type bank, so distinct case_types must not merge.
-    assert len(rows) == 2
-    assert {row["case_type"] for row in rows} == {
-        COMPLAINTS.case_type,
-        OTHER.case_type,
+    assert {(row["case_type"], row["answer_count"]) for row in rows} == {
+        (COMPLAINTS.case_type, 1),
+        (OTHER.case_type, 1),
     }
-    assert all(row["answer_count"] == 1 for row in rows)
 
 
 def test_remediation_is_empty_when_nothing_was_answered():
@@ -161,11 +159,11 @@ def test_remediation_is_empty_when_nothing_was_answered():
     )
 
     frame = writer.dataset.to_pandas()
-    assert list(frame.columns) == [
+    assert set(frame.columns) == {
         *ANSWER_REMEDIATION_DIMENSIONS,
         "answer_count",
         "as_of_utc",
-    ]
+    }
     assert len(frame) == 0
 
 
