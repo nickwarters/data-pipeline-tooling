@@ -45,7 +45,8 @@ Nothing in the gate can see SharePoint, so column provisioning is on you and has
 to be done **before** the upload, not after.
 
 - **`AssignedAt`** (Date and Time, **indexed**) on **every Case Type list** in
-  the environment you are deploying to — the `uat_`-prefixed lists too. It is
+  the environment you are deploying to — the `uat_` / `training_`-prefixed
+  lists too. It is
   used by the Action Centre's oldest-first query and “N days in progress” wording.
   If the column is absent, assignment writes fail with **400**, and the entire
   Action Centre reason/headline read fails because its filter/order names the
@@ -78,7 +79,7 @@ Read two things in the output before going further:
 
 Then run the same command without `--dry-run`.
 
-## 3. Deploy to UAT
+## 3. Deploy to UAT, training, or any other environment
 
 ```bash
 python3 scripts/deploy_to_sharepoint.py \
@@ -86,17 +87,19 @@ python3 scripts/deploy_to_sharepoint.py \
   --env uat --dry-run
 ```
 
-`--env uat` changes three things and nothing else:
+`--env <name>` accepts any name in the script's `ENVIRONMENT_NAMES` (`prod`,
+`uat`, `training`, …) and changes three things and nothing else:
 
-- target folder `Style Library/CODE/CORA-UAT` (prod: `CODE/CORA`),
-- the `{{CORA_ENV}}` substitution in the host page becomes `uat`, which is how the
-  deployed page tells the app to use the `uat_`-prefixed lists,
-- the host page is embedded in `SitePages/uat.app.aspx` (prod:
+- target folder `Style Library/CODE/CORA-<NAME>` (prod: `CODE/CORA`),
+- the `{{CORA_ENV}}` substitution in the host page becomes `<name>`, which is
+  how the deployed page tells the app to use the `<name>_`-prefixed lists,
+- the host page is embedded in `SitePages/<name>.app.aspx` (prod:
   `SitePages/app.aspx`) — a hand-maintained Content Editor page this script never
-  touches.
+  touches. The deploy log names the page it expects.
 
 Nothing else branches on the environment: the ordering, the verification and the
-diff are identical.
+diff are identical. Standing up a _new_ environment — the lists, the page, the
+access — is the [environment provisioning guide](guide/provisioning-an-environment.md).
 
 ## 4. What the pipeline does for you
 

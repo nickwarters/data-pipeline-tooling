@@ -22,8 +22,10 @@ configured Controls, Reviewer-Manager, Adviser, Responsible-Party-Manager and
 Maintainer groups. The app fans broad-role reads across every Case Type list and
 treats a 403 as a provisioning fault rather than silently showing partial data.
 
-For UAT, provision the matching `uat_`-prefixed list and include it in the ACL
-persona matrix described in the [testing guide](testing.md#selective-security-assurance).
+For every non-production environment (`uat`, `training`, …), provision the
+matching `<name>_`-prefixed list and include it in the ACL persona matrix
+described in the [testing guide](testing.md#selective-security-assurance); the
+per-environment pieces are in [provisioning an environment](provisioning-an-environment.md).
 The pre-release smoke gate must demonstrate that the list exists for an allowed
 reader, is hidden from an unrelated persona, and denies write permissions to a
 read-only persona.
@@ -78,8 +80,9 @@ indexed before enabling allocation.
 
 ## 2. Roadmap list
 
-Provision one site-wide `Roadmap` list for the read-only Roadmap page. UAT
-requires a matching `uat_Roadmap` list; application code applies the environment
+Provision one site-wide `Roadmap` list for the read-only Roadmap page. Every
+non-production environment requires a matching `<name>_Roadmap` list
+(`uat_Roadmap`, `training_Roadmap`); application code applies the environment
 prefix centrally (ADR-0033).
 
 | Internal name | SharePoint type            | Notes                                                     |

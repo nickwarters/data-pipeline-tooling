@@ -34,25 +34,33 @@ The Content Editor's "Content Link" should point at the deployed
 `{{CORA_BASE}}` token that the deploy script expands to the target's server-relative base at upload time.
 For local development use `dev/index.html` (relative paths, `?mock=1`), not the host page.
 
-### UAT environment (ADR-0033)
+### Environments: prod, UAT, training (ADR-0033)
 
-The same source tree can be deployed to a parallel **UAT** environment on the same site —
-live SharePoint (real auth, real REST, no `?mock=1`), but fully isolated from production:
+The same source tree is deployed once per **environment** on the same site — live
+SharePoint (real auth, real REST, no `?mock=1`), each fully isolated from the others:
 
-- **Code**: `python3 scripts/deploy_to_sharepoint.py --site-url <url> --env uat` syncs to
-  `Style Library/CODE/CORA-UAT` instead of `CODE/CORA`.
-- **Host page**: a separate page (e.g. `SitePages/uat.app.aspx`) whose Content Editor points at
-  the UAT copy's `host/index.html`. The deploy expands the host page's `{{CORA_ENV}}` token to
-  `uat` (`prod` for prod deploys), which the app reads back as `window.CORA_ENV` — the deployed
-  host page itself declares its environment; no query params.
-- **Data**: on UAT every Case list name is prefixed (`uat_Cases-ExampleReview`,
-  `uat_complaints`, …), and Question Bank text artifacts plus versioned exports are read
-  from `Style Library/case-review-uat/case-types`. Production lists and exports are untouched.
+| Environment | `--env`    | Code folder                        | Host page                     | Lists              |
+| ----------- | ---------- | ---------------------------------- | ----------------------------- | ------------------ |
+| prod        | `prod`     | `Style Library/CODE/CORA`          | `SitePages/app.aspx`          | unprefixed         |
+| UAT         | `uat`      | `Style Library/CODE/CORA-UAT`      | `SitePages/uat.app.aspx`      | `uat_Cases-…`      |
+| training    | `training` | `Style Library/CODE/CORA-TRAINING` | `SitePages/training.app.aspx` | `training_Cases-…` |
 
-One-off manual setup per environment: create the UAT `.aspx` page and its Content Editor link,
-and create each `uat_*` list with the same schema as its prod counterpart (adding a new list
-later means adding its `uat_*` copy too). A fixed "UAT environment" banner renders at boot on
-any non-prod environment.
+- **Code**: `python3 scripts/deploy_to_sharepoint.py --site-url <url> --env <name>` syncs to
+  the environment's folder.
+- **Host page**: one hand-made page per environment whose Content Editor points at that
+  copy's `host/index.html`. The deploy expands the host page's `{{CORA_ENV}}` token to the
+  environment name, which the app reads back as `window.CORA_ENV` — the deployed host page
+  itself declares its environment; no query params.
+- **Data**: outside prod every list name is prefixed with `<name>_`. Question Bank text
+  artifacts ship inside each code folder, so every environment reads its own. Production
+  lists and artifacts are untouched.
+
+The environment names are one table, `ENVIRONMENT_NAMES`, declared in
+`src/config/environment.js` and `scripts/deploy_to_sharepoint.py` (a test holds the two
+equal); the folder, page and prefix all follow from the name. Adding an environment is one
+entry in each plus the SharePoint setup in the
+[environment provisioning guide](docs/guide/provisioning-an-environment.md). A fixed
+"`<NAME>` environment" banner renders at boot on any non-prod environment.
 
 ## Testing
 

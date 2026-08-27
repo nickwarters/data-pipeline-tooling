@@ -51,9 +51,32 @@ SCRIPT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LIBRARY = "Style Library"
 DEFAULT_TARGET_FOLDER = "CODE/CORA"
 
-# Per-environment default target folders (ADR-0033). Each environment is a
-# fully independent code copy; `--target-folder` still overrides either.
-ENV_TARGET_FOLDERS = {"prod": DEFAULT_TARGET_FOLDER, "uat": "CODE/CORA-UAT"}
+# The environments the app can be deployed as (ADR-0033). Prod first; every
+# other name is a non-production copy on the same site. This list must match
+# `ENVIRONMENT_NAMES` in `src/config/environment.js` — a test holds the two
+# equal — and adding an environment means adding it to both, then provisioning
+# it per `docs/guide/provisioning-an-environment.md`.
+PROD_ENV = "prod"
+ENVIRONMENT_NAMES = (PROD_ENV, "uat", "training")
+
+
+def target_folder_for(env: str) -> str:
+    """The default code folder for ``env``: ``CODE/CORA`` for prod, otherwise
+    ``CODE/CORA-<NAME>`` — the one convention every environment follows."""
+    return DEFAULT_TARGET_FOLDER if env == PROD_ENV else f"{DEFAULT_TARGET_FOLDER}-{env.upper()}"
+
+
+def host_page_for(env: str) -> str:
+    """The hand-maintained Content Editor page that embeds ``env``'s host
+    page: ``SitePages/app.aspx`` for prod, ``SitePages/<name>.app.aspx``
+    otherwise. This script never writes it; it is named here so the deploy log
+    and the runbooks spell it the same way."""
+    return "SitePages/app.aspx" if env == PROD_ENV else f"SitePages/{env}.app.aspx"
+
+
+# Per-environment default target folders. Each environment is a fully
+# independent code copy; `--target-folder` still overrides any of them.
+ENV_TARGET_FOLDERS = {env: target_folder_for(env) for env in ENVIRONMENT_NAMES}
 
 # The deployable runtime tree. There is no build step, so source JS is deployed
 # JS. These roots deliberately exclude dev/, tests/, docs/,
@@ -85,9 +108,9 @@ TEMPLATED_SUFFIXES = (".html", ".aspx")
 # and the base embeds the site name, which is only known at deploy time.
 HOST_BASE_TOKEN = "{{CORA_BASE}}"
 
-# Placeholder in host HTML for the environment name ('prod' or 'uat'). The
-# deployed host page is what declares its environment (ADR-0033): the app reads
-# it back as `window.CORA_ENV` and derives the list prefix and export path.
+# Placeholder in host HTML for the environment name (one of ENVIRONMENT_NAMES).
+# The deployed host page is what declares its environment (ADR-0033): the app
+# reads it back as `window.CORA_ENV` and derives the list prefix from it.
 ENV_TOKEN = "{{CORA_ENV}}"
 
 # The repository's own gate, spelled exactly as the runbook spells it so the two
@@ -678,21 +701,21 @@ def parse_args(argv: list[str]) -> DeployOptions:
     )
     parser.add_argument(
         "--env",
-        choices=sorted(ENV_TARGET_FOLDERS),
-        default="prod",
+        choices=ENVIRONMENT_NAMES,
+        default=PROD_ENV,
         help=(
             "Deployment environment (ADR-0033). Picks the default target "
             "folder and the {{CORA_ENV}} substitution in host HTML. "
-            'Defaults to "prod".'
+            f'Defaults to "{PROD_ENV}".'
         ),
     )
     parser.add_argument(
         "--target-folder",
         default=None,
         help=(
-            "Folder within the library. Defaults to the environment's folder "
-            f"({DEFAULT_TARGET_FOLDER} for prod, "
-            f"{ENV_TARGET_FOLDERS['uat']} for uat)."
+            "Folder within the library. Defaults to the environment's folder ("
+            + ", ".join(f"{folder} for {env}" for env, folder in ENV_TARGET_FOLDERS.items())
+            + ")."
         ),
     )
     parser.add_argument(
@@ -772,7 +795,10 @@ def _deploy(opts: DeployOptions, client_factory, preflight, log) -> int:
 
     target = f"{opts.library}/{opts.target_folder}"
     cora_base = server_relative_base(opts.site_url, opts.library, opts.target_folder)
-    log(f"Deploy target: {opts.site_url} -> {target} (env: {opts.env})")
+    log(
+        f"Deploy target: {opts.site_url} -> {target} "
+        f"(env: {opts.env}, host page: {host_page_for(opts.env)})"
+    )
     log(f"Host asset base ({HOST_BASE_TOKEN}): {cora_base}")
 
     local = render_templated_files(

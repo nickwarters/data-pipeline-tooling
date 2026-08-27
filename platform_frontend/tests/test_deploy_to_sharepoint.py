@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -18,6 +19,10 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import deploy_to_sharepoint  # noqa: E402
 from deploy_to_sharepoint import (  # noqa: E402
+    ENVIRONMENT_NAMES,
+    SCRIPT_ROOT,
+    host_page_for,
+    target_folder_for,
     BANKS_DIR,
     BANK_ARTIFACT_SUFFIX,
     DEFAULT_INCLUDE_ROOTS,
@@ -58,6 +63,39 @@ class ParseArgsEnvTest(unittest.TestCase):
     def test_explicit_target_folder_overrides_the_env_default(self) -> None:
         opts = parse_args(SITE + ["--env", "uat", "--target-folder", "CODE/X"])
         self.assertEqual(opts.target_folder, "CODE/X")
+
+    def test_training_env_follows_the_same_folder_convention(self) -> None:
+        opts = parse_args(SITE + ["--env", "training"])
+        self.assertEqual(opts.env, "training")
+        self.assertEqual(opts.target_folder, "CODE/CORA-TRAINING")
+
+    def test_every_environment_derives_its_folder_and_host_page_by_convention(
+        self,
+    ) -> None:
+        self.assertEqual(ENVIRONMENT_NAMES[0], "prod")
+        self.assertEqual(target_folder_for("prod"), "CODE/CORA")
+        self.assertEqual(host_page_for("prod"), "SitePages/app.aspx")
+        for env in ENVIRONMENT_NAMES[1:]:
+            self.assertEqual(target_folder_for(env), f"CODE/CORA-{env.upper()}")
+            self.assertEqual(host_page_for(env), f"SitePages/{env}.app.aspx")
+            self.assertEqual(parse_args(SITE + ["--env", env]).target_folder,
+                             target_folder_for(env))
+
+    def test_environment_names_match_the_app_resolver(self) -> None:
+        # The app (src/config/environment.js) and this script each declare the
+        # environment list; a deploy of a name the app does not know would land
+        # in its own folder yet silently run against prod's lists.
+        source = (SCRIPT_ROOT / "src" / "config" / "environment.js").read_text()
+        match = re.search(
+            r"ENVIRONMENT_NAMES = Object\.freeze\(\[(.*?)\]\)", source, re.S
+        )
+        assert match is not None
+        names = re.findall(r"'([a-z0-9]+)'", match.group(1))
+        self.assertEqual(
+            ("prod", *names), ENVIRONMENT_NAMES,
+            "src/config/environment.js and scripts/deploy_to_sharepoint.py "
+            "disagree on the environment list",
+        )
 
     def test_unknown_env_is_rejected(self) -> None:
         with self.assertRaises(SystemExit):

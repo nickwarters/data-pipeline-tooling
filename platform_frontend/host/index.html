@@ -31,10 +31,11 @@
   <body>
     <div id="app" data-cora-root></div>
     <!--
-      {{CORA_ENV}} is substituted at deploy time ('prod' or 'uat') — the
-      deployed host page is what declares its environment (ADR-0033). The app
-      reads window.CORA_ENV via src/config/environment.js; anything other than
-      'uat' (including an unsubstituted token) resolves to prod.
+      {{CORA_ENV}} is substituted at deploy time with the environment name
+      ('prod', 'uat', 'training', ...) — the deployed host page is what
+      declares its environment (ADR-0033). The app reads window.CORA_ENV via
+      src/config/environment.js; any name not in its ENVIRONMENT_NAMES
+      (including an unsubstituted token) resolves to prod.
     -->
     <script>
       window.CORA_ENV = '{{CORA_ENV}}';
