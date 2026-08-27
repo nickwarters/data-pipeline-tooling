@@ -29,6 +29,7 @@ from pipelines.sharepoint_cases.pipeline import (
     to_silver_general_answer,
 )
 from pipelines.sharepoint_cases.schema import (
+    DETAIL_ID_VARS,
     AnswerCaptureRow,
     AnswerRow,
     AppealRow,
@@ -87,13 +88,15 @@ silver_appeals = partial(exploded, to_silver_appeal, "appeals")
 silver_case_details = partial(exploded, to_silver_case_detail, "details")
 
 
-# What ``version()``'s defaults say about the observation every child came from.
+# What ``version()``'s defaults say about the observation every child came from:
+# the declared id vars, in the type each reaches a Detail Table as (the batch
+# arrives typed, so the parent's modified instant is a Timestamp, not text).
+PARENT = version()
 STAMPS = {
-    "case_type": COMPLAINTS.case_type,
-    "source_item_id": "101",
-    "source_version": '"3"',
-    # A str declaration would abort here if this arrived untyped.
-    "source_modified_at": pd.Timestamp("2026-08-05 08:10:00+00:00"),
+    column: pd.Timestamp(PARENT[column])
+    if column == "source_modified_at"
+    else PARENT[column]
+    for column in DETAIL_ID_VARS
 }
 
 
@@ -107,9 +110,7 @@ def assert_carries_the_five_stamps(rows: list[dict], row_type: type) -> None:
     assert rows
     for row in rows:
         assert set(row) == {field.name for field in fields(row_type)}
-        for column, expected in STAMPS.items():
-            assert row[column] == expected
-        assert len(row["source_observation_id"]) > 0
+        assert {column: row[column] for column in STAMPS} == STAMPS
 
 
 # --- answer ------------------------------------------------------------------
@@ -356,28 +357,29 @@ def test_an_array_general_answer_is_canonicalised_rather_than_refused():
 
 
 def test_a_conversation_becomes_one_row_per_message_carrying_the_five_stamps():
-    rows = silver_conversation_messages(
-        json.dumps(
-            [
-                {
-                    "author": {"loginName": "a.khan", "displayName": "Amira Khan"},
-                    "timestamp": "2026-08-04T16:02:00Z",
-                    "body": "Please confirm the call date.",
-                },
-                {
-                    "author": {"loginName": "b.okafor", "displayName": "Bola Okafor"},
-                    "timestamp": "2026-08-04T18:47:12.000Z",
-                    "body": "Confirmed -- the call was on the 30th.",
-                },
-            ]
-        )
-    )
+    messages = [
+        {
+            "author": {"loginName": "a.khan", "displayName": "Amira Khan"},
+            "timestamp": "2026-08-04T16:02:00Z",
+            "body": "Please confirm the call date.",
+        },
+        {
+            "author": {"loginName": "b.okafor", "displayName": "Bola Okafor"},
+            "timestamp": "2026-08-04T18:47:12.000Z",
+            "body": "Confirmed -- the call was on the 30th.",
+        },
+    ]
 
-    assert [row["seq"] for row in rows] == [0, 1]
+    rows = silver_conversation_messages(json.dumps(messages))
+
+    # seq is the message's position in the list -- the only key it has.
+    assert [row["seq"] for row in rows] == list(range(len(messages)))
     # author is a nested object, lifted by two dotted paths rather than landed
     # as a JSON blob.
-    assert rows[0]["author_login"] == "a.khan"
-    assert rows[0]["author_display_name"] == "Amira Khan"
+    for row, message in zip(rows, messages):
+        assert row["author_login"] == message["author"]["loginName"]
+        assert row["author_display_name"] == message["author"]["displayName"]
+        assert row["body"] == message["body"]
     assert_carries_the_five_stamps(rows, ConversationMessageRow)
 
 
@@ -395,10 +397,11 @@ def test_an_appeal_becomes_one_row_keyed_by_its_own_id_with_appeal_seq():
 def test_an_unresolved_appeal_carries_nulls_in_every_resolution_column():
     [row] = silver_appeals(json.dumps([appeal(state="raised")]))
 
-    assert row["resolution_verdict"] is None
-    assert row["resolution_rationale"] is None
-    assert row["resolution_resolver"] is None
-    assert row["resolution_at"] is None
+    resolution_columns = [
+        f.name for f in fields(AppealRow) if f.name.startswith("resolution_")
+    ]
+    assert resolution_columns
+    assert all(row[column] is None for column in resolution_columns)
 
 
 def test_cited_answer_keys_is_json_text_null_only_when_the_key_is_omitted():
@@ -458,19 +461,25 @@ def test_an_empty_details_map_survives_every_step_as_a_zero_row_frame():
 
 
 @pytest.mark.parametrize(
-    "value, expected",
+    "value",
     [
-        pytest.param(3, "3", id="an-int"),
-        pytest.param(1.5, "1.5", id="a-float"),
-        pytest.param(True, "true", id="a-bool"),
-        pytest.param({"n": 1}, '{"n": 1}', id="an-object"),
-        pytest.param(["x"], '["x"]', id="an-array"),
-        pytest.param(None, None, id="a-json-null"),
+        pytest.param(3, id="an-int"),
+        pytest.param(1.5, id="a-float"),
+        pytest.param(True, id="a-bool"),
+        pytest.param({"n": 1}, id="an-object"),
+        pytest.param(["x"], id="an-array"),
     ],
 )
-def test_a_non_string_detail_value_lands_as_its_json_encoding(value, expected):
+def test_a_non_string_detail_value_lands_as_its_json_encoding(value):
     # Without encode_detail_value, the int/float/bool arms land value_text as
     # a non-string dtype and abort at SchemaValidator's is_string_dtype check.
     [row] = silver_case_details(json.dumps({"k": value}))
 
-    assert row["value_text"] == expected
+    assert isinstance(row["value_text"], str)
+    assert json.loads(row["value_text"]) == value
+
+
+def test_a_json_null_detail_value_lands_as_a_null_not_the_text_null():
+    [row] = silver_case_details(json.dumps({"k": None}))
+
+    assert row["value_text"] is None
