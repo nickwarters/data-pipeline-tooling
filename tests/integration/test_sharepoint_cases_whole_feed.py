@@ -2,7 +2,7 @@
 driven through the real `run()` over one fixture Case with every nest
 populated, polled twice.
 
-Proves what `tests/pipelines/test_sharepoint_cases.py`'s per-step suites
+Proves what the per-step suites in `tests/pipelines/test_sharepoint_cases/`
 cannot: that every gold Detail Table agrees on the one winning observation for
 one Case, all at once.
 
@@ -12,7 +12,6 @@ feed exists to join against yet.
 
 from __future__ import annotations
 
-import datetime as dt
 import json
 
 import pandas as pd
@@ -26,15 +25,17 @@ from pipelines.sharepoint_cases.gold import (
     UNKNOWN_BRAND,
 )
 from pipelines.sharepoint_cases.pipeline import FEED_NAME, run
-from pipelines.sharepoint_cases.schema import CASE_LISTS
-from tests._sharepoint_cases_fixtures import FakeListClient, item
+from tests._sharepoint_cases_fixtures import (
+    COMPLAINTS,
+    NEXT_POLL,
+    SERVER_NOW,
+    FakeListClient,
+    item,
+    later_item,
+)
 from tests.framework_testing import read_rows
 from tools.medallion import medallion
 from tools.store import StoreRegistry
-
-COMPLAINTS = CASE_LISTS[0]
-SERVER_NOW = dt.datetime(2026, 8, 5, 9, 0, 0, tzinfo=dt.timezone.utc)
-NEXT_POLL = dt.timedelta(minutes=10)
 
 ANSWERS_1 = {
     "q-outcome": {"value": "Not upheld"},
@@ -128,7 +129,7 @@ APPEALS_2 = APPEALS_1
 DETAILS_2 = {**DETAILS_1, "resolutionNote": "Retraining completed."}
 AMENDED_OUTCOME_2 = {"outcome": "Upheld", "hadRemediation": True}
 
-LATER = item(
+LATER = later_item(
     Status="Completed",
     CompletedAt="2026-08-05T08:45:00Z",
     ReportableAt="2026-08-05T08:45:00Z",
@@ -138,8 +139,6 @@ LATER = item(
     AmendedOutcome=json.dumps(AMENDED_OUTCOME_2),
     Details=json.dumps(DETAILS_2),
 )
-LATER["Modified"] = "2026-08-05T08:45:00Z"
-LATER["odata.etag"] = '"4"'
 
 
 def _question_ids(answers: dict) -> list[str]:

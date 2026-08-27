@@ -90,7 +90,8 @@ and each keeps its own watermark, so these shapes are per list. Four of them:
   investigation, not a rerun.
 
 The convergence is already proven; see the failure and retry tests in
-`tests/pipelines/test_sharepoint_cases.py` rather than re-establishing it by hand.
+`tests/pipelines/test_sharepoint_cases/test_end_to_end_failures.py` (one list) and
+`test_end_to_end_lists.py` (several) rather than re-establishing it by hand.
 
 The window rule itself — `window is None`, first load, overlap, safety lag,
 commit-is-last, and where the checkpoint file lives — is at
