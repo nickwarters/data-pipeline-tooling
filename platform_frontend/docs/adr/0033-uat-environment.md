@@ -4,7 +4,8 @@ Date: 2026-07-14
 
 ## Status
 
-Accepted
+Accepted. Amended 2026-08-27: the two-environment model became a table of
+environments — see "Amendment" below.
 
 Extends ADR-0021 (versioned Question Bank exports) and the hosting model in
 the README (Style Library + Content Editor host page).
@@ -95,3 +96,30 @@ with prod — client-side checks remain UX-only (ADR-0007-style boundary); the
   would silently escape the environment scoping.
 - Anyone adding a new SharePoint list must also create its `uat_*` copy for
   UAT to keep working.
+
+## Amendment (2026-08-27): environments are a table, not a pair
+
+A third environment, `training`, was needed and the model above already
+described it — nothing about UAT was specific to UAT except the literal
+`'uat'` spelled in the resolver, the deploy script and the tests. The decision
+is therefore generalised rather than extended:
+
+- An environment is a **name**. Prod is the unprefixed baseline; for any other
+  name `<name>` the three pieces follow one convention — code folder
+  `CODE/CORA-<NAME>`, host page `SitePages/<name>.app.aspx`, list prefix
+  `<name>_`.
+- The names are declared in exactly two places, `ENVIRONMENT_NAMES` in
+  `src/config/environment.js` and in `scripts/deploy_to_sharepoint.py`, and a
+  test holds the two lists equal. Everything else derives from the name;
+  nothing else in the codebase names an environment.
+- `resolveEnvironment()` resolves any name **not** in the table to prod, so
+  an unsubstituted token and the dev loop behave as before — and so a host
+  page declaring a name the deployed app does not know runs against prod's
+  lists. The name must be released before it is deployed.
+- The badge (`src/setup/uat-banner.js`) already rendered for any non-prod
+  environment from `env.name`; it keeps its file name.
+
+What is still manual per environment — lists, host page, ACLs — is written up
+once in `docs/guide/provisioning-an-environment.md`. The alternative above (a
+separate subsite per environment) stands as the thing to revisit if that
+per-environment chore becomes the dominant cost of a release.

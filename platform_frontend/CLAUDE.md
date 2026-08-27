@@ -84,7 +84,7 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   primitive owns writes; views never call `fetch` directly.
 - **Mock-first dev loop**. All REST goes through a `SharePointClient` interface. `?mock=1` URL param swaps in `MockSharePointClient` from `dev/fixtures/`; the Report Feed loader also fetches its canonical fixture under that flag. The mock client and its fixtures stay behind gated dynamic imports, and the loader's dev-only URL is never used outside mock mode — `dev/` is not deployed. `HttpSharePointClient` is a static import. `node --test` for unit tests.
 - **Auth: browser NTLM/Kerberos; security via SharePoint list permissions**. Client-side group checks are UX-only; the real boundary is SharePoint's list ACLs.
-- **Two live environments: prod and UAT (ADR-0033)**. Same source tree, deployed twice: prod at `Style Library/CODE/CORA` + `SitePages/app.aspx` + unprefixed lists; UAT at `CODE/CORA-UAT` + `SitePages/uat.app.aspx` + `uat_`-prefixed lists (`deploy_to_sharepoint.py --env uat`). The deployed host page declares its environment via the `{{CORA_ENV}}` token → `window.CORA_ENV`; `src/config/environment.js` is the only place that resolves it, and `HttpSharePointClient` applies the list prefix centrally. Never branch on the environment name elsewhere.
+- **Several live environments on one site: prod, UAT, training (ADR-0033)**. Same source tree, deployed once per environment: prod at `Style Library/CODE/CORA` + `SitePages/app.aspx` + unprefixed lists; every other environment `<name>` at `CODE/CORA-<NAME>` + `SitePages/<name>.app.aspx` + `<name>_`-prefixed lists (`deploy_to_sharepoint.py --env <name>`). The names live in `ENVIRONMENT_NAMES` in `src/config/environment.js` and `scripts/deploy_to_sharepoint.py` — a test holds the two equal — and everything else is derived by that one convention, so adding an environment is one entry in each plus the SharePoint work in `docs/guide/provisioning-an-environment.md`. The deployed host page declares its environment via the `{{CORA_ENV}}` token → `window.CORA_ENV`; `src/config/environment.js` is the only place that resolves it (an unknown name resolves to prod), and `HttpSharePointClient` applies the list prefix centrally. Never branch on the environment name elsewhere.
 
 ## Hard rules
 
@@ -375,7 +375,7 @@ src/
       cora-case-tabs.js           # pure Question Bank Case Type tab bar
 
   config/
-    environment.js              # ADR-0033: the only resolver of window.CORA_ENV (prod vs uat)
+    environment.js              # ADR-0033: the only resolver of window.CORA_ENV; ENVIRONMENT_NAMES table
     features.js                 # hard-coded feature switches (APPEALS_ENABLED = false). Enabling one
                                 #   means DELETING the constant and every `if` reading it, never
                                 #   flipping it to true — see docs/guide/feature-switches.md
@@ -521,7 +521,7 @@ src/
     register-routes.js            # routeTable(): THE list of hash routes + the page module behind each
                                   #   one, statically imported — bar the Question Bank editor's thunk
     resolve-eligible-case-types.js  # per-slug Case Type containment + the app-wide eligibility rule
-    uat-banner.js                 # ADR-0033 UAT-only environment badge; renders nothing on prod
+    uat-banner.js                 # ADR-0033 non-prod environment badge (UAT, training, …); renders nothing on prod
 
   styles/
     cora-design-tokens.css
