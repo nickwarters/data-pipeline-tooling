@@ -117,9 +117,9 @@ def _rows(dataset: Dataset) -> list[dict[str, object]]:
 
 
 def test_as_of_is_the_latest_record_or_none_for_an_empty_registry():
-    assert metrics.as_of_of(given_rows(RECORDS).read()) == AS_OF
+    assert metrics.latest_instant(given_rows(RECORDS).read()) == AS_OF
     empty = Dataset.from_pandas(pd.DataFrame(columns=list(metrics.RECORD_COLUMNS)))
-    assert metrics.as_of_of(empty) is None
+    assert metrics.latest_instant(empty) is None
 
 
 def test_run_summary_is_one_row_per_run_ranked_within_its_logical_run():

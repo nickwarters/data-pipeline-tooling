@@ -119,9 +119,9 @@ on the counts) before it is written.
 
 - Nothing is quarantined: the source is the registry, whose shape is derived
   from the one field declaration the run log writes from.
-- The read is gated by a `ColumnValidator` on the record columns the
-  reductions use, so a registry the reductions cannot read fails the run with
-  the column named.
+- Each step's read is gated by a `ColumnValidator` on the record columns the
+  reductions use, so a registry the reductions cannot read fails that step
+  with the column named.
 - The reductions read the registry's *stored* forms (`warn_hits` as JSON text,
   `committed` as 0/1) directly rather than through `RunRegistry`'s decode; a
   `warn_hits` value that is not a JSON list counts as no hits.

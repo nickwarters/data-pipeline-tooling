@@ -4,8 +4,9 @@ Reads the base directory's run registry -- after catching it up with every
 run log, so a run recorded under any subject is visible -- and refreshes three
 Aggregate tables in this subject's own gold: one row per run, step durations
 per day against their recent past, and the row funnel per step per run. The
-reductions are in ``metrics``; this module only wires the reader and writers
-around them with the eager steps.
+reductions are in ``metrics``; each ``to_*`` step here reads the registry,
+reduces, validates and writes one table, and ``run`` only hands each step its
+Reader and Writer.
 
 Where the registry lives is ``RunStore``'s to say (``tools.observability``),
 the same way ``tools.store`` says where data lives; this pipeline names
@@ -20,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from functools import partial
 from pathlib import Path
 
 import pandas as pd
@@ -28,10 +30,11 @@ from framework.core import (
     ColumnValidator,
     Dataset,
     PipelineError,
+    Reader,
     SchemaValidator,
     format_failure,
 )
-from framework.io import DatasetReader, Refresh, SqliteReader
+from framework.io import DatasetReader, Refresh, SqliteReader, Writer
 from framework.run import RunContext, read, run_pipeline, transform, validate, write
 from tools.medallion import medallion
 from tools.observability import timestamps
@@ -39,7 +42,6 @@ from tools.observability.run_store import RunStore
 from tools.store import StoreRegistry
 
 from . import metrics, schema
-from .schema import SUBJECT
 
 PIPELINE_NAME = "pipeline_run_metric"
 UPSTREAMS = ()
@@ -70,37 +72,72 @@ def run_records_reader(base_dir) -> SqliteReader | DatasetReader:
     return SqliteReader(store.registry_path, RUN_RECORDS_TABLE)
 
 
-def run(context: RunContext) -> Dataset:
-    output = medallion(StoreRegistry(context.base_dir), SUBJECT)
+def _records(reader: Reader, at: str, fallback_as_of: str) -> tuple[Dataset, str]:
+    """Read the registry, gate it, and settle the instant the table is stamped with.
 
-    records = read(run_records_reader(context.base_dir), name="read:run_records")
+    A registry with nothing in it has no latest record to date the table by;
+    the run's own clock stands in, and the table is empty.
+    """
+    records = read(reader, name=f"{at}:read")
     validate(
-        ColumnValidator(list(metrics.RECORD_COLUMNS)),
-        records,
-        name="validate:run_records",
+        ColumnValidator(list(metrics.RECORD_COLUMNS)), records, name=f"{at}:columns"
     )
-    # A registry with nothing in it has no latest record to date the tables
-    # by; the run's own clock stands in, and the tables are empty.
-    as_of = metrics.as_of_of(records) or timestamps.utc_now_iso()
+    return records, metrics.latest_instant(records) or fallback_as_of
 
-    result = records
-    for table, contract, reduce in (
-        ("pipeline_run_summary", schema.PipelineRunSummary, metrics.run_summary),
-        (
-            "step_duration_trend_daily",
-            schema.StepDurationTrendDaily,
-            metrics.step_duration_trend,
-        ),
-        ("step_row_flow", schema.StepRowFlow, metrics.step_row_flow),
-    ):
-        result = transform(
-            lambda data, reduce=reduce: reduce(data, as_of=as_of),
-            records,
-            name=f"reduce:{table}",
-        )
-        validate(SchemaValidator(contract), result, name=f"validate:{table}")
-        write(output.gold.writer(table, Refresh()), result, name=f"write:{table}")
-    return result
+
+def to_run_summary(reader: Reader, writer: Writer, fallback_as_of: str) -> Dataset:
+    at = "run_summary"
+    records, as_of = _records(reader, at, fallback_as_of)
+    data = transform(
+        partial(metrics.run_summary, as_of=as_of), records, name=f"{at}:reduce"
+    )
+    validate(SchemaValidator(schema.PipelineRunSummary), data, name=f"{at}:validate")
+    return write(writer, data, name=f"{at}:write")
+
+
+def to_step_duration_trend(
+    reader: Reader, writer: Writer, fallback_as_of: str
+) -> Dataset:
+    at = "step_duration_trend"
+    records, as_of = _records(reader, at, fallback_as_of)
+    data = transform(
+        partial(metrics.step_duration_trend, as_of=as_of),
+        records,
+        name=f"{at}:reduce",
+    )
+    validate(
+        SchemaValidator(schema.StepDurationTrendDaily), data, name=f"{at}:validate"
+    )
+    return write(writer, data, name=f"{at}:write")
+
+
+def to_step_row_flow(reader: Reader, writer: Writer, fallback_as_of: str) -> Dataset:
+    at = "step_row_flow"
+    records, as_of = _records(reader, at, fallback_as_of)
+    data = transform(
+        partial(metrics.step_row_flow, as_of=as_of), records, name=f"{at}:reduce"
+    )
+    validate(SchemaValidator(schema.StepRowFlow), data, name=f"{at}:validate")
+    return write(writer, data, name=f"{at}:write")
+
+
+def run(context: RunContext) -> Dataset:
+    """Build each table in publication order.
+
+    The registry Reader is minted once -- catching the registry up once -- and
+    handed to each ``to_*`` step with the Writer for its table; every step reads
+    what it needs, gates it, reduces, validates and writes. One ``now`` is taken
+    here so three empty tables carry the same stamp.
+    """
+    gold = medallion(StoreRegistry(context.base_dir), schema.SUBJECT).gold
+    records = run_records_reader(context.base_dir)
+    now = timestamps.utc_now_iso()
+
+    to_run_summary(records, gold.writer("pipeline_run_summary", Refresh()), now)
+    to_step_duration_trend(
+        records, gold.writer("step_duration_trend_daily", Refresh()), now
+    )
+    return to_step_row_flow(records, gold.writer("step_row_flow", Refresh()), now)
 
 
 def main(argv: list[str]) -> int:

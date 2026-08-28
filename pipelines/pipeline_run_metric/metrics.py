@@ -60,7 +60,7 @@ RECORD_COLUMNS = (
 # --- shared helpers ---------------------------------------------------------
 
 
-def as_of_of(records: Dataset) -> str | None:
+def latest_instant(records: Dataset) -> str | None:
     """The latest record timestamp, or None for an empty registry."""
     frame = records.to_pandas()
     if frame.empty:
