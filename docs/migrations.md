@@ -279,7 +279,8 @@ dataclass without a migration beside it?* Two things to know when answering that
 
 ## Which subjects are under migration control
 
-Three, today: `sharepoint_cases`, `reviewer_activity` and `notifications`.
+Four, today: `sharepoint_cases`, `reviewer_activity`, `notifications` and
+`cora_platform_metric`.
 Everything else under `pipelines/` is a demonstration or example that only ever
 writes into a `tmp_path` inside tests, and keeps implicit table creation.
 

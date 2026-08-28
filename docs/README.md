@@ -136,6 +136,15 @@ review platform, Review Outcomes flow *back* for reporting.
   login naming the SharePoint groups they must hold to open the Case they are
   being told about, written *before* the notifications so nobody is told about a
   Case before the request for their access to it has landed.
+- **Platform metrics** (platform-wide) — `pipelines/cora_platform_metric` —
+  reads Sync's **gold current state** and its **observation history** through
+  the Shared Readers and refreshes nine gold **Aggregate tables** on how the
+  platform is operating: stage dwell and holds (from the history — a floor, since
+  a change reversed between two polls was never seen), SLA attainment in working
+  days and voids by month, remediation Action load and remediation by
+  Responsible Party Manager, Appeal cycle time and cited questions, and
+  Conversation reply time
+  ([`data-dictionary-cora-platform-metric.md`](data-dictionary-cora-platform-metric.md)).
 - **Reporting** (platform-wide) joins Review Outcomes to the selected Cases and
   emits **Deliverables**.
 
@@ -700,6 +709,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`data-dictionary-template.md`](data-dictionary-template.md) | The Confluence-ready template for documenting what every table/Feed and each of its fields means — the prose companion to `schema.py`. |
 | [`data-dictionary-sharepoint-cases.md`](data-dictionary-sharepoint-cases.md) | The template filled in for the `sharepoint_cases` feed: the raw observation, the Case version, the `answer`/`answer_capture`/`answer_action`/`general_answer`/`conversation_message`/`appeal`/`case_detail` silver Detail Tables, and the fourteen gold tables with their declared grains — including the two aggregates reduced from a Detail Table rather than `case_current` — all shared across every declared Case list and discriminated by `case_type`; why raw and silver do not store when we saw the row; why silver settles `case_type` to the polled list's declared value; the two provisioning prerequisites (an index on `Modified`, and the site/GUID placeholders) that stand between it and a tenant; and which further aggregates were deliberately refused, and why. |
 | [`data-dictionary-reviewer-activity.md`](data-dictionary-reviewer-activity.md) | The working-day, freshness-guarded `reviewer_activity_daily` aggregate and its sparse per-Reviewer `my-stats/{account}.txt` Report Feed, reduced from Sync's `case_current`. |
+| [`data-dictionary-cora-platform-metric.md`](data-dictionary-cora-platform-metric.md) | The nine `cora_platform_metric` gold aggregates — stage dwell and holds reduced from the Sync observation history, SLA attainment and voids by month, remediation Action load and remediation by manager, Appeal cycle time and cited questions, Conversation reply time — their grains, why the two history tables measure what the polls saw rather than what happened, and what was deliberately left out. |
 | [`data-dictionary-notifications.md`](data-dictionary-notifications.md) | The notification outbox file and the three keys that are its consumer's contract; the user-group privileges file beside it and the two keys that are *its* consumer's contract; the `notified` ledger and why its row is exactly its key; the `users` reference feed the recipients and the Responsible Party Manager are resolved through; and the placeholder link template, unmapped Case Type names and example addresses standing between it and a tenant. |
 | [`sharepoint-rest-ingest.md`](sharepoint-rest-ingest.md) | The operator runbook for that feed: scheduling it, re-driving it, and what REST polling cannot tell you. |
 | [`benchmarking-gold.md`](benchmarking-gold.md) | What one gold publication costs, which phase grows, and how to measure it against the storage it will run on (`scripts/benchmark_gold.py`) — the evidence behind publishing the aggregates on the sync's schedule rather than their own. |
