@@ -1,6 +1,6 @@
 """Build the ``cora_platform_metric`` gold tables from the Sync subject.
 
-Nine Aggregate tables, each reduced from the Sync subject's published current
+Eleven Aggregate tables, each reduced from the Sync subject's published current
 state or its observation history through the Shared Readers in
 ``readers.sharepoint_cases``, and written whole (``Refresh()``) into this
 subject's own gold on every run. Each reduction is a function in ``metrics``;
@@ -74,6 +74,8 @@ GOLD_TABLES = (
     ("appeal_cycle_time_current", schema.AppealCycleTime),
     ("appeal_question_citations_current", schema.AppealQuestionCitation),
     ("conversation_response_time_current", schema.ConversationResponseTime),
+    ("conversation_volume_current", schema.ConversationVolume),
+    ("conversation_posting_pattern_current", schema.ConversationPostingPattern),
 )
 
 CALENDAR_PARAM = "calendar"
@@ -190,6 +192,28 @@ def to_response_time(messages: Reader, current: Reader, writer: Writer) -> Datas
     return write(writer, data, name=f"{at}:write")
 
 
+def to_volume(messages: Reader, current: Reader, writer: Writer) -> Dataset:
+    at = "volume"
+    cases = _gated(current, metrics.CURRENT_COLUMNS, f"{at}:current")
+    rows = _gated(messages, metrics.CONVERSATION_COLUMNS, f"{at}:messages")
+    data = transform(metrics.conversation_volume, rows, cases, name=f"{at}:reduce")
+    validate(SchemaValidator(schema.ConversationVolume), data, name=f"{at}:validate")
+    return write(writer, data, name=f"{at}:write")
+
+
+def to_posting_pattern(messages: Reader, current: Reader, writer: Writer) -> Dataset:
+    at = "posting_pattern"
+    cases = _gated(current, metrics.CURRENT_COLUMNS, f"{at}:current")
+    rows = _gated(messages, metrics.CONVERSATION_COLUMNS, f"{at}:messages")
+    data = transform(
+        metrics.conversation_posting_pattern, rows, cases, name=f"{at}:reduce"
+    )
+    validate(
+        SchemaValidator(schema.ConversationPostingPattern), data, name=f"{at}:validate"
+    )
+    return write(writer, data, name=f"{at}:write")
+
+
 def run(context: RunContext) -> Dataset:
     """Build each table in publication order.
 
@@ -229,8 +253,14 @@ def run(context: RunContext) -> Dataset:
     to_appeal_citations(
         appeals, current, gold.writer("appeal_question_citations_current", Refresh())
     )
-    return to_response_time(
+    to_response_time(
         messages, current, gold.writer("conversation_response_time_current", Refresh())
+    )
+    to_volume(messages, current, gold.writer("conversation_volume_current", Refresh()))
+    return to_posting_pattern(
+        messages,
+        current,
+        gold.writer("conversation_posting_pattern_current", Refresh()),
     )
 
 
