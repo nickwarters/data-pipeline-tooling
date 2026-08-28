@@ -1,6 +1,6 @@
 # Data dictionary — `cora_platform_metric`
 
-Nine gold **Aggregate tables** measuring how the Case Review Platform is
+Eleven gold **Aggregate tables** measuring how the Case Review Platform is
 operating, reduced from the Sync subject's published current state and its
 observation history. They belong to the `cora_platform_metric` Reporting
 subject and are rebuilt whole (`Refresh()`) on every run, so a re-run over the
@@ -59,7 +59,7 @@ hours are decimal (a three-hour hold is `0.125` days), rounded to three places.
 The Sync snapshot instant, `as_of_utc`, is read off `case_current` — one
 literal on every row — and is what an open hold is measured to and what every
 table is stamped with. An empty `case_current` has no snapshot to report
-against and fails the run rather than publishing nine empty tables.
+against and fails the run rather than publishing eleven empty tables.
 
 ## Part B — The tables
 
@@ -242,6 +242,49 @@ answers the other question: across a Case Type, how long does a reply take.
 | `thread_count` | `int` | No | Cases with at least one reply. |
 | `reply_count` | `int` | No | Replies across them. |
 | `reply_hours_mean` / `_p50` / `_p90` / `_max` | `float` | No | Over the replies, in decimal hours. |
+
+### `conversation_volume_current` — how much Conversation Cases carry
+
+Reduced from the `conversation_message` Detail Table joined to `case_current`.
+Grain: `brand` × `case_type`, over the **current non-void Cases** of the Case
+Type — Completed Cases included, since their Conversation is what they carried;
+a Message on a void Case, or on a Case no longer current, is not counted. So
+`message_count` is the volume on the live population, not a row count of the
+Detail Table, and a Case Type row exists whenever the Type has a live Case,
+Messages or not.
+
+| Field | Type | Nullable | Description |
+|-------|------|----------|-------------|
+| `brand` | `str` | No | `(unknown)`. |
+| `case_type` | `str` | No | Case Type slug. |
+| `case_count` | `int` | No | Current non-void Cases of the Type. |
+| `thread_count` | `int` | No | Of those, with at least one Message. |
+| `no_conversation_count` | `int` | No | `case_count − thread_count`. |
+| `no_conversation_share` | `float` | No | `no_conversation_count / case_count`, to four places. |
+| `message_count` | `int` | No | Messages across the threads. |
+| `messages_per_thread_mean` / `_p50` / `_p90` / `_max` | `float` | Yes | Over the threads; NULL when `thread_count` is 0. |
+
+### `conversation_posting_pattern_current` — when Messages get posted
+
+Reduced from the same join. Grain: `brand` × `case_type` × `weekday_order` ×
+`hour_of_day` — the **full 7 × 24 grid** for every Case Type with at least one
+counted Message, so a quiet cell is a row holding `0` rather than a hole a
+heat-map would have to infer. Weekday and hour are on the **local clock**, the
+same zone every calendar date in the system is expressed in
+(`tools.observability.timestamps.local_timezone`), converted per instant so a
+thread spanning a summer-time change files each Message under the hour it was
+actually posted at. Like the reply-time table it is author-agnostic: it says
+when the platform is being used, not by whom. A Message whose `posted_at` does
+not parse is not counted.
+
+| Field | Type | Nullable | Description |
+|-------|------|----------|-------------|
+| `brand` | `str` | No | `(unknown)`. |
+| `case_type` | `str` | No | Case Type slug. |
+| `weekday_order` | `int` | No | ISO weekday, `1` Monday … `7` Sunday; sort on this. |
+| `weekday` | `str` | No | Its English name; read this. |
+| `hour_of_day` | `int` | No | `0`–`23`, local clock. |
+| `message_count` | `int` | No | Messages posted in that cell; `0` where none. |
 
 ## Part C — Row checks
 

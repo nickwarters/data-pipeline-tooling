@@ -571,6 +571,88 @@ def test_conversation_response_time_measures_replies_across_an_author_change():
     }
 
 
+def test_conversation_volume_counts_threads_over_the_live_cases():
+    # c1 has a four-Message thread; c2 and c4 have none; c3 is void and out.
+    [row] = _rows(metrics.conversation_volume(given_rows(MESSAGES).read(), _current()))
+
+    assert row == {
+        "brand": UNKNOWN_BRAND,
+        "case_type": "complaints",
+        "case_count": 3,
+        "thread_count": 1,
+        "no_conversation_count": 2,
+        "no_conversation_share": 0.6667,
+        "message_count": 4,
+        "messages_per_thread_mean": 4.0,
+        "messages_per_thread_p50": 4.0,
+        "messages_per_thread_p90": 4.0,
+        "messages_per_thread_max": 4.0,
+        "as_of_utc": AS_OF,
+    }
+
+
+def test_conversation_volume_drops_messages_on_a_void_or_unknown_case():
+    stray = [
+        {**MESSAGES[0], "case_id": "c3"},  # void
+        {**MESSAGES[0], "case_id": "c9"},  # not current
+    ]
+    [row] = _rows(
+        metrics.conversation_volume(given_rows(MESSAGES + stray).read(), _current())
+    )
+
+    assert (row["thread_count"], row["message_count"]) == (1, 4)
+
+
+def test_conversation_volume_with_no_messages_has_counts_but_no_statistics():
+    empty = Dataset.from_pandas(pd.DataFrame(columns=metrics.CONVERSATION_COLUMNS))
+    [row] = _rows(metrics.conversation_volume(empty, _current()))
+
+    assert row["no_conversation_share"] == 1.0
+    assert row["messages_per_thread_mean"] is None
+
+
+def test_conversation_posting_pattern_is_a_dense_local_clock_grid():
+    rows = _rows(
+        metrics.conversation_posting_pattern(given_rows(MESSAGES).read(), _current())
+    )
+
+    assert len(rows) == 7 * 24
+    assert [r["weekday"] for r in rows[::24]] == list(metrics.WEEKDAY_NAMES)
+    assert [r["hour_of_day"] for r in rows[:24]] == list(range(24))
+    # 2026-07-05 is a Sunday: 09:00, 10:00, 13:00; the reply lands Monday 13:00.
+    posted = {
+        (r["weekday"], r["hour_of_day"]): r["message_count"]
+        for r in rows
+        if r["message_count"]
+    }
+    assert posted == {
+        ("Sunday", 9): 1,
+        ("Sunday", 10): 1,
+        ("Sunday", 13): 1,
+        ("Monday", 13): 1,
+    }
+
+
+def test_conversation_posting_pattern_files_each_message_under_its_local_hour(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        timestamps, "local_timezone", lambda: dt.timezone(dt.timedelta(hours=5))
+    )
+    rows = _rows(
+        metrics.conversation_posting_pattern(given_rows(MESSAGES).read(), _current())
+    )
+
+    posted = {(r["weekday"], r["hour_of_day"]) for r in rows if r["message_count"]}
+    assert posted == {("Sunday", 14), ("Sunday", 15), ("Sunday", 18), ("Monday", 18)}
+
+
+def test_conversation_posting_pattern_with_no_messages_has_no_grid():
+    empty = Dataset.from_pandas(pd.DataFrame(columns=metrics.CONVERSATION_COLUMNS))
+
+    assert _rows(metrics.conversation_posting_pattern(empty, _current())) == []
+
+
 def test_every_metric_carries_syncs_snapshot_instant_and_refuses_an_empty_one():
     with pytest.raises(ValueError, match="case_current is empty"):
         metrics.snapshot_as_of(Dataset.from_pandas(pd.DataFrame(columns=["as_of_utc"])))

@@ -200,3 +200,44 @@ class ConversationResponseTime:
     reply_hours_p90: Annotated[float, NonNull(), Range(minimum=0)]
     reply_hours_max: Annotated[float, NonNull(), Range(minimum=0)]
     as_of_utc: Annotated[str, NonNull()]
+
+
+@dataclass
+class ConversationVolume:
+    """``conversation_volume_current`` -- how much Conversation Cases carry.
+
+    Grain: ``brand`` x ``case_type``, over the current non-void Cases. The
+    thread-length statistics are over the ``thread_count`` Cases that have a
+    Message at all; NULL where none does.
+    """
+
+    brand: Annotated[str, NonNull()]
+    case_type: Annotated[str, NonNull()]
+    case_count: Annotated[int, NonNull(), Range(minimum=1)]
+    thread_count: Annotated[int, NonNull(), Range(minimum=0)]
+    no_conversation_count: Annotated[int, NonNull(), Range(minimum=0)]
+    no_conversation_share: Annotated[float, NonNull(), Range(minimum=0, maximum=1)]
+    message_count: Annotated[int, NonNull(), Range(minimum=0)]
+    messages_per_thread_mean: float
+    messages_per_thread_p50: float
+    messages_per_thread_p90: float
+    messages_per_thread_max: float
+    as_of_utc: Annotated[str, NonNull()]
+
+
+@dataclass
+class ConversationPostingPattern:
+    """``conversation_posting_pattern_current`` -- when Messages get posted.
+
+    Grain: ``brand`` x ``case_type`` x ``weekday_order`` x ``hour_of_day``,
+    the full 7 x 24 grid per Case Type with a Message; a quiet cell is a 0.
+    Local clock, like every calendar date in the system.
+    """
+
+    brand: Annotated[str, NonNull()]
+    case_type: Annotated[str, NonNull()]
+    weekday_order: Annotated[int, NonNull(), Range(minimum=1, maximum=7)]
+    weekday: Annotated[str, NonNull()]
+    hour_of_day: Annotated[int, NonNull(), Range(minimum=0, maximum=23)]
+    message_count: Annotated[int, NonNull(), Range(minimum=0)]
+    as_of_utc: Annotated[str, NonNull()]

@@ -18,6 +18,7 @@ import pandas as pd
 
 from framework.core import Dataset
 from tools.calendar import WorkingDayCalendar
+from tools.observability import timestamps
 from tools.observability.timestamps import local_date
 
 from .schema import REMEDIATION_SLA, REVIEW_SLA
@@ -54,8 +55,21 @@ FIRST_OBSERVATION_ENTRY_STAMPS = {
 # ``float64``, and everything else is a string dimension. Named here so the
 # rule is one place rather than a suffix guess per table.
 STATISTIC_SUFFIXES = ("_mean", "_p50", "_p90", "_max", "_total")
-INT_MEASURES = frozenset({"actions_per_case_max"})
-FLOAT_MEASURES = frozenset({"share_of_cases"})
+INT_MEASURES = frozenset({"actions_per_case_max", "weekday_order", "hour_of_day"})
+FLOAT_MEASURES = frozenset({"share_of_cases", "no_conversation_share"})
+
+# ISO weekday order -> name, so a posting-pattern row sorts by the number and
+# reads by the name without anyone hand-numbering the days.
+WEEKDAY_NAMES = (
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+)
+HOURS_OF_DAY = range(24)
 
 SECONDS_PER_DAY = 86_400.0
 SECONDS_PER_HOUR = 3_600.0
@@ -730,3 +744,125 @@ def conversation_response_time(messages: Dataset, current: Dataset) -> Dataset:
         AS_OF_COLUMN,
     )
     return _finish(rows, columns, as_of=as_of, sort_by=columns[:2])
+
+
+def _live_cases(current: Dataset) -> pd.DataFrame:
+    """The current non-void Cases: the population a Conversation belongs to."""
+    cases = current.to_pandas()
+    return cases.loc[cases["status"].ne("Void"), [CASE_ID_COLUMN, "case_type"]]
+
+
+def conversation_volume(messages: Dataset, current: Dataset) -> Dataset:
+    """How much Conversation Cases carry. **Grain: brand x case_type.**
+
+    Counts over the current non-void Cases of each Case Type: how many have a
+    thread at all, how many have none, and how the thread lengths are spread.
+    A Message whose Case is not among those Cases is not counted -- the Case
+    is void, or no longer current -- so ``message_count`` is the volume on the
+    live population, not on the Detail Table.
+    """
+    as_of = snapshot_as_of(current)
+    live = _live_cases(current)
+    frame = messages.to_pandas()
+    per_thread = (
+        frame.loc[frame[CASE_ID_COLUMN].isin(live[CASE_ID_COLUMN])]
+        .groupby(CASE_ID_COLUMN)
+        .size()
+        .rename("messages")
+    )
+    joined = live.join(per_thread, on=CASE_ID_COLUMN)
+    rows = []
+    for case_type, group in joined.groupby("case_type", sort=True):
+        threads = group["messages"].dropna()
+        case_count = int(len(group))
+        thread_count = int(len(threads))
+        rows.append(
+            {
+                "brand": UNKNOWN_BRAND,
+                "case_type": case_type,
+                "case_count": case_count,
+                "thread_count": thread_count,
+                "no_conversation_count": case_count - thread_count,
+                "no_conversation_share": round(
+                    (case_count - thread_count) / case_count, 4
+                ),
+                "message_count": int(threads.sum()),
+                **_stats(threads, "messages_per_thread"),
+            }
+        )
+    columns = (
+        "brand",
+        "case_type",
+        "case_count",
+        "thread_count",
+        "no_conversation_count",
+        "no_conversation_share",
+        "message_count",
+        "messages_per_thread_mean",
+        "messages_per_thread_p50",
+        "messages_per_thread_p90",
+        "messages_per_thread_max",
+        AS_OF_COLUMN,
+    )
+    return _finish(rows, columns, as_of=as_of, sort_by=columns[:2])
+
+
+def _local_weekday_and_hour(instants: pd.Series) -> pd.DataFrame:
+    """ISO weekday (1 = Monday) and hour of each instant on the local clock.
+
+    Converted one instant at a time through the local-zone seam rather than
+    with a fixed offset, so a thread spanning a summer-time change files each
+    Message under the hour it was actually posted at.
+    """
+    zone = timestamps.local_timezone()
+    local = [moment.to_pydatetime().astimezone(zone) for moment in instants]
+    return pd.DataFrame(
+        {
+            "weekday_order": [moment.isoweekday() for moment in local],
+            "hour_of_day": [moment.hour for moment in local],
+        },
+        index=instants.index,
+    )
+
+
+def conversation_posting_pattern(messages: Dataset, current: Dataset) -> Dataset:
+    """When Messages get posted. **Grain: brand x case_type x weekday_order x
+    hour_of_day.**
+
+    Every Case Type with at least one counted Message gets the full 7 x 24
+    grid, so a quiet cell is a row holding 0 rather than a hole a chart would
+    have to infer. Weekday and hour are on the *local* clock, the same zone
+    the calendar dates are expressed in; a Message with no parseable
+    ``posted_at`` is not counted.
+    """
+    as_of = snapshot_as_of(current)
+    live = _live_cases(current)
+    frame = messages.to_pandas().copy()
+    frame = frame.loc[frame[CASE_ID_COLUMN].isin(live[CASE_ID_COLUMN])]
+    frame["_posted"] = _instants(frame["posted_at"])
+    frame = frame.loc[frame["_posted"].notna()]
+    posted = pd.concat([frame, _local_weekday_and_hour(frame["_posted"])], axis=1)
+    counts = posted.groupby(["case_type", "weekday_order", "hour_of_day"]).size()
+    rows = [
+        {
+            "brand": UNKNOWN_BRAND,
+            "case_type": case_type,
+            "weekday_order": order,
+            "weekday": WEEKDAY_NAMES[order - 1],
+            "hour_of_day": hour,
+            "message_count": int(counts.get((case_type, order, hour), 0)),
+        }
+        for case_type in sorted(posted["case_type"].unique())
+        for order in range(1, len(WEEKDAY_NAMES) + 1)
+        for hour in HOURS_OF_DAY
+    ]
+    columns = (
+        "brand",
+        "case_type",
+        "weekday_order",
+        "weekday",
+        "hour_of_day",
+        "message_count",
+        AS_OF_COLUMN,
+    )
+    return _finish(rows, columns, as_of=as_of, sort_by=columns[:3] + columns[4:5])
