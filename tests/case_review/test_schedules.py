@@ -51,6 +51,7 @@ def test_the_schedule_registers_case_management_then_complaint_selection_daily()
     assert platform_metric.name == "cora_platform_metric"
     assert platform_metric.schedule == Schedule.daily()
     assert platform_metric.depends_on[0].upstream_pipeline == "sharepoint_cases"
+    assert platform_metric.depends_on[0].max_age_days == 0
     (complaint_selection,) = sets[1].pipelines
     assert complaint_selection.path == "pipelines/complaint_selection"
     assert complaint_selection.name == "complaint_selection"

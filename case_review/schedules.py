@@ -28,7 +28,9 @@ def build_pipeline_sets():
                 ScheduledPipeline(
                     "pipelines/cora_platform_metric",
                     Schedule.daily(),
-                    depends_on=(FreshnessRequirement("sharepoint_cases"),),
+                    depends_on=(
+                        FreshnessRequirement("sharepoint_cases", max_age_days=0),
+                    ),
                 ),
             ),
         ),

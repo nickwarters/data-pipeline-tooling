@@ -573,9 +573,9 @@ def test_conversation_response_time_measures_replies_across_an_author_change():
 
 def test_every_metric_carries_syncs_snapshot_instant_and_refuses_an_empty_one():
     with pytest.raises(ValueError, match="case_current is empty"):
-        metrics.as_of_of(Dataset.from_pandas(pd.DataFrame(columns=["as_of_utc"])))
+        metrics.snapshot_as_of(Dataset.from_pandas(pd.DataFrame(columns=["as_of_utc"])))
 
-    assert metrics.as_of_of(_current()) == AS_OF
+    assert metrics.snapshot_as_of(_current()) == AS_OF
 
 
 # --- end to end -------------------------------------------------------------
@@ -651,6 +651,7 @@ def test_the_pipeline_declares_sync_as_its_freshness_upstream():
     [requirement] = UPSTREAMS
     assert isinstance(requirement, FreshnessRequirement)
     assert requirement.upstream_pipeline == "sharepoint_cases"
+    assert requirement.max_age_days == 0
 
 
 def test_a_source_missing_a_column_a_metric_needs_fails_before_any_reduction(

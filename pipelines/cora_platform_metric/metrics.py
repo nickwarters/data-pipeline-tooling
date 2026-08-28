@@ -1,28 +1,11 @@
 """The reductions behind the ``cora_platform_metric`` gold tables.
 
-Every function here takes the Sync subject's published datasets as they were
-read and returns one Aggregate table. Nothing here reads or writes: the
-pipeline module wires readers and writers around these, so each one can be
-exercised on a handful of rows in a test and stepped through in a debugger.
-
-Two families:
-
-* **History metrics** (``case_stage_dwell``, ``case_hold``) read the Sync
-  subject's *observation history* -- one row per poll per Case -- and measure a
-  change between observations. They are a history of what the polls saw, not
-  of what happened: a state a Case entered and left between two polls (put on
-  hold in the morning, taken off before the next poll) was never observed and
-  is not counted. That is a known, accepted limit of polling, not a defect.
-
-* **Current metrics** (everything else) read the published current state --
-  ``case_current`` and its Detail Tables -- and reduce it.
-
-**One instant decides everything.** ``as_of`` is Sync's own snapshot instant,
-carried on every ``case_current`` row as ``as_of_utc``; it is what an open
-interval is measured to and what every table is stamped with, so a re-run over
-the same Sync snapshot produces identical numbers. Calendar arithmetic (a
-month, a working day) is on the **local** date of an instant, through
-``tools.observability.timestamps``.
+Each function takes the Sync datasets as read and returns one Aggregate table;
+nothing here reads or writes. ``case_stage_dwell`` and ``case_hold`` reduce the
+observation history and so measure what the polls saw -- a change reversed
+between two polls was never observed. Every table is stamped with Sync's own
+``as_of_utc`` and open intervals are measured to it, so a re-run over the same
+snapshot gives the same numbers.
 """
 
 from __future__ import annotations
@@ -135,7 +118,7 @@ CONVERSATION_COLUMNS = (
 # --- shared helpers ---------------------------------------------------------
 
 
-def as_of_of(current: Dataset) -> str:
+def snapshot_as_of(current: Dataset) -> str:
     """The one ``as_of_utc`` Sync stamped on every current row.
 
     Sync's Refresh-built current table carries one literal on every row; an
@@ -301,7 +284,7 @@ def case_stage_dwell(history: Dataset, current: Dataset) -> Dataset:
             "dwell_days_max",
             AS_OF_COLUMN,
         ),
-        as_of=as_of_of(current),
+        as_of=snapshot_as_of(current),
         sort_by=("brand", "case_type", "status"),
     )
 
@@ -317,7 +300,7 @@ def case_hold(history: Dataset, current: Dataset) -> Dataset:
     ``open_hold_count``. Attributed to the Reviewer the Case's latest
     observation names, so a reassigned Case's holds follow the Case.
     """
-    as_of = as_of_of(current)
+    as_of = snapshot_as_of(current)
     as_of_instant = pd.Timestamp(as_of)
     frame = _ordered_history(history)
     holds: list[dict[str, object]] = []
@@ -429,7 +412,7 @@ def sla_attainment(
     (weekends-only when none).
     """
     calendar = calendar or WorkingDayCalendar()
-    as_of = as_of_of(current)
+    as_of = snapshot_as_of(current)
     frame = current.to_pandas()
     completed = frame.loc[frame["status"].eq("Completed")].copy()
     completed["_completed"] = _instants(completed["completed_at"])
@@ -494,7 +477,7 @@ def void_monthly(current: Dataset) -> Dataset:
     """Voided Cases by reason and by whom. **Grain: void_month x brand x
     case_type x void_reason x voided_by_name.** Age at void is calendar days
     from ``created``."""
-    as_of = as_of_of(current)
+    as_of = snapshot_as_of(current)
     frame = current.to_pandas()
     voided = frame.loc[frame["status"].eq("Void")].copy()
     voided["_voided"] = _instants(voided["voided_at"])
@@ -542,7 +525,7 @@ def answer_action_load(actions: Dataset, current: Dataset) -> Dataset:
     so it reads as "this share of the Case Type's live Cases carry an Action on
     this question".
     """
-    as_of = as_of_of(current)
+    as_of = snapshot_as_of(current)
     cases = current.to_pandas()
     denominators = cases.loc[cases["status"].ne("Void")].groupby("case_type").size()
     frame = actions.to_pandas()
@@ -592,7 +575,7 @@ def answer_remediation_by_manager(answers: Dataset, current: Dataset) -> Dataset
     this joins each Answer to its Case for the manager who answers for the
     remediation, and counts both Answers and the distinct Cases behind them.
     """
-    as_of = as_of_of(current)
+    as_of = snapshot_as_of(current)
     cases = current.to_pandas()[[CASE_ID_COLUMN, "responsible_party_manager_name"]]
     frame = answers.to_pandas().merge(cases, on=CASE_ID_COLUMN, how="inner")
     frame = _filled(
@@ -625,7 +608,7 @@ def appeal_cycle_time(appeals: Dataset, current: Dataset) -> Dataset:
     """How long Appeals take to resolve. **Grain: case_type x state x
     resolution_verdict.** Cycle days run from ``raised_at`` to
     ``resolution_at``, over the Appeals carrying both."""
-    as_of = as_of_of(current)
+    as_of = snapshot_as_of(current)
     frame = appeals.to_pandas().copy()
     frame["_cycle"] = (
         _instants(frame["resolution_at"]) - _instants(frame["raised_at"])
@@ -670,7 +653,7 @@ def _cited_questions(value: object) -> list[str]:
 
 def appeal_question_citations(appeals: Dataset, current: Dataset) -> Dataset:
     """Which questions get appealed. **Grain: case_type x question_id.**"""
-    as_of = as_of_of(current)
+    as_of = snapshot_as_of(current)
     frame = appeals.to_pandas()
     exploded = (
         frame.assign(question_id=frame["cited_question_ids_json"].map(_cited_questions))
@@ -703,7 +686,7 @@ def conversation_response_time(messages: Dataset, current: Dataset) -> Dataset:
     (see its data dictionary), and the source's own ``awaiting_since`` already
     says who is being waited on right now.
     """
-    as_of = as_of_of(current)
+    as_of = snapshot_as_of(current)
     frame = messages.to_pandas().copy()
     frame["_posted"] = _instants(frame["posted_at"])
     frame = frame.sort_values([CASE_ID_COLUMN, "seq"], kind="stable")
