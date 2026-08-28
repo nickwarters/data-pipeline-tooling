@@ -37,6 +37,7 @@ def test_the_schedule_registers_case_management_then_complaint_selection_daily()
     assert [pipeline_set.name for pipeline_set in sets] == [
         "case_management",
         "selection",
+        "operations",
     ]
     sharepoint, reviewer_activity, platform_metric = sets[0].pipelines
     assert sharepoint.path == "pipelines/sharepoint_cases"
@@ -57,15 +58,21 @@ def test_the_schedule_registers_case_management_then_complaint_selection_daily()
     assert complaint_selection.name == "complaint_selection"
     assert complaint_selection.schedule == Schedule.daily()
     assert not complaint_selection.depends_on
+    (run_metric,) = sets[2].pipelines
+    assert run_metric.path == "pipelines/pipeline_run_metric"
+    assert run_metric.name == "pipeline_run_metric"
+    assert run_metric.schedule == Schedule.daily()
+    assert not run_metric.depends_on
     # The path is only an address until something resolves it: a typo would pass
     # every assertion above and fail only in production.
     assert callable(load_pipeline(sharepoint.path).run)
     assert callable(load_pipeline(reviewer_activity.path).run)
     assert callable(load_pipeline(platform_metric.path).run)
     assert callable(load_pipeline(complaint_selection.path).run)
+    assert callable(load_pipeline(run_metric.path).run)
 
 
-def test_a_working_day_pass_invokes_all_four_pipelines_in_declared_order(tmp_path):
+def test_a_working_day_pass_invokes_all_five_pipelines_in_declared_order(tmp_path):
     orchestrator, calls = _orchestrator(WorkingDayCalendar())
 
     result = orchestrator.run_due_once(tmp_path, run_date=dt.date(2026, 8, 5))
@@ -75,8 +82,10 @@ def test_a_working_day_pass_invokes_all_four_pipelines_in_declared_order(tmp_pat
         "pipelines/reviewer_activity",
         "pipelines/cora_platform_metric",
         "pipelines/complaint_selection",
+        "pipelines/pipeline_run_metric",
     ]
     assert [decision.status for decision in result.decisions] == [
+        "succeeded",
         "succeeded",
         "succeeded",
         "succeeded",
@@ -97,6 +106,7 @@ def test_a_weekend_or_configured_holiday_pass_skips_it(tmp_path):
             "skipped",
             "skipped",
             "skipped",
+            "skipped",
         ]
         assert all(not decision.was_due for decision in result.decisions)
 
@@ -111,6 +121,7 @@ def test_a_weekend_or_configured_holiday_pass_skips_it(tmp_path):
 
     assert calls == []
     assert [decision.status for decision in result.decisions] == [
+        "skipped",
         "skipped",
         "skipped",
         "skipped",
@@ -138,10 +149,12 @@ def test_two_operator_passes_on_one_weekday_are_safe(tmp_path):
         "pipelines/reviewer_activity",
         "pipelines/cora_platform_metric",
         "pipelines/complaint_selection",
+        "pipelines/pipeline_run_metric",
         "pipelines/sharepoint_cases",
         "pipelines/reviewer_activity",
         "pipelines/cora_platform_metric",
         "pipelines/complaint_selection",
+        "pipelines/pipeline_run_metric",
     ]
     for result in (first, second):
         assert [decision.status for decision in result.decisions] == [
@@ -149,7 +162,8 @@ def test_two_operator_passes_on_one_weekday_are_safe(tmp_path):
             "succeeded",
             "succeeded",
             "succeeded",
+            "succeeded",
         ]
 
     records = OrchestrationStore(tmp_path / "_orchestration" / "runs.db").records()
-    assert len(records) == 8
+    assert len(records) == 10
