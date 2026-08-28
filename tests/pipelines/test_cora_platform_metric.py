@@ -654,9 +654,7 @@ def test_the_pipeline_declares_sync_as_its_freshness_upstream():
     assert requirement.max_age_days == 0
 
 
-def test_a_source_missing_a_column_a_metric_needs_fails_before_any_reduction(
-    tmp_path, capsys
-):
+def test_a_source_missing_a_column_a_metric_needs_fails_that_step(tmp_path, capsys):
     # An unmigrated directory, so the narrowed table really lacks the column
     # (a migrated one would keep the declared column and land NULLs).
     _seed_sync(tmp_path)
@@ -669,6 +667,8 @@ def test_a_source_missing_a_column_a_metric_needs_fails_before_any_reduction(
     assert main(["prog", "--base-dir", str(tmp_path)]) == 1
 
     assert "posted_at" in capsys.readouterr().err
-    # Nothing was published: the source gate sits before every reduction.
+    # The gate sits inside the step that uses the column, so the tables before
+    # it are refreshed and the one that needed it is not.
     gold = medallion(StoreRegistry(tmp_path), "cora_platform_metric").gold
-    assert gold.columns_of("case_stage_dwell_current").columns() is None
+    assert gold.columns_of("case_stage_dwell_current").columns() is not None
+    assert gold.columns_of("conversation_response_time_current").columns() is None

@@ -24,16 +24,19 @@ from __future__ import annotations
 
 import argparse
 import sys
+from functools import partial
 from pathlib import Path
+from typing import Sequence
 
 from framework.core import (
     ColumnValidator,
     Dataset,
     PipelineError,
+    Reader,
     SchemaValidator,
     format_failure,
 )
-from framework.io import Refresh
+from framework.io import Refresh, Writer
 from framework.run import (
     FreshnessRequirement,
     RunContext,
@@ -81,170 +84,154 @@ def _calendar_from(context: RunContext) -> WorkingDayCalendar:
     return WorkingDayCalendar.from_yaml(path) if path else WorkingDayCalendar()
 
 
-def run(context: RunContext) -> Dataset:
-    """Read the Sync subject once, then reduce, validate and write each table.
+def _gated(reader: Reader, columns: Sequence[str], at: str) -> Dataset:
+    """Read one Sync dataset and gate it on the columns the step uses."""
+    data = read(reader, name=f"{at}:read")
+    validate(ColumnValidator(list(columns)), data, name=f"{at}:columns")
+    return data
 
-    Every line is a step: the sources are read and gated on the columns the
-    reductions use, then each table is reduced, gated on its contract and
-    refreshed, in publication order. Sources come through their Shared Readers
-    and targets through this pipeline's own medallion -- a pipeline resolves
-    where it *writes*, never where someone else's data lives.
+
+def to_stage_dwell(history: Reader, current: Reader, writer: Writer) -> Dataset:
+    at = "dwell"
+    cases = _gated(current, metrics.CURRENT_COLUMNS, f"{at}:current")
+    observations = _gated(history, metrics.HISTORY_COLUMNS, f"{at}:history")
+    data = transform(metrics.case_stage_dwell, observations, cases, name=f"{at}:reduce")
+    validate(SchemaValidator(schema.CaseStageDwell), data, name=f"{at}:validate")
+    return write(writer, data, name=f"{at}:write")
+
+
+def to_hold(history: Reader, current: Reader, writer: Writer) -> Dataset:
+    at = "hold"
+    cases = _gated(current, metrics.CURRENT_COLUMNS, f"{at}:current")
+    observations = _gated(history, metrics.HISTORY_COLUMNS, f"{at}:history")
+    data = transform(metrics.case_hold, observations, cases, name=f"{at}:reduce")
+    validate(SchemaValidator(schema.CaseHold), data, name=f"{at}:validate")
+    return write(writer, data, name=f"{at}:write")
+
+
+def to_sla_attainment(
+    current: Reader, writer: Writer, calendar: WorkingDayCalendar
+) -> Dataset:
+    at = "sla"
+    cases = _gated(current, metrics.CURRENT_COLUMNS, f"{at}:current")
+    data = transform(
+        partial(metrics.sla_attainment, calendar=calendar), cases, name=f"{at}:reduce"
+    )
+    validate(
+        SchemaValidator(schema.CaseSlaAttainmentMonthly), data, name=f"{at}:validate"
+    )
+    return write(writer, data, name=f"{at}:write")
+
+
+def to_void_monthly(current: Reader, writer: Writer) -> Dataset:
+    at = "void"
+    cases = _gated(current, metrics.CURRENT_COLUMNS, f"{at}:current")
+    data = transform(metrics.void_monthly, cases, name=f"{at}:reduce")
+    validate(SchemaValidator(schema.CaseVoidMonthly), data, name=f"{at}:validate")
+    return write(writer, data, name=f"{at}:write")
+
+
+def to_action_load(actions: Reader, current: Reader, writer: Writer) -> Dataset:
+    at = "action_load"
+    cases = _gated(current, metrics.CURRENT_COLUMNS, f"{at}:current")
+    rows = _gated(actions, metrics.ANSWER_ACTION_COLUMNS, f"{at}:actions")
+    data = transform(metrics.answer_action_load, rows, cases, name=f"{at}:reduce")
+    validate(SchemaValidator(schema.AnswerActionLoad), data, name=f"{at}:validate")
+    return write(writer, data, name=f"{at}:write")
+
+
+def to_remediation_by_manager(
+    answers: Reader, current: Reader, writer: Writer
+) -> Dataset:
+    at = "remediation_by_manager"
+    cases = _gated(current, metrics.CURRENT_COLUMNS, f"{at}:current")
+    rows = _gated(answers, metrics.ANSWER_COLUMNS, f"{at}:answers")
+    data = transform(
+        metrics.answer_remediation_by_manager, rows, cases, name=f"{at}:reduce"
+    )
+    validate(
+        SchemaValidator(schema.AnswerRemediationByManager), data, name=f"{at}:validate"
+    )
+    return write(writer, data, name=f"{at}:write")
+
+
+def to_appeal_cycle_time(appeals: Reader, current: Reader, writer: Writer) -> Dataset:
+    at = "appeal_cycle"
+    cases = _gated(current, metrics.CURRENT_COLUMNS, f"{at}:current")
+    rows = _gated(appeals, metrics.APPEAL_COLUMNS, f"{at}:appeals")
+    data = transform(metrics.appeal_cycle_time, rows, cases, name=f"{at}:reduce")
+    validate(SchemaValidator(schema.AppealCycleTime), data, name=f"{at}:validate")
+    return write(writer, data, name=f"{at}:write")
+
+
+def to_appeal_citations(appeals: Reader, current: Reader, writer: Writer) -> Dataset:
+    at = "appeal_citations"
+    cases = _gated(current, metrics.CURRENT_COLUMNS, f"{at}:current")
+    rows = _gated(appeals, metrics.APPEAL_COLUMNS, f"{at}:appeals")
+    data = transform(
+        metrics.appeal_question_citations, rows, cases, name=f"{at}:reduce"
+    )
+    validate(
+        SchemaValidator(schema.AppealQuestionCitation), data, name=f"{at}:validate"
+    )
+    return write(writer, data, name=f"{at}:write")
+
+
+def to_response_time(messages: Reader, current: Reader, writer: Writer) -> Dataset:
+    at = "response_time"
+    cases = _gated(current, metrics.CURRENT_COLUMNS, f"{at}:current")
+    rows = _gated(messages, metrics.CONVERSATION_COLUMNS, f"{at}:messages")
+    data = transform(
+        metrics.conversation_response_time, rows, cases, name=f"{at}:reduce"
+    )
+    validate(
+        SchemaValidator(schema.ConversationResponseTime), data, name=f"{at}:validate"
+    )
+    return write(writer, data, name=f"{at}:write")
+
+
+def run(context: RunContext) -> Dataset:
+    """Build each table in publication order.
+
+    Sources come through their Shared Readers and targets through this
+    pipeline's own medallion -- a pipeline resolves where it *writes*, never
+    where someone else's data lives. Each ``to_*`` step reads what it needs,
+    gates it, reduces, validates and writes one table.
     """
     base_dir = context.base_dir
     gold = medallion(StoreRegistry(base_dir), schema.SUBJECT).gold
     calendar = _calendar_from(context)
 
-    current = read(CurrentCasesReader(base_dir), name="read:case_current")
-    current = validate(
-        ColumnValidator(list(metrics.CURRENT_COLUMNS)),
-        current,
-        name="validate:case_current",
-    )
-    history = read(CaseObservationHistoryReader(base_dir), name="read:case_history")
-    history = validate(
-        ColumnValidator(list(metrics.HISTORY_COLUMNS)),
-        history,
-        name="validate:case_history",
-    )
-    answers = read(AnswersReader(base_dir), name="read:answer")
-    answers = validate(
-        ColumnValidator(list(metrics.ANSWER_COLUMNS)), answers, name="validate:answer"
-    )
-    actions = read(AnswerActionsReader(base_dir), name="read:answer_action")
-    actions = validate(
-        ColumnValidator(list(metrics.ANSWER_ACTION_COLUMNS)),
-        actions,
-        name="validate:answer_action",
-    )
-    appeals = read(AppealsReader(base_dir), name="read:appeal")
-    appeals = validate(
-        ColumnValidator(list(metrics.APPEAL_COLUMNS)), appeals, name="validate:appeal"
-    )
-    messages = read(ConversationMessagesReader(base_dir), name="read:conversation")
-    messages = validate(
-        ColumnValidator(list(metrics.CONVERSATION_COLUMNS)),
-        messages,
-        name="validate:conversation",
-    )
+    current = CurrentCasesReader(base_dir)
+    history = CaseObservationHistoryReader(base_dir)
+    answers = AnswersReader(base_dir)
+    actions = AnswerActionsReader(base_dir)
+    appeals = AppealsReader(base_dir)
+    messages = ConversationMessagesReader(base_dir)
 
-    dwell = transform(
-        metrics.case_stage_dwell, history, current, name="reduce:case_stage_dwell"
+    to_stage_dwell(history, current, gold.writer("case_stage_dwell_current", Refresh()))
+    to_hold(history, current, gold.writer("case_hold_current", Refresh()))
+    to_sla_attainment(
+        current, gold.writer("case_sla_attainment_monthly", Refresh()), calendar
     )
-    dwell = validate(
-        SchemaValidator(schema.CaseStageDwell), dwell, name="validate:case_stage_dwell"
+    to_void_monthly(current, gold.writer("case_void_monthly", Refresh()))
+    to_action_load(
+        actions, current, gold.writer("answer_action_load_current", Refresh())
     )
-    write(
-        gold.writer("case_stage_dwell_current", Refresh()),
-        dwell,
-        name="write:case_stage_dwell",
-    )
-
-    hold = transform(metrics.case_hold, history, current, name="reduce:case_hold")
-    hold = validate(SchemaValidator(schema.CaseHold), hold, name="validate:case_hold")
-    write(gold.writer("case_hold_current", Refresh()), hold, name="write:case_hold")
-
-    sla = transform(
-        lambda cases: metrics.sla_attainment(cases, calendar=calendar),
-        current,
-        name="reduce:sla_attainment",
-    )
-    sla = validate(
-        SchemaValidator(schema.CaseSlaAttainmentMonthly),
-        sla,
-        name="validate:sla_attainment",
-    )
-    write(
-        gold.writer("case_sla_attainment_monthly", Refresh()),
-        sla,
-        name="write:sla_attainment",
-    )
-
-    void = transform(metrics.void_monthly, current, name="reduce:void_monthly")
-    void = validate(
-        SchemaValidator(schema.CaseVoidMonthly), void, name="validate:void_monthly"
-    )
-    write(gold.writer("case_void_monthly", Refresh()), void, name="write:void_monthly")
-
-    load = transform(
-        metrics.answer_action_load, actions, current, name="reduce:answer_action_load"
-    )
-    load = validate(
-        SchemaValidator(schema.AnswerActionLoad),
-        load,
-        name="validate:answer_action_load",
-    )
-    write(
-        gold.writer("answer_action_load_current", Refresh()),
-        load,
-        name="write:answer_action_load",
-    )
-
-    by_manager = transform(
-        metrics.answer_remediation_by_manager,
+    to_remediation_by_manager(
         answers,
         current,
-        name="reduce:answer_remediation_by_manager",
-    )
-    by_manager = validate(
-        SchemaValidator(schema.AnswerRemediationByManager),
-        by_manager,
-        name="validate:answer_remediation_by_manager",
-    )
-    write(
         gold.writer("answer_remediation_by_manager_current", Refresh()),
-        by_manager,
-        name="write:answer_remediation_by_manager",
     )
-
-    cycle = transform(
-        metrics.appeal_cycle_time, appeals, current, name="reduce:appeal_cycle_time"
+    to_appeal_cycle_time(
+        appeals, current, gold.writer("appeal_cycle_time_current", Refresh())
     )
-    cycle = validate(
-        SchemaValidator(schema.AppealCycleTime),
-        cycle,
-        name="validate:appeal_cycle_time",
+    to_appeal_citations(
+        appeals, current, gold.writer("appeal_question_citations_current", Refresh())
     )
-    write(
-        gold.writer("appeal_cycle_time_current", Refresh()),
-        cycle,
-        name="write:appeal_cycle_time",
+    return to_response_time(
+        messages, current, gold.writer("conversation_response_time_current", Refresh())
     )
-
-    citations = transform(
-        metrics.appeal_question_citations,
-        appeals,
-        current,
-        name="reduce:appeal_question_citations",
-    )
-    citations = validate(
-        SchemaValidator(schema.AppealQuestionCitation),
-        citations,
-        name="validate:appeal_question_citations",
-    )
-    write(
-        gold.writer("appeal_question_citations_current", Refresh()),
-        citations,
-        name="write:appeal_question_citations",
-    )
-
-    response = transform(
-        metrics.conversation_response_time,
-        messages,
-        current,
-        name="reduce:conversation_response_time",
-    )
-    response = validate(
-        SchemaValidator(schema.ConversationResponseTime),
-        response,
-        name="validate:conversation_response_time",
-    )
-    write(
-        gold.writer("conversation_response_time_current", Refresh()),
-        response,
-        name="write:conversation_response_time",
-    )
-
-    return response
 
 
 def main(argv: list[str]) -> int:
