@@ -17,6 +17,10 @@ import pytest
 from framework.core import Dataset
 from framework.io import Refresh
 from readers.sharepoint_cases import (
+    AnswerActionsReader,
+    AnswersReader,
+    AppealsReader,
+    CaseObservationHistoryReader,
     ConversationMessagesReader,
     CurrentCasesReader,
 )
@@ -34,15 +38,16 @@ MESSAGES = [
 ]
 
 
-def _seed(base_dir, table: str, rows: list[dict]) -> None:
-    """Land ``rows`` where the producer lands them — the Sync subject's gold.
+def _seed(base_dir, table: str, rows: list[dict], *, layer: str = "gold") -> None:
+    """Land ``rows`` where the producer lands them — the Sync subject's gold,
+    or its silver for the observation history.
 
     Deliberately spelled out through the medallion rather than through the
     reader under test: this is standing in for the producing pipeline, which is
     the one thing entitled to name the subject, the layer and the table.
     """
-    gold = medallion(StoreRegistry(base_dir), "sharepoint_cases").gold
-    gold.writer(table, Refresh()).write(Dataset.from_pandas(pd.DataFrame(rows)))
+    store = getattr(medallion(StoreRegistry(base_dir), "sharepoint_cases"), layer)
+    store.writer(table, Refresh()).write(Dataset.from_pandas(pd.DataFrame(rows)))
 
 
 def test_current_cases_reads_what_the_producer_landed_in_gold(tmp_path):
@@ -55,6 +60,37 @@ def test_conversation_messages_reads_what_the_producer_landed_in_gold(tmp_path):
     _seed(tmp_path, "conversation_message", MESSAGES)
 
     assert rows_of(ConversationMessagesReader(tmp_path).read()) == MESSAGES
+
+
+@pytest.mark.parametrize(
+    "reader_class, table",
+    [
+        (AnswersReader, "answer"),
+        (AnswerActionsReader, "answer_action"),
+        (AppealsReader, "appeal"),
+    ],
+)
+def test_each_detail_table_reader_reads_what_the_producer_landed_in_gold(
+    tmp_path, reader_class, table
+):
+    rows = [{"case_id": "c-1", "question_id": "q1", "table": table}]
+    _seed(tmp_path, table, rows)
+
+    assert rows_of(reader_class(tmp_path).read()) == rows
+
+
+def test_case_observation_history_reads_the_producers_silver_not_its_gold(tmp_path):
+    # The history is the one reader below gold: the accumulated observations,
+    # one per poll per Case, that gold has already reduced to one row each. A
+    # contradicting gold table proves which layer the reader answers from.
+    history = [
+        {"source_item_id": "1", "source_observation_id": "o1", "status": "To-allocate"},
+        {"source_item_id": "1", "source_observation_id": "o2", "status": "In-progress"},
+    ]
+    _seed(tmp_path, "case_version", history, layer="silver")
+    _seed(tmp_path, "case_current", [{"source_item_id": "1", "status": "Completed"}])
+
+    assert rows_of(CaseObservationHistoryReader(tmp_path).read()) == history
 
 
 def test_each_reader_sees_only_its_own_table(tmp_path):
@@ -121,7 +157,15 @@ def test_describe_and_data_locations_delegate_to_the_reader_underneath(
 
 
 @pytest.mark.parametrize(
-    "reader_class", [CurrentCasesReader, ConversationMessagesReader]
+    "reader_class",
+    [
+        CurrentCasesReader,
+        ConversationMessagesReader,
+        AnswersReader,
+        AnswerActionsReader,
+        AppealsReader,
+        CaseObservationHistoryReader,
+    ],
 )
 def test_an_empty_base_dir_fails_the_way_the_underlying_reader_already_fails(
     tmp_path, reader_class

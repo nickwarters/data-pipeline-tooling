@@ -9,10 +9,11 @@ subject boundary. Its location and identity are declared **once**, in
 nothing else:
 
 ```python
-from readers.sharepoint_cases import CurrentCasesReader
+from readers.sharepoint_cases import CaseObservationHistoryReader, CurrentCasesReader
 from readers.users import UsersReader
 
 CurrentCasesReader(base_dir=base_dir)
+CaseObservationHistoryReader(base_dir=base_dir)
 UsersReader(base_dir=base_dir)
 ```
 
@@ -84,6 +85,17 @@ class CurrentCasesReader:
 Readers underneath populate it when `read()` runs; snapshotting it at
 construction would freeze the empty list and the run log would record that the
 step touched nothing.
+
+### Backed by a layer below gold — `CaseObservationHistoryReader`
+
+Most of `readers/sharepoint_cases.py` sits on the subject's gold. One reader
+does not: `CaseObservationHistoryReader` answers "what did each Case look like
+each time we saw it", and only the accumulated observation history beneath the
+current state can answer that — gold has already reduced it to one row per
+Case. The layer is still the module's secret: the consumer asks for the
+history, the reader knows it lives in silver today. `cora_platform_metric`'s
+stage-dwell and hold tables are its consumers, and they are the reason the
+question crosses a subject boundary at all.
 
 ### Backed by nothing at all — `readers/users.py`
 
