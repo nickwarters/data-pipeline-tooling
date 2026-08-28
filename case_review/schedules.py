@@ -31,4 +31,9 @@ def build_pipeline_sets():
             "selection",
             (ScheduledPipeline("pipelines/complaint_selection", Schedule.daily()),),
         ),
+        # Last, so the day's other runs are in the registry it reads.
+        PipelineSet(
+            "operations",
+            (ScheduledPipeline("pipelines/pipeline_run_metric", Schedule.daily()),),
+        ),
     )
