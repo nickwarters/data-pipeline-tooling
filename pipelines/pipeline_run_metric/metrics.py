@@ -18,11 +18,14 @@ the same registry contents produces the same tables.
 from __future__ import annotations
 
 import json
+from typing import get_type_hints
 
 import pandas as pd
 
 from framework.core import Dataset
 from tools.observability.timestamps import local_date
+
+from .schema import PipelineRunSummary, StepDurationTrendDaily, StepRowFlow
 
 AS_OF_COLUMN = "as_of_utc"
 
@@ -92,24 +95,34 @@ def _prepared(records: Dataset) -> pd.DataFrame:
     return frame
 
 
-def _typed(frame: pd.DataFrame, *, as_of: str, ints=(), floats=(), bools=()) -> Dataset:
-    """Stamp, type and return in the given column order (the frame's).
+# What each declared type is held as while the table is being built.
+PANDAS_DTYPES = {str: "string", int: "int64", float: "float64", bool: "bool"}
 
-    Typing is explicit so an empty result still carries the declared shape;
-    anything not named as a count, a statistic or a flag is a string dimension.
+
+def _columns(table: type) -> dict[str, str]:
+    """The columns ``table`` declares, in order, as the dtypes they land as.
+
+    The dataclass in ``schema`` is the one statement of a table's shape; these
+    reductions read it off there rather than restating it beside each one.
     """
+    return {
+        name: PANDAS_DTYPES[declared]
+        for name, declared in get_type_hints(table).items()
+    }
+
+
+def _typed(frame: pd.DataFrame, table: type, *, as_of: str) -> Dataset:
+    """Stamp the frame and land it as the columns and types ``table`` declares.
+
+    Typing every column explicitly is what makes an empty result still carry
+    the shape the table's ``SchemaValidator`` gates.
+    """
+    columns = _columns(table)
     frame = frame.copy()
     frame[AS_OF_COLUMN] = as_of
-    for column in frame.columns:
-        if column in ints:
-            frame[column] = frame[column].astype("int64")
-        elif column in floats:
-            frame[column] = pd.to_numeric(frame[column]).astype("float64")
-        elif column in bools:
-            frame[column] = frame[column].astype("bool")
-        else:
-            frame[column] = frame[column].astype("string")
-    return Dataset.from_pandas(frame.reset_index(drop=True))
+    for column, dtype in columns.items():
+        frame[column] = frame[column].astype(dtype)
+    return Dataset.from_pandas(frame[list(columns)].reset_index(drop=True))
 
 
 def _warn_count(value: object) -> int:
@@ -126,25 +139,6 @@ def _warn_count(value: object) -> int:
 
 
 # --- the tables -------------------------------------------------------------
-
-SUMMARY_COLUMNS = (
-    RUN_ID_COLUMN,
-    "pipeline",
-    "logical_run_id",
-    "run_date",
-    "started_at",
-    "finished_at",
-    "wall_clock_seconds",
-    "step_duration_seconds",
-    "step_count",
-    "failed_step_count",
-    "committed_step_count",
-    "warn_hit_count",
-    "status",
-    "error_category",
-    "attempt_number",
-    "is_latest_attempt",
-)
 
 
 def run_summary(records: Dataset, *, as_of: str) -> Dataset:
@@ -196,30 +190,18 @@ def run_summary(records: Dataset, *, as_of: str) -> Dataset:
             }
         )
 
-    summarised = pd.DataFrame(rows, columns=list(SUMMARY_COLUMNS)).sort_values(
-        ["started_at", RUN_ID_COLUMN], kind="stable"
-    )
-    # A run with no logical run id is its own attempt series.
+    summarised = pd.DataFrame(
+        rows, columns=list(_columns(PipelineRunSummary))
+    ).sort_values(["started_at", RUN_ID_COLUMN], kind="stable")
+    # A run with no logical run id is its own attempt series. The rows are in
+    # start order, so a key's last row is its latest attempt.
     attempt_key = summarised["logical_run_id"].fillna(summarised[RUN_ID_COLUMN])
     summarised["attempt_number"] = attempt_key.groupby(attempt_key).cumcount() + 1
-    summarised["is_latest_attempt"] = summarised["attempt_number"].eq(
-        attempt_key.map(attempt_key.value_counts())
-    )
-    return _typed(
-        summarised,
-        as_of=as_of,
-        ints=(
-            "step_count",
-            "failed_step_count",
-            "committed_step_count",
-            "warn_hit_count",
-            "attempt_number",
-        ),
-        floats=("wall_clock_seconds", "step_duration_seconds"),
-        bools=("is_latest_attempt",),
-    )
+    summarised["is_latest_attempt"] = ~attempt_key.duplicated(keep="last")
+    return _typed(summarised, PipelineRunSummary, as_of=as_of)
 
 
+# The trend's measures, rounded to the same place before they are published.
 TREND_MEASURES = (
     "duration_p50",
     "duration_p95",
@@ -265,7 +247,7 @@ def step_duration_trend(
     for column in TREND_MEASURES:
         daily[column] = daily[column].round(6)
 
-    return _typed(daily, as_of=as_of, ints=("execution_count",), floats=TREND_MEASURES)
+    return _typed(daily, StepDurationTrendDaily, as_of=as_of)
 
 
 COUNT_COLUMNS = ("rows_in", "rows_out", "rows_quarantined", "rows_excluded")
@@ -304,9 +286,4 @@ def step_row_flow(records: Dataset, *, as_of: str) -> Dataset:
     flow["out_ratio"] = (flow["rows_out"] / rows_in).round(6)
     flow["quarantine_ratio"] = (flow["rows_quarantined"] / rows_in).round(6)
 
-    return _typed(
-        flow,
-        as_of=as_of,
-        ints=("execution_count",),
-        floats=(*COUNT_COLUMNS, "out_ratio", "quarantine_ratio"),
-    )
+    return _typed(flow, StepRowFlow, as_of=as_of)
