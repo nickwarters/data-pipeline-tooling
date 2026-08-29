@@ -57,9 +57,11 @@ hours are decimal (a three-hour hold is `0.125` days), rounded to three places.
 | **Last reviewed** | 2026-08-28 |
 
 The Sync snapshot instant, `as_of_utc`, is read off `case_current` — one
-literal on every row — and is what an open hold is measured to and what every
-table is stamped with. An empty `case_current` has no snapshot to report
-against and fails the run rather than publishing eleven empty tables.
+literal on every row — once at the top of the run, and is what an open hold is
+measured to and what every table is stamped with. Each reduction is handed that
+instant, so the eleven tables cannot disagree about which snapshot they
+describe. An empty `case_current` has no snapshot to report against and fails
+the run rather than publishing eleven empty tables.
 
 ## Part B — The tables
 
@@ -297,11 +299,12 @@ gated by its `SchemaValidator` (columns, types, nullability, `OneOf` on
 
 - Nothing is quarantined: these are reductions of already-published gold and
   silver, whose row contracts the Sync subject enforces.
-- Each source is read once for the run, and each step gates the ones it uses
-  with a `ColumnValidator` on the columns its reduction reads, so a Sync shape
-  change fails that step with the column named rather than publishing a wrong
-  number; the tables before it in publication order are already refreshed, and
-  the next run rebuilds them all.
+- Each source is read once for the run. `case_current` is gated as it is read,
+  since the snapshot instant is taken off it there; every other source is gated
+  by the step that reduces it, with a `ColumnValidator` on the columns that
+  reduction reads. So a Sync shape change fails that step with the column named
+  rather than publishing a wrong number; the tables before it in publication
+  order are already refreshed, and the next run rebuilds them all.
 - An instant that does not parse (`errors="coerce"`) drops that row from the
   measure it feeds — a Completed Case with an unparseable `completed_at` is not
   in the SLA table; an Appeal with an unparseable `resolution_at` is in

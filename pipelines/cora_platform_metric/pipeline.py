@@ -7,10 +7,11 @@ subject's own gold on every run. Each reduction is a function in ``metrics``;
 this module only wires readers and writers around them, with the eager steps,
 so a run reads top to bottom and can be stepped through in a debugger.
 
-``run`` does the wiring: it reads each source once and hands it to every
-``to_*`` step that needs it. Each step then gates what it was handed on the
-columns it uses, reduces, validates and writes one table. The gate sits inside
-the step so a source missing a column fails that table rather than the ones
+``run`` does the wiring: it reads each source once, takes the Sync snapshot
+instant off the current Cases -- the one ``as_of_utc`` every table is stamped
+with -- and hands each ``to_*`` step what it reduces, that instant, and the
+Writer for its table. A step gates the source it reduces on the columns it
+needs, so a source missing a column fails that table rather than the ones
 before it: the tables commit independently, in order, and a failure part-way
 leaves the earlier ones refreshed, which is safe because the next run rebuilds
 everything from the same Sync snapshot or a newer one.
@@ -96,28 +97,33 @@ def _calendar_from(context: RunContext) -> WorkingDayCalendar:
     return WorkingDayCalendar.from_yaml(path) if path else WorkingDayCalendar()
 
 
-def to_stage_dwell(observations: Dataset, cases: Dataset, writer: Writer) -> Dataset:
+def to_stage_dwell(observations: Dataset, as_of: str, writer: Writer) -> Dataset:
     validate(HISTORY_GATE, observations, name="dwell:history")
-    validate(CURRENT_GATE, cases, name="dwell:current")
-    data = transform(metrics.case_stage_dwell, observations, cases, name="dwell:reduce")
+    data = transform(
+        partial(metrics.case_stage_dwell, as_of=as_of),
+        observations,
+        name="dwell:reduce",
+    )
     validate(SchemaValidator(schema.CaseStageDwell), data, name="dwell:validate")
     return write(writer, data, name="dwell:write")
 
 
-def to_hold(observations: Dataset, cases: Dataset, writer: Writer) -> Dataset:
+def to_hold(observations: Dataset, as_of: str, writer: Writer) -> Dataset:
     validate(HISTORY_GATE, observations, name="hold:history")
-    validate(CURRENT_GATE, cases, name="hold:current")
-    data = transform(metrics.case_hold, observations, cases, name="hold:reduce")
+    data = transform(
+        partial(metrics.case_hold, as_of=as_of), observations, name="hold:reduce"
+    )
     validate(SchemaValidator(schema.CaseHold), data, name="hold:validate")
     return write(writer, data, name="hold:write")
 
 
 def to_sla_attainment(
-    cases: Dataset, writer: Writer, calendar: WorkingDayCalendar
+    cases: Dataset, as_of: str, writer: Writer, calendar: WorkingDayCalendar
 ) -> Dataset:
-    validate(CURRENT_GATE, cases, name="sla:current")
     data = transform(
-        partial(metrics.sla_attainment, calendar=calendar), cases, name="sla:reduce"
+        partial(metrics.sla_attainment, as_of=as_of, calendar=calendar),
+        cases,
+        name="sla:reduce",
     )
     validate(
         SchemaValidator(schema.CaseSlaAttainmentMonthly), data, name="sla:validate"
@@ -125,18 +131,23 @@ def to_sla_attainment(
     return write(writer, data, name="sla:write")
 
 
-def to_void_monthly(cases: Dataset, writer: Writer) -> Dataset:
-    validate(CURRENT_GATE, cases, name="void:current")
-    data = transform(metrics.void_monthly, cases, name="void:reduce")
+def to_void_monthly(cases: Dataset, as_of: str, writer: Writer) -> Dataset:
+    data = transform(
+        partial(metrics.void_monthly, as_of=as_of), cases, name="void:reduce"
+    )
     validate(SchemaValidator(schema.CaseVoidMonthly), data, name="void:validate")
     return write(writer, data, name="void:write")
 
 
-def to_action_load(actions: Dataset, cases: Dataset, writer: Writer) -> Dataset:
+def to_action_load(
+    actions: Dataset, cases: Dataset, as_of: str, writer: Writer
+) -> Dataset:
     validate(ACTION_GATE, actions, name="action_load:actions")
-    validate(CURRENT_GATE, cases, name="action_load:current")
     data = transform(
-        metrics.answer_action_load, actions, cases, name="action_load:reduce"
+        partial(metrics.answer_action_load, as_of=as_of),
+        actions,
+        cases,
+        name="action_load:reduce",
     )
     validate(
         SchemaValidator(schema.AnswerActionLoad), data, name="action_load:validate"
@@ -145,12 +156,14 @@ def to_action_load(actions: Dataset, cases: Dataset, writer: Writer) -> Dataset:
 
 
 def to_remediation_by_manager(
-    answers: Dataset, cases: Dataset, writer: Writer
+    answers: Dataset, cases: Dataset, as_of: str, writer: Writer
 ) -> Dataset:
     validate(ANSWER_GATE, answers, name="remediation:answers")
-    validate(CURRENT_GATE, cases, name="remediation:current")
     data = transform(
-        metrics.answer_remediation_by_manager, answers, cases, name="remediation:reduce"
+        partial(metrics.answer_remediation_by_manager, as_of=as_of),
+        answers,
+        cases,
+        name="remediation:reduce",
     )
     validate(
         SchemaValidator(schema.AnswerRemediationByManager),
@@ -160,11 +173,12 @@ def to_remediation_by_manager(
     return write(writer, data, name="remediation:write")
 
 
-def to_appeal_cycle_time(appeals: Dataset, cases: Dataset, writer: Writer) -> Dataset:
+def to_appeal_cycle_time(appeals: Dataset, as_of: str, writer: Writer) -> Dataset:
     validate(APPEAL_GATE, appeals, name="appeal_cycle:appeals")
-    validate(CURRENT_GATE, cases, name="appeal_cycle:current")
     data = transform(
-        metrics.appeal_cycle_time, appeals, cases, name="appeal_cycle:reduce"
+        partial(metrics.appeal_cycle_time, as_of=as_of),
+        appeals,
+        name="appeal_cycle:reduce",
     )
     validate(
         SchemaValidator(schema.AppealCycleTime), data, name="appeal_cycle:validate"
@@ -172,13 +186,11 @@ def to_appeal_cycle_time(appeals: Dataset, cases: Dataset, writer: Writer) -> Da
     return write(writer, data, name="appeal_cycle:write")
 
 
-def to_appeal_citations(appeals: Dataset, cases: Dataset, writer: Writer) -> Dataset:
+def to_appeal_citations(appeals: Dataset, as_of: str, writer: Writer) -> Dataset:
     validate(APPEAL_GATE, appeals, name="appeal_citations:appeals")
-    validate(CURRENT_GATE, cases, name="appeal_citations:current")
     data = transform(
-        metrics.appeal_question_citations,
+        partial(metrics.appeal_question_citations, as_of=as_of),
         appeals,
-        cases,
         name="appeal_citations:reduce",
     )
     validate(
@@ -189,11 +201,12 @@ def to_appeal_citations(appeals: Dataset, cases: Dataset, writer: Writer) -> Dat
     return write(writer, data, name="appeal_citations:write")
 
 
-def to_response_time(messages: Dataset, cases: Dataset, writer: Writer) -> Dataset:
+def to_response_time(messages: Dataset, as_of: str, writer: Writer) -> Dataset:
     validate(MESSAGE_GATE, messages, name="response_time:messages")
-    validate(CURRENT_GATE, cases, name="response_time:current")
     data = transform(
-        metrics.conversation_response_time, messages, cases, name="response_time:reduce"
+        partial(metrics.conversation_response_time, as_of=as_of),
+        messages,
+        name="response_time:reduce",
     )
     validate(
         SchemaValidator(schema.ConversationResponseTime),
@@ -203,19 +216,24 @@ def to_response_time(messages: Dataset, cases: Dataset, writer: Writer) -> Datas
     return write(writer, data, name="response_time:write")
 
 
-def to_volume(messages: Dataset, cases: Dataset, writer: Writer) -> Dataset:
+def to_volume(messages: Dataset, cases: Dataset, as_of: str, writer: Writer) -> Dataset:
     validate(MESSAGE_GATE, messages, name="volume:messages")
-    validate(CURRENT_GATE, cases, name="volume:current")
-    data = transform(metrics.conversation_volume, messages, cases, name="volume:reduce")
+    data = transform(
+        partial(metrics.conversation_volume, as_of=as_of),
+        messages,
+        cases,
+        name="volume:reduce",
+    )
     validate(SchemaValidator(schema.ConversationVolume), data, name="volume:validate")
     return write(writer, data, name="volume:write")
 
 
-def to_posting_pattern(messages: Dataset, cases: Dataset, writer: Writer) -> Dataset:
+def to_posting_pattern(
+    messages: Dataset, cases: Dataset, as_of: str, writer: Writer
+) -> Dataset:
     validate(MESSAGE_GATE, messages, name="posting_pattern:messages")
-    validate(CURRENT_GATE, cases, name="posting_pattern:current")
     data = transform(
-        metrics.conversation_posting_pattern,
+        partial(metrics.conversation_posting_pattern, as_of=as_of),
         messages,
         cases,
         name="posting_pattern:reduce",
@@ -233,13 +251,17 @@ def run(context: RunContext) -> Dataset:
 
     Sources come through their Shared Readers and targets through this
     pipeline's own medallion -- a pipeline resolves where it *writes*, never
-    where someone else's data lives.
+    where someone else's data lives. The current Cases are gated here rather
+    than in a step because this function reads the snapshot instant off them.
     """
     base_dir = context.base_dir
     gold = medallion(StoreRegistry(base_dir), schema.SUBJECT).gold
     calendar = _calendar_from(context)
 
     cases = read(CurrentCasesReader(base_dir), name="current:read")
+    validate(CURRENT_GATE, cases, name="current:columns")
+    as_of = metrics.snapshot_as_of(cases)
+
     observations = read(CaseObservationHistoryReader(base_dir), name="history:read")
     answers = read(AnswersReader(base_dir), name="answers:read")
     actions = read(AnswerActionsReader(base_dir), name="actions:read")
@@ -247,29 +269,39 @@ def run(context: RunContext) -> Dataset:
     messages = read(ConversationMessagesReader(base_dir), name="messages:read")
 
     to_stage_dwell(
-        observations, cases, gold.writer("case_stage_dwell_current", Refresh())
+        observations, as_of, gold.writer("case_stage_dwell_current", Refresh())
     )
-    to_hold(observations, cases, gold.writer("case_hold_current", Refresh()))
+    to_hold(observations, as_of, gold.writer("case_hold_current", Refresh()))
     to_sla_attainment(
-        cases, gold.writer("case_sla_attainment_monthly", Refresh()), calendar
+        cases, as_of, gold.writer("case_sla_attainment_monthly", Refresh()), calendar
     )
-    to_void_monthly(cases, gold.writer("case_void_monthly", Refresh()))
-    to_action_load(actions, cases, gold.writer("answer_action_load_current", Refresh()))
+    to_void_monthly(cases, as_of, gold.writer("case_void_monthly", Refresh()))
+    to_action_load(
+        actions, cases, as_of, gold.writer("answer_action_load_current", Refresh())
+    )
     to_remediation_by_manager(
-        answers, cases, gold.writer("answer_remediation_by_manager_current", Refresh())
+        answers,
+        cases,
+        as_of,
+        gold.writer("answer_remediation_by_manager_current", Refresh()),
     )
     to_appeal_cycle_time(
-        appeals, cases, gold.writer("appeal_cycle_time_current", Refresh())
+        appeals, as_of, gold.writer("appeal_cycle_time_current", Refresh())
     )
     to_appeal_citations(
-        appeals, cases, gold.writer("appeal_question_citations_current", Refresh())
+        appeals, as_of, gold.writer("appeal_question_citations_current", Refresh())
     )
     to_response_time(
-        messages, cases, gold.writer("conversation_response_time_current", Refresh())
+        messages, as_of, gold.writer("conversation_response_time_current", Refresh())
     )
-    to_volume(messages, cases, gold.writer("conversation_volume_current", Refresh()))
+    to_volume(
+        messages, cases, as_of, gold.writer("conversation_volume_current", Refresh())
+    )
     return to_posting_pattern(
-        messages, cases, gold.writer("conversation_posting_pattern_current", Refresh())
+        messages,
+        cases,
+        as_of,
+        gold.writer("conversation_posting_pattern_current", Refresh()),
     )
 
 
