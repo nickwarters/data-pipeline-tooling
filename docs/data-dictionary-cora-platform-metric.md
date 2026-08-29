@@ -297,10 +297,11 @@ gated by its `SchemaValidator` (columns, types, nullability, `OneOf` on
 
 - Nothing is quarantined: these are reductions of already-published gold and
   silver, whose row contracts the Sync subject enforces.
-- Each step gates the sources it reads with a `ColumnValidator` on the columns
-  its reduction uses, so a Sync shape change fails that step with the column
-  named rather than publishing a wrong number; the tables before it in
-  publication order are already refreshed, and the next run rebuilds them all.
+- Each source is read once for the run, and each step gates the ones it uses
+  with a `ColumnValidator` on the columns its reduction reads, so a Sync shape
+  change fails that step with the column named rather than publishing a wrong
+  number; the tables before it in publication order are already refreshed, and
+  the next run rebuilds them all.
 - An instant that does not parse (`errors="coerce"`) drops that row from the
   measure it feeds — a Completed Case with an unparseable `completed_at` is not
   in the SLA table; an Appeal with an unparseable `resolution_at` is in

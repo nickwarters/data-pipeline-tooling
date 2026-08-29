@@ -7,10 +7,13 @@ subject's own gold on every run. Each reduction is a function in ``metrics``;
 this module only wires readers and writers around them, with the eager steps,
 so a run reads top to bottom and can be stepped through in a debugger.
 
-Sources are read once and handed to every reduction that needs them. The
-tables commit independently, in order; a failure part-way leaves the earlier
-ones refreshed, which is safe because the next run rebuilds everything from the
-same Sync snapshot or a newer one.
+``run`` does the wiring: it reads each source once and hands it to every
+``to_*`` step that needs it. Each step then gates what it was handed on the
+columns it uses, reduces, validates and writes one table. The gate sits inside
+the step so a source missing a column fails that table rather than the ones
+before it: the tables commit independently, in order, and a failure part-way
+leaves the earlier ones refreshed, which is safe because the next run rebuilds
+everything from the same Sync snapshot or a newer one.
 
 Run parameters:
 
@@ -26,13 +29,11 @@ import argparse
 import sys
 from functools import partial
 from pathlib import Path
-from typing import Sequence
 
 from framework.core import (
     ColumnValidator,
     Dataset,
     PipelineError,
-    Reader,
     SchemaValidator,
     format_failure,
 )
@@ -78,6 +79,15 @@ GOLD_TABLES = (
     ("conversation_posting_pattern_current", schema.ConversationPostingPattern),
 )
 
+# One gate per source, on the columns the reductions read from it. Stateless,
+# so the steps that share a source share its gate.
+CURRENT_GATE = ColumnValidator(metrics.CURRENT_COLUMNS)
+HISTORY_GATE = ColumnValidator(metrics.HISTORY_COLUMNS)
+ANSWER_GATE = ColumnValidator(metrics.ANSWER_COLUMNS)
+ACTION_GATE = ColumnValidator(metrics.ANSWER_ACTION_COLUMNS)
+APPEAL_GATE = ColumnValidator(metrics.APPEAL_COLUMNS)
+MESSAGE_GATE = ColumnValidator(metrics.CONVERSATION_COLUMNS)
+
 CALENDAR_PARAM = "calendar"
 
 
@@ -86,181 +96,180 @@ def _calendar_from(context: RunContext) -> WorkingDayCalendar:
     return WorkingDayCalendar.from_yaml(path) if path else WorkingDayCalendar()
 
 
-def _gated(reader: Reader, columns: Sequence[str], at: str) -> Dataset:
-    """Read one Sync dataset and gate it on the columns the step uses."""
-    data = read(reader, name=f"{at}:read")
-    validate(ColumnValidator(list(columns)), data, name=f"{at}:columns")
-    return data
+def to_stage_dwell(observations: Dataset, cases: Dataset, writer: Writer) -> Dataset:
+    validate(HISTORY_GATE, observations, name="dwell:history")
+    validate(CURRENT_GATE, cases, name="dwell:current")
+    data = transform(metrics.case_stage_dwell, observations, cases, name="dwell:reduce")
+    validate(SchemaValidator(schema.CaseStageDwell), data, name="dwell:validate")
+    return write(writer, data, name="dwell:write")
 
 
-def to_stage_dwell(history: Reader, current: Reader, writer: Writer) -> Dataset:
-    at = "dwell"
-    cases = _gated(current, metrics.CURRENT_COLUMNS, f"{at}:current")
-    observations = _gated(history, metrics.HISTORY_COLUMNS, f"{at}:history")
-    data = transform(metrics.case_stage_dwell, observations, cases, name=f"{at}:reduce")
-    validate(SchemaValidator(schema.CaseStageDwell), data, name=f"{at}:validate")
-    return write(writer, data, name=f"{at}:write")
-
-
-def to_hold(history: Reader, current: Reader, writer: Writer) -> Dataset:
-    at = "hold"
-    cases = _gated(current, metrics.CURRENT_COLUMNS, f"{at}:current")
-    observations = _gated(history, metrics.HISTORY_COLUMNS, f"{at}:history")
-    data = transform(metrics.case_hold, observations, cases, name=f"{at}:reduce")
-    validate(SchemaValidator(schema.CaseHold), data, name=f"{at}:validate")
-    return write(writer, data, name=f"{at}:write")
+def to_hold(observations: Dataset, cases: Dataset, writer: Writer) -> Dataset:
+    validate(HISTORY_GATE, observations, name="hold:history")
+    validate(CURRENT_GATE, cases, name="hold:current")
+    data = transform(metrics.case_hold, observations, cases, name="hold:reduce")
+    validate(SchemaValidator(schema.CaseHold), data, name="hold:validate")
+    return write(writer, data, name="hold:write")
 
 
 def to_sla_attainment(
-    current: Reader, writer: Writer, calendar: WorkingDayCalendar
+    cases: Dataset, writer: Writer, calendar: WorkingDayCalendar
 ) -> Dataset:
-    at = "sla"
-    cases = _gated(current, metrics.CURRENT_COLUMNS, f"{at}:current")
+    validate(CURRENT_GATE, cases, name="sla:current")
     data = transform(
-        partial(metrics.sla_attainment, calendar=calendar), cases, name=f"{at}:reduce"
+        partial(metrics.sla_attainment, calendar=calendar), cases, name="sla:reduce"
     )
     validate(
-        SchemaValidator(schema.CaseSlaAttainmentMonthly), data, name=f"{at}:validate"
+        SchemaValidator(schema.CaseSlaAttainmentMonthly), data, name="sla:validate"
     )
-    return write(writer, data, name=f"{at}:write")
+    return write(writer, data, name="sla:write")
 
 
-def to_void_monthly(current: Reader, writer: Writer) -> Dataset:
-    at = "void"
-    cases = _gated(current, metrics.CURRENT_COLUMNS, f"{at}:current")
-    data = transform(metrics.void_monthly, cases, name=f"{at}:reduce")
-    validate(SchemaValidator(schema.CaseVoidMonthly), data, name=f"{at}:validate")
-    return write(writer, data, name=f"{at}:write")
+def to_void_monthly(cases: Dataset, writer: Writer) -> Dataset:
+    validate(CURRENT_GATE, cases, name="void:current")
+    data = transform(metrics.void_monthly, cases, name="void:reduce")
+    validate(SchemaValidator(schema.CaseVoidMonthly), data, name="void:validate")
+    return write(writer, data, name="void:write")
 
 
-def to_action_load(actions: Reader, current: Reader, writer: Writer) -> Dataset:
-    at = "action_load"
-    cases = _gated(current, metrics.CURRENT_COLUMNS, f"{at}:current")
-    rows = _gated(actions, metrics.ANSWER_ACTION_COLUMNS, f"{at}:actions")
-    data = transform(metrics.answer_action_load, rows, cases, name=f"{at}:reduce")
-    validate(SchemaValidator(schema.AnswerActionLoad), data, name=f"{at}:validate")
-    return write(writer, data, name=f"{at}:write")
+def to_action_load(actions: Dataset, cases: Dataset, writer: Writer) -> Dataset:
+    validate(ACTION_GATE, actions, name="action_load:actions")
+    validate(CURRENT_GATE, cases, name="action_load:current")
+    data = transform(
+        metrics.answer_action_load, actions, cases, name="action_load:reduce"
+    )
+    validate(
+        SchemaValidator(schema.AnswerActionLoad), data, name="action_load:validate"
+    )
+    return write(writer, data, name="action_load:write")
 
 
 def to_remediation_by_manager(
-    answers: Reader, current: Reader, writer: Writer
+    answers: Dataset, cases: Dataset, writer: Writer
 ) -> Dataset:
-    at = "remediation_by_manager"
-    cases = _gated(current, metrics.CURRENT_COLUMNS, f"{at}:current")
-    rows = _gated(answers, metrics.ANSWER_COLUMNS, f"{at}:answers")
+    validate(ANSWER_GATE, answers, name="remediation:answers")
+    validate(CURRENT_GATE, cases, name="remediation:current")
     data = transform(
-        metrics.answer_remediation_by_manager, rows, cases, name=f"{at}:reduce"
+        metrics.answer_remediation_by_manager, answers, cases, name="remediation:reduce"
     )
     validate(
-        SchemaValidator(schema.AnswerRemediationByManager), data, name=f"{at}:validate"
+        SchemaValidator(schema.AnswerRemediationByManager),
+        data,
+        name="remediation:validate",
     )
-    return write(writer, data, name=f"{at}:write")
+    return write(writer, data, name="remediation:write")
 
 
-def to_appeal_cycle_time(appeals: Reader, current: Reader, writer: Writer) -> Dataset:
-    at = "appeal_cycle"
-    cases = _gated(current, metrics.CURRENT_COLUMNS, f"{at}:current")
-    rows = _gated(appeals, metrics.APPEAL_COLUMNS, f"{at}:appeals")
-    data = transform(metrics.appeal_cycle_time, rows, cases, name=f"{at}:reduce")
-    validate(SchemaValidator(schema.AppealCycleTime), data, name=f"{at}:validate")
-    return write(writer, data, name=f"{at}:write")
-
-
-def to_appeal_citations(appeals: Reader, current: Reader, writer: Writer) -> Dataset:
-    at = "appeal_citations"
-    cases = _gated(current, metrics.CURRENT_COLUMNS, f"{at}:current")
-    rows = _gated(appeals, metrics.APPEAL_COLUMNS, f"{at}:appeals")
+def to_appeal_cycle_time(appeals: Dataset, cases: Dataset, writer: Writer) -> Dataset:
+    validate(APPEAL_GATE, appeals, name="appeal_cycle:appeals")
+    validate(CURRENT_GATE, cases, name="appeal_cycle:current")
     data = transform(
-        metrics.appeal_question_citations, rows, cases, name=f"{at}:reduce"
+        metrics.appeal_cycle_time, appeals, cases, name="appeal_cycle:reduce"
     )
     validate(
-        SchemaValidator(schema.AppealQuestionCitation), data, name=f"{at}:validate"
+        SchemaValidator(schema.AppealCycleTime), data, name="appeal_cycle:validate"
     )
-    return write(writer, data, name=f"{at}:write")
+    return write(writer, data, name="appeal_cycle:write")
 
 
-def to_response_time(messages: Reader, current: Reader, writer: Writer) -> Dataset:
-    at = "response_time"
-    cases = _gated(current, metrics.CURRENT_COLUMNS, f"{at}:current")
-    rows = _gated(messages, metrics.CONVERSATION_COLUMNS, f"{at}:messages")
+def to_appeal_citations(appeals: Dataset, cases: Dataset, writer: Writer) -> Dataset:
+    validate(APPEAL_GATE, appeals, name="appeal_citations:appeals")
+    validate(CURRENT_GATE, cases, name="appeal_citations:current")
     data = transform(
-        metrics.conversation_response_time, rows, cases, name=f"{at}:reduce"
+        metrics.appeal_question_citations,
+        appeals,
+        cases,
+        name="appeal_citations:reduce",
     )
     validate(
-        SchemaValidator(schema.ConversationResponseTime), data, name=f"{at}:validate"
+        SchemaValidator(schema.AppealQuestionCitation),
+        data,
+        name="appeal_citations:validate",
     )
-    return write(writer, data, name=f"{at}:write")
+    return write(writer, data, name="appeal_citations:write")
 
 
-def to_volume(messages: Reader, current: Reader, writer: Writer) -> Dataset:
-    at = "volume"
-    cases = _gated(current, metrics.CURRENT_COLUMNS, f"{at}:current")
-    rows = _gated(messages, metrics.CONVERSATION_COLUMNS, f"{at}:messages")
-    data = transform(metrics.conversation_volume, rows, cases, name=f"{at}:reduce")
-    validate(SchemaValidator(schema.ConversationVolume), data, name=f"{at}:validate")
-    return write(writer, data, name=f"{at}:write")
-
-
-def to_posting_pattern(messages: Reader, current: Reader, writer: Writer) -> Dataset:
-    at = "posting_pattern"
-    cases = _gated(current, metrics.CURRENT_COLUMNS, f"{at}:current")
-    rows = _gated(messages, metrics.CONVERSATION_COLUMNS, f"{at}:messages")
+def to_response_time(messages: Dataset, cases: Dataset, writer: Writer) -> Dataset:
+    validate(MESSAGE_GATE, messages, name="response_time:messages")
+    validate(CURRENT_GATE, cases, name="response_time:current")
     data = transform(
-        metrics.conversation_posting_pattern, rows, cases, name=f"{at}:reduce"
+        metrics.conversation_response_time, messages, cases, name="response_time:reduce"
     )
     validate(
-        SchemaValidator(schema.ConversationPostingPattern), data, name=f"{at}:validate"
+        SchemaValidator(schema.ConversationResponseTime),
+        data,
+        name="response_time:validate",
     )
-    return write(writer, data, name=f"{at}:write")
+    return write(writer, data, name="response_time:write")
+
+
+def to_volume(messages: Dataset, cases: Dataset, writer: Writer) -> Dataset:
+    validate(MESSAGE_GATE, messages, name="volume:messages")
+    validate(CURRENT_GATE, cases, name="volume:current")
+    data = transform(metrics.conversation_volume, messages, cases, name="volume:reduce")
+    validate(SchemaValidator(schema.ConversationVolume), data, name="volume:validate")
+    return write(writer, data, name="volume:write")
+
+
+def to_posting_pattern(messages: Dataset, cases: Dataset, writer: Writer) -> Dataset:
+    validate(MESSAGE_GATE, messages, name="posting_pattern:messages")
+    validate(CURRENT_GATE, cases, name="posting_pattern:current")
+    data = transform(
+        metrics.conversation_posting_pattern,
+        messages,
+        cases,
+        name="posting_pattern:reduce",
+    )
+    validate(
+        SchemaValidator(schema.ConversationPostingPattern),
+        data,
+        name="posting_pattern:validate",
+    )
+    return write(writer, data, name="posting_pattern:write")
 
 
 def run(context: RunContext) -> Dataset:
-    """Build each table in publication order.
+    """Read each Sync source once, then build each table in publication order.
 
     Sources come through their Shared Readers and targets through this
     pipeline's own medallion -- a pipeline resolves where it *writes*, never
-    where someone else's data lives. Each ``to_*`` step reads what it needs,
-    gates it, reduces, validates and writes one table.
+    where someone else's data lives.
     """
     base_dir = context.base_dir
     gold = medallion(StoreRegistry(base_dir), schema.SUBJECT).gold
     calendar = _calendar_from(context)
 
-    current = CurrentCasesReader(base_dir)
-    history = CaseObservationHistoryReader(base_dir)
-    answers = AnswersReader(base_dir)
-    actions = AnswerActionsReader(base_dir)
-    appeals = AppealsReader(base_dir)
-    messages = ConversationMessagesReader(base_dir)
+    cases = read(CurrentCasesReader(base_dir), name="current:read")
+    observations = read(CaseObservationHistoryReader(base_dir), name="history:read")
+    answers = read(AnswersReader(base_dir), name="answers:read")
+    actions = read(AnswerActionsReader(base_dir), name="actions:read")
+    appeals = read(AppealsReader(base_dir), name="appeals:read")
+    messages = read(ConversationMessagesReader(base_dir), name="messages:read")
 
-    to_stage_dwell(history, current, gold.writer("case_stage_dwell_current", Refresh()))
-    to_hold(history, current, gold.writer("case_hold_current", Refresh()))
+    to_stage_dwell(
+        observations, cases, gold.writer("case_stage_dwell_current", Refresh())
+    )
+    to_hold(observations, cases, gold.writer("case_hold_current", Refresh()))
     to_sla_attainment(
-        current, gold.writer("case_sla_attainment_monthly", Refresh()), calendar
+        cases, gold.writer("case_sla_attainment_monthly", Refresh()), calendar
     )
-    to_void_monthly(current, gold.writer("case_void_monthly", Refresh()))
-    to_action_load(
-        actions, current, gold.writer("answer_action_load_current", Refresh())
-    )
+    to_void_monthly(cases, gold.writer("case_void_monthly", Refresh()))
+    to_action_load(actions, cases, gold.writer("answer_action_load_current", Refresh()))
     to_remediation_by_manager(
-        answers,
-        current,
-        gold.writer("answer_remediation_by_manager_current", Refresh()),
+        answers, cases, gold.writer("answer_remediation_by_manager_current", Refresh())
     )
     to_appeal_cycle_time(
-        appeals, current, gold.writer("appeal_cycle_time_current", Refresh())
+        appeals, cases, gold.writer("appeal_cycle_time_current", Refresh())
     )
     to_appeal_citations(
-        appeals, current, gold.writer("appeal_question_citations_current", Refresh())
+        appeals, cases, gold.writer("appeal_question_citations_current", Refresh())
     )
     to_response_time(
-        messages, current, gold.writer("conversation_response_time_current", Refresh())
+        messages, cases, gold.writer("conversation_response_time_current", Refresh())
     )
-    to_volume(messages, current, gold.writer("conversation_volume_current", Refresh()))
+    to_volume(messages, cases, gold.writer("conversation_volume_current", Refresh()))
     return to_posting_pattern(
-        messages,
-        current,
-        gold.writer("conversation_posting_pattern_current", Refresh()),
+        messages, cases, gold.writer("conversation_posting_pattern_current", Refresh())
     )
 
 

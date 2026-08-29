@@ -6,13 +6,17 @@ observation history and so measure what the polls saw -- a change reversed
 between two polls was never observed. Every table is stamped with Sync's own
 ``as_of_utc`` and open intervals are measured to it, so a re-run over the same
 snapshot gives the same numbers.
+
+Each table declares its columns and their types together, in a ``*_COLUMNS``
+mapping beside the reduction that fills it, and ``_finish`` builds the frame
+from that mapping -- so an empty result still lands the shape the table's
+``SchemaValidator`` gates.
 """
 
 from __future__ import annotations
 
 import datetime as dt
 import json
-from typing import Sequence
 
 import pandas as pd
 
@@ -50,13 +54,6 @@ FIRST_OBSERVATION_ENTRY_STAMPS = {
     "To-allocate": "created",
     "In-progress": "assigned_at",
 }
-
-# How ``_finish`` types a measure column: counts are ``int64``, statistics are
-# ``float64``, and everything else is a string dimension. Named here so the
-# rule is one place rather than a suffix guess per table.
-STATISTIC_SUFFIXES = ("_mean", "_p50", "_p90", "_max", "_total")
-INT_MEASURES = frozenset({"actions_per_case_max", "weekday_order", "hour_of_day"})
-FLOAT_MEASURES = frozenset({"share_of_cases", "no_conversation_share"})
 
 # ISO weekday order -> name, so a posting-pattern row sorts by the number and
 # reads by the name without anyone hand-numbering the days.
@@ -151,53 +148,59 @@ def _instants(values: pd.Series) -> pd.Series:
     return pd.to_datetime(values, utc=True, errors="coerce", format="ISO8601")
 
 
+def _instant(value: object) -> pd.Timestamp:
+    """Parse one ISO text (or datetime) to a UTC instant; bad or absent -> NaT."""
+    return pd.to_datetime(value, utc=True, errors="coerce", format="ISO8601")
+
+
 def _filled(frame: pd.DataFrame, fills: dict[str, str]) -> pd.DataFrame:
-    """``.where``, not ``fillna``: an all-null float64 column must land as
-    object holding the literal, not stay float64 with the literal coerced."""
+    """Replace a dimension's NULLs with the literal that stands in for them.
+
+    Through ``object``: an all-null column arrives as ``float64``, and filling
+    it in place would coerce the literal back to a number.
+    """
     return frame.assign(
         **{
-            column: frame[column].where(frame[column].notna(), literal)
+            column: frame[column].astype("object").fillna(literal)
             for column, literal in fills.items()
         }
     )
 
 
-def _stats(values: pd.Series, prefix: str) -> dict[str, float | None]:
-    """Mean / p50 / p90 / max of ``values`` as ``<prefix>_<stat>``; None when
-    there is nothing to summarise."""
-    clean = values.dropna()
-    if clean.empty:
-        return {f"{prefix}_{s}": None for s in ("mean", "p50", "p90", "max")}
-    return {
-        f"{prefix}_mean": round(float(clean.mean()), 3),
-        f"{prefix}_p50": round(float(clean.quantile(0.5)), 3),
-        f"{prefix}_p90": round(float(clean.quantile(0.9)), 3),
-        f"{prefix}_max": round(float(clean.max()), 3),
-    }
+def _rounded(value: object) -> float | None:
+    """A statistic as it is published; None where there was nothing to take."""
+    return None if pd.isna(value) else round(float(value), 3)
+
+
+def _mean(values: pd.Series) -> float | None:
+    return _rounded(values.dropna().mean())
+
+
+def _quantile(values: pd.Series, quantile: float) -> float | None:
+    return _rounded(values.dropna().quantile(quantile))
+
+
+def _maximum(values: pd.Series) -> float | None:
+    return _rounded(values.dropna().max())
 
 
 def _finish(
     rows: list[dict[str, object]],
-    columns: Sequence[str],
+    columns: dict[str, str],
     *,
     as_of: str,
-    sort_by: Sequence[str],
+    sort_by: tuple[str, ...],
 ) -> Dataset:
-    """Rows -> a stamped, sorted, typed frame in the declared column order.
+    """Rows -> a stamped, sorted frame in the declared column order and types.
 
-    Typing is explicit so an empty result still carries the declared shape:
-    string dimensions land as ``string``, counts as ``int64`` and statistics as
-    ``float64`` (NaN where a group had nothing to summarise).
+    The types come from the table's ``*_COLUMNS`` mapping, so an empty result
+    still carries the declared shape: string dimensions, ``int64`` counts and
+    ``float64`` statistics (NaN where a group had nothing to summarise).
     """
     frame = pd.DataFrame(rows, columns=list(columns))
     frame[AS_OF_COLUMN] = as_of
-    for column in columns:
-        if column in INT_MEASURES or column.endswith("_count"):
-            frame[column] = frame[column].astype("int64")
-        elif column in FLOAT_MEASURES or column.endswith(STATISTIC_SUFFIXES):
-            frame[column] = pd.to_numeric(frame[column]).astype("float64")
-        else:
-            frame[column] = frame[column].astype("string")
+    for column, dtype in columns.items():
+        frame[column] = frame[column].astype(dtype)
     ordered = frame.sort_values(list(sort_by), kind="stable").reset_index(drop=True)
     return Dataset.from_pandas(ordered)
 
@@ -220,14 +223,28 @@ def _ordered_history(dataset: Dataset) -> pd.DataFrame:
 def _entry_instant(first: pd.Series) -> pd.Timestamp:
     """When a Case entered the status its *first* observation carries."""
     stamp_column = FIRST_OBSERVATION_ENTRY_STAMPS.get(first["status"])
-    if stamp_column is not None:
-        stamped = _instants(pd.Series([first.get(stamp_column)])).iloc[0]
-        if pd.notna(stamped) and stamped <= first["_modified"]:
-            return stamped
+    if stamp_column is None:
+        return first["_modified"]
+    stamped = _instant(first.get(stamp_column))
+    if pd.notna(stamped) and stamped <= first["_modified"]:
+        return stamped
     return first["_modified"]
 
 
 # --- history metrics --------------------------------------------------------
+
+DWELL_COLUMNS = {
+    "brand": "string",
+    "case_type": "string",
+    "status": "string",
+    "interval_count": "int64",
+    "open_interval_count": "int64",
+    "dwell_days_mean": "float64",
+    "dwell_days_p50": "float64",
+    "dwell_days_p90": "float64",
+    "dwell_days_max": "float64",
+    AS_OF_COLUMN: "string",
+}
 
 
 def case_stage_dwell(history: Dataset, current: Dataset) -> Dataset:
@@ -241,10 +258,10 @@ def case_stage_dwell(history: Dataset, current: Dataset) -> Dataset:
     ``as_of`` would mix two different questions (the Sync subject's age-bucket
     aggregates already answer "how long has it been waiting").
     """
-    frame = _ordered_history(history)
-    closed: list[tuple[str, str, float]] = []
-    open_: list[tuple[str, str]] = []
-    for _, observations in frame.groupby(list(HISTORY_KEY), sort=False):
+    stays: list[dict[str, object]] = []
+    for _, observations in _ordered_history(history).groupby(
+        list(HISTORY_KEY), sort=False
+    ):
         first = observations.iloc[0]
         case_type = first["case_type"]
         status = first["status"]
@@ -252,55 +269,59 @@ def case_stage_dwell(history: Dataset, current: Dataset) -> Dataset:
         for _, observation in observations.iloc[1:].iterrows():
             if observation["status"] == status:
                 continue
-            days = (
-                observation["_modified"] - entered
-            ).total_seconds() / SECONDS_PER_DAY
-            closed.append((case_type, status, max(days, 0.0)))
+            days = (observation["_modified"] - entered).total_seconds()
+            stays.append(
+                {
+                    "case_type": case_type,
+                    "status": status,
+                    "days": max(days / SECONDS_PER_DAY, 0.0),
+                    "open": False,
+                }
+            )
             status = observation["status"]
             entered = observation["_modified"]
         if status not in TERMINAL_STATUSES:
-            open_.append((case_type, status))
+            stays.append(
+                {"case_type": case_type, "status": status, "days": None, "open": True}
+            )
 
-    closed_frame = pd.DataFrame(closed, columns=["case_type", "status", "days"])
-    open_frame = pd.DataFrame(open_, columns=["case_type", "status"])
-    keys = pd.concat(
-        [closed_frame[["case_type", "status"]], open_frame], ignore_index=True
-    ).drop_duplicates()
+    frame = pd.DataFrame(stays, columns=["case_type", "status", "days", "open"])
+    frame["days"] = pd.to_numeric(frame["days"])
     rows = []
-    for _, key in keys.iterrows():
-        mask_closed = (closed_frame["case_type"] == key["case_type"]) & (
-            closed_frame["status"] == key["status"]
-        )
-        mask_open = (open_frame["case_type"] == key["case_type"]) & (
-            open_frame["status"] == key["status"]
-        )
+    for (case_type, status), group in frame.groupby(["case_type", "status"], sort=True):
+        closed = group.loc[~group["open"].astype(bool), "days"]
         rows.append(
             {
                 "brand": UNKNOWN_BRAND,
-                "case_type": key["case_type"],
-                "status": key["status"],
-                "interval_count": int(mask_closed.sum()),
-                "open_interval_count": int(mask_open.sum()),
-                **_stats(closed_frame.loc[mask_closed, "days"], "dwell_days"),
+                "case_type": case_type,
+                "status": status,
+                "interval_count": len(closed),
+                "open_interval_count": len(group) - len(closed),
+                "dwell_days_mean": _mean(closed),
+                "dwell_days_p50": _quantile(closed, 0.5),
+                "dwell_days_p90": _quantile(closed, 0.9),
+                "dwell_days_max": _maximum(closed),
             }
         )
     return _finish(
         rows,
-        (
-            "brand",
-            "case_type",
-            "status",
-            "interval_count",
-            "open_interval_count",
-            "dwell_days_mean",
-            "dwell_days_p50",
-            "dwell_days_p90",
-            "dwell_days_max",
-            AS_OF_COLUMN,
-        ),
+        DWELL_COLUMNS,
         as_of=snapshot_as_of(current),
         sort_by=("brand", "case_type", "status"),
     )
+
+
+HOLD_COLUMNS = {
+    "brand": "string",
+    "case_type": "string",
+    "assigned_reviewer_name": "string",
+    "case_count": "int64",
+    "hold_count": "int64",
+    "open_hold_count": "int64",
+    "held_days_total": "float64",
+    "held_days_mean": "float64",
+    AS_OF_COLUMN: "string",
+}
 
 
 def case_hold(history: Dataset, current: Dataset) -> Dataset:
@@ -316,72 +337,69 @@ def case_hold(history: Dataset, current: Dataset) -> Dataset:
     """
     as_of = snapshot_as_of(current)
     as_of_instant = pd.Timestamp(as_of)
-    frame = _ordered_history(history)
     holds: list[dict[str, object]] = []
-    for key, observations in frame.groupby(list(HISTORY_KEY), sort=False):
-        holding = False
-        started: pd.Timestamp | None = None
+    for case, observations in _ordered_history(history).groupby(
+        list(HISTORY_KEY), sort=False
+    ):
+        reviewer = observations.iloc[-1]["assigned_reviewer_name"]
+        if pd.isna(reviewer) or not reviewer:
+            reviewer = UNASSIGNED
+        started = pd.NaT
         for _, observation in observations.iterrows():
             on_hold = (
                 bool(observation["on_hold"])
                 if pd.notna(observation["on_hold"])
                 else False
             )
-            if on_hold and not holding:
-                stamped = _instants(pd.Series([observation["placed_on_hold_at"]])).iloc[
-                    0
-                ]
+            if on_hold and pd.isna(started):
+                stamped = _instant(observation["placed_on_hold_at"])
                 started = stamped if pd.notna(stamped) else observation["_modified"]
-                holding = True
-            elif not on_hold and holding:
+            elif not on_hold and pd.notna(started):
                 holds.append(
-                    _hold_row(
-                        key, observations, started, observation["_modified"], False
-                    )
+                    _hold(case, reviewer, started, observation["_modified"], False)
                 )
-                holding = False
-        if holding:
-            holds.append(_hold_row(key, observations, started, as_of_instant, True))
+                started = pd.NaT
+        if pd.notna(started):
+            holds.append(_hold(case, reviewer, started, as_of_instant, True))
 
-    columns = (
-        "brand",
-        "case_type",
-        "assigned_reviewer_name",
-        "case_count",
-        "hold_count",
-        "open_hold_count",
-        "held_days_total",
-        "held_days_mean",
-        AS_OF_COLUMN,
+    held = pd.DataFrame(
+        holds, columns=["case", "case_type", "assigned_reviewer_name", "days", "open"]
     )
-    if not holds:
-        return _finish([], columns, as_of=as_of, sort_by=columns[:3])
-    held = pd.DataFrame(holds)
-    grouped = held.groupby(["case_type", "assigned_reviewer_name"], sort=True)
     rows = [
         {
             "brand": UNKNOWN_BRAND,
             "case_type": case_type,
             "assigned_reviewer_name": reviewer,
-            "case_count": int(group["case"].nunique()),
-            "hold_count": int(len(group)),
+            "case_count": group["case"].nunique(),
+            "hold_count": len(group),
             "open_hold_count": int(group["open"].sum()),
             "held_days_total": round(float(group["days"].sum()), 3),
             "held_days_mean": round(float(group["days"].mean()), 3),
         }
-        for (case_type, reviewer), group in grouped
+        for (case_type, reviewer), group in held.groupby(
+            ["case_type", "assigned_reviewer_name"], sort=True
+        )
     ]
-    return _finish(rows, columns, as_of=as_of, sort_by=columns[:3])
+    return _finish(
+        rows,
+        HOLD_COLUMNS,
+        as_of=as_of,
+        sort_by=("brand", "case_type", "assigned_reviewer_name"),
+    )
 
 
-def _hold_row(key, observations, started, ended, is_open) -> dict[str, object]:
-    reviewer = observations.iloc[-1]["assigned_reviewer_name"]
+def _hold(
+    case: tuple[str, str],
+    reviewer: str,
+    started: pd.Timestamp,
+    ended: pd.Timestamp,
+    is_open: bool,
+) -> dict[str, object]:
+    """One hold, as the aggregation above counts it."""
     return {
-        "case": key,
-        "case_type": key[0],
-        "assigned_reviewer_name": reviewer
-        if pd.notna(reviewer) and reviewer
-        else UNASSIGNED,
+        "case": case,
+        "case_type": case[0],
+        "assigned_reviewer_name": reviewer,
         "days": max((ended - started).total_seconds() / SECONDS_PER_DAY, 0.0),
         "open": is_open,
     }
@@ -411,6 +429,25 @@ def working_days_late(
     return late
 
 
+SLA_COLUMNS = {
+    "sla_kind": "string",
+    "completed_month": "string",
+    "brand": "string",
+    "case_type": "string",
+    "assigned_reviewer_manager_name": "string",
+    "case_count": "int64",
+    "on_time_count": "int64",
+    "late_count": "int64",
+    "no_due_date_count": "int64",
+    "late_working_days_mean": "float64",
+    "late_working_days_max": "float64",
+    AS_OF_COLUMN: "string",
+}
+
+# Each SLA and the due-date column it judges ``completed_at`` against.
+SLA_DUE_DATES = ((REVIEW_SLA, "due_date"), (REMEDIATION_SLA, "remediation_due_date"))
+
+
 def sla_attainment(
     current: Dataset, *, calendar: WorkingDayCalendar | None = None
 ) -> Dataset:
@@ -435,10 +472,7 @@ def sla_attainment(
     completed = _filled(completed, {"assigned_reviewer_manager_name": UNASSIGNED})
 
     rows = []
-    for sla_kind, due_column in (
-        (REVIEW_SLA, "due_date"),
-        (REMEDIATION_SLA, "remediation_due_date"),
-    ):
+    for sla_kind, due_column in SLA_DUE_DATES:
         judged = completed.copy()
         judged["_due"] = _instants(judged[due_column])
         if sla_kind == REMEDIATION_SLA:
@@ -451,7 +485,8 @@ def sla_attainment(
         ]
         dims = ["completed_month", "case_type", "assigned_reviewer_manager_name"]
         for (month, case_type, manager), group in judged.groupby(dims, sort=True):
-            late = pd.to_numeric(group["_late"], errors="coerce")
+            late = pd.to_numeric(group["_late"])
+            overdue = late[late > 0]
             rows.append(
                 {
                     "sla_kind": sla_kind,
@@ -459,32 +494,39 @@ def sla_attainment(
                     "brand": UNKNOWN_BRAND,
                     "case_type": case_type,
                     "assigned_reviewer_manager_name": manager,
-                    "case_count": int(len(group)),
+                    "case_count": len(group),
                     "on_time_count": int((late == 0).sum()),
-                    "late_count": int((late > 0).sum()),
+                    "late_count": len(overdue),
                     "no_due_date_count": int(late.isna().sum()),
-                    **{
-                        k: v
-                        for k, v in _stats(late[late > 0], "late_working_days").items()
-                        if k.endswith(("_mean", "_max"))
-                    },
+                    "late_working_days_mean": _mean(overdue),
+                    "late_working_days_max": _maximum(overdue),
                 }
             )
-    columns = (
-        "sla_kind",
-        "completed_month",
-        "brand",
-        "case_type",
-        "assigned_reviewer_manager_name",
-        "case_count",
-        "on_time_count",
-        "late_count",
-        "no_due_date_count",
-        "late_working_days_mean",
-        "late_working_days_max",
-        AS_OF_COLUMN,
+    return _finish(
+        rows,
+        SLA_COLUMNS,
+        as_of=as_of,
+        sort_by=(
+            "sla_kind",
+            "completed_month",
+            "brand",
+            "case_type",
+            "assigned_reviewer_manager_name",
+        ),
     )
-    return _finish(rows, columns, as_of=as_of, sort_by=columns[:5])
+
+
+VOID_COLUMNS = {
+    "void_month": "string",
+    "brand": "string",
+    "case_type": "string",
+    "void_reason": "string",
+    "voided_by_name": "string",
+    "case_count": "int64",
+    "age_at_void_days_mean": "float64",
+    "age_at_void_days_max": "float64",
+    AS_OF_COLUMN: "string",
+}
 
 
 def void_monthly(current: Dataset) -> Dataset:
@@ -501,6 +543,7 @@ def void_monthly(current: Dataset) -> Dataset:
         voided["_voided"] - _instants(voided["created"])
     ).dt.total_seconds() / SECONDS_PER_DAY
     voided = _filled(voided, {"void_reason": UNSTATED, "voided_by_name": UNASSIGNED})
+
     dims = ["void_month", "case_type", "void_reason", "voided_by_name"]
     rows = [
         {
@@ -509,27 +552,30 @@ def void_monthly(current: Dataset) -> Dataset:
             "case_type": case_type,
             "void_reason": reason,
             "voided_by_name": by,
-            "case_count": int(len(group)),
-            **{
-                k: v
-                for k, v in _stats(group["_age"], "age_at_void_days").items()
-                if k.endswith(("_mean", "_max"))
-            },
+            "case_count": len(group),
+            "age_at_void_days_mean": _mean(group["_age"]),
+            "age_at_void_days_max": _maximum(group["_age"]),
         }
         for (month, case_type, reason, by), group in voided.groupby(dims, sort=True)
     ]
-    columns = (
-        "void_month",
-        "brand",
-        "case_type",
-        "void_reason",
-        "voided_by_name",
-        "case_count",
-        "age_at_void_days_mean",
-        "age_at_void_days_max",
-        AS_OF_COLUMN,
+    return _finish(
+        rows,
+        VOID_COLUMNS,
+        as_of=as_of,
+        sort_by=("void_month", "brand", "case_type", "void_reason", "voided_by_name"),
     )
-    return _finish(rows, columns, as_of=as_of, sort_by=columns[:5])
+
+
+ACTION_LOAD_COLUMNS = {
+    "case_type": "string",
+    "question_id": "string",
+    "case_count": "int64",
+    "action_count": "int64",
+    "actions_per_case_mean": "float64",
+    "actions_per_case_max": "int64",
+    "share_of_cases": "float64",
+    AS_OF_COLUMN: "string",
+}
 
 
 def answer_action_load(actions: Dataset, current: Dataset) -> Dataset:
@@ -540,11 +586,11 @@ def answer_action_load(actions: Dataset, current: Dataset) -> Dataset:
     this question".
     """
     as_of = snapshot_as_of(current)
-    cases = current.to_pandas()
-    denominators = cases.loc[cases["status"].ne("Void")].groupby("case_type").size()
-    frame = actions.to_pandas()
+    live = _live_cases(current)
+    live_counts = live.groupby("case_type").size()
     per_case = (
-        frame.groupby(["case_type", "question_id", CASE_ID_COLUMN], sort=True)
+        actions.to_pandas()
+        .groupby(["case_type", "question_id", CASE_ID_COLUMN], sort=True)
         .size()
         .reset_index(name="actions")
     )
@@ -552,32 +598,34 @@ def answer_action_load(actions: Dataset, current: Dataset) -> Dataset:
     for (case_type, question_id), group in per_case.groupby(
         ["case_type", "question_id"], sort=True
     ):
-        case_count = int(len(group))
-        denominator = int(denominators.get(case_type, 0))
+        live_count = int(live_counts.get(case_type, 0))
         rows.append(
             {
                 "case_type": case_type,
                 "question_id": question_id,
-                "case_count": case_count,
+                "case_count": len(group),
                 "action_count": int(group["actions"].sum()),
                 "actions_per_case_mean": round(float(group["actions"].mean()), 3),
                 "actions_per_case_max": int(group["actions"].max()),
-                "share_of_cases": round(case_count / denominator, 4)
-                if denominator
+                "share_of_cases": round(len(group) / live_count, 4)
+                if live_count
                 else None,
             }
         )
-    columns = (
-        "case_type",
-        "question_id",
-        "case_count",
-        "action_count",
-        "actions_per_case_mean",
-        "actions_per_case_max",
-        "share_of_cases",
-        AS_OF_COLUMN,
+    return _finish(
+        rows, ACTION_LOAD_COLUMNS, as_of=as_of, sort_by=("case_type", "question_id")
     )
-    return _finish(rows, columns, as_of=as_of, sort_by=columns[:2])
+
+
+REMEDIATION_COLUMNS = {
+    "case_type": "string",
+    "responsible_party_manager_name": "string",
+    "remediation_required": "string",
+    "remediation_status": "string",
+    "answer_count": "int64",
+    "case_count": "int64",
+    AS_OF_COLUMN: "string",
+}
 
 
 def answer_remediation_by_manager(answers: Dataset, current: Dataset) -> Dataset:
@@ -609,13 +657,26 @@ def answer_remediation_by_manager(answers: Dataset, current: Dataset) -> Dataset
     rows = [
         {
             **dict(zip(dims, key)),
-            "answer_count": int(len(group)),
-            "case_count": int(group[CASE_ID_COLUMN].nunique()),
+            "answer_count": len(group),
+            "case_count": group[CASE_ID_COLUMN].nunique(),
         }
         for key, group in frame.groupby(dims, sort=True)
     ]
-    columns = (*dims, "answer_count", "case_count", AS_OF_COLUMN)
-    return _finish(rows, columns, as_of=as_of, sort_by=dims)
+    return _finish(rows, REMEDIATION_COLUMNS, as_of=as_of, sort_by=tuple(dims))
+
+
+APPEAL_CYCLE_COLUMNS = {
+    "case_type": "string",
+    "state": "string",
+    "resolution_verdict": "string",
+    "appeal_count": "int64",
+    "resolved_count": "int64",
+    "cycle_days_mean": "float64",
+    "cycle_days_p50": "float64",
+    "cycle_days_p90": "float64",
+    "cycle_days_max": "float64",
+    AS_OF_COLUMN: "string",
+}
 
 
 def appeal_cycle_time(appeals: Dataset, current: Dataset) -> Dataset:
@@ -628,27 +689,21 @@ def appeal_cycle_time(appeals: Dataset, current: Dataset) -> Dataset:
         _instants(frame["resolution_at"]) - _instants(frame["raised_at"])
     ).dt.total_seconds() / SECONDS_PER_DAY
     frame = _filled(frame, {"state": UNSTATED, "resolution_verdict": UNRESOLVED})
+
     dims = ["case_type", "state", "resolution_verdict"]
     rows = [
         {
             **dict(zip(dims, key)),
-            "appeal_count": int(len(group)),
+            "appeal_count": len(group),
             "resolved_count": int(group["_cycle"].notna().sum()),
-            **_stats(group["_cycle"], "cycle_days"),
+            "cycle_days_mean": _mean(group["_cycle"]),
+            "cycle_days_p50": _quantile(group["_cycle"], 0.5),
+            "cycle_days_p90": _quantile(group["_cycle"], 0.9),
+            "cycle_days_max": _maximum(group["_cycle"]),
         }
         for key, group in frame.groupby(dims, sort=True)
     ]
-    columns = (
-        *dims,
-        "appeal_count",
-        "resolved_count",
-        "cycle_days_mean",
-        "cycle_days_p50",
-        "cycle_days_p90",
-        "cycle_days_max",
-        AS_OF_COLUMN,
-    )
-    return _finish(rows, columns, as_of=as_of, sort_by=dims)
+    return _finish(rows, APPEAL_CYCLE_COLUMNS, as_of=as_of, sort_by=tuple(dims))
 
 
 def _cited_questions(value: object) -> list[str]:
@@ -665,11 +720,20 @@ def _cited_questions(value: object) -> list[str]:
     return [str(item) for item in loaded if isinstance(item, (str, int))]
 
 
+CITATION_COLUMNS = {
+    "case_type": "string",
+    "question_id": "string",
+    "appeal_count": "int64",
+    "case_count": "int64",
+    AS_OF_COLUMN: "string",
+}
+
+
 def appeal_question_citations(appeals: Dataset, current: Dataset) -> Dataset:
     """Which questions get appealed. **Grain: case_type x question_id.**"""
     as_of = snapshot_as_of(current)
     frame = appeals.to_pandas()
-    exploded = (
+    cited = (
         frame.assign(question_id=frame["cited_question_ids_json"].map(_cited_questions))
         .explode("question_id")
         .dropna(subset=["question_id"])
@@ -678,78 +742,98 @@ def appeal_question_citations(appeals: Dataset, current: Dataset) -> Dataset:
         {
             "case_type": case_type,
             "question_id": question_id,
-            "appeal_count": int(group["appeal_id"].nunique()),
-            "case_count": int(group[CASE_ID_COLUMN].nunique()),
+            "appeal_count": group["appeal_id"].nunique(),
+            "case_count": group[CASE_ID_COLUMN].nunique(),
         }
-        for (case_type, question_id), group in exploded.groupby(
+        for (case_type, question_id), group in cited.groupby(
             ["case_type", "question_id"], sort=True
         )
     ]
-    columns = ("case_type", "question_id", "appeal_count", "case_count", AS_OF_COLUMN)
-    return _finish(rows, columns, as_of=as_of, sort_by=columns[:2])
+    return _finish(
+        rows, CITATION_COLUMNS, as_of=as_of, sort_by=("case_type", "question_id")
+    )
+
+
+RESPONSE_TIME_COLUMNS = {
+    "brand": "string",
+    "case_type": "string",
+    "thread_count": "int64",
+    "reply_count": "int64",
+    "reply_hours_mean": "float64",
+    "reply_hours_p50": "float64",
+    "reply_hours_p90": "float64",
+    "reply_hours_max": "float64",
+    AS_OF_COLUMN: "string",
+}
 
 
 def conversation_response_time(messages: Dataset, current: Dataset) -> Dataset:
     """How quickly Conversations are replied to. **Grain: brand x case_type.**
 
-    Walks each Case's thread in ``seq`` order; a Message whose ``author_login``
-    differs from the previous Message's is a reply, and its hours are measured
-    from that previous Message. Two consecutive Messages by one author are one
-    turn, not a reply to oneself. Author-agnostic by design: which *side*
-    replied needs the bare-login-to-claims-login join the Sync subject refuses
-    (see its data dictionary), and the source's own ``awaiting_since`` already
-    says who is being waited on right now.
+    Each Case's thread is read in ``seq`` order; a Message whose
+    ``author_login`` differs from the previous Message's is a reply, and its
+    hours are measured from that previous Message. Two consecutive Messages by
+    one author are one turn, not a reply to oneself. Author-agnostic by design:
+    which *side* replied needs the bare-login-to-claims-login join the Sync
+    subject refuses (see its data dictionary), and the source's own
+    ``awaiting_since`` already says who is being waited on right now.
     """
     as_of = snapshot_as_of(current)
     frame = messages.to_pandas().copy()
     frame["_posted"] = _instants(frame["posted_at"])
     frame = frame.sort_values([CASE_ID_COLUMN, "seq"], kind="stable")
-    replies: list[tuple[str, str, float]] = []
-    for case_id, thread in frame.groupby(CASE_ID_COLUMN, sort=False):
-        previous_author = None
-        previous_posted = pd.NaT
-        for _, message in thread.iterrows():
-            author = message["author_login"]
-            posted = message["_posted"]
-            if (
-                previous_author is not None
-                and author != previous_author
-                and pd.notna(posted)
-                and pd.notna(previous_posted)
-            ):
-                hours = (posted - previous_posted).total_seconds() / SECONDS_PER_HOUR
-                replies.append((message["case_type"], case_id, max(hours, 0.0)))
-            previous_author, previous_posted = author, posted
 
-    replied = pd.DataFrame(replies, columns=["case_type", CASE_ID_COLUMN, "hours"])
+    threads = frame.groupby(CASE_ID_COLUMN, sort=False)
+    previous_author = threads["author_login"].shift()
+    previous_posted = threads["_posted"].shift()
+    replies = frame.loc[
+        threads.cumcount().gt(0)
+        & frame["author_login"].ne(previous_author)
+        & frame["_posted"].notna()
+        & previous_posted.notna()
+    ].copy()
+    replies["hours"] = (
+        (replies["_posted"] - previous_posted).dt.total_seconds() / SECONDS_PER_HOUR
+    ).clip(lower=0.0)
+
     rows = [
         {
             "brand": UNKNOWN_BRAND,
             "case_type": case_type,
-            "thread_count": int(group[CASE_ID_COLUMN].nunique()),
-            "reply_count": int(len(group)),
-            **_stats(group["hours"], "reply_hours"),
+            "thread_count": group[CASE_ID_COLUMN].nunique(),
+            "reply_count": len(group),
+            "reply_hours_mean": _mean(group["hours"]),
+            "reply_hours_p50": _quantile(group["hours"], 0.5),
+            "reply_hours_p90": _quantile(group["hours"], 0.9),
+            "reply_hours_max": _maximum(group["hours"]),
         }
-        for case_type, group in replied.groupby("case_type", sort=True)
+        for case_type, group in replies.groupby("case_type", sort=True)
     ]
-    columns = (
-        "brand",
-        "case_type",
-        "thread_count",
-        "reply_count",
-        "reply_hours_mean",
-        "reply_hours_p50",
-        "reply_hours_p90",
-        "reply_hours_max",
-        AS_OF_COLUMN,
+    return _finish(
+        rows, RESPONSE_TIME_COLUMNS, as_of=as_of, sort_by=("brand", "case_type")
     )
-    return _finish(rows, columns, as_of=as_of, sort_by=columns[:2])
 
 
 def _live_cases(current: Dataset) -> pd.DataFrame:
     """The current non-void Cases: the population a Conversation belongs to."""
     cases = current.to_pandas()
     return cases.loc[cases["status"].ne("Void"), [CASE_ID_COLUMN, "case_type"]]
+
+
+VOLUME_COLUMNS = {
+    "brand": "string",
+    "case_type": "string",
+    "case_count": "int64",
+    "thread_count": "int64",
+    "no_conversation_count": "int64",
+    "no_conversation_share": "float64",
+    "message_count": "int64",
+    "messages_per_thread_mean": "float64",
+    "messages_per_thread_p50": "float64",
+    "messages_per_thread_p90": "float64",
+    "messages_per_thread_max": "float64",
+    AS_OF_COLUMN: "string",
+}
 
 
 def conversation_volume(messages: Dataset, current: Dataset) -> Dataset:
@@ -763,66 +847,48 @@ def conversation_volume(messages: Dataset, current: Dataset) -> Dataset:
     """
     as_of = snapshot_as_of(current)
     live = _live_cases(current)
-    frame = messages.to_pandas()
     per_thread = (
-        frame.loc[frame[CASE_ID_COLUMN].isin(live[CASE_ID_COLUMN])]
-        .groupby(CASE_ID_COLUMN)
-        .size()
-        .rename("messages")
+        _live_messages(messages, live).groupby(CASE_ID_COLUMN).size().rename("messages")
     )
-    joined = live.join(per_thread, on=CASE_ID_COLUMN)
+    counted = live.join(per_thread, on=CASE_ID_COLUMN)
+
     rows = []
-    for case_type, group in joined.groupby("case_type", sort=True):
-        threads = group["messages"].dropna()
-        case_count = int(len(group))
-        thread_count = int(len(threads))
+    for case_type, group in counted.groupby("case_type", sort=True):
+        lengths = group["messages"].dropna()
+        without = len(group) - len(lengths)
         rows.append(
             {
                 "brand": UNKNOWN_BRAND,
                 "case_type": case_type,
-                "case_count": case_count,
-                "thread_count": thread_count,
-                "no_conversation_count": case_count - thread_count,
-                "no_conversation_share": round(
-                    (case_count - thread_count) / case_count, 4
-                ),
-                "message_count": int(threads.sum()),
-                **_stats(threads, "messages_per_thread"),
+                "case_count": len(group),
+                "thread_count": len(lengths),
+                "no_conversation_count": without,
+                "no_conversation_share": round(without / len(group), 4),
+                "message_count": int(lengths.sum()),
+                "messages_per_thread_mean": _mean(lengths),
+                "messages_per_thread_p50": _quantile(lengths, 0.5),
+                "messages_per_thread_p90": _quantile(lengths, 0.9),
+                "messages_per_thread_max": _maximum(lengths),
             }
         )
-    columns = (
-        "brand",
-        "case_type",
-        "case_count",
-        "thread_count",
-        "no_conversation_count",
-        "no_conversation_share",
-        "message_count",
-        "messages_per_thread_mean",
-        "messages_per_thread_p50",
-        "messages_per_thread_p90",
-        "messages_per_thread_max",
-        AS_OF_COLUMN,
-    )
-    return _finish(rows, columns, as_of=as_of, sort_by=columns[:2])
+    return _finish(rows, VOLUME_COLUMNS, as_of=as_of, sort_by=("brand", "case_type"))
 
 
-def _local_weekday_and_hour(instants: pd.Series) -> pd.DataFrame:
-    """ISO weekday (1 = Monday) and hour of each instant on the local clock.
+def _live_messages(messages: Dataset, live: pd.DataFrame) -> pd.DataFrame:
+    """The Messages whose Case is one of the live Cases."""
+    frame = messages.to_pandas()
+    return frame.loc[frame[CASE_ID_COLUMN].isin(live[CASE_ID_COLUMN])]
 
-    Converted one instant at a time through the local-zone seam rather than
-    with a fixed offset, so a thread spanning a summer-time change files each
-    Message under the hour it was actually posted at.
-    """
-    zone = timestamps.local_timezone()
-    local = [moment.to_pydatetime().astimezone(zone) for moment in instants]
-    return pd.DataFrame(
-        {
-            "weekday_order": [moment.isoweekday() for moment in local],
-            "hour_of_day": [moment.hour for moment in local],
-        },
-        index=instants.index,
-    )
+
+POSTING_PATTERN_COLUMNS = {
+    "brand": "string",
+    "case_type": "string",
+    "weekday_order": "int64",
+    "weekday": "string",
+    "hour_of_day": "int64",
+    "message_count": "int64",
+    AS_OF_COLUMN: "string",
+}
 
 
 def conversation_posting_pattern(messages: Dataset, current: Dataset) -> Dataset:
@@ -832,17 +898,21 @@ def conversation_posting_pattern(messages: Dataset, current: Dataset) -> Dataset
     Every Case Type with at least one counted Message gets the full 7 x 24
     grid, so a quiet cell is a row holding 0 rather than a hole a chart would
     have to infer. Weekday and hour are on the *local* clock, the same zone
-    the calendar dates are expressed in; a Message with no parseable
-    ``posted_at`` is not counted.
+    the calendar dates are expressed in -- converted instant by instant, so a
+    thread spanning a summer-time change files each Message under the hour it
+    was actually posted at. A Message with no parseable ``posted_at`` is not
+    counted.
     """
     as_of = snapshot_as_of(current)
-    live = _live_cases(current)
-    frame = messages.to_pandas().copy()
-    frame = frame.loc[frame[CASE_ID_COLUMN].isin(live[CASE_ID_COLUMN])]
-    frame["_posted"] = _instants(frame["posted_at"])
-    frame = frame.loc[frame["_posted"].notna()]
-    posted = pd.concat([frame, _local_weekday_and_hour(frame["_posted"])], axis=1)
+    posted = _live_messages(messages, _live_cases(current)).copy()
+    posted["_posted"] = _instants(posted["posted_at"])
+    posted = posted.loc[posted["_posted"].notna()]
+
+    local = posted["_posted"].dt.tz_convert(timestamps.local_timezone())
+    posted["weekday_order"] = local.dt.dayofweek + 1  # ISO: 1 = Monday
+    posted["hour_of_day"] = local.dt.hour
     counts = posted.groupby(["case_type", "weekday_order", "hour_of_day"]).size()
+
     rows = [
         {
             "brand": UNKNOWN_BRAND,
@@ -856,13 +926,9 @@ def conversation_posting_pattern(messages: Dataset, current: Dataset) -> Dataset
         for order in range(1, len(WEEKDAY_NAMES) + 1)
         for hour in HOURS_OF_DAY
     ]
-    columns = (
-        "brand",
-        "case_type",
-        "weekday_order",
-        "weekday",
-        "hour_of_day",
-        "message_count",
-        AS_OF_COLUMN,
+    return _finish(
+        rows,
+        POSTING_PATTERN_COLUMNS,
+        as_of=as_of,
+        sort_by=("brand", "case_type", "weekday_order", "hour_of_day"),
     )
-    return _finish(rows, columns, as_of=as_of, sort_by=columns[:3] + columns[4:5])
