@@ -87,17 +87,17 @@ def test_cli_runs_real_ingest_then_selection_end_to_end(tmp_path):
 
 
 def test_orchestrate_imports_the_real_application_schedule(tmp_path):
-    """`--app case_review.schedules` resolves and decides, on a non-due date.
+    """`--app pipelines.schedules` resolves and decides, on a non-due date.
 
     Deliberately a weekend: a due-day pass would assert on `NoClientError` today,
     and would attempt a real network call once an organisational client is wired.
     The due-day invocation is covered hermetically in
-    `tests/case_review/test_schedules.py`.
+    `tests/pipelines/test_schedules.py`.
     """
     result = _cli(
         "orchestrate",
         "--app",
-        "case_review.schedules",
+        "pipelines.schedules",
         "--base-dir",
         str(tmp_path),
         "--run-date",

@@ -10,7 +10,7 @@ the point where that document applies.
 
 Everything except the tenant is done. Source → raw → silver → gold runs
 end-to-end against fixture pages, the watermark and its window rule are built and
-tested, and `case_review/schedules.py` puts the feed on `Schedule.daily()`.
+tested, and `pipelines/schedules.py` puts the feed on `Schedule.daily()`.
 
 What is missing is the ability to reach a real list, and it is missing in three
 separate places:
@@ -226,7 +226,7 @@ feed has accumulated anything you would miss.
 Only now point an external scheduler (Windows Task Scheduler, cron) at:
 
 ```sh
-python -m cli orchestrate --app case_review.schedules --env prod --once
+python -m cli orchestrate --app pipelines.schedules --env prod --once
 ```
 
 Run it as often in the day as you find useful — several times a working day is

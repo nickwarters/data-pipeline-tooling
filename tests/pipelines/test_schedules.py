@@ -7,8 +7,8 @@ touching scheduling internals.
 
 import datetime as dt
 
-from case_review.schedules import build_pipeline_sets
 from framework.run import load_pipeline
+from pipelines.schedules import build_pipeline_sets
 from tools.calendar import WorkingDayCalendar
 from tools.orchestration import OrchestrationStore, Orchestrator, Schedule
 

@@ -19,10 +19,10 @@ below describes the feed once that is done.
 ## 2. The daily command
 
 ```sh
-python -m cli orchestrate --app case_review.schedules --base-dir /data/case-review --once
+python -m cli orchestrate --app pipelines.schedules --base-dir /data/case-review --once
 ```
 
-`case_review/schedules.py` puts the feed on `Schedule.daily()` — every working
+`pipelines/schedules.py` puts the feed on `Schedule.daily()` — every working
 day, one `PipelineSet` named `case_management`.
 
 **Running it at 09:00, 10:00 and 11:00 on the same working day is intended and
