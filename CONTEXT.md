@@ -519,8 +519,8 @@ due ones **by that path at runtime** — the same addressing as the `run` comman
 so no handler registry is wired up front; it is not a Pipeline that runs other
 Pipelines. Python
 definitions own the canonical sets, dependencies, and default schedules — and
-those definitions are **application-owned**, here `case_review/schedules.py`,
-which the operator CLI's `--app` names. YAML
+those definitions are **application-owned** and live beside the feeds they
+address, here `pipelines/schedules.py`, which the operator CLI's `--app` names. YAML
 may override enablement, timing, and freshness windows. Schedules are
 expressed with the friendly `Schedule.*` constructors (`Schedule.daily()`,
 `Schedule.on_weekdays("monday", …)`, `Schedule.day_of_month(n)`,

@@ -1,8 +1,11 @@
 """The case-review application's orchestration schedules.
 
+Declared beside the ``pipelines/<name>`` feeds they address, not in the domain
+package: a schedule names a path in this tree and nothing in ``case_review/``.
+
 The module an operator names on the command line::
 
-    python -m cli orchestrate --app case_review.schedules --base-dir BASE_DIR --once
+    python -m cli orchestrate --app pipelines.schedules --base-dir BASE_DIR --once
 
 The schedule gates only the *day*; the feed's own watermark gates the *data*.
 See ``docs/sharepoint-rest-ingest.md`` for the runbook.

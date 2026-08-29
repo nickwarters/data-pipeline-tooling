@@ -251,7 +251,7 @@ A `--app` that names a module which cannot be imported, or which exposes no
 `build_pipeline_sets()`, is a configuration error: it exits non-zero with the
 same clean, traceback-free message every other CLI failure prints.
 
-The real `case_review` app schedules both `sharepoint_cases` and
+The real `pipelines.schedules` app schedules both `sharepoint_cases` and
 `reviewer_activity` on working days (Monday-Friday by default). The
 `reviewer_activity` schedule dependency and its pipeline `UPSTREAMS`
 declaration both apply the Sync freshness check before normal publication.
@@ -276,7 +276,7 @@ holidays:
 ```
 
 ```sh
-python -m cli orchestrate --app case_review.schedules --env prod --once \
+python -m cli orchestrate --app pipelines.schedules --env prod --once \
     --calendar holidays.yml
 ```
 
@@ -329,11 +329,11 @@ python -m cli orchestrate --app my_app.schedules --base-dir /data --run-date 202
 ```
 
 The real `--app` module in this repository is
-[`case_review/schedules.py`](../case_review/schedules.py), which puts the
+[`pipelines/schedules.py`](../pipelines/schedules.py), which puts the
 `sharepoint_cases` feed on `Schedule.daily()`:
 
 ```sh
-python -m cli orchestrate --app case_review.schedules --base-dir /data/case-review --once
+python -m cli orchestrate --app pipelines.schedules --base-dir /data/case-review --once
 ```
 
 Repeated `--once` passes on the same day are safe — the schedule gates the *day*

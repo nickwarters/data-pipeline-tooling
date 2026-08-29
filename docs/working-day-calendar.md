@@ -113,7 +113,7 @@ window's far edge) and `result[0]` the most recent.
 ## Where the calendar is used — orchestration
 
 A scheduled pipeline reaches the calendar through its `Schedule`. The worked
-example is [`case_review/schedules.py`](../case_review/schedules.py), where the
+example is [`pipelines/schedules.py`](../pipelines/schedules.py), where the
 `sharepoint_cases` feed is declared `Schedule.daily()`, so a weekend or a seeded
 holiday is what makes the orchestrator record `skipped` rather than invoke the
 pipeline.

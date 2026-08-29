@@ -47,9 +47,11 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   local-calendar-date rule every freshness check reads is settled once in
   `tools/observability/timestamps.py`. Then `case_review/` (the
   case-review *application* — Case Type declarations, `CasePool`, and its gold
-  helpers, which live outside the framework; it also owns the application's
-  orchestration schedules, `case_review/schedules.py`, which `orchestrate --app`
-  names), `pipelines/` (scripts),
+  helpers, which live outside the framework), `pipelines/` (scripts, plus the
+  application's orchestration schedules in `pipelines/schedules.py`, which
+  `orchestrate --app` names — a schedule addresses a `pipelines/<name>` path and
+  names nothing in `case_review/`, so it is declared beside the feeds it
+  schedules),
   `tests/` (pytest, with author test helpers in `tests/framework_testing/`),
   `docs/` (architecture, ADRs).
 - **Test layout:** `tests/` mirrors the source shape — `tests/framework/`

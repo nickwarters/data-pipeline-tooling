@@ -30,7 +30,7 @@ Two details settled in implementation, neither changing the decision:
 - **The subject is named `sharepoint_cases`.** An earlier draft of this ADR
   proposed `cora_cases` and treated the feed's existing name as interim. That
   rename was considered on its own merits and **declined**: it moves on-disk
-  directories, `case_review/schedules.py`'s pipeline path, `reviewer_activity`'s
+  directories, `pipelines/schedules.py`'s pipeline path, `reviewer_activity`'s
   reader and two data dictionaries, and re-keys gold across thirteen tables — all
   to swap one accurate name for another. The name is now settled, and the free
   re-key below is spent on it deliberately rather than provisionally.

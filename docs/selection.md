@@ -388,7 +388,7 @@ the module-main registered under a subject and recorded
 `complaints_a/complaints_a`, a label no requirement here names, so an ingest run
 that way left this pipeline stuck on the silent first-run "allow" fallback
 forever ([ADR-0027](adr/0027-eager-steps-are-the-default-authoring-model.md)).
-`orchestrate --app case_review.schedules` schedules `complaint_selection` itself
+`orchestrate --app pipelines.schedules` schedules `complaint_selection` itself
 but does not run the three ingests — they are not on any schedule — so something
 else (an operator, a separate job) still has to run them for that requirement to
 mean anything; it no longer matters *how*.

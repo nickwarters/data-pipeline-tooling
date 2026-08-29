@@ -653,10 +653,10 @@ python -m cli log ingest --base-dir /data --pipeline-run-id 5f8ff8c7
 ```
 
 `orchestrate` runs the scheduled due work instead of one named pipeline. In this
-repository the `--app` module is `case_review.schedules`:
+repository the `--app` module is `pipelines.schedules`:
 
 ```sh
-python -m cli orchestrate --app case_review.schedules --base-dir /data --once
+python -m cli orchestrate --app pipelines.schedules --base-dir /data --once
 ```
 
 `run` addresses a pipeline by **its location on disk**: `pipelines/ingest` maps
