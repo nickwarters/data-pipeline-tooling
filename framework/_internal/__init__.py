@@ -1,8 +1,5 @@
-"""Private, cross-cutting framework internals — **not** a public facade.
+"""Private cross-cutting framework internals.
 
-Helpers used by more than one facade that carry no public name of their own:
-``connection`` (the ``connect`` factory seam) and ``describe`` (the
-``render`` helper behind the opt-in ``describe()`` protocol).
-The leading underscore marks the whole package as internal layout: pipelines and
-the case-review layer never import from here. See ``docs/public-api.md``.
+These helpers have no public names; application code imports only through the
+public facades.
 """

@@ -102,10 +102,7 @@ def test_package_root_exposes_only_public_facade_modules():
         "transform",
         "run",
     ]
-    # Every advertised facade must actually be bound on the package — not merely
-    # listed in __all__. A stale name in __all__ (e.g. a folded-away facade whose
-    # directory lingers on disk) passes ruff's F822 but raises AttributeError at
-    # runtime, so guard the binding here.
+    # Every advertised facade must be bound at runtime, not merely listed in __all__.
     for name in framework.__all__:
         assert hasattr(framework, name), (
             f"framework.{name} listed in __all__ but unbound"
@@ -113,8 +110,7 @@ def test_package_root_exposes_only_public_facade_modules():
     assert framework.core.Dataset is not None
     assert framework.io.CsvReader is not None
     assert framework.transform.Filter is not None
-    # The validate(dataset) checks live on framework.core (the validate facade
-    # was folded into core).
+    # The validate(dataset) checks are exported from framework.core.
     assert framework.core.SchemaValidator is not None
     assert framework.core.ColumnValidator is not None
     assert framework.run.Pipeline is not None
@@ -246,7 +242,7 @@ def test_internal_plumbing_stays_out_of_the_public_facades():
     internal = {
         "connect",  # framework._internal.connection — connection factory seam
         "RowTrace",  # framework.run.trace — generic trace mechanics
-        "RemoteRunner",  # framework.io.remote — stubbed remote client seam
+        "RemoteRunner",  # tools.integrations.remote — remote client seam
         "FreshnessGuard",  # framework.run.runner — internal guard
         "StepMetrics",  # tools.observability.run_log — internal timing record
         "pipeline_label",  # framework.run.runner — internal label helper
@@ -287,17 +283,14 @@ def test_readers_import_framework_only_through_the_public_facades():
     # dataset lands is exactly what a module here is for.
     offenders = _facade_offenders(READERS_DIR)
     assert not offenders, f"readers bypassing the public facades: {offenders}"
-    # ...and the tree was actually read. Until the subject modules land this is
-    # the package docstring alone, so without this the test above would pass on
-    # an empty directory and keep passing if the directory were deleted.
+    # Guard against a stable no-offenders result from an empty scan.
     assert _scanned_modules(READERS_DIR), f"{READERS_DIR} has no modules to check"
 
 
 def test_the_boundary_check_itself_catches_both_kinds_of_violation():
     # The check above is only worth its CI status if it would actually fail.
-    # A previous version compared only the *second* dotted segment, so reaching
-    # behind a facade — the thing the rule is about — passed silently. Pin both
-    # halves here so the check cannot go hollow again unnoticed.
+    # Pin both rejection paths here: reaching behind a public facade and naming
+    # a private framework module must each produce a violation.
     behind_a_facade = _framework_import_violations(
         "from framework.core.value_rules import Range\n"
     )

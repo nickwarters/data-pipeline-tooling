@@ -1,10 +1,7 @@
-"""The demo Case Type ingest: source -> raw -> silver -> gold.
+"""Demo ingest from source through raw and silver to gold.
 
-The gold reduction used to live in a shared ``case_review.gold`` builder every
-Case Type called. It is now four lines inside this pipeline's ``run``, so these
-tests drive the pipeline itself: what they pin is the *rule* -- silver keeps
-every observation, gold keeps one current row per Case, and a Case's id is a
-deterministic digest of its natural key under its namespace.
+Silver retains every observation; gold keeps one current row per Case with a
+deterministic natural-key digest under its namespace.
 """
 
 import pandas as pd

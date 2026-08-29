@@ -60,9 +60,8 @@ def test_values_are_left_as_text(tmp_path):
 
 
 def test_agrees_with_the_pandas_reader_on_text_but_not_on_a_blank(tmp_path):
-    # Both readers land text now, so that is no longer this one's distinction.
-    # What still differs is the blank: the grammar says a field was present and
-    # empty, so it lands as "", where the pandas readers land a gap.
+    # Both preserve text; strict keeps present-empty as "", while pandas maps
+    # blanks to NA.
     src = tmp_path / "nums.csv"
     src.write_text("id,amount\n0007,\n", encoding="utf-8")
 
@@ -232,7 +231,7 @@ def test_doubled_quote_still_default_without_escapechar(tmp_path):
 
     rows = _rows(StrictCsvReader(src).read())
 
-    # Regression guard: the RFC 4180 doubled-quote default is unchanged.
+    # RFC 4180 doubled quotes remain the default.
     assert rows == [{"a": 'x"y'}]
 
 

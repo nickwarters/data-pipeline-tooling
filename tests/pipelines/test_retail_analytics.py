@@ -152,19 +152,20 @@ def test_revenue_terminus_joins_completed_orders_with_active_catalog():
     by_order = {r["order_id"]: r for r in revenue}
     assert set(by_order) == {"O1", "O2"}
 
+    # Expected revenue/cost/margin: O1 = 100/50/50; O2 = 250/80/170.
     o1 = by_order["O1"]
     assert o1["product_name"] == "Widget Alpha"
     assert o1["category"] == "Hardware"
-    assert o1["revenue"] == pytest.approx(100.0)  # 2 × 50.0
-    assert o1["cost_of_goods"] == pytest.approx(50.0)  # 2 × 25.0
-    assert o1["margin"] == pytest.approx(50.0)  # 100.0 − 50.0
+    assert o1["revenue"] == pytest.approx(100.0)
+    assert o1["cost_of_goods"] == pytest.approx(50.0)
+    assert o1["margin"] == pytest.approx(50.0)
 
     o2 = by_order["O2"]
     assert o2["product_name"] == "Gadget Beta"
     assert o2["category"] == "Software"
-    assert o2["revenue"] == pytest.approx(250.0)  # 1 × 250.0
-    assert o2["cost_of_goods"] == pytest.approx(80.0)  # 1 × 80.0
-    assert o2["margin"] == pytest.approx(170.0)  # 250.0 − 80.0
+    assert o2["revenue"] == pytest.approx(250.0)
+    assert o2["cost_of_goods"] == pytest.approx(80.0)
+    assert o2["margin"] == pytest.approx(170.0)
 
 
 def test_risk_terminus_stacks_cancelled_orders_and_low_stock():
@@ -326,9 +327,7 @@ def test_dag_builder_gates_missing_order_columns():
     revenue_w, risk_w, ops_w = RecordingWriter(), RecordingWriter(), RecordingWriter()
 
     p = dag_builder(
-        orders_reader=given_rows(
-            [{"order_id": "O1", "customer_id": "C1"}]
-        ),  # missing columns
+        orders_reader=given_rows([{"order_id": "O1", "customer_id": "C1"}]),
         catalog_reader=given_rows(_CATALOG),
         revenue_writer=revenue_w,
         risk_writer=risk_w,
@@ -349,7 +348,7 @@ def test_dag_builder_gates_missing_catalog_columns():
 
     p = dag_builder(
         orders_reader=given_rows(_ORDERS),
-        catalog_reader=given_rows([{"product_id": "P1"}]),  # missing columns
+        catalog_reader=given_rows([{"product_id": "P1"}]),
         revenue_writer=revenue_w,
         risk_writer=risk_w,
         ops_writer=ops_w,

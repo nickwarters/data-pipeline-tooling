@@ -128,7 +128,7 @@ def _sale(adviser, risk_score, category="A", sale_id="S", sale_date=date(2026, 6
 def _sales_in_months(n, adviser="adv001"):
     """``n`` sales, one in each of the ``n`` rolling months ending at ``AS_OF``.
 
-    Gives the adviser ``n`` *active* months, so ``check_target`` pro-rata's their
+    Gives the adviser ``n`` *active* months, so ``check_target`` prorates their
     capacity to ``round(10 * n / 12)``.
     """
     out = []
@@ -152,7 +152,7 @@ def test_select_cases_picks_one_per_adviser_and_explains_exclusions():
     pool, trace = select_cases(sales, reviews, AS_OF)
 
     assert [r["adviser"] for r in pool] == ["clean"]
-    assert pool[0]["case_type"] == "C"  # 300 -> C
+    assert pool[0]["case_type"] == "C"
     verdicts = {r["adviser"]: r["verdict"] for r in trace}
     assert verdicts == {"clean": "selected", "busy": "excluded"}
     # "stale" had no recent sale, so it is not even a considered adviser.
@@ -188,7 +188,7 @@ def test_selection_builder_runs_in_memory_with_recording_writers():
     from tests.framework_testing import RecordingWriter
 
     sales = given_rows([_sale("adv001", 260, sale_id="S1")])
-    reviews = given_rows([])  # clean adviser
+    reviews = given_rows([])
     writer = RecordingWriter()
     selector = SelectCasesToCheck(reviews, AS_OF)
 

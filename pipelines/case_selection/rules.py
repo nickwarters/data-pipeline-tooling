@@ -234,7 +234,7 @@ def assign_case_type(
         return "C"
     done = checks_in_window(reviews, as_of)
     type_c_needed = max(0, type_c_quota - type_c_checks_in_window(reviews, as_of))
-    slots_remaining = check_target(sales, as_of) - done  # this fills one of them
+    slots_remaining = check_target(sales, as_of) - done
     if 0 < slots_remaining <= type_c_needed:
         return "C"
     return natural

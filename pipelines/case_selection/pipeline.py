@@ -59,7 +59,6 @@ REVIEWS_CSV = SAMPLE_DIR / "case_reviews.csv"
 # deterministic; doubles as the demo's run date when invoked directly.
 AS_OF = date(2026, 6, 25)
 
-# This pipeline is self-contained (it lands its own sources), so no upstreams.
 UPSTREAMS = ()
 
 

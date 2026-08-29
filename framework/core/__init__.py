@@ -4,9 +4,8 @@ The noun every pipeline names regardless of task — ``Dataset`` — plus the
 foundational data contracts: declaring and enforcing a feed's schema
 (``SchemaValidator``, value rules) and structural validations.
 
-The medallion (``raw`` / ``silver`` / ``gold``) is **no longer framework
-vocabulary**: the framework stores an opaque ``namespace`` → file, and the
-medallion is an application-level profile (``tools.medallion``) layered on top.
+The medallion (``raw`` / ``silver`` / ``gold``) is application infrastructure,
+not framework vocabulary: ``tools.medallion`` layers it over opaque namespaces.
 
 Import from here rather than the underlying modules::
 

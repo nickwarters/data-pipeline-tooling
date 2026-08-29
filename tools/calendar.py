@@ -1,17 +1,4 @@
-"""``WorkingDayCalendar`` — config-seeded working-day arithmetic.
-
-Availability criteria phrase eligibility in *working days* ("these Advisers
-within the last 20 working days" — see ``CONTEXT.md``). This utility answers
-those questions deterministically from a seeded weekend rule plus a set of
-holidays. It is **pure logic**: no ``Store``, no in-memory engine, no
-``Dataset`` — it depends only on the stdlib ``datetime``, so it is the same on
-Windows and macOS. Reference Data lives in per-subject medallions; the
-working-day calendar is deliberately not a feed.
-
-The config it is "seeded from" is a **YAML calendar file** — a mapping of
-optional ``holidays`` and ``weekend`` keys — loadable by
-:meth:`WorkingDayCalendar.from_yaml`; it is still not a feed.
-"""
+"""Deterministic stdlib working-day arithmetic for Windows and macOS."""
 
 from __future__ import annotations
 
@@ -50,23 +37,13 @@ class WorkingDayCalendar:
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "WorkingDayCalendar":
-        """Seed a calendar from a YAML calendar file.
+        """Seed from a mapping of optional ``holidays`` and ``weekend`` forms.
 
-        The file is a mapping with two optional keys::
+        Holidays are dates or ``YYYY-MM-DD`` strings. Weekend values are English
+        weekday names, case-insensitively; ``[]`` means no weekend.
 
-            weekend: [saturday, sunday]   # the default
-            holidays:
-              - 2026-01-01
-              - 2026-12-25
-
-        ``holidays`` are ``YYYY-MM-DD`` dates (YAML parses unquoted ones into
-        ``date`` objects; quoted strings are accepted too). ``weekend`` names
-        full English weekdays, case-insensitively — the same operator language
-        ``Schedule.on_weekdays(...)`` accepts; ``[]`` means "no weekend".
-
-        Every operator-facing problem raises :class:`ValueError` naming the
-        path, so a caller never has to interpret a parser exception. ``yaml`` is
-        imported lazily so importing this module costs only the stdlib.
+        Operator-facing failures raise :class:`ValueError` naming ``path``;
+        ``yaml`` is imported lazily so the module otherwise stays stdlib-only.
         """
         import yaml
 
@@ -132,12 +109,7 @@ def _parse_holidays(value: Any, path: Path) -> list[date]:
 
 
 def _parse_holiday(value: Any, index: int, path: Path) -> date:
-    """One holiday element, as a ``date``.
-
-    A ``datetime`` is rejected rather than narrowed: it compares unequal to the
-    ``date`` a schedule asks about and hashes differently, so it would sit in
-    the holiday set and silently never match.
-    """
+    """Parse one date, rejecting datetimes rather than silently narrowing them."""
     where = f"calendar file '{path}': holidays[{index}]"
     if isinstance(value, datetime):
         raise ValueError(

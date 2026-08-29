@@ -1,11 +1,4 @@
-"""Generating a subject's baseline migrations from the databases themselves.
-
-The load-bearing test here is the last one: it runs the real `sharepoint_cases`
-pipeline against its bundled fixture, generates baselines from the databases that
-run wrote, applies them to an empty base directory, and asserts the result is the
-same shape. That is the whole claim of #689 — the generated DDL reproduces what a
-current run creates — and it is checked end to end rather than asserted.
-"""
+"""Test end-to-end schema reproduction by generated baseline migrations."""
 
 import sqlite3
 import sys
@@ -62,9 +55,7 @@ def test_every_database_a_subject_has_gets_a_baseline(tmp_path):
 
 
 def test_the_baseline_is_the_databases_own_create_statement(tmp_path):
-    # The point of #689 after review: the statement is copied, not rebuilt. What
-    # lands in the file is what `sqlite3 <db> .schema` would print, down to the
-    # spacing, so nothing about the shape passes through a model of it.
+    # Copy the database's statement verbatim rather than rebuilding its shape.
     base = tmp_path / "data"
     declared = 'CREATE TABLE "cases" (\n  "case_id" TEXT NOT NULL,\n  score REAL\n)'
     _database(base / "cases" / "silver.db", declared)
@@ -171,7 +162,7 @@ def test_the_ledger_and_the_scratch_tables_are_not_part_of_a_baseline(tmp_path):
 
 
 def test_regenerating_an_unchanged_database_is_byte_identical(tmp_path):
-    # So a checked-in baseline can be diffed against the database it claims to
+    # So a stored baseline can be diffed against the database it claims to
     # describe, and the diff means something.
     base = tmp_path / "data"
     _database(
@@ -246,10 +237,8 @@ def test_an_empty_database_is_noted_and_gets_no_directory(tmp_path, capsys):
 
 
 def test_the_generated_baseline_matches_what_a_real_run_creates(tmp_path):
-    # #689's "done when", end to end and with no fixtures of its own: run the
-    # real sharepoint_cases pipeline against its bundled sample, generate from
-    # the databases it wrote, apply those migrations to an empty base directory,
-    # and compare every table column-for-column and type-for-type.
+    # Generate from a real pipeline run, apply to an empty base directory, and
+    # compare every table column-for-column and type-for-type.
     pytest.importorskip("pandas")
     from framework.run.run_context import RunContext
     from pipelines.sharepoint_cases import pipeline as feed

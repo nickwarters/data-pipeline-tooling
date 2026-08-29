@@ -13,5 +13,4 @@ from __future__ import annotations
 
 
 def sharepoint_location(site: str, list_name: str) -> dict[str, str]:
-    """One SharePoint list, as the site it lives in and the list's own name."""
     return {"namespace": site, "name": list_name}

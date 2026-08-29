@@ -95,10 +95,7 @@ def test_insert_or_ignore_preserves_rows_not_in_incoming_batch(tmp_path):
 
 
 def test_an_ignored_row_keeps_the_run_that_first_inserted_it(tmp_path):
-    # An ignored row is not written, so the row already there is not restamped:
-    # the same "first landed" reading an append-only target has. The target's
-    # own PRIMARY KEY is what does the ignoring, and the extra column takes no
-    # part in it.
+    # Ignored rows retain their original provenance.
     db = tmp_path / "store.db"
     con = sqlite3.connect(db)
     con.execute("CREATE TABLE things (id INTEGER PRIMARY KEY, name TEXT)")

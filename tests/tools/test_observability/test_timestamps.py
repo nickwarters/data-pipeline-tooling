@@ -29,7 +29,7 @@ BST = dt.timezone(dt.timedelta(hours=1))
 
 @pytest.fixture
 def uk_summer(monkeypatch):
-    """Pretend the box's local zone is UTC+1, as a UK box is half the year."""
+    """Pretend the local zone is UTC+1 in summer."""
     monkeypatch.setattr(timestamps, "local_timezone", lambda: BST)
 
 

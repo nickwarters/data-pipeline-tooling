@@ -1,13 +1,4 @@
-"""Schema-driven coercion between raw and silver.
-
-``SchemaCoercion`` is the processor that makes a column carry what the Case Type
-schema declared, *ahead of* the silver ``SchemaValidator``: types storage loses
-outright (dates land as text, booleans as ``1``/``0`` or ``TRUE``/``FALSE``) and
-types a reader's inference is free to land as something else (a digits-only
-reference read as ``int64``, a number read as text). A column the validator's
-dtype check would already accept is left alone. It is engine-confined (reaches
-the frame via ``to_pandas``/``from_pandas``).
-"""
+"""Schema coercion converts raw values to declared silver dtypes before validation."""
 
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -95,7 +86,7 @@ def test_coerces_a_declared_date_from_text_so_the_validator_passes():
 
     coerced = SchemaCoercion(DatedCase)(dataset)
 
-    SchemaValidator(DatedCase).validate(coerced)  # does not raise
+    SchemaValidator(DatedCase).validate(coerced)
 
 
 def test_coerces_a_declared_bool_from_true_false_text():
@@ -106,7 +97,7 @@ def test_coerces_a_declared_bool_from_true_false_text():
 
     coerced = SchemaCoercion(FlaggedCase)(dataset)
 
-    SchemaValidator(FlaggedCase).validate(coerced)  # does not raise
+    SchemaValidator(FlaggedCase).validate(coerced)
     assert list(coerced.to_pandas()["active"]) == [True, False]
 
 
@@ -150,13 +141,8 @@ def test_does_not_recast_a_column_that_already_carries_the_declared_dtype():
 
 
 def test_types_every_declared_column_when_the_frame_has_no_rows():
-    # A quiet source's window has no row to type its columns and no value to
-    # infer one from: it arrives object-typed, or float64 where `reindex` had to
-    # invent the column. The validator lets an empty frame past on exactly that
-    # basis — but the dtypes still reach storage, and an empty write is what
-    # *creates* the table, fixing each column's affinity for the life of the
-    # feed. No branch handles this: the ordinary paths run with no rows, and
-    # what they land is still what fixes the created table's affinity.
+    # Empty frames still need declared dtypes because their writes establish
+    # SQLite column affinities.
     empty = pd.DataFrame(
         {
             "case_ref": pd.Series([], dtype="float64"),  # as reindex invents it
@@ -256,7 +242,7 @@ def test_coerces_a_nullable_bool_column_keeping_the_null():
 
     coerced = SchemaCoercion(OptionallyFlaggedCase)(dataset)
 
-    SchemaValidator(OptionallyFlaggedCase).validate(coerced)  # does not raise
+    SchemaValidator(OptionallyFlaggedCase).validate(coerced)
     active = coerced.to_pandas()["active"]
     assert active.isna().tolist() == [False, True, False]
     assert active.dropna().tolist() == [True, False]
@@ -285,7 +271,7 @@ def test_null_in_a_non_null_bool_is_a_nullability_breach_not_a_coercion_error():
     raw = pd.DataFrame({"case_ref": ["c1", "c2"], "active": ["TRUE", None]})
     dataset = Dataset.from_pandas(raw)
 
-    coerced = SchemaCoercion(RequiredFlagCase)(dataset)  # does not raise
+    coerced = SchemaCoercion(RequiredFlagCase)(dataset)
 
     with pytest.raises(ValidationError, match="active.*null"):
         SchemaValidator(RequiredFlagCase).validate(coerced)
@@ -298,7 +284,7 @@ def test_validator_accepts_the_nullable_boolean_dtype_the_coercer_lands():
         {"case_ref": ["c1", "c2"], "active": pd.array([True, False], dtype="boolean")}
     )
 
-    SchemaValidator(FlaggedCase).validate(Dataset.from_pandas(frame))  # does not raise
+    SchemaValidator(FlaggedCase).validate(Dataset.from_pandas(frame))
 
 
 @pytest.mark.parametrize(
@@ -343,7 +329,7 @@ def test_coerces_a_declared_bool_from_one_zero_encoding():
 
     coerced = SchemaCoercion(FlaggedCase)(dataset)
 
-    SchemaValidator(FlaggedCase).validate(coerced)  # does not raise
+    SchemaValidator(FlaggedCase).validate(coerced)
     assert list(coerced.to_pandas()["active"]) == [True, False]
 
 
@@ -355,7 +341,7 @@ def test_coerces_an_inferred_numeric_reference_to_text_so_the_validator_passes()
 
     coerced = SchemaCoercion(ReferenceCase)(Dataset.from_pandas(raw))
 
-    SchemaValidator(ReferenceCase).validate(coerced)  # does not raise
+    SchemaValidator(ReferenceCase).validate(coerced)
     assert coerced.to_pandas()["case_ref"].tolist() == ["12345", "67890"]
 
 
@@ -396,7 +382,7 @@ def test_coerces_numeric_text_to_the_declared_number_so_the_validator_passes():
 
     coerced = SchemaCoercion(ScoredCase)(Dataset.from_pandas(raw))
 
-    SchemaValidator(ScoredCase).validate(coerced)  # does not raise
+    SchemaValidator(ScoredCase).validate(coerced)
     assert coerced.to_pandas()["score"].tolist() == [10, 20]
 
 
@@ -406,7 +392,7 @@ def test_coerces_declared_float_text_to_float():
 
     coerced = SchemaCoercion(RatedCase)(Dataset.from_pandas(raw))
 
-    SchemaValidator(RatedCase).validate(coerced)  # does not raise
+    SchemaValidator(RatedCase).validate(coerced)
     assert coerced.to_pandas()["rating"].tolist() == [3.14, 2.0]
 
 
@@ -416,14 +402,8 @@ def test_coerces_declared_float_text_to_float():
     ids=["float-widened", "null", "blank"],
 )
 def test_a_gap_in_a_declared_int_survives_the_cast_as_a_gap(column):
-    # Three spellings of one absence: the float64 a gap widened the column to,
-    # a null, and the empty field a CSV spells "nothing here" with. None is a
-    # bad value. The fractional check is where this is easiest to get wrong — it
-    # runs over float64, in which a gap is NaN, and `NaN % 1` is NaN, which
-    # compares unequal to 0, so without masking the gaps out every null is
-    # reported as a fractional value and a plainly nullable column can never be
-    # coerced at all. Nullable Int64 is what lands, so the gap survives rather
-    # than having to be invented as a zero.
+    # Mask gaps before the fractional check so they are not rejected as values;
+    # nullable Int64 preserves them after coercion.
     raw = pd.DataFrame({"case_ref": ["c1", "c2"], "score": column})
 
     coerced = SchemaCoercion(ScoredCase)(Dataset.from_pandas(raw)).to_pandas()
@@ -440,7 +420,7 @@ def test_validator_accepts_the_nullable_integer_dtype_the_coercer_lands():
         {"case_ref": ["c1", "c2"], "score": pd.array([10, None], dtype="Int64")}
     )
 
-    SchemaValidator(ScoredCase).validate(Dataset.from_pandas(frame))  # does not raise
+    SchemaValidator(ScoredCase).validate(Dataset.from_pandas(frame))
 
 
 @pytest.mark.parametrize(
@@ -470,12 +450,7 @@ def test_an_unparseable_number_fails_fast_naming_the_column_and_the_value(
 def test_a_value_a_declared_int_cannot_hold_aborts_rather_than_being_rounded(
     value, expected
 ):
-    # Rounding or narrowing would silently change the value. The arms refuse it
-    # and the expected message distinguishes them: 3.5 fails the fractional
-    # check, while 1e30 passes it (`1e30 % 1 == 0`) and is caught by the Int64
-    # cast, which will not narrow a float that has no equivalent integer. A
-    # reference wider than int64 lands in the same place: declared `int` it is a
-    # mis-declaration, and `str` now preserves it exactly.
+    # Fractions and values outside Int64 are rejected instead of silently rounded.
     raw = pd.DataFrame({"case_ref": ["c1"], "score": [value]})
 
     with pytest.raises(CoercionError, match=expected):
@@ -516,7 +491,7 @@ def test_a_blank_cell_in_a_declared_bool_is_a_gap_not_an_unrecognized_encoding()
 
     coerced = SchemaCoercion(OptionallyFlaggedCase)(Dataset.from_pandas(raw))
 
-    SchemaValidator(OptionallyFlaggedCase).validate(coerced)  # does not raise
+    SchemaValidator(OptionallyFlaggedCase).validate(coerced)
     assert coerced.to_pandas()["active"].isna().tolist() == [False, True]
 
 
@@ -544,7 +519,7 @@ def test_coerces_every_declared_type_off_a_real_csv_read(tmp_path):
 
     coerced = SchemaCoercion(CsvSourcedCase)(CsvReader(src).read())
 
-    SchemaValidator(CsvSourcedCase).validate(coerced)  # does not raise
+    SchemaValidator(CsvSourcedCase).validate(coerced)
     frame = coerced.to_pandas()
     assert frame.iloc[0].to_dict() == {
         "case_ref": "00123",  # the reference the reader preserved

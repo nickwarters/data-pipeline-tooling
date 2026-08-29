@@ -32,13 +32,15 @@ def default_list_name(slug: str) -> str:
 
 def parse_args(argv: list[str]) -> ScaffoldOptions:
     parser = argparse.ArgumentParser(
-        description="Scaffold a new Case Type module, wiring, fixtures, tests, and ADR."
+        description=(
+            "Scaffold a new Case Type module, wiring, fixtures, tests, and documentation."
+        )
     )
     parser.add_argument(
         "--root",
         type=Path,
         default=SCRIPT_ROOT,
-        help="Repository root. Defaults to the current checkout.",
+        help="Repository root. Defaults to the script's source tree.",
     )
     parser.add_argument(
         "--slug",
@@ -55,7 +57,7 @@ def parse_args(argv: list[str]) -> ScaffoldOptions:
         help=(
             "SharePoint Case list name. Defaults to the Cases-{PascalSlug} "
             "convention, e.g. Cases-WidgetReview. Every Case Type must declare "
-            "one: there is no default store (issue #249)."
+            "one because there is no default store."
         ),
     )
     args = parser.parse_args(argv)
@@ -99,8 +101,8 @@ def escape_regexp(source: str) -> str:
 # Operator-supplied text reaches generated JS string literals, JSDoc comments and
 # Markdown. Unescaped, `--display "O'Brien Review"` emitted
 # `label: 'O'Brien Review reference'` — a module that does not parse — and a
-# crafted value could close the literal and inject arbitrary code into a file the
-# maintainer is about to commit. Two defences, because escaping alone does not
+# crafted value could close the literal and inject arbitrary code into the
+# generated file. Two defences, because escaping alone does not
 # save a JSDoc block from a `*/`:
 #
 #   1. an allow-list of characters that are safe in all three contexts, and
@@ -140,16 +142,14 @@ def insert_before_match(content: str, pattern: str, insertion: str, file_path: P
 
 
 def layout_line(slug: str, display_name: str) -> str:
-    """One `case-types/` entry for CLAUDE.md's Directory layout block.
+    """One `case-types/` entry for the checked Directory layout block.
 
-    The block is a checked contract — `tests/claude-md-layout-contract.test.js`
-    fails for any production module under `src/` or `case-types/` whose basename
-    it does not mention — so the scaffold writes its own line rather than
-    leaving the developer a red test to decode.
+    Every production module under `src/` or `case-types/` must be named there,
+    so the scaffold writes its own line.
     """
     name = f"  {slug}.js"
     padding = " " * max(1, 32 - len(name))
-    return f"{name}{padding}# {display_name} Case Type scaffold (ADR-0028)\n"
+    return f"{name}{padding}# {display_name} Case Type scaffold\n"
 
 
 def insert_after_match(content: str, pattern: str, insertion: str, file_path: Path) -> str:
@@ -461,22 +461,22 @@ The scaffold creates a plain-data Case Type module for `{opts.display_name}` and
 registers it with a single entry in `CASE_TYPES` (`case-types/manifest.js`) — the
 one registry, carrying the display name from which the three per-Case-Type
 SharePoint group names derive. `permissions.caseTypes` is derived from it, so no
-permissions edit is needed (issue #508). The scaffold also adds mock personas,
+permissions edit is needed. The scaffold also adds mock personas,
 one outstanding and one Completed mock Case, and a focused test file for the
 generated contract.
 
 The generated Case Type declares `listName: '{opts.list_name}'` — defaulted from
 the slug by the `Cases-{{PascalSlug}}` convention and overridable with
 `--list-name`. It is not optional: the mock store partitions the fixture Cases by
-each Case Type's declared list and has no default bucket (issue #249), so a Case
+each Case Type's declared list and has no default bucket, so a Case
 Type that writes mock Cases without a `listName` would break `?mock=1` for every
 other Case Type. Declaring it is what makes the generated sample Cases openable
 in the mock loop. The script refuses to overwrite an existing Case Type slug;
 maintainers should edit an existing type directly once it has real business
 configuration.
 
-The scaffold also appends the generated module to the Directory layout block in
-`CLAUDE.md`, which is a checked contract (`tests/claude-md-layout-contract.test.js`).
+The scaffold also adds the generated module to the checked Directory layout
+block.
 
 ## Consequences
 
@@ -494,13 +494,7 @@ The scaffold also appends the generated module to the Directory layout block in
 """
 
 
-# The tests that pin today's Case Type registry as a CLOSED set.
-#
-# Each names `complaints` (the only live Case Type) in a literal expectation, so
-# a newly scaffolded slug moves them by design. The scaffold does not edit
-# contract tests — a script silently rewriting the assertions that guard the
-# registry would defeat the point of having them — so it names them instead,
-# precisely enough that a developer can match every red test to a line here.
+# Closed-known-slug contract tests are reported, not rewritten.
 EXPECTED_FAILURES = [
     (
         "tests/case-type-manifest.test.js",
@@ -570,12 +564,8 @@ def scaffold(opts: ScaffoldOptions) -> None:
     test_path.write_text(case_type_test(opts), encoding="utf-8")
     adr_path.write_text(adr(opts), encoding="utf-8")
 
-    # One registry entry, into the array `CASE_TYPES` is exported from. It
-    # carries the slug, the ONE copy of the display name the three SharePoint
-    # group names derive from (#527), and the lazy importer. `CASE_TYPE_IMPORTERS`, `QUESTION_BANK_IMPORTERS` and
-    # `permissions.caseTypes` are all derived from it (issue #508), so there is
-    # nothing to add in src/services/permissions.js. No `bank` thunk is emitted:
-    # the scaffold writes no Question Bank artifact, and `bank` is optional.
+    # Add one frozen CASE_TYPES entry; importers and permissions derive from it.
+    # No Question Bank artifact or bank thunk is generated.
     js_display = js_escape(opts.display_name)
     manifest_path = opts.root / "case-types" / "manifest.js"
     manifest = manifest_path.read_text(encoding="utf-8")
@@ -583,9 +573,7 @@ def scaffold(opts: ScaffoldOptions) -> None:
         manifest = insert_after_match(
             manifest,
             r"const registry = \[\n",
-            # Frozen like every other registry entry (#527): the display name it
-            # carries composes three SharePoint group names, and both the
-            # capability and eligibility sides read that one copy.
+            # Frozen like every other registry entry.
             f"  Object.freeze({{\n"
             f"    slug: '{opts.slug}',\n"
             f"    displayName: '{js_display}',\n"
@@ -636,10 +624,8 @@ def scaffold(opts: ScaffoldOptions) -> None:
         )
         cases_path.write_text(cases, encoding="utf-8")
 
-    # CLAUDE.md's Directory layout block is a checked contract: every `.js`
-    # under src/ and case-types/ must be named in it
-    # (tests/claude-md-layout-contract.test.js). The scaffold adds its own line
-    # so the generated module does not land as an unexplained red test.
+    # Every `.js` under src/ and case-types/ must be named in the checked
+    # Directory layout block. The scaffold adds its own line.
     claude_md_path = opts.root / "CLAUDE.md"
     claude_md = claude_md_path.read_text(encoding="utf-8")
     if f"  {opts.slug}.js" not in claude_md:

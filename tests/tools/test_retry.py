@@ -28,8 +28,6 @@ _TARGET = {"namespace": "sqlite:/d/raw.db", "name": "orders"}
 
 
 class FlakyReader:
-    """A Reader that raises a transient error for its first ``fails`` reads."""
-
     def __init__(self, error: Exception, fails: int) -> None:
         self._error = error
         self._fails = fails
@@ -69,8 +67,6 @@ def test_non_retryable_failure_aborts_immediately():
 
 
 class FlakyWriter:
-    """A Writer that raises a transient error for its first ``fails`` writes."""
-
     def __init__(self, error: Exception, fails: int) -> None:
         self._error = error
         self._fails = fails
@@ -186,10 +182,7 @@ def test_policy_wraps_a_bare_remote_client_call():
     assert calls["n"] == 2
 
 
-# --------------------------------------------------------------------------
-# describe(): retry is an operational concern and must not cost the plan
-# the line saying where the data comes from.
-# --------------------------------------------------------------------------
+# Retry wrappers preserve plan descriptions.
 
 
 def test_the_plan_shows_the_wrapped_reader_through_the_retry_decorator(tmp_path):
@@ -226,15 +219,11 @@ def test_the_pipeline_plan_names_the_source_behind_a_retrying_reader(tmp_path):
         name="read",
     )
 
-    # The node line names the step; the reader's own summary is what retry used
-    # to erase, so assert it can still be rendered from the wrapped component.
+    # The wrapped reader's summary remains visible through the retry decorator.
     assert "CsvReader" in p._nodes[0].reader.describe()
 
 
-# --------------------------------------------------------------------------
-# Data locations survive the decorator: a silently blank field is the failure
-# mode.
-# --------------------------------------------------------------------------
+# Retry wrappers preserve data locations.
 
 
 def test_a_read_node_behind_retry_still_records_the_source():

@@ -63,8 +63,6 @@ def test_the_schedule_registers_case_management_then_complaint_selection_daily()
     assert run_metric.name == "pipeline_run_metric"
     assert run_metric.schedule == Schedule.daily()
     assert not run_metric.depends_on
-    # The path is only an address until something resolves it: a typo would pass
-    # every assertion above and fail only in production.
     assert callable(load_pipeline(sharepoint.path).run)
     assert callable(load_pipeline(reviewer_activity.path).run)
     assert callable(load_pipeline(platform_metric.path).run)
@@ -131,13 +129,7 @@ def test_a_weekend_or_configured_holiday_pass_skips_it(tmp_path):
 
 
 def test_two_operator_passes_on_one_weekday_are_safe(tmp_path):
-    """Both passes are due, reach the pipeline, and are recorded separately.
-
-    What this does *not* prove: that the data converges. Landing the same window
-    twice is the feed's own contract — the watermark plus its append-only key —
-    covered by
-    ``tests/pipelines/test_sharepoint_cases.py::test_a_repeated_observation_is_a_no_op_in_raw_and_silver``.
-    """
+    """A repeated due pass records all five pipelines each time."""
     wednesday = dt.date(2026, 8, 5)
     orchestrator, calls = _orchestrator(WorkingDayCalendar())
 

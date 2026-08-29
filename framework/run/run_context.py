@@ -132,12 +132,8 @@ def _date_text(value: dt.date | str) -> str:
     return value.isoformat() if isinstance(value, dt.date) else value
 
 
-# The ambient run context for the current call stack. The runner and a dry run
-# both execute their handler inside ``active_context(ctx)``; a ``Pipeline.run()``
-# invoked with no explicit context inherits it (as a child, via
-# ``for_nested_pipeline``). That means every bare ``p.run()`` of one attempt
-# shares its ``pipeline_run_id`` and run log — and a dry-run flag reaches every
-# nested pipeline — without each call having to thread the context by hand.
+# Ambient context inherited by nested pipelines and eager steps, preserving run
+# identity, logging, and dry-run state without explicit threading.
 _ACTIVE_CONTEXT: contextvars.ContextVar["RunContext | None"] = contextvars.ContextVar(
     "active_run_context", default=None
 )

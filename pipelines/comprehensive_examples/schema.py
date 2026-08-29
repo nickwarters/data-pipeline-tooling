@@ -1,9 +1,4 @@
-"""Declared schemas for the comprehensive pipeline example.
-
-The scaffold pattern keeps schemas separate from the pipeline wiring. These
-dataclasses are the silver contracts for the reference data, detail table, and
-enriched case snapshot assembled by ``pipeline.py``.
-"""
+"""Schemas for the comprehensive pipeline example."""
 
 from __future__ import annotations
 

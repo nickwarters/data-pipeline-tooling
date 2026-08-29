@@ -9,9 +9,6 @@ into gold — a single-feed current reduce, a multi-feed join enriching one Case
 Type, Detail Tables — is unique per Case Type, so the gold step is left to you.
 Its shape is sketched at the foot of ``run``.
 
-Every line here **does its work when it is reached**. Put a breakpoint on one,
-step over it, and the variable holds the actual rows at that point in the feed
-([ADR-0027](../../docs/adr/0027-eager-steps-are-the-default-authoring-model.md)).
 Each medallion step is its own ``to_*`` function, so a test can drive one with
 sample rows and a recording writer without touching SQLite or the filesystem.
 
@@ -19,7 +16,7 @@ Address it by its location on disk::
 
     python -m cli run pipelines/myfeed --base-dir BASE_DIR
 
-or run the module directly, which is what a PyCharm run configuration does::
+or run the module directly::
 
     python -m pipelines.myfeed.pipeline --base-dir BASE_DIR
 """

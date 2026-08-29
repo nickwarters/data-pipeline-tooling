@@ -8,9 +8,10 @@ otherwise need a hand-written wrapper script: **run** a
 pipeline by its path, **orchestrate** scheduled due work, **migrate** the
 databases they write into, check its **status**,
 list recent **runs**, and inspect a run **log**. It is a thin shell
-over the public `framework.run` runtime surface (`run_pipeline`,
-`Orchestrator`) and the `RunLog` / `RunRegistry` observability seam —
-everything stays local SQLite + JSONL, with no external services
+over the public `framework.run` execution surface (`run_pipeline`),
+`tools.orchestration` scheduling (`Orchestrator`), and the `RunLog` /
+`RunRegistry` observability seam — everything stays local SQLite + JSONL, with
+no external services
 ([the SQLite per-subject medallion store](adr/0001-sqlite-per-subject-medallion-store.md),
 [structured JSONL observability](adr/0005-fail-fast-atomic-runs-and-observability.md)).
 

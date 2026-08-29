@@ -1,11 +1,9 @@
 """Helpers for the opt-in ``describe()`` protocol.
 
 A component renders its own safe summary for ``Pipeline.describe()`` by
-implementing ``describe() -> str``. The builder no longer reflects over a
-component's ``__dict__`` to guess what to show or which attribute names look
-sensitive; each component decides explicitly what is safe to surface, omitting
-the fields it does not want in the plan. These helpers exist only to keep
-that rendering uniform — they introspect nothing.
+implementing ``describe() -> str``. Each component explicitly chooses what is
+safe to surface. These helpers keep that rendering uniform and never inspect a
+component's attributes.
 """
 
 from __future__ import annotations

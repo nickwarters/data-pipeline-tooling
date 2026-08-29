@@ -1,11 +1,4 @@
-"""Tests for the Markdown-mirror generator.
-
-The generator keeps a ``.md`` mirror beside every ``.py`` source. Two behaviours
-need guarding. The *clean* step must prune mirrors orphaned when a source is
-renamed, moved, or deleted, while never touching hand-written Markdown. The
-*generate* step must refuse to overwrite hand-written Markdown that occupies a
-mirror path — the failure that silently ate the frontend's deploy runbook.
-"""
+"""Test orphan cleaning and generated-mirror overwrite refusal."""
 
 from pathlib import Path
 
@@ -31,7 +24,7 @@ def test_generate_then_regenerate_leaves_no_orphans(tmp_path):
     assert (src / "move_me.md").exists()
     assert (src / "delete_me.md").exists()
 
-    # Relocate one source and delete another, as a branch merge would.
+    # Relocate one source and delete another to exercise both stale-file cases.
     (src / "move_me.py").rename(src / "renamed.py")
     (src / "delete_me.py").unlink()
 
@@ -79,12 +72,7 @@ def test_excluded_dirs_are_skipped(tmp_path):
 
 
 def test_generate_refuses_to_overwrite_hand_written_markdown(tmp_path):
-    """A ``.py`` whose mirror path holds prose is a refusal, not an overwrite.
-
-    This is the defect that replaced the frontend's deploy runbook with a copy of
-    ``deploy_to_sharepoint.py``: the runbook sat at the mirror path, and generate
-    wrote straight over it.
-    """
+    """Refuse a generated-mirror path occupied by handwritten Markdown."""
     runbook = tmp_path / "deploy.md"
     runbook.write_text("# Deploy runbook\n\nHand-written prose.\n", encoding="utf-8")
     (tmp_path / "deploy.py").write_text("x = 1\n", encoding="utf-8")
@@ -133,11 +121,7 @@ def test_find_collisions_reports_only_hand_written_markdown(tmp_path):
 
 
 def test_node_modules_is_not_scanned(tmp_path):
-    """Dependency trees are none of the generator's business.
-
-    A third-party ``.py`` shipped alongside its own ``.md`` would otherwise be a
-    collision nobody in this repository can resolve.
-    """
+    """Exclude dependency trees from mirror discovery."""
     pkg = tmp_path / "node_modules" / "flatted" / "python"
     pkg.mkdir(parents=True)
     (pkg / "flatted.py").write_text("x = 1\n", encoding="utf-8")
@@ -149,12 +133,7 @@ def test_node_modules_is_not_scanned(tmp_path):
 
 
 def test_main_refuses_before_cleaning(tmp_path, monkeypatch, capsys):
-    """A refused run leaves the existing mirrors in place.
-
-    ``main`` cleans before it generates, so checking only inside ``generate``
-    would abort a run that had already deleted every mirror it declined to
-    rewrite — the worst of both outcomes.
-    """
+    """Detect collisions before cleaning so refusal preserves existing mirrors."""
     (tmp_path / "clash.py").write_text("a = 1\n", encoding="utf-8")
     (tmp_path / "clash.md").write_text("# Prose\n", encoding="utf-8")
     survivor = tmp_path / "other.md"

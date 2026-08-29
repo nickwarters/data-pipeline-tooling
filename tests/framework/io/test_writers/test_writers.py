@@ -105,8 +105,7 @@ def test_excel_writer_round_trips_through_the_matching_reader(tmp_path):
 
 
 def test_json_writer_emits_file_deliverable_records(tmp_path):
-    # JSON currently has a Writer but no matching Reader; the observable
-    # Deliverable contract is a JSON array of record objects at the target path.
+    # The JSON deliverable contract is an array of records at the target path.
     source = CsvReader(FIXTURE).read()
     target = tmp_path / "deliverables" / "cases.json"
 
@@ -182,8 +181,7 @@ def test_accumulate_by_run_writer_keeps_each_run(tmp_path):
 
 
 def test_accumulate_by_run_writer_is_idempotent_per_run(tmp_path):
-    # Re-driving the same run replaces only that run's rows (delete-by-run then
-    # insert — ), so a re-run does not duplicate.
+    # Re-driving the same run deletes its prior rows before inserting replacements.
     dataset = CsvReader(FIXTURE).read()
     db = tmp_path / "gold.db"
     writer = AccumulateByRunWriter(db, "selection_pool", "r1", "2026-05-29")
@@ -262,12 +260,7 @@ def test_accumulate_by_run_writer_is_atomic_when_the_write_fails(tmp_path):
 
 
 class _DeleteRefusingConnection(sqlite3.Connection):
-    """A connection whose DELETE always reports the database as locked.
-
-    Simulates the one moment that matters on a shared network drive: the
-    delete-by-run step losing the race for the write lock while everything
-    around it still works.
-    """
+    """Simulate a delete-by-run losing the database write-lock race."""
 
     def execute(self, sql, *parameters):  # type: ignore[override]
         if sql.lstrip().upper().startswith("DELETE"):
@@ -454,7 +447,7 @@ def test_insert_if_absent_reports_its_table_even_when_no_rows_are_new(tmp_path):
     writer.write(Dataset.from_pandas(pd.DataFrame({"code": ["a"]})))
 
     fresh = SqliteInsertIfAbsentWriter(db, "advisers", ("code",))
-    fresh.write(Dataset.from_pandas(pd.DataFrame({"code": ["a"]})))  # nothing new
+    fresh.write(Dataset.from_pandas(pd.DataFrame({"code": ["a"]})))
 
     assert writer.data_locations == _table(db, "advisers")
     assert fresh.data_locations == _table(db, "advisers")

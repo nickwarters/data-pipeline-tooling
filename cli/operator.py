@@ -2,8 +2,9 @@
 
 A small command surface so operators do not need to write wrapper scripts to run
 pipelines or inspect their history. It sits on top of the public ``framework.run``
-orchestration (``PipelineRunner``), ``RunRegistry``, and ``RunLog``. Everything
-stays local SQLite + JSONL, with no external services.
+execution surface (``PipelineRunner``), ``tools.orchestration.Orchestrator``, and
+the ``RunRegistry`` / ``RunLog`` observability seam. Everything stays local
+SQLite + JSONL, with no external services.
 
 Run from the repository root so the import-only ``framework`` package resolves::
 
@@ -165,7 +166,6 @@ def _load_registry_or_report(base_dir: str | Path) -> RunRegistry | None:
 
 
 def _format_run(record: dict) -> str:
-    """One human-readable line for a ``run`` summary record from the registry."""
     parts = [
         record.get("timestamp") or "?",
         record.get("pipeline") or "?",
@@ -365,7 +365,6 @@ def _runs_wrote_table(registry: RunRegistry, name: str, namespace: str | None) -
 
 
 def _format_write(record: dict, location: dict) -> str:
-    """One human-readable line for a location a run's step committed to."""
     parts = [
         record.get("step_address") or record.get("step") or "?",
         f"{location.get('namespace', '?')} -> {location.get('name', '?')}",
@@ -377,7 +376,6 @@ def _format_write(record: dict, location: dict) -> str:
 
 
 def _format_record(record: dict) -> str:
-    """One human-readable line for any RunLog step/summary record."""
     parts = [f"{record.get('step', '?')}: {record.get('status', '?')}"]
     for field in ("rows_in", "rows_out", "rows_quarantined", "rows_excluded"):
         value = record.get(field)
@@ -539,7 +537,7 @@ def register(sub) -> None:
         default=None,
         metavar="DIR",
         help=f"the migrations tree to apply (default: {MIGRATIONS_ROOT}); for an "
-        "alternate checkout",
+        "alternate root",
     )
     migrate.set_defaults(func=_migrate)
 

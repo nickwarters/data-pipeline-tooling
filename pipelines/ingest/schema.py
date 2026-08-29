@@ -17,8 +17,6 @@ VARIATIONS = (
 
 @dataclass
 class ActivityCase:
-    """The demo Case Type's schema: an activity-dated, advised, valued Case."""
-
     case_ref: str
     adviser: str
     activity_date: date

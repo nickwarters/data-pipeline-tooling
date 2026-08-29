@@ -8,10 +8,8 @@ so the rest of the system keeps naming only Python types and the two adapters
 stay consistent without depending on each other.
 
 It also owns the **one** evaluation of a schema's declared value rules
-(:func:`evaluate_rules`). The checking half and the row-routing half of the
-declared-schema contract used to walk the declarations separately and disagree
-in undocumented ways; they now consume the same :class:`RuleOutcome` list and
-differ only in how they *present* it.
+(:func:`evaluate_rules`). The checking and row-routing halves consume the same
+:class:`RuleOutcome` list and differ only in how they *present* it.
 
 Private layout: pipelines and the case-review layer never import from here; the
 adapters reach it, and the value-rule classes live in

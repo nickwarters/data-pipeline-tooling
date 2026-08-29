@@ -59,7 +59,7 @@ def test_raw_builder_lands_source_rows():
 
 def test_raw_builder_gates_source_columns():
     writer = RecordingWriter()
-    reader = given_rows([{"brand": "A", "channel": "Web"}])  # missing required columns
+    reader = given_rows([{"brand": "A", "channel": "Web"}])
     with pytest.raises(ValidationError, match="missing required column"):
         raw_builder(reader, writer).run()
     assert len(writer.writes) == 0

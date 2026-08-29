@@ -14,10 +14,8 @@ The deploy is a **sync**, not a blind copy:
 A pre-flight gate, a dependency-ordered upload and a post-upload hash comparison
 bracket that sync, and each of the three is a refusal rather than a repair.
 
-See ``docs/deploy-runbook.md`` for the runbook. It deliberately does not sit
-beside this file: the repository root's ``scripts/generate_md_mirrors.py`` writes
-a Markdown mirror of every ``.py`` to its sibling ``.md`` path, so a runbook there
-would once have been overwritten and would now block the mirror run outright.
+See ``platform_frontend/docs/deploy-runbook.md``. It lives under ``docs`` because
+``generate_md_mirrors.py`` owns sibling ``.md`` files beside Python scripts.
 
 Only the sync *policy* lives here. Every call that touches the library — folder
 creation, listing, upload, delete — goes through the
@@ -51,8 +49,8 @@ SCRIPT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LIBRARY = "Style Library"
 DEFAULT_TARGET_FOLDER = "CODE/CORA"
 
-# The environments the app can be deployed as (ADR-0033). Prod first; every
-# other name is a non-production copy on the same site. This list must match
+# Prod first; every other environment is a non-production copy on the same
+# site. This list must match
 # `ENVIRONMENT_NAMES` in `src/config/environment.js` — a test holds the two
 # equal — and adding an environment means adding it to both, then provisioning
 # it per `docs/guide/provisioning-an-environment.md`.
@@ -88,12 +86,12 @@ DEFAULT_INCLUDE_ROOTS = ("src", "case-types", "host")
 # (e.g. a generated .map or an editor backup) is not deployed.
 DEFAULT_INCLUDE_SUFFIXES = (".js", ".css", ".html", ".aspx")
 
-# Question Bank artifacts are JSON stored as .txt (see CLAUDE.md "Gotchas":
-# SharePoint SE can block/mis-serve real .json files). `case-types/load-bank.js`
+# Question Bank artifacts are JSON stored as .txt because SharePoint SE can
+# block or mis-serve real .json files. `case-types/load-bank.js`
 # fetches `./banks/{slug}.txt` relative to its deployed module URL at runtime, so
 # these files must ship too. Unlike DEFAULT_INCLUDE_SUFFIXES this is scoped to
 # BANKS_DIR only — a stray .txt tool artefact elsewhere under an include root
-# (e.g. src/notes.txt) must still be excluded (#435). Every .txt file placed in
+# (e.g. src/notes.txt) must still be excluded. Every .txt file placed in
 # BANKS_DIR is deployable runtime content; synthetic fixtures belong under tests/
 # so they cannot accidentally ship to prod or UAT.
 BANKS_DIR = "case-types/banks"
@@ -109,7 +107,7 @@ TEMPLATED_SUFFIXES = (".html", ".aspx")
 HOST_BASE_TOKEN = "{{CORA_BASE}}"
 
 # Placeholder in host HTML for the environment name (one of ENVIRONMENT_NAMES).
-# The deployed host page is what declares its environment (ADR-0033): the app
+# The deployed host page declares its environment: the app
 # reads it back as `window.CORA_ENV` and derives the list prefix from it.
 ENV_TOKEN = "{{CORA_ENV}}"
 
@@ -409,7 +407,7 @@ def load_import_graph(artifact: Path) -> dict[str, list[str]]:
     if version != GRAPH_VERSION:
         raise DeployAborted(
             f"{artifact} is schema version {version!r}, not {GRAPH_VERSION} — "
-            "regenerate it with a matching checkout"
+            "regenerate it from the matching source tree"
         )
 
     scanned = graph.get("deployable") or {}
@@ -441,8 +439,9 @@ def assert_graph_covers(
     """Refuse to upload a file the gate never saw.
 
     The include-rule check in :func:`load_import_graph` says the two scanners
-    agree in principle; this says they agree about this checkout. A file with no
-    node has no known dependents, so its place in the order would be a guess.
+    agree in principle; this says they agree about the deployment tree. A file
+    with no node has no known dependents, so its place in the order would be a
+    guess.
     """
     unknown = sorted(rel for rel in local if rel not in graph)
     if unknown:
@@ -516,7 +515,7 @@ def deploy_order(
 def parent_folders(path: str) -> list[str]:
     """Return the ancestor folders of ``path``, root-first (excluding ``path``).
 
-    ``src/lib/signal.js`` -> ``["src", "src/lib"]``. Used to ensure every
+    ``src/lib/signal.js`` -> ``["src", "src/lib"]``. Ensures every
     directory exists before a file is uploaded into it.
     """
     parts = PurePosixPath(path).parts[:-1]
@@ -692,7 +691,7 @@ def parse_args(argv: list[str]) -> DeployOptions:
         "--root",
         type=Path,
         default=SCRIPT_ROOT,
-        help="Repository root. Defaults to the current checkout.",
+        help="Repository root. Defaults to the script's source tree.",
     )
     parser.add_argument(
         "--library",
@@ -704,7 +703,7 @@ def parse_args(argv: list[str]) -> DeployOptions:
         choices=ENVIRONMENT_NAMES,
         default=PROD_ENV,
         help=(
-            "Deployment environment (ADR-0033). Picks the default target "
+            "Deployment environment. Picks the default target "
             "folder and the {{CORA_ENV}} substitution in host HTML. "
             f'Defaults to "{PROD_ENV}".'
         ),
@@ -789,7 +788,7 @@ def _deploy(opts: DeployOptions, client_factory, preflight, log) -> int:
         # order derived from it would describe a tree this deploy is not reading.
         raise DeployAborted(
             f"--root is {opts.root} but the verify gate runs in {SCRIPT_ROOT}; "
-            "deploy from the checkout you verified"
+            "deploy the source tree you verified"
         )
     graph = load_import_graph(preflight(log=log))
 

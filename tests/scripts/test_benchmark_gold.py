@@ -1,14 +1,4 @@
-"""Tests for the gold publication benchmark.
-
-The script exists to be run against a network share, where a wrong answer is
-expensive to discover. Two things need guarding: the synthetic silver history
-must be shaped like the real one, so what is measured is the real reduction
-and not a simplified stand-in; and the run must not touch anything in the
-directory an operator points it at.
-
-The scenarios here are deliberately tiny -- this asserts the measurement is
-sound, not what the numbers are.
-"""
+"""Test realistic silver history and output-directory safety for the gold benchmark."""
 
 from pathlib import Path
 
@@ -17,8 +7,7 @@ import pytest
 from pipelines.sharepoint_cases.schema import CaseVersion
 from scripts import benchmark_gold
 
-# The smallest scenario the CLI will accept, for the tests that are about the
-# script's file handling rather than its measurements.
+# Smallest accepted CLI scenario for file-handling tests.
 _TINY = ("--lists", "1", "--cases", "2", "--versions", "2")
 
 

@@ -1,11 +1,4 @@
-"""One declaration site per schedule.
-
-A schedule used to be declared in three unrelated places: the class, a friendly
-constructor on the base, and a string branch in the overrides parser carrying
-its own bespoke key names. These tests hold the parser to a single site — a new
-schedule reaches an operator's overrides file with no edit anywhere else — and
-pin every key that existing overrides files already use.
-"""
+"""Test one schedule declaration site with unique, parseable config keys."""
 
 import datetime as dt
 
@@ -30,16 +23,12 @@ CALENDAR = WorkingDayCalendar()
 MONDAY = dt.date(2026, 6, 22)
 
 
-# ── every key an existing overrides file may already contain still parses ─────
-
-
 @pytest.mark.parametrize(
     ("config", "expected"),
     [
         ("weekdays", Weekdays()),
         ("weekday", Weekdays()),
         ({"type": "weekdays"}, Weekdays()),
-        # Hyphens and capitals are normalised, as they always were.
         ({"type": "Day-Of-Month", "day": 21}, DayOfMonth(21)),
         ({"type": "specific_weekdays", "weekdays": [0, 2]}, SpecificWeekdays([0, 2])),
         ({"type": "day_of_month", "day": 21}, DayOfMonth(21)),
@@ -57,16 +46,8 @@ def test_unknown_override_type_still_fails_clearly():
         _schedule_from_config({"type": "phase_of_the_moon"})
 
 
-# ── a seventh schedule reaches YAML config from its class body alone ──────────
-
-
 class EveryOtherTuesday(Schedule):
-    """A throwaway seventh schedule, declared only here.
-
-    Nothing else in the codebase mentions it: no friendly constructor, no branch
-    in the overrides parser, no entry in any list. If it can be named from an
-    overrides file, the parser genuinely has one declaration site per schedule.
-    """
+    """A test schedule declared only by its class-local config key."""
 
     config_key = "every_other_tuesday"
 
@@ -118,9 +99,6 @@ def test_a_new_schedule_reaches_an_overrides_file_end_to_end(tmp_path):
     assert overridden.schedule == EveryOtherTuesday(1)
 
 
-# ── a key belongs to exactly one schedule ─────────────────────────────────────
-
-
 def test_a_config_key_cannot_be_claimed_twice():
     """Defining a second claimant fails at definition, not at an operator's file.
 
@@ -133,19 +111,14 @@ def test_a_config_key_cannot_be_claimed_twice():
         class ImposterDayOfMonth(Schedule):
             config_key = "day_of_month"
 
-    # The rejected class never entered the registry, so the real one still wins.
     assert Schedule.config_types()["day_of_month"] is DayOfMonth
 
 
 def test_a_schedule_may_register_more_than_one_spelling():
-    # Weekdays owns both its key and its legacy alias.
     types = Schedule.config_types()
 
     assert types["weekdays"] is Weekdays
     assert types["weekday"] is Weekdays
-
-
-# ── each schedule explains a not-due date in its own terms ──────────────
 
 
 @pytest.mark.parametrize(

@@ -6,7 +6,7 @@ this run's candidates.
 
 No Question Bank reference: the review platform derives which bank to
 present from its own Case Type configuration, so nothing Selection delivers
-feeds that choice (CONTEXT.md's Question Bank ownership entry).
+feeds that choice.
 """
 
 from __future__ import annotations
@@ -23,9 +23,9 @@ class SelectedComplaint:
     case_ref: str
     case_type: str
     priority_score: int
-    # Nullable (plain str, not Optional -- the repo's convention): populated
-    # only once a feed carries the real attribute, and only for a Case chosen
-    # as a void's replacement, respectively.
+    # ``attribute_a`` is populated once a feed carries the real attribute;
+    # ``replaces_case_ref`` and ``void_match_rung`` are populated only for a Case
+    # chosen as a void's replacement.
     attribute_a: str
     related_date: str
     replaces_case_ref: str

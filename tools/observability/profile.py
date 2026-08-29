@@ -244,7 +244,7 @@ class ProfileDriftCheck:
     **null rate** against the median null rate of the same column over the feed's
     recent profiled runs, and reports every column whose rate moved by more than
     ``null_rate_tolerance`` (an absolute change in the 0–1 rate, so ``0.2`` is a
-    twenty-point swing). That catches the silent regression a row-count check
+    twenty-point swing). That catches silent drift a row-count check
     misses — a column sliding 5% → 60% null while every row stays individually
     valid.
 
@@ -319,18 +319,11 @@ class ProfileDriftCheck:
 
 
 class DataProfiler:
-    """The injected profiler ``Pipeline.profile`` drives — the application-layer
-    statistical computation behind the framework's
-    :class:`~framework.core.protocols.DatasetProfiler` port.
+    """Application implementation of the ``DatasetProfiler`` port.
 
-    It bundles the cost-bounding knobs (``columns`` allow-list, ``top_n``) and the
-    optional run-over-run drift check into one component the pipeline wires in, so
-    the framework stays free of any profiling logic — it only calls
-    :meth:`profile` and records what it returns. When a ``baseline`` is given an
-    ``address`` must be too (the stable ``step_address`` to trend against); a
-    drift beyond tolerance either *warns* (returned as messages the node logs) or,
-    in ``"fail"`` severity, raises :class:`ProfileError` — the same warn/fail
-    escape hatch a Validator gets.
+    ``columns`` and ``top_n`` bound profiling cost. Optional drift checking
+    requires ``address`` with ``baseline``; it warns by default, while ``fail``
+    severity raises :class:`ProfileError`.
     """
 
     def __init__(

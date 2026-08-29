@@ -1,8 +1,5 @@
 """Due today, but gated by an ``earliest_run`` an hour away.
 
-It is not attempted this pass at all, and is recorded ``skipped`` with the
-window that held it back named in its reason.
-
 Run it on its own with::
 
     python -m cli run pipelines/demo_later --base-dir /tmp/ordering-demo

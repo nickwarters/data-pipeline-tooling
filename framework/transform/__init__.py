@@ -65,9 +65,7 @@ from framework.transform.processors import (
 from framework.transform.quarantine import SchemaValueRulePartitioner
 
 __all__ = [
-    # The processor seam (defined in framework.core.protocols, re-exported here)
     "Processor",
-    # Processors
     "Filter",
     "Score",
     "VectorizedFilter",
@@ -94,8 +92,6 @@ __all__ = [
     "CoercionError",
     "IdentityError",
     "JsonShapeError",
-    # The coerce half of the schema adapter
     "SchemaCoercion",
-    # Quarantine partitioning
     "SchemaValueRulePartitioner",
 ]

@@ -56,9 +56,7 @@ def _index_names(db_path):
 
 
 def test_a_migrated_layer_keeps_its_declared_shape_across_refreshes(tmp_path):
-    # End to end: migrate, then run a Refresh twice through the medallion Store
-    # the application actually uses. The index the migration created is still
-    # there afterwards — the collision (#685) that started all this.
+    # Refresh through the application Store must preserve migration-owned indexes.
     base_dir = tmp_path / "data"
     db_path = _apply(base_dir, tmp_path / "migrations", "cases", "silver", BASELINE)
     assert is_under_migration_control(db_path)

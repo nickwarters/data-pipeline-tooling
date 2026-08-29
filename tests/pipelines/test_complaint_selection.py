@@ -2,8 +2,8 @@
 
 Complaints A/B/C stop at silver, so this pipeline reads their current silver
 plus Sync's current Cases and narrows them to the SelectionPool through a
-chain of named steps -- score, gate (vectorised), replace voids like-for-like
-(ADR-0021, reduced), queue replacements ahead of the rest, cap the queue at
+chain of named steps -- score, gate (vectorised), replace voids like-for-like,
+queue replacements ahead of the rest, cap the queue at
 the Hopper's remaining capacity -- landing both the SelectionPool (with each
 source's own Case Details, attached to survivors only) and its trace.
 """
@@ -90,10 +90,8 @@ def test_the_steps_are_exactly_the_ones_it_always_took():
     stronger pin than reading a plan, because it proves the steps ran rather
     than merely being wired.
     """
-    # Real rows, not an empty frame: the steps execute, so each source has to
-    # carry what the shared age rule reads -- ``received_date`` -- and
-    # ``load_date``, which the old
-    # plan test could leave out because describing a graph never touched data.
+    # Eager steps receive real rows, including the required ``received_date`` and
+    # ``load_date`` inputs.
     reader_a = given_rows(
         [
             {
@@ -166,8 +164,8 @@ def test_the_steps_are_exactly_the_ones_it_always_took():
     # One label for the whole run: the grouping is in the step name, not in a
     # second identity the run also records under.
     assert {record["pipeline"] for record in run_log.records} == {PIPELINE_NAME}
-    # Line order is the ordering guarantee now the graph is gone: the pool is
-    # written before the trace because that line comes first.
+    # Line order is the ordering guarantee: the pool is written before the trace
+    # because that line comes first.
     committed = [r["step"] for r in run_log.records if r.get("committed")]
     assert committed == ["write-pool", "write-trace", "write-json"]
 
@@ -397,7 +395,7 @@ def test_freshness_requirement_resolves_against_path_addressed_ingest_history(
     # the failure mode this test guards against.
     assert [record["warn_hits"] for record in freshness] == [[], [], [], []]
 
-    # The four reads this pipeline now issues each record their own step.
+    # Each of the pipeline's four source reads records its own step.
     read_steps = {record["step"] for record in records}
     assert {
         "read-complaints_a",
@@ -517,15 +515,15 @@ def test_max_age_gate_settles_old_missing_and_unparseable_dates_vectorised():
     assert by_ref["junk"]["reason"] == "excluded by filter 'missing-received-date'"
 
 
-# ── Void replacement (ADR-0021, reduced) ──────────────────────────────────
+# ── Void replacement ──────────────────────────────────────────────────────
 
 
 def test_a_void_since_the_previous_run_is_replaced_at_the_case_type_rung(
     tmp_path, monkeypatch
 ):
-    """The regression test for the timestamp-grain bug.
+    """A same-day void after the previous run remains eligible.
 
-    ``voided_at`` is voided on the *same calendar day* as run 1, strictly after
+    ``voided_at`` is set on the *same calendar day* as run 1, strictly after
     its instant -- a naive-vs-offset string compare would have sorted the void
     before run 1's instant (the separator character alone decides it) and
     silently dropped it as "not since the previous run".
@@ -601,9 +599,7 @@ def test_a_void_since_the_previous_run_is_replaced_at_the_case_type_rung(
 
     pool = {row["case_ref"]: row for row in read_rows(store, POOL_TABLE)}
     assert "R001" not in pool
-    # attribute_a is None on both sides (no feed carries it yet), so the ladder
-    # falls through to its last rung -- the live rung today, and that is
-    # expected and real, not a workaround.
+    # Missing attribute_a falls through to the case_type rung.
     assert pool["R003"]["replaces_case_ref"] == "R001"
     assert pool["R003"]["void_match_rung"] == "case_type"
 
@@ -816,7 +812,7 @@ def test_each_row_consumes_at_most_one_void():
     assert out.loc[out["case_ref"] == "r2", "replaces_case_ref"].iloc[0] == "V2"
 
 
-# ── Hopper cap (ADR-0021) ──────────────────────────────────────────────────
+# ── Hopper cap ─────────────────────────────────────────────────────────────
 
 
 _EMPTY_C = Dataset.from_pandas(pd.DataFrame(columns=["record_id", "load_date"]))
@@ -929,7 +925,7 @@ def test_rank_reflects_queue_position_not_score():
 
 
 def test_unallocated_count_counts_to_allocate_cases_among_the_candidates():
-    """Post-#768: one status equality, never a scan for a blank reviewer."""
+    """Count candidate rows with status ``"To-allocate"``; ignore blank titles."""
     current = pd.DataFrame(
         [
             {"title": "R1", "status": "To-allocate"},
@@ -1133,9 +1129,7 @@ def test_an_empty_case_type_still_yields_declared_columns():
 
 
 def test_zero_candidates_overall_runs_clean():
-    """The framework #762 regression: no ``.apply(axis=1)`` anywhere here, so a
-    genuinely empty run never hits pandas' empty-frame probe-call crash.
-    """
+    """An empty run avoids pandas' empty-frame probe-call crash."""
     empty = Dataset.from_pandas(pd.DataFrame(columns=["record_id", "load_date"]))
 
     considered = _run_steps([empty, empty, empty], _EMPTY_CURRENT)

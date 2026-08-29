@@ -197,9 +197,7 @@ class CodeCase:
 
 
 def test_reject_reason_names_only_the_rules_expectation_not_other_rows_values():
-    # The ticket's reproduction: three rows breach OneOf('A', 'B'). Each row's
-    # reason must describe the *rule*, never sample values that belong to the
-    # other rejected rows.
+    # Each reason describes the rule, never values from other rejected rows.
     ds = _dataset(code=pd.Series(["A", "X", "B", "Y", "Z"], dtype="string"))
 
     _, rejected = SchemaValueRulePartitioner(CodeCase).partition(ds)
@@ -304,8 +302,7 @@ def test_partitioner_routes_by_position_on_a_non_monotonic_integer_index():
 
 
 def test_partitioner_row_check_reasons_follow_the_row_on_a_duplicated_index():
-    # The horizontal path must route positionally too: only the breaching row
-    # carries the check's phrase, even when it shares a label with a good row.
+    # Preserve duplicate labels so positional routing is exercised.
     frame = pd.DataFrame(
         {
             "amount": pd.Series([10, 99, 30], dtype="int64"),

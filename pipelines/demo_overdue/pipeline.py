@@ -1,8 +1,5 @@
 """Past its own deadline by an hour.
 
-It competes with the inherited pressure on ``demo_steady`` and ``demo_report`` by how
-overdue each one is.
-
 Run it on its own with::
 
     python -m cli run pipelines/demo_overdue --base-dir /tmp/ordering-demo

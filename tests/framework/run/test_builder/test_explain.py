@@ -1,12 +1,4 @@
-"""Selection explainability: the per-Case trace of why a Case was/wasn't selected.
-
-Selection's ``Filter``/``Score``/``JoinWith`` processors silently drop Cases
-plain-Python callables, leaving no trace of *why* an adviser's Case was or
-wasn't picked up, a governance gap management raised as a requirement.
-``.explain(writer, id_column=...)`` is the quarantine-style terminus that
-routes a per-Case verdict to a sibling trace table: who was considered, what
-each scored, which gate excluded the rest, and how the survivors ranked.
-"""
+"""Explain writes a per-Case selection trace with verdicts, scores, and ranks."""
 
 from __future__ import annotations
 

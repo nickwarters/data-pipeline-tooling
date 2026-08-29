@@ -1,16 +1,6 @@
-"""Writers against a database that declares its own shape.
+"""Writers preserve declared DDL and reject missing tables in migrated databases.
 
-A database carrying a ``schema_migrations`` ledger is under migration control:
-its tables are declared by SQL and a Writer must neither create a missing one
-nor drop one it was handed. A database without the ledger behaves exactly as it
-always has — which is what makes the change additive, and why every test here
-has an unmigrated twin.
-
-The ledger is created with plain SQL rather than through ``tools.migrations``.
-The rule the Writers implement is "this database carries the ledger table", and
-stating it that way keeps this test on the framework's own side of the line. The
-loop back to the runner that really writes that ledger is closed in
-``tests/integration/test_migrated_writes.py``.
+Without a migration ledger, Writers retain their table-creation behaviour.
 """
 
 import sqlite3
@@ -88,13 +78,9 @@ def _rows(db_path, table):
         con.close()
 
 
-# --- Refresh: replace becomes delete-then-append -----------------------------
-
-
 def test_refresh_keeps_the_declared_ddl_it_was_handed(tmp_path):
-    # The collision this whole change exists for: if_exists="replace" drops the
-    # table, so the primary key and index a migration created would be gone
-    # after the next nightly run — silently, with the rows still landing.
+    # Replace drops the migrated table, keys, and indexes; refresh retains its
+    # DDL while replacing the rows.
     db = tmp_path / "silver.db"
     _migrate(db, CREATE_CASES, INDEX_CASES)
 
@@ -138,9 +124,6 @@ def test_refresh_refuses_a_table_no_migration_declares(tmp_path):
 
     with pytest.raises(MissingTableError, match="'cases'"):
         SqliteTruncateReloadWriter(db, "cases").write(_cases())
-
-
-# --- no implicit creation, per Writer ----------------------------------------
 
 
 def _write_upsert(db):
@@ -218,12 +201,8 @@ def test_the_merge_writers_land_rows_into_a_declared_table(tmp_path, name):
 
 
 def test_a_declared_table_must_carry_every_column_its_writer_writes(tmp_path):
-    # The regime in one test. InsertIfAbsent mints a surrogate beside the row,
-    # so its migration has to declare that column: SQL owning the shape means
-    # SQL owning all of it, and a column the migration missed surfaces as
-    # SQLite's own error rather than as a silent widening. That message reads
-    # poorly next to MissingTableError, which is the trade decision 4 of #685
-    # accepted rather than paying for a pre-write column check on every run.
+    # InsertIfAbsent adds an ``id`` column, so migrated DDL must declare it. A
+    # missing column surfaces SQLite's error, not a silent schema widening.
     db = tmp_path / "silver.db"
     _migrate(db, CREATE_CASES)
 
@@ -261,11 +240,7 @@ def test_the_quarantine_table_is_declared_like_any_other(tmp_path):
 def test_a_writer_asks_the_ledger_afresh_rather_than_remembering_an_old_answer(
     tmp_path,
 ):
-    # The check used to be cached per Writer instance, because a chunk-write
-    # session drove one Writer over many chunks of one source and would
-    # otherwise have repeated the sqlite_master lookup per chunk. With that
-    # drive gone the cache only let a Writer keep an answer its database had
-    # stopped giving. This is what that costs if the cache comes back.
+    # Check the ledger on every write so changed migration state is observed.
     db = tmp_path / "gold.db"
     writer = SqliteTruncateReloadWriter(db, "cases")
     writer.write(_cases())

@@ -1,9 +1,4 @@
-"""Tests for the Shared Reader over the ``complaints_c`` subject's silver.
-
-A *location* indirection and nothing else: rows seeded where the producer puts
-them come back, the three ports delegate to the Reader underneath, and a base
-directory holding nothing fails the way that Reader already fails.
-"""
+"""Shared-reader delegation tests for the ``complaints_c`` silver subject."""
 
 from __future__ import annotations
 

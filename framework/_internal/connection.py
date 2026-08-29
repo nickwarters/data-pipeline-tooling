@@ -1,11 +1,10 @@
 """The shared SQLite connection factory.
 
-Kept in its own module so the per-subject ``Store`` can mint Writers/Readers
-(importing those modules) while those modules still depend only on this factory
-without a cycle. It is the single place SQLite connections are configured:
-``busy_timeout`` lets read-only clients ride out the single writer's in-place
-commits instead of erroring. The default rollback journal is used because WAL is
-unavailable over a network share.
+Kept separate so Store factories and I/O adapters can share connection setup
+without an import cycle. It is the single place SQLite connections are
+configured: ``busy_timeout`` lets clients ride out the single writer's in-place
+commits, and the default rollback journal is used because WAL is unavailable
+over a network share.
 """
 
 from __future__ import annotations

@@ -1,11 +1,4 @@
-"""The one read -> validate -> print body every item in the demo runs.
-
-Near-identical pipelines would each be a copy of the same four lines, so the
-body lives here and each ``pipeline.py`` supplies only its name and its rows.
-The source is an in-memory :class:`~framework.core.Dataset` and the sink is
-:class:`~framework.io.StdoutWriter`, so a demo run touches no data file at all —
-the only thing that reaches disk is the run metadata the framework itself keeps.
-"""
+"""Shared read/validate/print body for the ordering demo."""
 
 from __future__ import annotations
 

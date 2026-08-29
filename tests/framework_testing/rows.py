@@ -1,7 +1,7 @@
 """In-memory row helpers: build a source, capture a sink, assert on the result.
 
 The row-dict side of the testing surface. Everything speaks plain Python row
-dicts (``list[dict]``) behind the :class:`~framework.core.dataset.Dataset` seam, so
+dicts (``list[dict]``) behind the :class:`~framework.core.Dataset` seam, so
 a pipeline test never touches a pandas frame, a temp directory, or a SQLite
 round-trip unless it wants to. Re-exported from :mod:`tests.framework_testing`.
 """
@@ -91,7 +91,7 @@ def rows_of(source: Dataset | RecordingWriter | Reader) -> list[dict[str, Any]]:
 
 
 class RecordingWriter:
-    """A :class:`~framework.io.writers.Writer` that captures writes in memory.
+    """A :class:`~framework.io.Writer` that captures writes in memory.
 
     The expect-output-rows sink: compose it with ``.write(writer, ...)`` and the
     pipeline hands it the final Dataset instead of persisting anywhere. Reach the

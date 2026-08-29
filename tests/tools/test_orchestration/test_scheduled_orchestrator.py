@@ -24,15 +24,7 @@ from tools.orchestration import (
 
 
 class _FakeInvoker:
-    """A path-addressed invoker that runs in-memory handlers, not disk modules.
-
-    It behaves exactly like ``PathPipelineInvoker`` — resolving the pipeline by
-    the leaf of its ``pipelines/<name>`` path and executing through
-    ``run_pipeline`` so real run logs and registry records are written — but
-    resolves the handler from a dict instead of importing a module. That lets the
-    orchestrator's decision, freshness, and lineage logic be exercised without
-    real pipeline packages on disk.
-    """
+    """Run path-addressed in-memory handlers through the real runner."""
 
     def __init__(self, calls: list[str], failing: set[str] | None = None) -> None:
         self._calls = calls
@@ -174,11 +166,9 @@ def test_task_level_requirement_allows_downstream_when_task_success_is_fresh(tmp
         invoker=_Invoker(),
     )
 
-    # A fixed working day (Friday) like the sibling tests: the pipelines are
-    # scheduled Weekdays(), so run_date must be a working day or nothing is due.
-    # Pinning it keeps the test deterministic (dt.date.today() failed on weekends
-    # and holidays); freshness still holds because the upstream runs in the same
-    # pass on the same run_date.
+    # A fixed Friday satisfies Weekdays() and keeps the test deterministic across
+    # weekends and holidays. Freshness still holds because the upstream runs in
+    # the same pass on the same run_date.
     result = orchestrator.run_due_once(tmp_path, run_date=dt.date(2026, 6, 12))
 
     assert calls == ["pipeline-2", "pipeline-3"]
@@ -440,13 +430,7 @@ pipelines:
 
 
 def test_freshness_days_override_on_an_item_without_dependencies_warns(tmp_path):
-    """An override that cannot change anything must say so, not pass silently.
-
-    ``freshness_days`` is applied by rewriting each declared dependency, so an
-    item that declares none absorbs the override into an empty loop. The
-    reference check only proved the set/pipeline names resolved, so an operator
-    who tuned freshness on the wrong item got a clean start-up and no effect.
-    """
+    """Warn when a freshness override targets an item without dependencies."""
     overrides = tmp_path / "overrides.yml"
     overrides.write_text(
         """
@@ -501,7 +485,7 @@ pipelines:
         )
 
 
-# ── ordering decides the sequence, never the runnability ──────────────────────
+# Ordering does not decide runnability.
 
 
 def test_invocation_order_follows_deadline_pressure(tmp_path):
@@ -532,11 +516,7 @@ def test_invocation_order_follows_deadline_pressure(tmp_path):
 
 
 def test_a_pipeline_set_is_the_outer_boundary_and_never_reordered(tmp_path):
-    """Deadline pressure orders work *within* a set; it cannot cross sets.
-
-    The second set's item is overdue and the first set's has no deadline at all,
-    so a single pooled ordering would seat it first. Sets run in declared order.
-    """
+    """Preserve pipeline-set order across independently ordered sets."""
     calls: list[str] = []
     orchestrator = Orchestrator(
         (
@@ -618,13 +598,7 @@ def test_a_gated_item_is_skipped_with_its_window_and_never_invoked(tmp_path):
 def test_the_dependent_of_a_gated_upstream_is_blocked_by_freshness_not_by_the_gate(
     tmp_path,
 ):
-    """The gate orders; freshness decides. The two must not be confused.
-
-    ``earliest_run`` holds its own item back for the pass. Its dependent is
-    still evaluated, and what stops it is the ordinary freshness rule finding no
-    same-day upstream success — the same verdict it would reach if the upstream
-    had simply not run yet.
-    """
+    """A gated upstream leaves its dependent blocked by freshness."""
     calls: list[str] = []
     # Yesterday's success, so the same-day requirement has history to judge and
     # finds it stale rather than falling through its first-run allowance.
@@ -709,13 +683,11 @@ def test_orchestration_lineage_links_a_pass_to_each_pipeline_execution(tmp_path)
 
     result = orchestrator.run_due_once(tmp_path, run_date=dt.date(2026, 6, 12))
 
-    # Every triggered item carries both correlation ids.
     assert [d.status for d in result.decisions] == ["succeeded", "succeeded"]
     for decision in result.decisions:
         assert decision.logical_run_id == f"{decision.pipeline}:2026-06-12"
         assert decision.pipeline_run_id  # read back from the registry
 
-    # The umbrella id fans out to each pipeline execution via the join key.
     store = OrchestrationStore(tmp_path / "_orchestration" / "runs.db")
     lineage = store.lineage(result.orchestration_run_id)
     assert {row["pipeline"] for row in lineage} == {"feed_a", "feed_b"}
@@ -723,8 +695,6 @@ def test_orchestration_lineage_links_a_pass_to_each_pipeline_execution(tmp_path)
     registry = RunRegistry(tmp_path / "_registry" / "runs.db")
     for row in lineage:
         records = registry.records_for_run(row["pipeline_run_id"])
-        # The pipeline's step records are reachable from the pass, and the run
-        # summary's logical_run_id matches the business key the pass assigned.
         assert {r["pipeline_run_id"] for r in records} == {row["pipeline_run_id"]}
         summary = [r for r in records if r["step"] == "run"]
         assert summary and summary[0]["logical_run_id"] == row["logical_run_id"]

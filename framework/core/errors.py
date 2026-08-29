@@ -8,12 +8,12 @@ base lets a run boundary catch the whole family with a single ``except`` and
 present it cleanly via :func:`format_failure`, while a genuine programming error
 (a ``KeyError`` in a transform) keeps its full traceback.
 
-The base lives here in ``core`` — the vocabulary everything builds on — so the
-``validate`` / ``transform`` / ``run`` facades can each subclass it without
-importing one another. :func:`format_failure` sits beside it: the error family
-and the function that presents it are one matched pair, and the formatter touches
-only the exception, never any run machinery. Each concrete error keeps its own
-message; the base adds no behaviour beyond being the common ancestor.
+The base lives here in ``core`` so validators and the ``transform`` / ``run``
+facades can share it without importing one another. :func:`format_failure` sits
+beside it: the error family and the function that presents it are one matched
+pair, and the formatter touches only the exception, never any run machinery.
+Each concrete error keeps its own message; the base adds no behaviour beyond
+being the common ancestor.
 """
 
 from __future__ import annotations
