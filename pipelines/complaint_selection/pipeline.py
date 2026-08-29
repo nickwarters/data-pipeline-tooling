@@ -70,28 +70,21 @@ POOL_JSON = "selection_pool.json"
 # is selectable. A declared starting value, expected to be tuned.
 MAX_AGE_DAYS = 50
 
-# A declared starting depth for the Hopper. ADR-0021 sizes it as 3D (three
-# times the group's daily assignment rate); monitoring throughput and
-# adjusting this from it is deferred.
+# The initial Hopper depth is three times the group's daily assignment rate;
+# tune it from observed throughput.
 HOPPER_DEPTH = 60
 
 # The complaints export is weekly (weekly_complaints_export.sas), so a daily
 # schedule needs slack past one week to still find it fresh.
 INGEST_MAX_AGE_DAYS = 10
 
-# The two sync statuses this pipeline reads by. "To-allocate" is the status
-# the platform creates a Case in and the one its allocation claim replaces
-# (#768) -- the Hopper is a predicate on it, never a scan for a blank
-# reviewer. See CONTEXT.md's Hopper entry.
+# Hopper eligibility uses explicit sync statuses, not reviewer presence.
 TO_ALLOCATE = "To-allocate"
 VOID_STATUS = "Void"
 
-# ADR-0021's void-replacement ladder: ordered match attempts, tried per void in
-# order until one has an unconsumed candidate. Each field must be a top-level
-# candidate column -- this is the one place to change like-for-like matching.
-# `attribute_a` is a placeholder until a feed carries the real cross-Case-Type
-# attribute the ADR describes; today it is always None, so the live rung is
-# `("case_type",)`.
+# Ordered match attempts, tried per void until one has an unconsumed candidate.
+# Each field must be a top-level candidate column. ``attribute_a`` is reserved
+# for a future cross-Case-Type attribute, so the live rung is ``("case_type",)``.
 MATCH_LADDER: tuple[tuple[str, ...], ...] = (
     ("attribute_a", "case_type"),
     ("attribute_a",),
@@ -118,7 +111,7 @@ POOL_COLUMNS: tuple[str, ...] = (
     "details",
 )
 
-# The selection trace's declared columns (ADR-0008) -- exactly these five.
+# The selection trace's five declared columns.
 TRACE_COLUMNS: tuple[str, ...] = ("case_ref", "verdict", "reason", "rank", "score")
 
 # Every column a considered Case carries through the gates -- pool and trace
@@ -250,9 +243,8 @@ def voids_since(
 def unallocated_count(current: pd.DataFrame, candidate_refs: set[str]) -> int:
     """Cases in ``To-allocate``, joined by title to this run's own candidates.
 
-    One status equality (CONTEXT.md's Hopper entry, post-#768) -- never a scan
-    for a blank reviewer, which would reintroduce the by-elimination read #768
-    removed. Scoped to *this run's* candidate population rather than a
+    Uses one status equality, never a scan for a blank reviewer. Scoped to
+    *this run's* candidate population rather than a
     historical pool: a Case this run could select is this run's capacity to
     count, whether or not a past run happened to select it too.
     """
@@ -628,10 +620,6 @@ def select_pool(
 ) -> tuple[Dataset, Dataset]:
     """The Selection flow: reads, five named decisions, three projections.
 
-    Written with the **eager steps**, so every line does its work when it is
-    reached and the variable on the left holds the real rows -- put a
-    breakpoint on any step and watch the population narrow
-    ([ADR-0027](../../docs/adr/0027-eager-steps-are-the-default-authoring-model.md)).
     Each step is named for the domain decision it makes -- ``candidates``,
     ``gate-voided``, ``gate-max-age``, ``replace-voids``, ``hopper`` -- not
     for a framework primitive. The gates are vectorised and run first; the
@@ -644,11 +632,7 @@ def select_pool(
     a member: adding a Case Type to the group is one ``SELECTION_GROUP``
     entry, and this function follows.
 
-    Line order is the ordering guarantee. The graph form needed a comment
-    warning that leaf declaration order was load-bearing, because ``p.run()``
-    returned its leaves in the order they were wired; here the pool is written
-    before the trace because that line comes first, which is the same rule
-    without having to know it.
+    Line order is the ordering guarantee: the pool is written before the trace.
 
     ``hopper_depth`` is resolved from ``HOPPER_DEPTH`` inside ``apply_hopper``
     when ``None``, rather than as this function's own default argument value:

@@ -3,13 +3,13 @@
 A small, test-only surface that makes a concrete pipeline script easy to test
 without hand-wiring temp directories, SQLite round-trips, or JSONL parsing. It
 sits *beside* the production facades (``framework.core`` / ``framework.io`` /
-``framework.transform`` / ``framework.run`` / ``framework.shared``) rather than
+``framework.transform`` / ``framework.run``) rather than
 inside them: pipeline code never imports it at
 runtime, but a pipeline author's **tests** do.
 
     from tests.framework_testing import given_rows, rows_of, assert_rows_equal
 
-The surface splits into two implementation modules, both re-exported here:
+The surface splits into three implementation modules, all re-exported here:
 
 - :mod:`tests.framework_testing.rows` — in-memory **row** helpers. Build a source
   (:func:`given_rows`, :func:`given_csv`), capture a sink
@@ -27,7 +27,7 @@ The surface splits into two implementation modules, both re-exported here:
   ``Refresh`` preserves the DDL), so a feed's tests have to run against a built
   one to be testing the branch production takes.
 
-Everything stays behind the :class:`~framework.core.dataset.Dataset` seam:
+Everything stays behind the :class:`~framework.core.Dataset` seam:
 helpers take and return plain Python row dicts, never a pandas frame.
 """
 

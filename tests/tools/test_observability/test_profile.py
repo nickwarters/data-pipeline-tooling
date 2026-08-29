@@ -1,12 +1,4 @@
-"""Per-column data profiling.
-
-Two layers, mirroring how the volume guardrail is tested: the pure profile
-computation and the drift check are exercised in isolation against fixed inputs
-(and a fake baseline), then an integration test drives a *real*
-``Pipeline.profile`` + ``RunLog`` + ``RunRegistry`` so the
-emitter → store → baseline seam is covered end to end, never a hand-faked record
-shape.
-"""
+"""Test pure profiling, drift checks, and Pipeline–RunLog–Registry integration."""
 
 import pandas as pd
 import pytest
@@ -52,9 +44,6 @@ def _dataset(**columns) -> Dataset:
     return Dataset.from_pandas(pd.DataFrame(columns))
 
 
-# --- profile_dataset: the computation -------------------------------------
-
-
 def test_profile_captures_completeness_cardinality_and_range_per_column():
     # A numeric column reports its null rate, distinct count, and min/max range.
     profile = profile_dataset(_dataset(amount=[10.0, 20.0, 20.0, None]))
@@ -77,12 +66,11 @@ def test_profile_of_a_categorical_column_bounds_the_value_distribution():
 
     assert status.minimum is None and status.maximum is None
     assert status.distinct_count == 3
-    assert status.top_values == [["open", 3], ["closed", 1]]  # capped at top_n=2
+    assert status.top_values == [["open", 3], ["closed", 1]]
 
 
 def test_profile_flags_a_high_null_column():
-    # The motivating regression: a column that is mostly null. The rate is what
-    # the drift check trends, so it must be computed faithfully.
+    # The drift check trends the null rate, so it must be computed faithfully.
     [col] = profile_dataset(_dataset(maybe=[None, None, None, 1])).columns
 
     assert col.null_count == 3
@@ -117,9 +105,6 @@ def test_profile_of_an_empty_dataset_reports_zero_null_rate():
     assert col.null_count == 0
 
 
-# --- ProfileDriftCheck: the run-over-run baseline -------------------------
-
-
 def _baseline_with_null_rate(rate: float, runs: int = 4) -> _FakeBaseline:
     """A fake baseline whose ``amount`` column sits at a fixed null rate."""
     nulls = int(round(rate * 4))
@@ -147,7 +132,7 @@ def test_drift_check_is_silent_within_tolerance():
     baseline = _baseline_with_null_rate(0.25)
     check = ProfileDriftCheck(baseline, "cases.profile", null_rate_tolerance=0.2)
 
-    today = profile_dataset(_dataset(amount=[None, 1.0, 2.0, 3.0]))  # 25% null
+    today = profile_dataset(_dataset(amount=[None, 1.0, 2.0, 3.0]))
 
     assert check.check(today) == []
 
@@ -177,9 +162,6 @@ def test_drift_check_only_watches_named_columns_when_narrowed():
     )
 
     assert check.check(today) == []  # other drifted, but it is not watched
-
-
-# --- DataProfiler: the injected port -------------------------------------
 
 
 def test_data_profiler_returns_the_record_and_no_warnings_without_a_baseline():
@@ -228,9 +210,6 @@ def test_data_profiler_rejects_a_baseline_without_an_address():
         DataProfiler(baseline=_baseline_with_null_rate(0.0))
 
 
-# --- end-to-end: Pipeline.profile -> RunLog -> RunRegistry ----------------
-
-
 def _run_profiling_pipeline(log_path, dataset, *, name="cases", profiler=None):
     p = Pipeline(name, run_log=RunLog(log_path))
     r = p.read(RecordingReader(dataset), name="read")
@@ -262,7 +241,7 @@ def test_recent_profiles_baseline_drives_drift_detection_end_to_end(tmp_path):
     log_path = tmp_path / "cases.log"
     registry = RunRegistry(tmp_path / "registry.db")
 
-    healthy = _dataset(amount=[1.0, 2.0, 3.0, 4.0])  # 0% null
+    healthy = _dataset(amount=[1.0, 2.0, 3.0, 4.0])
     for _ in range(4):
         _run_profiling_pipeline(log_path, healthy)
         registry.ingest(log_path)
@@ -271,8 +250,8 @@ def test_recent_profiles_baseline_drives_drift_detection_end_to_end(tmp_path):
     assert len(registry.recent_profiles("cases.profile")) == 4
 
     check = ProfileDriftCheck(registry, "cases.profile", null_rate_tolerance=0.2)
-    regressed = profile_dataset(_dataset(amount=[None, None, None, 4.0]))  # 75% null
-    assert check.check(regressed)  # drift detected from real run history
+    regressed = profile_dataset(_dataset(amount=[None, None, None, 4.0]))
+    assert check.check(regressed)
 
 
 def test_profile_task_fails_the_run_on_drift_in_fail_severity(tmp_path):

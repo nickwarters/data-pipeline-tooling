@@ -40,8 +40,8 @@ COPY_FILE_TO_SHAREPOINT = "copy_file_to_sharepoint"
 
 CopyMethod = Literal["copy", "move"]
 
-# ADR-0001 takes copy over move: a failure part-way through a move loses the
-# file, where copy-then-archive leaves a retry idempotent.
+# Copy is safer by default: a failed move can lose the source, while
+# copy-then-archive leaves retries idempotent.
 COPY = "copy"
 MOVE = "move"
 COPY_METHODS = (COPY, MOVE)
@@ -76,8 +76,8 @@ class Task:
     list_name: str | None = None
     destination_dir: str | None = None
     method: CopyMethod = COPY
-    # Off by default: without it a part-failed file is retried whole, which is
-    # the behaviour that existed before per-item retry was available.
+    # Off by default: a partially failed file is retried whole unless its task
+    # explicitly opts into per-item retry.
     enable_per_item_retry_next_run: bool = False
 
 

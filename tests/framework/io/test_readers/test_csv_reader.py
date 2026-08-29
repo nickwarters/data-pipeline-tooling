@@ -26,7 +26,7 @@ def test_csv_reader_projects_only_requested_columns():
 
 
 def test_csv_reader_without_columns_reads_all_columns():
-    # Omitting columns preserves read-everything behaviour (regression guard).
+    # Omitting columns reads every column.
     dataset = CsvReader(FIXTURE).read()
 
     assert dataset.columns == ["case_id", "advisor", "activity_date", "amount"]

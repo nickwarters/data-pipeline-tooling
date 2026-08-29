@@ -33,8 +33,8 @@ re-observation of the whole list when it changes.
 
 The window is **half-open** — ``Modified ge start and Modified lt end`` — so
 consecutive windows tile without dropping or double-counting an item whose
-``Modified`` lands exactly on a boundary, and both bounds are converted to UTC
-once, at construction, so a Windows box and a macOS box send the same predicate.
+``Modified`` lands exactly on a boundary. Both bounds are converted to UTC when
+the predicates are rendered, so Windows and macOS send the same query.
 
 Retry is not implemented here: a transient client failure is
 ``tools.retry.RetryingReader``'s business, and one policy then covers every

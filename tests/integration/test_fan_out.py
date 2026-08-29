@@ -31,7 +31,7 @@ NAMESPACE = "wide_cases"
 NATURAL_KEY = ("case_ref",)
 CASE_ID = "case_id"
 
-PRODUCT_COLS = [f"product_{i}" for i in range(1, 4)]  # keep small for tests
+PRODUCT_COLS = [f"product_{i}" for i in range(1, 4)]
 
 
 def _derive_key(dataset, *, name):

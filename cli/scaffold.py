@@ -1,6 +1,6 @@
 """Scaffold a new feed from a template.
 
-Renders the runnable template under ``framework/_cli/scaffold_templates/feed/``
+Renders the runnable template under ``cli/scaffold_templates/feed/``
 into a new feed: the feed *code* (schema, an ingest pipeline that refines source
 -> raw -> silver -> gold via the public facades, and a sample fixture) as a
 subpackage ``pipelines/<feed>/``, and its *test* (given source rows -> expected
@@ -418,7 +418,7 @@ def _render_test(text: str, feed: str, spec: _FeedSpec) -> str:
 
 # What the template's wiring adds to every row on top of the declared schema:
 # ``AccumulateByRun`` stamps the business run and its date, and every
-# table-backed Writer stamps the run that wrote the row (ADR-0020).
+# table-backed Writer stamps the run that wrote the row.
 _STAMP_COLUMNS = ("logical_run_id", "load_date")
 # The column the quarantine partitioner adds to a rejected row, naming the rule
 # it broke.
@@ -496,12 +496,9 @@ def _migration_plan(
     canonical names, capped at ``_MAX_FEED_COLUMNS`` like the dataclass they
     describe.
 
-    On a source wider than the cap those two part company, and deliberately: a
-    scaffold is a starting point, not the finished feed. The generated ``to_silver``
-    does not project, so a 45-column source would reach silver with columns its
-    baseline does not declare — which is the point at which whoever is building
-    the feed decides whether to narrow the source, widen the schema, or add a
-    projection. ``_read_feed_file`` says so on the way past.
+    On a source wider than the cap, raw keeps every source column while generated
+    ``to_silver`` projects ``SELECT_RAW_COLUMNS`` before enforcement, so extra
+    columns stop at raw.
     """
     declared = _schema_fields(spec)
     stamps = (*_STAMP_COLUMNS, RUN_PROVENANCE_COLUMN)
@@ -601,8 +598,6 @@ def render(
                     text = spec.raw_text
         plan.append((target, text))
 
-    # The feed's baselines, so `python -m cli migrate` has something to apply and
-    # the feed is not born as the one subject nothing declares.
     for database, sql in _migration_plan(feed, spec, case_type=case_type).items():
         plan.append((migrations_dir / database / "0001_create_initial_tables.sql", sql))
 

@@ -22,7 +22,7 @@ def _item(**kwargs) -> ScheduledPipeline:
     return ScheduledPipeline("pipelines/ingest", Weekdays(), **kwargs)
 
 
-# ── "HH:MM" parsing ───────────────────────────────────────────────────────────
+# Time parsing
 
 
 def test_a_zero_padded_time_parses_into_a_time():
@@ -69,7 +69,7 @@ def test_a_non_string_time_is_rejected_naming_the_value():
     assert "930" in str(caught.value)
 
 
-# ── priority ──────────────────────────────────────────────────────────────────
+# Priority
 
 
 def test_priority_defaults_to_zero_and_accepts_negatives():
@@ -77,7 +77,7 @@ def test_priority_defaults_to_zero_and_accepts_negatives():
     assert _item(priority=-5).priority == -5
 
 
-# ── overrides preserve the ordering inputs ────────────────────────────────────
+# Override preservation
 
 
 def _full_item() -> ScheduledPipeline:

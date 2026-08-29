@@ -34,8 +34,8 @@ every reader out for its whole duration.
 match what was recorded is an **error**, not a silent skip — it means a
 migration was edited after it was applied, so the database and the file that
 claims to describe it have quietly diverged. The checksum is taken over the
-file's text read with universal newlines, so a CRLF checkout on Windows and an
-LF one on macOS agree; the framework runs on both. The converse — a ledger row
+file's text read with universal newlines, so a CRLF file on Windows and an LF
+file on macOS agree; the framework runs on both. The converse — a ledger row
 whose file has since been *deleted* — is deliberately not checked: a file can be
 moved between directories for reasons that are not drift.
 
@@ -85,7 +85,7 @@ __all__ = [
 # this runner writes and what the Writers look for.
 
 # The repository's migrations tree. ``tools`` is a top-level package of the
-# import-only checkout, so its parent is the repository root.
+# import-only source tree, so its parent is the repository root.
 MIGRATIONS_ROOT = Path(__file__).resolve().parent.parent / "migrations"
 
 _CREATE_LEDGER = f"""
@@ -155,9 +155,9 @@ class MigrationTarget:
 class MigrationRunner:
     """Applies one directory of migrations to one SQLite database.
 
-    A runner is bound to a single ``(database, directory)`` pair, because that
-    pairing is what the ledger records. It
-    holds no connection: each call opens one, does its work, and closes.
+    A runner is bound to one ``(database, directory)`` pair because that pairing
+    is what the ledger records. It holds no connection; each call opens one,
+    does its work, and closes.
     """
 
     def __init__(
@@ -345,10 +345,10 @@ def migrations_directory(
 def _read_migration(path: Path, version: int) -> Migration:
     """Read one file into a :class:`Migration`, checksumming its text.
 
-    Read as *text*: universal newlines collapse a CRLF checkout to ``\\n``
-    before the digest is taken, so the same migration checksums identically on
-    Windows and macOS. Encoding is pinned to UTF-8 rather than left to the
-    platform's locale for the same reason.
+    Read as *text*: universal newlines collapse a CRLF file to ``\\n`` before the
+    digest is taken, so the same migration checksums identically on Windows and
+    macOS. Encoding is pinned to UTF-8 rather than left to the platform's locale
+    for the same reason.
     """
     sql = path.read_text(encoding="utf-8")
     return Migration(

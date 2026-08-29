@@ -221,10 +221,9 @@ def _staged_merge(
     merge statement — the commit boundary and the cleanup are not theirs to get
     wrong.
 
-    Staging is dropped *after* the commit, as it was when each Writer did this
-    for itself: a failed merge leaves the scratch table behind rather than
-    running further statements against a connection whose transaction is being
-    discarded, and the next write replaces it wholesale anyway.
+    Staging is dropped *after* the commit so a failed merge leaves the scratch
+    table behind rather than running further statements against a connection
+    whose transaction is being discarded; the next write replaces it wholesale.
     """
     with _writing_connection(db_path, busy_timeout_ms) as con:
         staging = _STAGING_PREFIX + table
@@ -284,11 +283,8 @@ class _MigrationGuard:
     the behaviour it has always had, which is what lets databases convert one at
     a time.
 
-    The answer is asked afresh on the connection each write. It was cached per
-    Writer instance while a chunk-write session drove one Writer many times over
-    one source; with that drive gone the cache bought one saved
-    ``sqlite_master`` lookup per extra write, at the price of a Writer that could
-    hold an answer its database had since stopped giving.
+    The answer is asked afresh on the connection each write, so a Writer never
+    reuses a stale migration-control result.
     """
 
     def __init__(self, db_path: Path, table: str) -> None:
@@ -359,9 +355,8 @@ class _FileWriter:
     with whoever reads it. An extra column would be one the recipient did not
     ask for and cannot interpret. The question "which run produced this file?"
     is answered without touching the file at all, by the run record's
-    ``data_locations``. The asymmetry is a decision — recorded in the
-    architecture decisions and pinned by a test — not an omission to be tidied
-    up later.
+    ``data_locations``. The asymmetry is deliberate: deliverables expose only
+    the columns their recipients expect.
     """
 
     def __init__(
@@ -1069,14 +1064,13 @@ class SqliteAppendOnlyWriter:
 class AccumulateByRunWriter:
     """A Writer that accumulates runs into one table, stamped by run.
 
-    Owns its target location (a single layer db file + table). Used for the gold
-    layer (the accumulating SelectionPool / Review Outcomes), whose history must
-    survive across runs. Each row is stamped with the ``logical_run_id`` and
-    ``load_date`` this Writer was built with — the strategy's own contract — and,
-    like every table-backed Writer, with the reserved provenance column naming
-    the run that wrote it. A re-driven logical run is idempotent via
-    delete-by-logical-run then insert, so a re-drive's rows carry the run that
-    actually landed them.
+    Owns its target location (a database file + table). Its rows represent
+    history that must survive across runs. Each row is stamped with the
+    ``logical_run_id`` and ``load_date`` this Writer was built with — the
+    strategy's own contract — and, like every table-backed Writer, with the
+    reserved provenance column naming the run that wrote it. A re-driven logical
+    run is idempotent via delete-by-logical-run then insert, so a re-drive's rows
+    carry the run that actually landed them.
     """
 
     def __init__(

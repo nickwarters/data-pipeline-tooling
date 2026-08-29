@@ -8,9 +8,8 @@ freshness guard, and the ``RunLog`` / ``RunRegistry`` observability types.
 
 **Start with the eager steps.** They execute where they are written, so a
 pipeline is an ordinary Python function a debugger steps through line by line,
-and they emit the identical run-log records the deferred builder does
-(``docs/adr/0027-eager-steps-are-the-default-authoring-model.md``). The
-``Pipeline`` builder remains for the graphs that genuinely fan in.
+and they emit the identical run-log records the deferred builder does.
+The ``Pipeline`` builder remains for graphs that genuinely fan in.
 
 Import from here rather than the underlying modules::
 
@@ -59,7 +58,6 @@ from tools.observability.run_log import RunLog
 from tools.observability.run_registry import RunRegistry
 
 __all__ = [
-    # The eager steps — the default authoring model (ADR-0027).
     "read",
     "transform",
     "validate",
@@ -71,7 +69,6 @@ __all__ = [
     "explain",
     "write_trace",
     "StepError",
-    # The deferred builder, for graphs that genuinely fan in.
     "Pipeline",
     "PipelineGraphError",
     "RunAddress",

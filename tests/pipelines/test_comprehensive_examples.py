@@ -58,8 +58,8 @@ def test_complex_silver_to_gold_example_assembles_reporting_outputs(tmp_path):
     assert [row["review_priority"] for row in review_queue] == [1430, 775]
     assert {row["logical_run_id"] for row in review_queue} == {"2026-05-29"}
 
-    # Without the run that wrote them: the Writer stamps that on every table it
-    # writes, and it is a fresh id per run rather than part of this aggregate.
+    # Drop pipeline-generated provenance: it is fresh per run and outside the
+    # aggregate contract.
     adviser_summary = without_columns(
         read_rows(medallion(catalog, "complex_reporting").gold, "adviser_summary"),
         RUN_PROVENANCE_COLUMN,

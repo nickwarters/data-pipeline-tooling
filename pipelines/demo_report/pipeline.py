@@ -1,8 +1,5 @@
 """Overdue, and dependent on ``demo_steady``.
 
-Dependency order dominates deadline pressure, so ``demo_steady`` is attempted
-first however tight this deadline is.
-
 Run it on its own with::
 
     python -m cli run pipelines/demo_report --base-dir /tmp/ordering-demo

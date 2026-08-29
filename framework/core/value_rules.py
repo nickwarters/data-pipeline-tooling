@@ -144,7 +144,7 @@ class Pattern(ValueRuleBase):
 
     def __init__(self, pattern: str) -> None:
         self._source = pattern
-        self._regex = re.compile(pattern)  # fail-fast on a malformed pattern
+        self._regex = re.compile(pattern)
 
     def _violates(self, present: "pd.Series") -> "pd.Series":
         return ~present.astype("string").str.fullmatch(self._regex).fillna(False)

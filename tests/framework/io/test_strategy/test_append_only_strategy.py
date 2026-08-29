@@ -334,11 +334,7 @@ def test_append_only_requires_at_least_one_key_column():
 
 # --- the reserved run-provenance column --------------------------------------
 #
-# Every row carries the run that first landed it, and that column takes no part
-# in the comparison that decides unseen / unchanged / conflict. Excluding it is
-# load-bearing: an overlapping poll re-reads rows an earlier run landed, so a
-# comparison that included the column would turn routine operation into
-# AppendOnlyConflictError.
+# Provenance is excluded from comparisons.
 
 
 def test_an_appended_row_names_the_run_that_first_landed_it(tmp_path):
@@ -358,9 +354,8 @@ def test_an_appended_row_names_the_run_that_first_landed_it(tmp_path):
 
 
 def test_the_same_batch_under_a_later_run_is_still_a_noop(tmp_path):
-    # The regression this exclusion exists for. An overlapping window re-reads
-    # observations a previous run landed: no conflict, no duplicate row, and the
-    # stored provenance stays with the run that first landed it.
+    # An overlapping window can re-read prior observations without conflict or
+    # duplication; stored provenance stays with the first landing run.
     store = Store(tmp_path / "raw.db")
     writer = store.writer("observations", AppendOnly("observation_id"))
     batch = _ds(

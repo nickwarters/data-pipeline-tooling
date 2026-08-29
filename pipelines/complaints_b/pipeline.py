@@ -4,9 +4,6 @@ Complaints A/B/C are one SAS complaints export split three ways. Each is its own
 Case Type with its own ingest, and ``pipelines/complaint_selection`` is the one
 place the three come back together, as a Selection group.
 
-Every line below **does its work when it is reached**: put a breakpoint on one,
-step over it, and the variable holds the actual rows at that point in the feed
-([ADR-0027](../../docs/adr/0027-eager-steps-are-the-default-authoring-model.md)).
 Each medallion step is its own ``to_*`` function, so a test can drive one with
 sample rows and a recording writer without touching SQLite or the filesystem.
 
@@ -15,8 +12,8 @@ recorded under -- and so the label a downstream ``FreshnessRequirement`` names::
 
     python -m cli run pipelines/complaints_b --base-dir BASE_DIR
 
-or run the module directly, which is what a PyCharm run configuration does. It
-routes through the same ``run_pipeline``, so both record one identity::
+or run the module directly. It routes through the same ``run_pipeline``, so
+both record one identity::
 
     python -m pipelines.complaints_b.pipeline --base-dir BASE_DIR
 """
@@ -76,7 +73,7 @@ def to_silver(
 def run(context: RunContext) -> Dataset:
     """Refine the feed source -> raw -> silver under the run context; return silver."""
     # Where the feed lands follows FEED_NAME, never the identity NAMESPACE:
-    # they are two declarations that happen to coincide today, and a Case
+    # they are separate declarations even when their values coincide, and a Case
     # Type renamed must keep writing to the same place on disk.
     med = medallion(StoreRegistry(context.base_dir), FEED_NAME)
     strategy = AccumulateByRun.from_context(context)

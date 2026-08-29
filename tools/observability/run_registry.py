@@ -13,10 +13,9 @@ declaration in :mod:`tools.observability.record_schema`, so what is written and
 what is read can never drift from what the log emits.
 
 Opening the file and migrating it are separate jobs. Migration is write work,
-and a writer's lock is exclusive because WAL is unavailable on the share, so
-doing it per connection made every read-only operator query briefly lock the
-registry against every running pipeline. It is attempted once per instance now,
-and writes only when the file is actually behind.
+and a writer's lock is exclusive because WAL is unavailable on the share.
+Migration is therefore attempted once per instance and writes only when the file
+is actually behind, leaving later read-only connections free of migration work.
 
 It is a *query* store, not a ``Dataset`` carrier, so it stays stdlib-only
 (``json`` + ``sqlite3``) and never touches pandas. It opens through the shared
@@ -113,13 +112,10 @@ class RunRegistry:
     def _connect(self):
         """Open a connection, migrating the file once per instance.
 
-        Opening and migrating are separate jobs. Migration is DDL plus a
-        one-off backfill — write work — and running it on every connection made
-        every read take a write lock: with the rollback journal (WAL is
-        unavailable on a network share) a writer's lock is exclusive, so a
-        read-only operator query briefly locked the registry against every
-        running pipeline. Now a connection is just a connection, and the
-        migration is attempted once per instance.
+        Migration is DDL plus a one-off backfill, so it is attempted once per
+        instance. With the rollback journal, a migration takes an exclusive
+        writer lock; later read-only connections therefore open without running
+        migration work again.
         """
         if not self._migrated:
             self._db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -205,19 +201,16 @@ class RunRegistry:
         norm_path = os.fspath(path.resolve())
         con = self._connect()
         try:
-            # --- look up (or default) the stored byte offset ---
             row = con.execute(
                 "SELECT byte_offset FROM ingest_progress WHERE log_path = ?",
                 (norm_path,),
             ).fetchone()
             offset = row[0] if row else 0
 
-            # --- truncation / rotation guard ---
             file_size = path.stat().st_size
             if file_size < offset:
                 offset = 0
 
-            # --- read the tail in binary mode ---
             with path.open("rb") as fh:
                 fh.seek(offset)
                 tail = fh.read()
@@ -230,12 +223,10 @@ class RunRegistry:
             consumed = tail[: last_newline + 1]
             new_offset = offset + len(consumed)
 
-            # --- decode lines (strip \r to handle CRLF on Windows) ---
             raw_lines = [
                 chunk.rstrip(b"\r").decode("utf-8") for chunk in consumed.split(b"\n")
             ]
 
-            # --- collect pipeline_run_ids in the tail for ordinal seeding ---
             tail_records: list[dict] = []
             tail_run_ids: set[str] = set()
             for raw in raw_lines:
@@ -245,7 +236,6 @@ class RunRegistry:
                 tail_records.append(rec)
                 tail_run_ids.add(rec["pipeline_run_id"])
 
-            # --- seed seen dict from existing DB rows for those run ids ---
             seen: dict[tuple[str, str], int] = {}
             if tail_run_ids:
                 placeholders = ",".join("?" * len(tail_run_ids))
@@ -261,7 +251,6 @@ class RunRegistry:
                 for pipeline_run_id, step, next_ordinal in rows:
                     seen[(pipeline_run_id, step)] = next_ordinal
 
-            # --- insert tail records ---
             inserted = 0
             for rec in tail_records:
                 key = (rec["pipeline_run_id"], rec["step"])
@@ -280,7 +269,6 @@ class RunRegistry:
                 )
                 inserted += cur.rowcount
 
-            # --- upsert high-water mark in the same transaction ---
             con.execute(
                 """
                 INSERT INTO ingest_progress (log_path, byte_offset)
@@ -441,7 +429,7 @@ class RunRegistry:
     ) -> dict | None:
         """Latest successful record for a pipeline or step address.
 
-        Date filters are based on the run-log record ``timestamp`` date.
+        Date filters use the local calendar date of the UTC run-log timestamp.
         Whole-pipeline addresses match the ``run`` summary record; step/task
         addresses match successful non-``run`` records for that step.
         """

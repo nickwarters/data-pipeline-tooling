@@ -134,7 +134,7 @@ class RenderTemplatedFilesTest(unittest.TestCase):
 
 
 class CollectLocalFilesBankArtifactTest(unittest.TestCase):
-    """Question Bank .txt artifacts (#435) are scoped to case-types/banks/."""
+    """Question Bank .txt artifacts are scoped to case-types/banks/."""
 
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
@@ -211,15 +211,15 @@ class FakeClient:
 
 
 class DeployHarness(unittest.TestCase):
-    """A temp checkout, a graph artifact, a fake gate and a fake target folder."""
+    """A temporary source tree, graph artifact, fake gate and fake target folder."""
 
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         self.root = Path(self._tmp.name)
         self.preflight_calls: list[str] = []
-        # The deploy refuses a --root other than the gate's own checkout, so the
-        # harness makes the temp tree that checkout.
+        # The deploy requires --root to match the gate's source tree, so the
+        # harness makes the temporary tree that root.
         patched = mock.patch.object(deploy_to_sharepoint, "SCRIPT_ROOT", self.root)
         patched.start()
         self.addCleanup(patched.stop)
@@ -303,13 +303,13 @@ class PreflightGateTest(DeployHarness):
         self.assertEqual(client.folders, [])
         self.assertIn("graph not written", self.logged)
 
-    def test_deploying_a_root_other_than_the_verified_checkout_aborts(self) -> None:
+    def test_deploying_a_root_other_than_the_verified_source_tree_aborts(self) -> None:
         self.write("src/app.js")
         self.write_graph({"src/app.js": []})
         client = FakeClient()
 
         opts = DeployOptions(
-            root=self.root / "some-other-checkout",
+            root=self.root / "alternate-root",
             site_url="https://sp.example.com/sites/cora",
             library="Style Library",
             target_folder="CODE/CORA",
@@ -325,7 +325,7 @@ class PreflightGateTest(DeployHarness):
 
         self.assertEqual(exit_code, 1)
         self.assertEqual(client.uploaded, [])
-        self.assertIn("some-other-checkout", self.logged)
+        self.assertIn("alternate-root", self.logged)
 
     def test_run_preflight_returns_the_freshly_written_artifact(self) -> None:
         def runner(command, **kwargs):

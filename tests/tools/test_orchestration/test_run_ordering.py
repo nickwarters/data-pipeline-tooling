@@ -46,7 +46,7 @@ def _order(*candidates, now: str) -> list[str]:
     return [item.candidate.item.name for item in ordered]
 
 
-# ── deadline pressure ─────────────────────────────────────────────────────────
+# Deadline pressure
 
 
 def test_the_earlier_deadline_runs_first():
@@ -103,7 +103,7 @@ def test_items_without_a_deadline_follow_those_with_one_in_declared_order():
     ) == ["with_deadline", "no_deadline_a", "no_deadline_b"]
 
 
-# ── priority and declared order ───────────────────────────────────────────────
+# Priority and declared order
 
 
 def test_priority_breaks_an_exact_deadline_tie():
@@ -145,7 +145,7 @@ def test_work_that_is_not_due_is_seated_after_work_that_is():
     ) == ["due", "not_due"]
 
 
-# ── deadline inheritance ──────────────────────────────────────────────────────
+# Deadline inheritance
 
 
 def _inheritance(*candidates, now: str) -> dict[str, tuple[dt.time | None, str | None]]:
@@ -213,7 +213,7 @@ def test_a_dependency_cycle_terminates_rather_than_recursing():
     assert sorted(names) == ["a", "b"]
 
 
-# ── dependency order dominates ────────────────────────────────────────────────
+# Dependency order
 
 
 def test_a_tighter_deadline_and_higher_priority_cannot_outrank_an_upstream():
@@ -242,7 +242,7 @@ def test_an_upstream_that_is_not_due_does_not_hold_back_its_dependent():
     ) == ["reporting", "monthly_extract"]
 
 
-# ── the earliest_run gate ─────────────────────────────────────────────────────
+# earliest_run gate
 
 
 def _eligibility(*candidates, now: str) -> dict[str, bool]:

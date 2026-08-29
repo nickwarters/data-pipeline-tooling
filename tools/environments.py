@@ -9,13 +9,13 @@ this ``env -> base_dir`` mapping is an operational concern and lives here in
 ``tools/`` (a sibling utility, not a framework facade), wired into the operator
 CLI and the pipeline ``main()`` entry points.
 
-Each environment has a committed default root in ``shared.constants``. An OS
-variable, when set, supplies a machine-specific absolute path -- a UNC share on
-Windows, a local directory on macOS -- without changing source. Relative
-defaults are resolved from the current working directory.
+Each environment has a configured default root in ``shared.constants``. An OS
+variable, when set, supplies a machine-specific path with ``~`` expanded — a UNC
+share on Windows or a local directory on macOS. Only relative configured defaults
+are resolved from the current working directory.
 
 The production default is intentionally visible: when ``prod`` uses its
-committed fallback, a one-line warning is written to stderr so an operator can
+configured fallback, a one-line warning is written to stderr so an operator can
 distinguish it from an explicitly configured production root.
 
 To add an environment, add a row to :data:`_ENVIRONMENTS` (and document it).
@@ -40,9 +40,9 @@ DEFAULT_ENV = "dev"
 class _Environment:
     """How one named environment resolves its ``base_dir``."""
 
-    #: OS variable that, when set, supplies this environment's root verbatim.
+    #: OS variable that supplies this environment's root; ``~`` is expanded.
     path_var: str
-    #: Committed root used when ``path_var`` is unset.
+    #: Configured root used when ``path_var`` is unset.
     fallback: Path
 
 
@@ -68,7 +68,7 @@ def resolve_base_dir(env: str | None = None) -> Path:
 
     ``env`` defaults to the ``PIPELINE_ENV`` OS variable, then to
     :data:`DEFAULT_ENV`. The chosen environment's root is taken from its
-    ``path_var`` OS variable when set, otherwise its committed default. A
+    ``path_var`` OS variable when set, otherwise its configured default. A
     relative default is resolved from the current working directory. An
     unknown name raises :class:`ValueError` with an actionable message.
     """
@@ -85,7 +85,7 @@ def resolve_base_dir(env: str | None = None) -> Path:
     )
     if name == "prod":
         print(
-            f"warning: {spec.path_var} is unset; using committed production root "
+            f"warning: {spec.path_var} is unset; using configured production root "
             f"{fallback}; set {spec.path_var} to override it",
             file=sys.stderr,
         )

@@ -139,7 +139,6 @@ def test_to_silver_quarantines_value_rule_breaches():
     with active_context(RunContext(pipeline=FEED_NAME, run_log=run_log)):
         to_silver(reader, writer, reject_writer)
 
-    # The good row reaches the main writer
     assert_rows_equal(
         writer,
         [
@@ -153,13 +152,11 @@ def test_to_silver_quarantines_value_rule_breaches():
         ignoring=["run_id"],
     )
 
-    # The bad row is routed to the reject writer
     rejects = reject_writer.writes[0].to_pandas().to_dict("records")
     assert len(rejects) == 1
     assert rejects[0]["record_id"] == "R002"
     assert "value not in [0, 100]" in rejects[0]["failed_rule"]
 
-    # The run log captured the partition statistics
     q_record = next(r for r in run_log.records if r["step"] == "silver:quarantine")
     assert q_record["rows_in"] == 2
     assert q_record["rows_out"] == 1

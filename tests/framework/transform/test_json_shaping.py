@@ -87,8 +87,7 @@ def test_explode_json_map_value_into_lands_the_whole_map_value():
         value_into="detail_value",
     )(dataset).to_pandas()
     assert list(result.columns) == ["case_ref", "detail_name", "detail_value"]
-    # A scalar lands as itself; anything else is JSON-encoded so one column can
-    # carry a polymorphic value.
+    # Non-scalar lifted values are JSON-encoded so one column can carry them.
     assert list(result["detail_value"]) == ["ana", '["a", "b"]']
 
 

@@ -19,16 +19,7 @@ from tools.integrations.remote import (
 
 
 class FakeListBackend:
-    """An in-memory SharePoint list backend standing in for the deferred client.
-
-    Plays *both* seam roles (fetch + push) over a dict keyed by (site, list), so a
-    Dataset pushed by ``SharePointWriter`` can be fetched straight back by
-    ``SharePointReader`` with no network, no tenant — the SharePoint-list dual of
-    the way ``SasReader`` tests against landed fixture files. One
-    object covers both directions, mirroring the single client seam a real on-prem
-    SE client will sit behind. ``Refresh`` overwrites a list; ``AccumulateByRun``
-    appends to it, so per-Case-Type lists stay independent and runs accumulate.
-    """
+    """In-memory list backend; ``Refresh`` replaces and ``AccumulateByRun`` appends."""
 
     def __init__(self) -> None:
         self._lists: dict[tuple[str, str], pd.DataFrame] = {}
@@ -236,8 +227,8 @@ def test_accumulate_by_run_stamps_survive_the_round_trip():
 def test_selection_pool_is_delivered_to_a_per_case_type_list(tmp_path):
     # the Selection Deliverable terminus. A *second* pipeline reads the gold
     # SelectionPool and writes it to the Case Type's own SharePoint list — the
-    # two-pipelines mechanism settled in  (CONTEXT.md), not a mid-run
-    # checkpoint. Gold SelectionPool -> SqliteReader -> SharePointWriter -> list.
+    # delivery is a second pipeline, not a mid-run checkpoint:
+    # Gold SelectionPool -> SqliteReader -> SharePointWriter -> list.
     case_type = "cases"
     gold_db = tmp_path / case_type / "gold.db"
     selection_pool = Dataset.from_pandas(

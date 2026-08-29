@@ -14,17 +14,9 @@ published once, over every list's accumulated history.
   ``conversation_message``, ``appeal``, ``case_detail``) each explode one
   blob -- or one level further into one -- of that same silver batch into
   one row per child structure; see each builder's own docstring.
-- ``gold.publish_gold`` rebuilds the current Case, the Detail Tables and five
-  aggregates from the whole silver history, each with ``Refresh()`` -- three
+- ``gold.publish_gold`` rebuilds the current Case, the Detail Tables and six
+  aggregates from the whole silver history, each with ``Refresh()`` -- four
   reduced from ``case_current``, and two from a Detail Table.
-
-Every line of every step **does its work when it is reached**: put a breakpoint on
-one, step over it, and the variable holds the actual rows at that point
-([ADR-0027](../../docs/adr/0027-eager-steps-are-the-default-authoring-model.md)).
-Because this feed drives the same shapes many times over -- one set per list, one
-per Detail Table -- each one prefixes its step names with the list it is
-polling, so the run
-log still says which list's ``read`` failed rather than ``read-17``.
 
 **Every watermark is committed last**, after gold has been written, because
 advancing one is what vouches for its window having been *published*. A run that
@@ -44,6 +36,9 @@ does not exist yet::
 Both run from the repo root so the import-only ``framework`` package resolves on
 ``sys.path``.
 """
+
+# Repeated per-list and per-detail steps prefix names so the run log identifies
+# their source.
 
 from __future__ import annotations
 
@@ -891,9 +886,7 @@ def run(
             med.silver.quarantine_writer("case_version"),
         )
 
-        # Every Detail Table reads this settled silver batch, not raw's own
-        # CaseType cell -- see to_silver_answer's docstring; the same
-        # reasoning holds for every step below, whichever blob it explodes.
+        # Detail builders consume the settled silver batch, not raw.
         detail_rows: dict[str, int] = {}
         for table, to_silver_detail, key_columns in _DETAIL_TABLES:
             detail_rows[table] = len(
@@ -995,11 +988,8 @@ def main(argv: list[str]) -> int:
     def handler(ctx: RunContext) -> list[ListPoll]:
         return run(ctx, client=LocalJsonListClient() if args.sample else None)
 
-    # The *same* run_pipeline the operator CLI uses, so a run started here and
-    # one started with `cli run` record under one identity -- one pipeline label,
-    # one logical_run_id, one run history. To see what a poll would do without
-    # doing it, use `cli run pipelines/sharepoint_cases --dry-run`: every step
-    # still runs and only the commits, and the watermarks, are held back.
+    # Use run_pipeline so direct and CLI runs share identity; dry-run holds back
+    # commits and watermarks.
     try:
         polls = run_pipeline(handler, FEED_NAME, base_dir, upstreams=UPSTREAMS)
     except PipelineError as exc:

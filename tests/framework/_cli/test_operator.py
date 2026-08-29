@@ -144,10 +144,8 @@ def test_run_downstream_succeeds_after_fresh_source_history(tmp_path):
 
 
 def test_orchestrate_runs_path_addressed_pipelines(tmp_path):
-    # orchestrate now addresses each scheduled pipeline by its pipelines/<name>
-    # path (via --app's build_pipeline_sets()), with no build_runner() registry.
-    # One due-work pass runs _source then its freshness-gated _downstream, both
-    # imported by path at runtime, and lands their medallion artifacts.
+    # Scheduled pipelines are path-addressed and loaded at runtime; this pass
+    # runs the source, then its freshness-gated downstream.
     result = _cli(
         "orchestrate",
         "--app",
@@ -169,11 +167,7 @@ def test_orchestrate_runs_path_addressed_pipelines(tmp_path):
 
 
 def test_orchestrate_skips_a_pipeline_on_a_calendar_seeded_holiday(tmp_path):
-    # The contrast with the test above: same app, same run date -- a Friday, so
-    # only the seeded holiday can explain the skip -- but a --calendar file that
-    # names it. The absent raw.db is what makes this end-to-end rather than a
-    # string assertion. The printed reason names the *weekday*, because that is
-    # what Weekdays.not_due_detail judges.
+    # A seeded holiday skips the source, so no raw artifact is created.
     calendar = tmp_path / "calendar.yml"
     calendar.write_text("holidays:\n  - 2026-05-29\n", encoding="utf-8")
 
@@ -494,10 +488,7 @@ def test_log_without_a_log_file_reports_clear_error(tmp_path):
 
 
 def test_run_stale_upstream_reports_clear_error(tmp_path):
-    # _downstream declares _source as a freshness upstream; with only stale
-    # _source history the run must abort with a clear stale-upstream message, not
-    # a crash. The shared registry catches up from every _runs/*.log, so a record
-    # in the upstream's own log is enough to drive the freshness verdict.
+    # A stale upstream produces a clean freshness error.
     log = tmp_path / "_runs" / "_source.log"
     log.parent.mkdir(parents=True, exist_ok=True)
     log.write_text(
@@ -645,8 +636,7 @@ def test_reviewer_publish_only_malformed_gold_is_a_clean_cli_failure(
 
 
 def test_run_resolves_base_dir_from_env(tmp_path):
-    # No --base-dir: --env names the environment, whose configured root comes
-    # from its OS variable (tools.environments). The registry lands there.
+    # Without --base-dir, the environment supplies the configured root.
     env = {
         **os.environ,
         "PYTHONPATH": os.pathsep.join(
@@ -785,10 +775,7 @@ def test_status_and_log_resolve_base_dir_from_env(tmp_path):
 
 
 def test_every_usage_example_in_the_module_docstring_parses():
-    # The docstring is the first thing an author reads, so a stale example there
-    # is worse than a stale one in the docs. Each `python -m cli ...` line it
-    # shows is fed back through the real parser, so an option that is renamed or
-    # turned into a flag cannot leave a broken example behind.
+    # Keep CLI examples in the module docstring executable.
     import re
     import shlex
 
@@ -805,9 +792,7 @@ def test_every_usage_example_in_the_module_docstring_parses():
 
 # --- migrate ---------------------------------------------------------------
 #
-# The migrations tree these drive is a throwaway one under tmp_path, named by
-# --migrations-root: the repository's own tree is the deployed subjects' and
-# must not decide whether this plumbing works.
+# Migration fixtures are isolated under a temporary root.
 
 CREATE_CASES = "CREATE TABLE cases (case_id TEXT PRIMARY KEY);\n"
 CREATE_EVENTS = "CREATE TABLE events (event_id TEXT PRIMARY KEY);\n"
@@ -966,7 +951,7 @@ def test_migrate_isolates_one_broken_subject_from_the_rest(tmp_path):
 
 
 def test_migrate_reports_an_empty_tree_without_failing(tmp_path):
-    # Nothing has opted in yet — the state the repository is in today.
+    # An absent migrations root is a successful no-op.
     result = _cli(
         "migrate",
         "--base-dir",

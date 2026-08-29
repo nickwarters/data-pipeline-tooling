@@ -1,11 +1,4 @@
-"""The run-metadata layout of a base directory.
-
-``RunStore`` is the single owner of where a base directory's *run metadata*
-lands — the counterpart of ``StoreRegistry``, which owns where the *data* lands.
-These tests pin the actual path fragments, because the layout is a live on-disk
-convention: existing bases already have ``_runs/`` and ``_registry/runs.db`` in
-them, and centralising the knowledge must not move a single file.
-"""
+"""Test the on-disk run-metadata locations owned by ``RunStore``."""
 
 from pathlib import Path
 
@@ -46,7 +39,7 @@ def test_a_string_base_dir_is_accepted(tmp_path):
 def test_registry_opens_at_the_declared_path(tmp_path):
     registry = RunStore(tmp_path).registry()
     assert isinstance(registry, RunRegistry)
-    registry.query_runs()  # opening it creates the file
+    registry.query_runs()
     assert (tmp_path / "_registry" / "runs.db").exists()
 
 

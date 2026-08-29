@@ -69,7 +69,7 @@ def select_cases(
         adviser_sales = sales_by_adviser[adviser]
         recent = [s for s in adviser_sales if is_recent_sale(s["sale_date"], as_of)]
         if not recent:
-            continue  # no sale in the last 15 days -> not a candidate
+            continue
         adviser_reviews = reviews_by_adviser.get(adviser, [])
         sale = best_sale(recent)
 

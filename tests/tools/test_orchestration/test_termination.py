@@ -1,16 +1,4 @@
-"""Loop termination reads data, not prose.
-
-``--loop`` stops when everything that was due for the run date has settled. That
-question used to be answered by filtering decisions on their ``reason`` text
-against the two literals ``"not due"`` and ``"disabled"`` — strings written a
-hundred lines away for an operator's console. Rewording either one, an
-obviously safe copy change, silently moved skipped items into the due set and
-changed when an orchestration stopped polling, in production, with no test able
-to notice because both sides of the comparison were the same literal.
-
-The decision now carries ``was_due``. These tests pin that termination depends
-on it and on nothing an editor might reword.
-"""
+"""Test that ``Decision.was_due``, not mutable reason prose, controls termination."""
 
 import datetime as dt
 from dataclasses import replace
@@ -85,9 +73,8 @@ def test_a_pass_with_nothing_due_is_not_terminal():
 
 
 def test_rewording_a_skip_reason_does_not_make_a_dead_pass_look_settled():
-    # The exact regression this replaced: with the reason-text filter, appending a
-    # word to "not due" moved both skips into the due set, every one of which is
-    # already terminal, so the pass reported settled and the loop exited early.
+    # Skip reason wording must not move skipped items into the due set and make
+    # the loop exit early.
     orchestrator = _empty_orchestrator()
     reworded = OrchestrationPassResult(
         "orch-1",
@@ -108,9 +95,6 @@ def test_a_due_item_still_running_keeps_the_loop_going():
     )
 
     assert orchestrator._all_due_terminal(result) is False
-
-
-# ── the same, driven end to end ───────────────────────────────────────────────
 
 
 class _NoopInvoker:

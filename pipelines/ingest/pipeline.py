@@ -1,21 +1,10 @@
 """Ingest pipeline: the demo Case Type's source feed -> raw -> silver -> gold.
 
-The first half of the capstone path the framework exists to make routine: land
-the bundled CSV feed into **raw** (accumulated, stamped ``logical_run_id`` /
-``load_date``), refine it into **silver** (accumulated, schema enforced), then
-reduce it to a current-only **gold** (one row per Case). Gold is the CasePool the
-downstream ``selection`` pipeline reads.
-
-Written with the **eager steps** (``read`` / ``transform`` / ``validate`` /
-``write``): every line does its work when it is reached, so putting a breakpoint
-on one and stepping through shows the actual rows changing
-([ADR-0027](../../docs/adr/0027-eager-steps-are-the-default-authoring-model.md)).
-
-Address it by its location on disk::
+Run through the operator CLI::
 
     python -m cli run pipelines/ingest --base-dir /tmp/demo --run-date 2026-05-29
 
-or run the module directly -- which is what a PyCharm run configuration does::
+Or run the module directly::
 
     python -m pipelines.ingest.pipeline --base-dir /tmp/demo
 """
@@ -62,7 +51,6 @@ SAMPLE_CSV = Path(__file__).parent / "sample_data" / "activity_cases.csv"
 AS_OF = date(2026, 5, 29)
 
 
-# This pipeline has no upstream — it is the source of the CasePool.
 UPSTREAMS = ()
 
 
@@ -137,10 +125,7 @@ def main(argv: list[str]) -> int:
         print(str(exc), file=sys.stderr)
         return 1
 
-    # Direct invocation goes through the *same* run_pipeline the operator CLI
-    # uses, so a run started from a PyCharm run configuration records under the
-    # same identity — pipeline label, logical_run_id, run log — as one started
-    # with `cli run`. Anything else gives the feed two run histories.
+    # Use the same runner as the operator CLI so both entry points share run identity.
     try:
         dataset = run_pipeline(
             run, "ingest", base_dir, upstreams=UPSTREAMS, run_date=AS_OF

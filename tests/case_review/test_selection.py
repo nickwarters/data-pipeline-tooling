@@ -23,17 +23,13 @@ _VARIATIONS = (
 
 
 def _land_gold_cases(gold, frame: pd.DataFrame) -> None:
-    # Land Cases into ingest gold (current-only, one row per Case) as an
-    # ingest_silver_to_gold run would — CasePool reads gold.
+    # Seed current-only ingest gold; CasePool reads this shape.
     gold.writer("cases", Refresh()).write(Dataset.from_pandas(frame))
 
 
 def test_selection_narrows_the_casepool_into_a_stamped_selection_pool(tmp_path):
-    # Acceptance: the full source->selection path for one Case Type. Ingest
-    # has landed Cases into silver; the Selection pipeline fetches available cases
-    # from the CasePool, narrows them with specific Python processors (a high-value
-    # filter, a sort), stamps the chosen Variation's question_bank_id, and writes
-    # the SelectionPool into gold stamped logical_run_id / load_date (CONTEXT.md; ).
+    # End-to-end acceptance: CasePool availability, filter/sort, variation
+    # stamping, and a run-stamped SelectionPool.
     gold = medallion(StoreRegistry(tmp_path), "cases").gold
     _land_gold_cases(
         gold,

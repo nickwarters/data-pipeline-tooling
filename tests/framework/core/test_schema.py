@@ -103,10 +103,7 @@ def test_schema_validator_rejects_int_where_float_declared():
 
 
 def test_schema_validator_accepts_a_zero_row_frame_whatever_its_dtypes():
-    # A column with no rows has no value to breach a declared type, and nothing
-    # types it: a quiet source's empty window arrives object-typed (and
-    # `reindex` invents a column as float64). Dtype is a claim about values, so
-    # with no values there is nothing to check and the frame passes.
+    # Empty frames have no violating values; column presence is checked separately.
     frame = pd.DataFrame(
         {
             "count": pd.Series([], dtype="object"),

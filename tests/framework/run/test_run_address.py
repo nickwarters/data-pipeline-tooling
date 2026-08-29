@@ -79,11 +79,7 @@ def test_task_constructor_aliases_step_for_existing_builder_vocabulary():
     ],
 )
 def test_rendered_labels_are_the_stored_on_disk_strings(address, expected_label):
-    """Pin the rendering: these strings are keys in every existing registry.
-
-    ``step_address`` is a stored column, so a changed rendering would orphan
-    the freshness lookups of every run recorded before the change.
-    """
+    """Keep stored ``step_address`` strings compatible with existing registries."""
 
     assert address.label == expected_label
     assert str(address) == expected_label

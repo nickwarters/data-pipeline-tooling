@@ -1,4 +1,4 @@
-"""Validators: fail-fast checks over a ``Dataset`` at a layer boundary.
+"""Validators: fail-fast checks over a ``Dataset`` at a pipeline boundary.
 
 A ``Validator`` states an expectation about a feed's data and raises
 ``ValidationError`` when the data breaks it. Validators are attached to the
@@ -12,8 +12,8 @@ concrete engine, so they stay behind the Dataset seam. Some take an extra narrow
 seam for a run-over-run comparison the in-flight dataset can't supply:
 ``VolumeAnomalyValidator`` reads a ``RunHistory`` baseline, and
 ``SchemaDriftValidator`` reads a ``PriorColumns`` source — the prior run's landed
-columns — to warn on raw-boundary source drift. Schema/dtype enforcement at
-silver and gold is a later, richer Validator of the same shape.
+columns — to warn on source drift. Schema/dtype enforcement is a later, richer
+Validator of the same shape.
 """
 
 from __future__ import annotations
@@ -156,13 +156,9 @@ class VolumeAnomalyValidator:
 
 
 class PriorColumns(Protocol):
-    """The slice of the raw layer a drift check needs: last landing's columns.
+    """The prior landed columns and source label a drift check needs.
 
-    Anything that can answer "what columns did the prior run land for this
-    table, and what is the table called?" is a prior-columns source;
-    ``Store.columns_of`` is the production one (a ``PRAGMA`` over the live raw
-    table). Stated as a Protocol so the drift diff stays behind a narrow seam
-    and is exercised in isolation (mirrors ``RunHistory``).
+    Stated as a Protocol so the drift comparison stays behind a narrow seam.
     """
 
     label: str
@@ -175,17 +171,16 @@ class PriorColumns(Protocol):
 class SchemaDriftValidator:
     """Warn when a feed's incoming columns drift from the prior run's.
 
-    Raw is schema-light: an owner-controlled source can silently add or drop a
-    column between snapshots, and that may only surface a layer later as a silver
-    schema breach. This catches it at the door by diffing the incoming
-    :class:`Dataset`'s columns against the prior run's landed columns and raising
-    with the added/dropped columns named.
+    An owner-controlled source can silently add or drop a column between
+    snapshots, so this validator catches the drift at the input boundary by
+    diffing the incoming Dataset against the prior run's landed columns and
+    naming additions and drops.
 
-    The diff is **names-only** (a dtype change on a surviving column stays a
-    silver concern) and a **case-sensitive set** difference (order is
-    not drift; an upstream rename surfaces honestly as one drop + one add). The
-    first-ever run has no prior (``columns()`` returns ``None``) and is a clean
-    no-op. Severity is the builder's call like any Validator.
+    The diff is **names-only**; a dtype change on a surviving column remains a
+    later schema-validation concern. It is a **case-sensitive set** difference
+    (order is not drift; an upstream rename surfaces honestly as one drop + one
+    add). The first-ever run has no prior (``columns()`` returns ``None``) and is
+    a clean no-op. Severity is the builder's call like any Validator.
     """
 
     def __init__(self, prior: PriorColumns) -> None:
@@ -194,7 +189,7 @@ class SchemaDriftValidator:
     def validate(self, dataset: Dataset) -> None:
         prior = self._prior.columns()
         if prior is None:
-            return  # first-ever run: no baseline to drift from
+            return
         incoming = set(dataset.columns)
         baseline = set(prior)
         added = [c for c in dataset.columns if c not in baseline]
@@ -217,13 +212,11 @@ class SchemaDriftValidator:
 class UniqueValidator:
     """Assert that a column (or column set) is unique across the dataset.
 
-    Attached at the gold boundary it enforces the one-row-per-Case grain,
-    aborting the run before duplicated-grain gold is written.
+    At a boundary it enforces the declared one-row-per-key grain, aborting before
+    duplicated-grain data is written.
 
     ``columns`` may be a single column name (str) or a list of column names for
     a composite key.
-
-    Duplicates are found by comparing every row against every other.
     """
 
     def __init__(self, columns: str | Iterable[str]) -> None:

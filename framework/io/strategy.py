@@ -1,9 +1,7 @@
 """Load strategy value types — the explicit _how_ for a Writer.
 
-A strategy is passed to ``Store.writer`` to declare the load behaviour for a
-feed, independent of which medallion layer it targets. The Store resolves only
-the *location* (which ``<subject>/<layer>.db``); the Writer owns both location
-and strategy.
+A strategy is passed to ``Store.writer`` to declare a feed's load behaviour. The
+Store resolves the location; the Writer owns both location and strategy.
 
 Each strategy knows how to **realise itself**, so nothing outside this module
 has to branch on which strategy it was handed:
@@ -113,8 +111,6 @@ class Refresh:
     def apply_to_frame(
         self, frame: "pd.DataFrame", read_existing: ReadExisting
     ) -> "pd.DataFrame":
-        # Replace wholesale: the incoming frame is the whole answer, so
-        # whatever the target already holds is never even read.
         return frame
 
 

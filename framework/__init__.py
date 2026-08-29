@@ -4,12 +4,10 @@ Use the public facade modules:
 
 - ``framework.core`` for Dataset and the schema/validation contracts — the
   foundational vocabulary the other facades build on.
-- ``framework.io`` for Readers, Writers, the namespace Store, and strategies.
+- ``framework.io`` for Readers, Writers, and load strategies.
 - ``framework.transform`` for the reshaping processors and SchemaCoercion.
-- ``framework.run`` for Pipeline, orchestration, RunLog, and RunRegistry.
-
-(The ``validate(dataset)`` checks and the declared-schema contract live on
-``framework.core`` — the ``validate`` facade was folded into ``core``.)
+- ``framework.run`` for Pipeline composition/execution and run observability
+  (RunLog and RunRegistry).
 
 (``tests.framework_testing`` is a separate test-only surface; ``framework._internal``
 is private layout.)

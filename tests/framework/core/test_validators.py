@@ -23,11 +23,7 @@ def _rows(n: int) -> Dataset:
 
 
 class _FakeHistory:
-    """A stand-in baseline source returning fixed recent read volumes.
-
-    Mirrors ``RunRegistry.recent_row_counts`` so the band logic can be exercised
-    in isolation; an integration test drives the real registry seam end-to-end.
-    """
+    """Stand-in source for recent read volumes."""
 
     def __init__(self, counts: list[int]) -> None:
         self._counts = counts
@@ -113,10 +109,7 @@ def test_unique_validator_passes_when_multi_column_key_is_unique():
 
 
 def test_volume_anomaly_validator_trips_on_a_far_shortfall():
-    # The motivating case: recent nights read ~10k rows, tonight's source
-    # export is truncated to 200. Every row may be individually valid, yet the
-    # run is catastrophically incomplete — the guardrail must trip, naming the
-    # count and the baseline it deviated from.
+    # A severe shortfall raises despite individually valid rows.
     history = _FakeHistory([10_000, 9_800, 10_200, 9_900])
     validator = VolumeAnomalyValidator(history, pipeline="cases", tolerance=0.5)
 
@@ -164,12 +157,7 @@ def test_volume_anomaly_floor_is_always_on_even_without_history():
 
 
 class _FakePrior:
-    """A stand-in prior-columns source returning a fixed landed column set.
-
-    Mirrors the ``PriorColumns`` seam (``Store.columns_of``) so the drift diff
-    can be exercised in isolation; an integration test drives the real PRAGMA
-    seam end-to-end.
-    """
+    """Stand-in source for previously landed columns."""
 
     def __init__(self, columns, label="raw.cases") -> None:
         self._columns = columns
@@ -246,9 +234,7 @@ def test_schema_drift_validator_no_op_on_first_ever_run():
 
 
 def test_schema_drift_validator_drives_the_real_store_prior_columns_seam(tmp_path):
-    # End-to-end over the production PriorColumns seam (Store.columns_of's PRAGMA
-    # read of the live raw table): land one shape, then a drifted snapshot warns
-    # vs the prior landing — the next run reads the door, one layer before silver.
+    # Compare a drifted snapshot with the columns landed in SQLite.
     from tools.store import Store
 
     store = Store(tmp_path / "raw.db", namespace="raw")

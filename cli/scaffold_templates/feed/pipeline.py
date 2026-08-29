@@ -1,10 +1,5 @@
 """Ingest pipeline for the ``myfeed`` feed: source -> raw -> silver -> gold.
 
-Every line here **does its work when it is reached**. Put a breakpoint on one,
-step over it, and the variable holds the actual rows at that point in the feed —
-which is the whole reason the steps are written this way
-([ADR-0027](../../docs/adr/0027-eager-steps-are-the-default-authoring-model.md)).
-
 Each medallion step is its own ``to_*`` function, so a test can drive one with
 sample rows and a recording writer without touching SQLite, the network, or the
 filesystem. ``run`` calls the three in order.
@@ -17,7 +12,7 @@ Address it by its location on disk::
 
     python -m cli run pipelines/myfeed --base-dir BASE_DIR
 
-or run the module directly, which is what a PyCharm run configuration does::
+or run the module directly::
 
     python -m pipelines.myfeed.pipeline --base-dir BASE_DIR
 """

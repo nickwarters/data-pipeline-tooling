@@ -4,7 +4,7 @@ A Case Type's **schema** is an ordinary dataclass whose annotations *are* the
 contract: each field is a column name and its declared Python type, optionally
 carrying ``Annotated`` value rules. ``SchemaValidator`` checks a ``Dataset``'s
 columns + dtypes + nullability + value rules + cross-field **row checks**
-(declared via the ``@row_checks`` class decorator) at the **silver** boundary
+(declared via the ``@row_checks`` class decorator) at the validation boundary
 (post-validator), reporting every breach at once in one located message before
 downstream logic touches the data.
 

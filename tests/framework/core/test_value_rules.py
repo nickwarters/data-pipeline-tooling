@@ -1,10 +1,5 @@
-"""Value-level schema rules: format, length, uniqueness, and value-set.
-
-These rules ride on the *same* Case Type dataclass as the columns+dtypes
-contract from , attached to a field via ``Annotated[type, Rule(...), ...]`` so
-the annotations stay the single source of truth. ``SchemaValidator``
-runs them over column values on the same engine-confined seam it uses for
-dtypes, collecting every breach into one located message naming column + rule.
+"""Value rules share Case Type dataclass and ``Annotated`` fields with the
+columns-and-dtypes contract. This suite covers masks, messages, and row checks.
 """
 
 import re
@@ -31,7 +26,7 @@ from framework.core.validators import ValidationError
 
 @dataclass
 class PatternCase:
-    # An id that must be 9-10 numeric characters (the issue's worked example).
+    # Numeric case-reference pattern used by this fixture.
     case_ref: Annotated[str, Pattern(r"\d{9,10}")]
 
 
@@ -317,12 +312,7 @@ def test_non_null_field_passes_on_an_empty_dataset():
 
 
 def _rules_columns_and_masks():
-    """Each value rule paired with a column it judges and its expected mask.
-
-    One duplicated-index frame (built the way application code builds one: two
-    frames concatenated without resetting the index) drives every rule, so the
-    shared masking contract is exercised once per rule.
-    """
+    """Pair each rule with its column and expected duplicate-index mask."""
     return [
         (Pattern(r"[AB]{2}"), "code", [False, False, True, False]),
         (Length(minimum=2), "code", [False, False, True, False]),
@@ -333,9 +323,7 @@ def _rules_columns_and_masks():
 
 
 def _duplicated_index_frame():
-    # Two batches concatenated the way a custom processor would, so index labels
-    # repeat: 0, 1, 0, 1. Row 2 ('X' / 500.0) breaches the format/size rules,
-    # rows 0 and 3 duplicate 'AA', and the null row 1 is out of scope for all.
+    # Repeated indexes: one null row, one format/size breach, and duplicate AA rows.
     first = pd.DataFrame(
         {
             "code": pd.Series(["AA", pd.NA], dtype="string"),
@@ -455,12 +443,7 @@ def test_check_returns_none_for_an_all_null_column():
 
 
 class HandRolledRule:
-    """A rule that implements the protocol and inherits nothing.
-
-    The ValueRule contract is structural, so a third-party rule that satisfies
-    the two methods must keep validating and quarantining without deriving from
-    the framework's shared base.
-    """
+    """Structural-protocol rule with no framework base class."""
 
     def violating_mask(self, series: "pd.Series") -> "pd.Series":
         return pd.Series(

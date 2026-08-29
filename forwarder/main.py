@@ -127,7 +127,7 @@ class StubbedListItemClient:
 
 
 def build_list_item_client(site_url: str) -> ListItemClient:
-    """Build the list client the loop writes through, for the site at ``site_url``."""
+    """Return the stub list client for ``site_url`` until a real client is wired."""
     return StubbedListItemClient()
 
 
@@ -163,7 +163,7 @@ class StubbedFileHandlerClient:
 
 
 def build_file_handler_client(site_url: str) -> FileHandlerClient:
-    """Build the file client the loop copies through, for the site at ``site_url``."""
+    """Return the stub file client for ``site_url`` until a real client is wired."""
     return StubbedFileHandlerClient()
 
 
@@ -371,7 +371,7 @@ def deliver_one(
     """Deliver one queued file and set it aside. Says whether that succeeded.
 
     A failure leaves the file where it is, which *is* the retry: the next tick
-    finds it still queued and tries again (ADR-0001). Nothing here re-raises —
+    finds it still queued and tries again. Nothing here re-raises —
     one bad file must not stop the files behind it, let alone the service.
     """
     try:
@@ -598,7 +598,6 @@ def request_shutdown_on_signals() -> threading.Event:
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """Read the Forwarder's command line."""
     parser = argparse.ArgumentParser(description="Run the Forwarder delivery loop.")
     parser.add_argument(
         "--tick-minutes",
@@ -622,7 +621,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Run the Forwarder."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",

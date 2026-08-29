@@ -103,7 +103,7 @@ def _render_mirror(source: str) -> str:
 def is_generated_mirror(md_file: Path) -> bool:
     """Whether *md_file* looks like a generated mirror (a single ``python`` block).
 
-    Used to distinguish prunable mirrors from hand-written Markdown so that only
+    Distinguishes prunable mirrors from hand-written Markdown so that only
     files this script produced are ever deleted.
     """
     try:

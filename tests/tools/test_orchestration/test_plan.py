@@ -18,18 +18,13 @@ from tools.orchestration import (
     plan_for_each,
 )
 
-# ── Monday 2026-06-15 is a working day (used as a stable "due" date) ──────────
-_DUE_DATE = dt.date(2026, 6, 15)  # Monday
-_STALE_DATE = "2026-06-01T00:00:00+00:00"  # well before _DUE_DATE
+_DUE_DATE = dt.date(2026, 6, 15)
+_STALE_DATE = "2026-06-01T00:00:00+00:00"
 _SAME_DAY_DATE = "2026-06-15T00:00:00+00:00"
 
 
 class _RecordingInvoker:
-    """A path-addressed invoker that only records calls.
-
-    ``plan()`` never invokes it — the tests assert it stays untouched — so a
-    minimal recorder is enough to prove the plan is a pure projection.
-    """
+    """Record path-addressed invocations."""
 
     def __init__(self) -> None:
         self.calls: list[str] = []
@@ -41,7 +36,6 @@ class _RecordingInvoker:
 
 
 def _orchestrator(*pipeline_sets) -> tuple[Orchestrator, list[str]]:
-    """An orchestrator whose invoker records calls, plus the shared call log."""
     invoker = _RecordingInvoker()
     orchestrator = Orchestrator(pipeline_sets, WorkingDayCalendar(), invoker=invoker)
     return orchestrator, invoker.calls
@@ -56,7 +50,6 @@ def _record_run(
     timestamp: str = _SAME_DAY_DATE,
     pipeline_run_id: str = "upstream",
 ) -> None:
-    """Write a synthetic run record to a JSONL log file."""
     record = {
         "timestamp": timestamp,
         "pipeline_run_id": pipeline_run_id,
@@ -76,9 +69,6 @@ def _record_run(
         fh.write(json.dumps(record) + "\n")
 
 
-# ── test_plan_returns_ready_for_due_item_without_calling_handler ───────────────
-
-
 def test_plan_returns_ready_for_due_item_without_calling_handler(tmp_path):
     orchestrator, calls = _orchestrator(
         PipelineSet("claims", (ScheduledPipeline("pipelines/ingest", Weekdays()),))
@@ -92,9 +82,6 @@ def test_plan_returns_ready_for_due_item_without_calling_handler(tmp_path):
     assert item.status == "ready"
     assert "daily" in item.reason
     assert "is due" in item.reason
-
-
-# ── test_plan_returns_skipped_for_not_due_item ────────────────────────────────
 
 
 def test_plan_returns_skipped_for_not_due_item(tmp_path):
@@ -116,10 +103,8 @@ def test_plan_returns_skipped_for_not_due_item(tmp_path):
 def test_plan_not_due_reason_names_the_schedule_that_was_not_due(tmp_path):
     """A monthly schedule must not explain itself in weekday language.
 
-    The plan preview used to compute one weekday name for the whole pass and
-    paste it onto every skipped item, so a day-of-month schedule reported "is
-    not due on monday" — an operator reading it would go looking for a weekday
-    rule that does not exist. Each schedule now says why *it* was not due.
+    Each schedule explains why *it* was not due; a day-of-month schedule must
+    not send an operator looking for a weekday rule that does not exist.
     """
     orchestrator, _ = _orchestrator(
         PipelineSet(
@@ -138,9 +123,6 @@ def test_plan_not_due_reason_names_the_schedule_that_was_not_due(tmp_path):
     )
 
 
-# ── test_plan_returns_disabled_for_disabled_item ──────────────────────────────
-
-
 def test_plan_returns_disabled_for_disabled_item(tmp_path):
     orchestrator, calls = _orchestrator(
         PipelineSet(
@@ -155,14 +137,8 @@ def test_plan_returns_disabled_for_disabled_item(tmp_path):
     assert result.items[0].status == "disabled"
 
 
-# ── test_plan_returns_blocked_when_freshness_requirement_is_stale ─────────────
-
-
 def test_plan_returns_blocked_when_freshness_requirement_is_stale(tmp_path):
-    """Write a stale upstream log; plan() must report blocked without calling handler.
-
-    No pipeline handler should be invoked.
-    """
+    """A stale upstream is blocked without invoking the pipeline."""
     log_path = tmp_path / "_runs" / "ingest.log"
     _record_run(
         log_path,
@@ -198,9 +174,6 @@ def test_plan_returns_blocked_when_freshness_requirement_is_stale(tmp_path):
     assert "ingest" in item.reason
 
 
-# ── test_plan_returns_already_satisfied_when_run_succeeded_today ──────────────
-
-
 def test_plan_returns_already_satisfied_when_run_succeeded_today(tmp_path):
     """Write a same-day success; plan() must report already-satisfied."""
     log_path = tmp_path / "_runs" / "ingest.log"
@@ -222,9 +195,6 @@ def test_plan_returns_already_satisfied_when_run_succeeded_today(tmp_path):
     item = result.items[0]
     assert item.status == "already-satisfied"
     assert _DUE_DATE.isoformat() in item.reason
-
-
-# ── test_plan_for_each_reports_multiple_planned_runs_without_executing ────────
 
 
 def test_plan_for_each_reports_multiple_planned_runs_without_executing(tmp_path):
@@ -264,9 +234,6 @@ def test_plan_for_each_uses_file_id_fn(tmp_path):
     assert items[1].reason == "source file: claims_20260615_b.csv"
 
 
-# ── test_plan_result_str_formats_table ────────────────────────────────────────
-
-
 def test_plan_result_str_formats_table(tmp_path):
     orchestrator, _ = _orchestrator(
         PipelineSet(
@@ -297,9 +264,6 @@ def test_plan_result_str_empty():
     output = str(result)
     assert "no scheduled items" in output
     assert _DUE_DATE.isoformat() in output
-
-
-# ── the plan's row order is the order the pass would attempt ──────────────────
 
 
 def test_plan_rows_are_ordered_by_deadline_pressure(tmp_path):
@@ -379,16 +343,11 @@ def test_plan_reports_a_gated_item_as_skipped_naming_the_window(tmp_path):
     assert item.reason == "before earliest_run 23:00"
 
 
-# ── the plan preview reads the same clock rule the runner does ────────────────
 #
-# A stored timestamp is a UTC instant; a run date is a local calendar date. On a
-# UK box at UTC+1, an upstream that succeeded at 00:10 local on the due date is
-# stamped 23:10 UTC the day before, and taking the UTC date blocked the
-# downstream as stale. The plan preview must not disagree with the runner about
-# which upstream runs count as today's.
+# A 23:10 UTC success is 00:10 on the next local calendar date at UTC+1; the
+# preview must apply the same conversion as the runner.
 
 _BST = dt.timezone(dt.timedelta(hours=1))
-# 23:10 UTC the day before _DUE_DATE == 00:10 local on _DUE_DATE at UTC+1.
 _JUST_AFTER_LOCAL_MIDNIGHT = "2026-06-14T23:10:00+00:00"
 
 

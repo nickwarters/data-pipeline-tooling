@@ -1,36 +1,10 @@
-"""Tell the two Conversation parties who did not post the last Message, and the
-Responsible Party and their Manager when a Case becomes Reportable with
-remediation.
+"""Publish notification and access-group deliverables for two Case triggers.
 
-Reads Sync's published current state -- every Case as it currently stands, and
-every Conversation Message -- because the rule needs the last Message, the
-Case's people and its status at one grain, already reduced. Both arrive keyed by
-``case_id`` and already one row per their own grain, so nothing here re-derives
-a key or reduces a second time. Neither is this pipeline's to locate: they come
-through ``readers.sharepoint_cases``, which is why no layer or table is named
-below.
-
-Two triggers, two independent selection passes over the same ``case_current``,
-each anti-joined against its own ledger table. Emits one JSON file per pass into
-the deliverable outbox: an array of objects carrying exactly ``recipients`` /
-``subject`` / ``body``, one object per Case per trigger. The path is unique per
-pass, so a `Refresh` can never overwrite a file nobody has drained yet.
-
-A pass emits a **second** deliverable, to a destination of its own because it
-has a different consumer: the frontline SharePoint groups its recipients must
-hold to open the Cases they are being told about, as one object per login
-carrying ``login_name`` and an array of ``groups``. It is the two passes'
-frontline recipients reduced together, and it is written *before* the outbox
-file -- a group grant nobody uses costs nothing, an access-denied on a
-notification link costs a support call.
-
-Every line below **does its work when it is reached**: put a breakpoint on one,
-step over it, and the variable holds the actual rows at that point
-([ADR-0027](../../docs/adr/0027-eager-steps-are-the-default-authoring-model.md)).
-Where a rule takes two inputs -- pairing a thread with its Case, resolving
-recipients against the directory -- it is a plain Python call wrapped in
-``step``, which keeps it a timed, named record in the run log without pretending
-it is a one-input transform.
+One notifies the two Conversation parties who did not post the last Message;
+the other notifies the Responsible Party and Manager when a Case becomes
+Reportable with remediation. Both reuse shared current-Case and Message readers
+and keep separate ledgers. Access groups are written before notifications, and
+this pipeline owns its writers and ledgers locally.
 """
 
 from __future__ import annotations
@@ -135,14 +109,9 @@ _LINK_BASE = "https://sharepoint.invalid/sites/REPLACE-ME/SitePages/REPLACE-ME.a
 # The fragment after the base is the app's own registered Case route -- one
 # template for both triggers, because both land on the same page.
 #
-# The Conversation trigger used to deep-link `#/conversation/:caseType/:id`, so
-# the recipient arrived where they could reply. That route is being removed for
-# leaking Case content to viewers holding no role on the Case (#790): it has no
-# guard, and it resolves its list from the Case Type manifest rather than the
-# viewer's own sources, so the SharePoint ACL was the only thing standing in the
-# way. `#/case/:caseType/:id` is the gated route to the same thread, via the
-# Case page's Conversation panel. Landing on the Case is the whole requirement;
-# a deep link into the thread was considered and is not wanted.
+# The gated Case route reaches the same thread through the Conversation panel.
+# The direct Conversation route has no role guard and resolves its list from the
+# Case Type manifest rather than the viewer's sources.
 CASE_LINK_TEMPLATE = _LINK_BASE + "#/case/{case_type}/{source_item_id}"
 
 _THREAD_COLUMNS = ("case_id", "last_author_login", "message_at")
@@ -535,9 +504,7 @@ def publish(
     Case before the file asking for their access to it has landed, and nobody is
     recorded as told until the file telling them has landed. A crash between any
     two costs a group grant nobody uses, or a duplicate notification -- both the
-    safe direction. Expressing that used to take an extra graph edge feeding each
-    ledger step the outbox write's result; written out, it is simply which line
-    comes first.
+    safe direction.
 
     No frontline recipient means no privileges file at all, for the same reason
     :func:`run` publishes nothing when nobody is owed anything: an empty array is
@@ -600,14 +567,10 @@ def run(context: RunContext) -> Dataset:
     how many notifications were owed this pass.
     """
     base_dir = context.base_dir or Path.cwd() / "data"
-    # The ledger is this pipeline's own subject, so it resolves that itself.
-    # Everything it reads belongs to someone else and arrives through a reader
-    # that knows where it lives.
+    # This pipeline owns the ledger; readers locate upstream data.
     ledger_store = medallion(StoreRegistry(base_dir), SUBJECT).gold
 
-    # Both triggers select from the same published current state and the same
-    # directory, so each is read once here and handed to both passes rather than
-    # re-read per pass.
+    # Read shared inputs once and reuse them for both passes.
     cases = read(CurrentCasesReader(base_dir=base_dir), name="read-cases")
     users = read(UsersReader(base_dir=base_dir), name="read-users")
     messages = read(ConversationMessagesReader(base_dir=base_dir), name="read-messages")
@@ -718,10 +681,8 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv[1:])
     base_dir = Path(args.base_dir) if args.base_dir else Path.cwd() / "data"
 
-    # The *same* run_pipeline the operator CLI uses, so a run started here and
-    # one started with `cli run` record under one identity. To see what a pass
-    # would do without doing it, use `cli run pipelines/notifications --dry-run`:
-    # every step still runs, and only the commits are held back.
+    # Use run_pipeline so direct and CLI invocations share identity;
+    # --dry-run suppresses commits.
     try:
         run_pipeline(
             run,

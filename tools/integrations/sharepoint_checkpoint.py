@@ -13,7 +13,7 @@ repeated too soon, which is ordinary operation rather than a failure.
 
 **"Checkpoint" here is not the pipeline sense.** A `Pipeline` checkpoint is a
 mid-graph ``.write()`` node that lands an intermediate dataset for lineage. This
-one is **source control state**: how far a source has been polled, kept in its
+one is **polling state**: how far a source has been polled, kept in its
 own file beside the run metadata rather than inside it.
 
 Why the lag, why the overlap, why the list GUID keys a watermark, and how a run

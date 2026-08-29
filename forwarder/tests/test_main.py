@@ -1560,7 +1560,6 @@ def test_a_stop_request_ends_the_tick_between_files(tmp_path):
     for name in ("a.json", "b.json", "c.json"):
         write_items(queue_dir, [{"fields": {"Title": name}}], name=name)
     list_client = RecordingListItemClient()
-    # Ask to stop as soon as the first file has been delivered.
     stop_after_one = lambda: len(list_client.created) >= 1  # noqa: E731
 
     summary = run(
@@ -1661,7 +1660,6 @@ def test_the_period_holds_across_ticks_of_differing_lengths():
 
 
 def test_a_tick_that_overran_its_interval_is_rerun_immediately():
-    # Started at 1000, took 400s — already past the 1300 deadline.
     deadline = next_deadline(1000.0, TICK, now=1400.0)
 
     assert deadline == 1400.0

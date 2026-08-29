@@ -1,16 +1,4 @@
-"""One run-log record per node execution, emitted in exactly one place.
-
-Recording is the wrapper's job, not each node's: ``Node.execute`` times the node,
-drains its warn hits, categorises its failure and writes *the* record. A node
-reports what it measured by returning a ``StepResult``; it never touches the run
-log itself.
-
-That is a structural property, not a coincidence, so these tests pin it
-structurally: the record count per node, the fields a side-effecting node
-contributes to its single record, the stable step address on both the real and
-the preview path, and — the reason the rule exists — that a brand-new
-side-effecting node type inherits correct recording without writing any.
-"""
+"""Each node execution emits one run-log record through ``Node.execute``."""
 
 from __future__ import annotations
 
@@ -78,7 +66,7 @@ def test_an_explain_node_is_recorded_exactly_once():
 
 
 def test_the_single_quarantine_record_carries_both_the_count_and_the_duration():
-    """The two records used to disagree — one had the count, the other the time."""
+    """The single record carries both measures."""
     run_log = RecordingRunLog()
     _quarantine_pipeline(run_log).run()
 
