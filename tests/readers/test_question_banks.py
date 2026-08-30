@@ -410,7 +410,7 @@ def test_the_stacked_readers_open_nothing_until_read(tmp_path):
 
 
 def test_the_versions_sweep_stacks_every_published_snapshot():
-    rows = rows_of(QuestionBankStore().qb_versions_reader().read())
+    rows = rows_of(QuestionBankStore().qb_reader(current=False).read())
 
     per_version = {}
     for row in rows:
@@ -423,7 +423,7 @@ def test_the_versions_sweep_stacks_every_published_snapshot():
 
 
 def test_the_versions_sweep_gives_the_severities_of_each_publication():
-    rows = rows_of(QuestionBankStore().outcomes_versions_reader().read())
+    rows = rows_of(QuestionBankStore().outcomes_reader(current=False).read())
 
     per_version = {}
     for row in rows:
@@ -440,7 +440,7 @@ def test_the_current_head_is_not_read_twice_as_its_own_snapshot():
     over *every* file would land each of them twice — two identical rows, each
     correct alone, and every figure grouped by version doubled.
     """
-    reader = QuestionBankStore().qb_versions_reader()
+    reader = QuestionBankStore().qb_reader(current=False)
     rows = rows_of(reader.read())
 
     read = [location["name"] for location in reader.data_locations]
@@ -453,7 +453,9 @@ def test_the_head_and_the_snapshot_sweeps_are_reconcilable_by_version():
     store = QuestionBankStore()
 
     heads = {row["version"] for row in rows_of(store.qb_reader().read())}
-    published = {row["version"] for row in rows_of(store.qb_versions_reader().read())}
+    published = {
+        row["version"] for row in rows_of(store.qb_reader(current=False).read())
+    }
 
     # Not an assertion that they must agree — a head not yet published as a
     # snapshot is a real state. It is the comparison that makes it visible.
@@ -465,10 +467,11 @@ def test_the_versioned_rows_keep_the_shape_of_a_single_banks_rows(tmp_path):
     store = QuestionBankStore(banks_dir=tmp_path)
 
     assert (
-        tuple(store.qb_versions_reader().read().to_pandas().columns) == QUESTION_COLUMNS
+        tuple(store.qb_reader(current=False).read().to_pandas().columns)
+        == QUESTION_COLUMNS
     )
     assert (
-        tuple(store.outcomes_versions_reader().read().to_pandas().columns)
+        tuple(store.outcomes_reader(current=False).read().to_pandas().columns)
         == OUTCOME_COLUMNS
     )
 
@@ -480,10 +483,12 @@ def test_the_versioned_order_does_not_depend_on_the_filesystem(tmp_path):
     store = QuestionBankStore(banks_dir=tmp_path)
 
     first = [
-        (r["slug"], r["version"]) for r in rows_of(store.qb_versions_reader().read())
+        (r["slug"], r["version"])
+        for r in rows_of(store.qb_reader(current=False).read())
     ]
     second = [
-        (r["slug"], r["version"]) for r in rows_of(store.qb_versions_reader().read())
+        (r["slug"], r["version"])
+        for r in rows_of(store.qb_reader(current=False).read())
     ]
 
     assert first == second
@@ -491,7 +496,7 @@ def test_the_versioned_order_does_not_depend_on_the_filesystem(tmp_path):
 
 
 def test_a_chronological_order_is_the_consumers_and_every_snapshot_carries_it():
-    rows = rows_of(QuestionBankStore().qb_versions_reader().read())
+    rows = rows_of(QuestionBankStore().qb_reader(current=False).read())
 
     assert all(row["generated_at"] for row in rows)
     ordered = sorted({(row["generated_at"], row["version"]) for row in rows})
@@ -506,14 +511,14 @@ def test_a_current_bank_is_not_a_published_version(tmp_path):
     _bank(tmp_path, slug="demo", version=None)
 
     with pytest.raises(ValidationError, match="no published Question Bank versions"):
-        QuestionBankStore(banks_dir=tmp_path).qb_versions_reader().read()
+        QuestionBankStore(banks_dir=tmp_path).qb_reader(current=False).read()
 
 
 def test_a_banks_directory_that_is_not_there_has_no_versions_either(tmp_path):
     store = QuestionBankStore(banks_dir=tmp_path / "missing")
 
     with pytest.raises(ValidationError, match="no published Question Bank versions"):
-        store.outcomes_versions_reader().read()
+        store.outcomes_reader(current=False).read()
 
 
 def test_a_snapshot_filed_under_a_version_it_does_not_declare_is_refused(tmp_path):
@@ -521,25 +526,25 @@ def test_a_snapshot_filed_under_a_version_it_does_not_declare_is_refused(tmp_pat
     (tmp_path / "demo.v1.txt").rename(tmp_path / "demo.v9.txt")
 
     with pytest.raises(ValidationError, match="declares version 'v1'"):
-        QuestionBankStore(banks_dir=tmp_path).qb_versions_reader().read()
+        QuestionBankStore(banks_dir=tmp_path).qb_reader(current=False).read()
 
 
-def test_the_versioned_readers_describe_themselves_without_naming_a_file(tmp_path):
+def test_the_snapshot_reads_describe_themselves_without_naming_a_file(tmp_path):
     store = QuestionBankStore(banks_dir=tmp_path)
 
-    assert store.qb_versions_reader().describe() == (
+    assert store.qb_reader(current=False).describe() == (
         "QuestionBankReader(banks='every published version')"
     )
-    assert store.outcomes_versions_reader().describe() == (
+    assert store.outcomes_reader(current=False).describe() == (
         "OutcomeOptionsReader(banks='every published version')"
     )
 
 
-def test_the_versioned_readers_open_nothing_until_read(tmp_path):
+def test_the_snapshot_reads_open_nothing_until_read(tmp_path):
     store = QuestionBankStore(banks_dir=tmp_path)
 
-    assert store.qb_versions_reader().data_locations == []
-    assert store.outcomes_versions_reader().data_locations == []
+    assert store.qb_reader(current=False).data_locations == []
+    assert store.outcomes_reader(current=False).data_locations == []
 
 
 # --- current and version name the same thing, so they must agree ------------
@@ -557,24 +562,55 @@ def test_a_version_with_current_left_true_is_refused_rather_than_guessed():
         QuestionBankStore().qb_reader("complaints", EARLIER_VERSION)
 
 
-def test_asking_for_a_snapshot_without_naming_one_is_refused(tmp_path):
-    store = QuestionBankStore(banks_dir=tmp_path)
+def test_one_case_types_whole_history_is_current_false_with_a_case_type(tmp_path):
+    """The cell that completes the grid.
 
-    with pytest.raises(ValidationError, match="current=False asks for a published"):
-        store.qb_reader("demo", current=False)
-
-
-def test_the_all_snapshots_sweep_is_not_reachable_by_turning_current_off(tmp_path):
-    """``qb_reader(current=False)`` is the shape someone will try for it.
-
-    It is refused and the message names ``qb_versions_reader()``, which is why
-    that sweep stays a method of its own rather than a third meaning for a
-    boolean that already cannot carry two.
+    Narrowing by Case Type is *which artifacts to open* — the same selection
+    ``qb_reader("complaints")`` already makes over the heads — not the
+    row-level predicate pushdown left open in the guide.
     """
+    _bank(tmp_path, slug="alpha", version="v1")
+    _bank(tmp_path, slug="alpha", version="v2")
+    _bank(tmp_path, slug="beta", version="v1")
     store = QuestionBankStore(banks_dir=tmp_path)
 
-    with pytest.raises(ValidationError, match="qb_versions_reader"):
-        store.qb_reader(current=False)
+    rows = rows_of(store.qb_reader("alpha", current=False).read())
+
+    assert [(row["slug"], row["version"]) for row in rows] == [
+        ("alpha", "v1"),
+        ("alpha", "v2"),
+    ]
+
+
+def test_a_case_type_with_no_published_version_is_refused_not_read_as_nothing(
+    tmp_path,
+):
+    _bank(tmp_path, slug="alpha", version="v1")
+    _bank(tmp_path, slug="beta", version=None)
+    store = QuestionBankStore(banks_dir=tmp_path)
+
+    with pytest.raises(ValidationError, match="for case type 'beta'"):
+        store.qb_reader("beta", current=False).read()
+
+
+def test_unpinned_current_false_is_the_only_thing_version_cannot_say(tmp_path):
+    """What earns ``current`` its place in the signature.
+
+    With ``current=True``-plus-version refused, a version already implies a
+    snapshot — so pinning one never needs the flag. Asking for *every* snapshot
+    is the one statement the flag alone can make, and it is what let this store
+    drop from four methods to two.
+    """
+    _bank(tmp_path, slug="alpha", version="v1")
+    _bank(tmp_path, slug="beta", version="v2")
+    store = QuestionBankStore(banks_dir=tmp_path)
+
+    rows = rows_of(store.qb_reader(current=False).read())
+
+    assert [(row["slug"], row["version"]) for row in rows] == [
+        ("alpha", "v1"),
+        ("beta", "v2"),
+    ]
 
 
 def test_a_version_without_a_case_type_names_nothing_and_is_refused(tmp_path):
@@ -584,12 +620,11 @@ def test_a_version_without_a_case_type_names_nothing_and_is_refused(tmp_path):
         store.qb_reader(None, "v1", current=False)
 
 
-def test_both_grains_apply_the_same_three_rules(tmp_path):
+def test_both_grains_apply_the_same_two_rules(tmp_path):
     store = QuestionBankStore(banks_dir=tmp_path)
 
     for call in (
         lambda: store.outcomes_reader("demo", "v1"),
-        lambda: store.outcomes_reader("demo", current=False),
         lambda: store.outcomes_reader(None, "v1", current=False),
     ):
         with pytest.raises(ValidationError):

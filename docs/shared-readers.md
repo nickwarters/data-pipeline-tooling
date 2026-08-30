@@ -113,15 +113,13 @@ from readers.question_banks import QuestionBankStore
 
 store = QuestionBankStore(context.base_dir)
 
-store.qb_reader()                     # every Case Type's current bank
-store.qb_reader("complaints")         # that bank's mutable head
-store.qb_reader("complaints", version, current=False)   # one immutable snapshot
-store.qb_versions_reader()            # every published snapshot
+store.qb_reader()                             # every Case Type's head
+store.qb_reader("complaints")                 # that Case Type's head
+store.qb_reader(current=False)                # every published snapshot
+store.qb_reader("complaints", current=False)  # that Case Type's history
+store.qb_reader("complaints", version, current=False)   # one snapshot
 
-store.outcomes_reader()               # the same four, at the other grain
-store.outcomes_reader("complaints")
-store.outcomes_reader("complaints", version, current=False)
-store.outcomes_versions_reader()
+store.outcomes_reader(...)                    # the same five, other grain
 ```
 
 **Four Readers, along two axes that are not the same axis.** The store's
@@ -129,32 +127,26 @@ store.outcomes_versions_reader()
 says *which of the two things that artifact declares*, and whether you want one
 Case Type or all of them:
 
-|                               | one bank                  | every current bank | every published version      |
-| ----------------------------- | ------------------------- | ------------------ | ---------------------------- |
-| **questions** (~50/bank)      | `qb_reader(ct[, v, ...])` | `qb_reader()`      | `qb_versions_reader()`       |
-| **outcome options** (~4/bank) | `outcomes_reader(ct, …)`  | `outcomes_reader()`| `outcomes_versions_reader()` |
+**Two methods, one per grain. Every argument is optional, and every argument
+narrows** — `case_type` picks one Case Type out of all of them, `current` picks
+which *kind* of artifact, `version` pins one snapshot out of a Case Type's. The
+defaults are the widest sensible read.
 
-The prefix is the **grain** and the arguments are the **scope**. Two of the four
-methods take arguments; naming no Case Type is what asks for all of them.
-
-#### `current` and `version` name the same thing, so they must agree
-
-A bank exists in two kinds — a mutable head (`{slug}.txt`) and immutable
-snapshots beside it (`{slug}.{version}.txt`) — and `current` and `version` are
-two ways of saying which kind you want. Each is refused without the other:
-
-| call                                        | result                                  |
-| ------------------------------------------- | --------------------------------------- |
-| `qb_reader()`                               | every current bank                      |
-| `qb_reader("complaints")`                   | that bank's head                        |
-| `qb_reader("complaints", v, current=False)` | that snapshot                           |
-| `qb_reader("complaints", v)`                | **refused** — a version is not the head |
-| `qb_reader("complaints", current=False)`    | **refused** — which snapshot?           |
-| `qb_reader(current=False)`                  | **refused** — use `qb_versions_reader()` |
+| call                                        | reads                                       |
+| ------------------------------------------- | ------------------------------------------- |
+| `qb_reader()`                               | every Case Type's head                      |
+| `qb_reader("complaints")`                   | that Case Type's head                       |
+| `qb_reader(current=False)`                  | every published snapshot                    |
+| `qb_reader("complaints", current=False)`    | that Case Type's whole history              |
+| `qb_reader("complaints", v, current=False)` | that one snapshot                           |
+| `qb_reader("complaints", v)`                | **refused** — a version is not the head     |
 | `qb_reader(None, v, current=False)`         | **refused** — a version needs its Case Type |
 
-The first refusal is the one that earns its keep, because it is the
-contradiction a Case row walks into. `questionBankVersion` is *absent* on an
+Only two combinations are refused, and each for its own reason.
+
+**A version with `current` left true** is a contradiction — `current` names a
+bank's mutable head, a version names an immutable snapshot beside it — and it is
+the contradiction a Case row walks into. `questionBankVersion` is *absent* on an
 in-progress Case and *present* on a completed one, so a consumer passing it
 straight through would silently read a different kind of file depending on the
 row. Refusing puts that branch at the call site:
@@ -168,17 +160,23 @@ reader = (
 ```
 
 `current` is **keyword-only**, so `qb_reader("complaints", v, False)` is a
-`TypeError` rather than a silent third positional argument. And the last
-refusal holds because a version identifier is minted per Case Type and shared
-with none — "every bank at version X" names nothing.
+`TypeError` rather than a silent third positional argument.
 
-`qb_versions_reader()` stays a method of its own precisely *because*
-`qb_reader(current=False)` is refused. Folding it in would mean giving that call
-a third meaning on top of the two it already cannot have. It is not
-`qb_history_reader` either: a bank artifact already declares a `history` — the
-ordered `{version, generatedAt}` list — and a Reader named for it would
-plausibly be expected to return those few metadata rows rather than every
-snapshot's questions.
+**A version with no Case Type** names nothing: a version identifier is minted
+per Case Type and shared with none, so "every bank at version X" is not a set.
+
+**`current=False` without a version is deliberately allowed**, and it is what
+lets two methods do the work of four. There is no such thing as "the" snapshot,
+so the natural reading of an unpinned `current=False` is *every* snapshot. It is
+also the only thing `current` says that `version` cannot: with the pairing above
+refused, a version already implies a snapshot, so "unpinned" is the parameter's
+entire job. Under the earlier rule that `current=False` required a version,
+`current` was fully determined by `version` and earned nothing.
+
+Narrowing by `case_type` is *which artifacts to open* — the same selection
+`qb_reader("complaints")` already makes over the heads — and **not** the
+row-level predicate pushdown left open at the end of this page. Applying it to
+both kinds of artifact is what makes the grid complete rather than holed.
 
 The grain split is the reason there are two datasets rather than one: an
 artifact declares a Case Type's questions *and* the outcomes those questions'
@@ -190,8 +188,7 @@ one outcome worse than another. Both carry `default_outcome_id`, so the failure
 test — *an option mapped to anything other than the default fails* — can be
 applied from either end.
 
-The four right-hand cells take **no arguments** and stack many artifacts into
-one dataset. Nothing is layered on top: the rows are the same rows, concatenated
+A call naming no Case Type stacks many artifacts into one dataset. Nothing is layered on top: the rows are the same rows, concatenated
 in a deterministic order (directory iteration order is the filesystem's business
 and differs between Windows and macOS), and `slug` + `version` are already on
 every row so nothing is added to tell the artifacts apart. Nothing is
@@ -201,10 +198,10 @@ rather than returned as an empty dataset: a deployed banks folder always has at
 least one of each, so zero means a broken sync or a wrong root, and a report of
 nothing looks exactly like a report of nothing that is true.
 
-#### The versions sweep is the snapshots, not "every file"
+#### `current` splits the directory where the artifacts split it
 
-`qb_versions_reader()` reads the `{slug}.{version}.txt` artifacts and **not**
-the `{slug}.txt` heads. Those two sets are not complements by accident — the
+`current=False` reads the `{slug}.{version}.txt` artifacts and `current=True`
+the `{slug}.txt` heads — never both. Those two sets are not complements by accident — the
 difference is a silent double count.
 
 A current bank declares the version it was last published as, so today
@@ -218,20 +215,15 @@ two ever diverged.
 So the line is drawn where the artifacts themselves draw it — a
 `{slug}.{version}.txt` is an **immutable published snapshot**, a `{slug}.txt` is
 the **mutable head** — and each sweep reads one kind. A head whose version has
-no snapshot beside it is absent from the versions sweep, correctly: it has not
-been published as one. Comparing the two sweeps' `version` sets is how you find
-that out, and it is a consumer's comparison to make, not something either Reader
+no snapshot beside it is absent from `current=False`, correctly: it has not
+been published as one. Comparing the two reads' `version` sets is how you find that
+out, and it is a consumer's comparison to make, not something the Reader
 asserts.
 
 Ordering is by `(slug, version)` — deterministic, but a version identifier is
 opaque and sorts meaninglessly. A consumer wanting *chronological* order sorts
-on `generated_at`, which every snapshot carries (and which the current head does
-not — one more reason the two are separate reads).
-
-Neither sweep narrows to a Case Type. `slug` is on every row, so
-`qb_versions_reader()` filtered in the consumer is one Case Type's whole bank
-history; pushing that predicate into the Reader is the not-decided question at
-the end of this page, not something to settle in passing.
+on `generated_at`, which every snapshot carries (and which a head does not — one
+more reason the two are separate reads).
 
 This does not bend **G4**. The store is the factory, so the Reader it hands back
 is fully parametrised by the time it exists and still answers `read()` and
@@ -252,7 +244,9 @@ Two things about it are worth reading across to other entries:
 - **Two Readers over one file is not two declarations of location** (G3). The
   store resolves the path once; which array of the envelope a Reader is a row
   per element of is the only thing that differs between them, and it is one
-  overridden method inside the module.
+  overridden method inside the module. The *grain* is the method; the *scope*
+  is the arguments, and keeping those two axes separate is what holds the
+  surface at two.
 - **Parsing JSON into rows is not shaping** (G5). `Dataset` is a tabular
   carrier and the artifact is a document, so *something* has to render one as
   the other; the entry does it once, faithfully, rather than every consumer

@@ -79,20 +79,25 @@ class per Case Type per publication. ``QuestionBankStore(base_dir)`` mints the
 Reader instead, the same shape ``tools.store``'s ``Store.reader(table)`` has and
 for the same reason::
 
-    store.qb_reader()                         # every current bank's questions
-    store.qb_reader(case_type)                # that bank's head
-    store.qb_reader(case_type, v, current=False)   # one published snapshot
-    store.qb_versions_reader()                # every published snapshot
-    store.outcomes_reader(...)                # the same four, at the other grain
-    store.outcomes_versions_reader()
+    store.qb_reader()                             # every Case Type's head
+    store.qb_reader(case_type)                    # that Case Type's head
+    store.qb_reader(current=False)                # every published snapshot
+    store.qb_reader(case_type, current=False)     # that Case Type's history
+    store.qb_reader(case_type, v, current=False)  # one snapshot
+    store.outcomes_reader(...)                    # the same five, other grain
 
-The prefix is the *grain* and the arguments are the *scope*; naming no Case Type
-is what asks for all of them. ``current`` and ``version`` are two ways of saying
-which **kind** of artifact -- the mutable head or an immutable snapshot -- so
-each is refused without the other, and ``current`` is keyword-only. That refusal
-is not pedantry: ``questionBankVersion`` is absent on an in-progress Case and
-present on a completed one, so a consumer passing it straight through would
-otherwise read a different kind of file depending on the row, silently.
+**The method is the grain; the arguments are the scope.** Keeping those two axes
+apart is what holds the surface at two methods rather than six. Every argument
+is optional and every argument narrows, so the defaults are the widest sensible
+read and every combination means something -- bar a version with ``current``
+left true (a version names a snapshot, ``current`` names the head), and a
+version with no Case Type (a version is minted per Case Type, so "every bank at
+version X" is not a set). ``current`` is keyword-only.
+
+The first refusal is not pedantry: ``questionBankVersion`` is absent on an
+in-progress Case and present on a completed one, so a consumer passing it
+straight through would otherwise read a different *kind* of file depending on
+the row, silently.
 
 This is the exception, not a second default: reach for it only when naming every
 member is impossible rather than merely tedious, because the store's argument
@@ -109,13 +114,13 @@ none is refused rather than read as an empty dataset: a report of nothing,
 published, looks exactly like a report of nothing that is true.
 
 The sweeps are also where a store can quietly *double count*, which is a third
-thing to get right. ``qb_versions_reader()`` reads the immutable
-``{slug}.{version}.txt`` snapshots and never the mutable ``{slug}.txt`` heads,
-because a head declares the version it was last published as -- so the same bank
-sits under two names, and reading both lands every question twice, each row
-individually correct. Splitting the sweeps along the line the artifacts already
-draw costs nothing; de-duplicating afterwards would be shaping, and would hide
-the two diverging.
+thing to get right. ``current=False`` reads the immutable
+``{slug}.{version}.txt`` snapshots and ``current=True`` the mutable
+``{slug}.txt`` heads, never both -- because a head declares the version it was
+last published as, so the same bank sits under two names and reading both lands
+every question twice, each row individually correct. Splitting along the line
+the artifacts already draw costs nothing; de-duplicating afterwards would be
+shaping, and would hide the two diverging.
 
 Every constructor takes ``base_dir`` and nothing else -- including a reader that
 does not need it yet. A consumer handed a *path* has been told the source is a
