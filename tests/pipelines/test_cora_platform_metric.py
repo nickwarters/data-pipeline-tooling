@@ -258,7 +258,7 @@ def _current(rows=CURRENT) -> Dataset:
 
 
 def test_stage_dwell_closes_an_interval_at_each_observed_status_change():
-    result = _rows(metrics.case_stage_dwell(given_rows(HISTORY).read(), _current()))
+    result = _rows(metrics.case_stage_dwell(given_rows(HISTORY).read(), as_of=AS_OF))
 
     # To-allocate: entered at ``created`` (1 Jul), not at the poll that first
     # saw it (2 Jul), and left on 4 Jul: three days. In-progress: 4 Jul to
@@ -299,7 +299,7 @@ def test_stage_dwell_credits_a_status_only_when_a_later_poll_saw_it_change():
         _observation("1", "b", "2026-07-03T09:00:00+00:00", "Completed"),
         _observation("1", "a", "2026-07-02T09:00:00+00:00", "In-progress"),
     ]
-    [row] = _rows(metrics.case_stage_dwell(given_rows(history).read(), _current()))
+    [row] = _rows(metrics.case_stage_dwell(given_rows(history).read(), as_of=AS_OF))
 
     assert row["status"] == "In-progress"
     assert row["interval_count"] == 1
@@ -308,7 +308,7 @@ def test_stage_dwell_credits_a_status_only_when_a_later_poll_saw_it_change():
 
 
 def test_hold_runs_from_the_source_stamp_or_the_observation_to_release_or_as_of():
-    result = _rows(metrics.case_hold(given_rows(HISTORY).read(), _current()))
+    result = _rows(metrics.case_hold(given_rows(HISTORY).read(), as_of=AS_OF))
 
     assert result == [
         {
@@ -341,7 +341,7 @@ def test_hold_runs_from_the_source_stamp_or_the_observation_to_release_or_as_of(
 
 def test_a_history_with_no_holds_lands_the_declared_shape_and_no_rows():
     history = [_observation("1", "o1", "2026-07-02T09:00:00+00:00", "To-allocate")]
-    result = metrics.case_hold(given_rows(history).read(), _current())
+    result = metrics.case_hold(given_rows(history).read(), as_of=AS_OF)
 
     assert len(result) == 0
     assert list(result.columns) == [
@@ -376,7 +376,7 @@ def test_working_days_late_counts_working_days_after_the_due_date(
 
 
 def test_sla_attainment_judges_each_sla_against_its_own_due_date():
-    result = _rows(metrics.sla_attainment(_current()))
+    result = _rows(metrics.sla_attainment(_current(), as_of=AS_OF))
 
     assert result == [
         {
@@ -416,7 +416,9 @@ def test_sla_attainment_takes_the_calendar_it_is_given():
     calendar = WorkingDayCalendar(holidays=[dt.date(2026, 7, 9), dt.date(2026, 7, 10)])
     review = [
         row
-        for row in _rows(metrics.sla_attainment(_current(), calendar=calendar))
+        for row in _rows(
+            metrics.sla_attainment(_current(), as_of=AS_OF, calendar=calendar)
+        )
         if row["sla_kind"] == "review"
     ]
 
@@ -437,7 +439,8 @@ def test_sla_attainment_counts_a_completed_case_with_no_due_date_separately():
                         assigned_reviewer_manager_name=None,
                     )
                 ]
-            )
+            ),
+            as_of=AS_OF,
         )
     )
 
@@ -462,7 +465,7 @@ def test_void_monthly_groups_by_reason_and_actor_on_the_local_void_month(
             created="2026-07-01T23:30:00+00:00",
         ),
     ]
-    [row] = _rows(metrics.void_monthly(_current(rows)))
+    [row] = _rows(metrics.void_monthly(_current(rows), as_of=AS_OF))
 
     assert row["void_month"] == "2026-08"
     assert row["void_reason"] == UNSTATED
@@ -472,7 +475,9 @@ def test_void_monthly_groups_by_reason_and_actor_on_the_local_void_month(
 
 
 def test_answer_action_load_measures_actions_per_case_and_share_of_live_cases():
-    [row] = _rows(metrics.answer_action_load(given_rows(ACTIONS).read(), _current()))
+    [row] = _rows(
+        metrics.answer_action_load(given_rows(ACTIONS).read(), _current(), as_of=AS_OF)
+    )
 
     # Three live (non-void) Cases; two carry an Action on q1.
     assert row == {
@@ -489,7 +494,9 @@ def test_answer_action_load_measures_actions_per_case_and_share_of_live_cases():
 
 def test_answer_remediation_by_manager_joins_each_answer_to_its_case():
     result = _rows(
-        metrics.answer_remediation_by_manager(given_rows(ANSWERS).read(), _current())
+        metrics.answer_remediation_by_manager(
+            given_rows(ANSWERS).read(), _current(), as_of=AS_OF
+        )
     )
 
     assert [
@@ -511,14 +518,14 @@ def test_answer_remediation_by_manager_joins_each_answer_to_its_case():
 def test_answer_remediation_by_manager_drops_an_answer_with_no_current_case():
     orphan = [{**ANSWERS[0], "case_id": "gone"}]
     result = metrics.answer_remediation_by_manager(
-        given_rows(orphan).read(), _current()
+        given_rows(orphan).read(), _current(), as_of=AS_OF
     )
 
     assert len(result) == 0
 
 
 def test_appeal_cycle_time_is_measured_over_the_resolved_appeals_only():
-    result = _rows(metrics.appeal_cycle_time(given_rows(APPEALS).read(), _current()))
+    result = _rows(metrics.appeal_cycle_time(given_rows(APPEALS).read(), as_of=AS_OF))
 
     assert [
         (
@@ -537,7 +544,7 @@ def test_appeal_cycle_time_is_measured_over_the_resolved_appeals_only():
 
 def test_appeal_question_citations_count_an_appeal_once_per_cited_question():
     result = _rows(
-        metrics.appeal_question_citations(given_rows(APPEALS).read(), _current())
+        metrics.appeal_question_citations(given_rows(APPEALS).read(), as_of=AS_OF)
     )
 
     assert [(r["question_id"], r["appeal_count"], r["case_count"]) for r in result] == [
@@ -553,7 +560,7 @@ def test_a_citation_blob_that_is_not_a_list_of_ids_cites_nothing(blob):
 
 def test_conversation_response_time_measures_replies_across_an_author_change():
     [row] = _rows(
-        metrics.conversation_response_time(given_rows(MESSAGES).read(), _current())
+        metrics.conversation_response_time(given_rows(MESSAGES).read(), as_of=AS_OF)
     )
 
     # seq 2 is the same author as seq 1: one turn, not a reply. seq 3 replies
@@ -573,7 +580,11 @@ def test_conversation_response_time_measures_replies_across_an_author_change():
 
 def test_conversation_volume_counts_threads_over_the_live_cases():
     # c1 has a four-Message thread; c2 and c4 have none; c3 is void and out.
-    [row] = _rows(metrics.conversation_volume(given_rows(MESSAGES).read(), _current()))
+    [row] = _rows(
+        metrics.conversation_volume(
+            given_rows(MESSAGES).read(), _current(), as_of=AS_OF
+        )
+    )
 
     assert row == {
         "brand": UNKNOWN_BRAND,
@@ -597,7 +608,9 @@ def test_conversation_volume_drops_messages_on_a_void_or_unknown_case():
         {**MESSAGES[0], "case_id": "c9"},  # not current
     ]
     [row] = _rows(
-        metrics.conversation_volume(given_rows(MESSAGES + stray).read(), _current())
+        metrics.conversation_volume(
+            given_rows(MESSAGES + stray).read(), _current(), as_of=AS_OF
+        )
     )
 
     assert (row["thread_count"], row["message_count"]) == (1, 4)
@@ -605,7 +618,7 @@ def test_conversation_volume_drops_messages_on_a_void_or_unknown_case():
 
 def test_conversation_volume_with_no_messages_has_counts_but_no_statistics():
     empty = Dataset.from_pandas(pd.DataFrame(columns=metrics.CONVERSATION_COLUMNS))
-    [row] = _rows(metrics.conversation_volume(empty, _current()))
+    [row] = _rows(metrics.conversation_volume(empty, _current(), as_of=AS_OF))
 
     assert row["no_conversation_share"] == 1.0
     assert row["messages_per_thread_mean"] is None
@@ -613,7 +626,9 @@ def test_conversation_volume_with_no_messages_has_counts_but_no_statistics():
 
 def test_conversation_posting_pattern_is_a_dense_local_clock_grid():
     rows = _rows(
-        metrics.conversation_posting_pattern(given_rows(MESSAGES).read(), _current())
+        metrics.conversation_posting_pattern(
+            given_rows(MESSAGES).read(), _current(), as_of=AS_OF
+        )
     )
 
     assert len(rows) == 7 * 24
@@ -640,7 +655,9 @@ def test_conversation_posting_pattern_files_each_message_under_its_local_hour(
         timestamps, "local_timezone", lambda: dt.timezone(dt.timedelta(hours=5))
     )
     rows = _rows(
-        metrics.conversation_posting_pattern(given_rows(MESSAGES).read(), _current())
+        metrics.conversation_posting_pattern(
+            given_rows(MESSAGES).read(), _current(), as_of=AS_OF
+        )
     )
 
     posted = {(r["weekday"], r["hour_of_day"]) for r in rows if r["message_count"]}
@@ -650,7 +667,10 @@ def test_conversation_posting_pattern_files_each_message_under_its_local_hour(
 def test_conversation_posting_pattern_with_no_messages_has_no_grid():
     empty = Dataset.from_pandas(pd.DataFrame(columns=metrics.CONVERSATION_COLUMNS))
 
-    assert _rows(metrics.conversation_posting_pattern(empty, _current())) == []
+    assert (
+        _rows(metrics.conversation_posting_pattern(empty, _current(), as_of=AS_OF))
+        == []
+    )
 
 
 def test_every_metric_carries_syncs_snapshot_instant_and_refuses_an_empty_one():
