@@ -97,6 +97,137 @@ history, the reader knows it lives in silver today. `cora_platform_metric`'s
 stage-dwell and hold tables are its consumers, and they are the reason the
 question crosses a subject boundary at all.
 
+### A family rather than a name — `readers/question_banks.py`
+
+The other three entries each name **one** dataset. A **Question Bank** is not
+one: it is two-dimensional in Case Type and version — `{slug}.txt` for the
+current bank, `{slug}.{version}.txt` for the immutable snapshot a completed
+Case was reviewed against — and neither dimension is enumerable from this side.
+A class per dataset would be a class per Case Type per publication.
+
+So the entry is a **store**, the same shape `tools.store`'s `Store.reader(table)`
+has and for the same reason:
+
+```python
+from readers.question_banks import QuestionBankStore
+
+store = QuestionBankStore(context.base_dir)
+
+store.reader("complaints")            # the current bank's questions
+store.reader("complaints", version)   # what a Case carrying that
+                                      # questionBankVersion was reviewed against
+store.outcomes_reader("complaints")   # that bank's Outcome Options
+store.outcomes_reader("complaints", version)
+
+store.current_reader()                # every Case Type's current questions
+store.current_outcomes_reader()       # every Case Type's current Outcome Options
+
+store.versions_reader()               # every published snapshot's questions
+store.versions_outcomes_reader()      # every published snapshot's Outcome Options
+```
+
+**Four Readers, along two axes that are not the same axis.** The store's
+`case_type` / `version` arguments say *which artifact*; which method you call
+says *which of the two things that artifact declares*, and whether you want one
+Case Type or all of them:
+
+|                               | one bank               | every current bank          | every published version       |
+| ----------------------------- | ---------------------- | --------------------------- | ----------------------------- |
+| **questions** (~50/bank)      | `reader(...)`          | `current_reader()`          | `versions_reader()`           |
+| **outcome options** (~4/bank) | `outcomes_reader(...)` | `current_outcomes_reader()` | `versions_outcomes_reader()`  |
+
+The grain split is the reason there are two datasets rather than one: an
+artifact declares a Case Type's questions *and* the outcomes those questions'
+answers map onto, and denormalising ~4 rows across ~50 would make anyone
+counting outcomes de-duplicate questions first. They join on `id` — a question's
+`option_outcomes` maps each answer *wording* to an outcome `id`, so the outcomes
+dataset is the key side of that map, carrying the `severity` score that makes
+one outcome worse than another. Both carry `default_outcome_id`, so the failure
+test — *an option mapped to anything other than the default fails* — can be
+applied from either end.
+
+The four right-hand Readers take **no arguments** and stack many artifacts into
+one dataset. Nothing is layered on top: the rows are the same rows, concatenated
+in a deterministic order (directory iteration order is the filesystem's business
+and differs between Windows and macOS), and `slug` + `version` are already on
+every row so nothing is added to tell the artifacts apart. Nothing is
+*reconciled* either — a question `id` is unique only within its own bank, and
+two Case Types asking the same thing stay two rows. **Finding none is refused**
+rather than returned as an empty dataset: a deployed banks folder always has at
+least one of each, so zero means a broken sync or a wrong root, and a report of
+nothing looks exactly like a report of nothing that is true.
+
+#### The versions sweep is the snapshots, not "every file"
+
+`versions_reader()` reads the `{slug}.{version}.txt` artifacts and **not** the
+`{slug}.txt` heads. Those two sets are not complements by accident — the
+difference is a silent double count.
+
+A current bank declares the version it was last published as, so today
+`complaints.txt` and `complaints.49fee….txt` are the *same* bank at the *same*
+version under two names, carrying the same 49 questions. A sweep over every file
+lands each question twice: two identical rows, each perfectly correct on its
+own, and every figure grouped by version silently doubled. De-duplicating them
+afterwards would be shaping (G5) and would also hide a real disagreement if the
+two ever diverged.
+
+So the line is drawn where the artifacts themselves draw it — a
+`{slug}.{version}.txt` is an **immutable published snapshot**, a `{slug}.txt` is
+the **mutable head** — and each sweep reads one kind. A head whose version has
+no snapshot beside it is absent from the versions sweep, correctly: it has not
+been published as one. Comparing the two sweeps' `version` sets is how you find
+that out, and it is a consumer's comparison to make, not something either Reader
+asserts.
+
+Ordering is by `(slug, version)` — deterministic, but a version identifier is
+opaque and sorts meaninglessly. A consumer wanting *chronological* order sorts
+on `generated_at`, which every snapshot carries (and which the current head does
+not — one more reason the two are separate reads).
+
+Neither sweep narrows to a Case Type. `slug` is on every row, so
+`versions_reader()` filtered in the consumer is one Case Type's whole bank
+history; pushing that predicate into the Reader is the not-decided question at
+the end of this page, not something to settle in passing.
+
+This does not bend **G4**. The store is the factory, so the Reader it hands back
+is fully parametrised by the time it exists and still answers `read()` and
+nothing else; what is still forbidden is a `reader.for_version(...)` on the
+Reader. It is the exception rather than a second default — reach for a store
+only when naming every member is impossible rather than merely tedious, because
+the store's argument list is the one thing a consumer *does* have to know.
+
+Two things about it are worth reading across to other entries:
+
+- **The location is still the module's secret.** Today it is
+  `platform_frontend/case-types/banks/` — the frontend's source tree, which is
+  also its deployed tree ([ADR-0041](../platform_frontend/docs/adr/0041-deployed-bytes-are-source-bytes.md)),
+  so those are the published bytes and not a copy of them. The store takes
+  `base_dir` and does not use it, exactly as `UsersReader` does, so the day the
+  artifacts arrive as a synced drop under the base directory or over HTTP from
+  the deployed folder, no call site moves.
+- **Two Readers over one file is not two declarations of location** (G3). The
+  store resolves the path once; which array of the envelope a Reader is a row
+  per element of is the only thing that differs between them, and it is one
+  overridden method inside the module.
+- **Parsing JSON into rows is not shaping** (G5). `Dataset` is a tabular
+  carrier and the artifact is a document, so *something* has to render one as
+  the other; the entry does it once, faithfully, rather than every consumer
+  doing it differently. Names are the artifact's own, canonicalised from
+  camelCase and nothing more, and `options` / `optionOutcomes` / `showWhen` /
+  `labelIds` / `remediationActions` are landed as JSON text columns so they
+  survive whole and survive a write to a table. An absent key stays a **gap**
+  rather than becoming the string `"null"`: a question with no `showWhen` is
+  unconditional, which is not the same statement as one whose rule is null. No
+  failure test, no applicability evaluation, no join to a Case — those are the
+  consumer's, and [the reporting data contract](../platform_frontend/docs/reporting-data-contract.md)
+  specifies them.
+
+What the *contract* says about which file to read is not this module's to
+decide either: a completed Case carrying a `questionBankVersion` should be read
+against that version, and the reader is given it. Passing `None` and reporting
+history against today's bank is a consumer's mistake, not one the store can
+catch.
+
 ### Backed by nothing at all — `readers/users.py`
 
 The `users` directory feed has no producer pipeline, no subject and no
@@ -266,3 +397,7 @@ same four facades every other application tree does, and
   that *writes* through its own medallion.
 - [escape-hatch-store.md](escape-hatch-store.md) — the other reason to reach
   outside the medallion, and why it is debt while this is not.
+- [reporting-data-contract.md](../platform_frontend/docs/reporting-data-contract.md)
+  — the review platform's specification of the Question Bank export
+  `QuestionBankStore` reads, and the failure/applicability algorithms a consumer
+  applies to it.

@@ -38,7 +38,10 @@ not own.
 
 **G4 -- The port is the contract.** ``read() -> Dataset``, ``describe()``,
 ``data_locations``. Parametrisation happens at construction, never through a
-query method.
+query method. A **store** (``QuestionBankStore``) satisfies this rather than
+bending it: the store is the factory, so the Reader it mints is already fully
+parametrised and still answers ``read()`` and nothing else. What no entry may
+grow is ``reader.for_version(...)``.
 
 **G5 -- Read what was written.** A Shared Reader over a stored table is a
 pass-through: no projection, no coercion, no re-shaping, no joins, no
@@ -68,6 +71,43 @@ carries its own docstring as its contract, and its internals can change without
 the call site changing shape. Composition rather than subclassing: ``Reader`` is
 a structural Protocol, so an entry wraps the Reader the medallion mints and
 delegates ``read`` / ``describe`` / ``data_locations``.
+
+**A store instead, when the dataset is a family rather than a name.** A Question
+Bank is not one dataset: it is two-dimensional in Case Type and version, and
+neither dimension is enumerable from here, so a class per dataset would be a
+class per Case Type per publication. ``QuestionBankStore(base_dir)`` mints the
+Reader instead, the same shape ``tools.store``'s ``Store.reader(table)`` has and
+for the same reason::
+
+    store.reader(case_type, version=None)     # that bank's questions
+    store.outcomes_reader(case_type, ...)     # that bank's outcome options
+    store.current_reader()                    # every current bank's questions
+    store.current_outcomes_reader()           # every current bank's outcomes
+    store.versions_reader()                   # every published snapshot's questions
+    store.versions_outcomes_reader()          # every published snapshot's outcomes
+
+This is the exception, not a second default: reach for it only when naming every
+member is impossible rather than merely tedious, because the store's argument
+list is the one thing a consumer *does* have to know.
+
+Two things a store makes it easy to get wrong, both visible above. **A second
+grain earns a second Reader, not a wider one** -- an artifact declaring ~50
+questions and the ~4 outcomes they map onto is two datasets, and denormalising
+them would make anyone counting the small one de-duplicate the large one first.
+And **"all of them" is its own question, taking no arguments** -- a
+``current_reader()`` stacks the same rows and reconciles nothing, so it stays a
+read rather than becoming an aggregate the consumer cannot see (G5). Finding
+none is refused rather than read as an empty dataset: a report of nothing,
+published, looks exactly like a report of nothing that is true.
+
+The sweeps are also where a store can quietly *double count*, which is a third
+thing to get right. ``versions_reader()`` reads the immutable
+``{slug}.{version}.txt`` snapshots and never the mutable ``{slug}.txt`` heads,
+because a head declares the version it was last published as -- so the same bank
+sits under two names, and reading both lands every question twice, each row
+individually correct. Splitting the sweeps along the line the artifacts already
+draw costs nothing; de-duplicating afterwards would be shaping, and would hide
+the two diverging.
 
 Every constructor takes ``base_dir`` and nothing else -- including a reader that
 does not need it yet. A consumer handed a *path* has been told the source is a
