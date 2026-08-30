@@ -97,6 +97,175 @@ history, the reader knows it lives in silver today. `cora_platform_metric`'s
 stage-dwell and hold tables are its consumers, and they are the reason the
 question crosses a subject boundary at all.
 
+### A family rather than a name — `readers/question_banks.py`
+
+The other three entries each name **one** dataset. A **Question Bank** is not
+one: it is two-dimensional in Case Type and version — `{slug}.txt` for the
+current bank, `{slug}.{version}.txt` for the immutable snapshot a completed
+Case was reviewed against — and neither dimension is enumerable from this side.
+A class per dataset would be a class per Case Type per publication.
+
+So the entry is a **store**, the same shape `tools.store`'s `Store.reader(table)`
+has and for the same reason:
+
+```python
+from readers.question_banks import QuestionBankStore
+
+store = QuestionBankStore(context.base_dir)
+
+store.qb_reader()                             # every Case Type's head
+store.qb_reader("complaints")                 # that Case Type's head
+store.qb_reader(current=False)                # every published snapshot
+store.qb_reader("complaints", current=False)  # that Case Type's history
+store.qb_reader("complaints", version, current=False)   # one snapshot
+
+store.outcomes_reader(...)                    # the same five, other grain
+```
+
+**Four Readers, along two axes that are not the same axis.** The store's
+`case_type` / `version` arguments say *which artifact*; which method you call
+says *which of the two things that artifact declares*, and whether you want one
+Case Type or all of them:
+
+**Two methods, one per grain. Every argument is optional, and every argument
+narrows** — `case_type` picks one Case Type out of all of them, `current` picks
+which *kind* of artifact, `version` pins one snapshot out of a Case Type's. The
+defaults are the widest sensible read.
+
+| call                                        | reads                                       |
+| ------------------------------------------- | ------------------------------------------- |
+| `qb_reader()`                               | every Case Type's head                      |
+| `qb_reader("complaints")`                   | that Case Type's head                       |
+| `qb_reader(current=False)`                  | every published snapshot                    |
+| `qb_reader("complaints", current=False)`    | that Case Type's whole history              |
+| `qb_reader("complaints", v, current=False)` | that one snapshot                           |
+| `qb_reader("complaints", v)`                | **refused** — a version is not the head     |
+| `qb_reader(None, v, current=False)`         | **refused** — a version needs its Case Type |
+
+Only two combinations are refused, and each for its own reason.
+
+**A version with `current` left true** is a contradiction — `current` names a
+bank's mutable head, a version names an immutable snapshot beside it — and it is
+the contradiction a Case row walks into. `questionBankVersion` is *absent* on an
+in-progress Case and *present* on a completed one, so a consumer passing it
+straight through would silently read a different kind of file depending on the
+row. Refusing puts that branch at the call site:
+
+```python
+version = case.get("questionBankVersion")
+reader = (
+    store.qb_reader(slug, version, current=False) if version
+    else store.qb_reader(slug)
+)
+```
+
+`current` is **keyword-only**, so `qb_reader("complaints", v, False)` is a
+`TypeError` rather than a silent third positional argument.
+
+**A version with no Case Type** names nothing: a version identifier is minted
+per Case Type and shared with none, so "every bank at version X" is not a set.
+
+**`current=False` without a version is deliberately allowed**, and it is what
+lets two methods do the work of four. There is no such thing as "the" snapshot,
+so the natural reading of an unpinned `current=False` is *every* snapshot. It is
+also the only thing `current` says that `version` cannot: with the pairing above
+refused, a version already implies a snapshot, so "unpinned" is the parameter's
+entire job. Under the earlier rule that `current=False` required a version,
+`current` was fully determined by `version` and earned nothing.
+
+Narrowing by `case_type` is *which artifacts to open* — the same selection
+`qb_reader("complaints")` already makes over the heads — and **not** the
+row-level predicate pushdown left open at the end of this page. Applying it to
+both kinds of artifact is what makes the grid complete rather than holed.
+
+The grain split is the reason there are two datasets rather than one: an
+artifact declares a Case Type's questions *and* the outcomes those questions'
+answers map onto, and denormalising ~4 rows across ~50 would make anyone
+counting outcomes de-duplicate questions first. They join on `id` — a question's
+`option_outcomes` maps each answer *wording* to an outcome `id`, so the outcomes
+dataset is the key side of that map, carrying the `severity` score that makes
+one outcome worse than another. Both carry `default_outcome_id`, so the failure
+test — *an option mapped to anything other than the default fails* — can be
+applied from either end.
+
+A call naming no Case Type stacks many artifacts into one dataset. Nothing is layered on top: the rows are the same rows, concatenated
+in a deterministic order (directory iteration order is the filesystem's business
+and differs between Windows and macOS), and `slug` + `version` are already on
+every row so nothing is added to tell the artifacts apart. Nothing is
+*reconciled* either — a question `id` is unique only within its own bank, and
+two Case Types asking the same thing stay two rows. **Finding none is refused**
+rather than returned as an empty dataset: a deployed banks folder always has at
+least one of each, so zero means a broken sync or a wrong root, and a report of
+nothing looks exactly like a report of nothing that is true.
+
+#### `current` splits the directory where the artifacts split it
+
+`current=False` reads the `{slug}.{version}.txt` artifacts and `current=True`
+the `{slug}.txt` heads — never both. Those two sets are not complements by accident — the
+difference is a silent double count.
+
+A current bank declares the version it was last published as, so today
+`complaints.txt` and `complaints.49fee….txt` are the *same* bank at the *same*
+version under two names, carrying the same 49 questions. A sweep over every file
+lands each question twice: two identical rows, each perfectly correct on its
+own, and every figure grouped by version silently doubled. De-duplicating them
+afterwards would be shaping (G5) and would also hide a real disagreement if the
+two ever diverged.
+
+So the line is drawn where the artifacts themselves draw it — a
+`{slug}.{version}.txt` is an **immutable published snapshot**, a `{slug}.txt` is
+the **mutable head** — and each sweep reads one kind. A head whose version has
+no snapshot beside it is absent from `current=False`, correctly: it has not
+been published as one. Comparing the two reads' `version` sets is how you find that
+out, and it is a consumer's comparison to make, not something the Reader
+asserts.
+
+Ordering is by `(slug, version)` — deterministic, but a version identifier is
+opaque and sorts meaninglessly. A consumer wanting *chronological* order sorts
+on `generated_at`, which every snapshot carries (and which a head does not — one
+more reason the two are separate reads).
+
+This does not bend **G4**. The store is the factory, so the Reader it hands back
+is fully parametrised by the time it exists and still answers `read()` and
+nothing else; what is still forbidden is a `reader.for_version(...)` on the
+Reader. It is the exception rather than a second default — reach for a store
+only when naming every member is impossible rather than merely tedious, because
+the store's argument list is the one thing a consumer *does* have to know.
+
+Two things about it are worth reading across to other entries:
+
+- **The location is still the module's secret.** Today it is
+  `platform_frontend/case-types/banks/` — the frontend's source tree, which is
+  also its deployed tree ([ADR-0041](../platform_frontend/docs/adr/0041-deployed-bytes-are-source-bytes.md)),
+  so those are the published bytes and not a copy of them. The store takes
+  `base_dir` and does not use it, exactly as `UsersReader` does, so the day the
+  artifacts arrive as a synced drop under the base directory or over HTTP from
+  the deployed folder, no call site moves.
+- **Two Readers over one file is not two declarations of location** (G3). The
+  store resolves the path once; which array of the envelope a Reader is a row
+  per element of is the only thing that differs between them, and it is one
+  overridden method inside the module. The *grain* is the method; the *scope*
+  is the arguments, and keeping those two axes separate is what holds the
+  surface at two.
+- **Parsing JSON into rows is not shaping** (G5). `Dataset` is a tabular
+  carrier and the artifact is a document, so *something* has to render one as
+  the other; the entry does it once, faithfully, rather than every consumer
+  doing it differently. Names are the artifact's own, canonicalised from
+  camelCase and nothing more, and `options` / `optionOutcomes` / `showWhen` /
+  `labelIds` / `remediationActions` are landed as JSON text columns so they
+  survive whole and survive a write to a table. An absent key stays a **gap**
+  rather than becoming the string `"null"`: a question with no `showWhen` is
+  unconditional, which is not the same statement as one whose rule is null. No
+  failure test, no applicability evaluation, no join to a Case — those are the
+  consumer's, and [the reporting data contract](../platform_frontend/docs/reporting-data-contract.md)
+  specifies them.
+
+What the *contract* says about which file to read is not this module's to
+decide either: a completed Case carrying a `questionBankVersion` should be read
+against that version, and the reader is given it. Passing `None` and reporting
+history against today's bank is a consumer's mistake, not one the store can
+catch.
+
 ### Backed by nothing at all — `readers/users.py`
 
 The `users` directory feed has no producer pipeline, no subject and no
@@ -256,6 +425,37 @@ same four facades every other application tree does, and
 `tests/integration/test_public_api.py` holds it there
 ([public-api.md](public-api.md)).
 
+#### What the entry refuses
+
+`readers/question_banks.py` keeps its docstrings to the contract, so the
+reasoning behind its four guards lives here. Each has a test that constructs
+the broken input and asserts the raise, so all four are negative by
+construction.
+
+- **An artifact whose envelope disagrees with the filename it is filed under.**
+  `slug` is the join key to a Case's `caseType` and `version` is what a
+  completed Case was stamped with, and the contract has each echoed inside the
+  file it names. A mismatch attributes every derived figure to the wrong bank —
+  and silently, because both values look perfectly well-formed alone.
+- **A `case_type` or `version` that is not a plain filename segment.**
+  `questionBankVersion` arrives off a Case row as *data* and is pasted into a
+  path. The contract says to treat it as opaque and never parse it, which is
+  exactly the argument for bounding it to this directory.
+- **A read that finds no artifacts.** Neither sweep returns an empty dataset. A
+  deployed banks folder always has at least one head and one snapshot, so zero
+  means a broken sync or a wrong root — and a published report of nothing looks
+  exactly like a report of nothing that is true.
+- **The two contradictory argument combinations** in the grid above.
+
+One thing it deliberately does *not* guard: whether a head has been published as
+a snapshot. A head whose version has no `{slug}.{version}.txt` beside it is a
+real state, not an error, so comparing `qb_reader()`'s `version` set against
+`qb_reader(current=False)`'s is a consumer's comparison to make. It is held by a
+test rather than asserted in the Reader.
+
+`data_locations` is also assigned only once a whole walk succeeds, so a run log
+never claims a partially-failed read touched everything it had opened.
+
 ## Related
 
 - [ADR-0026](adr/0026-shared-readers-declare-cross-subject-reads.md) — why the
@@ -266,3 +466,7 @@ same four facades every other application tree does, and
   that *writes* through its own medallion.
 - [escape-hatch-store.md](escape-hatch-store.md) — the other reason to reach
   outside the medallion, and why it is debt while this is not.
+- [reporting-data-contract.md](../platform_frontend/docs/reporting-data-contract.md)
+  — the review platform's specification of the Question Bank export
+  `QuestionBankStore` reads, and the failure/applicability algorithms a consumer
+  applies to it.

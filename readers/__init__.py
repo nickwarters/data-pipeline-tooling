@@ -38,7 +38,10 @@ not own.
 
 **G4 -- The port is the contract.** ``read() -> Dataset``, ``describe()``,
 ``data_locations``. Parametrisation happens at construction, never through a
-query method.
+query method. A **store** (``QuestionBankStore``) satisfies this rather than
+bending it: the store is the factory, so the Reader it mints is already fully
+parametrised and still answers ``read()`` and nothing else. What no entry may
+grow is ``reader.for_version(...)``.
 
 **G5 -- Read what was written.** A Shared Reader over a stored table is a
 pass-through: no projection, no coercion, no re-shaping, no joins, no
@@ -68,6 +71,56 @@ carries its own docstring as its contract, and its internals can change without
 the call site changing shape. Composition rather than subclassing: ``Reader`` is
 a structural Protocol, so an entry wraps the Reader the medallion mints and
 delegates ``read`` / ``describe`` / ``data_locations``.
+
+**A store instead, when the dataset is a family rather than a name.** A Question
+Bank is not one dataset: it is two-dimensional in Case Type and version, and
+neither dimension is enumerable from here, so a class per dataset would be a
+class per Case Type per publication. ``QuestionBankStore(base_dir)`` mints the
+Reader instead, the same shape ``tools.store``'s ``Store.reader(table)`` has and
+for the same reason::
+
+    store.qb_reader()                             # every Case Type's head
+    store.qb_reader(case_type)                    # that Case Type's head
+    store.qb_reader(current=False)                # every published snapshot
+    store.qb_reader(case_type, current=False)     # that Case Type's history
+    store.qb_reader(case_type, v, current=False)  # one snapshot
+    store.outcomes_reader(...)                    # the same five, other grain
+
+**The method is the grain; the arguments are the scope.** Keeping those two axes
+apart is what holds the surface at two methods rather than six. Every argument
+is optional and every argument narrows, so the defaults are the widest sensible
+read and every combination means something -- bar a version with ``current``
+left true (a version names a snapshot, ``current`` names the head), and a
+version with no Case Type (a version is minted per Case Type, so "every bank at
+version X" is not a set). ``current`` is keyword-only.
+
+The first refusal is not pedantry: ``questionBankVersion`` is absent on an
+in-progress Case and present on a completed one, so a consumer passing it
+straight through would otherwise read a different *kind* of file depending on
+the row, silently.
+
+This is the exception, not a second default: reach for it only when naming every
+member is impossible rather than merely tedious, because the store's argument
+list is the one thing a consumer *does* have to know.
+
+Two things a store makes it easy to get wrong, both visible above. **A second
+grain earns a second Reader, not a wider one** -- an artifact declaring ~50
+questions and the ~4 outcomes they map onto is two datasets, and denormalising
+them would make anyone counting the small one de-duplicate the large one first.
+And **"all of them" is its own question** -- an argument-less ``qb_reader()``
+stacks the same rows and reconciles nothing, so it stays a read rather than
+becoming an aggregate the consumer cannot see (G5). Finding
+none is refused rather than read as an empty dataset: a report of nothing,
+published, looks exactly like a report of nothing that is true.
+
+The sweeps are also where a store can quietly *double count*, which is a third
+thing to get right. ``current=False`` reads the immutable
+``{slug}.{version}.txt`` snapshots and ``current=True`` the mutable
+``{slug}.txt`` heads, never both -- because a head declares the version it was
+last published as, so the same bank sits under two names and reading both lands
+every question twice, each row individually correct. Splitting along the line
+the artifacts already draw costs nothing; de-duplicating afterwards would be
+shaping, and would hide the two diverging.
 
 Every constructor takes ``base_dir`` and nothing else -- including a reader that
 does not need it yet. A consumer handed a *path* has been told the source is a
