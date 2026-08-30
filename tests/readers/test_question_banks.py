@@ -53,7 +53,7 @@ def _bank(directory: Path, *, slug: str = "demo", version=None, **overrides) -> 
 
 
 def test_the_current_bank_is_the_one_with_no_version():
-    rows = rows_of(QuestionBankStore(base_dir=None).reader("complaints").read())
+    rows = rows_of(QuestionBankStore(base_dir=None).qb_reader("complaints").read())
 
     assert len(rows) == 49
     assert {row["slug"] for row in rows} == {"complaints"}
@@ -61,7 +61,9 @@ def test_the_current_bank_is_the_one_with_no_version():
 
 
 def test_a_version_reads_the_bank_a_completed_case_was_reviewed_against():
-    rows = rows_of(QuestionBankStore().reader("complaints", EARLIER_VERSION).read())
+    store = QuestionBankStore()
+
+    rows = rows_of(store.qb_reader("complaints", EARLIER_VERSION, current=False).read())
 
     assert [row["id"] for row in rows] == ["q-cmp-0001", "q-cmp-0016"]
     assert {row["version"] for row in rows} == {EARLIER_VERSION}
@@ -69,7 +71,7 @@ def test_a_version_reads_the_bank_a_completed_case_was_reviewed_against():
 
 
 def test_every_row_carries_the_envelope_the_failure_test_needs():
-    rows = rows_of(QuestionBankStore().reader("complaints").read())
+    rows = rows_of(QuestionBankStore().qb_reader("complaints").read())
 
     row = rows[0]
     assert row["default_outcome_id"] == "good"
@@ -83,7 +85,7 @@ def test_every_row_carries_the_envelope_the_failure_test_needs():
 
 
 def test_the_declared_order_of_the_questions_survives_as_a_column():
-    rows = rows_of(QuestionBankStore().reader("complaints").read())
+    rows = rows_of(QuestionBankStore().qb_reader("complaints").read())
 
     assert [row["position"] for row in rows] == list(range(len(rows)))
     declared = json.loads((BANKS / "complaints.txt").read_text(encoding="utf-8"))
@@ -93,7 +95,7 @@ def test_the_declared_order_of_the_questions_survives_as_a_column():
 def test_the_question_columns_are_exactly_the_declared_set(tmp_path):
     _bank(tmp_path)
 
-    dataset = QuestionBankStore(banks_dir=tmp_path).reader("demo").read()
+    dataset = QuestionBankStore(banks_dir=tmp_path).qb_reader("demo").read()
 
     assert tuple(dataset.to_pandas().columns) == QUESTION_COLUMNS
 
@@ -114,7 +116,7 @@ def test_a_nested_field_lands_as_json_a_consumer_can_load(tmp_path):
         ],
     )
 
-    row = rows_of(QuestionBankStore(banks_dir=tmp_path).reader("demo").read())[0]
+    row = rows_of(QuestionBankStore(banks_dir=tmp_path).qb_reader("demo").read())[0]
 
     assert json.loads(row["show_when"]) == {"q-0": {"equals": "Yes"}}
     assert json.loads(row["label_ids"]) == ["lbl-sla"]
@@ -126,7 +128,7 @@ def test_a_nested_field_lands_as_json_a_consumer_can_load(tmp_path):
 def test_an_absent_nested_field_is_a_gap_and_never_the_string_null(tmp_path):
     _bank(tmp_path)
 
-    frame = QuestionBankStore(banks_dir=tmp_path).reader("demo").read().to_pandas()
+    frame = QuestionBankStore(banks_dir=tmp_path).qb_reader("demo").read().to_pandas()
 
     for column in QUESTION_JSON_COLUMNS:
         assert not (frame[column] == "null").any()
@@ -137,18 +139,18 @@ def test_an_absent_nested_field_is_a_gap_and_never_the_string_null(tmp_path):
 
 def test_a_bank_that_is_not_there_fails_as_a_missing_file(tmp_path):
     with pytest.raises(FileNotFoundError):
-        QuestionBankStore(banks_dir=tmp_path).reader("demo").read()
+        QuestionBankStore(banks_dir=tmp_path).qb_reader("demo").read()
 
 
 def test_nothing_is_opened_until_read(tmp_path):
-    reader = QuestionBankStore(banks_dir=tmp_path).reader("demo")
+    reader = QuestionBankStore(banks_dir=tmp_path).qb_reader("demo")
 
     assert reader.data_locations == []
 
 
 def test_read_records_the_artifact_it_touched(tmp_path):
     path = _bank(tmp_path)
-    reader = QuestionBankStore(banks_dir=tmp_path).reader("demo")
+    reader = QuestionBankStore(banks_dir=tmp_path).qb_reader("demo")
 
     reader.read()
 
@@ -156,7 +158,7 @@ def test_read_records_the_artifact_it_touched(tmp_path):
 
 
 def test_describe_names_the_bank_without_naming_the_file():
-    reader = QuestionBankStore().reader("complaints", EARLIER_VERSION)
+    reader = QuestionBankStore().qb_reader("complaints", EARLIER_VERSION, current=False)
 
     described = reader.describe()
     assert "complaints" in described and EARLIER_VERSION in described
@@ -166,13 +168,13 @@ def test_describe_names_the_bank_without_naming_the_file():
 @pytest.mark.parametrize("case_type", ["../complaints", "a/b", "a\\b", "", "  ", "."])
 def test_a_case_type_that_is_not_a_filename_segment_is_refused(tmp_path, case_type):
     with pytest.raises(ValidationError, match="case type"):
-        QuestionBankStore(banks_dir=tmp_path).reader(case_type)
+        QuestionBankStore(banks_dir=tmp_path).qb_reader(case_type)
 
 
 @pytest.mark.parametrize("version", ["../other", "a/b", "..", ""])
 def test_a_version_that_is_not_a_filename_segment_is_refused(tmp_path, version):
     with pytest.raises(ValidationError, match="version"):
-        QuestionBankStore(banks_dir=tmp_path).reader("demo", version)
+        QuestionBankStore(banks_dir=tmp_path).qb_reader("demo", version, current=False)
 
 
 def test_a_bank_declaring_another_slug_than_it_is_filed_under_is_refused(tmp_path):
@@ -180,7 +182,7 @@ def test_a_bank_declaring_another_slug_than_it_is_filed_under_is_refused(tmp_pat
     path.rename(tmp_path / "demo.txt")
 
     with pytest.raises(ValidationError, match="declares slug 'other'"):
-        QuestionBankStore(banks_dir=tmp_path).reader("demo").read()
+        QuestionBankStore(banks_dir=tmp_path).qb_reader("demo").read()
 
 
 def test_a_versioned_bank_declaring_another_version_is_refused(tmp_path):
@@ -190,13 +192,15 @@ def test_a_versioned_bank_declaring_another_version_is_refused(tmp_path):
     )
 
     with pytest.raises(ValidationError, match="declares version 'v1'"):
-        QuestionBankStore(banks_dir=tmp_path).reader("demo", "v2").read()
+        QuestionBankStore(banks_dir=tmp_path).qb_reader(
+            "demo", "v2", current=False
+        ).read()
 
 
 def test_the_current_bank_is_not_held_to_a_version_it_was_not_asked_for(tmp_path):
     _bank(tmp_path, version=None)
 
-    rows = rows_of(QuestionBankStore(banks_dir=tmp_path).reader("demo").read())
+    rows = rows_of(QuestionBankStore(banks_dir=tmp_path).qb_reader("demo").read())
 
     assert [row["version"] for row in rows] == ["v1"]
 
@@ -207,13 +211,13 @@ def test_a_file_carrying_no_questions_is_not_a_question_bank(tmp_path):
     )
 
     with pytest.raises(ValidationError, match="no 'questions' array"):
-        QuestionBankStore(banks_dir=tmp_path).reader("demo").read()
+        QuestionBankStore(banks_dir=tmp_path).qb_reader("demo").read()
 
 
 def test_a_bank_with_no_questions_yet_reads_as_no_rows_with_the_columns(tmp_path):
     _bank(tmp_path, questions=[])
 
-    dataset = QuestionBankStore(banks_dir=tmp_path).reader("demo").read()
+    dataset = QuestionBankStore(banks_dir=tmp_path).qb_reader("demo").read()
 
     assert rows_of(dataset) == []
     assert tuple(dataset.to_pandas().columns) == QUESTION_COLUMNS
@@ -259,7 +263,7 @@ def test_an_outcome_row_carries_the_envelope_that_names_the_default():
 
 def test_the_two_readers_join_on_what_a_question_maps_its_answers_to():
     store = QuestionBankStore()
-    questions = rows_of(store.reader("complaints").read())
+    questions = rows_of(store.qb_reader("complaints").read())
     outcomes = rows_of(store.outcomes_reader("complaints").read())
 
     declared = {row["id"] for row in outcomes}
@@ -272,7 +276,9 @@ def test_the_two_readers_join_on_what_a_question_maps_its_answers_to():
 
 def test_the_outcomes_of_a_versioned_bank_are_that_versions():
     rows = rows_of(
-        QuestionBankStore().outcomes_reader("complaints", EARLIER_VERSION).read()
+        QuestionBankStore()
+        .outcomes_reader("complaints", EARLIER_VERSION, current=False)
+        .read()
     )
 
     assert {row["version"] for row in rows} == {EARLIER_VERSION}
@@ -299,21 +305,19 @@ def _two_banks(tmp_path: Path) -> None:
     _bank(tmp_path, slug="alpha", version=None)
 
 
-def test_the_current_reader_stacks_every_case_types_questions(tmp_path):
+def test_naming_no_case_type_stacks_every_case_types_questions(tmp_path):
     _two_banks(tmp_path)
 
-    rows = rows_of(QuestionBankStore(banks_dir=tmp_path).current_reader().read())
+    rows = rows_of(QuestionBankStore(banks_dir=tmp_path).qb_reader().read())
 
     assert [row["slug"] for row in rows] == ["alpha", "beta"]
     assert [row["id"] for row in rows] == ["q-1", "q-1"]
 
 
-def test_the_current_outcomes_reader_stacks_every_case_types_outcomes(tmp_path):
+def test_naming_no_case_type_stacks_every_case_types_outcomes(tmp_path):
     _two_banks(tmp_path)
 
-    rows = rows_of(
-        QuestionBankStore(banks_dir=tmp_path).current_outcomes_reader().read()
-    )
+    rows = rows_of(QuestionBankStore(banks_dir=tmp_path).outcomes_reader().read())
 
     assert [(row["slug"], row["id"]) for row in rows] == [
         ("alpha", "good"),
@@ -325,11 +329,8 @@ def test_the_stacked_rows_keep_the_shape_of_a_single_banks_rows(tmp_path):
     _two_banks(tmp_path)
     store = QuestionBankStore(banks_dir=tmp_path)
 
-    assert tuple(store.current_reader().read().to_pandas().columns) == QUESTION_COLUMNS
-    assert (
-        tuple(store.current_outcomes_reader().read().to_pandas().columns)
-        == OUTCOME_COLUMNS
-    )
+    assert tuple(store.qb_reader().read().to_pandas().columns) == QUESTION_COLUMNS
+    assert tuple(store.outcomes_reader().read().to_pandas().columns) == OUTCOME_COLUMNS
 
 
 def test_the_order_does_not_depend_on_the_filesystem(tmp_path):
@@ -337,8 +338,8 @@ def test_the_order_does_not_depend_on_the_filesystem(tmp_path):
     _bank(tmp_path, slug="gamma", version=None)
     store = QuestionBankStore(banks_dir=tmp_path)
 
-    first = [row["slug"] for row in rows_of(store.current_reader().read())]
-    second = [row["slug"] for row in rows_of(store.current_reader().read())]
+    first = [row["slug"] for row in rows_of(store.qb_reader().read())]
+    second = [row["slug"] for row in rows_of(store.qb_reader().read())]
 
     assert first == second == ["alpha", "beta", "gamma"]
 
@@ -347,7 +348,7 @@ def test_a_versioned_artifact_is_not_a_current_bank(tmp_path):
     _bank(tmp_path, slug="demo", version=None)
     _bank(tmp_path, slug="demo", version="v0")
 
-    rows = rows_of(QuestionBankStore(banks_dir=tmp_path).current_reader().read())
+    rows = rows_of(QuestionBankStore(banks_dir=tmp_path).qb_reader().read())
 
     assert [row["version"] for row in rows] == ["v1"]
 
@@ -356,19 +357,19 @@ def test_finding_no_current_bank_is_refused_rather_than_read_as_nothing(tmp_path
     _bank(tmp_path, slug="demo", version="v0")  # versioned only — no current bank
 
     with pytest.raises(ValidationError, match="no current Question Bank artifacts"):
-        QuestionBankStore(banks_dir=tmp_path).current_reader().read()
+        QuestionBankStore(banks_dir=tmp_path).qb_reader().read()
 
 
 def test_a_banks_directory_that_is_not_there_is_refused_the_same_way(tmp_path):
     store = QuestionBankStore(banks_dir=tmp_path / "missing")
 
     with pytest.raises(ValidationError, match="no current Question Bank artifacts"):
-        store.current_outcomes_reader().read()
+        store.outcomes_reader().read()
 
 
 def test_the_stacked_read_records_every_artifact_it_touched(tmp_path):
     _two_banks(tmp_path)
-    reader = QuestionBankStore(banks_dir=tmp_path).current_reader()
+    reader = QuestionBankStore(banks_dir=tmp_path).qb_reader()
 
     reader.read()
 
@@ -381,7 +382,7 @@ def test_the_stacked_read_records_every_artifact_it_touched(tmp_path):
 def test_a_failed_stacked_read_claims_no_locations_at_all(tmp_path):
     _bank(tmp_path, slug="alpha", version=None)
     _bank(tmp_path, slug="wrong", version=None).rename(tmp_path / "beta.txt")
-    reader = QuestionBankStore(banks_dir=tmp_path).current_reader()
+    reader = QuestionBankStore(banks_dir=tmp_path).qb_reader()
 
     with pytest.raises(ValidationError):
         reader.read()
@@ -392,10 +393,8 @@ def test_a_failed_stacked_read_claims_no_locations_at_all(tmp_path):
 def test_the_stacked_readers_describe_themselves_without_naming_a_file(tmp_path):
     store = QuestionBankStore(banks_dir=tmp_path)
 
-    assert store.current_reader().describe() == (
-        "QuestionBankReader(banks='every current')"
-    )
-    assert store.current_outcomes_reader().describe() == (
+    assert store.qb_reader().describe() == ("QuestionBankReader(banks='every current')")
+    assert store.outcomes_reader().describe() == (
         "OutcomeOptionsReader(banks='every current')"
     )
 
@@ -403,15 +402,15 @@ def test_the_stacked_readers_describe_themselves_without_naming_a_file(tmp_path)
 def test_the_stacked_readers_open_nothing_until_read(tmp_path):
     store = QuestionBankStore(banks_dir=tmp_path)
 
-    assert store.current_reader().data_locations == []
-    assert store.current_outcomes_reader().data_locations == []
+    assert store.qb_reader().data_locations == []
+    assert store.outcomes_reader().data_locations == []
 
 
 # --- every published version -----------------------------------------------
 
 
-def test_the_versions_reader_stacks_every_published_snapshot():
-    rows = rows_of(QuestionBankStore().versions_reader().read())
+def test_the_versions_sweep_stacks_every_published_snapshot():
+    rows = rows_of(QuestionBankStore().qb_versions_reader().read())
 
     per_version = {}
     for row in rows:
@@ -423,8 +422,8 @@ def test_the_versions_reader_stacks_every_published_snapshot():
     }
 
 
-def test_the_versions_outcomes_reader_gives_the_severities_of_each_publication():
-    rows = rows_of(QuestionBankStore().versions_outcomes_reader().read())
+def test_the_versions_sweep_gives_the_severities_of_each_publication():
+    rows = rows_of(QuestionBankStore().outcomes_versions_reader().read())
 
     per_version = {}
     for row in rows:
@@ -441,7 +440,7 @@ def test_the_current_head_is_not_read_twice_as_its_own_snapshot():
     over *every* file would land each of them twice — two identical rows, each
     correct alone, and every figure grouped by version doubled.
     """
-    reader = QuestionBankStore().versions_reader()
+    reader = QuestionBankStore().qb_versions_reader()
     rows = rows_of(reader.read())
 
     read = [location["name"] for location in reader.data_locations]
@@ -453,8 +452,8 @@ def test_the_current_head_is_not_read_twice_as_its_own_snapshot():
 def test_the_head_and_the_snapshot_sweeps_are_reconcilable_by_version():
     store = QuestionBankStore()
 
-    heads = {row["version"] for row in rows_of(store.current_reader().read())}
-    published = {row["version"] for row in rows_of(store.versions_reader().read())}
+    heads = {row["version"] for row in rows_of(store.qb_reader().read())}
+    published = {row["version"] for row in rows_of(store.qb_versions_reader().read())}
 
     # Not an assertion that they must agree — a head not yet published as a
     # snapshot is a real state. It is the comparison that makes it visible.
@@ -465,9 +464,11 @@ def test_the_versioned_rows_keep_the_shape_of_a_single_banks_rows(tmp_path):
     _bank(tmp_path, version="v1")
     store = QuestionBankStore(banks_dir=tmp_path)
 
-    assert tuple(store.versions_reader().read().to_pandas().columns) == QUESTION_COLUMNS
     assert (
-        tuple(store.versions_outcomes_reader().read().to_pandas().columns)
+        tuple(store.qb_versions_reader().read().to_pandas().columns) == QUESTION_COLUMNS
+    )
+    assert (
+        tuple(store.outcomes_versions_reader().read().to_pandas().columns)
         == OUTCOME_COLUMNS
     )
 
@@ -478,9 +479,11 @@ def test_the_versioned_order_does_not_depend_on_the_filesystem(tmp_path):
             _bank(tmp_path, slug=slug, version=version)
     store = QuestionBankStore(banks_dir=tmp_path)
 
-    first = [(r["slug"], r["version"]) for r in rows_of(store.versions_reader().read())]
+    first = [
+        (r["slug"], r["version"]) for r in rows_of(store.qb_versions_reader().read())
+    ]
     second = [
-        (r["slug"], r["version"]) for r in rows_of(store.versions_reader().read())
+        (r["slug"], r["version"]) for r in rows_of(store.qb_versions_reader().read())
     ]
 
     assert first == second
@@ -488,7 +491,7 @@ def test_the_versioned_order_does_not_depend_on_the_filesystem(tmp_path):
 
 
 def test_a_chronological_order_is_the_consumers_and_every_snapshot_carries_it():
-    rows = rows_of(QuestionBankStore().versions_reader().read())
+    rows = rows_of(QuestionBankStore().qb_versions_reader().read())
 
     assert all(row["generated_at"] for row in rows)
     ordered = sorted({(row["generated_at"], row["version"]) for row in rows})
@@ -503,14 +506,14 @@ def test_a_current_bank_is_not_a_published_version(tmp_path):
     _bank(tmp_path, slug="demo", version=None)
 
     with pytest.raises(ValidationError, match="no published Question Bank versions"):
-        QuestionBankStore(banks_dir=tmp_path).versions_reader().read()
+        QuestionBankStore(banks_dir=tmp_path).qb_versions_reader().read()
 
 
 def test_a_banks_directory_that_is_not_there_has_no_versions_either(tmp_path):
     store = QuestionBankStore(banks_dir=tmp_path / "missing")
 
     with pytest.raises(ValidationError, match="no published Question Bank versions"):
-        store.versions_outcomes_reader().read()
+        store.outcomes_versions_reader().read()
 
 
 def test_a_snapshot_filed_under_a_version_it_does_not_declare_is_refused(tmp_path):
@@ -518,16 +521,16 @@ def test_a_snapshot_filed_under_a_version_it_does_not_declare_is_refused(tmp_pat
     (tmp_path / "demo.v1.txt").rename(tmp_path / "demo.v9.txt")
 
     with pytest.raises(ValidationError, match="declares version 'v1'"):
-        QuestionBankStore(banks_dir=tmp_path).versions_reader().read()
+        QuestionBankStore(banks_dir=tmp_path).qb_versions_reader().read()
 
 
 def test_the_versioned_readers_describe_themselves_without_naming_a_file(tmp_path):
     store = QuestionBankStore(banks_dir=tmp_path)
 
-    assert store.versions_reader().describe() == (
+    assert store.qb_versions_reader().describe() == (
         "QuestionBankReader(banks='every published version')"
     )
-    assert store.versions_outcomes_reader().describe() == (
+    assert store.outcomes_versions_reader().describe() == (
         "OutcomeOptionsReader(banks='every published version')"
     )
 
@@ -535,5 +538,66 @@ def test_the_versioned_readers_describe_themselves_without_naming_a_file(tmp_pat
 def test_the_versioned_readers_open_nothing_until_read(tmp_path):
     store = QuestionBankStore(banks_dir=tmp_path)
 
-    assert store.versions_reader().data_locations == []
-    assert store.versions_outcomes_reader().data_locations == []
+    assert store.qb_versions_reader().data_locations == []
+    assert store.outcomes_versions_reader().data_locations == []
+
+
+# --- current and version name the same thing, so they must agree ------------
+
+
+def test_a_version_with_current_left_true_is_refused_rather_than_guessed():
+    """The contradiction a Case row walks into.
+
+    ``questionBankVersion`` is absent on an in-progress Case and present on a
+    completed one, so a consumer passing it straight through would read a
+    different *kind* of file depending on the row without saying so. Refusing
+    puts that branch at the call site.
+    """
+    with pytest.raises(ValidationError, match="current=True reads a bank's head"):
+        QuestionBankStore().qb_reader("complaints", EARLIER_VERSION)
+
+
+def test_asking_for_a_snapshot_without_naming_one_is_refused(tmp_path):
+    store = QuestionBankStore(banks_dir=tmp_path)
+
+    with pytest.raises(ValidationError, match="current=False asks for a published"):
+        store.qb_reader("demo", current=False)
+
+
+def test_the_all_snapshots_sweep_is_not_reachable_by_turning_current_off(tmp_path):
+    """``qb_reader(current=False)`` is the shape someone will try for it.
+
+    It is refused and the message names ``qb_versions_reader()``, which is why
+    that sweep stays a method of its own rather than a third meaning for a
+    boolean that already cannot carry two.
+    """
+    store = QuestionBankStore(banks_dir=tmp_path)
+
+    with pytest.raises(ValidationError, match="qb_versions_reader"):
+        store.qb_reader(current=False)
+
+
+def test_a_version_without_a_case_type_names_nothing_and_is_refused(tmp_path):
+    store = QuestionBankStore(banks_dir=tmp_path)
+
+    with pytest.raises(ValidationError, match="minted per Case Type"):
+        store.qb_reader(None, "v1", current=False)
+
+
+def test_both_grains_apply_the_same_three_rules(tmp_path):
+    store = QuestionBankStore(banks_dir=tmp_path)
+
+    for call in (
+        lambda: store.outcomes_reader("demo", "v1"),
+        lambda: store.outcomes_reader("demo", current=False),
+        lambda: store.outcomes_reader(None, "v1", current=False),
+    ):
+        with pytest.raises(ValidationError):
+            call()
+
+
+def test_current_is_keyword_only_so_a_bare_boolean_cannot_be_passed(tmp_path):
+    store = QuestionBankStore(banks_dir=tmp_path)
+
+    with pytest.raises(TypeError):
+        store.qb_reader("demo", None, False)  # type: ignore[misc]

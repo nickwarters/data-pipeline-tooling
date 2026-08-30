@@ -113,17 +113,15 @@ from readers.question_banks import QuestionBankStore
 
 store = QuestionBankStore(context.base_dir)
 
-store.reader("complaints")            # the current bank's questions
-store.reader("complaints", version)   # what a Case carrying that
-                                      # questionBankVersion was reviewed against
-store.outcomes_reader("complaints")   # that bank's Outcome Options
-store.outcomes_reader("complaints", version)
+store.qb_reader()                     # every Case Type's current bank
+store.qb_reader("complaints")         # that bank's mutable head
+store.qb_reader("complaints", version, current=False)   # one immutable snapshot
+store.qb_versions_reader()            # every published snapshot
 
-store.current_reader()                # every Case Type's current questions
-store.current_outcomes_reader()       # every Case Type's current Outcome Options
-
-store.versions_reader()               # every published snapshot's questions
-store.versions_outcomes_reader()      # every published snapshot's Outcome Options
+store.outcomes_reader()               # the same four, at the other grain
+store.outcomes_reader("complaints")
+store.outcomes_reader("complaints", version, current=False)
+store.outcomes_versions_reader()
 ```
 
 **Four Readers, along two axes that are not the same axis.** The store's
@@ -131,10 +129,56 @@ store.versions_outcomes_reader()      # every published snapshot's Outcome Optio
 says *which of the two things that artifact declares*, and whether you want one
 Case Type or all of them:
 
-|                               | one bank               | every current bank          | every published version       |
-| ----------------------------- | ---------------------- | --------------------------- | ----------------------------- |
-| **questions** (~50/bank)      | `reader(...)`          | `current_reader()`          | `versions_reader()`           |
-| **outcome options** (~4/bank) | `outcomes_reader(...)` | `current_outcomes_reader()` | `versions_outcomes_reader()`  |
+|                               | one bank                  | every current bank | every published version      |
+| ----------------------------- | ------------------------- | ------------------ | ---------------------------- |
+| **questions** (~50/bank)      | `qb_reader(ct[, v, ...])` | `qb_reader()`      | `qb_versions_reader()`       |
+| **outcome options** (~4/bank) | `outcomes_reader(ct, …)`  | `outcomes_reader()`| `outcomes_versions_reader()` |
+
+The prefix is the **grain** and the arguments are the **scope**. Two of the four
+methods take arguments; naming no Case Type is what asks for all of them.
+
+#### `current` and `version` name the same thing, so they must agree
+
+A bank exists in two kinds — a mutable head (`{slug}.txt`) and immutable
+snapshots beside it (`{slug}.{version}.txt`) — and `current` and `version` are
+two ways of saying which kind you want. Each is refused without the other:
+
+| call                                        | result                                  |
+| ------------------------------------------- | --------------------------------------- |
+| `qb_reader()`                               | every current bank                      |
+| `qb_reader("complaints")`                   | that bank's head                        |
+| `qb_reader("complaints", v, current=False)` | that snapshot                           |
+| `qb_reader("complaints", v)`                | **refused** — a version is not the head |
+| `qb_reader("complaints", current=False)`    | **refused** — which snapshot?           |
+| `qb_reader(current=False)`                  | **refused** — use `qb_versions_reader()` |
+| `qb_reader(None, v, current=False)`         | **refused** — a version needs its Case Type |
+
+The first refusal is the one that earns its keep, because it is the
+contradiction a Case row walks into. `questionBankVersion` is *absent* on an
+in-progress Case and *present* on a completed one, so a consumer passing it
+straight through would silently read a different kind of file depending on the
+row. Refusing puts that branch at the call site:
+
+```python
+version = case.get("questionBankVersion")
+reader = (
+    store.qb_reader(slug, version, current=False) if version
+    else store.qb_reader(slug)
+)
+```
+
+`current` is **keyword-only**, so `qb_reader("complaints", v, False)` is a
+`TypeError` rather than a silent third positional argument. And the last
+refusal holds because a version identifier is minted per Case Type and shared
+with none — "every bank at version X" names nothing.
+
+`qb_versions_reader()` stays a method of its own precisely *because*
+`qb_reader(current=False)` is refused. Folding it in would mean giving that call
+a third meaning on top of the two it already cannot have. It is not
+`qb_history_reader` either: a bank artifact already declares a `history` — the
+ordered `{version, generatedAt}` list — and a Reader named for it would
+plausibly be expected to return those few metadata rows rather than every
+snapshot's questions.
 
 The grain split is the reason there are two datasets rather than one: an
 artifact declares a Case Type's questions *and* the outcomes those questions'
@@ -146,7 +190,7 @@ one outcome worse than another. Both carry `default_outcome_id`, so the failure
 test — *an option mapped to anything other than the default fails* — can be
 applied from either end.
 
-The four right-hand Readers take **no arguments** and stack many artifacts into
+The four right-hand cells take **no arguments** and stack many artifacts into
 one dataset. Nothing is layered on top: the rows are the same rows, concatenated
 in a deterministic order (directory iteration order is the filesystem's business
 and differs between Windows and macOS), and `slug` + `version` are already on
@@ -159,8 +203,8 @@ nothing looks exactly like a report of nothing that is true.
 
 #### The versions sweep is the snapshots, not "every file"
 
-`versions_reader()` reads the `{slug}.{version}.txt` artifacts and **not** the
-`{slug}.txt` heads. Those two sets are not complements by accident — the
+`qb_versions_reader()` reads the `{slug}.{version}.txt` artifacts and **not**
+the `{slug}.txt` heads. Those two sets are not complements by accident — the
 difference is a silent double count.
 
 A current bank declares the version it was last published as, so today
@@ -185,7 +229,7 @@ on `generated_at`, which every snapshot carries (and which the current head does
 not — one more reason the two are separate reads).
 
 Neither sweep narrows to a Case Type. `slug` is on every row, so
-`versions_reader()` filtered in the consumer is one Case Type's whole bank
+`qb_versions_reader()` filtered in the consumer is one Case Type's whole bank
 history; pushing that predicate into the Reader is the not-decided question at
 the end of this page, not something to settle in passing.
 

@@ -79,12 +79,20 @@ class per Case Type per publication. ``QuestionBankStore(base_dir)`` mints the
 Reader instead, the same shape ``tools.store``'s ``Store.reader(table)`` has and
 for the same reason::
 
-    store.reader(case_type, version=None)     # that bank's questions
-    store.outcomes_reader(case_type, ...)     # that bank's outcome options
-    store.current_reader()                    # every current bank's questions
-    store.current_outcomes_reader()           # every current bank's outcomes
-    store.versions_reader()                   # every published snapshot's questions
-    store.versions_outcomes_reader()          # every published snapshot's outcomes
+    store.qb_reader()                         # every current bank's questions
+    store.qb_reader(case_type)                # that bank's head
+    store.qb_reader(case_type, v, current=False)   # one published snapshot
+    store.qb_versions_reader()                # every published snapshot
+    store.outcomes_reader(...)                # the same four, at the other grain
+    store.outcomes_versions_reader()
+
+The prefix is the *grain* and the arguments are the *scope*; naming no Case Type
+is what asks for all of them. ``current`` and ``version`` are two ways of saying
+which **kind** of artifact -- the mutable head or an immutable snapshot -- so
+each is refused without the other, and ``current`` is keyword-only. That refusal
+is not pedantry: ``questionBankVersion`` is absent on an in-progress Case and
+present on a completed one, so a consumer passing it straight through would
+otherwise read a different kind of file depending on the row, silently.
 
 This is the exception, not a second default: reach for it only when naming every
 member is impossible rather than merely tedious, because the store's argument
@@ -94,14 +102,14 @@ Two things a store makes it easy to get wrong, both visible above. **A second
 grain earns a second Reader, not a wider one** -- an artifact declaring ~50
 questions and the ~4 outcomes they map onto is two datasets, and denormalising
 them would make anyone counting the small one de-duplicate the large one first.
-And **"all of them" is its own question, taking no arguments** -- a
-``current_reader()`` stacks the same rows and reconciles nothing, so it stays a
-read rather than becoming an aggregate the consumer cannot see (G5). Finding
+And **"all of them" is its own question** -- an argument-less ``qb_reader()``
+stacks the same rows and reconciles nothing, so it stays a read rather than
+becoming an aggregate the consumer cannot see (G5). Finding
 none is refused rather than read as an empty dataset: a report of nothing,
 published, looks exactly like a report of nothing that is true.
 
 The sweeps are also where a store can quietly *double count*, which is a third
-thing to get right. ``versions_reader()`` reads the immutable
+thing to get right. ``qb_versions_reader()`` reads the immutable
 ``{slug}.{version}.txt`` snapshots and never the mutable ``{slug}.txt`` heads,
 because a head declares the version it was last published as -- so the same bank
 sits under two names, and reading both lands every question twice, each row

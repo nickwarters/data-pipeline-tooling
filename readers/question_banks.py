@@ -42,23 +42,28 @@ They join on ``id``, and both carry ``default_outcome_id`` so the failure test �
 *an option mapped to anything other than the default fails* — can be applied
 from either side.
 
-Six readers, because "all of them" is its own question — twice
----------------------------------------------------------------
+Four readers over two grains and two scopes
+-------------------------------------------
 
-``reader`` and ``outcomes_reader`` each address **one** bank at one version. The
-four argument-less Readers each answer a whole-estate question instead:
+``qb_reader`` and ``outcomes_reader`` each answer three shapes, chosen by their
+arguments::
 
-``current_reader`` / ``current_outcomes_reader``
-    Every Case Type's *current* bank — "which questions exist across the
-    platform today", "what does every Case Type score an outcome at".
-``versions_reader`` / ``versions_outcomes_reader``
-    Every **published snapshot** of every Case Type — the whole history in one
-    dataset, which is what a report spanning Cases completed against different
-    banks has to join against.
+    store.qb_reader()                             # every Case Type's current bank
+    store.qb_reader("complaints")                 # that bank's mutable head
+    store.qb_reader("complaints", v, current=False)   # an immutable snapshot
 
-Nothing is stacked on top of any of them: the rows are the same rows,
-concatenated, and ``slug`` + ``version`` already distinguish them because both
-are on every row.
+``current`` and ``version`` are two ways of naming the same thing — which *kind*
+of artifact — so each is refused without the other. ``current=True`` with a
+``version`` is a contradiction, and it is the contradiction a Case row walks
+into: ``questionBankVersion`` is absent on an in-progress Case and present on a
+completed one, so a consumer passing it straight through would silently read a
+different file depending on the row. ``current=False`` without one asks for "the"
+snapshot, and there is no such thing — every published snapshot is equally real.
+
+``qb_versions_reader`` and ``outcomes_versions_reader`` are the sweep over all of
+those, and take no arguments. They are separate methods precisely *because*
+``qb_reader(current=False)`` is refused; folding them in would mean giving that
+call a third meaning on top of the two it already cannot have.
 
 **The versions sweep is the ``{slug}.{version}.txt`` snapshots and not "every
 file in the directory".** Those two are not the same set, and the difference is
@@ -75,7 +80,7 @@ absent from the versions sweep, correctly — it has not been published as one,
 and comparing the two sweeps' ``version`` sets is how you find that out.
 
 Neither sweep narrows to a Case Type. ``slug`` is on every row, so
-``versions_reader()`` filtered in the consumer is one Case Type's whole bank
+``qb_versions_reader()`` filtered in the consumer is one Case Type's whole bank
 history — and pushing the predicate in here is the not-decided question the
 guide leaves open, not something to settle in passing.
 
@@ -390,16 +395,15 @@ class QuestionBankStore:
 
         store = QuestionBankStore(context.base_dir)
 
-        store.reader("complaints")           # current bank, its questions
-        store.reader("complaints", version)  # the bank a Case was reviewed against
-        store.outcomes_reader("complaints")  # that bank's outcome options
-        store.outcomes_reader("complaints", version)
+        store.qb_reader()                    # every current bank's questions
+        store.qb_reader("complaints")        # that bank's head
+        store.qb_reader("complaints", v, current=False)   # one snapshot
+        store.qb_versions_reader()           # every published snapshot
 
-        store.current_reader()               # every Case Type's current questions
-        store.current_outcomes_reader()      # every Case Type's current outcomes
-
-        store.versions_reader()              # every published snapshot's questions
-        store.versions_outcomes_reader()     # every published snapshot's outcomes
+        store.outcomes_reader()              # the same four, at the other grain
+        store.outcomes_reader("complaints")
+        store.outcomes_reader("complaints", v, current=False)
+        store.outcomes_versions_reader()
 
     ``base_dir`` is taken and **not used**, deliberately and for the same reason
     ``UsersReader`` takes it: resolving a location is this module's job, and
@@ -418,67 +422,69 @@ class QuestionBankStore:
     ) -> None:
         self._banks_dir = Path(banks_dir) if banks_dir is not None else _BANKS_DIR
 
-    def reader(self, case_type: str, version: str | None = None) -> QuestionBankReader:
-        """One bank's questions — the current bank when ``version`` is None.
+    def qb_reader(
+        self,
+        case_type: str | None = None,
+        version: str | None = None,
+        *,
+        current: bool = True,
+    ) -> QuestionBankReader:
+        """Questions: one bank's, or every Case Type's current bank stacked.
 
-        Nothing is opened here: a missing bank surfaces at ``read()``, as a
-        missing file does from every other Reader, rather than in a new way of
-        the store's own.
+        ``qb_reader()``
+            Every Case Type's current bank. ``slug`` is on every row already,
+            so nothing is added to tell the Case Types apart and nothing is
+            reconciled between them: a question ``id`` is unique only within
+            its own bank, and two Case Types asking the same thing stay two
+            rows.
+        ``qb_reader("complaints")``
+            That Case Type's current bank — the mutable head.
+        ``qb_reader("complaints", version, current=False)``
+            The immutable snapshot a completed Case was reviewed against.
+
+        See :meth:`_resolve` for why ``current`` and ``version`` cannot be
+        given together and why neither can be omitted alone. Nothing is opened
+        here: a missing bank surfaces at ``read()``, as a missing file does
+        from every other Reader, rather than in a new way of the store's own.
         """
-        artifact = self._artifact(case_type, version)
+        resolve, described = self._resolve(case_type, version, current=current)
         return QuestionBankReader(
-            lambda: (artifact,),
-            described_as=(
-                f"QuestionBankReader(case_type={artifact.case_type!r}, "
-                f"version={version!r})"
-            ),
+            resolve, described_as=f"QuestionBankReader({described})"
         )
 
     def outcomes_reader(
-        self, case_type: str, version: str | None = None
+        self,
+        case_type: str | None = None,
+        version: str | None = None,
+        *,
+        current: bool = True,
     ) -> OutcomeOptionsReader:
-        """One bank's outcome options — the current bank when ``version`` is None."""
-        artifact = self._artifact(case_type, version)
-        return OutcomeOptionsReader(
-            lambda: (artifact,),
-            described_as=(
-                f"OutcomeOptionsReader(case_type={artifact.case_type!r}, "
-                f"version={version!r})"
-            ),
-        )
+        """Outcome options: one bank's, or every Case Type's current bank stacked.
 
-    def current_reader(self) -> QuestionBankReader:
-        """Every Case Type's *current* questions, stacked into one dataset.
-
-        ``slug`` is on every row already, so nothing is added to tell the Case
-        Types apart and nothing is reconciled between them: a question ``id``
-        is only unique within its own bank, and two Case Types asking the same
-        thing are still two rows.
+        The same three shapes as :meth:`qb_reader`, at the other grain. Stacked
+        over every current bank it is the cross-Case-Type view of severity:
+        whether two Case Types score the same wording the same way is a
+        question this answers and no per-bank Reader can.
         """
-        return QuestionBankReader(
-            self._current_artifacts,
-            described_as="QuestionBankReader(banks='every current')",
-        )
-
-    def current_outcomes_reader(self) -> OutcomeOptionsReader:
-        """Every Case Type's *current* outcome options, stacked into one dataset.
-
-        The cross-Case-Type view of severity: whether two Case Types score the
-        same wording the same way is a question this answers and no per-bank
-        Reader can.
-        """
+        resolve, described = self._resolve(case_type, version, current=current)
         return OutcomeOptionsReader(
-            self._current_artifacts,
-            described_as="OutcomeOptionsReader(banks='every current')",
+            resolve, described_as=f"OutcomeOptionsReader({described})"
         )
 
-    def versions_reader(self) -> QuestionBankReader:
+    def qb_versions_reader(self) -> QuestionBankReader:
         """Every published snapshot's questions, stacked into one dataset.
 
         The whole estate's bank history at once — what a report spanning Cases
         completed against different banks has to join against, since each Case
         carries the ``questionBankVersion`` it was reviewed under and no single
         bank covers them all.
+
+        Its own method rather than ``qb_reader(current=False)``, because that
+        call is refused: ``current=False`` asks for a snapshot and a snapshot is
+        named by its version. Not ``qb_history_reader`` either — a bank artifact
+        already declares a ``history``, the ordered ``{version, generatedAt}``
+        list, and a Reader named for it would plausibly be expected to return
+        those few metadata rows rather than every snapshot's questions.
 
         ``slug`` and ``version`` are both on every row and together identify a
         snapshot, so nothing is added and nothing is reconciled. Rows arrive
@@ -491,7 +497,7 @@ class QuestionBankStore:
             described_as="QuestionBankReader(banks='every published version')",
         )
 
-    def versions_outcomes_reader(self) -> OutcomeOptionsReader:
+    def outcomes_versions_reader(self) -> OutcomeOptionsReader:
         """Every published snapshot's outcome options, stacked into one dataset.
 
         The severities in force at each point in time, which is what makes a
@@ -502,6 +508,56 @@ class QuestionBankStore:
         return OutcomeOptionsReader(
             self._versioned_artifacts,
             described_as="OutcomeOptionsReader(banks='every published version')",
+        )
+
+    def _resolve(
+        self, case_type: str | None, version: str | None, *, current: bool
+    ) -> tuple[Callable[[], Iterable[_Artifact]], str]:
+        """Settle which artifacts a reader will walk, and how it describes them.
+
+        ``current`` and ``version`` are two ways of saying which *kind* of
+        artifact is wanted, and they must agree, so each is refused without the
+        other:
+
+        - ``current=True`` names a bank's mutable head and ``version`` names an
+          immutable snapshot beside it. Both at once is a contradiction, and it
+          is the one a Case row walks into — ``questionBankVersion`` is absent
+          on an in-progress Case and present on a completed one, so a consumer
+          passing it straight through would silently read a different file
+          depending on the row. Refusing makes that branch explicit at the call
+          site instead.
+        - ``current=False`` asks for a snapshot without saying which. There is
+          no such thing as "the" snapshot; every published one is equally real,
+          and the sweep over all of them is :meth:`qb_versions_reader`.
+
+        A ``version`` with no ``case_type`` is refused for a different reason:
+        a version identifier is minted per Case Type and shared with none, so
+        "every bank at version X" names nothing.
+        """
+        if current and version is not None:
+            raise ValidationError(
+                f"current=True reads a bank's head and version {version!r} names a "
+                f"snapshot beside it; pass current=False to read that snapshot, or "
+                f"drop the version to read the head"
+            )
+        if not current and version is None:
+            raise ValidationError(
+                "current=False asks for a published snapshot, which is named by its "
+                "version; pass version=..., leave current=True for the head, or use "
+                "qb_versions_reader() for every snapshot at once"
+            )
+        if version is not None and case_type is None:
+            raise ValidationError(
+                f"version {version!r} names a snapshot of one Case Type's bank, so it "
+                f"needs a case_type; a version identifier is minted per Case Type and "
+                f"shared with none"
+            )
+        if case_type is None:
+            return self._current_artifacts, "banks='every current'"
+        artifact = self._artifact(case_type, version)
+        return (
+            lambda: (artifact,),
+            f"case_type={artifact.case_type!r}, version={version!r}",
         )
 
     def _artifact(self, case_type: str, version: str | None) -> _Artifact:
