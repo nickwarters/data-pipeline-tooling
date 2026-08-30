@@ -1,115 +1,18 @@
 """The Case Review Platform's published **Question Bank** artifacts, as rows.
 
-The review platform owns the Question Bank outright — its content, and which
-bank a Case gets (root ``CONTEXT.md``, *Question Bank ownership*). This side
-only ever *reads* it, and reads it as a **published contract**: the export
-artifact specified by
-``platform_frontend/docs/reporting-data-contract.md``, which exists precisely so
-an external reporting process can turn Case data into question-level reports
-without executing any Case Type logic.
+The review platform owns the Question Bank outright (root ``CONTEXT.md``); this
+side only reads it, as the export artifact
+``platform_frontend/docs/reporting-data-contract.md`` specifies. Both filename
+forms hold JSON (``.txt`` is a SharePoint constraint), and one artifact
+declares two grains — a Case Type's **questions** (~50) and the **outcome
+options** they map onto (~4) — hence two Readers, joining on ``id``.
 
-Two filename forms, and they are the whole of the ``version`` argument:
+``{slug}.txt`` is a bank's **mutable head**; ``{slug}.{version}.txt`` an
+**immutable snapshot**, which is what a completed Case's ``questionBankVersion``
+names. Never read together: a head declares the version it was last published
+as, so the same bank sits under both names and reading both double counts it.
 
-``{slug}.txt``
-    The **current** bank — what an in-progress Case is being reviewed against,
-    and what a Case completed today would be stamped with. Also the only file
-    carrying the ``labels`` table and the ``history`` list.
-``{slug}.{version}.txt``
-    An immutable **versioned** snapshot. A completed Case row carries the
-    identifier it was reviewed against in ``questionBankVersion``; passing that
-    value here gives the as-reviewed wording, ``optionOutcomes`` and
-    ``showWhen``, free of drift from later bank edits.
-
-The ``.txt`` extension is a SharePoint constraint, not a format: both files hold
-JSON, and both are parsed explicitly rather than by trusting a content type.
-
-Two datasets, because one artifact declares two things
-------------------------------------------------------
-
-An artifact carries the Case Type's **questions** *and* the **outcome options**
-those questions' answers map onto — a different grain, ~50 rows against ~4, so
-they are two Readers rather than one denormalised frame:
-
-``reader(...)``
-    A row per question. ``option_outcomes`` maps each answer *wording* to an
-    outcome ``id``.
-``outcomes_reader(...)``
-    A row per outcome option: its ``id``, its ``wording``, and its ``severity``
-    — the score that ranks them, which is what makes an Outcome comparable at
-    all (the case verdict is the highest-severity applicable mapped outcome).
-
-They join on ``id``, and both carry ``default_outcome_id`` so the failure test —
-*an option mapped to anything other than the default fails* — can be applied
-from either side.
-
-Two readers, one per grain
----------------------------
-
-``qb_reader`` and ``outcomes_reader`` are the whole surface. Every argument is
-optional and every argument **narrows**; the defaults are the widest sensible
-read::
-
-    store.qb_reader()                             # every Case Type's head
-    store.qb_reader("complaints")                 # that Case Type's head
-    store.qb_reader(current=False)                # every published snapshot
-    store.qb_reader("complaints", current=False)  # that Case Type's snapshots
-    store.qb_reader("complaints", v, current=False)   # that one snapshot
-
-``case_type`` picks one Case Type out of all of them. ``current`` picks which
-*kind* of artifact — the mutable heads (``{slug}.txt``) or the immutable
-snapshots (``{slug}.{version}.txt``). ``version`` pins one snapshot out of a
-Case Type's. Every combination means something, bar two:
-
-``qb_reader(case_type, version)`` — refused
-    ``current=True`` names a head and a version names a snapshot beside it.
-    This is the contradiction a Case row walks into: ``questionBankVersion`` is
-    absent on an in-progress Case and present on a completed one, so a consumer
-    passing it straight through would silently read a different *kind* of file
-    depending on the row. Refusing puts the branch at the call site.
-``qb_reader(None, version, current=False)`` — refused
-    A version identifier is minted per Case Type and shared with none, so
-    "every bank at version X" is not a set.
-
-``current=False`` **without** a version is deliberately allowed, and it is what
-lets two methods do the work of four: there is no such thing as "the" snapshot,
-so the natural reading of an unpinned ``current=False`` is *every* snapshot.
-It is also the only thing ``current`` says that ``version`` cannot — with the
-pairing above refused, a version already implies a snapshot, so "unpinned" is
-the parameter's entire job.
-
-**The snapshots sweep is the ``{slug}.{version}.txt`` files and never the
-heads.** Those two are not the same set, and the difference is a silent double
-count. A current bank declares the version it was last published as, so
-``complaints.txt`` and ``complaints.49fee….txt`` are today the *same* bank at
-the *same* version under two names; reading both yields two identical,
-individually-correct rows per question, and any figure grouped by version is
-then twice what it should be. De-duplicating them would be shaping (G5) and
-would hide a genuine disagreement if the two ever diverged. So ``current``
-splits the directory where the artifacts themselves split it, and a head whose
-version has no snapshot beside it is absent from ``current=False``, correctly —
-it has not been published as one. Comparing the two reads' ``version`` sets is
-how you find that out.
-
-Narrowing by ``case_type`` is *which artifacts to open*, which this store has
-always decided — it is not the row-level predicate pushdown left open at the end
-of ``docs/shared-readers.md``, and applying it to both kinds of artifact is what
-makes the grid complete rather than holed.
-
-A **store** rather than one class per dataset, because a Question Bank is not
-one dataset: it is a family, two-dimensional in Case Type and version, and
-neither dimension is enumerable from a consumer. That does not weaken G4: the
-store is the factory, so a *Reader* is still fully parametrised by the time it
-exists and still answers ``read()`` and nothing else. What it must not grow is a
-``reader.for_version(...)``.
-
-**Where the artifacts live is this module's business** (G3), and today's answer
-is the frontend's own source tree, ``platform_frontend/case-types/banks/``. It
-is not a fixture: those are the bytes that deploy, unchanged
-([ADR-0041](../platform_frontend/docs/adr/0041-deployed-bytes-are-source-bytes.md)).
-The day a pipeline reads them from a synced drop under the base directory, or
-over HTTP from the deployed folder, the answer changes here and no call site
-moves — which is why the store takes ``base_dir`` even though it has nothing to
-resolve with it yet.
+Design, guardrails and the argument grid: ``docs/shared-readers.md``.
 """
 
 from __future__ import annotations
@@ -133,20 +36,14 @@ __all__ = [
     "QuestionBankStore",
 ]
 
-#: Where the artifacts live today. The frontend's source tree *is* its deployed
-#: tree, so this is the published contract and not a copy of one.
+#: Where the artifacts live today: the frontend's source tree, which is also its
+#: deployed tree, so these are the published bytes and not a copy of them.
 _BANKS_DIR = (
     Path(__file__).resolve().parents[1] / "platform_frontend" / "case-types" / "banks"
 )
 
-#: Envelope field -> column, on every row of both datasets.
-#:
-#: A question means nothing without the ``default_outcome_id`` its
-#: ``option_outcomes`` are read against, and a figure is only reproducible if
-#: the ``version`` it came from travels with it — so the envelope is stamped
-#: rather than left for a consumer to carry alongside. ``generatedAt`` is absent
-#: from the current bank and present on every versioned one, so its column is a
-#: gap for the former.
+#: Envelope field -> column, stamped on every row of both datasets.
+#: ``generatedAt`` is absent from a head and present on every snapshot.
 _ENVELOPE_FIELDS = {
     "slug": "slug",
     "label": "label",
@@ -155,9 +52,8 @@ _ENVELOPE_FIELDS = {
     "defaultOutcomeId": "default_outcome_id",
 }
 
-#: Question field -> column. A question carries only the keys that apply to it —
-#: ``labelIds``, ``showWhen``, ``remediationActions`` and ``category`` are each
-#: on a minority of rows — so every one of these is landed as a gap when absent.
+#: Question field -> column. A question carries only the keys that apply to it,
+#: so any of these is a gap when absent.
 _QUESTION_FIELDS = {
     "id": "id",
     "text": "text",
@@ -172,24 +68,16 @@ _QUESTION_FIELDS = {
     "remediationActions": "remediation_actions",
 }
 
-#: Outcome option field -> column.
-#:
-#: ``wording`` is what an answer *is* — it is the key side of a question's
-#: ``option_outcomes`` map — and ``id`` is what it *counts as*, the value side.
-#: ``severity`` is the score that orders them: the review platform resolves a
-#: Case's verdict as the highest-severity applicable mapped outcome, so it is
-#: the field that makes "worse" mean anything.
+#: Outcome option field -> column. ``wording`` is the key side of a question's
+#: ``option_outcomes`` map, ``id`` the value side, ``severity`` the score.
 _OUTCOME_FIELDS = {
     "id": "id",
     "wording": "wording",
     "severity": "severity",
 }
 
-#: One row per question, in the order the artifact declares them.
-#:
-#: Names are the artifact's own, canonicalised from camelCase and nothing more —
-#: so ``id`` and ``text`` are the *question*'s, never a Case's. Renaming for a
-#: consumer's convenience is that consumer's business (G5).
+#: One row per question. Names are the artifact's own, canonicalised from
+#: camelCase — ``id`` and ``text`` are the *question*'s, never a Case's.
 QUESTION_COLUMNS = (
     *_ENVELOPE_FIELDS.values(),
     "outcome_options",
@@ -197,29 +85,16 @@ QUESTION_COLUMNS = (
     *_QUESTION_FIELDS.values(),
 )
 
-#: One row per outcome option, in the order the artifact declares them.
-#:
-#: Deliberately small and deliberately not denormalised into
-#: :data:`QUESTION_COLUMNS`: ~4 rows against ~50 is a different grain, and a
-#: consumer counting outcomes should not have to de-duplicate questions first.
+#: One row per outcome option, in declared order.
 OUTCOME_COLUMNS = (
     *_ENVELOPE_FIELDS.values(),
     "position",
     *_OUTCOME_FIELDS.values(),
 )
 
-#: The question columns holding a nested structure, landed as a JSON string.
-#:
-#: ``Dataset`` is a tabular carrier and these are objects and arrays, so one of
-#: the two has to give. Encoding keeps them whole, keeps them writable to a
-#: table unchanged, and keeps the decision here rather than in each consumer;
-#: ``json.loads`` on the column is the other half. An absent key stays a **gap**
-#: rather than becoming the string ``"null"`` — a question with no ``showWhen``
-#: is unconditional, which is not the same statement as one whose rule is null.
-#:
-#: The outcome options have no nested fields, which is most of why they are
-#: worth a Reader of their own: ``severity`` arrives as a number to sort on
-#: rather than as a string to parse back out of ``outcome_options``.
+#: Nested question columns, landed as JSON text so they survive whole and
+#: survive a write to a table. An absent key stays a gap rather than becoming
+#: the string ``"null"``; ``json.loads`` on the column is the other half.
 QUESTION_JSON_COLUMNS = (
     "outcome_options",
     "options",
@@ -240,14 +115,7 @@ class _Artifact:
 
 
 def _segment(kind: str, value: str) -> str:
-    """Refuse anything that is not a single, plain filename segment.
-
-    A ``version`` reaches this module off a Case row and a ``case_type`` off a
-    Case Type's configuration — both are data, and both are pasted into a path.
-    The contract says to treat a version as an opaque label and never to parse
-    it, which is exactly the argument for checking it can only ever name a file
-    *in this directory*.
-    """
+    """Refuse anything but a plain filename segment (a version is Case data)."""
     text = str(value).strip()
     if not text or text in {".", ".."} or set(text) & set("/\\"):
         raise ValidationError(
@@ -267,11 +135,8 @@ def _encode(column: str, value: object) -> object:
 def _load(artifact: _Artifact) -> dict:
     """Parse one artifact, refusing one that does not answer to its own name.
 
-    ``slug`` is the join key to a Case's ``caseType`` and ``version`` is what a
-    completed Case was stamped with; the contract has each echoed inside the
-    file it names. If a file and its own envelope disagree, every figure derived
-    from it is attributed to the wrong bank — and silently, because both values
-    look perfectly well-formed on their own.
+    They are join keys: a file disagreeing with its own envelope attributes
+    every derived figure to the wrong bank, silently.
     """
     payload = json.loads(artifact.path.read_text(encoding="utf-8"))
     declared_slug = payload.get("slug")
@@ -290,14 +155,9 @@ def _load(artifact: _Artifact) -> dict:
 
 
 class _BankReader:
-    """The walk shared by all four Readers: resolve, parse, explode, stack.
+    """The walk both Readers share: resolve, parse, explode, stack.
 
-    Subclassed rather than composed, and only inside this module: the two
-    subclasses differ by *which array of the envelope they are a row per element
-    of* and nothing else, so there is one method to override. The
-    compose-don't-subclass rule in ``readers/__init__`` is about not subclassing
-    the framework's ``Reader`` — which neither of these does; ``Reader`` is a
-    structural Protocol and they satisfy it by shape.
+    They differ only by which envelope array they are a row per element of.
     """
 
     #: The envelope array this Reader is a row per element of.
@@ -350,12 +210,7 @@ class _BankReader:
 
 
 class QuestionBankReader(_BankReader):
-    """A Case Type's questions — one row per question, in declared order.
-
-    Minted by :class:`QuestionBankStore`, never constructed directly: the path
-    is the store's secret, and a consumer holding one has been told the source
-    is a file.
-    """
+    """A Case Type's questions — one row per question, in declared order."""
 
     _ARRAY_FIELD = "questions"
     _COLUMNS = QUESTION_COLUMNS
@@ -379,13 +234,8 @@ class QuestionBankReader(_BankReader):
 class OutcomeOptionsReader(_BankReader):
     """A Case Type's outcome options — one row per option, with its severity.
 
-    The small dataset behind every ranking question: ``severity`` is the score
-    the review platform resolves a Case's verdict with (highest applicable
-    mapped outcome wins), and ``wording`` is the key side of a question's
-    ``option_outcomes`` map, so this joins to
-    :class:`QuestionBankReader`'s rows from either end.
-
-    Minted by :class:`QuestionBankStore`, never constructed directly.
+    ``severity`` is the score a Case's verdict resolves by (highest applicable
+    mapped outcome wins).
     """
 
     _ARRAY_FIELD = "outcomeOptions"
@@ -402,25 +252,10 @@ class OutcomeOptionsReader(_BankReader):
 class QuestionBankStore:
     """Mints Readers over the published Question Banks — one bank, or all of them.
 
-    ::
-
-        store = QuestionBankStore(context.base_dir)
-
-        store.qb_reader()                             # every current bank
-        store.qb_reader("complaints")                 # that bank's head
-        store.qb_reader(current=False)                # every published snapshot
-        store.qb_reader("complaints", current=False)  # that bank's snapshots
-        store.qb_reader("complaints", v, current=False)   # one snapshot
-
-        store.outcomes_reader(...)           # the same five, at the other grain
-
-    ``base_dir`` is taken and **not used**, deliberately and for the same reason
-    ``UsersReader`` takes it: resolving a location is this module's job, and
-    today's answer happens to be a directory in the repository. The signature is
-    already the one a synced drop under the base directory would need.
-
-    ``banks_dir`` is a **test and spike seam**, keyword-only so it cannot be
-    passed by accident. Nothing in ``pipelines/`` should use it.
+    ``base_dir`` is taken and **not used**, as ``UsersReader`` takes it:
+    resolving a location is this module's job, and the signature is already the
+    one a synced drop under the base directory would need. ``banks_dir`` is a
+    test and spike seam, keyword-only; ``pipelines/`` should not use it.
     """
 
     def __init__(
@@ -438,28 +273,18 @@ class QuestionBankStore:
         *,
         current: bool = True,
     ) -> QuestionBankReader:
-        """Questions: one bank's, or every Case Type's current bank stacked.
+        """Questions, at any scope. Every argument is optional and narrows::
 
-        ``qb_reader()``
-            Every Case Type's current bank.
-        ``qb_reader("complaints")``
-            That Case Type's current bank — the mutable head.
-        ``qb_reader(current=False)``
-            Every published snapshot of every Case Type.
-        ``qb_reader("complaints", current=False)``
-            That Case Type's whole published history.
-        ``qb_reader("complaints", version, current=False)``
-            The one snapshot a completed Case was reviewed against.
+            qb_reader()                             # every Case Type's head
+            qb_reader("complaints")                 # that Case Type's head
+            qb_reader(current=False)                # every published snapshot
+            qb_reader("complaints", current=False)  # that Case Type's history
+            qb_reader("complaints", v, current=False)   # that one snapshot
 
-        Stacked over more than one artifact, nothing is added to tell them
-        apart and nothing is reconciled between them: ``slug`` and ``version``
-        are on every row already, a question ``id`` is unique only within its
-        own bank, and two Case Types asking the same thing stay two rows.
-
-        See :meth:`_resolve` for the two combinations that are refused. Nothing
-        is opened here: a missing bank surfaces at ``read()``, as a missing file
-        does from every other Reader, rather than in a new way of the store's
-        own.
+        A version with ``current`` left true is refused (a version names a
+        snapshot, ``current`` the head — the contradiction a Case row walks
+        into), as is a version with no ``case_type`` (a version is minted per
+        Case Type). Nothing is opened until ``read()``.
         """
         resolve, described = self._resolve(case_type, version, current=current)
         return QuestionBankReader(
@@ -473,16 +298,7 @@ class QuestionBankStore:
         *,
         current: bool = True,
     ) -> OutcomeOptionsReader:
-        """Outcome options: one bank's, or every Case Type's current bank stacked.
-
-        The same five shapes as :meth:`qb_reader`, at the other grain. Stacked
-        over every current bank it is the cross-Case-Type view of severity —
-        whether two Case Types score the same wording the same way is a
-        question this answers and no per-bank Reader can. Stacked over the
-        snapshots it is the cross-*time* one: a severity can be re-scored
-        between publications, and reading today's would attribute a completed
-        Case to a ranking that did not exist when it was reviewed.
-        """
+        """Outcome options — the same five shapes as :meth:`qb_reader`."""
         resolve, described = self._resolve(case_type, version, current=current)
         return OutcomeOptionsReader(
             resolve, described_as=f"OutcomeOptionsReader({described})"
@@ -491,32 +307,10 @@ class QuestionBankStore:
     def _resolve(
         self, case_type: str | None, version: str | None, *, current: bool
     ) -> tuple[Callable[[], Iterable[_Artifact]], str]:
-        """Settle which artifacts a reader will walk, and how it describes them.
+        """Settle which artifacts a reader walks, and how it describes them.
 
-        Every argument **narrows**, and their defaults are the widest sensible
-        read. ``case_type`` picks one Case Type out of all of them, ``current``
-        picks which *kind* of artifact — the mutable heads or the immutable
-        snapshots — and ``version`` pins one snapshot out of a Case Type's.
-        Every combination therefore means something, bar two:
-
-        - ``current=True`` with a ``version`` is a contradiction: ``current``
-          names a bank's head and a version names a snapshot beside it. It is
-          the contradiction a Case row walks into — ``questionBankVersion`` is
-          absent on an in-progress Case and present on a completed one, so a
-          consumer passing it straight through would silently read a different
-          *kind* of file depending on the row. Refusing puts that branch at the
-          call site instead.
-        - A ``version`` with no ``case_type`` names nothing: a version
-          identifier is minted per Case Type and shared with none, so "every
-          bank at version X" is not a set.
-
-        ``current=False`` without a version is **not** refused, and that is what
-        collapsed this store to two methods. There is no such thing as "the"
-        snapshot, so the natural reading of an unpinned ``current=False`` is
-        *every* snapshot — which is exactly the sweep that used to need a method
-        of its own. It is also the only thing ``current`` says that ``version``
-        cannot: with the pairing refused above, a ``version`` already implies a
-        snapshot, so unpinned is the parameter's whole job.
+        An unpinned ``current=False`` is deliberately allowed — every snapshot —
+        and is the only thing ``current`` says that ``version`` cannot.
         """
         if current and version is not None:
             raise ValidationError(
@@ -560,20 +354,9 @@ class QuestionBankStore:
         return _Artifact(self._banks_dir / f"{stem}.txt", slug, version)
 
     def _current_artifacts(self) -> tuple[_Artifact, ...]:
-        """Every ``{slug}.txt`` in the directory, ordered by slug.
+        """Every ``{slug}.txt``, ordered by slug so two runs agree.
 
-        A versioned artifact is ``{slug}.{version}.txt``, so the current banks
-        are exactly the files whose stem carries no further dot — the same rule
-        the filenames are minted under, read backwards.
-
-        Ordered so two runs over one directory produce rows in the same order;
-        directory iteration order is the filesystem's business and differs
-        between Windows and macOS.
-
-        **Finding none is refused**, rather than returned as an empty dataset. A
-        deployed banks folder always has at least one bank, so zero is a broken
-        sync or a wrong root — and a report of nothing, published, looks exactly
-        like a report of nothing that is true.
+        Finding none is refused rather than read as an empty dataset.
         """
         artifacts = tuple(
             _Artifact(path, path.stem, None)
@@ -590,31 +373,12 @@ class QuestionBankStore:
     def _versioned_artifacts(
         self, case_type: str | None = None
     ) -> tuple[_Artifact, ...]:
-        """Every ``{slug}.{version}.txt`` in the directory, ordered by both.
+        """Every ``{slug}.{version}.txt``, optionally for one Case Type.
 
-        Narrowed to one Case Type when ``case_type`` is given. That is the same
-        selection ``qb_reader("complaints")`` already makes over the heads —
-        *which artifacts to open*, which this store has always decided — and not
-        the row-level predicate pushdown left open at the end of
-        ``docs/shared-readers.md``. Applying it to both kinds is what makes the
-        argument grid complete rather than holed.
-
-        The complement of :meth:`_current_artifacts`, split on the same rule
-        read the same way: a stem carrying a further dot was minted as
-        ``f"{slug}.{version}"``, so it partitions back at the first one. A
-        version identifier is opaque and contains no dot in anything the
-        platform publishes; if one ever did, the envelope echo check in
-        :func:`_load` is what catches the mis-split, not a guess here.
-
-        **The current head is deliberately not in this set**, even though it
-        declares a version of its own — it is the same bank as its snapshot
-        under a second name, and including both double counts every one of its
-        questions under a version that then reports twice its true figure.
-
-        Finding none is refused, as it is for the current sweep: a directory
-        holding banks but no published snapshot of any of them is a partial
-        sync, and an empty history published as a history is indistinguishable
-        from a true one.
+        Split from :meth:`_current_artifacts` on the rule the filenames were
+        minted under, read backwards. **The head is deliberately not in this
+        set**: it is the same bank as its own snapshot under a second name, and
+        including both double counts every question under that version.
         """
         artifacts = []
         for path in sorted(self._banks_dir.glob("*.txt")):

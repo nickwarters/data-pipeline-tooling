@@ -425,6 +425,37 @@ same four facades every other application tree does, and
 `tests/integration/test_public_api.py` holds it there
 ([public-api.md](public-api.md)).
 
+#### What the entry refuses
+
+`readers/question_banks.py` keeps its docstrings to the contract, so the
+reasoning behind its four guards lives here. Each has a test that constructs
+the broken input and asserts the raise, so all four are negative by
+construction.
+
+- **An artifact whose envelope disagrees with the filename it is filed under.**
+  `slug` is the join key to a Case's `caseType` and `version` is what a
+  completed Case was stamped with, and the contract has each echoed inside the
+  file it names. A mismatch attributes every derived figure to the wrong bank —
+  and silently, because both values look perfectly well-formed alone.
+- **A `case_type` or `version` that is not a plain filename segment.**
+  `questionBankVersion` arrives off a Case row as *data* and is pasted into a
+  path. The contract says to treat it as opaque and never parse it, which is
+  exactly the argument for bounding it to this directory.
+- **A read that finds no artifacts.** Neither sweep returns an empty dataset. A
+  deployed banks folder always has at least one head and one snapshot, so zero
+  means a broken sync or a wrong root — and a published report of nothing looks
+  exactly like a report of nothing that is true.
+- **The two contradictory argument combinations** in the grid above.
+
+One thing it deliberately does *not* guard: whether a head has been published as
+a snapshot. A head whose version has no `{slug}.{version}.txt` beside it is a
+real state, not an error, so comparing `qb_reader()`'s `version` set against
+`qb_reader(current=False)`'s is a consumer's comparison to make. It is held by a
+test rather than asserted in the Reader.
+
+`data_locations` is also assigned only once a whole walk succeeds, so a run log
+never claims a partially-failed read touched everything it had opened.
+
 ## Related
 
 - [ADR-0026](adr/0026-shared-readers-declare-cross-subject-reads.md) — why the
