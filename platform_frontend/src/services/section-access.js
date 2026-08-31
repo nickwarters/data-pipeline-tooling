@@ -196,9 +196,9 @@ export function remediationAudience(roles) {
 }
 
 /**
- * The Conversation cell shared by every participant in the thread: they post
- * unless the Case Type's `allowMessagesWhen` gate excludes the current status,
- * in which case the thread is still readable.
+ * The Conversation cell shared by every participant in the thread. A Case Type
+ * may name the side that starts the Conversation; the other side remains a
+ * reader until the first message has been posted, then may reply.
  *
  * A terminal Case closes the thread for everyone, gate or no gate. The freeze
  * on a closed Case is a framework rule, and the Conversation is part of the
@@ -209,13 +209,25 @@ export function remediationAudience(roles) {
  * @param {CaseTypeConfig} config
  * @returns {Mode}
  */
-const postsWhenAllowed = (c, config) => {
+const conversationMode = (c, config, side) => {
   if (c.status === CASE_STATUS.COMPLETED || c.status === CASE_STATUS.VOID) {
     return 'read-only';
   }
   const allowed = config.sections?.conversation?.allowMessagesWhen;
-  return allowed && !allowed.includes(c.status) ? 'read-only' : 'edit';
+  if (allowed && !allowed.includes(c.status)) return 'read-only';
+
+  const initiatedBy = config.sections?.conversation?.initiatedBy;
+  if (initiatedBy && initiatedBy !== side && c.conversation.length === 0) {
+    return 'read-only';
+  }
+  return 'edit';
 };
+
+const reviewerConversationMode = (c, config) =>
+  conversationMode(c, config, 'reviewer');
+
+const responsiblePartyConversationMode = (c, config) =>
+  conversationMode(c, config, 'responsibleParty');
 
 /**
  * The Sections that can contribute a block to the read-only Summary Section, in
@@ -376,14 +388,14 @@ export const MATRIX = {
   // The Conversation is the thread between the Assigned Reviewer and the
   // Responsible Party side — including their Manager, who is routed here by the
   // Remediation tab to discuss remediation and report it done — each posting
-  // subject to the Case Type's `allowMessagesWhen` status gate. Everyone else
+  // subject to the Case Type's status and initiating-side gates. Everyone else
   // observes it read-only.
   conversation: {
-    assignedReviewer: postsWhenAllowed,
+    assignedReviewer: reviewerConversationMode,
     otherReviewer: 'read-only',
     reviewerManager: 'read-only',
-    responsibleParty: postsWhenAllowed,
-    responsiblePartyManager: postsWhenAllowed,
+    responsibleParty: responsiblePartyConversationMode,
+    responsiblePartyManager: responsiblePartyConversationMode,
     caseTypeOwner: 'read-only',
     journeyOwner: 'read-only',
     controls: 'read-only',

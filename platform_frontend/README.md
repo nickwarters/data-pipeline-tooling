@@ -167,7 +167,7 @@ The UX needs to be VERY good here. Users should be easily able to answer all the
 
 #### The Conversation
 
-This section allows the reviewer and the person responsbile for the case to communicate if the reviewer needs to clarify any information. Messages should just be stored in SharePoint lists, 1 item per case. Messages can be added to JSON arrays and stored in plain text on the list.
+This section allows the Reviewer and Responsible Party side to communicate. Each Case Type configures the statuses in which messages may be sent and can choose either side to initialise the Conversation; the other side receives read-only access until the first Message exists, then may reply. Messages are stored as a JSON array in a plain-text field on the single Case item.
 
 #### Remediation
 

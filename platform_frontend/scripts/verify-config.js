@@ -705,7 +705,7 @@ function checkSections(slug, file, config) {
       // list would otherwise be silent: the block would simply be composed for
       // nobody holding that name, which is exactly what an unnamed role looks like.
       const showIn = value?.showInSummary;
-      return Array.isArray(showIn)
+      const failures = Array.isArray(showIn)
         ? showIn
             .filter((r) => !knownRoles.has(r))
             .map((r) =>
@@ -714,6 +714,19 @@ function checkSections(slug, file, config) {
               )
             )
         : [];
+      const initiatedBy = value?.initiatedBy;
+      if (
+        initiatedBy !== undefined &&
+        (key !== 'conversation' ||
+          !['reviewer', 'responsibleParty'].includes(initiatedBy))
+      ) {
+        failures.push(
+          fail(
+            `Case Type "${slug}": \`sections.${key}.initiatedBy\` must be "reviewer" or "responsibleParty" on the Conversation Section`
+          )
+        );
+      }
+      return failures;
     }
   );
 }

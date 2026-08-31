@@ -224,7 +224,10 @@ const config = {
   sections: {
     details: { showInSummary: true },
     questions: { showInSummary: true },
-    conversation: { allowMessagesWhen: ['Actions In Progress'] },
+    conversation: {
+      allowMessagesWhen: ['Actions In Progress'],
+      initiatedBy: 'responsibleParty',
+    },
     notes: { showInSummary: false },
     issues: { showInSummary: true },
     remediation: { showInSummary: true },
@@ -318,10 +321,12 @@ What each field does, and how to choose its value:
 - **`sections`** — membership is the allow-list: a Section absent from this
   object does not exist for this type. `showInSummary` opts a Section's block
   into the read-only Summary tab; `allowMessagesWhen` gates when Conversation
-  messages may be posted during a live review — a terminal Case (`Completed` or
-  `Void`) closes the thread for everyone regardless of the gate. The set above
-  is the current standard full set — start from it and remove what the type
-  genuinely doesn't need.
+  messages may be posted during a live review, and `initiatedBy` selects the
+  `reviewer` or `responsibleParty` side that may send the first Message. After
+  that first Message, the other side may reply. A terminal Case (`Completed` or
+  `Void`) closes the thread for everyone regardless of either gate. The set
+  above is the current standard full set — start from it and remove what the
+  type genuinely doesn't need.
 
   An explicit `sections` object must retain `summary`, even when no other
   Summary block is configured. Omitting `sections` is still valid and keeps the
