@@ -715,14 +715,20 @@ function checkSections(slug, file, config) {
             )
         : [];
       const initiatedBy = value?.initiatedBy;
-      if (
+      if (initiatedBy !== undefined && key !== 'conversation') {
+        failures.push(
+          fail(
+            `Case Type "${slug}": \`initiatedBy\` is only valid on the Conversation Section, not \`sections.${key}\``
+          )
+        );
+      } else if (
+        key === 'conversation' &&
         initiatedBy !== undefined &&
-        (key !== 'conversation' ||
-          !['reviewer', 'responsibleParty'].includes(initiatedBy))
+        !['reviewer', 'responsibleParty'].includes(initiatedBy)
       ) {
         failures.push(
           fail(
-            `Case Type "${slug}": \`sections.${key}.initiatedBy\` must be "reviewer" or "responsibleParty" on the Conversation Section`
+            `Case Type "${slug}": \`sections.conversation.initiatedBy\` must be "reviewer" or "responsibleParty"`
           )
         );
       }

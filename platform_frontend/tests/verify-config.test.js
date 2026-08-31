@@ -370,6 +370,20 @@ test('checkCaseTypes validates the Conversation initiating side', async () => {
     assert.match(failures[0].message, /conversation\.initiatedBy/i);
   }
 
+  const misplaced = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(
+        demoConfig({
+          sections: {
+            summary: { initiatedBy: 'reviewer' },
+          },
+        })
+      ),
+    ],
+  });
+  assert.equal(misplaced.length, 1);
+  assert.match(misplaced[0].message, /only valid on the Conversation Section/);
+
   for (const initiatedBy of ['reviewer', 'responsibleParty']) {
     const failures = await checkCaseTypes({
       caseTypes: [

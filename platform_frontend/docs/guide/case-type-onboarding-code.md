@@ -226,7 +226,6 @@ const config = {
     questions: { showInSummary: true },
     conversation: {
       allowMessagesWhen: ['Actions In Progress'],
-      initiatedBy: 'responsibleParty',
     },
     notes: { showInSummary: false },
     issues: { showInSummary: true },
@@ -323,7 +322,8 @@ What each field does, and how to choose its value:
   into the read-only Summary tab; `allowMessagesWhen` gates when Conversation
   messages may be posted during a live review, and `initiatedBy` selects the
   `reviewer` or `responsibleParty` side that may send the first Message. After
-  that first Message, the other side may reply. A terminal Case (`Completed` or
+  that first Message, the other side may reply. Omitting `initiatedBy` is
+  neutral: either side may send the first Message. A terminal Case (`Completed` or
   `Void`) closes the thread for everyone regardless of either gate. The set
   above is the current standard full set — start from it and remove what the
   type genuinely doesn't need.

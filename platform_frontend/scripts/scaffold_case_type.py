@@ -207,7 +207,6 @@ const config = {{
     questions: {{ showInSummary: true }},
     conversation: {{
       allowMessagesWhen: ['Actions In Progress'],
-      initiatedBy: 'responsibleParty',
     }},
     notes: {{ showInSummary: false }},
     issues: {{ showInSummary: true }},

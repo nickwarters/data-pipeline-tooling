@@ -2037,7 +2037,7 @@ test('case page reducer keeps conversation and field state behind loaded access'
 
   const grouped = {
     ...snapshot(),
-    machine: { canToggleConversation: true },
+    machine: { canToggleConversation: true, roles: ['assignedReviewer'] },
     applicableQuestions: [
       ...snapshot().applicableQuestions,
       {
@@ -2117,6 +2117,68 @@ test('case page reducer keeps conversation and field state behind loaded access'
     }),
     lifecycleBlockedConversation,
     'a visible conversation remains closed when the lifecycle gate blocks toggling'
+  );
+});
+
+test('case page reducer refreshes only Conversation access when a thread starts', () => {
+  const initial = createInitialCaseReviewState(chrome);
+  for (const [initiatedBy, roles] of /** @type {const} */ ([
+    ['responsibleParty', ['assignedReviewer']],
+    ['reviewer', ['responsibleParty']],
+  ])) {
+    const loaded = snapshot();
+    loaded.caseRow = { ...loaded.caseRow, conversation: [] };
+    loaded.config = {
+      ...loaded.config,
+      sections: { conversation: { initiatedBy } },
+    };
+    loaded.machine = { roles };
+    loaded.access = {
+      ...loaded.access,
+      details: 'read-only',
+      conversation: 'read-only',
+    };
+    let state = caseReviewReducer(initial, {
+      type: 'case/load-finished',
+      snapshot: loaded,
+    });
+    state = caseReviewReducer(state, {
+      type: 'case/conversation-changed',
+      messages: [{ body: 'First message' }],
+    });
+    assert.equal(
+      state.routes.caseReview.snapshot?.access.conversation,
+      'edit',
+      initiatedBy
+    );
+    assert.equal(
+      state.routes.caseReview.snapshot?.access.details,
+      'read-only',
+      'unrelated access is preserved'
+    );
+  }
+});
+
+test('case page reducer updates Conversation safely when an error snapshot has no config', () => {
+  const initial = createInitialCaseReviewState(chrome);
+  const incomplete = snapshot();
+  incomplete.error = 'Case Type configuration unavailable';
+  incomplete.config = null;
+  incomplete.access = { ...incomplete.access, conversation: 'read-only' };
+  let state = caseReviewReducer(initial, {
+    type: 'case/load-finished',
+    snapshot: incomplete,
+  });
+  state = caseReviewReducer(state, {
+    type: 'case/conversation-changed',
+    messages: [{ body: 'Message received during refresh' }],
+  });
+  assert.deepEqual(state.routes.caseReview.snapshot?.caseRow?.conversation, [
+    { body: 'Message received during refresh' },
+  ]);
+  assert.equal(
+    state.routes.caseReview.snapshot?.access.conversation,
+    'read-only'
   );
 });
 

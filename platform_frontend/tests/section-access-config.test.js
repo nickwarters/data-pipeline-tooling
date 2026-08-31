@@ -206,6 +206,54 @@ test('evaluateAccess: Reviewer initiates and frontline can reply after the first
   );
 });
 
+test('evaluateAccess: a missing or malformed Conversation is treated as an empty thread', () => {
+  const cfg = makeConfig({
+    sections: { conversation: { initiatedBy: 'reviewer' } },
+  });
+  for (const conversation of [undefined, null, {}, 'not a thread']) {
+    const c = makeCase(/** @type {any} */ ({ conversation }));
+    assert.equal(
+      evaluateAccess('conversation', ['responsibleParty'], c, cfg),
+      'read-only'
+    );
+    assert.equal(
+      evaluateAccess('conversation', ['assignedReviewer'], c, cfg),
+      'edit'
+    );
+  }
+});
+
+test('evaluateAccess: dual-side roles use the Reviewer side to initiate', () => {
+  const c = makeCase({ conversation: [] });
+  const roles =
+    /** @type {import('../src/services/section-access.js').Role[]} */ ([
+      'assignedReviewer',
+      'responsibleParty',
+    ]);
+  assert.equal(
+    evaluateAccess(
+      'conversation',
+      roles,
+      c,
+      makeConfig({
+        sections: { conversation: { initiatedBy: 'reviewer' } },
+      })
+    ),
+    'edit'
+  );
+  assert.equal(
+    evaluateAccess(
+      'conversation',
+      roles,
+      c,
+      makeConfig({
+        sections: { conversation: { initiatedBy: 'responsibleParty' } },
+      })
+    ),
+    'read-only'
+  );
+});
+
 test('evaluateAccess: a terminal Case closes the Conversation even with no allowMessagesWhen gate', () => {
   const cfg = makeConfig({ sections: { conversation: {} } });
   for (const status of /** @type {const} */ (['Completed', 'Void'])) {

@@ -196,11 +196,8 @@ export function remediationAudience(roles) {
 }
 
 /**
- * The Conversation cell shared by every participant in the thread. A Case Type
- * may name the side that starts the Conversation; the other side remains a
- * reader until the first message has been posted, then may reply.
- *
- * A terminal Case closes the thread for everyone, gate or no gate. The freeze
+ * The Conversation cell shared by every participant in the thread. A terminal
+ * Case closes the thread for everyone, gate or no gate. The freeze
  * on a closed Case is a framework rule, and the Conversation is part of the
  * record it freezes — a Case Type's gate chooses when the thread is open
  * during the review, not whether it survives the end of one.
@@ -209,25 +206,15 @@ export function remediationAudience(roles) {
  * @param {CaseTypeConfig} config
  * @returns {Mode}
  */
-const conversationMode = (c, config, side) => {
+const conversationMode = (c, config) => {
   if (c.status === CASE_STATUS.COMPLETED || c.status === CASE_STATUS.VOID) {
     return 'read-only';
   }
   const allowed = config.sections?.conversation?.allowMessagesWhen;
   if (allowed && !allowed.includes(c.status)) return 'read-only';
 
-  const initiatedBy = config.sections?.conversation?.initiatedBy;
-  if (initiatedBy && initiatedBy !== side && c.conversation.length === 0) {
-    return 'read-only';
-  }
   return 'edit';
 };
-
-const reviewerConversationMode = (c, config) =>
-  conversationMode(c, config, 'reviewer');
-
-const responsiblePartyConversationMode = (c, config) =>
-  conversationMode(c, config, 'responsibleParty');
 
 /**
  * The Sections that can contribute a block to the read-only Summary Section, in
@@ -391,11 +378,11 @@ export const MATRIX = {
   // subject to the Case Type's status and initiating-side gates. Everyone else
   // observes it read-only.
   conversation: {
-    assignedReviewer: reviewerConversationMode,
+    assignedReviewer: conversationMode,
     otherReviewer: 'read-only',
     reviewerManager: 'read-only',
-    responsibleParty: responsiblePartyConversationMode,
-    responsiblePartyManager: responsiblePartyConversationMode,
+    responsibleParty: conversationMode,
+    responsiblePartyManager: conversationMode,
     caseTypeOwner: 'read-only',
     journeyOwner: 'read-only',
     controls: 'read-only',
@@ -623,6 +610,16 @@ export function evaluateAccess(
         ? cell(caseRow, caseTypeConfig, catalogue)
         : cell;
     if (RANK[mode] > RANK[best]) best = mode;
+  }
+  if (section === 'conversation' && best === 'edit') {
+    const initiatedBy = caseTypeConfig.sections?.conversation?.initiatedBy;
+    const side = conversationSideOf(roles);
+    const messageCount = Array.isArray(caseRow.conversation)
+      ? caseRow.conversation.length
+      : 0;
+    if (initiatedBy && initiatedBy !== side && messageCount === 0) {
+      return 'read-only';
+    }
   }
   return best;
 }

@@ -167,7 +167,7 @@ The UX needs to be VERY good here. Users should be easily able to answer all the
 
 #### The Conversation
 
-This section allows the Reviewer and Responsible Party side to communicate. Each Case Type configures the statuses in which messages may be sent and can choose either side to initialise the Conversation; the other side receives read-only access until the first Message exists, then may reply. Messages are stored as a JSON array in a plain-text field on the single Case item.
+This section allows the Reviewer and Responsible Party side to communicate. Each Case Type configures the statuses in which messages may be sent and can choose either side to initiate the Conversation; the other side receives read-only access until the first Message exists, then may reply. Messages are stored as a JSON array in a plain-text field on the single Case item.
 
 #### Remediation
 
