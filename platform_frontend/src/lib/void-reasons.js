@@ -12,6 +12,10 @@
  *
  * The keys are what is persisted; the labels are display copy and may be
  * reworded freely.
+ *
+ * `other` is the escape hatch and the only key that means nothing on its own:
+ * it is stored alongside a written note, and a Reviewer who picks it has not
+ * finished choosing until that note is filled in.
  */
 
 /** @typedef {import('../sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
@@ -29,7 +33,27 @@ export const VOID_REASONS = Object.freeze([
   Object.freeze({ key: 'no-evidence', label: 'Evidence unavailable' }),
   Object.freeze({ key: 'superseded', label: 'Superseded by another Case' }),
   Object.freeze({ key: 'withdrawn', label: 'Withdrawn by the business' }),
+  Object.freeze({ key: 'other', label: 'Other' }),
 ]);
+
+/**
+ * The one reason that names nothing on its own. It is last in display order and
+ * carries a written note instead of a meaning of its own, so a Case voided
+ * under it still says why — see `voidReasonNeedsNote`.
+ */
+export const VOID_REASON_OTHER = 'other';
+
+/**
+ * Whether a reason is answered by its key alone, or needs the Reviewer to write
+ * what it was. Only `other` needs one: every other key already names its own
+ * meaning, and the report groups on the key.
+ *
+ * @param {string | null | undefined} key
+ * @returns {boolean}
+ */
+export function voidReasonNeedsNote(key) {
+  return key === VOID_REASON_OTHER;
+}
 
 /**
  * The reasons a Case Type offers, in framework display order. A Case Type that
@@ -66,4 +90,21 @@ export function isVoidReasonKey(key) {
 export function voidReasonLabel(key) {
   if (!key) return '';
   return VOID_REASONS.find((reason) => reason.key === key)?.label ?? key;
+}
+
+/**
+ * How a stored reason reads on a voided Case: the label, and the written note
+ * behind it when there is one. The note is what carries the meaning under
+ * `other`, so a banner that showed the label alone would say only that the
+ * Reviewer had a reason.
+ *
+ * @param {string | null | undefined} key
+ * @param {string | null | undefined} note
+ * @returns {string}
+ */
+export function voidReasonText(key, note) {
+  const label = voidReasonLabel(key);
+  const written = (note ?? '').trim();
+  if (!written) return label;
+  return label ? `${label}: ${written}` : written;
 }

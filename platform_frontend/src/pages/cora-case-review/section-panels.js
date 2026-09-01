@@ -162,6 +162,7 @@ export const SECTION_PANELS = {
       machine: snapshot.machine,
       config,
       reasonKey: route.voidReason,
+      note: route.voidReasonNote,
     });
     const details = caseDetailsView(
       caseRow,
@@ -175,6 +176,8 @@ export const SECTION_PANELS = {
       onToggle: () => dispatch({ type: 'case/void-panel-toggled' }),
       onReasonSelected: (reasonKey) =>
         dispatch({ type: 'case/void-reason-selected', reasonKey }),
+      onNoteChanged: (note) =>
+        dispatch({ type: 'case/void-note-changed', note }),
       onConfirm: actions.onVoid,
     });
     return voidView ? [details, voidView] : [details];

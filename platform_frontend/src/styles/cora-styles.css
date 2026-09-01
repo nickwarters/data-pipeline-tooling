@@ -2462,6 +2462,21 @@
   margin-top: var(--cora-space-2);
 }
 
+/* The note only exists while `Other` is selected, so it is styled as part of
+   the panel rather than as a field that is sometimes disabled. */
+[data-cora-root] .cora-void-note-label {
+  display: block;
+  margin-top: var(--cora-space-3);
+}
+
+[data-cora-root] .cora-void-note {
+  display: block;
+  width: 100%;
+  margin-top: var(--cora-space-2);
+  min-height: 4rem;
+  resize: vertical;
+}
+
 [data-cora-root] .cora-void-confirm {
   margin-top: var(--cora-space-3);
   background: var(--cora-color-danger);

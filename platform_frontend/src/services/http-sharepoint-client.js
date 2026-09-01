@@ -1238,6 +1238,8 @@ function rowFromItem(item, etag) {
     completedAt:
       typeof item?.CompletedAt === 'string' ? item.CompletedAt : null,
     voidReason: item?.VoidReason != null ? String(item.VoidReason) : undefined,
+    voidReasonNote:
+      item?.VoidReasonNote != null ? String(item.VoidReasonNote) : undefined,
     voidedAt: typeof item?.VoidedAt === 'string' ? item.VoidedAt : null,
     voidedBy: voidedByPerson?.Name
       ? toBareAccount(String(voidedByPerson.Name))
@@ -1387,6 +1389,8 @@ function itemFromRow(fields) {
   // numeric id that only a round trip to the directory can supply, and this
   // function is pure. `patchCase` resolves it and sets the column there.
   if (fields.voidReason !== undefined) out.VoidReason = fields.voidReason;
+  if (fields.voidReasonNote !== undefined)
+    out.VoidReasonNote = fields.voidReasonNote;
   if (fields.voidedAt !== undefined) out.VoidedAt = fields.voidedAt;
   if (fields.hasOpenAppeal !== undefined)
     out.HasOpenAppeal = fields.hasOpenAppeal;

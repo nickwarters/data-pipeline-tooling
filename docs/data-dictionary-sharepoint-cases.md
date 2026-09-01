@@ -239,6 +239,7 @@ silver, `case_type` is always the Case Type of the list the row came from.
 | `placed_on_hold_at` | `PlacedOnHoldAt` | `datetime` | Yes | — | When the hold was placed. | | None | Cleared automatically when leaving `In-progress`. |
 | `voided_at` | `VoidedAt` | `datetime` | Yes | — | When the Case was voided. | | None | |
 | `void_reason` | `VoidReason` | `str` | Yes | — | Void Reason key from the framework vocabulary. | `duplicate` | None | A key, not display copy. Not constrained here: the vocabulary is the review application's and may widen. |
+| `void_reason_note` | `VoidReasonNote` | `str` | Yes | — | The Reviewer's own words behind an `other` Void Reason. | `The file was destroyed in the flood` | Internal | Free text, and the only thing an `other` void means. Qualifies `void_reason`; nothing groups on it. |
 | `voided_by_name` | `VoidedBy/Name` | `str` | Yes | — | Whoever voided the Case. | `i:0#.w\|CONTOSO\d.reid` | PII | |
 | `outcome` | `Outcome` | `str` | Yes | — | Live working Outcome. | `Upheld` | None | Free text; the vocabulary is the Case Type's. |
 | `outcome_at_completion` | `OutcomeAtCompletion` | `str` | Yes | — | Frozen Outcome snapshot taken at reportable. | `Not upheld` | None | |

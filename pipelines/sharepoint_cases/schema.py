@@ -146,6 +146,9 @@ class CaseVersion:
 
     voided_at: datetime
     void_reason: str
+    # Free text and the only thing an "other" void means, so it carries no
+    # OneOf and nothing groups on it: void_reason stays the grouping key.
+    void_reason_note: str
     voided_by_name: str
 
     outcome: str

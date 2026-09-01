@@ -121,6 +121,7 @@ def synthetic_silver(*, lists: int, cases: int, versions: int) -> pd.DataFrame:
                         "placed_on_hold_at": pd.NaT,
                         "voided_at": ended if status == "Void" else pd.NaT,
                         "void_reason": "",
+                        "void_reason_note": "",
                         "voided_by_name": "",
                         "outcome": "Fair",
                         "outcome_at_completion": "Fair",

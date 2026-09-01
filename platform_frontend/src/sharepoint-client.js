@@ -167,7 +167,10 @@
  * `Void`, stamping `voidReason` (a key from the framework's Void Reason
  * vocabulary), `voidedAt` and `voidedBy` (a bare account login). Voiding takes
  * no Outcome snapshot, so a Case voided before the reportable milestone carries
- * none at all.
+ * none at all. `voidReasonNote` is the Reviewer's own words, carried only by
+ * the `other` reason — which means nothing without them — and `null` under
+ * every keyed reason, which already names itself. The report still groups on
+ * `voidReason`, so the note is display copy and never a grouping key.
  *
  * `effectiveOutcome` / `effectiveHadRemediation` / `outcomeOverridden`
  * carry the corrected result for the responsible-party-team report; they
@@ -229,6 +232,7 @@
  * remediationDueDate?: string | null,
  * completedAt: string | null,
  * voidReason?: string | null,
+ * voidReasonNote?: string | null,
  * voidedAt?: string | null,
  * voidedBy?: string | null,
  * outcome?: string | null,

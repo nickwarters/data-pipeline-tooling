@@ -158,6 +158,9 @@ test('CaseMachine void stamps the terminal fields and no Outcome', () => {
   assert.deepEqual(fields, {
     status: 'Void',
     voidReason: 'duplicate',
+    // A keyed reason names itself, so the note is explicitly nothing rather
+    // than an empty string a reader would have to interpret.
+    voidReasonNote: null,
     voidedAt: '2026-03-04T09:00:00.000Z',
     voidedBy: 'u1',
     onHold: false,
@@ -174,6 +177,25 @@ test('CaseMachine void stamps the terminal fields and no Outcome', () => {
   ]) {
     assert.equal(Object.hasOwn(fields, key), false, key);
   }
+});
+
+test('CaseMachine void records the words written under a reason that has no meaning alone', () => {
+  const machine = new CaseMachine(
+    { ...BASE_ROW, status: 'In-progress' },
+    { id: 'u1' },
+    NO_CAPABILITIES,
+    EMPTY_CONFIG,
+    { catalogue: CATALOGUE, now: () => new Date('2026-03-04T09:00:00Z') }
+  );
+
+  assert.equal(
+    machine.transitionToVoid('other', '  the file was destroyed  ')
+      .voidReasonNote,
+    'the file was destroyed'
+  );
+  // Whitespace is not a written reason; the control gates on the same rule, so
+  // this is the second half of one guard rather than a second guard.
+  assert.equal(machine.transitionToVoid('other', '   ').voidReasonNote, null);
 });
 
 test('CaseMachine Issues editing needs no Case Type opt-in and freezes at reportable', () => {

@@ -191,6 +191,7 @@ what was reviewed.
  * remediationDueDate?: string | null,
  * completedAt: string | null,
  * voidReason?: string | null,
+ * voidReasonNote?: string | null,
  * voidedAt?: string | null,
  * voidedBy?: string | null,
  * amendedOutcome?: AmendedOutcome | null,
