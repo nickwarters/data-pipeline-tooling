@@ -159,6 +159,12 @@ Reduced from `case_current` over `status = Void` with a `voided_at`. Grain:
 | `case_count` | `int` | No | Voided Cases in the group. |
 | `age_at_void_days_mean` / `_max` | `float` | Yes | `voided_at − created` in decimal days; NULL where no Case in the group carries `created`. |
 
+`void_reason_note` — the free text behind an `other` void — deliberately does not
+reach this table. It is a per-Case sentence, not a dimension: grouping on it
+would give one row per distinct note and turn an aggregate back into a listing.
+The note stays on `case_current`, where a reader who has a group can go and read
+it.
+
 ### `answer_action_load_current` — remediation Actions per question
 
 Reduced from the `answer_action` Detail Table, with `case_current` for the

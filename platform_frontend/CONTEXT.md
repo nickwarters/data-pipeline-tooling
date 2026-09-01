@@ -46,8 +46,8 @@ _Avoid_: Closed, finished, done
 
 **Void Case**:
 A **Case** in the terminal `Void` **status**: abandoned before it could be reviewed to a
-conclusion, and stamped with a **Void Reason**, `voidedAt` and `voidedBy` (the account of
-whoever voided it). Voided by its **Assigned Reviewer** alone, from `In-progress` or
+conclusion, and stamped with a **Void Reason** — plus a **Void Reason Note** where that
+reason is _Other_ — `voidedAt` and `voidedBy` (the account of whoever voided it). Voided by its **Assigned Reviewer** alone, from `In-progress` or
 `Actions In Progress`, through a two-step control that names the consequences and demands
 a reason. **Deliberately carries no Outcome** — it is not reviewed work and must not count
 as any — and there is no un-void: a Case voided in error is raised again. Its Answers,
@@ -58,14 +58,24 @@ during a live review.
 _Avoid_: Cancelled, deleted, closed (a Case is never removed — voiding is a status)
 
 **Void Reason**:
-Why a **Case** was voided, chosen from a framework-owned vocabulary of six —
+Why a **Case** was voided, chosen from a framework-owned vocabulary of seven —
 _Duplicate of another Case_, _Raised in error_, _Out of scope for review_, _Evidence
-unavailable_, _Superseded by another Case_, _Withdrawn by the business_. A **Case Type**
-may narrow which of them it offers (`voidReasons`) but may not add one: the **Reviewer
-Manager**'s report groups reasons across Case Types, which only means something while a
-key means the same everywhere. Stored as the key; a key no longer in the vocabulary
-renders as itself rather than blank.
+unavailable_, _Superseded by another Case_, _Withdrawn by the business_, _Other_. A
+**Case Type** may narrow which of them it offers (`voidReasons`) but may not add one: the
+**Reviewer Manager**'s report groups reasons across Case Types, which only means something
+while a key means the same everywhere. Stored as the key; a key no longer in the
+vocabulary renders as itself rather than blank.
 _Avoid_: Void code, cancellation reason
+
+**Void Reason Note**:
+The **Reviewer**'s own words behind an _Other_ **Void Reason** — the one reason that names
+nothing on its own, and so is not a chosen reason at all until the note is written. The
+box appears only under _Other_, is emptied whenever the reason changes, and holds the Void
+until it is filled in; it is stored on the row as `voidReasonNote` and is `null` under
+every keyed reason. Display copy, never a grouping key: the **Reviewer Manager**'s report
+still groups on the **Void Reason** key, so _Other_ groups as one bucket however many
+different notes sit under it.
+_Avoid_: Void comment, free-text reason, other reason
 
 **Case Status**:
 The lifecycle state on the Case row: **`To-allocate`** → (**allocation claim**)

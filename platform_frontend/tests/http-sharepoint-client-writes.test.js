@@ -812,7 +812,8 @@ test('HttpSharePointClient: patchCase writes the void columns, and omits them wh
     'case-1',
     {
       status: 'Void',
-      voidReason: 'duplicate',
+      voidReason: 'other',
+      voidReasonNote: 'The file was destroyed in the flood',
       voidedAt: '2026-07-05T09:00:00.000Z',
       voidedBy: 'reviewer-1',
     },
@@ -824,7 +825,8 @@ test('HttpSharePointClient: patchCase writes the void columns, and omits them wh
   assert.ok(patch, 'PATCH was issued');
   assert.deepEqual(JSON.parse(String(patch.body)), {
     Status: 'Void',
-    VoidReason: 'duplicate',
+    VoidReason: 'other',
+    VoidReasonNote: 'The file was destroyed in the flood',
     VoidedAt: '2026-07-05T09:00:00.000Z',
     VoidedById: 14,
   });

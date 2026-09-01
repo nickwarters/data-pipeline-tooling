@@ -62,6 +62,7 @@ test('voidControlView preserves the disclosure markup and callback props', () =>
     onReasonSelected: (reasonKey) => {
       selected = reasonKey;
     },
+    onNoteChanged: () => {},
     onConfirm: () => {
       confirmed += 1;
     },
@@ -79,6 +80,8 @@ test('voidControlView preserves the disclosure markup and callback props', () =>
     Array.from(select.querySelectorAll('option')).map((option) => option.value),
     ['', ...VOID_REASONS.map((reason) => reason.key)]
   );
+  // A keyed reason answers itself, so no box is offered under one.
+  assert.equal(root.querySelector('.cora-void-note'), null);
   select.value = 'withdrawn';
   fireEvent(select, 'change');
   assert.equal(root.querySelector('.cora-void-confirm').disabled, false);
@@ -93,6 +96,7 @@ test('voidControlView preserves the disclosure markup and callback props', () =>
     pending: true,
     onToggle: () => {},
     onReasonSelected: () => {},
+    onNoteChanged: () => {},
     onConfirm: () => {},
   });
   assert.equal(
@@ -217,4 +221,142 @@ test('voidPatch: an offered reason returns the CaseMachine transition', () => {
   assert.equal(fields?.voidReason, 'superseded');
   assert.equal(fields?.voidedBy, 'u1');
   assert.equal(typeof fields?.voidedAt, 'string');
+});
+
+test('voidControlView: choosing "Other" offers the box, and typing in it reports what was written', () => {
+  let written = null;
+  const node = voidControlView({
+    control: voidControl({
+      machine: machineFor('In-progress'),
+      config: CONFIG,
+      reasonKey: 'other',
+      note: 'already here',
+    }),
+    disclosureOpen: true,
+    pending: false,
+    onToggle: () => {},
+    onReasonSelected: () => {},
+    onNoteChanged: (note) => {
+      written = note;
+    },
+    onConfirm: () => {},
+  });
+  const root = findByClass({ _children: [node] }, 'cora-void');
+  const box = root.querySelector('.cora-void-note');
+  assert.equal(box.value, 'already here');
+  assert.equal(box.getAttribute('aria-label'), 'Say why');
+  box.value = 'the customer died before the review';
+  fireEvent(box, 'input');
+  assert.equal(written, 'the customer died before the review');
+});
+
+test('voidControlView: the confirm stays dead while the box is empty', () => {
+  const empty = voidControlView({
+    control: voidControl({
+      machine: machineFor('In-progress'),
+      config: CONFIG,
+      reasonKey: 'other',
+    }),
+    disclosureOpen: true,
+    pending: false,
+    onToggle: () => {},
+    onReasonSelected: () => {},
+    onNoteChanged: () => {},
+    onConfirm: () => {},
+  });
+  assert.equal(
+    findByClass({ _children: [empty] }, 'cora-void').querySelector(
+      '.cora-void-confirm'
+    ).disabled,
+    true
+  );
+});
+
+test('voidControl: "Other" is not a chosen reason until it is written out', () => {
+  const machine = machineFor('In-progress');
+  const unwritten = voidControl({
+    machine,
+    config: CONFIG,
+    reasonKey: 'other',
+  });
+  assert.equal(unwritten.noteRequired, true);
+  assert.equal(unwritten.disabled, true);
+  // Whitespace is not an answer.
+  assert.equal(
+    voidControl({ machine, config: CONFIG, reasonKey: 'other', note: '   ' })
+      .disabled,
+    true
+  );
+  const written = voidControl({
+    machine,
+    config: CONFIG,
+    reasonKey: 'other',
+    note: 'the file was destroyed',
+  });
+  assert.equal(written.disabled, false);
+  assert.equal(written.note, 'the file was destroyed');
+});
+
+test('voidControl: a note left over from "Other" does not follow a keyed reason', () => {
+  const control = voidControl({
+    machine: machineFor('In-progress'),
+    config: CONFIG,
+    reasonKey: 'duplicate',
+    note: 'left over',
+  });
+  assert.equal(control.noteRequired, false);
+  assert.equal(control.note, '');
+  assert.equal(control.disabled, false);
+});
+
+test('voidControl: a Case Type that does not offer "Other" never asks for a note', () => {
+  assert.equal(
+    voidControl({
+      machine: machineFor('In-progress'),
+      config: { ...CONFIG, voidReasons: ['withdrawn'] },
+      reasonKey: 'other',
+      note: 'written anyway',
+    }).noteRequired,
+    false
+  );
+});
+
+test('voidPatch: null under "Other" until the Reviewer writes the reason', () => {
+  assert.equal(
+    voidPatch({
+      machine: machineFor('In-progress'),
+      config: CONFIG,
+      reasonKey: 'other',
+    }),
+    null
+  );
+  assert.equal(
+    voidPatch({
+      machine: machineFor('In-progress'),
+      config: CONFIG,
+      reasonKey: 'other',
+      note: '  ',
+    }),
+    null
+  );
+});
+
+test('voidPatch: a written "Other" carries the note onto the row, and a keyed reason clears it', () => {
+  const written = voidPatch({
+    machine: machineFor('In-progress'),
+    config: CONFIG,
+    reasonKey: 'other',
+    note: '  the file was destroyed  ',
+  });
+  assert.equal(written?.voidReason, 'other');
+  assert.equal(written?.voidReasonNote, 'the file was destroyed');
+
+  const keyed = voidPatch({
+    machine: machineFor('In-progress'),
+    config: CONFIG,
+    reasonKey: 'duplicate',
+    note: 'left over',
+  });
+  assert.equal(keyed?.voidReason, 'duplicate');
+  assert.equal(keyed?.voidReasonNote, null);
 });

@@ -186,6 +186,7 @@ RAW_FEED_COLUMNS = (
     "PlacedOnHoldAt",
     "VoidedAt",
     "VoidReason",
+    "VoidReasonNote",
     "VoidedBy/Name",
     "Outcome",
     "OutcomeAtCompletion",

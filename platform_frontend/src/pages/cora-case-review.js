@@ -35,7 +35,7 @@ import {
   completionPatch,
 } from './cora-case-review/completion-actions.js';
 import { voidPatch } from './cora-case-review/void-actions.js';
-import { voidReasonLabel } from '../lib/void-reasons.js';
+import { voidReasonText } from '../lib/void-reasons.js';
 
 /** @typedef {import('../services/save-queue.js').SaveStatus} SaveStatus */
 /** @typedef {import('../lib/people-search.js').PeopleSearchState} PeopleSearchState */
@@ -77,6 +77,9 @@ import { voidReasonLabel } from '../lib/void-reasons.js';
  * @property {boolean} completionPending
  * @property {boolean} voidPanelOpen
  * @property {string} voidReason The Void Reason key chosen in the open panel.
+ * @property {string} voidReasonNote The written reason behind an `other` choice.
+ *   Cleared whenever the reason changes, so it can only ever describe the
+ *   reason currently selected.
  * @property {boolean} voidPending
  * @property {Record<string, Map<string, boolean>>} captureCollapsed
  * @property {Record<string, Record<string, PeopleSearchState>>} captureSearch
@@ -110,6 +113,7 @@ export function createInitialCaseReviewState(chrome) {
         completionPending: false,
         voidPanelOpen: false,
         voidReason: '',
+        voidReasonNote: '',
         voidPending: false,
         captureCollapsed: {},
         captureSearch: {},
@@ -435,10 +439,19 @@ export function caseReviewReducer(state, action) {
     return patchRoute(state, 'caseReview', {
       voidPanelOpen: !route.voidPanelOpen,
       voidReason: '',
+      voidReasonNote: '',
     });
   }
   if (action.type === 'case/void-reason-selected') {
-    return patchRoute(state, 'caseReview', { voidReason: action.reasonKey });
+    // Changing the reason forgets what was written under the last one: a note
+    // kept across the change would describe a reason nobody chose.
+    return patchRoute(state, 'caseReview', {
+      voidReason: action.reasonKey,
+      voidReasonNote: '',
+    });
+  }
+  if (action.type === 'case/void-note-changed') {
+    return patchRoute(state, 'caseReview', { voidReasonNote: action.note });
   }
   if (action.type === 'case/void-pending') {
     // Identity guard: the pending flag is already what the effect reports.
@@ -497,7 +510,7 @@ function voidBannerView(caseRow) {
     'div',
     { key: 'void-banner', className: 'cora-void-banner', role: 'status' },
     h('span', { className: 'cora-void-pill' }, CASE_STATUS.VOID),
-    h('p', {}, voidReasonLabel(caseRow.voidReason)),
+    h('p', {}, voidReasonText(caseRow.voidReason, caseRow.voidReasonNote)),
     h(
       'p',
       {},
@@ -922,6 +935,7 @@ export function createRouteSlice(params, context) {
         machine: snapshot.machine,
         config,
         reasonKey: route.voidReason,
+        note: route.voidReasonNote,
       });
       if (!patchFields) return;
       tools.dispatch({ type: 'case/void-pending', pending: true });

@@ -118,6 +118,7 @@ test('the panel map owns completion on Summary and Void on Case Details', () => 
     voidPanelOpen: false,
     voidPending: false,
     voidReason: '',
+    voidReasonNote: '',
     completionPending: false,
     captureCollapsed: {},
     captureSearch: {},
