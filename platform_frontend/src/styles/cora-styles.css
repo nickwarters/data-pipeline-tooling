@@ -2457,9 +2457,18 @@
   color: var(--cora-color-danger);
 }
 
+/* Wears the same box as every other select in the app. Without an explicit
+   fill the control falls back to the UA default, which follows the OS colour
+   scheme rather than ours — so on a dark-mode machine it stayed dark even with
+   the app forced to light. */
 [data-cora-root] .cora-void-reason {
   display: block;
   margin-top: var(--cora-space-2);
+  padding: var(--cora-space-2) var(--cora-space-3);
+  color: inherit;
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
 }
 
 /* The note only exists while `Other` is selected, so it is styled as part of
