@@ -964,6 +964,211 @@ def test_migrate_reports_an_empty_tree_without_failing(tmp_path):
     assert "no migrations under" in result.stdout
 
 
+def test_migrate_database_narrows_the_walk_to_the_named_target(tmp_path):
+    # --database names one <subject>/<database> the tree carries; only that one
+    # is migrated and the summary counts only it.
+    tree = tmp_path / "migrations"
+    _migration(tree, "cases", "raw", "0001_create_cases.sql", CREATE_CASES)
+    _migration(tree, "cases", "silver", "0001_create_cases.sql", CREATE_CASES)
+    _migration(tree, "activity", "gold", "0001_create_events.sql", CREATE_EVENTS)
+    base = tmp_path / "data"
+
+    result = _cli(
+        "migrate",
+        "--base-dir",
+        str(base),
+        "--migrations-root",
+        str(tree),
+        "--database",
+        "cases/silver",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "cases" in _tables(base / "cases" / "silver.db")
+    assert not (base / "cases" / "raw.db").exists()
+    assert not (base / "activity" / "gold.db").exists()
+    assert "cases/silver" in result.stdout
+    assert "cases/raw" not in result.stdout
+    assert "migrated 1 database(s): 1 applied, 0 up to date, 0 failed" in result.stdout
+
+
+def test_migrate_database_repeats_and_keeps_tree_order(tmp_path):
+    # Several --database flags select several targets; they are walked in the
+    # tree's order, not the order they were named in.
+    tree = tmp_path / "migrations"
+    _migration(tree, "cases", "raw", "0001_create_cases.sql", CREATE_CASES)
+    _migration(tree, "cases", "silver", "0001_create_cases.sql", CREATE_CASES)
+    _migration(tree, "activity", "gold", "0001_create_events.sql", CREATE_EVENTS)
+    base = tmp_path / "data"
+
+    result = _cli(
+        "migrate",
+        "--base-dir",
+        str(base),
+        "--migrations-root",
+        str(tree),
+        "--database",
+        "cases/raw",
+        "--database",
+        "activity/gold",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "cases" in _tables(base / "cases" / "raw.db")
+    assert "events" in _tables(base / "activity" / "gold.db")
+    assert not (base / "cases" / "silver.db").exists()
+    assert result.stdout.index("activity/gold") < result.stdout.index("cases/raw")
+    assert "migrated 2 database(s): 2 applied, 0 up to date, 0 failed" in result.stdout
+
+
+def test_migrate_database_check_reports_only_the_named_target(tmp_path):
+    # --check composes with --database: the gate judges the named database and
+    # says nothing about the rest.
+    tree = tmp_path / "migrations"
+    _migration(tree, "cases", "raw", "0001_create_cases.sql", CREATE_CASES)
+    _migration(tree, "cases", "silver", "0001_create_cases.sql", CREATE_CASES)
+    base = tmp_path / "data"
+    _cli(
+        "migrate",
+        "--base-dir",
+        str(base),
+        "--migrations-root",
+        str(tree),
+        "--database",
+        "cases/silver",
+    )
+
+    result = _cli(
+        "migrate",
+        "--base-dir",
+        str(base),
+        "--migrations-root",
+        str(tree),
+        "--check",
+        "--database",
+        "cases/silver",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "cases/raw" not in result.stdout
+    assert "checked 1 database(s): 0 pending, 1 up to date, 0 failed" in result.stdout
+
+
+def test_migrate_database_rejects_a_name_the_tree_does_not_carry(tmp_path):
+    # The tree is still the registry: a database without a directory in it is
+    # not under migration control, so naming one is an error that migrates
+    # nothing — including the names beside it that *are* known.
+    tree = tmp_path / "migrations"
+    _migration(tree, "cases", "raw", "0001_create_cases.sql", CREATE_CASES)
+    base = tmp_path / "data"
+
+    result = _cli(
+        "migrate",
+        "--base-dir",
+        str(base),
+        "--migrations-root",
+        str(tree),
+        "--database",
+        "cases/raw",
+        "--database",
+        "cases/sliver",
+    )
+
+    assert result.returncode == 1
+    assert "unknown database(s) cases/sliver" in result.stderr
+    assert "known: cases/raw" in result.stderr
+    assert not (base / "cases" / "raw.db").exists()
+    assert "migrated" not in result.stdout
+
+
+def test_migrate_subject_selects_every_database_under_it(tmp_path):
+    # --subject names a subject; every database the tree carries under it is
+    # migrated and nothing under any other subject is touched.
+    tree = tmp_path / "migrations"
+    _migration(tree, "cases", "raw", "0001_create_cases.sql", CREATE_CASES)
+    _migration(tree, "cases", "silver", "0001_create_cases.sql", CREATE_CASES)
+    _migration(tree, "cases", "gold", "0001_create_cases.sql", CREATE_CASES)
+    _migration(tree, "activity", "gold", "0001_create_events.sql", CREATE_EVENTS)
+    base = tmp_path / "data"
+
+    result = _cli(
+        "migrate",
+        "--base-dir",
+        str(base),
+        "--migrations-root",
+        str(tree),
+        "--subject",
+        "cases",
+    )
+
+    assert result.returncode == 0, result.stderr
+    for database in ("raw", "silver", "gold"):
+        assert "cases" in _tables(base / "cases" / f"{database}.db")
+    assert not (base / "activity" / "gold.db").exists()
+    assert "activity/gold" not in result.stdout
+    assert "migrated 3 database(s): 3 applied, 0 up to date, 0 failed" in result.stdout
+
+
+def test_migrate_subject_and_database_combine_as_a_union(tmp_path):
+    # A subject plus a database under another subject selects both, walked in
+    # tree order; a database already covered by its subject is not counted twice.
+    tree = tmp_path / "migrations"
+    _migration(tree, "cases", "raw", "0001_create_cases.sql", CREATE_CASES)
+    _migration(tree, "cases", "silver", "0001_create_cases.sql", CREATE_CASES)
+    _migration(tree, "activity", "gold", "0001_create_events.sql", CREATE_EVENTS)
+    _migration(tree, "reference", "lookups", "0001_create_cases.sql", CREATE_CASES)
+    base = tmp_path / "data"
+
+    result = _cli(
+        "migrate",
+        "--base-dir",
+        str(base),
+        "--migrations-root",
+        str(tree),
+        "--subject",
+        "cases",
+        "--database",
+        "activity/gold",
+        "--database",
+        "cases/raw",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "cases" in _tables(base / "cases" / "raw.db")
+    assert "cases" in _tables(base / "cases" / "silver.db")
+    assert "events" in _tables(base / "activity" / "gold.db")
+    assert not (base / "reference" / "lookups.db").exists()
+    assert result.stdout.index("activity/gold") < result.stdout.index("cases/raw")
+    assert "migrated 3 database(s): 3 applied, 0 up to date, 0 failed" in result.stdout
+
+
+def test_migrate_subject_rejects_a_name_the_tree_does_not_carry(tmp_path):
+    # As with --database: an unknown subject is an error naming the known
+    # ones, and nothing is migrated — not even the valid selection beside it.
+    tree = tmp_path / "migrations"
+    _migration(tree, "cases", "raw", "0001_create_cases.sql", CREATE_CASES)
+    _migration(tree, "activity", "gold", "0001_create_events.sql", CREATE_EVENTS)
+    base = tmp_path / "data"
+
+    result = _cli(
+        "migrate",
+        "--base-dir",
+        str(base),
+        "--migrations-root",
+        str(tree),
+        "--subject",
+        "cases",
+        "--subject",
+        "caes",
+    )
+
+    assert result.returncode == 1
+    assert "unknown subject(s) caes" in result.stderr
+    assert "known: activity, cases" in result.stderr
+    assert not (base / "cases" / "raw.db").exists()
+    assert "migrated" not in result.stdout
+
+
 def test_migrate_does_not_judge_what_a_database_is_called(tmp_path):
     # The tree names a subject and a database within it. raw/silver/gold is the
     # tools.medallion profile's reading of those names, not the migrate

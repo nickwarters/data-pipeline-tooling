@@ -591,7 +591,7 @@ planned per-file runs.
 ## `migrate` — apply the SQL migrations that own the databases' shape
 
 ```sh
-python -m cli migrate [--base-dir DIR] [--env ENV] [--check] [--migrations-root DIR]
+python -m cli migrate [--base-dir DIR] [--env ENV] [--subject SUBJECT ...] [--database SUBJECT/NAME ...] [--check] [--migrations-root DIR]
 ```
 
 `run` fills the databases; `migrate` decides what shape they are in. It walks
@@ -621,6 +621,41 @@ Each database is independent, with its own ledger, so a failure
 in one is reported to stderr and the walk continues to the rest — the same
 per-item failure isolation `orchestrate` applies to scheduled work. The command
 exits non-zero if anything failed.
+
+### `--subject` / `--database` — migrate part of the tree, not all of it
+
+`--subject <subject>` narrows the walk to every database the tree carries
+under that subject — for a medallion subject, its raw, silver and gold in one
+go. `--database <subject>/<database>` narrows it to one database, named as the
+tree's directory spells it. Both can be repeated, and they combine as a union.
+Everything else is unchanged: the selected targets are walked in tree order,
+`--check` reports on just those, and the summary counts only them.
+
+```console
+$ python -m cli migrate --base-dir /data --subject sharepoint_cases
+sharepoint_cases/gold        /data/sharepoint_cases/gold.db        applied 1: 0002_add_void_reason_note.sql
+sharepoint_cases/quarantine  /data/sharepoint_cases/quarantine.db  applied 1: 0003_add_void_reason_note.sql
+sharepoint_cases/raw         /data/sharepoint_cases/raw.db         applied 1: 0002_add_void_reason_note.sql
+sharepoint_cases/silver      /data/sharepoint_cases/silver.db      applied 1: 0002_add_void_reason_note.sql
+migrated 4 database(s): 4 applied, 0 up to date, 0 failed
+$ python -m cli migrate --base-dir /data --database sharepoint_cases/silver
+sharepoint_cases/silver  /data/sharepoint_cases/silver.db  up to date
+migrated 1 database(s): 0 applied, 1 up to date, 0 failed
+```
+
+The tree is still the registry. A subject or database it does not carry is
+rejected — with the names it does carry — and **nothing is migrated**,
+including any other names on the same command line: a database without a
+`migrations/` directory is not under migration control, and half-applying a
+request that misspells one of its names would leave the operator to work out
+which half.
+
+```console
+$ python -m cli migrate --base-dir /data --database sharepoint_cases/sliver
+unknown database(s) sharepoint_cases/sliver: not under /repo/migrations; known: cora_platform_metric/gold, ..., sharepoint_cases/silver
+$ echo $?
+1
+```
 
 ### `--check` — report without writing
 

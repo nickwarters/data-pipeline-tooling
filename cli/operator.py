@@ -22,8 +22,9 @@ resolves one), never a positional argument.
 ``migrate`` applies the SQL migrations that own the *shape* of those databases.
 It walks the repository's ``migrations/`` tree — the only registry of which
 databases are under migration control — and brings each ``<subject>/<database>``
-it names, under the resolved base directory, up to date; ``--check`` reports
-instead of writing.
+it names, under the resolved base directory, up to date; ``--subject <subject>``
+/ ``--database <subject>/<database>`` narrow that to the named one(s), and
+``--check`` reports instead of writing.
 
 ``run`` addresses a pipeline by *its location on disk*: ``pipelines/orders`` maps
 to the module ``pipelines.orders.pipeline``, imported at runtime, whose
@@ -64,6 +65,7 @@ from tools.migrations import (
     MIGRATIONS_ROOT,
     MigrationError,
     MigrationRunner,
+    MigrationTarget,
     discover_targets,
 )
 from tools.observability.run_store import RunStore
@@ -273,6 +275,13 @@ def _migrate(args: argparse.Namespace) -> int:
     ``orchestrate`` uses); the command exits non-zero at the end if anything
     failed.
 
+    ``--subject <subject>`` and ``--database <subject>/<database>`` narrow the
+    walk to the named target(s) — one subject on a share whose other subjects
+    are being worked on, or a new baseline being landed on its own — without
+    changing what the registry is: a name the tree does not carry is an error,
+    not something to migrate, since a database without a directory is not
+    under migration control.
+
     ``--check`` reports what is outstanding and exits non-zero if anything is,
     writing nothing — a CI gate. It is deliberately not wired into
     ``run`` / ``orchestrate``: a pipeline can be invoked directly as
@@ -287,6 +296,10 @@ def _migrate(args: argparse.Namespace) -> int:
     if not targets:
         print(f"no migrations under {root}")
         return 0
+    if args.subjects or args.databases:
+        targets = _select_targets(targets, args.subjects, args.databases, root)
+        if targets is None:
+            return 1
     registry = StoreRegistry(base_dir)
     width = max(len(target.namespace) for target in targets)
     outstanding = current = failed = 0
@@ -316,6 +329,48 @@ def _migrate(args: argparse.Namespace) -> int:
     if failed or (args.check and outstanding):
         return 1
     return 0
+
+
+def _select_targets(
+    targets: list[MigrationTarget],
+    subjects: list[str],
+    databases: list[str],
+    root: Path,
+) -> list[MigrationTarget] | None:
+    """Narrow the discovered targets to ``--subject`` / ``--database``, in tree order.
+
+    A subject selects every database the tree carries under it; a database
+    selects exactly one. The two compose as a union. Every name must match
+    something the tree carries; an unknown one is reported with the names that
+    *are* known, and ``None`` is returned so nothing is migrated. Half-applying
+    a request that misspells one of its names would leave the operator to work
+    out which half.
+    """
+    known_subjects = sorted({target.subject for target in targets})
+    unknown_subjects = [name for name in subjects if name not in known_subjects]
+    if unknown_subjects:
+        print(
+            f"unknown subject(s) {', '.join(unknown_subjects)}: not under {root}; "
+            f"known: {', '.join(known_subjects)}",
+            file=sys.stderr,
+        )
+        return None
+    known_databases = [target.namespace for target in targets]
+    unknown_databases = [name for name in databases if name not in known_databases]
+    if unknown_databases:
+        print(
+            f"unknown database(s) {', '.join(unknown_databases)}: not under {root}; "
+            f"known: {', '.join(known_databases)}",
+            file=sys.stderr,
+        )
+        return None
+    wanted_subjects = set(subjects)
+    wanted_databases = set(databases)
+    return [
+        target
+        for target in targets
+        if target.subject in wanted_subjects or target.namespace in wanted_databases
+    ]
 
 
 def _runs(args: argparse.Namespace) -> int:
@@ -530,6 +585,24 @@ def register(sub) -> None:
         action="store_true",
         help="report what is outstanding and exit non-zero if anything is, "
         "without writing (a CI gate)",
+    )
+    migrate.add_argument(
+        "--subject",
+        dest="subjects",
+        action="append",
+        default=[],
+        metavar="SUBJECT",
+        help="migrate every database the tree carries under this subject "
+        "(e.g. sharepoint_cases); repeat for several; combines with --database",
+    )
+    migrate.add_argument(
+        "--database",
+        dest="databases",
+        action="append",
+        default=[],
+        metavar="SUBJECT/NAME",
+        help="migrate only this database, named as the tree names it "
+        "(e.g. sharepoint_cases/silver); repeat for several; omit for all",
     )
     migrate.add_argument(
         "--migrations-root",
