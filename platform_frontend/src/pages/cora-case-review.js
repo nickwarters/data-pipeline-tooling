@@ -35,6 +35,7 @@ import {
   completionPatch,
 } from './cora-case-review/completion-actions.js';
 import { voidPatch } from './cora-case-review/void-actions.js';
+import { evaluateAccess } from '../services/section-access.js';
 import { voidReasonText } from '../lib/void-reasons.js';
 
 /** @typedef {import('../services/save-queue.js').SaveStatus} SaveStatus */
@@ -398,8 +399,22 @@ export function caseReviewReducer(state, action) {
     });
   }
   if (action.type === 'case/conversation-changed' && route.snapshot?.caseRow) {
+    const caseRow = {
+      ...route.snapshot.caseRow,
+      conversation: action.messages,
+    };
+    const config = route.snapshot.config;
+    if (!config) return patchSnapshot(state, { caseRow });
+    const conversation = evaluateAccess(
+      'conversation',
+      route.snapshot.machine?.roles ?? [],
+      caseRow,
+      config,
+      route.snapshot.catalogue
+    );
     return patchSnapshot(state, {
-      caseRow: { ...route.snapshot.caseRow, conversation: action.messages },
+      caseRow,
+      access: { ...route.snapshot.access, conversation },
     });
   }
   if (action.type === 'case/field-edited' && route.snapshot?.caseRow) {

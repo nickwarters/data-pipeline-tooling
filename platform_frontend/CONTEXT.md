@@ -53,8 +53,8 @@ a reason. **Deliberately carries no Outcome** — it is not reviewed work and mu
 as any — and there is no un-void: a Case voided in error is raised again. Its Answers,
 Issues and Notes freeze, and its **Conversation** stops accepting messages for everyone —
 a terminal **status** (`Void` or `Completed`) closes the thread regardless of the
-**Case Type**'s `allowMessagesWhen` gate, which only chooses when the thread is open
-during a live review.
+**Case Type**'s Conversation gates, which choose when the thread is open and which
+side may initiate it during a live review.
 _Avoid_: Cancelled, deleted, closed (a Case is never removed — voiding is a status)
 
 **Void Reason**:
@@ -566,7 +566,7 @@ Action Centre counterpart.
 ### Communication
 
 **Conversation**:
-The thread between the **Reviewer** and the responsible-party side of one **Case** — the **Responsible Party** and their **Manager**, both of whom post. Stored as a JSON array of **Messages** in a single plain-text field on the Case row.
+The thread between the **Reviewer** and the responsible-party side of one **Case** — the **Responsible Party** and their **Manager**, both of whom post. A **Case Type** declares the live statuses in which messages may be sent and may name either the Reviewer or Responsible Party side as the initiator. Before the first Message only that side may post; afterwards the other side may reply. An omitted initiator preserves the legacy rule that either side may start. Stored as a JSON array of **Messages** in a single plain-text field on the Case row.
 
 **Message**:
 One entry in a **Conversation** — author, timestamp, body. The author is a

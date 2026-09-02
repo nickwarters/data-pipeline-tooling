@@ -123,6 +123,137 @@ test('evaluateAccess: conversation without allowMessagesWhen defaults to edit', 
   );
 });
 
+test('evaluateAccess: Responsible Party initiates and Reviewer can reply after the first message', () => {
+  const cfg = makeConfig({
+    sections: {
+      conversation: {
+        allowMessagesWhen: ['Actions In Progress'],
+        initiatedBy: 'responsibleParty',
+      },
+    },
+  });
+  const unopened = makeCase({
+    status: 'Actions In Progress',
+    conversation: [],
+  });
+
+  assert.equal(
+    evaluateAccess('conversation', ['assignedReviewer'], unopened, cfg),
+    'read-only'
+  );
+  assert.equal(
+    evaluateAccess('conversation', ['responsibleParty'], unopened, cfg),
+    'edit'
+  );
+  assert.equal(
+    evaluateAccess('conversation', ['responsiblePartyManager'], unopened, cfg),
+    'edit'
+  );
+
+  const opened = makeCase({
+    ...unopened,
+    conversation: [
+      {
+        author: { loginName: 'frontline', displayName: 'Frontline' },
+        timestamp: '2026-08-30T09:00:00Z',
+        body: 'The actions are complete.',
+      },
+    ],
+  });
+  assert.equal(
+    evaluateAccess('conversation', ['assignedReviewer'], opened, cfg),
+    'edit'
+  );
+});
+
+test('evaluateAccess: Reviewer initiates and frontline can reply after the first message', () => {
+  const cfg = makeConfig({
+    sections: {
+      conversation: {
+        allowMessagesWhen: ['In-progress'],
+        initiatedBy: 'reviewer',
+      },
+    },
+  });
+  const unopened = makeCase({ status: 'In-progress', conversation: [] });
+
+  assert.equal(
+    evaluateAccess('conversation', ['assignedReviewer'], unopened, cfg),
+    'edit'
+  );
+  assert.equal(
+    evaluateAccess('conversation', ['responsibleParty'], unopened, cfg),
+    'read-only'
+  );
+
+  const opened = makeCase({
+    ...unopened,
+    conversation: [
+      {
+        author: { loginName: 'reviewer', displayName: 'Reviewer' },
+        timestamp: '2026-08-30T09:00:00Z',
+        body: 'Could you clarify this point?',
+      },
+    ],
+  });
+  assert.equal(
+    evaluateAccess('conversation', ['responsibleParty'], opened, cfg),
+    'edit'
+  );
+  assert.equal(
+    evaluateAccess('conversation', ['responsiblePartyManager'], opened, cfg),
+    'edit'
+  );
+});
+
+test('evaluateAccess: a missing or malformed Conversation is treated as an empty thread', () => {
+  const cfg = makeConfig({
+    sections: { conversation: { initiatedBy: 'reviewer' } },
+  });
+  for (const conversation of [undefined, null, {}, 'not a thread']) {
+    const c = makeCase(/** @type {any} */ ({ conversation }));
+    assert.equal(
+      evaluateAccess('conversation', ['responsibleParty'], c, cfg),
+      'read-only'
+    );
+    assert.equal(
+      evaluateAccess('conversation', ['assignedReviewer'], c, cfg),
+      'edit'
+    );
+  }
+});
+
+test('evaluateAccess: dual-side roles use the Reviewer side to initiate', () => {
+  const c = makeCase({ conversation: [] });
+  const roles =
+    /** @type {import('../src/services/section-access.js').Role[]} */ ([
+      'assignedReviewer',
+      'responsibleParty',
+    ]);
+  assert.equal(
+    evaluateAccess(
+      'conversation',
+      roles,
+      c,
+      makeConfig({
+        sections: { conversation: { initiatedBy: 'reviewer' } },
+      })
+    ),
+    'edit'
+  );
+  assert.equal(
+    evaluateAccess(
+      'conversation',
+      roles,
+      c,
+      makeConfig({
+        sections: { conversation: { initiatedBy: 'responsibleParty' } },
+      })
+    ),
+    'read-only'
+  );
+});
+
 test('evaluateAccess: a terminal Case closes the Conversation even with no allowMessagesWhen gate', () => {
   const cfg = makeConfig({ sections: { conversation: {} } });
   for (const status of /** @type {const} */ (['Completed', 'Void'])) {

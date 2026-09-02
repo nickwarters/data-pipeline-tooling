@@ -97,6 +97,7 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
         # Case tables are framework-owned: every Case Type is listed under the
         # same columns, so a scaffolded Case Type declares none of its own.
         self.assertNotIn("caseTableColumns", module_source)
+        self.assertNotIn("initiatedBy", module_source)
 
         # The CASE_TYPES entry carries the slug, the
         # display name the SharePoint group names derive from, and the lazy

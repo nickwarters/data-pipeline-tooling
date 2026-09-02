@@ -352,6 +352,55 @@ test('checkCaseTypes rejects malformed explicit sections values', async () => {
   }
 });
 
+test('checkCaseTypes validates the Conversation initiating side', async () => {
+  for (const initiatedBy of ['frontline', 'assignedReviewer', true]) {
+    const failures = await checkCaseTypes({
+      caseTypes: [
+        demoEntry(
+          demoConfig({
+            sections: {
+              summary: {},
+              conversation: { initiatedBy },
+            },
+          })
+        ),
+      ],
+    });
+    assert.equal(failures.length, 1);
+    assert.match(failures[0].message, /conversation\.initiatedBy/i);
+  }
+
+  const misplaced = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(
+        demoConfig({
+          sections: {
+            summary: { initiatedBy: 'reviewer' },
+          },
+        })
+      ),
+    ],
+  });
+  assert.equal(misplaced.length, 1);
+  assert.match(misplaced[0].message, /only valid on the Conversation Section/);
+
+  for (const initiatedBy of ['reviewer', 'responsibleParty']) {
+    const failures = await checkCaseTypes({
+      caseTypes: [
+        demoEntry(
+          demoConfig({
+            sections: {
+              summary: {},
+              conversation: { initiatedBy },
+            },
+          })
+        ),
+      ],
+    });
+    assert.deepEqual(failures, []);
+  }
+});
+
 test('checkCaseTypes accepts declared review-cadence thresholds', async () => {
   const failures = await checkCaseTypes({
     caseTypes: [

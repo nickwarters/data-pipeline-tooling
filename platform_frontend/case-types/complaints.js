@@ -48,7 +48,10 @@ const config = {
   sections: {
     details: { showInSummary: true },
     questions: { showInSummary: true },
-    conversation: { allowMessagesWhen: ['Actions In Progress'] },
+    conversation: {
+      allowMessagesWhen: ['Actions In Progress'],
+      initiatedBy: 'responsibleParty',
+    },
     notes: { showInSummary: false },
     issues: {
       showInSummary: [
