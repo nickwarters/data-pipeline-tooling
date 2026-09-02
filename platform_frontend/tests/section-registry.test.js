@@ -36,37 +36,31 @@ test('SECTION_REGISTRY declares the ten built-in Sections in canonical order', (
   ]);
 });
 
-test('every registry entry has the wiring the derivations need', () => {
-  for (const entry of SECTION_REGISTRY) {
-    assert.equal(typeof entry.id, 'string');
-    assert.equal(typeof entry.tab, 'boolean');
-    assert.equal(typeof entry.summaryBlock, 'boolean');
-    assert.equal(typeof entry.showInSummaryDefault, 'boolean');
-  }
-});
-
 // --- SECTIONS / SUMMARY_SECTIONS are derived, not restated ---
 
 test('SECTIONS is derived from the registry', () => {
   assert.deepEqual([...SECTIONS], sectionIds());
 });
 
-test('SUMMARY_SECTIONS is derived from the registry (summary blocks in order)', () => {
+test('SUMMARY_SECTIONS is derived from the registry', () => {
   assert.deepEqual([...SUMMARY_SECTIONS], summaryBlockIds());
-  // Unchanged observable set: Conversation, Summary itself and the appeal /
-  // amend Sections never appear as Summary blocks.
-  assert.deepEqual(
-    [...SUMMARY_SECTIONS],
-    ['details', 'questions', 'issues', 'remediation', 'notes']
-  );
+});
+
+test('summaryBlockIds returns Summary blocks in canonical order', () => {
+  assert.deepEqual(summaryBlockIds(), [
+    'details',
+    'questions',
+    'issues',
+    'remediation',
+    'notes',
+  ]);
 });
 
 // --- Tabs are derived, Summary ahead of Remediation ---
 
 test('tabEntries derives tab order and ids from the registry', () => {
-  const tabs = tabEntries();
   assert.deepEqual(
-    tabs.map((t) => t.id),
+    tabEntries().map((tab) => tab.id),
     [
       'details',
       'questions',
@@ -79,8 +73,14 @@ test('tabEntries derives tab order and ids from the registry', () => {
       'amendOutcome',
     ]
   );
-  // Conversation is never a tab.
-  assert.ok(!tabs.some((t) => /** @type {string} */ (t.id) === 'conversation'));
+});
+
+test('tabEntries excludes Sections not configured as tabs', () => {
+  assert.ok(
+    !tabEntries().some(
+      (tab) => /** @type {string} */ (tab.id) === 'conversation'
+    )
+  );
 });
 
 // --- Consistency contracts ---

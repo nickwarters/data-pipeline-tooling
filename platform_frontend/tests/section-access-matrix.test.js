@@ -1,6 +1,5 @@
 // @ts-check
 import { test } from 'node:test';
-import assert from 'node:assert/strict';
 import {
   makeCase,
   makeConfig,
@@ -8,34 +7,9 @@ import {
   openAppeal,
   assertGrid,
   assertMatrixGrid,
-  SECTIONS,
 } from './helpers/section-access.js';
 
 // Capability: the complete role-by-section access matrix.
-
-// --- The Section set ---
-
-test('SECTIONS is the amended ten-Section set (appeal split into request/review + amendOutcome)', () => {
-  assert.deepEqual(
-    [...SECTIONS],
-    [
-      'details',
-      'questions',
-      'issues',
-      'summary',
-      'remediation',
-      'notes',
-      'conversation',
-      'appealRequest',
-      'appealReview',
-      'amendOutcome',
-    ]
-  );
-  // The pre-amend keys are gone.
-  const asStrings = /** @type {string[]} */ (SECTIONS);
-  assert.ok(!asStrings.includes('appeal'));
-  assert.ok(!asStrings.includes('outcome'));
-});
 
 test('matrix — In-progress Case (no actions, default appeal config → responsiblePartyManager raiser)', () => {
   const cfg = makeConfig();

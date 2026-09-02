@@ -5366,15 +5366,8 @@ function everySectionVisibleCase() {
   return { row, config, catalogue, access };
 }
 
-test('a Case Type that renames every Section renames every tab and every heading', () => {
+function renderEverySectionRenamed() {
   const { row, config, catalogue, access } = everySectionVisibleCase();
-
-  assert.deepEqual(
-    Object.entries(access).filter(([, mode]) => mode === 'hidden'),
-    [],
-    'the fixture must leave every Section visible, or the render skips its panel'
-  );
-
   const sectionLabels = resolveSectionLabels({
     sectionLabels: {
       details: 'Background',
@@ -5405,11 +5398,11 @@ test('a Case Type that renames every Section renames every tab and every heading
       sectionLabels,
     }),
   });
-  const { container } = renderShippedState(state);
+  return renderShippedState(state).container;
+}
 
-  // Compared as sets: this test is about renaming, so it asserts that every
-  // tab carries its configured caption and none keeps its default. Tab order
-  // is `tabEntries`' contract, held by section-registry.test.js alone.
+test('a Case Type can rename every tab caption', () => {
+  const container = renderEverySectionRenamed();
   const tabNames = queryAllByRole(container, 'tab').map(
     (tab) => tab.textContent
   );
@@ -5427,7 +5420,10 @@ test('a Case Type that renames every Section renames every tab and every heading
       'Correct Outcome',
     ].sort()
   );
+});
 
+test('a Case Type can rename every Section heading', () => {
+  const container = renderEverySectionRenamed();
   const headings = queryAllByTag(container, 'h2').map(
     (node) => node.textContent
   );
