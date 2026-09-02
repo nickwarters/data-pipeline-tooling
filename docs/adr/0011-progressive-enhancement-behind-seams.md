@@ -18,8 +18,14 @@ Seams already in place, each with its simple-now / rich-later pair:
   deferred graph *is* the spec, so a config loader builds the same nodes.
 - **Schema/typing:** dataclasses now → Pydantic later; validation is derived from
   annotations via an adapter, so the swap is the model base + adapter only.
-- **Remote execution:** shell `ssh`/`scp` behind a `RemoteRunner` seam now → a
-  library (e.g. paramiko) later; the remote SAS exec is stubbed until needed.
+- ~~**Remote execution:** shell `ssh`/`scp` behind a `RemoteRunner` seam now → a
+  library (e.g. paramiko) later; the remote SAS exec is stubbed until needed.~~
+  *Withdrawn by [ADR-0029](0029-sas-runs-outside-the-framework.md).* The seam
+  was built past its consumer: one no-op implementation, no `ssh`/`scp` runner
+  ever written, and no feed reading through it — the SAS-sourced feeds read a
+  landed CSV with `CsvReader` from the start. It was removed under the rule
+  below, and stays listed here, struck through, because a seam built ahead of
+  demand and later removed is the clearest illustration of that rule.
 
 ## Why
 
