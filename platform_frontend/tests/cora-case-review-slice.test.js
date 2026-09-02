@@ -5345,20 +5345,26 @@ test('a Case Type that renames every Section renames every tab and every heading
   });
   const { container } = renderShippedState(state);
 
+  // Compared as sets: this test is about renaming, so it asserts that every
+  // tab carries its configured caption and none keeps its default. Tab order
+  // is `tabEntries`' contract, held by section-registry.test.js alone.
   const tabNames = queryAllByRole(container, 'tab').map(
     (tab) => tab.textContent
   );
-  assert.deepEqual(tabNames, [
-    'Background',
-    'Assess',
-    'Findings',
-    'Wrap-up',
-    'Fix-ups',
-    'Scribbles',
-    'Challenge',
-    'Challenge Review',
-    'Correct Outcome',
-  ]);
+  assert.deepEqual(
+    [...tabNames].sort(),
+    [
+      'Background',
+      'Assess',
+      'Findings',
+      'Fix-ups',
+      'Wrap-up',
+      'Scribbles',
+      'Challenge',
+      'Challenge Review',
+      'Correct Outcome',
+    ].sort()
+  );
 
   const headings = queryAllByTag(container, 'h2').map(
     (node) => node.textContent
