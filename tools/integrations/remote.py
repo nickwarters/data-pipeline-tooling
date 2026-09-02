@@ -15,7 +15,6 @@ import pandas as pd
 
 from framework._internal.describe import render
 from framework.core.dataset import Dataset
-from framework.io.readers import GlobCsvReader
 from framework.io.strategy import AccumulateByRun, Refresh
 from tools.integrations.locations import sharepoint_location
 
@@ -107,41 +106,6 @@ class LocalCsvFetcher:
 
     def fetch(self, site: str, list_name: str, auth: object) -> Dataset:
         return Dataset.from_pandas(pd.read_csv(self._path))
-
-
-class SasReader:
-    """Read a SAS feed by running it remotely and reading the landed output."""
-
-    def __init__(
-        self,
-        script: str,
-        copy_glob: str,
-        dest: str | os.PathLike[str],
-        *,
-        runner: RemoteRunner | None = None,
-    ) -> None:
-        self._script = script
-        self._copy_glob = copy_glob
-        self._dest = Path(dest)
-        self._runner = runner or StubbedRemoteRunner()
-        self.data_locations: list[dict[str, str]] = []
-
-    def read(self) -> Dataset:
-        self._runner.run_script(self._script)
-        self._runner.fetch(self._copy_glob, self._dest)
-        reader = GlobCsvReader(self._dest, self._copy_glob)
-        dataset = reader.read()
-        # The files that actually landed, not the glob asked of the runner.
-        self.data_locations = list(reader.data_locations)
-        return dataset
-
-    def describe(self) -> str:
-        return render(
-            self,
-            script=self._script,
-            copy_glob=self._copy_glob,
-            dest=str(self._dest),
-        )
 
 
 class SharePointReader:
