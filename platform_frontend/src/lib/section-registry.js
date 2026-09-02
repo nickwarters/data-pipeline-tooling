@@ -51,7 +51,9 @@
 /**
  * The built-in Sections, declared once. Declaration order is the canonical
  * Section order (what `SECTIONS` exposes); tab and Summary order are carried
- * explicitly because they differ from it.
+ * explicitly so they can differ from it. Summary precedes Remediation in the
+ * tab strip so the Responsible Party's two tabs read as the roll-up first,
+ * then the actions to take; the Reviewer sees the same order.
  *
  * Deliberately carries no `@type {readonly SectionDefinition[]}` annotation: the
  * literal `id` strings must survive inference for `Section` above to project
@@ -86,7 +88,7 @@ export const SECTION_REGISTRY = /** @type {const} */ ([
   {
     id: 'summary',
     tab: true,
-    tabOrder: 5,
+    tabOrder: 4,
     summaryBlock: false,
     summaryOrder: 0,
     showInSummaryDefault: true,
@@ -94,7 +96,7 @@ export const SECTION_REGISTRY = /** @type {const} */ ([
   {
     id: 'remediation',
     tab: true,
-    tabOrder: 4,
+    tabOrder: 5,
     summaryBlock: true,
     summaryOrder: 4,
     showInSummaryDefault: true,
