@@ -21,6 +21,7 @@ from typing import get_type_hints
 
 import pandas as pd
 
+from case_review.pass_rules import FAIL, PASS, PASS_RULES, PassRule
 from framework.core import Dataset
 from tools.calendar import WorkingDayCalendar
 from tools.observability import timestamps
@@ -30,6 +31,7 @@ from .schema import (
     REMEDIATION_SLA,
     REVIEW_SLA,
     AnswerActionLoad,
+    AnswerPassRate,
     AnswerRemediationByManager,
     AppealCycleTime,
     AppealQuestionCitation,
@@ -117,8 +119,20 @@ CURRENT_COLUMNS = (
 ANSWER_COLUMNS = (
     CASE_ID_COLUMN,
     "case_type",
+    "question_id",
+    "value_json",
     "remediation_required",
     "remediation_status",
+)
+# The Question Bank as ``readers.question_banks`` lands it: the artifact's own
+# names, so ``slug`` is the Case Type and ``id`` the question. ``option_outcomes``
+# is the option -> outcome id map, as JSON text.
+QUESTION_BANK_COLUMNS = (
+    "slug",
+    "id",
+    "question_group",
+    "deprecated",
+    "option_outcomes",
 )
 ANSWER_ACTION_COLUMNS = (CASE_ID_COLUMN, "case_type", "question_id", "action_id")
 APPEAL_COLUMNS = (
@@ -799,4 +813,219 @@ def conversation_posting_pattern(
         ConversationPostingPattern,
         as_of=as_of,
         sort_by=("brand", "case_type", "weekday_order", "hour_of_day"),
+    )
+
+
+# --- pass rate against the Question Bank ------------------------------------
+
+#: The bank's own "not applicable" option: neither a pass nor a fail, and not
+#: among the outcomes a ``PassRule`` has to classify.
+NA_OPTION = "NA"
+
+# The two verdict classes that are neither pass nor fail.
+UNANSWERED = "unanswered"
+NOT_APPLICABLE = "na"
+
+BANK_KEY = ("case_type", "question_id")
+
+
+def _selected(value_json: object) -> list[str]:
+    """The option(s) an Answer selected; ``[]`` when unanswered.
+
+    ``value_json`` is the value verbatim: a multi-choice lands as JSON-list
+    text, a scalar as itself -- the rule ``derive_value_text`` reads it by.
+    Parsed here rather than split from ``value_text``, whose ``|`` join would
+    make ``Process|Training`` look like one option.
+    """
+    if not isinstance(value_json, str):
+        return [] if pd.isna(value_json) else [str(value_json)]
+    if value_json.startswith("["):
+        try:
+            loaded = json.loads(value_json)
+        except ValueError:
+            loaded = None
+        if isinstance(loaded, list):
+            return [str(item) for item in loaded if item not in ("", None)]
+    return [] if value_json == "" else [value_json]
+
+
+def _option_outcomes(bank: pd.DataFrame) -> pd.DataFrame:
+    """The bank's ``option_outcomes`` maps, exploded to one row per
+    (case_type, question_id, option, outcome_id).
+
+    A question with no map -- informational -- contributes no rows, so
+    nothing it is answered with can fail.
+    """
+    rows = []
+    for case_type, question_id, blob in zip(
+        bank["case_type"], bank["question_id"], bank["option_outcomes"]
+    ):
+        if not isinstance(blob, str) or not blob.strip():
+            continue
+        mapping = json.loads(blob)
+        if not isinstance(mapping, dict):
+            continue
+        rows.extend(
+            (case_type, question_id, str(option), str(outcome))
+            for option, outcome in mapping.items()
+        )
+    return pd.DataFrame(rows, columns=[*BANK_KEY, "option", "outcome_id"])
+
+
+def _check_rule_covers_bank(rule: PassRule, outcomes: pd.DataFrame) -> None:
+    """Every outcome the bank declares for a Case Type the rule covers is
+    classified by it exactly once, and the rule names nothing the bank lacks.
+
+    ``NA`` is not an outcome to classify. The same posture as a
+    ``ColumnValidator`` gate: a bank that grows an outcome, or a rule that
+    drifts from its bank, fails the run naming the rule, the Case Type and
+    the ids, rather than landing a silent pass or fail.
+    """
+    declared = (
+        outcomes.loc[outcomes["option"] != NA_OPTION]
+        .groupby("case_type")["outcome_id"]
+        .agg(set)
+    )
+    for case_type in rule.covers:
+        passing = set(rule.passing.get(case_type, ()))
+        failing = set(rule.failing.get(case_type, ()))
+        bank = set(declared.get(case_type, set()))
+        problems = {
+            "classified as both pass and fail": passing & failing,
+            "declared by the bank but unclassified": bank - passing - failing,
+            "classified but not in the bank": (passing | failing) - bank,
+        }
+        found = {label: sorted(ids) for label, ids in problems.items() if ids}
+        if found:
+            raise ValueError(
+                f"pass rule {rule.name!r} does not match the current Question Bank "
+                f"for case type {case_type!r}: {found}"
+            )
+
+
+def answer_pass_rate(
+    answers: Dataset,
+    questions: Dataset,
+    current: Dataset,
+    *,
+    as_of: str,
+    rules: tuple[PassRule, ...] = PASS_RULES,
+) -> Dataset:
+    """Pass rate per question under each ``PassRule``. **Grain: pass_rule x
+    brand x case_type x question_id.**
+
+    Over the Answers on the current non-void Cases, judged against the
+    *current* bank -- joined on Case Type and question id, never on version,
+    since a question is deprecated and never removed. Every Answer lands in
+    exactly one of four classes (unanswered, NA, pass, fail), so the four
+    counts sum to ``answer_count``. A multi-choice Answer fails if *any*
+    selected option other than ``NA`` maps to an outcome the rule calls a
+    fail; an option the bank maps to no outcome has no verdict and fails
+    nothing. ``can_fail`` is per rule -- whether any option of the question
+    maps to an outcome this rule calls a fail -- and is computed here from
+    the rule, not read from the bank's default-outcome notion of failure.
+
+    Three things fail the run rather than land a hole: an Answer on a
+    question the current bank does not carry, an Answer on a Case Type no
+    rule covers, and a rule that disagrees with the bank about which outcomes
+    exist (``_check_rule_covers_bank``). ``rules`` is a declaration with a
+    default, not something the run reads; a test passes its own.
+    """
+    live = _live_cases(current)
+    frame = answers.to_pandas()
+    frame = frame.loc[frame[CASE_ID_COLUMN].isin(live[CASE_ID_COLUMN])]
+
+    bank = questions.to_pandas().rename(
+        columns={"slug": "case_type", "id": "question_id"}
+    )
+    asked = set(zip(frame["case_type"], frame["question_id"]))
+    missing = sorted(asked - set(zip(bank["case_type"], bank["question_id"])))
+    if missing:
+        raise ValueError(
+            f"answers on questions absent from the current Question Bank: {missing}"
+        )
+    covered = set().union(*(rule.covers for rule in rules))
+    uncovered = sorted({case_type for case_type, _ in asked} - covered)
+    if uncovered:
+        raise ValueError(f"answers on case types no PassRule covers: {uncovered}")
+
+    outcomes = _option_outcomes(bank)
+    # (case_type, question_id, option) -> outcome_id; the rule turns that
+    # into a verdict.
+    outcome_of = dict(
+        zip(
+            zip(outcomes["case_type"], outcomes["question_id"], outcomes["option"]),
+            outcomes["outcome_id"],
+        )
+    )
+    # (case_type, question_id) -> the outcome ids its options can map to.
+    declared = (
+        outcomes.loc[outcomes["option"] != NA_OPTION]
+        .groupby(list(BANK_KEY))["outcome_id"]
+        .agg(set)
+        .to_dict()
+    )
+    questions_by_key = bank.set_index(list(BANK_KEY))
+
+    def classify(rule: PassRule, case_type, question_id, value_json) -> str:
+        selected = _selected(value_json)
+        if not selected:
+            return UNANSWERED
+        assessed = [option for option in selected if option != NA_OPTION]
+        if not assessed:
+            return NOT_APPLICABLE
+        verdicts = {
+            rule.verdict(case_type, outcome_of[(case_type, question_id, option)])
+            for option in assessed
+            if (case_type, question_id, option) in outcome_of
+        }
+        return FAIL if FAIL in verdicts else PASS
+
+    rows = []
+    for rule in rules:
+        _check_rule_covers_bank(rule, outcomes)
+        scope = frame.loc[frame["case_type"].isin(rule.covers)]
+        scope = scope.assign(
+            _verdict=[
+                classify(rule, case_type, question_id, value_json)
+                for case_type, question_id, value_json in zip(
+                    scope["case_type"], scope["question_id"], scope["value_json"]
+                )
+            ]
+        )
+        for (case_type, question_id), group in scope.groupby(list(BANK_KEY), sort=True):
+            counts = group["_verdict"].value_counts()
+            passed, failed = int(counts.get(PASS, 0)), int(counts.get(FAIL, 0))
+            question = questions_by_key.loc[(case_type, question_id)]
+            group_name = question["question_group"]
+            deprecated = question["deprecated"]
+            rows.append(
+                {
+                    "pass_rule": rule.name,
+                    "brand": UNKNOWN_BRAND,
+                    "case_type": case_type,
+                    "question_id": question_id,
+                    "question_group": group_name
+                    if isinstance(group_name, str) and group_name
+                    else UNSTATED,
+                    "deprecated": bool(deprecated) if pd.notna(deprecated) else False,
+                    "can_fail": any(
+                        rule.verdict(case_type, outcome) == FAIL
+                        for outcome in declared.get((case_type, question_id), ())
+                    ),
+                    "answer_count": len(group),
+                    "unanswered_count": int(counts.get(UNANSWERED, 0)),
+                    "na_count": int(counts.get(NOT_APPLICABLE, 0)),
+                    "pass_count": passed,
+                    "fail_count": failed,
+                    "pass_rate": round(passed / (passed + failed), 4)
+                    if passed + failed
+                    else None,
+                }
+            )
+    return _finish(
+        rows,
+        AnswerPassRate,
+        as_of=as_of,
+        sort_by=("pass_rule", "brand", "case_type", "question_id"),
     )
