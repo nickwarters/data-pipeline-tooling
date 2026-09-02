@@ -341,6 +341,7 @@
       <p>Model the extract as a <strong>Reference Data</strong> subject (per <code>CONTEXT.md</code>): its own per-subject medallion (<code>regulatory/{raw,silver,gold}.db</code>), refined by its own ingest pipeline, <strong>read-only</strong> to everything downstream. Nobody joins it live; they join its silver table.</p>
 
       <h3>Landing the SAS extract — ADR-0012</h3>
+      <p><strong>Superseded.</strong> <a href="adr/0029-sas-runs-outside-the-framework.md">ADR-0029</a> retired ADR-0012 and removed <code>SasReader</code> / <code>RemoteRunner</code>: the SAS job lands the extract outside the framework and the ingest reads the landed file with an ordinary Reader &mdash; which is what the build note below already had it doing in the meantime. The paragraph below is the plan as written.</p>
       <p>The remote-execution read path is exactly <a href="adr/0012-sas-sources-via-remote-execution.md">ADR-0012</a>: a <code>SasReader</code> configured with <code>script</code> / <code>copy_glob</code> / <code>dest</code> runs the SAS job on the remote host, copies the compressed output back to a local landing dir, and reads the landed file through the ordinary file path — so the read works identically on Windows and macOS, and is testable end-to-end against a fixture via the <code>StubbedRemoteRunner</code> seam.</p>
       <div class="callout warn">
         <span class="label">Build note</span>
@@ -376,7 +377,9 @@
       <a href="adr/0028-a-source-too-big-for-memory-is-narrowed-at-the-source.md">ADR-0028</a>. There is no
       <code>ChunkReader</code> port, no <code>ChunkedCsvReader</code>, no <code>SasFileReader</code> and no
       <code>Pipeline.read_chunks</code>; <code>core-primitives.md</code> no longer has a section to link to. The
-      remote ADR-0012 <code>SasReader</code> is unaffected. A landed extract too big to hold whole is narrowed
+      remote ADR-0012 <code>SasReader</code> has since gone too, under
+      <a href="adr/0029-sas-runs-outside-the-framework.md">ADR-0029</a>: SAS runs outside the framework and the
+      ingest reads the landed file. A landed extract too big to hold whole is narrowed
       before the framework sees it &mdash; a column projection or a pre-filtered file &mdash; and the pipeline
       reads a whole <code>Dataset</code>. Everything below this line is the July 2026 record of what was planned,
       not a description of the framework.</p>
