@@ -137,13 +137,14 @@ generator's business to settle first.
 ## Applying them — `python -m cli migrate`
 
 ```sh
-python -m cli migrate [--base-dir DIR] [--env ENV] [--database SUBJECT/NAME ...] [--check]
+python -m cli migrate [--base-dir DIR] [--env ENV] [--subject SUBJECT ...] [--database SUBJECT/NAME ...] [--check]
 ```
 
 Walks the tree and brings every database it names, under the resolved base
-directory, up to date; `--database <subject>/<database>` (repeatable) narrows
-that to the named one(s), and `--check` reports what is outstanding and exits
-non-zero if anything is, without writing. A `--database` the tree does not
+directory, up to date; `--subject <subject>` narrows that to every database
+under one subject and `--database <subject>/<database>` to one database (both
+repeatable, combining as a union), and `--check` reports what is outstanding
+and exits non-zero if anything is, without writing. A name the tree does not
 carry is an error that migrates nothing — the tree stays the only registry.
 Worked output and the failure-isolation rule
 are in [operator-cli.md](operator-cli.md#migrate--apply-the-sql-migrations-that-own-the-databases-shape).
