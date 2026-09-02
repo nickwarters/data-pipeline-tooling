@@ -235,14 +235,13 @@ def test_an_author_can_compose_ordered_stages_through_the_run_facade(tmp_path):
 def test_internal_plumbing_stays_out_of_the_public_facades():
     # Authors must not reach internal seams through the facades. These names are
     # implementation detail (connection factory, layer-name helper, trace
-    # mechanics, remote client seam, runner/run-log internals) — documented as
+    # mechanics, runner/run-log internals) — documented as
     # internal in docs/public-api.md and absent from every facade's __all__.
     from framework import core, io, run, transform
 
     internal = {
         "connect",  # framework._internal.connection — connection factory seam
         "RowTrace",  # framework.run.trace — generic trace mechanics
-        "RemoteRunner",  # tools.integrations.remote — remote client seam
         "FreshnessGuard",  # framework.run.runner — internal guard
         "StepMetrics",  # tools.observability.run_log — internal timing record
         "pipeline_label",  # framework.run.runner — internal label helper
