@@ -1,8 +1,16 @@
 ---
-status: accepted
+status: superseded by ADR-0029
 ---
 
 # SAS sources via remote execution, read locally
+
+> **Superseded by [ADR-0029](0029-sas-runs-outside-the-framework.md)**
+> (2026-09-02). `SasReader`, the `RemoteRunner` seam and `StubbedRemoteRunner`
+> are removed: SAS runs outside the framework, and a pipeline reads the landed
+> file with an ordinary `Reader`. The seam described below never gained the
+> `ssh`/`scp` runner it promised or a feed that read through it — the three
+> SAS-sourced feeds read a landed CSV with `CsvReader` from the start. The body
+> is left as written; it records what was decided at the time and why.
 
 SAS is never executed on the machine running the framework: SAS does not run on
 macOS (a development environment here), and the cross-platform constraint forbids a
