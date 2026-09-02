@@ -1,8 +1,18 @@
-"""Remote IO seams for SAS and SharePoint feeds.
+"""The SharePoint IO seams and the Reader / Writer over them.
 
 Remote behaviour stays behind small interfaces so local Readers and Writers are
 testable with fixtures and can later swap in platform-specific clients without
-changing pipeline code.
+changing pipeline code. :class:`SharePointFetcher` / :class:`SharePointPusher`
+are the seams; :class:`SharePointReader` / :class:`SharePointWriter` are the
+components over them; :class:`LocalCsvFetcher` is the offline fetcher a test
+hands in.
+
+This module is SharePoint-only. It once also held the SAS remote-execution seam
+(``RemoteRunner`` / ``SasReader``), removed under ADR-0029: SAS runs outside the
+framework and a pipeline reads the landed file. The ``remote`` name is retained
+deliberately rather than renamed to ``sharepoint``: where the SharePoint
+integration lives is a separate, undecided relocation, and that decision should
+drive the rename so it is done once.
 """
 
 from __future__ import annotations
