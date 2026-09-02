@@ -246,8 +246,10 @@ schedule judges against (omitted, it is weekends-only). `migrate` applies the
 SQL migrations that own those databases' *shape*: it walks the `migrations/`
 tree — the only registry of which databases are under migration control, since a
 database opts in by having a directory there — and brings each one under
-the resolved base directory up to date, with `--check` reporting what is pending
-and exiting non-zero without writing (a CI gate, deliberately **not** wired into
+the resolved base directory up to date — or just the one(s) named by a
+repeatable `--database <subject>/<database>`, a name the tree does not carry
+being an error — with `--check` reporting what is pending and exiting non-zero
+without writing (a CI gate, deliberately **not** wired into
 `run`/`orchestrate`).
 
 Scaffold a new feed with `python -m cli scaffold <feed>`: it renders the
