@@ -1,127 +1,149 @@
-# Testing External Systems & Orchestration
+# Testing External Systems
 
-Pipelines often don't just read local files; they trigger external jobs, query remote APIs, or orchestrate tools like a remote SAS server or Databricks. If your pipeline code directly imports a network library (like `paramiko` or `requests`) and wires up the remote call, your tests become a nightmare of mocking network side-effects.
+Some feeds read from, or write to, a system the framework host cannot reach in
+a test: a SharePoint list on the on-prem Subscription Edition tenant, a remote
+API. If the Reader imports the network library and wires up the call itself,
+every test of that Reader — and of every pipeline that uses it — becomes an
+exercise in mocking network side-effects.
 
-To maintain granular, fast, in-memory testability, we decouple the **intent** of the orchestration from the **mechanism** of the network call using **Dependency Injection** and a **Boundary Protocol**.
+To keep tests fast, in-memory and granular, we decouple the **intent** of the
+remote call from the **mechanism** using **Dependency Injection** and a
+**Boundary Protocol**. The worked example below is the SharePoint pair in
+`tools/integrations/remote.py`, which has real consumers and a real test file;
+every symbol named here can be grepped in the tree.
 
-## 1. Define the Boundary (The Protocol)
+(SAS is deliberately *not* an example. Per
+[ADR-0029](adr/0029-sas-runs-outside-the-framework.md) a SAS job runs outside
+the framework and lands a file; the pipeline reads it with `CsvReader`, and is
+tested against a fixture CSV like any other file feed. There is no seam to
+fake.)
 
-Create a strict interface representing what the external system *can do for us*, completely ignoring *how* it connects. For example, if we need to run a SAS script and pull down the generated CSVs:
+## 1. Define the boundary (the Protocol)
+
+Declare an interface for what the external system *can do for us*, and nothing
+about *how* it connects. The SharePoint download seam is one method:
 
 ```python
-from typing import Protocol
-from pathlib import Path
+@runtime_checkable
+class SharePointFetcher(Protocol):
+    """The SharePoint download seam: fetch one list's rows as a Dataset."""
 
-class SasRemoteClient(Protocol):
-    def execute_script(self, script_path: str) -> str:
-        """Triggers a remote SAS script and returns the execution job ID."""
+    def fetch(self, site: str, list_name: str, auth: object) -> Dataset:
+        """Fetch ``list_name`` from ``site`` (authenticated with ``auth``)."""
         ...
-
-    def fetch_extracts(self, job_id: str, dest_dir: Path) -> list[Path]:
-        """Downloads the generated CSVs for a job to dest_dir and returns their local paths."""
-        ...
 ```
 
-## 2. Build the Orchestrator
+`SharePointPusher` is the upload dual — `push(site, list_name, auth, dataset,
+strategy)`. Neither names a transport, an auth mechanism or a paging scheme;
+those are the client's problem, behind the seam.
 
-Your orchestration layer takes this client as a dependency rather than instantiating the connection itself. Its job is purely logistical: run the script, fetch the files, and hand them off to the pipeline runners.
+## 2. Build the component that takes the seam as a dependency
+
+The Reader takes a fetcher as a constructor argument rather than building the
+connection itself. Its job is purely logistical: hand the configuration to the
+seam, report what it touched, return the Dataset.
 
 ```python
-from framework.run import RunContext
+class SharePointReader:
+    """Read a SharePoint list into a Dataset through a swappable fetcher."""
 
-def run_complaints_orchestrator(
-    sas_client: SasRemoteClient, 
-    landing_zone: Path, 
-    context: RunContext
-) -> None:
-    # 1. Trigger SAS
-    job_id = sas_client.execute_script("/sas/scripts/weekly_complaints_export.sas")
-    
-    # 2. Fetch the newly generated CSVs to the local landing zone
-    sas_client.fetch_extracts(job_id, landing_zone)
-    
-    # 3. Trigger the downstream pipelines
-    # (The pipelines expect their specific files to be present in the landing_zone)
-    from pipelines.complaints_a.pipeline import run as run_a
-    from pipelines.complaints_b.pipeline import run as run_b
-    from pipelines.complaints_c.pipeline import run as run_c
-    
-    run_a(context)
-    run_b(context)
-    run_c(context)
+    def __init__(
+        self,
+        site: str,
+        list_name: str,
+        auth: object = None,
+        *,
+        fetcher: SharePointFetcher | None = None,
+    ) -> None:
+        self._site = site
+        self._list_name = list_name
+        self._auth = auth
+        self._fetcher = fetcher or StubbedSharePointFetcher()
+        self.data_locations: list[dict[str, str]] = []
+
+    def read(self) -> Dataset:
+        self.data_locations = [sharepoint_location(self._site, self._list_name)]
+        return self._fetcher.fetch(self._site, self._list_name, self._auth)
 ```
 
-## 3. Write the "Fake" for Testing
+The default, `StubbedSharePointFetcher`, **raises `NotImplementedError`** — the
+real on-prem client is deferred, so a Reader constructed without a fetcher
+refuses rather than pretending to reach the network. A missing client is
+diagnosed as a missing client, never as an empty list.
 
-Instead of using `unittest.mock.MagicMock` (which can be brittle and fails to verify multi-step behaviour effectively), we write a lightweight, in-memory `Fake` that implements the protocol. It behaves like the real external server but operates locally.
+## 3. Write the fake
+
+Instead of `unittest.mock.MagicMock` (brittle, and poor at verifying multi-step
+behaviour), write a small object that implements the Protocol and behaves like
+the real system, locally. Two ship or live in the tests:
+
+**`LocalCsvFetcher`** — a fake that serves *real data from a fixture file*. It
+ignores the SharePoint configuration and reads the CSV, so the whole read path
+is exercised with no tenant, no auth and no network:
 
 ```python
-class FakeSasClient:
-    def __init__(self):
-        self.executed_scripts = []
-        self.files_to_serve = {}  # Map of filename -> csv string content
-        
-    def execute_script(self, script_path: str) -> str:
-        self.executed_scripts.append(script_path)
-        return "fake-job-123"
-        
-    def fetch_extracts(self, job_id: str, dest_dir: Path) -> list[Path]:
-        assert job_id == "fake-job-123"
-        downloaded = []
-        
-        # Simulate an SFTP/Network download by writing our fake files to the disk
-        for filename, content in self.files_to_serve.items():
-            path = dest_dir / filename
-            path.write_text(content, encoding="utf-8")
-            downloaded.append(path)
-            
-        return downloaded
+class LocalCsvFetcher:
+    """An offline :class:`SharePointFetcher` backed by a local CSV fixture."""
+
+    def __init__(self, path: str | os.PathLike[str]) -> None:
+        self._path = Path(path)
+
+    def fetch(self, site: str, list_name: str, auth: object) -> Dataset:
+        return Dataset.from_pandas(pd.read_csv(self._path))
 ```
 
-## 4. The Granular Test
+**`FakeListBackend`** — in `tests/tools/test_integrations/test_sharepoint_reader.py`,
+an in-memory list that plays *both* fetcher and pusher, so a Dataset pushed out
+through `SharePointWriter` comes straight back through `SharePointReader`. It
+honours the load strategy it is handed: `Refresh` replaces the list,
+`AccumulateByRun` appends.
 
-Now we can thoroughly test our orchestration logic without ever touching a network, spinning up a server, or writing flaky remote tests.
+## 4. The granular test
+
+With a fake behind the seam, a test asserts on behaviour through the Dataset's
+public surface and never touches a network:
 
 ```python
-from tools.store import StoreRegistry
-from tests.framework_testing import read_rows
-from tools.medallion import medallion
+def test_reads_a_list_through_a_fixture_fetcher(fixture_csv):
+    # The fetch is behind a swappable seam: an offline LocalCsvFetcher stands in
+    # for the deferred SharePoint client so the read path is exercised.
+    reader = SharePointReader(
+        "https://contoso.sharepoint.com/sites/cases",
+        "Advisers",
+        fetcher=LocalCsvFetcher(fixture_csv),
+    )
 
-def test_orchestrator_triggers_sas_and_drives_pipelines(tmp_path):
-    # Setup the fake SAS environment with our expected CSV outputs
-    sas_client = FakeSasClient()
-    sas_client.files_to_serve = {
-        "complaints_a.csv": "record_id,label,amount\nA1,foo,50\n",
-        "complaints_b.csv": "record_id,category,priority\nB1,sales,high\n",
-        "complaints_c.csv": "record_id,department,resolution_days\nC1,hr,5\n"
-    }
-    
-    landing_zone = tmp_path / "landing_zone"
-    landing_zone.mkdir()
-    context = RunContext(base_dir=tmp_path, pipeline="orchestrator")
-    
-    # Execute the orchestrator
-    run_complaints_orchestrator(sas_client, landing_zone, context)
-    
-    # Assert 1: The orchestrator ran the correct script remotely
-    assert "/sas/scripts/weekly_complaints_export.sas" in sas_client.executed_scripts
-    
-    # Assert 2: The CSV files successfully landed in the landing zone
-    assert (landing_zone / "complaints_a.csv").exists()
-    
-    # Assert 3: The downstream pipelines successfully picked them up and ran
-    registry = StoreRegistry(tmp_path)
-    silver_a = read_rows(medallion(registry, "complaints_a").silver, "complaints_a")
-    silver_b = read_rows(medallion(registry, "complaints_b").silver, "complaints_b")
-    
-    assert len(silver_a) == 1
-    assert silver_a[0]["amount"] == 50
-    assert len(silver_b) == 1
-    assert silver_b[0]["priority"] == "high"
+    dataset = reader.read()
+
+    # Observed only through the Dataset's public surface.
+    assert dataset.columns == ["adviser_id", "name"]
+    assert len(dataset) == 3
 ```
+
+The same file pins the other things worth pinning about a seam: that the
+default refuses (`test_default_fetcher_defers_until_implemented`), that the
+configuration reaches the seam verbatim
+(`test_passes_the_configured_site_list_and_auth_to_the_fetcher`, via a
+`RecordingFetcher`), and that both directions compose
+(`test_write_then_read_round_trips_through_an_in_memory_list_backend`).
 
 ## Why this works so well
 
-- **Resilient to Platform Change:** If you swap SAS out for a Databricks job, or switch from SFTP to AWS S3, the orchestrator and its test **do not change**. You simply build a new production implementation of the `SasRemoteClient` (e.g. `S3DatabricksClient`).
-- **Tests the Integration, not the Implementation:** It verifies that if files land, the downstream pipelines are successfully triggered in sequence and refine the data.
-- **Fast:** It executes entirely locally in milliseconds, with zero network latency.
+- **Resilient to platform change.** When the on-prem SE client lands
+  (NTLM/Kerberos/REST), it is a new production implementation of
+  `SharePointFetcher` / `SharePointPusher`. `SharePointReader`,
+  `SharePointWriter`, every pipeline that uses them and every test above **do
+  not change**. The same holds if the list moves to a different backend
+  entirely: build a new implementation of the seam, nothing else moves.
+- **Tests the integration, not the implementation.** The test verifies that if
+  rows come back through the seam, the Reader hands them on as a Dataset that
+  the rest of the pipeline can validate and land — not how the client paged
+  through the list.
+- **A missing client fails loudly.** Because the stub raises, a pipeline wired
+  without a real client cannot quietly land nothing.
+- **Fast.** It executes entirely locally, in milliseconds.
+
+The incremental reader, `SharePointModifiedReader` in
+`tools/integrations/sharepoint_rest.py`, follows the same shape behind its own
+`SharePointListClient` seam; see
+[adding-a-feed.md](adding-a-feed.md#sharepointmodifiedreadersite-list_name-columns-window).
