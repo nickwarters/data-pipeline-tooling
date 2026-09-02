@@ -100,7 +100,7 @@ The completed result of a Reviewer reviewing a Case, captured in the (separate) 
 _Avoid_: result, verdict, assessment
 
 **Feed**:
-A single configured **inbound** data stream the framework ingests (e.g. one Excel workbook, one SharePoint list, one SAS extract, the returned Review Outcomes); outbound artifacts are **Deliverables**, not Feeds.
+A single configured **inbound** data stream the framework ingests (e.g. one Excel workbook, one SharePoint list, one SAS extract, the returned Review Outcomes); outbound artifacts are **Deliverables**, not Feeds. A Feed that arrives as a file is landed **outside** the framework — a SAS job writes its CSV where the pipeline reads it — and the framework triggers no upstream job; a freshness declaration on the ingest, not a fetch step, is what notices a file that did not arrive ([ADR-0029](docs/adr/0029-sas-runs-outside-the-framework.md)).
 _Avoid_: source (reserved for source *type*: Excel/CSV/SAS/SQLite/SharePoint), import, Deliverable (that is outbound)
 
 **Polling Feed**:

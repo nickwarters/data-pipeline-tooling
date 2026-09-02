@@ -409,7 +409,7 @@ the door instead of mid-rename. Skip it when the rename's failure mode is alread
 obvious.
 
 The rest of this guide is the reference behind that scaffold: every Reader, and
-the stubbed remote (SAS / SharePoint) seams.
+the stubbed remote SharePoint seams.
 
 ## Wide feeds (hundreds of columns)
 
@@ -463,7 +463,7 @@ class Reader(Protocol):
 The concrete in-memory engine (pandas today) lives **inside** the Reader and
 behind the `Dataset` seam — it never appears in this signature, a pipeline
 script, or the domain layer. Readers are tested against **local fixture files**:
-no network, no SAS, no SharePoint. Paths are taken as `str | os.PathLike` and
+no network, no live SharePoint. Paths are taken as `str | os.PathLike` and
 held with `pathlib.Path`, so they behave identically on Windows and macOS.
 
 Concrete Readers that ship:
@@ -475,7 +475,6 @@ Concrete Readers that ship:
 | `GlobCsvReader(directory, pattern)` | Many local CSV files that together form one Feed snapshot | directory path + glob pattern |
 | `ExcelReader(path, sheet=0)` | One worksheet of an `.xlsx` workbook | path + sheet **name or zero-based index** (default the first sheet) |
 | `SqliteReader(db_path, table)` | One table of a SQLite layer db | db path + table name |
-| `SasReader(script, copy_glob, dest)` | A SAS feed run on a remote box | script name + glob of outputs to copy back + local landing dir |
 | `SharePointReader(site, list_name, auth)` | A SharePoint list, whole (a snapshot) | site URL + list name + auth config |
 | `SharePointModifiedReader(site, list_name, columns, window)` | A SharePoint list, only the items changed in one `Modified` window | site URL + list name + the columns to project + the window |
 
@@ -512,9 +511,12 @@ cross-platform engine; in `requirements.txt`). `SqliteReader` is the read-side
 dual of the Sqlite Writers — it opens through the shared `connect` factory, so
 it inherits the share-tolerant settings and can read a subject's own
 layer **or** another subject's read-only Reference Data medallion (joined in
-Python). `SasReader` and `SharePointReader` follow the same `read()`
-shape but reach a remote source whose client is **stubbed for now**;
-see [Remote feeds (SAS, SharePoint)](#remote-feeds-sas-sharepoint) below.
+Python). `SharePointReader` follows the same `read()` shape but reaches a
+remote source whose client is **stubbed for now**; see
+[Remote feeds (SharePoint)](#remote-feeds-sharepoint) below. A SAS-sourced feed
+is not a remote feed: the SAS job lands a CSV outside the framework and the
+pipeline reads it with `CsvReader`
+([ADR-0029](adr/0029-sas-runs-outside-the-framework.md)).
 
 ## 2. Compose the pipeline and land it
 
@@ -559,53 +561,28 @@ run boundary:
 - Use `ForEach(files, pipeline_builder, ...)` when each file is an independent
   run that needs its own context, failure boundary, and idempotency key.
 
-## Remote feeds (SAS, SharePoint)
+## Remote feeds (SharePoint)
 
-Two source types live on a remote system the framework host can't run itself:
-SAS (no macOS runtime, and the cross-platform constraint forbids a Windows-only
-path) and SharePoint (**Subscription Edition on-prem**; the connection drops in
-from a separate repo). Their Readers keep the same `read() -> Dataset` shape,
-but the remote behaviour — shelling to `ssh`/`scp`, calling the SharePoint list
-API — sits behind a **swappable seam in `tools.integrations.remote` that is stubbed
-today**. The on-prem SE auth (NTLM/Kerberos/REST — **not**
-Azure AD/Graph) is a client-seam concern designed once for both directions, and
+One source type lives on a remote system the framework reaches through a
+client: SharePoint (**Subscription Edition on-prem**; the connection drops in
+from a separate repo). Its Readers and Writer keep the same `read() -> Dataset`
+/ `write(dataset)` shape, but the remote behaviour — calling the SharePoint list
+API — sits behind a **swappable seam in `tools.integrations.remote` that is
+stubbed today**. The on-prem SE auth (NTLM/Kerberos/REST — **not** Azure
+AD/Graph) is a client-seam concern designed once for both directions, and
 keeping it behind the seam keeps the cross-platform constraint (Windows + macOS)
 the framework's, not the caller's. Because the remote step is a seam, the whole
-feed is testable against local fixtures with **no SSH, SAS box, network, or live
-SharePoint**, and the real client drops in later without touching the Reader,
-the Writer, or any pipeline script.
+feed is testable against local fixtures with **no network or live SharePoint**,
+and the real client drops in later without touching the Reader, the Writer, or
+any pipeline script.
 
-### `SasReader(script, copy_glob, dest)`
-
-Configured with three knobs, and on `read()` does three things:
-
-| Knob | Meaning |
-|------|---------|
-| `script` | the SAS script to run on the remote box |
-| `copy_glob` | which output files to copy back (e.g. `"*.csv"`) |
-| `dest` | the local landing directory the outputs are copied into |
-
-1. **Run** `script` on the remote SAS host.
-2. **Fetch** the files matching `copy_glob` into `dest`.
-3. **Read** the landed files (sorted, concatenated) via the ordinary local file
-   read path — the same CSV engine `CsvReader` uses, behind the Dataset seam.
-
-Steps 1–2 are delegated to a `RemoteRunner` (the cross-platform shell/transfer
-seam — `ssh`/`scp` today, a library such as `paramiko` later). The default is
-`StubbedRemoteRunner`, a **no-op**: it runs nothing and copies nothing, assuming
-the outputs are **already landed** in `dest` (a fixture in tests, a
-previously-copied directory in practice). If nothing in `dest` matches
-`copy_glob`, `read()` raises `FileNotFoundError` rather than masking a broken
-fetch with an empty Dataset. Swap in a different `RemoteRunner` (keyword-only
-`runner=`) to add the real exec/transfer behind the same interface.
-
-```python
-from tools.integrations.remote import SasReader
-
-# Reads cases.csv already landed in /data/landing/cases (stubbed transfer).
-reader = SasReader("run_cases.sas", "*.csv", "/data/landing/cases")
-dataset = reader.read()
-```
+SAS is *not* a remote source type here. Per
+[ADR-0029](adr/0029-sas-runs-outside-the-framework.md) a SAS job runs outside
+the framework and lands a file; the pipeline reads it with `CsvReader` (or
+`GlobCsvReader` for a multi-part export) exactly as in section 1, and a
+freshness declaration on the ingest — not a fetch step — is what guards
+against the file not having arrived. The framework has no remote-execution
+seam.
 
 ### `SharePointReader(site, list_name, auth)`
 
@@ -620,7 +597,8 @@ the `(site, list_name, auth)` config verbatim. Two fetchers ship:
   it ignores the SharePoint config and reads the file, so the read path is
   exercised with no live connection. It has the same shape a real client will
   take. (Tests that exercise **both** directions through one object use an
-  in-memory fake list backend — see `tests/framework/test_sharepoint_reader.py`.)
+  in-memory fake list backend — see
+  `tests/tools/test_integrations/test_sharepoint_reader.py`.)
 
 ```python
 from tools.integrations.remote import SharePointReader

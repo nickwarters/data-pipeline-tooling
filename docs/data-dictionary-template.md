@@ -68,7 +68,7 @@ consumes it. Name the medallion layer and the subject it belongs to.*
 | **Is this a Case Type?** | `<Yes — yields Cases \| No — Reference Data / Detail Table / staging>` |
 | **Natural key → `case_id`** | `<natural_key column(s), or "n/a">` |
 | **Source system** | `<e.g. Claims SAS export, Advisers SharePoint list, internal CSV>` |
-| **Reader** | `<CsvReader \| ExcelReader \| SqliteReader \| GlobCsvReader \| SasReader \| SharePointReader>` |
+| **Reader** | `<CsvReader \| ExcelReader \| SqliteReader \| GlobCsvReader \| SharePointReader>` |
 | **Load strategy** | `<Refresh() \| AccumulateByRun(...)>` *(who owns history at this layer)* |
 | **Upstream dependencies** | `<UPSTREAMS feeds/tables this one needs fresh, or "none — source feed">` |
 | **Schedule / freshness** | `<e.g. daily by 07:00; freshness window 1 working day>` |
@@ -127,7 +127,7 @@ from the raw SAS export (`raw.claims`), schema-enforced at this boundary.
 | **Is this a Case Type?** | Yes — yields Cases |
 | **Natural key → `case_id`** | `claim_ref` |
 | **Source system** | Claims SAS export (`run_claims.sas`, daily CSV) |
-| **Reader** | `CsvReader` (raw landed by `SasReader`) |
+| **Reader** | `CsvReader` (the CSV the SAS job lands upstream) |
 | **Load strategy** | `AccumulateByRun` (silver keeps the change-over-time record) |
 | **Upstream dependencies** | `raw.claims` |
 | **Schedule / freshness** | daily by 07:00; freshness window 1 working day |
