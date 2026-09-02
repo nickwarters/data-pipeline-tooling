@@ -34,7 +34,9 @@ extract must be narrowed upstream. SAS execution also remains outside the
 framework: a pipeline reads the landed file.
 
 `SasReader`, ADR-0012's remote-execution seam, is therefore outside this
-decision and is unchanged here.
+decision and is unchanged here. *(It has since been removed under
+[ADR-0029](0029-sas-runs-outside-the-framework.md), which records the second
+half of #807's answer.)*
 
 ## Consequences
 

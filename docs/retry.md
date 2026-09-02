@@ -1,7 +1,7 @@
 # Targeted retry at the I/O edges
 
 Some failures are worth one more attempt; most are not. A remote source that is
-briefly unavailable, a SharePoint/SAS fetch that drops, a SQLite
+briefly unavailable, a SharePoint fetch that drops, a SQLite
 `database is locked` under a busy share — these are **transient edge failures**:
 nothing is wrong with the data or the configuration, the I/O just needs another
 go. A schema-validation breach or a missing-file/configuration error is the
@@ -56,8 +56,9 @@ the same:
 ```python
 from framework.io import CsvReader, SqliteTruncateReloadWriter, Refresh
 from framework.run import Pipeline
+from tools.integrations.remote import SharePointReader
 
-reader = RetryingReader(SasReader(...), policy)
+reader = RetryingReader(SharePointReader(site, list_name, auth), policy)
 writer = RetryingWriter(SqliteTruncateReloadWriter(db, "cases"), policy)
 
 p = Pipeline("cases")
@@ -71,7 +72,7 @@ Only the wrapped `read()` / `write()` is retried. The decorators are ordinary
 
 ### Remote clients
 
-`RetryPolicy` is a standalone collaborator: a remote client (a SharePoint or SAS
+`RetryPolicy` is a standalone collaborator: a remote client (a SharePoint
 fetch) can call through it directly, without a reader/writer wrapper, and get the
 same transient-only semantics:
 
@@ -91,7 +92,7 @@ new run-log fields — see [run-log-format.md](run-log-format.md).
 
 | Use retry | Don't use retry |
 |-----------|-----------------|
-| Remote source/sink access (SAS, SharePoint) | Schema validation breaches |
+| Remote source/sink access (SharePoint) | Schema validation breaches |
 | SQLite `database is locked` / busy timeouts on a shared store | Configuration errors (missing file, bad path, wrong column set) |
 | Transient network blips at a reader/writer edge | Business-rule failures / quarantine decisions |
 
