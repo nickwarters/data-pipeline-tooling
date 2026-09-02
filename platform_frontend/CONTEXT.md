@@ -143,7 +143,7 @@ changes the Section set is: `details` · `questions` · `issues` · `summary` ·
 `amendOutcome`. A Section's display copy is one per-Section descriptor carrying
 two spellings — a `tab` caption and a `heading` — which a **Case Type** may
 rename via `sectionLabels` (`src/lib/section-labels.js`). The **Reviewer**'s tab
-row is **Details · Review · Issues · Remediation · Summary · Notes · Amend
+row is **Details · Review · Issues · Summary · Remediation · Notes · Amend
 Outcome**; the `questions` Section is tabbed **Review** but headed
 **Questions**, and `details` is tabbed **Details** but headed **Case Details**.
 Two Sections that used to be one: **Issues** _captures_ failed-Answer

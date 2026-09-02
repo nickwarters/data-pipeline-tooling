@@ -61,7 +61,7 @@ test('SUMMARY_SECTIONS is derived from the registry (summary blocks in order)', 
   );
 });
 
-// --- Tabs are derived, in the historical order ---
+// --- Tabs are derived, Summary ahead of Remediation ---
 
 test('tabEntries derives tab order and ids from the registry', () => {
   const tabs = tabEntries();
@@ -71,8 +71,8 @@ test('tabEntries derives tab order and ids from the registry', () => {
       'details',
       'questions',
       'issues',
-      'remediation',
       'summary',
+      'remediation',
       'notes',
       'appealRequest',
       'appealReview',
