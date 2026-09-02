@@ -1,6 +1,6 @@
 """Targeted retry at the reader/writer edges.
 
-Transient edge failures — a remote source briefly unavailable, a SharePoint/SAS
+Transient edge failures — a remote source briefly unavailable, a SharePoint
 fetch dropping, a SQLite ``database is locked`` — are worth one more attempt;
 schema-validation and configuration errors are not. A :class:`RetryPolicy`
 encodes that distinction as an **allowlist**: it retries only the exception types
