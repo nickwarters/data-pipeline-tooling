@@ -268,13 +268,20 @@ export class CaseMachine {
    * a close clears them: a terminal Case waits on nobody, and no later
    * transition would ever clear them.
    *
+   * The note is what `other` means, and nothing else carries it: a keyed reason
+   * already names itself, so the note is stored trimmed or as an explicit
+   * `null` rather than as an empty string a reader would have to interpret.
+   *
    * @param {string} reasonKey a key from the Void Reason vocabulary
+   * @param {string} [note] the Reviewer's written reason, required under `other`
    * @returns {Partial<CaseRow>}
    */
-  transitionToVoid(reasonKey) {
+  transitionToVoid(reasonKey, note = '') {
+    const written = note.trim();
     return {
       status: CASE_STATUS.VOID,
       voidReason: reasonKey,
+      voidReasonNote: written === '' ? null : written,
       voidedAt: this._now().toISOString(),
       voidedBy: this.currentUser.id,
       onHold: false,

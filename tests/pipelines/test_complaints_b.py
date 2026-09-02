@@ -1,10 +1,6 @@
-"""Tests for the ``complaints_b`` Case Type ingest.
+"""Tests for ``complaints_b`` ingest.
 
-Each step is an ordinary function over a ``Reader`` and a ``Writer`` whose lines
-run where they are written, so a test drives the real thing in memory:
-``given_rows`` stands in for the source and ``RecordingWriter`` captures what
-would be written. This never touches SQLite, the network, or the filesystem —
-and a failing assertion stops on the line that failed.
+Step tests run in memory; the bundled sample covers the filesystem path.
 """
 
 from __future__ import annotations

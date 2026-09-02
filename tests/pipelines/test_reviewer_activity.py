@@ -145,11 +145,7 @@ def test_main_reads_sync_gold_and_refreshes_the_reporting_subject(base_dir):
     sync.gold.writer("case_current", Refresh()).write(
         Dataset.from_pandas(pd.DataFrame([_case()]))
     )
-    # This test used to plant a decoy — a contradicting `case_current` in Sync's
-    # *silver* — to show the aggregate reads gold. Both subjects are under
-    # migration control now, and the decoy is not merely unnecessary but
-    # impossible: Sync's silver baseline declares no such table, which states the
-    # same thing structurally rather than by experiment.
+    # Sync silver has no case_current; assert the aggregate reads migrated gold.
     assert sync.silver.columns_of("case_current").columns() is None
 
     assert main(["prog", "--base-dir", str(base_dir)]) == 0

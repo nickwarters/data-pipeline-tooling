@@ -1,10 +1,4 @@
-"""A load strategy realises its own Writer — nothing else branches on it.
-
-These tests pin the mechanism rather than any single strategy's semantics (those
-live in the sibling modules): the store asks the strategy for a Writer, the file
-writers ask the strategy for the frame to write, and a strategy nobody has heard
-of works anyway because there is nothing left to teach.
-"""
+"""Tests that strategies realise writers and file transforms."""
 
 import ast
 from pathlib import Path
@@ -97,12 +91,7 @@ class _RecordingWriter:
 
 
 class _MarkRows:
-    """A strategy beyond the shipped set, defined here — the blast-radius proof.
-
-    It is unknown to the store, to the writers module, and to the facade, and
-    yet it loads through both seams. Adding a real strategy is the same shape
-    of work: one class, one export line.
-    """
+    """Minimal structural third-party realisation strategy."""
 
     def __init__(self, mark):
         self.mark = mark
@@ -140,9 +129,7 @@ def test_a_new_strategy_also_drives_the_file_writers(tmp_path):
     [UpsertStrategy("case_id"), InsertIfAbsent("case_id"), AppendOnly("case_id")],
 )
 def test_a_file_writer_names_the_strategy_it_cannot_realise(tmp_path, strategy):
-    # A key-driven load has no whole-file rewrite, so those strategies define no
-    # apply_to_frame. The mismatch must name both sides rather than fall off the
-    # end of a chain of branches.
+    # Key strategies cannot realise file writers; the error names both types.
     writer = CsvWriter(tmp_path / "out.csv", strategy)
 
     with pytest.raises(TypeError) as excinfo:

@@ -72,7 +72,7 @@ rather than a live computation over a half-answered Case.
 
 ### The Void Reason vocabulary is framework-owned
 
-Six reasons, in `src/lib/void-reasons.js`, keyed and frozen. A Case Type may
+Seven reasons, in `src/lib/void-reasons.js`, keyed and frozen. A Case Type may
 narrow the list it offers (`voidReasons`), but that narrowing is display-only:
 storage validates against the whole vocabulary. The manager report groups
 reasons **across** Case Types, and it can only do that while a key means the
@@ -86,11 +86,44 @@ disclosure button plus a panel naming the consequences and demanding a reason.
 A terminal action with no way back does not sit behind one click. There is no
 un-void: correcting a mistaken void means raising the Case again.
 
+### `Other` is a reason that is not chosen until it is written
+
+`other` is the seventh key and the only one that names nothing on its own. A
+closed vocabulary that a Reviewer cannot escape gets escaped anyway — through
+the nearest-fitting key, which then means two things in the report — so the
+vocabulary carries the escape hatch explicitly rather than leaving it to be
+improvised inside `no-evidence`.
+
+Because the key says nothing, picking it is not finishing the choice: the panel
+offers a free-text box **only** under `other`, and the confirm stays dead until
+something is written in it. `voidControl` reports `noteRequired` and folds the
+empty note into the same `disabled` it already computed for "no reason chosen",
+so there is one gate rather than two, and `voidPatch` produces no patch at all
+until it opens.
+
+The box appears and disappears with the reason rather than being disabled in
+place, and the store empties it whenever the reason changes — including on the
+panel close that already forgets the reason. Both halves say the same thing: a
+note describes the reason it was written under and no other. `voidControl` also
+reports an empty note for any reason that does not need one, so the two guards
+are belt and braces rather than one guard the other depends on.
+
+The note is display copy, not a second key. The report still groups on
+`voidReason`, so every `other` void is one bucket however many different notes
+sit beneath it — which is what keeps the cross-Case-Type grouping the argument
+above rests on intact. `voidReasonText(key, note)` is what a reader renders: the
+label, and the words behind it when there are any.
+
 ### Storage
 
-Three new columns on every `Cases-{slug}` list: `VoidedAt` (Date and Time,
-**indexed**), `VoidReason` (single line of text) and `VoidedBy` (**Person or
-Group**). `Status` gains `Void` as a fourth choice value.
+Four new columns on every `Cases-{slug}` list: `VoidedAt` (Date and Time,
+**indexed**), `VoidReason` (single line of text), `VoidReasonNote` (multiple
+lines of text) and `VoidedBy` (**Person or Group**). `Status` gains `Void` as a
+fourth choice value.
+
+`VoidReasonNote` is written trimmed, or as an explicit `null` under every keyed
+reason — never an empty string a reader would have to interpret. It is never
+filtered or ordered on, so it needs no index.
 
 `VoidedBy` is a Person column, the same as the four other people on a Case row:
 expanded on read and reduced to a bare account name, and resolved to a numeric
@@ -111,6 +144,18 @@ column already uses.
   already past the List View Threshold cannot be given the index afterwards, so
   on such a list the report is served unindexed. Stated in
   [`docs/case-type-onboarding.md`](../case-type-onboarding.md).
+- **`VoidReasonNote` is a provisioning pre-requisite alongside the other three.**
+  A list that has the `Other` reason available in the app but not the column
+  behind it takes the void and loses the only thing that said why — the reason
+  key alone means nothing. Stated in
+  [`docs/case-type-onboarding.md`](../case-type-onboarding.md).
+- **The note flows through the pipelines as far as a Case, and no further.**
+  `sharepoint_cases` lands it beside `VoidReason` — raw, silver and
+  `case_current`, with the additive migrations that go with a shape change —
+  because a voided Case whose reason is `other` says nothing at all without it.
+  It stops there: `cora_platform_metric`'s `case_void_monthly` groups on
+  `void_reason`, and a free-text sentence is not a dimension — grouping on it
+  would give one row per distinct note. Recorded in both data dictionaries.
 - **Adding `Void` to the `Status` choice column is a deploy pre-requisite.**
   SharePoint rejects a PATCH writing a choice value the column does not offer,
   so voiding fails on every list that has not been updated, in both

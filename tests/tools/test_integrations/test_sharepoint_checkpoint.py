@@ -1,9 +1,4 @@
-"""The per-list ``Modified`` watermark, and the window rule computed over it.
-
-No network and no tenant: a checkpoint is control state on disk, so every test
-here drives a real SQLite file under ``tmp_path`` and reads it back with plain
-``sqlite3`` to assert what was persisted.
-"""
+"""Test persisted per-list ``Modified`` watermarks and polling windows."""
 
 import datetime as dt
 import sqlite3

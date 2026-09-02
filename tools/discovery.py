@@ -10,13 +10,7 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class SourceArtifact:
-    """A single dated source file discovered on disk.
-
-    ``path`` is the resolved absolute path. ``business_date`` is the date
-    encoded in the filename. ``file_id`` is a stable, run-independent
-    identifier derived from the filename — safe as an ``AccumulateByRun``
-    logical-run-id component.
-    """
+    """A source file with its resolved path, business date, and stable file ID."""
 
     path: Path
     business_date: dt.date
@@ -24,21 +18,10 @@ class SourceArtifact:
 
 
 class DatedFileDiscovery:
-    """Discover source artifacts whose filenames encode a business date.
+    """Discover dated filenames in ``(start, end]`` business-date order.
 
-    The ``pattern`` uses ``{date:FORMAT}`` as a placeholder for the date
-    portion and ``*`` as a wildcard for anything else::
-
-        DatedFileDiscovery("/share/claims", "claims_{date:%Y%m%d}_*.csv")
-
-    Call ``available_between(start, end)`` to retrieve artifacts whose
-    ``business_date`` falls in the **exclusive-start, inclusive-end** range
-    ``(start, end]``.  Pass the last successfully processed source date as
-    *start* and the current run date as *end* to discover exactly the
-    un-processed dates since the last successful run.
-
-    Results are sorted by ``(business_date, path)`` for deterministic ordering
-    across Windows and macOS.
+    ``pattern`` marks the date with ``{date:FORMAT}``. Results are ordered by
+    date then path for deterministic behavior on Windows and macOS.
     """
 
     def __init__(
@@ -50,10 +33,6 @@ class DatedFileDiscovery:
         self._glob_pattern, self._filename_regex, self._date_format = _compile(pattern)
 
     def available_between(self, start: dt.date, end: dt.date) -> list[SourceArtifact]:
-        """Return artifacts where ``start < business_date <= end``.
-
-        Results are sorted by ``(business_date, path)``.
-        """
         artifacts: list[SourceArtifact] = []
         for path in self._directory.glob(self._glob_pattern):
             match = self._filename_regex.match(path.name)
@@ -77,7 +56,6 @@ class DatedFileDiscovery:
 
 
 def _compile(pattern: str) -> tuple[str, re.Pattern[str], str]:
-    """Return (glob_pattern, filename_regex, date_format) for a dated pattern."""
     placeholder = re.search(r"\{date:([^}]+)\}", pattern)
     if placeholder is None:
         raise ValueError(

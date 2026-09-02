@@ -72,7 +72,6 @@ class RetryPolicy:
                     on_retry(attempt, exc)
                 if self.backoff_seconds:
                     self._sleep(self.backoff_seconds)
-        # Unreachable: the loop either returns or raises on the final attempt.
         raise AssertionError("RetryPolicy.call exhausted without returning")
 
 

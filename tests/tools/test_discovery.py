@@ -31,11 +31,6 @@ def _discover(tmp_path, pattern, start, end):
     return DatedFileDiscovery(tmp_path, pattern).available_between(start, end)
 
 
-# ---------------------------------------------------------------------------
-# SourceArtifact
-# ---------------------------------------------------------------------------
-
-
 class TestSourceArtifact:
     def test_is_immutable(self, tmp_path):
         artifact = SourceArtifact(
@@ -52,20 +47,16 @@ class TestSourceArtifact:
         assert a == b
 
 
-# ---------------------------------------------------------------------------
-# DatedFileDiscovery — date range filtering
-# ---------------------------------------------------------------------------
-
-
 class TestAvailableBetween:
     def test_monday_catchup_finds_saturday_sunday_monday(self, tmp_path):
         """The canonical catch-up case: three files discovered, Friday excluded."""
         _touch(
             tmp_path,
-            "claims_20260619.csv",  # Friday — already processed
-            "claims_20260620.csv",  # Saturday
-            "claims_20260621.csv",  # Sunday
-            "claims_20260622.csv",  # Monday
+            # Start is exclusive; weekend and end-date files are included.
+            "claims_20260619.csv",
+            "claims_20260620.csv",
+            "claims_20260621.csv",
+            "claims_20260622.csv",
         )
         friday = dt.date(2026, 6, 19)
         monday = dt.date(2026, 6, 22)
@@ -123,11 +114,6 @@ class TestAvailableBetween:
         assert artifacts == []
 
 
-# ---------------------------------------------------------------------------
-# DatedFileDiscovery — multiple files per date
-# ---------------------------------------------------------------------------
-
-
 class TestMultipleFilesPerDate:
     def test_all_files_for_each_date_are_discovered(self, tmp_path):
         _touch(
@@ -167,11 +153,6 @@ class TestMultipleFilesPerDate:
         assert len(artifacts) == 3
 
 
-# ---------------------------------------------------------------------------
-# DatedFileDiscovery — deterministic ordering
-# ---------------------------------------------------------------------------
-
-
 class TestDeterministicOrder:
     def test_sorted_by_date_then_path(self, tmp_path):
         _touch(
@@ -207,11 +188,6 @@ class TestDeterministicOrder:
         second = [a.path.name for a in discovery.available_between(start, end)]
 
         assert first == second
-
-
-# ---------------------------------------------------------------------------
-# DatedFileDiscovery — SourceArtifact fields
-# ---------------------------------------------------------------------------
 
 
 class TestArtifactFields:
@@ -264,20 +240,10 @@ class TestArtifactFields:
         assert artifact.business_date == dt.date(2026, 6, 20)
 
 
-# ---------------------------------------------------------------------------
-# DatedFileDiscovery — invalid pattern
-# ---------------------------------------------------------------------------
-
-
 class TestInvalidPattern:
     def test_missing_date_placeholder_raises(self):
         with pytest.raises(ValueError, match="date"):
             DatedFileDiscovery("/any", "claims_*.csv")
-
-
-# ---------------------------------------------------------------------------
-# ForEach integration
-# ---------------------------------------------------------------------------
 
 
 class TestForEachIntegration:

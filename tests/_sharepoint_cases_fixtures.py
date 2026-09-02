@@ -369,11 +369,9 @@ def aggregate(reduce, step: str, rows: list[dict]) -> list[dict]:
 def nothing_landed(base_dir) -> bool:
     """Whether the subject's databases are all still empty.
 
-    "The run wrote nothing" used to be "the subject's directory does not exist":
-    nothing created it because nothing wrote. Under migration control the
-    databases exist before the run does anything, so the claim has to be made
-    about their contents instead — which is the thing those tests meant all
-    along.
+    Migration control creates the databases before the run starts, so directory
+    presence cannot show whether anything landed. The assertion must inspect the
+    database contents instead.
     """
     for db_path in sorted((base_dir / FEED_NAME).glob("*.db")):
         connection = sqlite3.connect(db_path)
@@ -396,14 +394,10 @@ def nothing_landed(base_dir) -> bool:
 def published_gold(run_log: RecordingRunLog) -> set[str]:
     """Which gold tables a run actually published into, per its own record.
 
-    This used to read ``sqlite_master``: a gold table existed exactly when a
-    run had created it by writing, so presence answered "was gold published?".
-    Under migration control every gold table exists before the run does
-    anything — the migration created it — so presence answers nothing, and the
-    question has to be put to the run instead. A committed write record naming
-    a gold location is the publication, whether it carried rows or not, which
-    also makes the quiet-window case say what it means rather than relying on
-    an empty table having been created as a side effect.
+    Migration control creates every gold table before a run starts, so table
+    presence cannot show whether that run published it. A committed write record
+    naming a gold location is the publication, whether it carried rows or not;
+    the quiet-window case therefore depends on recorded writes, not table shape.
     """
     return {
         location["name"]

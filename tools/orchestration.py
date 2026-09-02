@@ -291,7 +291,6 @@ class Schedule:
         """A snapshot of the configurable spellings and the classes owning them."""
         return dict(Schedule._config_registry)
 
-    # -- Friendly constructors -------------------------------------------------
     # Common operator language over the concrete schedule classes. These read
     # at call time, so referencing the subclasses defined later in this module
     # is fine.
@@ -1352,10 +1351,8 @@ class Orchestrator:
     def _all_due_terminal(self, result: OrchestrationPassResult) -> bool:
         """Has every item that *was* due for this run date reached a final state?
 
-        Reads the decision's own ``was_due`` flag. It used to filter on the
-        reason text, which meant an editorial change to a console message — the
-        safest edit imaginable — moved skipped items into the due set and changed
-        when a ``--loop`` orchestration stopped polling.
+        Reads the decision's own ``was_due`` flag so console wording cannot
+        change when a ``--loop`` orchestration stops polling.
         """
         due = [decision for decision in result.decisions if decision.was_due]
         return bool(due) and all(

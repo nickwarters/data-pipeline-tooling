@@ -101,7 +101,7 @@ class Store:
         return SqliteReader(self._db_path, table, busy_timeout_ms=self._busy_timeout_ms)
 
     def quarantine_writer(self, table: str) -> Writer:
-        """Mint a QuarantineWriter over this namespace's quarantine file."""
+        """Mint a QuarantineWriter over this subject's quarantine file."""
         return QuarantineWriter(
             self._db_path.parent / "quarantine.db",
             table,
@@ -140,7 +140,7 @@ class TableColumns:
 
     def columns(self) -> tuple[str, ...] | None:
         if not self._db_path.exists():
-            return None  # the namespace has landed nothing yet (first run)
+            return None
         con = connect(self._db_path, self._busy_timeout_ms)
         try:
             rows = con.execute(
@@ -149,7 +149,7 @@ class TableColumns:
         finally:
             con.close()
         if not rows:
-            return None  # the table does not exist yet (first run for this feed)
+            return None
         # PRAGMA table_info yields (cid, name, type, ...); name is index 1.
         return tuple(row[1] for row in rows)
 

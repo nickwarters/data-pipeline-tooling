@@ -1,9 +1,4 @@
-"""The Modified-window Reader, exercised against a fake list client.
-
-No network, no tenant, no auth: the organisational SharePoint client is a seam
-(:class:`SharePointListClient`), so every test here hands the Reader a fake that
-records the query it was configured with and returns a frame.
-"""
+"""Test Modified-window reads through a fake SharePoint list client."""
 
 import datetime as dt
 

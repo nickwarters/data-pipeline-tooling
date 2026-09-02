@@ -1,30 +1,7 @@
-"""Generate a subject's baseline ``0001_create_initial_tables.sql`` files.
+"""Generate baseline SQL from SQLite databases.
 
-A database's first migration has to describe the tables it already writes.
-Those descriptions already exist, in the database itself: SQLite keeps the
-verbatim ``CREATE`` statement of every table and index in ``sqlite_master``. So
-this does not reconstruct a shape from the declared dataclasses and a model of
-what ``pandas.to_sql`` would have done with them — it copies out what is
-actually there, which is the same text ``sqlite3 <db> .schema`` prints.
-
-That makes a baseline faithful by construction rather than by argument, and it
-covers every table the same way: a gold aggregate whose columns are whatever its
-transform computed, a quarantine reject table, and a raw landing table whose
-shape is the source's all have a ``CREATE`` statement, and none of them has a
-dataclass to be derived from.
-
-Usage — produce a run first, then generate from it::
-
-    python -m pipelines.sharepoint_cases.pipeline --base-dir /tmp/run --sample
-    python scripts/generate_baseline_migrations.py sharepoint_cases \\
-        --base-dir /tmp/run --stdout        # review before writing anything
-    python scripts/generate_baseline_migrations.py sharepoint_cases \\
-        --base-dir /tmp/run
-
-**Baselines are generated once, checked in, and maintained by hand from then
-on.** A change to a checked-in migration is refused by the runner's checksum, so
-re-running this over an existing baseline is for comparison, never for editing:
-a shape change after the baseline is a new numbered migration.
+Copy non-machinery ``CREATE`` statements into numbered baselines without ever
+overwriting an existing file. See ``docs/migrations.md``.
 """
 
 from __future__ import annotations
@@ -153,7 +130,7 @@ def generate(
         path = directory / BASELINE_FILENAME
         if path.exists():
             print(
-                f"refusing to overwrite {path} — a checked-in baseline is "
+                f"refusing to overwrite {path} — an existing baseline is "
                 "maintained by hand; a shape change is a new numbered migration",
                 file=sys.stderr,
             )
@@ -187,7 +164,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--stdout",
         action="store_true",
-        help="print the SQL instead of writing it, to review before checking in",
+        help="print the SQL instead of writing it, for inspection",
     )
     args = parser.parse_args(argv)
     return generate(

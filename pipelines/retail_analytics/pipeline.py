@@ -1,7 +1,7 @@
 """Retail analytics DAG: orders + catalog → revenue / risk_signals / ops_queue (silver).
 
 One ``dag_builder`` composes a single ``Pipeline`` whose execution graph fans out
-to **eight concurrent data streams** and then converges to **three write terminuses**
+to **eight data streams** and then converges to **three write terminuses**
 in a single ``p.run()``.  The graph is intentionally non-linear: two independent
 sources branch in different directions and reconverge via distinct fan-ins.
 
@@ -244,25 +244,21 @@ def dag_builder(
     )
 
     # ── FAN-OUT FROM ORDERS (four branches) ───────────────────────────────────
-    #   Branch 1: completed orders — further splits into add_margin + tag_period
     n_completed = p.transform(
         Filter(lambda r: r["status"] == "completed"),
         n_orders_typed,
         name="filter_completed",
     )
-    #   Branch 2: cancelled orders → risk terminus
     n_cancelled = p.transform(
         Filter(lambda r: r["status"] == "cancelled"),
         n_orders_typed,
         name="filter_cancelled",
     )
-    #   Branch 3: pending orders → ops terminus
     n_pending = p.transform(
         Filter(lambda r: r["status"] == "pending"),
         n_orders_typed,
         name="filter_pending",
     )
-    #   Branch 4: high-value orders (any status) → ops terminus
     n_high_value = p.transform(
         Filter(lambda r: r["qty"] * r["unit_price"] > HIGH_VALUE_THRESHOLD),
         n_orders_typed,
@@ -270,19 +266,15 @@ def dag_builder(
     )
 
     # ── FURTHER FAN-OUT FROM n_completed (two more branches) ─────────────────
-    #   Branch 5: add revenue column for the margin join → revenue terminus
     n_margin = p.transform(_add_margin, n_completed, name="add_margin")
-    #   Branch 6: tag by recency period → ops terminus
     n_period_tagged = p.transform(_tag_period, n_completed, name="tag_period")
 
     # ── FAN-OUT FROM CATALOG (two branches) ───────────────────────────────────
-    #   Branch 7: in-stock products → revenue terminus (join with completed orders)
     n_active = p.transform(
         Filter(lambda r: r["stock_qty"] > 0),
         n_catalog_typed,
         name="filter_active",
     )
-    #   Branch 8: out-of-stock products → risk terminus
     n_low_stock = p.transform(
         Filter(lambda r: r["stock_qty"] == 0),
         n_catalog_typed,

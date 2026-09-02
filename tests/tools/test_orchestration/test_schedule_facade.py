@@ -21,8 +21,7 @@ from tools.orchestration import (
     Weekdays,
 )
 
-# June 2026: the 1st is a Monday; the 13th/14th are the weekend; the 15th is a
-# seeded holiday (a Monday). The 30th is the last working day of the month.
+# June 2026 fixtures: 15 June is a holiday; 13–14 June are weekend.
 HOLIDAY = dt.date(2026, 6, 15)
 CALENDAR = WorkingDayCalendar(holidays={HOLIDAY})
 
@@ -31,19 +30,19 @@ def test_daily_runs_on_working_days_only():
     schedule = Schedule.daily()
 
     assert isinstance(schedule, Weekdays)
-    assert schedule.is_due(dt.date(2026, 6, 12), CALENDAR)  # Friday
-    assert not schedule.is_due(dt.date(2026, 6, 13), CALENDAR)  # Saturday
-    assert not schedule.is_due(dt.date(2026, 6, 14), CALENDAR)  # Sunday
-    assert not schedule.is_due(HOLIDAY, CALENDAR)  # holiday Monday
+    assert schedule.is_due(dt.date(2026, 6, 12), CALENDAR)
+    assert not schedule.is_due(dt.date(2026, 6, 13), CALENDAR)
+    assert not schedule.is_due(dt.date(2026, 6, 14), CALENDAR)
+    assert not schedule.is_due(HOLIDAY, CALENDAR)
 
 
 def test_on_weekdays_monday_and_wednesday():
     schedule = Schedule.on_weekdays("monday", "wednesday")
 
     assert isinstance(schedule, SpecificWeekdays)
-    assert schedule.is_due(dt.date(2026, 6, 1), CALENDAR)  # Monday
-    assert schedule.is_due(dt.date(2026, 6, 3), CALENDAR)  # Wednesday
-    assert not schedule.is_due(dt.date(2026, 6, 2), CALENDAR)  # Tuesday
+    assert schedule.is_due(dt.date(2026, 6, 1), CALENDAR)
+    assert schedule.is_due(dt.date(2026, 6, 3), CALENDAR)
+    assert not schedule.is_due(dt.date(2026, 6, 2), CALENDAR)
 
 
 def test_on_weekdays_is_case_insensitive_and_ignores_surrounding_space():
@@ -55,9 +54,7 @@ def test_on_weekdays_is_case_insensitive_and_ignores_surrounding_space():
 def test_on_weekdays_skips_weekends_and_holidays():
     schedule = Schedule.on_weekdays("monday")
 
-    # The 15th is a Monday, but it is a seeded holiday, so it is not due.
     assert not schedule.is_due(HOLIDAY, CALENDAR)
-    # A non-holiday Monday is due.
     assert schedule.is_due(dt.date(2026, 6, 1), CALENDAR)
 
 
@@ -75,7 +72,6 @@ def test_day_of_month_on_a_working_day():
     schedule = Schedule.day_of_month(21)
 
     assert isinstance(schedule, DayOfMonth)
-    # 21 May 2026 is a Thursday.
     assert schedule.is_due(dt.date(2026, 5, 21), CALENDAR)
     assert not schedule.is_due(dt.date(2026, 5, 20), CALENDAR)
 
@@ -89,7 +85,6 @@ def test_nth_working_day_of_month_first():
     schedule = Schedule.nth_working_day_of_month(1)
 
     assert isinstance(schedule, NthWorkingDayOfMonth)
-    # 1 June 2026 is the first working day (a Monday).
     assert schedule.is_due(dt.date(2026, 6, 1), CALENDAR)
     assert not schedule.is_due(dt.date(2026, 6, 2), CALENDAR)
 
@@ -103,7 +98,6 @@ def test_last_working_day_of_month():
     schedule = Schedule.last_working_day_of_month()
 
     assert isinstance(schedule, LastWorkingDayOfMonth)
-    # 30 June 2026 is a Tuesday and the last working day of the month.
     assert schedule.is_due(dt.date(2026, 6, 30), CALENDAR)
     assert not schedule.is_due(dt.date(2026, 6, 29), CALENDAR)
 

@@ -43,7 +43,7 @@ PARTY_EMAIL = "b.okafor@example.invalid"
 MANAGER_EMAIL = "e.novak@example.invalid"
 
 # The producing subject, named here because these tests stand in for the Sync
-# pipeline when they seed its gold. The pipeline under test no longer knows it.
+# pipeline when they seed its gold. The pipeline under test does not know it.
 SYNC_SUBJECT = "sharepoint_cases"
 
 USERS = (
@@ -117,7 +117,7 @@ def users_csv(tmp_path, monkeypatch):
     """Stand a test directory extract in for the bundled one.
 
     Patches the reader's own declaration of where the feed lives, rather than a
-    helper on this pipeline: the pipeline no longer knows, which is the point of
+    helper on this pipeline: the pipeline does not know, which is the point of
     the change this fixture follows.
     """
     path = tmp_path / "users.csv"
@@ -692,9 +692,8 @@ def test_both_triggers_on_one_case_produce_two_objects_and_neither_suppresses_th
     by_subject = {
         notification["subject"]: notification["body"] for notification in payload
     }
-    # Both triggers link to the Case page. They are told apart by their subject
-    # and their prose, not by their route: the Conversation trigger's deep link
-    # was the unguarded `#/conversation/...` route (#790).
+    # Both triggers use the Case route; their subjects and prose distinguish
+    # them, and neither uses the conversation route.
     for body in by_subject.values():
         assert "#/case/" in body
         assert "#/conversation/" not in body

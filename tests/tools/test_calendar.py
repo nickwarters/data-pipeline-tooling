@@ -1,10 +1,4 @@
-"""``WorkingDayCalendar`` — working-day arithmetic and its YAML seeding.
-
-Covers ``WorkingDayCalendar.from_yaml``: what a calendar file may say, what the
-seeded calendar then answers (both the ``is_working_day`` gate orchestration
-reads and the ``last_n_working_days`` window Availability criteria read), and
-the operator-facing ``ValueError`` for every way the file can be wrong.
-"""
+"""Test YAML-seeded working-day arithmetic and operator-facing errors."""
 
 import datetime as dt
 import re
@@ -32,11 +26,12 @@ holidays:
 
     calendar = WorkingDayCalendar.from_yaml(path)
 
-    assert calendar.is_working_day(dt.date(2026, 5, 25)) is False  # the holiday
-    assert calendar.is_working_day(dt.date(2026, 5, 26)) is True  # Tuesday after
-    assert calendar.is_working_day(dt.date(2026, 5, 22)) is True  # Friday before
-    assert calendar.is_working_day(dt.date(2026, 5, 23)) is False  # a Saturday
-    assert calendar.is_working_day(dt.date(2026, 5, 24)) is False  # a Sunday
+    # 25 May is the holiday; adjacent dates cover weekday and weekend defaults.
+    assert calendar.is_working_day(dt.date(2026, 5, 25)) is False
+    assert calendar.is_working_day(dt.date(2026, 5, 26)) is True
+    assert calendar.is_working_day(dt.date(2026, 5, 22)) is True
+    assert calendar.is_working_day(dt.date(2026, 5, 23)) is False
+    assert calendar.is_working_day(dt.date(2026, 5, 24)) is False
 
 
 def test_quoted_dates_are_accepted(tmp_path):

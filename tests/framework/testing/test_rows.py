@@ -1,9 +1,4 @@
-"""The in-memory row helpers (``tests.framework_testing.rows``).
-
-Exercised the way a pipeline author would: build a feed from in-memory rows or a
-CSV, run a real :class:`~framework.run.Pipeline`, and assert on the output rows
-without wiring temp directories or SQLite by hand.
-"""
+"""Tests for the in-memory row helpers used by pipeline authors."""
 
 import pytest
 

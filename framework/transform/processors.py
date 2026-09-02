@@ -929,7 +929,7 @@ class Sample:
         # run's actual population so the sample scales with it.
         if self._n is not None:
             return self._n
-        assert self._fraction is not None  # one of the two is always set
+        assert self._fraction is not None
         return round(self._fraction * population)
 
     def __call__(self, dataset: Dataset) -> Dataset:

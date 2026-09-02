@@ -61,10 +61,12 @@ edit does, and a full dev-harness verification tour — see
       offer — and the allocation pot reads empty, so no Reviewer can take a
       Case. This is the status every Case is created in.
 - [ ] **On every existing `Cases-{slug}` list, in both prod and UAT**: add `Void`
-      to the `Status` choice column, and add the `VoidedAt`, `VoidReason` and
-      `VoidedBy` columns. Without the choice value, voiding a Case fails on the
-      PATCH; without `VoidedAt` indexed, the manager's void report reads the
-      whole list. `VoidedAt` can only be indexed on an empty list, so on a list
+      to the `Status` choice column, and add the `VoidedAt`, `VoidReason`,
+      `VoidReasonNote` and `VoidedBy` columns. Without the choice value, voiding
+      a Case fails on the PATCH; without `VoidReasonNote`, a Case voided under
+      the `Other` reason lands with nothing saying why, since that reason means
+      nothing without the note; without `VoidedAt` indexed, the manager's void
+      report reads the whole list. `VoidedAt` can only be indexed on an empty list, so on a list
       already past the threshold the report is served unindexed.
 - [ ] Before enabling allocation on a list that already contains Cases,
       backfill every unset `OnHold` value to **No**. The app-wide capacity count
@@ -121,6 +123,7 @@ lead with an indexed predicate.
 | `PlacedOnHoldAt`                                        | Date and Time                                                                         |         | Clock paired with `OnHold`; the Action Centre On Hold group sorts on it. Cleared automatically when leaving `In-progress`.                                                                                                                                                                                                                                      |
 | `VoidedAt`                                              | Date and Time                                                                         |  **✓**  | Stamped when a Case is voided; app-written. Leads the void report's date window, so it must be indexed on the empty list.                                                                                                                                                                                                                                       |
 | `VoidReason`                                            | Single line of text                                                                   |         | Void Reason key from the framework vocabulary; app-written. Grouped client-side, never queried.                                                                                                                                                                                                                                                                 |
+| `VoidReasonNote`                                        | Multiple lines of text                                                                |         | The Reviewer's own words behind an `Other` void; app-written, `null` under every keyed reason. Display copy on the Case, never a grouping key — the void report still groups on `VoidReason`.                                                                                                                                                                   |
 | `VoidedBy` (`VoidedById`)                               | Person                                                                                |         | Whoever voided the Case; app-written, resolved to a numeric id the same way as the other Person columns — see ADR-0046.                                                                                                                                                                                                                                         |
 | `Outcome`                                               | Single line of text                                                                   |         | Live working Outcome.                                                                                                                                                                                                                                                                                                                                           |
 | `OutcomeAtCompletion`                                   | Single line of text                                                                   |         | Frozen Outcome snapshot taken at reportable; app-written.                                                                                                                                                                                                                                                                                                       |

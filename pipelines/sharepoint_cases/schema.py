@@ -146,6 +146,9 @@ class CaseVersion:
 
     voided_at: datetime
     void_reason: str
+    # Free text and the only thing an "other" void means, so it carries no
+    # OneOf and nothing groups on it: void_reason stays the grouping key.
+    void_reason_note: str
     voided_by_name: str
 
     outcome: str
@@ -184,8 +187,6 @@ class AnswerRow:
     ``None``.
     """
 
-    # DETAIL_ID_VARS, repeated onto every row by ExplodeJsonMap -- see its
-    # docstring for why this must carry NATURAL_KEY's columns.
     case_type: Annotated[str, NonNull()]
     source_item_id: Annotated[str, NonNull()]
     # datetime, not str: the batch arrives already typed by
@@ -221,9 +222,6 @@ class AnswerCaptureRow:
     and appear nowhere here.
     """
 
-    # DETAIL_ID_VARS, repeated onto every row by the two chained
-    # ExplodeJsonMap passes -- see its docstring for why this must carry
-    # NATURAL_KEY's columns.
     case_type: Annotated[str, NonNull()]
     source_item_id: Annotated[str, NonNull()]
     # datetime, not str -- see AnswerRow's own field for why.
@@ -257,9 +255,6 @@ class AnswerActionRow:
     than quarantining, since it is a structural breach of the declared grain.
     """
 
-    # DETAIL_ID_VARS, repeated onto every row by ExplodeJsonMap plus
-    # ExplodeJsonList -- see its docstring for why this must carry
-    # NATURAL_KEY's columns.
     case_type: Annotated[str, NonNull()]
     source_item_id: Annotated[str, NonNull()]
     # datetime, not str -- see AnswerRow's own field for why.
@@ -287,11 +282,8 @@ class GeneralAnswerRow:
     ``_as_column_value``/``derive_value_text`` for why an array or a JSON
     scalar still needs a faithful text rendering.
 
-    Plain types throughout, never ``X | None`` -- see ``AnswerRow`` for why.
     """
 
-    # DETAIL_ID_VARS, repeated onto every row by ExplodeJsonMap -- see its
-    # docstring for why this must carry NATURAL_KEY's columns.
     case_type: Annotated[str, NonNull()]
     source_item_id: Annotated[str, NonNull()]
     # datetime, not str -- see AnswerRow's own field for why.
@@ -328,11 +320,8 @@ class ConversationMessageRow:
     are clean. ``source_modified_at`` stays ``datetime`` because it comes
     from OData and is already typed upstream.
 
-    Plain types throughout, never ``X | None`` -- see ``AnswerRow`` for why.
     """
 
-    # DETAIL_ID_VARS, repeated onto every row by ExplodeJsonList -- see its
-    # docstring for why this must carry NATURAL_KEY's columns.
     case_type: Annotated[str, NonNull()]
     source_item_id: Annotated[str, NonNull()]
     # datetime, not str -- see AnswerRow's own field for why.
@@ -362,11 +351,8 @@ class AppealRow:
     ``ConversationMessageRow.author_login``); ``raised_at`` and
     ``resolution_at`` stay ``str`` for the same reason ``posted_at`` does.
 
-    Plain types throughout, never ``X | None`` -- see ``AnswerRow`` for why.
     """
 
-    # DETAIL_ID_VARS, repeated onto every row by ExplodeJsonList -- see its
-    # docstring for why this must carry NATURAL_KEY's columns.
     case_type: Annotated[str, NonNull()]
     source_item_id: Annotated[str, NonNull()]
     # datetime, not str -- see AnswerRow's own field for why.
@@ -397,11 +383,8 @@ class CaseDetailRow:
     others". Values are not normalised, and there is no ``value_json`` twin
     the way ``AnswerRow`` keeps one.
 
-    Plain types throughout, never ``X | None`` -- see ``AnswerRow`` for why.
     """
 
-    # DETAIL_ID_VARS, repeated onto every row by ExplodeJsonMap -- see its
-    # docstring for why this must carry NATURAL_KEY's columns.
     case_type: Annotated[str, NonNull()]
     source_item_id: Annotated[str, NonNull()]
     # datetime, not str -- see AnswerRow's own field for why.

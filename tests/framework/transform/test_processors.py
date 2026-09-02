@@ -17,9 +17,7 @@ from framework.io.strategy import Refresh
 from framework.run.builder import Pipeline
 from framework.transform import AntiJoinWith as PublicAntiJoinWith
 
-# The bounded-subset processors are imported through the facade on purpose: that
-# is how a pipeline author reaches them, and until they were exported these
-# classes were only usable by their internal module path.
+# Import bounded-subset processors through the pipeline author's public facade.
 from framework.transform import (
     IdentityError,
     Parse,
@@ -361,9 +359,8 @@ def _key_of(dataset, namespace=_NS, natural_key=("ref",)):
 
 
 def test_derive_key_stamps_the_sha256_of_its_canonical_payload():
-    # The golden digest is spelled out rather than recomputed with the helper, so
-    # a change to the encoding fails here instead of agreeing with itself. This
-    # value is on disk in every id already published: it is not free to change.
+    # This literal pins the durable encoding; recomputing it with the helper
+    # would let both drift together.
     dataset = Dataset.from_pandas(
         pd.DataFrame({"surname": ["SMITH"], "dob": ["2024-01-15"]})
     )
@@ -647,8 +644,6 @@ def test_join_columns_raises_on_missing_column():
 
 
 # --- Bounded-subset processors: Sample / SamplePerGroup / TopNPerGroup / Parse ---
-# Merged here from the retired tools/analytics fork of these same classes. The
-# framework module is now the single home, so these are its tests.
 
 
 def test_sample_keeps_at_most_n_from_the_whole_feed():

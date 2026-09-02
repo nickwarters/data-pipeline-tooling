@@ -1,21 +1,4 @@
-"""Fan-out demo: one wide feed -> Cases table + Detail Table.
-
-Shows how a single wide ingest feed is fanned into two independent single-table
-pipelines over the shared raw table:
-
-1. **Raw** — the wide CSV lands in one shared raw table, stamped with
-   ``logical_run_id`` / ``load_date``.
-2. **Cases pipeline** — projects the case columns, applies the shared
-   normalisation, schema-coerces and validates, accumulates silver, then
-   reduces to a current-only one-row-per-Case gold.
-3. **Products pipeline** — projects the product columns + natural key, applies
-   the *same* shared normalisation instance, accumulates silver, then derives
-   ``case_id`` and unpivots wide→long into the ``case_products`` Detail Table
-   gold (empty slots dropped).
-
-Both pipelines read the same raw table, share one normalisation ``Processor``
-instance (defined once here), and are each independently validated / atomic
-with their own gold write.
+"""Fan out one wide feed into Cases and a Detail Table.
 
 Run from the repo root::
 
@@ -123,8 +106,7 @@ def main(target_dir: str) -> None:
     )
 
     # --- products: gold, wide -> long, linked by case_id --------------------
-    # The *same* namespace and natural key as the Cases reduction above, so
-    # product rows carry matching case_ids without joining back to Cases gold.
+    # Reuse the Case identity contract so product rows carry matching case_ids.
     gold_prods = read(med.silver.reader("case_products"), name="read-silver-products")
     gold_prods = transform(
         DeriveKey(

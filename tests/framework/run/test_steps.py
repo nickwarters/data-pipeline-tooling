@@ -1,12 +1,4 @@
-"""Tests for the eager pipeline steps (``framework.run.steps``).
-
-The steps exist so a pipeline executes where it is written — the property the
-deferred builder cannot offer — while emitting the *identical* run-log records
-the builder does. Both halves are tested here: what each step returns (so an
-author's next line gets real data), and what it records (so the run registry,
-freshness and ``cli status`` are unaffected by which model a feed was written
-in).
-"""
+"""Eager steps execute inline while preserving the deferred run-log contract."""
 
 from __future__ import annotations
 
@@ -412,9 +404,7 @@ def test_a_custom_step_that_raises_is_recorded_as_an_error():
 
 
 def test_eager_steps_and_a_deferred_pipeline_share_one_runs_identity():
-    # A feed part-converted to eager steps still reports as one run: the same
-    # pipeline_run_id across both models, so nothing orphans in the registry
-    # while the migration is half done.
+    # Mixed eager and deferred work shares one run identity for registry correlation.
     context, run_log = _context()
     with active_context(context):
         read(given_rows([{"record_id": "a"}]))
@@ -432,14 +422,7 @@ def test_eager_steps_and_a_deferred_pipeline_share_one_runs_identity():
 
 
 def test_repeated_steps_are_told_apart_by_the_name_their_caller_gives_them():
-    """The reason a feed with 20 reads is still readable.
-
-    There is no grouping scope to open: a step that runs many times over is
-    handed a name carrying what it is building. Left to default, the framework
-    still keeps every record naming exactly one step -- ``read``, ``read-2`` --
-    but only the author knows which list the second one polled, which is why a
-    feed that repeats a shape names its steps and a feed that does not need not.
-    """
+    """Explicit names attribute repeated inputs; defaults receive numeric suffixes."""
     context, run_log = _context()
     with active_context(context):
         for case_type in ("claims", "complaints"):

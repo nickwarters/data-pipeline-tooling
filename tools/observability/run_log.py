@@ -72,7 +72,8 @@ class RunLog:
         committed: bool = False,
         logical_run_id: str | None = None,
     ) -> Iterator[StepMetrics]:
-        """Time a step; emit one record when it closes — or `error` if it raises.
+        """Time a step; emit one record when it closes or record
+        ``status="error"`` if it raises.
 
         A raising step is recorded with ``status="error"`` and the exception
         message, then the exception is re-raised so the run still aborts.

@@ -89,7 +89,6 @@ class Node:
         if self._executed:
             return self._result
 
-        # Ensure inputs are executed first
         input_results = [node.execute(session, context) for node in self.inputs]
 
         started = time.perf_counter()
@@ -213,7 +212,7 @@ class TransformNode(Node):
 
         after = self.func(*datasets)
         if session.trace is not None and before is not None:
-            # Extract trace_role and trace_name from the processor if it's a method
+            # Preserve optional processor trace metadata.
             role = getattr(processor, "trace_role", None)
             name = getattr(
                 processor,
@@ -335,10 +334,8 @@ class QuarantineNode(Node):
 
         committed = False
         if len(rejected) > 0:
-            # The two the quarantine table is keyed and dated by. The run that
-            # wrote the row is not stamped here: the QuarantineWriter sets the
-            # reserved provenance column, as every table-backed Writer does, so
-            # one column has one stamper.
+            # The pipeline supplies logical_run_id and load_date; QuarantineWriter
+            # supplies the reserved provenance column.
             frame = rejected.to_pandas()
             frame["logical_run_id"] = context.logical_run_id
             frame["load_date"] = context.load_date

@@ -53,7 +53,7 @@ def test_sqlite_reader_projects_only_requested_columns(fixture_db):
 
 
 def test_sqlite_reader_without_columns_reads_all_columns(fixture_db):
-    # Omitting columns preserves read-everything behaviour (regression guard).
+    # Omitting columns reads every column.
     dataset = SqliteReader(fixture_db, "advisers").read()
 
     assert dataset.columns == ["adviser_id", "name"]

@@ -1,12 +1,4 @@
-"""A minimal orchestration app for CLI tests: schedules path-addressed feeds.
-
-Stands in for a real application's registry module — the ``--app`` argument to
-``python -m cli orchestrate``. It exposes only ``build_pipeline_sets()`` (the
-schedules); there is no ``build_runner()`` any more, because orchestrate now
-addresses each pipeline by its ``pipelines/<name>`` path exactly as ``run`` does.
-The scheduled pipelines are the throwaway fixtures under
-``tests/fixtures/clipipelines/``.
-"""
+"""Path-addressed fixture app for operator CLI tests."""
 
 from __future__ import annotations
 

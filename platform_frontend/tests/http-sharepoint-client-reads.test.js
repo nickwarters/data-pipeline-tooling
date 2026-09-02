@@ -485,7 +485,8 @@ test('HttpSharePointClient: listCases maps the void columns onto the Case Row', 
       Id: 'case-void',
       Title: 'Voided',
       Status: 'Void',
-      VoidReason: 'duplicate',
+      VoidReason: 'other',
+      VoidReasonNote: 'The file was destroyed in the flood',
       VoidedAt: '2026-06-04T10:00:00.000Z',
       VoidedBy: { Name: 'i:0#.w|CONTOSO\\reviewer-1' },
     }),
@@ -494,11 +495,13 @@ test('HttpSharePointClient: listCases maps the void columns onto the Case Row', 
 
   const rows = await client.listCases({}, { listName: 'Cases-ExampleReview' });
 
-  assert.equal(rows[0].voidReason, 'duplicate');
+  assert.equal(rows[0].voidReason, 'other');
+  assert.equal(rows[0].voidReasonNote, 'The file was destroyed in the flood');
   assert.equal(rows[0].voidedAt, '2026-06-04T10:00:00.000Z');
   assert.equal(rows[0].voidedBy, 'reviewer-1');
   // A list that has not been given the columns yet still hydrates.
   assert.equal(rows[1].voidReason, undefined);
+  assert.equal(rows[1].voidReasonNote, undefined);
   assert.equal(rows[1].voidedAt, null);
   assert.equal(rows[1].voidedBy, undefined);
 });

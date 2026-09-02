@@ -1,8 +1,7 @@
 """The raw → silver → gold medallion, as an application-level store profile.
 
-The medallion is no longer framework vocabulary: ``framework.io`` stores
-an opaque ``namespace`` (a logical database) → file, and this helper layers the
-conventional three-layer medallion on top. A subject's three layers are three
+This helper layers the conventional three-layer medallion over opaque store
+namespaces. A subject's three layers are three
 namespaces under it — ``<subject>/raw``, ``<subject>/silver``, ``<subject>/gold``
 — so the on-disk layout stays ``<root>/<subject>/{raw,silver,gold}.db``, isolated
 per subject.

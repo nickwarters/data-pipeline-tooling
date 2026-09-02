@@ -1,10 +1,10 @@
-"""Build a test's databases from the checked-in migrations.
+"""Build a test's databases from the declared migrations.
 
 A database carrying a ``schema_migrations`` ledger behaves differently at the
 write: no Writer creates a missing table, and ``Refresh`` preserves the DDL
 rather than dropping it. A test of a feed that writes such a database has to run
-against one that has actually been built, or it is testing the *other* branch —
-the one production no longer takes.
+against one that has actually been built, or it is testing a different write
+path from production.
 
     from tests.framework_testing import build_databases
 
@@ -20,12 +20,11 @@ over the store, and a subject whose databases are named something else builds th
 same way.
 
 Ask for the database a test actually writes. Building a subject's whole set is
-the convenient default, not the cheap one — `sharepoint_cases` is 23 tables
-across four files, and a test that only exercises silver pays for the other
-three every time it runs.
+the convenient default, not the cheap one: a test that only exercises one
+database otherwise pays to build unrelated databases.
 
 **It applies the real ``migrations/`` tree.** A test-only DDL path would defeat
-the point: the thing worth testing is that the checked-in SQL and the code agree,
+the point: the thing worth testing is that the declared SQL and the code agree,
 so a test that invented its own tables would pass while production failed. That
 also means a table a migration forgot fails these tests exactly as it fails a
 run.
@@ -63,7 +62,7 @@ def _targets_for(spec: str, migrations_root: str | os.PathLike[str]):
         raise LookupError(
             f"nothing to build for {spec!r} under {migrations_root}. Known: "
             f"{sorted(target.namespace for target in available)}. Only a database "
-            "with a checked-in baseline can be built; one without still creates "
+            "with a declared baseline can be built; one without still creates "
             "its tables on first write, so its tests need no fixture."
         )
     return matched
@@ -74,7 +73,7 @@ def build_databases(
     *specs: str,
     migrations_root: str | os.PathLike[str] | None = None,
 ) -> Path:
-    """Apply the checked-in migrations each spec names, under ``base_dir``.
+    """Apply the declared migrations each spec names, under ``base_dir``.
 
     Each spec is a subject (``"reviewer_activity"``) or one of its databases
     (``"reviewer_activity/gold"``). Returns the base directory, so a caller can

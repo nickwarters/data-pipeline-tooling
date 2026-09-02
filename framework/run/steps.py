@@ -1,36 +1,8 @@
-"""Eager pipeline steps — the default authoring model.
+"""Immediate pipeline steps for procedural authoring.
 
-Every function here **does its work when you call it** and hands back an ordinary
-:class:`~framework.core.dataset.Dataset`. A pipeline written with them is a plain
-Python function, read and debugged top to bottom::
-
-    def run(context):
-        med = medallion(StoreRegistry(context.base_dir), "orders")
-        data = read(CsvReader(SOURCE))        # <- breakpoint here; data is real
-        data = coerce(OrderRow, data)         # <- step over; watch it change
-        validate(SchemaValidator(OrderRow), data)
-        write(med.silver.writer("orders", strategy), data)
-
-That is the whole point. The deferred :class:`~framework.run.builder.Pipeline`
-builds a graph first and executes it later, from the leaves backwards, which
-means a breakpoint on an author's own line shows a ``TransformNode`` rather than
-their data: to watch a frame change they have to breakpoint inside framework
-code and know the walk order. These steps execute in the order they are written,
-so the debugger an author already uses tells them the truth
-([ADR-0027](../../docs/adr/0027-eager-steps-are-the-default-authoring-model.md)).
-
-**Nothing observable is given up.** Each step emits exactly the same run-log
-record the equivalent node would: one record per step, with its timing, row
-counts either side, warn hits, data locations, and whether it committed. The
-record's identity (``pipeline_run_id`` / ``logical_run_id``) comes from the
-ambient :class:`~framework.run.run_context.RunContext` the runner sets around
-``run(context)``, so replay, the run registry, freshness and ``cli status`` all
-work exactly as before — the graph was never what produced them.
-
-Run **outside** a runner — an author poking at a feed in a scratch file or a
-PyCharm debug session — and there is simply no ambient context to record
-against, so the steps quietly do their work and record nothing. Being able to
-call :func:`read` on its own, with no ceremony, is a feature.
+Each step returns a ``Dataset`` and, within an active ``RunContext``, emits
+run-log records equivalent to deferred execution. Without an active context,
+work executes without recording.
 """
 
 from __future__ import annotations
@@ -67,15 +39,8 @@ class StepError(PipelineError):
     category = ErrorCategory.CONFIG
 
 
-# --- step naming -------------------------------------------------------------
-#
-# A step's name is what an operator reads in the run log and what ``cli runs``
-# keys on, so it has to be stable and self-describing without the author having
-# to invent one. ``read`` and ``write`` take the verb (there is normally one of
-# each and "read"/"write" is what an operator expects to see); ``transform`` and
-# ``validate`` take the component's own name, which is already the most
-# informative word available -- ``Filter`` -> "filter", ``SchemaCoercion`` ->
-# "schema_coercion". A name given explicitly always wins.
+# Step names must be stable run-log keys. Explicit names win; otherwise reads and
+# writes use their verb and transforms/validators use their component name.
 
 _CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
 
@@ -114,15 +79,10 @@ def _unique_step_name(context: RunContext | None, name: str) -> str:
     seen: dict[str, int] = getattr(context, "_eager_step_names", None)
     if seen is None:
         seen = {}
-        # Private to the eager steps: the tally is per run attempt, and the
-        # context is already exactly that scope.
         context._eager_step_names = seen
     count = seen.get(name, 0) + 1
     seen[name] = count
     return name if count == 1 else f"{name}-{count}"
-
-
-# --- recording ---------------------------------------------------------------
 
 
 @contextmanager
@@ -254,12 +214,7 @@ def _record(
         )
 
 
-# --- the row trace ------------------------------------------------------------
-#
-# The ambient trace an ``explain`` block opens. ``transform`` reports every stage
-# to it, exactly as the deferred builder's ``TransformNode`` reports to the
-# session's trace, so a population's per-row verdict is accumulated the same way
-# by either authoring model.
+# Eager transforms report stages through the trace opened by ``explain``.
 
 _ACTIVE_TRACE: contextvars.ContextVar[Any] = contextvars.ContextVar(
     "active_row_trace", default=None
@@ -346,9 +301,6 @@ def _require_dataset(value: object, verb: str) -> Dataset:
         "Eager steps pass the data itself, not a builder node: write "
         "`data = transform(processor, data)`, not `p.transform(...)`."
     )
-
-
-# --- the steps ---------------------------------------------------------------
 
 
 def read(reader: Reader, *, name: str | None = None) -> Dataset:

@@ -176,8 +176,6 @@ class SchemaCoercion:
         return ", ".join(repr(v) for v in sorted(set(values.astype(str))))
 
     def _error(self, name: str, detail: str) -> CoercionError:
-        # Name the schema, column, and reason so an aborted coerce step diagnoses
-        # itself.
         return CoercionError(
             f"{self._schema.__name__} coercion: column {name!r} {detail}"
         )

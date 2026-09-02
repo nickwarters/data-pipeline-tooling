@@ -1,41 +1,9 @@
 #!/usr/bin/env python3
-"""Measure what one gold publication of ``sharepoint_cases`` costs.
+"""Benchmark one ``sharepoint_cases`` gold publication.
 
-The feed polls hourly, and every poll rebuilds gold whole. This answers the
-question that follows: how long does that take, and which part of it grows?
-
-Gold is published in two phases, and they scale differently:
-
-- ``case_current`` reads the **whole** silver history and reduces it to the
-  latest observation of each Case. Silver is append-only, so this phase grows
-  for as long as the feed runs.
-- the four ``case_current``-sourced aggregates group the resulting
-  current-state frame, which holds one row per Case. This phase grows with
-  the *Case count*, not with history depth.
-
-The timings are reported separately so the two can be told apart, and the read
-of silver off disk is timed on its own -- on a network share that read is
-usually most of the cost, and it is the number that changes when this is run
-against a share rather than a local disk.
-
-This script never builds the Detail Tables, so their sourced aggregates
-are out of scope here -- see ``publish_aggregates`` below.
-
-Usage (from the repo root)::
-
-    python -m scripts.benchmark_gold --base-dir C:\\temp\\bench
-    python -m scripts.benchmark_gold --base-dir /Volumes/share/bench --sweep
-    python -m scripts.benchmark_gold --base-dir ./bench --lists 8 --cases 5000
-
-``--base-dir`` is where the medallion databases are written, so pointing it at a
-network share is how this measures that share. A uniquely named subdirectory is
-created underneath it and removed afterwards; nothing else in the directory is
-touched. Pass ``--keep`` to leave it behind.
-
-The synthetic data is shaped like the real silver table but is not real data, so
-treat the ratios as the finding and the absolute seconds as machine-specific.
-
-Path handling is OS-agnostic (pathlib) so the script runs on Windows and macOS.
+Measures the silver read, current-state reduction, and current aggregates on
+synthetic data; Detail Table aggregates are excluded. See
+``docs/benchmarking-gold.md``.
 """
 
 from __future__ import annotations
@@ -153,6 +121,7 @@ def synthetic_silver(*, lists: int, cases: int, versions: int) -> pd.DataFrame:
                         "placed_on_hold_at": pd.NaT,
                         "voided_at": ended if status == "Void" else pd.NaT,
                         "void_reason": "",
+                        "void_reason_note": "",
                         "voided_by_name": "",
                         "outcome": "Fair",
                         "outcome_at_completion": "Fair",

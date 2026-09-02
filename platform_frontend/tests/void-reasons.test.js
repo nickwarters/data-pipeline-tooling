@@ -4,8 +4,11 @@ import assert from 'node:assert/strict';
 
 import {
   VOID_REASONS,
+  VOID_REASON_OTHER,
   isVoidReasonKey,
   voidReasonLabel,
+  voidReasonNeedsNote,
+  voidReasonText,
   voidReasonsFor,
 } from '../src/lib/void-reasons.js';
 
@@ -22,6 +25,7 @@ test('VOID_REASONS is the frozen framework vocabulary, in display order', () => 
       'no-evidence',
       'superseded',
       'withdrawn',
+      'other',
     ]
   );
   for (const reason of VOID_REASONS) {
@@ -73,4 +77,44 @@ test('voidReasonLabel: an unknown key renders as itself, so historic data is nev
   // A Case that was never voided carries no reason at all.
   assert.equal(voidReasonLabel(null), '');
   assert.equal(voidReasonLabel(undefined), '');
+});
+
+test('voidReasonNeedsNote: only the escape hatch is unanswered by its key', () => {
+  assert.equal(voidReasonNeedsNote(VOID_REASON_OTHER), true);
+  for (const reason of VOID_REASONS) {
+    if (reason.key === VOID_REASON_OTHER) continue;
+    assert.equal(voidReasonNeedsNote(reason.key), false, reason.key);
+  }
+  // Nothing chosen yet is not a reason that needs writing out — it is no
+  // reason at all, which the control gates on separately.
+  assert.equal(voidReasonNeedsNote(''), false);
+  assert.equal(voidReasonNeedsNote(null), false);
+  assert.equal(voidReasonNeedsNote(undefined), false);
+});
+
+test('voidReasonText: the note is what "Other" means, so it reads beside the label', () => {
+  assert.equal(
+    voidReasonText('other', 'The customer died before the review'),
+    'Other: The customer died before the review'
+  );
+  // Whitespace a Reviewer left around the note is not part of what they wrote.
+  assert.equal(voidReasonText('other', '  spaced  '), 'Other: spaced');
+});
+
+test('voidReasonText: a keyed reason with no note reads exactly as its label', () => {
+  assert.equal(voidReasonText('duplicate', null), 'Duplicate of another Case');
+  assert.equal(voidReasonText('duplicate', ''), 'Duplicate of another Case');
+  assert.equal(voidReasonText('duplicate', '   '), 'Duplicate of another Case');
+  assert.equal(
+    voidReasonText('duplicate', undefined),
+    'Duplicate of another Case'
+  );
+});
+
+test('voidReasonText: a note with no reason still says what happened', () => {
+  // Historic rows are the population here: a reason retired from the
+  // vocabulary must not take the words written under it off the screen.
+  assert.equal(voidReasonText(null, 'written anyway'), 'written anyway');
+  assert.equal(voidReasonText('', 'written anyway'), 'written anyway');
+  assert.equal(voidReasonText(null, null), '');
 });

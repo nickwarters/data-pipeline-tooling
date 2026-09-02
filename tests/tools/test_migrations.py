@@ -201,7 +201,6 @@ def test_a_filename_that_does_not_parse_is_an_error_naming_the_file(tmp_path, na
 
 
 def test_two_files_claiming_one_version_is_an_error_naming_both(tmp_path):
-    # The classic merge accident: two branches each added an 0002.
     migrations = tmp_path / "migrations"
     _write(migrations, "0002_index_opened.sql", ADD_INDEX)
     _write(migrations, "0002_other_change.sql", "CREATE TABLE other (x INTEGER);")
@@ -211,7 +210,7 @@ def test_two_files_claiming_one_version_is_an_error_naming_both(tmp_path):
 
 
 def test_non_sql_entries_are_ignored_rather_than_rejected(tmp_path):
-    # A macOS checkout grows a .DS_Store unasked; a README beside the DDL is
+    # A macOS directory can contain a .DS_Store; a README beside the DDL is
     # legitimate. Neither is a migration, so neither is an error.
     migrations = tmp_path / "migrations"
     _write(migrations, "0001_create_cases.sql", CREATE_CASES)
@@ -362,7 +361,6 @@ def test_discover_targets_does_not_judge_what_a_database_is_called(tmp_path):
 
 
 def test_discover_targets_on_a_tree_that_does_not_exist_yet_is_empty(tmp_path):
-    # Today's state: nothing has opted in. Not an error.
     assert discover_targets(tmp_path / "absent") == []
 
 

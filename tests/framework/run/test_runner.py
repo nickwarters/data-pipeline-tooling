@@ -108,10 +108,8 @@ def test_requirement_within_days_allows_recent_successful_task(tmp_path):
 
 def test_requirement_same_day_requires_success_on_run_date(tmp_path):
     log_path = tmp_path / "runs.log"
-    # 23:59 on the day *before* the run date: same_day() rejects a success one
-    # minute short of it, which is what separates it from within_days(1). The
-    # local zone is UTC here (tests/conftest.py), so the instant's date is the
-    # local date — the conversion is exercised by the uk_summer tests below.
+    # One minute before the run date fails. UTC is the test default; ``uk_summer``
+    # exercises conversion to a different local date.
     _record_run(
         log_path,
         pipeline="cases/ingest",
@@ -386,7 +384,7 @@ def test_runner_redrives_a_business_run_under_an_explicit_logical_run_id(tmp_pat
     assert len(landed) == 2
     assert set(landed["logical_run_id"]) == {"REDRIVE-7"}
     # Each execution stays individually traceable.
-    assert len(set(landed["pipeline_run_id"])) == 1  # the latest execution's rows
+    assert len(set(landed["pipeline_run_id"])) == 1
 
 
 def test_runner_defaults_run_log_to_runs_dir_under_base_dir(tmp_path):
@@ -456,13 +454,8 @@ def test_runner_stale_guard_prevents_handler_and_records_error_run(tmp_path):
     assert freshness[0]["status"] == "error"
 
 
-# --- run dates are local; stored instants are UTC ----------------------------
-#
-# The deployment target is a UK box, which runs at UTC+1 for half the year. An
-# upstream that succeeds at 00:10 local on the 28th is stamped 23:10 UTC on the
-# 27th, so a freshness check that took the *UTC* date of the stamp called it
-# yesterday's run and blocked a downstream twenty minutes after the upstream had
-# succeeded. The stamp is converted to the local calendar date first.
+# Stored timestamps are UTC instants; freshness compares their local calendar
+# dates. UK summer time exercises the case where those dates differ.
 
 _BST = dt.timezone(dt.timedelta(hours=1))
 

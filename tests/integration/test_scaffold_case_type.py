@@ -8,7 +8,7 @@ framework/application boundary and live here in ``tests/integration/`` rather
 than coupling the framework scaffold test to the application contract.
 
 The variant is additive over the generic feed: it declares the Case Type's
-identity contract and refines source -> raw -> silver (the settled ingest spine),
+identity contract and refines source -> raw -> silver (the declared ingest spine),
 deliberately stopping at silver and leaving gold as the author's seam while the
 snapshot-vs-join assembly remains open.
 """
@@ -63,7 +63,7 @@ def test_case_type_variant_refines_to_silver_and_leaves_gold_a_commented_seam(tm
         encoding="utf-8"
     )
 
-    # The settled ingest spine is rendered live: source -> raw -> silver.
+    # The rendered ingest spine is source -> raw -> silver.
     assert "silver = to_silver(" in pipeline
     assert "med.silver.writer(" in pipeline
     # Rendered against the eager steps, so they execute where they're written.

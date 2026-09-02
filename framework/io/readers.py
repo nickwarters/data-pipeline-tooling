@@ -348,7 +348,7 @@ class ExcelReader:
 
 
 class SqliteReader:
-    """Read one table from a SQLite layer database into a Dataset."""
+    """Read one table from a SQLite database into a Dataset."""
 
     def __init__(
         self,

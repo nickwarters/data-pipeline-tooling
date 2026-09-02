@@ -1,12 +1,6 @@
-"""Tests for the new-feed scaffold.
+"""Tests for the new-feed scaffold under ``cli/scaffold_templates/feed``.
 
-The scaffold renders a feed from the template under
-``framework/_cli/scaffold_templates/feed/``: the feed *code* as a subpackage
-``pipelines/<feed>/`` and its *test* under
-``tests/pipelines/`` (mirroring the source layout). These tests drive the
-generator: that it lays the artifacts down in those two homes, substitutes the
-feed name everywhere, rewrites the relocated test's imports to absolute, and that
-the rendered pipeline actually runs.
+They cover generated locations, substitution, imports, and execution.
 """
 
 from __future__ import annotations
@@ -101,9 +95,7 @@ def test_the_rendered_steps_are_wired_inline(tmp_path):
         importlib.reload(pipeline)
         writer, rejects = RecordingWriter(), RecordingWriter()
 
-        # The steps are eager, so what the feed *did* is what it recorded. Driving
-        # it is the equivalent of reading a deferred pipeline's plan — and it
-        # proves the steps actually ran rather than merely being wired.
+        # Eager execution records the generated steps.
         raw_log = RecordingRunLog()
         with active_context(RunContext(pipeline="widgets", run_log=raw_log)):
             pipeline.to_raw(given_rows(rows), writer)
@@ -142,9 +134,8 @@ def test_rendered_pipeline_runs_and_lands_its_sample_feed(tmp_path):
     repo = tmp_path / "repo"
     scaffold.render("widgets", repo)
 
-    # The feed package lives at repo/pipelines/widgets; put repo/pipelines on the
-    # path so it imports as the top-level package "widgets" (relative imports and
-    # all), without colliding with this repo's own real "pipelines" package.
+    # Import the generated package from its temporary pipelines root without
+    # colliding with the repository's production package.
     sys.path.insert(0, str(repo / "pipelines"))
     try:
         pipeline = importlib.import_module("widgets.pipeline")
@@ -161,12 +152,7 @@ def test_rendered_pipeline_runs_and_lands_its_sample_feed(tmp_path):
     med = medallion(StoreRegistry(tmp_path / "data"), "widgets")
     landed = read_rows(med.raw, "widgets")
     assert len(landed) == len(dataset) > 0
-    # raw accumulates under the run context, so landed rows carry the run's
-    # stamps (run_id / load_date / ...) on top of the source columns. What lands
-    # *faithfully* is the source's own spelling of each value, so the comparison
-    # is against the feed file itself rather than against the returned dataset —
-    # that one has been through silver's coercion and carries the declared types,
-    # which is precisely the difference raw exists to not make yet.
+    # Compare raw with the source because silver is coerced and reshaped.
     source = rows_of(
         CsvReader(repo / "pipelines" / "widgets" / "sample_data" / "widgets.csv")
     )
@@ -175,9 +161,7 @@ def test_rendered_pipeline_runs_and_lands_its_sample_feed(tmp_path):
 
 
 def test_rendered_pipeline_main_runs_and_records_a_run(tmp_path, capsys):
-    # Drive the rendered feed's CLI entry point (main) end to end, the way
-    # `python -m pipelines.widgets.pipeline <base_dir>` does. This exercises the
-    # PipelineRunner registration/dispatch the in-process `run()` test skips.
+    # Drive generated main, including run_pipeline dispatch.
     repo = tmp_path / "repo"
     scaffold.render("widgets", repo)
     base_dir = tmp_path / "data"
@@ -401,11 +385,7 @@ def _function_body(text: str, name: str) -> str:
 
 
 def test_feed_file_seeds_structural_rejection_rows_missing_a_column(tmp_path):
-    # The structural-rejection tests are reseeded with the real feed rows minus
-    # one required column, so they stay structurally invalid and keep tripping the
-    # validators (regression: a feed scaffolded with --from-feed-file shipped with
-    # failing negative tests because seeding overwrote their invalid rows with
-    # valid data, so the validators no longer raised).
+    # Generated negative tests remain structurally invalid after seeding.
     feed = _write_feed(
         tmp_path / "cases.csv",
         "Case Number,Adviser Name\nC1,Smith\nC2,Jones\n",
@@ -432,9 +412,7 @@ def test_feed_file_seeds_structural_rejection_rows_missing_a_column(tmp_path):
 
 # --- migrations --------------------------------------------------------------
 #
-# A scaffolded feed is born with its baselines. Without them it would be the one
-# subject nothing declares — which tests/integration/test_migration_coverage.py
-# refuses — and the author would find out by writing one themselves.
+# Baselines cover every database a generated feed writes.
 
 
 def _migration(root, feed, database):
@@ -497,9 +475,7 @@ def test_raw_is_declared_in_the_sources_own_column_names(tmp_path):
 
 
 def test_a_scaffolded_feed_runs_against_its_own_migrations(tmp_path, monkeypatch):
-    # The ticket's "done when", end to end: scaffold, apply what it wrote, and
-    # run the feed against the result. Every table it writes must be declared,
-    # or the run aborts with MissingTableError.
+    # Apply migrations before running the generated feed.
     import sys
 
     from framework.run.run_context import RunContext
@@ -540,8 +516,7 @@ def _feed_file(tmp_path, headers):
 def test_a_narrow_feed_file_scaffolds_and_runs_against_its_own_migrations(
     tmp_path, monkeypatch
 ):
-    # The common --from-feed-file path, end to end: a source inside the cap, so
-    # the schema covers it and every step's baseline matches what it writes.
+    # Exercise the capped feed-file path end to end.
     import importlib  # noqa: PLC0415
     import sys  # noqa: PLC0415
 
@@ -567,10 +542,7 @@ def test_a_narrow_feed_file_scaffolds_and_runs_against_its_own_migrations(
 
 
 def test_a_source_wider_than_the_cap_runs_and_stops_at_raw(tmp_path, monkeypatch):
-    # The two halves together: raw keeps all 45 source columns, SELECT_RAW_COLUMNS
-    # narrows silver to the declared 40, and every step's write matches the table
-    # its baseline declared. Before the select was wired in, this run died on
-    # `table wide has no column named Ref Code 40!`.
+    # Raw keeps all source columns; silver and gold keep only capped canonical columns.
     import importlib  # noqa: PLC0415
     import sys  # noqa: PLC0415
 
@@ -603,11 +575,7 @@ def test_a_source_wider_than_the_cap_runs_and_stops_at_raw(tmp_path, monkeypatch
 def test_raw_mirrors_the_whole_feed_file_while_silver_follows_the_capped_schema(
     tmp_path,
 ):
-    # Raw is always whatever came in, so its baseline declares every column the
-    # file has, in the file's own spelling. Silver and gold describe the
-    # dataclass, which the scaffold caps -- so on a source wider than the cap the
-    # two deliberately part company. A scaffold is a starting point, not the
-    # finished feed; _read_feed_file says as much on the way past.
+    # Raw declares every source column; capped silver and gold declare the selection.
     header = [f"Ref Code {i}!" for i in range(_MAX + 5)]
     scaffold.render("wide", tmp_path, feed_file=_feed_file(tmp_path, header))
 
@@ -624,8 +592,7 @@ def test_raw_mirrors_the_whole_feed_file_while_silver_follows_the_capped_schema(
 
 
 def test_the_dropped_columns_warning_says_where_they_go(tmp_path, capsys):
-    # Not a blocker any more -- silver drops them cleanly -- so the warning says
-    # where they end up and what carrying one further would take.
+    # Dropped columns remain in raw and are omitted from silver.
     header = [f"col_{i}" for i in range(_MAX + 5)]
     scaffold.render("wide", tmp_path, feed_file=_feed_file(tmp_path, header))
 

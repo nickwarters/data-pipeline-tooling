@@ -5,8 +5,6 @@ The module an operator names on the command line::
     python -m cli orchestrate --app pipelines.ordering_demo.schedules \\
         --base-dir /tmp/ordering-demo --once
 
-Every relative time is computed when :func:`build_pipeline_sets` is called, so
-the demo tells the same story whenever it is run.
 """
 
 from __future__ import annotations

@@ -1,26 +1,6 @@
-"""Shared Readers over the ``sharepoint_cases`` subject's published datasets.
+"""Shared Readers for the ``sharepoint_cases`` published datasets.
 
-The Sync Feed owns these datasets and is the only thing that writes them. This
-module is the one place that knows *where* they are, so a consumer of the Case
-Review Platform's current state names neither a layer nor a table and asserts
-nothing about the producer's storage shape.
-
-Every reader is a pass-through: it hands back the rows as landed, with no
-projection, no coercion and no column contract. A consumer that needs specific
-columns keeps its own ``ColumnValidator`` — the reader must not grow into the
-union of every consumer's needs.
-
-All but one sit on the subject's gold. ``CaseObservationHistoryReader`` sits on
-its silver, because the question it answers -- what did each Case look like at
-every poll -- is one only the accumulated history can answer; gold has already
-reduced that history to one row per Case. The layer is still this module's
-secret: the consumer asks for the history, not for silver.
-
-Nor does either declare how fresh the data has to be. Two pipelines can read the
-same Cases and legitimately want different tolerances -- notifications must not
-tell anyone anything on yesterday's picture, while a monthly report would rather
-publish slightly stale than not at all -- and a reader has no basis to choose
-between them. Each consuming pipeline declares its own ``UPSTREAMS``.
+They pass through rows without validation or freshness policy.
 """
 
 from __future__ import annotations
@@ -43,12 +23,7 @@ _CASE_HISTORY_TABLE = "case_version"
 
 
 def _gold_reader(base_dir: str | os.PathLike[str], table: str) -> Reader:
-    """Mint a Reader over one of the subject's published gold tables.
-
-    The declaration of location for everything in this module bar the history
-    reader. Today that resolves through the subject's medallion; the day it does
-    not, this is the function that changes and no call site moves.
-    """
+    """Mint a Reader over a published gold table in this subject."""
     return medallion(StoreRegistry(base_dir), _SUBJECT).gold.reader(table)
 
 
@@ -58,16 +33,7 @@ def _silver_reader(base_dir: str | os.PathLike[str], table: str) -> Reader:
 
 
 class CurrentCasesReader:
-    """Every Case as it currently stands — one row per ``case_id``.
-
-    The Sync Feed's published current state: each Case reduced to its latest
-    observation, so a consumer reads the Case's people, its status and its
-    dates at one grain without reducing anything itself.
-
-    Wraps the Reader the store mints rather than subclassing one: ``Reader`` is
-    a structural Protocol, so composition costs three delegated members and
-    leaves the SQLite mechanics where they already are.
-    """
+    """Published current-state Cases, one row per ``case_id``."""
 
     def __init__(self, base_dir: str | os.PathLike[str]) -> None:
         self._reader = _gold_reader(base_dir, _CASE_CURRENT_TABLE)
@@ -84,12 +50,7 @@ class CurrentCasesReader:
 
 
 class ConversationMessagesReader:
-    """Every Conversation Message across every Case — grain ``case_id`` x ``seq``.
-
-    The Sync Feed's published Detail Table, already reduced to the winning
-    observation's messages, so the thread a consumer reads is the thread as it
-    currently stands.
-    """
+    """Published conversation messages, one row per ``case_id`` × ``seq``."""
 
     def __init__(self, base_dir: str | os.PathLike[str]) -> None:
         self._reader = _gold_reader(base_dir, _CONVERSATION_MESSAGE_TABLE)

@@ -1,9 +1,5 @@
 """The deadline-free item every other item is measured against.
 
-It declares no ``due_time`` of its own, yet is ordered under deadline
-pressure because ``demo_report`` depends on it and a deadline inherits up the
-dependency graph.
-
 Run it on its own with::
 
     python -m cli run pipelines/demo_steady --base-dir /tmp/ordering-demo

@@ -1,13 +1,4 @@
-"""Independent-commit semantics for run artifacts.
-
-A ``.run()`` writes its intermediate artifacts — quarantine rejects, the
-selection/explain trace, and checkpoints — to their own backing stores as their
-nodes execute. They are **independently committed evidence**, not staged into one
-publish unit with the final output: a *later* node's failure aborts the run but
-does not roll back an artifact that already landed. These tests inject a failure
-after each artifact write and assert (a) the artifact persisted and (b) the run
-log marks the artifact step ``committed`` before the failing step's ``error``.
-"""
+"""Artifacts commit independently, survive later failure, and log before error."""
 
 from __future__ import annotations
 

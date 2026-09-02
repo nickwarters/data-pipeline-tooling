@@ -1,11 +1,4 @@
-"""The run registry.
-
-A ``RunRegistry`` ingests the structured JSONL a ``RunLog`` emits into its own
-queryable SQLite store, so operators can answer "did last night's run succeed,
-how many rows, did anything warn?" without grepping ``.log`` files. The tests
-drive a *real* ``Pipeline`` + ``RunLog`` to produce the log, then ingest it —
-exercising the actual emitter→registry seam, never a hand-faked record shape.
-"""
+"""Test real RunLog JSONL ingestion into the SQLite run registry."""
 
 import itertools
 import json
@@ -31,8 +24,6 @@ from tools.observability.run_registry import RunRegistry
 
 
 class RecordingReader:
-    """A Reader that returns a fixed dataset (mirrors test_run_log)."""
-
     def __init__(self, dataset: Dataset) -> None:
         self._dataset = dataset
 
@@ -41,21 +32,17 @@ class RecordingReader:
 
 
 class CapturingWriter:
-    """A Writer that captures what it was handed."""
-
     def write(self, dataset: Dataset) -> None:
         self._written = dataset
 
 
 class PassThroughProcessor:
-    """A Processor that returns the dataset unchanged (emits a `process` step)."""
-
     def __call__(self, dataset: Dataset) -> Dataset:
         return dataset
 
 
 def _run_pipeline(log_path, name="cases", rows=2):
-    """Drive a real run that emits to ``log_path``; return its run_id."""
+    """Run a real pipeline and return its run ID."""
     reader = RecordingReader(
         Dataset.from_pandas(pd.DataFrame({"id": list(range(rows))}))
     )
@@ -138,8 +125,8 @@ def test_ingest_is_idempotent_re_reading_does_not_double_count(tmp_path):
     second = registry.ingest(log_path)
     after_second = registry.records_for_run(run_id)
 
-    assert first > 0  # the first ingest landed the run's records
-    assert second == 0  # the re-read inserted nothing new
+    assert first > 0
+    assert second == 0
     assert len(after_second) == len(after_first)
 
 
@@ -148,7 +135,7 @@ def test_latest_run_per_pipeline_returns_the_most_recent_summary_each(tmp_path):
     # summary by emit time — one row per pipeline, regardless of how many runs.
     log_path = tmp_path / "runs.log"
     _run_pipeline(log_path, name="alpha")
-    alpha_latest = _run_pipeline(log_path, name="alpha")  # a second alpha run
+    alpha_latest = _run_pipeline(log_path, name="alpha")
     beta_only = _run_pipeline(log_path, name="beta")
 
     registry = RunRegistry(tmp_path / "registry.db")
@@ -161,7 +148,7 @@ def test_latest_run_per_pipeline_returns_the_most_recent_summary_each(tmp_path):
 
 
 def _run_failing_pipeline(log_path, name="cases"):
-    """Drive a run that aborts at pre-validate (missing column); return run_id."""
+    """Run a failing pre-validation and return its run ID."""
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
     p = Pipeline(name, run_log=RunLog(log_path))
     r = p.read(reader, name="read")
@@ -185,7 +172,7 @@ def test_query_runs_returns_summaries_filterable_by_pipeline_and_status(tmp_path
 
     all_runs = registry.query_runs()
     assert {r["pipeline_run_id"] for r in all_runs} == {ok_a, ok_b, err_a}
-    assert all(r["step"] == "run" for r in all_runs)  # summaries only
+    assert all(r["step"] == "run" for r in all_runs)
 
     alpha = registry.query_runs(pipeline="alpha")
     assert {r["pipeline_run_id"] for r in alpha} == {ok_a, err_a}
@@ -360,7 +347,7 @@ def test_records_for_logical_run_excludes_records_with_no_business_key(tmp_path)
     registry = RunRegistry(tmp_path / "registry.db")
     registry.ingest(log_path)
 
-    assert registry.records_for_run("run-no-key")  # still findable by attempt id
+    assert registry.records_for_run("run-no-key")
     assert registry.records_for_logical_run("cases:2026-06-23") == []
     assert registry.succeeded_logical_run_ids("cases") == set()
 
@@ -452,7 +439,7 @@ def test_succeeded_logical_run_ids_excludes_default_key_equal_to_attempt_id(tmp_
         RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]}))), name="read"
     )
     p.write(CapturingWriter(), r, name="write")
-    p.run(RunContext())  # no pipeline= kwarg -> uuid-hex logical_run_id
+    p.run(RunContext())
 
     registry = RunRegistry(tmp_path / "registry.db")
     registry.ingest(log_path)
@@ -462,7 +449,7 @@ def test_succeeded_logical_run_ids_excludes_default_key_equal_to_attempt_id(tmp_
 
 def test_ingest_preserves_the_error_triage_category(tmp_path):
     # The failure's triage category survives the emitter->registry round-trip, so
-    # an operator can query "which runs failed on a data issue?" without grepping.
+    # an operator can query "which runs failed because of bad data?" without grepping.
     log_path = tmp_path / "runs.log"
     err = _run_failing_pipeline(log_path, name="cases")
 
@@ -480,7 +467,7 @@ def test_ingest_tolerates_a_pre_timestamp_log(tmp_path):
     # (the format the emitter produced previously): the record ingests,
     # its missing timestamp lands as null, and it is still queryable by run_id.
     log_path = tmp_path / "old.log"
-    old_record = {  # the pre-amendment shape — no "timestamp" key
+    old_record = {
         "pipeline_run_id": "abc123",
         "pipeline": "legacy",
         "step": "run",
@@ -508,7 +495,7 @@ def test_runs_that_warned_surfaces_tolerated_warn_hits(tmp_path):
     # messages decoded back to a list, so a drift is visible without re-grepping
     # ("runs that warned" + schema-drift surfacing).
     log_path = tmp_path / "runs.log"
-    clean = _run_pipeline(log_path, name="alpha")  # no warns
+    clean = _run_pipeline(log_path, name="alpha")
 
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
     warned = Pipeline("beta", run_log=RunLog(log_path))
@@ -535,9 +522,9 @@ def test_recent_row_counts_returns_read_volumes_most_recent_first(tmp_path):
     # most-recent-first, capped at `limit` — so a band can be built over "the
     # last N runs" without re-grepping logs.
     log_path = tmp_path / "runs.log"
-    for rows in (100, 110, 90, 105):  # four healthy nights, in time order
+    for rows in (100, 110, 90, 105):
         _run_pipeline(log_path, name="cases", rows=rows)
-    _run_pipeline(log_path, name="other", rows=5)  # a different feed
+    _run_pipeline(log_path, name="other", rows=5)
 
     registry = RunRegistry(tmp_path / "registry.db")
     registry.ingest(log_path)
@@ -551,7 +538,7 @@ def test_recent_row_counts_excludes_aborted_runs_from_the_baseline(tmp_path):
     # itself tripped would drag tonight's baseline down toward the bad value.
     log_path = tmp_path / "runs.log"
     _run_pipeline(log_path, name="cases", rows=100)
-    _run_failing_pipeline(log_path, name="cases")  # reads 1 row, then aborts
+    _run_failing_pipeline(log_path, name="cases")
     _run_pipeline(log_path, name="cases", rows=110)
 
     registry = RunRegistry(tmp_path / "registry.db")
@@ -587,7 +574,7 @@ def test_volume_guardrail_trips_against_real_history_and_records_to_the_runlog(
         severity="warn",
     )
     pipeline.write(CapturingWriter(), v, name="write")
-    pipeline.run()  # warn-severity: completes rather than aborting
+    pipeline.run()
 
     registry.ingest(truncated_log)
     warned = registry.runs_that_warned()
@@ -658,9 +645,7 @@ def test_repeated_process_steps_are_kept_distinct_not_deduped(tmp_path):
     assert len(again) == 2
 
 
-# ---------------------------------------------------------------------------
-# Incremental-ingest tests
-# ---------------------------------------------------------------------------
+# Incremental ingest
 
 
 def test_incremental_ingest_second_call_returns_only_new_records(tmp_path):
@@ -678,7 +663,7 @@ def test_incremental_ingest_second_call_returns_only_new_records(tmp_path):
     run_id_b = _run_pipeline(log_path, name="cases")
 
     second_count = registry.ingest(log_path)
-    assert second_count > 0  # only the new run's records
+    assert second_count > 0
 
     # Total records == full ingest of the combined file into a fresh registry.
     fresh_registry = RunRegistry(tmp_path / "fresh.db")
@@ -739,7 +724,7 @@ def test_incremental_ingest_ordinals_continue_across_boundary(tmp_path):
 
     registry = RunRegistry(tmp_path / "registry.db")
     c1 = registry.ingest(proc_log)
-    assert c1 == 1  # first process record ingested
+    assert c1 == 1
 
     # Append two more process records.
     with proc_log.open("ab") as fh:
@@ -747,7 +732,7 @@ def test_incremental_ingest_ordinals_continue_across_boundary(tmp_path):
         fh.write(line2.encode("utf-8"))
 
     c2 = registry.ingest(proc_log)
-    assert c2 == 2  # both new records ingested (not silently dropped)
+    assert c2 == 2
 
     # All three records present with ordinals 0, 1, 2 — no gaps, no duplicates.
     process_records = [
@@ -787,14 +772,14 @@ def test_incremental_ingest_partial_line_not_ingested_then_completed(tmp_path):
 
     registry = RunRegistry(tmp_path / "registry.db")
     count = registry.ingest(log_path)
-    assert count == 0  # partial line — nothing ingested
+    assert count == 0
 
     # Complete the line.
     with log_path.open("ab") as fh:
         fh.write(b"\n")
 
     count2 = registry.ingest(log_path)
-    assert count2 == 1  # now it lands
+    assert count2 == 1
 
     # Re-ingest: idempotent — no duplicates.
     count3 = registry.ingest(log_path)
@@ -836,7 +821,7 @@ def test_incremental_ingest_truncation_resets_and_picks_up_new_file(tmp_path):
     log_path.write_bytes((new_record + "\n").encode("utf-8"))
 
     count_after = registry.ingest(log_path)
-    assert count_after == 1  # the new record, ingested from the top
+    assert count_after == 1
 
     records = registry.records_for_run("new-run-after-rotation")
     assert len(records) == 1
@@ -852,7 +837,7 @@ def test_incremental_ingest_no_new_content_returns_zero(tmp_path):
     registry.ingest(log_path)
 
     assert registry.ingest(log_path) == 0
-    assert registry.ingest(log_path) == 0  # stable across multiple calls
+    assert registry.ingest(log_path) == 0
 
 
 def test_incremental_ingest_offset_persisted_across_registry_instances(tmp_path):
@@ -873,7 +858,7 @@ def test_incremental_ingest_offset_persisted_across_registry_instances(tmp_path)
     registry_b = RunRegistry(db_path)
     count_b = registry_b.ingest(log_path)
     assert count_b > 0
-    assert count_b == count_a  # same pipeline / step structure → same record count
+    assert count_b == count_a
 
     # And re-ingesting with registry_a (same DB) also sees nothing new.
     assert registry_a.ingest(log_path) == 0
@@ -894,7 +879,7 @@ def test_committed_marker_round_trips_through_ingest(tmp_path):
 
 
 def _run_file_to_table_pipeline(tmp_path, log_path):
-    """Drive a real file->table run; return its run_id and the two locations."""
+    """Run CSV-to-SQLite and return its run ID and data paths."""
     csv_path = tmp_path / "orders.csv"
     csv_path.write_text("id\n1\n2\n", encoding="utf-8")
     db_path = tmp_path / "raw.db"
@@ -1022,7 +1007,7 @@ def test_ingest_migrates_a_pre_data_locations_registry_db(tmp_path):
     run_id, csv_path, _ = _run_file_to_table_pipeline(tmp_path, log_path)
 
     registry = RunRegistry(db_path)
-    assert registry.ingest(log_path) > 0  # the migration let the INSERT through
+    assert registry.ingest(log_path) > 0
 
     by_step = {r["step"]: r for r in registry.records_for_run(run_id)}
     assert by_step["read"]["data_locations"] == [
@@ -1066,18 +1051,14 @@ def test_ingest_migrates_a_pre_committed_registry_db(tmp_path):
     run_id = _run_pipeline(log_path)
 
     registry = RunRegistry(db_path)
-    assert registry.ingest(log_path) > 0  # the migration let the INSERT through
+    assert registry.ingest(log_path) > 0
 
     by_step = {r["step"]: r for r in registry.records_for_run(run_id)}
     assert by_step["write"]["committed"] is True
 
 
-# --- migration is a startup concern, not something every query pays for -------
-#
-# Opening a connection and migrating the file are separate jobs. Migration writes
-# (DDL, and a one-off backfill of the step_address column), and with the rollback
-# journal a writer's lock is exclusive — so running it per connection made every
-# read-only operator query briefly lock the registry against running pipelines.
+# Migrate on the first connection only: SQLite DDL and backfills take a writer
+# lock, which read-only operator queries must not repeatedly acquire.
 
 
 _LEGACY_TABLE = """
@@ -1104,7 +1085,7 @@ _LEGACY_ROWS = [
 
 
 def _legacy_db(path, *, with_step_address: bool = False):
-    """A registry file as an earlier release left it, optionally mid-migration."""
+    """Create a legacy registry with an optional empty ``step_address`` column."""
     con = sqlite3.connect(path)
     con.execute(_LEGACY_TABLE)
     if with_step_address:

@@ -1,8 +1,5 @@
 """Not due today at all.
 
-Work that is not due is reported after the day's work, whatever deadlines and
-priorities the due items carry.
-
 Run it on its own with::
 
     python -m cli run pipelines/demo_tomorrow --base-dir /tmp/ordering-demo

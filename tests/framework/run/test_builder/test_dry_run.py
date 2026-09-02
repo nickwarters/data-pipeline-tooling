@@ -1,12 +1,4 @@
-"""Dry-run / preview mode for the deferred ``Pipeline`` builder.
-
-A run executed in dry-run mode reads, processes, and validates real data but
-**skips every commit**: no Write, Quarantine, or Explain node calls its writer,
-and no Action node calls its callable. Instead each step contributes to a
-``DryRunReport`` — columns, dtypes, row counts, and a bounded row sample — so an
-author can preview a pipeline during local development without landing
-artifacts.
-"""
+"""Deferred dry runs execute data steps, skip commits, and return a preview."""
 
 from __future__ import annotations
 

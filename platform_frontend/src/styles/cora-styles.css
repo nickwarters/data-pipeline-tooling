@@ -2457,9 +2457,50 @@
   color: var(--cora-color-danger);
 }
 
+/* Wears the same box as every other select in the app. Without an explicit
+   fill the control falls back to the UA default, which follows the OS colour
+   scheme rather than ours — so on a dark-mode machine it stayed dark even with
+   the app forced to light. */
 [data-cora-root] .cora-void-reason {
   display: block;
   margin-top: var(--cora-space-2);
+  padding: var(--cora-space-2) var(--cora-space-3);
+  color: inherit;
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+}
+
+/* The note only exists while `Other` is selected, so it is styled as part of
+   the panel rather than as a field that is sometimes disabled. */
+[data-cora-root] .cora-void-note-label {
+  display: block;
+  margin-top: var(--cora-space-3);
+}
+
+/* Wears the same box as the Notes and Issue Capture textareas. Without an
+   explicit fill the control falls back to the UA default, which follows the OS
+   colour scheme rather than ours — so on a dark-mode machine it stayed dark
+   even with the app forced to light, exactly as the select beside it did. */
+[data-cora-root] .cora-void-note {
+  display: block;
+  font: inherit;
+  width: 100%;
+  margin-top: var(--cora-space-2);
+  min-height: 4rem;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  color: inherit;
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  resize: vertical;
+  transition: border-color var(--cora-duration-fast) var(--cora-easing-standard);
+}
+
+[data-cora-root] .cora-void-note:focus {
+  outline: none;
+  border-color: var(--cora-color-accent);
+  box-shadow: var(--cora-focus-ring);
 }
 
 [data-cora-root] .cora-void-confirm {

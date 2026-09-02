@@ -1,10 +1,4 @@
-"""``tools.environments``: resolving a medallion ``base_dir`` from a named env.
-
-The mapping is an operational concern that lives outside the framework, so these
-tests pin the precedence (explicit arg -> ``PIPELINE_ENV`` -> default), the
-per-env OS variable override, the dev/prod fallbacks, and the actionable error
-for an unknown environment.
-"""
+"""Test named-environment resolution, fallbacks, and precedence."""
 
 from pathlib import Path
 

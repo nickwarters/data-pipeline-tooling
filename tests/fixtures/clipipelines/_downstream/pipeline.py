@@ -1,11 +1,4 @@
-"""A minimal downstream pipeline for CLI tests: gated on `_source` freshness.
-
-Stands in for "the real selection pipeline" wherever a CLI test needs a pipeline
-that (a) declares a freshness upstream so the stale-upstream abort path runs, and
-(b) writes an accumulated gold table so a re-drive under one `--logical-run-id`
-can be read back and asserted on. As with `_source`, the computation is trivial;
-the CLI tests assert on the plumbing.
-"""
+"""CLI-test downstream gated on ``_source`` freshness."""
 
 from __future__ import annotations
 

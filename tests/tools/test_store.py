@@ -31,8 +31,6 @@ def test_store_writer_with_refresh_strategy_round_trips_a_dataset(tmp_path):
 
 
 def test_refresh_strategy_full_refreshes_rather_than_accumulates(tmp_path):
-    # A Refresh strategy truncates + reloads: a second write replaces the
-    # first rather than appending.
     dataset = CsvReader(FIXTURE).read()
     store = _namespace_store(tmp_path)
 
@@ -90,7 +88,6 @@ def test_store_registry_mints_namespace_stores_over_distinct_files(tmp_path):
     cases.writer("shared_table", Refresh()).write(dataset)
     advisers.writer("shared_table", Refresh()).write(dataset)
 
-    # One file per namespace; a same-named table in two namespaces never collides.
     assert (tmp_path / "cases.db").exists()
     assert (tmp_path / "advisers.db").exists()
     assert len(cases.reader("shared_table").read()) == len(dataset)
@@ -115,7 +112,6 @@ def test_normalised_schema_across_logical_databases(tmp_path):
     customers = registry.store("customers")  # one logical database…
     reference = registry.store("reference")  # …a second, read-only to the first
 
-    # The "customers" database carries several related tables.
     customers.writer("customer", Refresh()).write(
         Dataset.from_pandas(
             pd.DataFrame({"customer_id": [1, 2], "region_code": ["N", "S"]})
@@ -127,7 +123,6 @@ def test_normalised_schema_across_logical_databases(tmp_path):
         )
     )
 
-    # The "reference" database carries its own related tables.
     reference.writer("region", Refresh()).write(
         Dataset.from_pandas(
             pd.DataFrame({"region_code": ["N", "S"], "region_name": ["North", "South"]})
@@ -139,11 +134,9 @@ def test_normalised_schema_across_logical_databases(tmp_path):
         )
     )
 
-    # One file per logical database, several tables each.
     assert (tmp_path / "customers.db").exists()
     assert (tmp_path / "reference.db").exists()
 
-    # A cross-database join: customers + their region names, joined in Python.
     customer = customers.reader("customer").read().to_pandas()
     account = customers.reader("account").read().to_pandas()
     region = reference.reader("region").read().to_pandas()
@@ -182,8 +175,6 @@ def test_registry_registers_and_returns_a_named_reader_and_writer(tmp_path):
 
 
 def test_register_returns_the_component_for_one_line_use(tmp_path):
-    # register() hands the component straight back so a caller can register and
-    # wire it in one expression.
     registry = StoreRegistry(tmp_path)
     writer = registry.store("cases").writer("cases", Refresh())
 

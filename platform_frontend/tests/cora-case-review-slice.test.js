@@ -251,6 +251,7 @@ test('state: route state owns loading, save status, and selected tab under route
     completionPending: false,
     voidPanelOpen: false,
     voidReason: '',
+    voidReasonNote: '',
     voidPending: false,
     captureCollapsed: {},
     captureSearch: {},
@@ -2792,9 +2793,13 @@ function voidableSnapshot(fields) {
     machine: /** @type {any} */ ({
       canVoid: true,
       catalogue: [],
-      transitionToVoid: (/** @type {string} */ reasonKey) => ({
+      transitionToVoid: (
+        /** @type {string} */ reasonKey,
+        /** @type {string} */ note
+      ) => ({
         ...fields,
         voidReason: reasonKey,
+        voidReasonNote: note ? note.trim() : null,
       }),
     }),
   };
@@ -2826,6 +2831,45 @@ test('void: the panel toggles open and closed, forgetting a chosen reason on clo
     '',
     'a reason chosen and then abandoned does not survive the panel'
   );
+});
+
+test('void: what was written under one reason does not survive choosing another', () => {
+  const opened = caseReviewReducer(
+    caseReviewReducer(createInitialCaseReviewState(chrome), {
+      type: 'case/load-finished',
+      snapshot: voidableSnapshot({}),
+    }),
+    { type: 'case/void-panel-toggled' }
+  );
+
+  const written = caseReviewReducer(
+    caseReviewReducer(opened, {
+      type: 'case/void-reason-selected',
+      reasonKey: 'other',
+    }),
+    { type: 'case/void-note-changed', note: 'the file was destroyed' }
+  );
+  assert.equal(
+    written.routes.caseReview.voidReasonNote,
+    'the file was destroyed'
+  );
+
+  const switched = caseReviewReducer(written, {
+    type: 'case/void-reason-selected',
+    reasonKey: 'duplicate',
+  });
+  assert.equal(
+    switched.routes.caseReview.voidReasonNote,
+    '',
+    'a note written under one reason must not describe the next one'
+  );
+
+  // And abandoning the panel forgets it too, for the same reason the chosen
+  // reason does not survive.
+  const abandoned = caseReviewReducer(written, {
+    type: 'case/void-panel-toggled',
+  });
+  assert.equal(abandoned.routes.caseReview.voidReasonNote, '');
 });
 
 test('action: voiding a Case PATCHes the transition and folds only those fields into the store Case Row', async () => {
@@ -2886,6 +2930,72 @@ test('action: voiding a Case PATCHes the transition and folds only those fields 
   assert.equal(location.hash, '#/dashboard');
 });
 
+test('action: "Other" holds the void until it is written out, then sends what was written', async () => {
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: voidableSnapshot({
+      status: 'Void',
+      voidedAt: '2026-07-19T12:00:00Z',
+      voidedBy: 'u1',
+    }),
+  });
+  /** @type {any} */
+  let persistedFields = null;
+  const view = renderShippedState(state, {
+    saveQueue: {
+      async flushCase() {
+        return true;
+      },
+      getEtag: () => 'e1',
+    },
+    client: {
+      async patchCase(/** @type {string} */ _id, /** @type {any} */ fields) {
+        persistedFields = fields;
+        return { ok: true, status: 200 };
+      },
+    },
+  });
+
+  fireEvent(
+    getByRole(view.container, 'button', { name: 'Void Case…' }),
+    'click'
+  );
+  assert.equal(
+    queryAllByRole(view.container, 'textbox', { name: 'Say why' }).length,
+    0,
+    'the box is not on screen before a reason that needs it is chosen'
+  );
+
+  const select = getByRole(view.container, 'combobox', {
+    name: 'Reason for voiding',
+  });
+  select.value = 'other';
+  fireEvent(select, 'change');
+
+  const confirm = () =>
+    getByRole(view.container, 'button', { name: 'Void Case' });
+  assert.equal(
+    confirm().disabled,
+    true,
+    'an unexplained "Other" is not a reason to void a Case'
+  );
+
+  const box = getByRole(view.container, 'textbox', { name: 'Say why' });
+  box.value = 'the file was destroyed';
+  fireEvent(box, 'input');
+  assert.equal(confirm().disabled, false);
+
+  fireEvent(confirm(), 'click');
+  await flush();
+
+  assert.equal(persistedFields?.voidReason, 'other');
+  assert.equal(persistedFields?.voidReasonNote, 'the file was destroyed');
+  assert.equal(
+    view.state.routes.caseReview.snapshot.caseRow.voidReasonNote,
+    'the file was destroyed'
+  );
+});
+
 test('view: a voided Case names the reason, who voided it and when', () => {
   const voided = {
     ...snapshot(),
@@ -2913,6 +3023,29 @@ test('view: a voided Case names the reason, who voided it and when', () => {
     0,
     'a Case cannot be voided twice'
   );
+});
+
+test('view: a Case voided under "Other" reads back the words, not just the label', () => {
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: {
+      ...snapshot(),
+      caseRow: {
+        ...caseRow,
+        status: 'Void',
+        voidReason: 'other',
+        voidReasonNote: 'the file was destroyed in the flood',
+        voidedBy: 'u7',
+        voidedAt: '2026-07-19T12:00:00Z',
+      },
+    },
+  });
+
+  const banner = getByTag(
+    renderShippedState(state).container,
+    'header'
+  ).textContent;
+  assert.match(banner, /Other: the file was destroyed in the flood/);
 });
 
 test('action: a failed completion PATCH leaves the store Case Row as it was', async () => {
@@ -5274,20 +5407,26 @@ test('a Case Type that renames every Section renames every tab and every heading
   });
   const { container } = renderShippedState(state);
 
+  // Compared as sets: this test is about renaming, so it asserts that every
+  // tab carries its configured caption and none keeps its default. Tab order
+  // is `tabEntries`' contract, held by section-registry.test.js alone.
   const tabNames = queryAllByRole(container, 'tab').map(
     (tab) => tab.textContent
   );
-  assert.deepEqual(tabNames, [
-    'Background',
-    'Assess',
-    'Findings',
-    'Fix-ups',
-    'Wrap-up',
-    'Scribbles',
-    'Challenge',
-    'Challenge Review',
-    'Correct Outcome',
-  ]);
+  assert.deepEqual(
+    [...tabNames].sort(),
+    [
+      'Background',
+      'Assess',
+      'Findings',
+      'Fix-ups',
+      'Wrap-up',
+      'Scribbles',
+      'Challenge',
+      'Challenge Review',
+      'Correct Outcome',
+    ].sort()
+  );
 
   const headings = queryAllByTag(container, 'h2').map(
     (node) => node.textContent

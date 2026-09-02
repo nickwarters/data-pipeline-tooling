@@ -1,8 +1,8 @@
-"""The database helper: a base directory built from the checked-in migrations.
+"""The database helper: a base directory built from declared migrations.
 
 These drive the helper against a throwaway migrations tree rather than the
-repository's own, so they say what the helper does regardless of which subjects
-have baselines checked in yet. That the helper reads the *real* tree by default
+configured default, so they say what the helper does regardless of which subjects
+have baselines yet. That the helper reads the *real* tree by default
 is itself asserted, because a test-only DDL path would defeat the point.
 """
 
@@ -122,8 +122,8 @@ def test_specs_of_both_kinds_mix_in_one_call(tmp_path):
 
 
 def test_something_the_tree_does_not_declare_is_an_error_naming_it(tmp_path):
-    # Silently returning an unbuilt base directory would leave the test passing
-    # against the old implicit-creation branch and proving nothing.
+    # Silently returning an unbuilt base directory would let the first write
+    # create tables implicitly, so the migration contract would go untested.
     root = _tree(tmp_path, "cases", silver=CASES)
 
     with pytest.raises(LookupError, match="nothing to build for 'absent'"):
@@ -137,9 +137,8 @@ def test_something_the_tree_does_not_declare_is_an_error_naming_it(tmp_path):
 
 def test_the_helper_reads_the_real_migrations_tree_by_default(tmp_path):
     # A test-only DDL path would defeat the point: what is worth testing is that
-    # the checked-in SQL and the code agree. Asked for a subject with no
-    # baselines and given no tree, the helper says which tree it looked in — the
-    # repository's own.
+    # the stored SQL and the code agree. Asked for a subject with no baselines
+    # and given no tree, the helper identifies the default tree it searched.
     with pytest.raises(LookupError, match=re.escape(str(MIGRATIONS_ROOT))):
         build_databases(tmp_path / "data", "definitely_not_a_subject")
 

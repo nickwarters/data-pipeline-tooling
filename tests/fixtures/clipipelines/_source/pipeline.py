@@ -1,10 +1,4 @@
-"""A minimal source pipeline for CLI tests: lands one raw table, no upstream.
-
-Stands in for "the real ingest pipeline" wherever a CLI test only needs *a*
-pipeline that runs cleanly and leaves landed evidence behind (a `raw.db` under
-its subject, a run in the registry). The behaviour is deliberately trivial; what
-the CLI tests assert on is the plumbing around it, not what this computes.
-"""
+"""CLI-test source that lands fixture rows."""
 
 from __future__ import annotations
 

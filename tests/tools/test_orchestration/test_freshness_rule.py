@@ -1,17 +1,7 @@
-"""One freshness rule, two presentations.
+"""Test guard/plan parity through one freshness predicate.
 
-``FreshnessGuard`` (which blocks a real run) and ``Orchestrator.plan()`` (which
-previews it) used to carry separate copies of the same predicate, and the copies
-had already drifted: the guard named the downstream in its message and the plan
-did not, so an operator comparing ``orchestrate`` output against a plan saw two
-sentences for one condition. The plan preview's whole promise is *this is what
-will happen*, and two implementations meant that promise was kept by discipline.
-
-These tests hold the two callers to the one rule, including the local-calendar
--date semantics: a stored run timestamp is a UTC instant, a run date is a local
-calendar date, and the instant must be moved into the local zone before its date
-is taken. The local zone is substituted through ``timestamps.local_timezone``
-rather than by setting ``TZ`` so the tests are meaningful on Windows too.
+UTC instants convert through an injected local timezone, keeping date boundaries
+deterministic on Windows.
 """
 
 import datetime as dt
@@ -59,12 +49,7 @@ class _NeverInvoked:
 
 
 def _guard_message(tmp_path, requirement, *, run_date=DUE_DATE) -> str:
-    """The message the runner's guard raises for ``requirement``.
-
-    The run is labelled ``reporting`` — no medallion subject — so it carries the
-    same identity the path-addressed orchestrator uses for the same pipeline, and
-    the two messages are comparable rather than merely similar.
-    """
+    """Return the guard's message for the reporting pipeline."""
     registry = RunStoreRegistry(tmp_path)
     context = RunContext(
         base_dir=tmp_path,
@@ -108,7 +93,7 @@ def _plan_reason(tmp_path, requirement, *, run_date=DUE_DATE) -> str:
     return item.reason
 
 
-# ── the guard and the plan say exactly the same thing ─────────────────────────
+# Guard/plan parity
 
 
 @pytest.mark.parametrize(
@@ -140,15 +125,11 @@ def test_a_blocking_first_run_reads_the_same_both_ways(tmp_path):
     assert _plan_reason(tmp_path, requirement) == _guard_message(tmp_path, requirement)
 
 
-# ── exactly one implementation, shared by both ────────────────────────────────
+# Shared predicate
 
 
 def test_both_callers_go_through_the_shared_predicate(tmp_path, monkeypatch):
-    """Neither caller keeps a private copy of the rule.
-
-    Substituting the shared predicate must change what *both* of them decide; a
-    caller with its own copy would carry on regardless.
-    """
+    """Substituting the shared predicate changes both callers' decisions."""
     import framework.run.freshness as freshness_module
     import framework.run.runner as runner_module
     import tools.orchestration as orchestration_module
@@ -170,7 +151,7 @@ def test_both_callers_go_through_the_shared_predicate(tmp_path, monkeypatch):
     assert _guard_message(tmp_path, requirement) == "substituted verdict"
 
 
-# ── the local-calendar-date rule, on the shared predicate ─────────────────────
+# Local-date semantics
 
 _UTC_PLUS_ONE = dt.timezone(dt.timedelta(hours=1))
 # 23:10 UTC the day before DUE_DATE is 00:10 local on DUE_DATE at UTC+1.
@@ -199,8 +180,6 @@ class _SummerTimeZone(dt.tzinfo):
 
 
 class _Latest:
-    """A run history stub returning one recorded success."""
-
     def __init__(self, timestamp: str | None) -> None:
         self._timestamp = timestamp
 
@@ -224,8 +203,6 @@ def test_the_shared_predicate_reads_the_stored_instant_as_a_local_date(monkeypat
 
 
 def test_the_shared_predicate_would_disagree_reading_the_instant_as_utc(monkeypatch):
-    # The same timestamp under a UTC-local box really is the previous day, so the
-    # test above is proving the conversion rather than an accident of the data.
     monkeypatch.setattr(timestamps, "local_timezone", lambda: dt.timezone.utc)
     requirement = Requirement.succeeded(RunAddress.for_pipeline("ingest")).same_day()
 
@@ -236,13 +213,7 @@ def test_the_shared_predicate_would_disagree_reading_the_instant_as_utc(monkeypa
 
 
 def test_the_shared_predicate_uses_the_offset_in_force_on_the_day(monkeypatch):
-    """A run either side of a summer-time change gets that day's offset.
-
-    An upstream landing at 23:30 UTC on 30 March is 00:30 local on 31 March once
-    the clocks have gone forward; before the change, 23:30 UTC on 28 March is
-    still 28 March locally. Reading one fixed offset for both would misdate one
-    of them.
-    """
+    """Use the offset in force at each instant across a summer-time change."""
     monkeypatch.setattr(timestamps, "local_timezone", _SummerTimeZone)
     same_day = Requirement.succeeded(RunAddress.for_pipeline("ingest")).same_day()
 
@@ -297,7 +268,7 @@ def test_both_callers_agree_across_the_local_midnight_boundary(tmp_path, monkeyp
     FreshnessGuard().check(context, requirement)
 
 
-# ── the first-run policies keep their run-log behaviour ───────────────────────
+# First-run logging
 
 
 def test_first_run_warn_still_lands_on_the_run_log_as_a_warning(tmp_path):

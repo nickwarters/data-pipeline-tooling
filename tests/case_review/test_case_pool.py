@@ -12,9 +12,8 @@ from tools.store import StoreRegistry
 
 
 def _land_gold_cases(gold, frame: pd.DataFrame) -> None:
-    # Land Cases into the ingest gold exactly as an ingest_silver_to_gold run
-    # would — one row per Case, dates as text (SQLite has no date type), which
-    # is what the CasePool re-reads.
+    # Seed current-only ingest gold (one row per Case); CasePool reads it back
+    # after SQLite serializes dates as text.
     gold.writer("cases", Refresh()).write(Dataset.from_pandas(frame))
 
 
@@ -22,7 +21,7 @@ def test_fetch_available_cases_keeps_only_cases_inside_the_working_day_window(
     tmp_path,
 ):
     # "Available cases" are the eligible candidates: activity dated within the
-    # last N working days of as_of (CONTEXT.md). The CasePool reads the current
+    # last N working days of as_of. The CasePool reads the current
     # ingested gold and narrows to that window using the WorkingDayCalendar —
     # the domain retrieval Selection calls instead of a raw read.
     gold = medallion(StoreRegistry(tmp_path), "cases").gold

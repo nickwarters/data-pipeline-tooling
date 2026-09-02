@@ -1,11 +1,4 @@
-"""Tests for the Shared Readers over the ``sharepoint_cases`` subject's gold.
-
-These readers are a *location* indirection and nothing else, so the tests are
-about location: rows seeded where the producer puts them come back, the three
-ports delegate to the Reader underneath, and a base directory holding nothing
-fails the way that Reader already fails rather than in some new way of the
-wrapper's own.
-"""
+"""Location/delegation tests for the ``sharepoint_cases`` Shared Readers."""
 
 from __future__ import annotations
 
@@ -39,13 +32,7 @@ MESSAGES = [
 
 
 def _seed(base_dir, table: str, rows: list[dict], *, layer: str = "gold") -> None:
-    """Land ``rows`` where the producer lands them — the Sync subject's gold,
-    or its silver for the observation history.
-
-    Deliberately spelled out through the medallion rather than through the
-    reader under test: this is standing in for the producing pipeline, which is
-    the one thing entitled to name the subject, the layer and the table.
-    """
+    """Seed rows where the producer lands them."""
     store = getattr(medallion(StoreRegistry(base_dir), "sharepoint_cases"), layer)
     store.writer(table, Refresh()).write(Dataset.from_pandas(pd.DataFrame(rows)))
 

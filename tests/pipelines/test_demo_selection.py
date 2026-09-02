@@ -35,7 +35,7 @@ def test_demo_variation_lookup_reports_an_unknown_id():
 
 
 def test_demo_runs_the_full_source_to_selection_path(tmp_path, capsys):
-    # The capstone demo is now two path-addressed pipelines: ingest (CSV -> raw
+    # The capstone demo comprises two path-addressed pipelines: ingest (CSV -> raw
     # -> silver -> the gold CasePool) then selection (the available cases ->
     # the gold SelectionPool). Running them in order through the framework's
     # `run` exercises the whole flow, freshness gate included.

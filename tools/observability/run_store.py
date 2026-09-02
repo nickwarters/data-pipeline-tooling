@@ -6,12 +6,8 @@ JSONL run logs, the registry that indexes them, the orchestration decision log â
 is laid out here. They are deliberately separate concerns and neither constructs
 the other; this is the counterpart of ``StoreRegistry``, not an extension of it.
 
-Before this existed, the three fragments ``_runs/``, ``_registry/runs.db`` and
-``_orchestration/runs.db`` were spelled out in the runner, the orchestrator and
-the operator CLI â€” three packages each asserting the same on-disk convention,
-with the "sweep every log into the registry" incantation copied alongside them.
-A layout with no owner is a layout that drifts, so it has one now: every path
-under a base directory that is about *runs* rather than *rows* comes from here.
+Every path under a base directory that is about *runs* rather than *rows* comes
+from here, giving the layout one owner and preventing drift between callers.
 """
 
 from __future__ import annotations

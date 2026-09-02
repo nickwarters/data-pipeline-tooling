@@ -80,26 +80,26 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
         self.assertIn("The **Widget Review** Case Type", module_source)
         self.assertIn("TODO(case-type): Replace starter questions", module_source)
         self.assertNotIn("dashboardPanels", module_source)
-        # #525: the generated Case Type must declare its Case list. The mock
-        # store's partition is total (no default store, #249), so a fixture Case
+        # The generated Case Type must declare its Case list. The mock store's
+        # partition is total, so a fixture Case
         # whose Case Type declares no listName throws and takes ?mock=1 down for
         # every other Case Type.
         self.assertIn("listName: 'Cases-WidgetReview',", module_source)
-        # #525/#527: no eligibleGroups at all. The org-wide 'Reviewers' would
+        # No eligibleGroups: the org-wide 'Reviewers' would
         # open the type to every reviewer, and the derived
         # 'Reviewers - Widget Review' is already granted by the registry display
         # name — restating it makes a second grant that a later rename of the
         # registry entry does NOT move, silently keeping the decommissioned
         # group's access alive.
         self.assertNotIn("eligibleGroups:", module_source)
-        # #527: the display name lives only on the CASE_TYPES registry entry.
+        # The display name lives only on the CASE_TYPES registry entry.
         self.assertNotIn("displayName:", module_source)
         # Case tables are framework-owned: every Case Type is listed under the
         # same columns, so a scaffolded Case Type declares none of its own.
         self.assertNotIn("caseTableColumns", module_source)
         self.assertNotIn("initiatedBy", module_source)
 
-        # One registry edit (#508): the CASE_TYPES entry carries the slug, the
+        # The CASE_TYPES entry carries the slug, the
         # display name the SharePoint group names derive from, and the lazy
         # importer. permissions.caseTypes is derived from it.
         manifest_path = root / "case-types" / "manifest.js"
@@ -107,7 +107,7 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
         self.assert_js_parses(manifest_path)
         self.assertIn("slug: 'widget-review',", manifest)
         self.assertIn("displayName: 'Widget Review',", manifest)
-        # #527: frozen like every other entry, so the one copy of the display
+        # Frozen like every other entry, so the one copy of the display
         # name that composes three SharePoint group names stays one copy.
         self.assertIn("Object.freeze({", manifest)
         self.assertIn("importer: () => import('./widget-review.js'),", manifest)
@@ -136,9 +136,7 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
         )
         self.assertIn("# Case Type scaffolding contract", adr)
         self.assertIn("refuses to overwrite an existing Case Type slug", adr)
-        # #525: the ADR must describe what the code does. The old text claimed
-        # the Case Type had no listName so its Cases were mock-openable; the
-        # mock store has had no default bucket since #249.
+        # The contract must match the generated listName.
         self.assertIn("listName: 'Cases-WidgetReview'", adr)
         self.assertNotIn("deliberately has no `listName`", adr)
 
@@ -189,8 +187,7 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
             root, "--slug", "widget-review", "--display", "Widget Review"
         )
 
-        # The sign-off must be matchable test-by-test: a developer should be able
-        # to map every remaining red test to a line here (#525).
+        # Each remaining red test must map to a line in the sign-off.
         self.assertIn("tests/case-type-manifest.test.js", result.stdout)
         self.assertIn(
             "known Case Type slugs resolve to their static import functions",
@@ -226,11 +223,9 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
     def test_rejects_a_display_name_that_could_break_out_of_generated_code(
         self,
     ) -> None:
-        # --display and --list-name were interpolated UNESCAPED into generated
-        # JS string literals, JSDoc comments and Markdown; only non-blank was
-        # checked. A value carrying a quote, a comment terminator or a newline
-        # could close the literal it lands in and inject code into a file the
-        # maintainer is about to commit.
+        # Operator values reach generated JS string literals, JSDoc comments and
+        # Markdown. The allow-list must reject characters that could close those
+        # contexts and inject code into a generated file.
         root = self.make_fixture_root()
 
         for flag, value in [

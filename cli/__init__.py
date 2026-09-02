@@ -4,8 +4,8 @@ The framework is import-only (on ``sys.path``, never installed), but it can also
 be *run* as a tool. ``python -m cli`` dispatches to the subcommands the
 framework owns -- ``scaffold`` (generate a feed) and the operator commands
 ``run`` / ``orchestrate`` / ``runs`` / ``status`` / ``log``. This is an entry
-point, not part of the importable public surface (the six facades); the modules
-behind it live in this private ``cli`` package.
+point, not part of the importable public surface (the public facade modules);
+the modules behind it live in this private ``cli`` package.
 """
 
 from __future__ import annotations

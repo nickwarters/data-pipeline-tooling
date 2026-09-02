@@ -1,10 +1,10 @@
 """Small framework protocols shared across the implementation.
 
-These protocols are the dependency boundary between the public task facades:
-``io`` implements readers/writers, ``transform`` implements processors,
-``validate`` implements validators, and ``run`` composes them. Keeping the
-shapes here prevents feature modules from importing sibling implementations
-only to name a type.
+These protocols are the dependency boundary between the public facades: ``io``
+implements readers/writers, ``core`` implements validators, ``transform``
+implements processors, and ``run`` composes them. Keeping the shapes here
+prevents feature modules from importing sibling implementations only to name a
+type.
 """
 
 from __future__ import annotations
