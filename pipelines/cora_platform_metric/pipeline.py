@@ -1,9 +1,10 @@
 """Build the ``cora_platform_metric`` gold tables from the Sync subject.
 
-Eleven Aggregate tables, each reduced from the Sync subject's published current
+Twelve Aggregate tables, each reduced from the Sync subject's published current
 state or its observation history through the Shared Readers in
-``readers.sharepoint_cases``, and written whole (``Refresh()``) into this
-subject's own gold on every run. Each reduction is a function in ``metrics``;
+``readers.sharepoint_cases`` -- the twelfth also from the current Question
+Bank through ``readers.question_banks`` -- and written whole (``Refresh()``)
+into this subject's own gold on every run. Each reduction is a function in ``metrics``;
 this module only wires readers and writers around them, with the eager steps,
 so a run reads top to bottom and can be stepped through in a debugger.
 
@@ -48,6 +49,7 @@ from framework.run import (
     validate,
     write,
 )
+from readers.question_banks import QuestionBankStore
 from readers.sharepoint_cases import (
     AnswerActionsReader,
     AnswersReader,
@@ -78,6 +80,7 @@ GOLD_TABLES = (
     ("conversation_response_time_current", schema.ConversationResponseTime),
     ("conversation_volume_current", schema.ConversationVolume),
     ("conversation_posting_pattern_current", schema.ConversationPostingPattern),
+    ("answer_pass_rate_current", schema.AnswerPassRate),
 )
 
 # One gate per source, on the columns the reductions read from it. Stateless,
@@ -88,6 +91,7 @@ ANSWER_GATE = ColumnValidator(metrics.ANSWER_COLUMNS)
 ACTION_GATE = ColumnValidator(metrics.ANSWER_ACTION_COLUMNS)
 APPEAL_GATE = ColumnValidator(metrics.APPEAL_COLUMNS)
 MESSAGE_GATE = ColumnValidator(metrics.CONVERSATION_COLUMNS)
+QUESTION_BANK_GATE = ColumnValidator(metrics.QUESTION_BANK_COLUMNS)
 
 CALENDAR_PARAM = "calendar"
 
@@ -246,13 +250,35 @@ def to_posting_pattern(
     return write(writer, data, name="posting_pattern:write")
 
 
+def to_answer_pass_rate(
+    answers: Dataset,
+    questions: Dataset,
+    cases: Dataset,
+    as_of: str,
+    writer: Writer,
+) -> Dataset:
+    validate(ANSWER_GATE, answers, name="pass_rate:answers")
+    validate(QUESTION_BANK_GATE, questions, name="pass_rate:questions")
+    data = transform(
+        partial(metrics.answer_pass_rate, as_of=as_of),
+        answers,
+        questions,
+        cases,
+        name="pass_rate:reduce",
+    )
+    validate(SchemaValidator(schema.AnswerPassRate), data, name="pass_rate:validate")
+    return write(writer, data, name="pass_rate:write")
+
+
 def run(context: RunContext) -> Dataset:
-    """Read each Sync source once, then build each table in publication order.
+    """Read each source once, then build each table in publication order.
 
     Sources come through their Shared Readers and targets through this
     pipeline's own medallion -- a pipeline resolves where it *writes*, never
     where someone else's data lives. The current Cases are gated here rather
     than in a step because this function reads the snapshot instant off them.
+    The Question Bank is read as the current heads of every Case Type: the
+    pass-rate table joins on Case Type and question id, never on version.
     """
     base_dir = context.base_dir
     gold = medallion(StoreRegistry(base_dir), schema.SUBJECT).gold
@@ -267,6 +293,7 @@ def run(context: RunContext) -> Dataset:
     actions = read(AnswerActionsReader(base_dir), name="actions:read")
     appeals = read(AppealsReader(base_dir), name="appeals:read")
     messages = read(ConversationMessagesReader(base_dir), name="messages:read")
+    questions = read(QuestionBankStore(base_dir).qb_reader(), name="question_bank:read")
 
     to_stage_dwell(
         observations, as_of, gold.writer("case_stage_dwell_current", Refresh())
@@ -297,11 +324,18 @@ def run(context: RunContext) -> Dataset:
     to_volume(
         messages, cases, as_of, gold.writer("conversation_volume_current", Refresh())
     )
-    return to_posting_pattern(
+    to_posting_pattern(
         messages,
         cases,
         as_of,
         gold.writer("conversation_posting_pattern_current", Refresh()),
+    )
+    return to_answer_pass_rate(
+        answers,
+        questions,
+        cases,
+        as_of,
+        gold.writer("answer_pass_rate_current", Refresh()),
     )
 
 
