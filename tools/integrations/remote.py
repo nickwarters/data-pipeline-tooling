@@ -20,31 +20,6 @@ from tools.integrations.locations import sharepoint_location
 
 
 @runtime_checkable
-class RemoteRunner(Protocol):
-    """The SAS shell/transfer seam: run a script remotely, copy outputs back."""
-
-    def run_script(self, script: str) -> None:
-        """Execute ``script`` on the remote SAS host."""
-        ...
-
-    def fetch(self, copy_glob: str, dest: Path) -> None:
-        """Copy the remote files matching ``copy_glob`` into local ``dest``."""
-        ...
-
-
-class StubbedRemoteRunner:
-    """No-op :class:`RemoteRunner` for already-landed output files."""
-
-    def run_script(self, script: str) -> None:  # pragma: no cover - no-op stub
-        return None
-
-    def fetch(
-        self, copy_glob: str, dest: Path
-    ) -> None:  # pragma: no cover - no-op stub
-        return None
-
-
-@runtime_checkable
 class SharePointFetcher(Protocol):
     """The SharePoint download seam: fetch one list's rows as a Dataset."""
 
