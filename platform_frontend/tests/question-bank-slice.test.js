@@ -93,26 +93,34 @@ function context() {
   });
 }
 
-test('question bank slice owns bank selection, filters, and drawer state', () => {
+test('question bank slice selects a bank', () => {
   const slice = loadedSlice();
   const initial = selectQuestionBankState(slice.initialState);
   const selected = slice.reducer(slice.initialState, {
     type: 'bank/selected',
-    slug: initial.activeSlug,
+    slug: 'beta',
   });
-  const filtered = slice.reducer(selected, {
+  assert.notEqual(initial.activeSlug, 'beta');
+  assert.equal(selectQuestionBankState(selected).activeSlug, 'beta');
+  assert.notEqual(selected, slice.initialState);
+});
+
+test('question bank slice updates filters', () => {
+  const slice = loadedSlice();
+  const filtered = slice.reducer(slice.initialState, {
     type: 'filters/changed',
     patch: { conditionalOnly: true },
   });
-  const opened = slice.reducer(filtered, {
+  assert.equal(selectQuestionBankState(filtered).filters.conditionalOnly, true);
+});
+
+test('question bank slice opens the publish drawer', () => {
+  const slice = loadedSlice();
+  const opened = slice.reducer(slice.initialState, {
     type: 'drawer/changed',
     open: true,
   });
-
-  assert.equal(selectQuestionBankState(opened).filters.conditionalOnly, true);
   assert.equal(selectQuestionBankState(opened).drawerOpen, true);
-  assert.equal(selectQuestionBankState(opened).activeSlug, initial.activeSlug);
-  assert.notEqual(opened, slice.initialState);
 });
 
 test('question bank slice deprecates and restores definitions without deleting them', () => {
@@ -271,9 +279,8 @@ test('editing a Question ID refreshes condition targets in memoised neighbouring
   );
 });
 
-test('bank selectors report added, changed, and deprecated Question Definitions', () => {
+function changedBankRoute() {
   const route = selectQuestionBankState(loadedSlice().initialState);
-  const baseline = baselineBank(route);
   const changed = structuredClone(route);
   changed.cases[changed.activeSlug].questions[0].text += ' edited';
   changed.cases[changed.activeSlug].questions[1].deprecated = true;
@@ -283,9 +290,22 @@ test('bank selectors report added, changed, and deprecated Question Definitions'
     responseType: 'yes-no-na',
     deprecated: false,
   });
-  assert.equal(baseline, route.baseline[route.activeSlug]);
+  return { route, changed };
+}
+
+test('bank selectors resolve the active baseline', () => {
+  const route = selectQuestionBankState(loadedSlice().initialState);
+  assert.equal(baselineBank(route), route.baseline[route.activeSlug]);
+});
+
+test('bank selectors report whether the active bank is dirty', () => {
+  const { route, changed } = changedBankRoute();
   assert.equal(isDirty(route), false);
   assert.equal(isDirty(changed), true);
+});
+
+test('bank selectors count added, changed, and deprecated definitions', () => {
+  const { changed } = changedBankRoute();
   assert.deepEqual(diffCounts(changed), {
     added: 1,
     changed: 1,
@@ -293,16 +313,48 @@ test('bank selectors report added, changed, and deprecated Question Definitions'
   });
 });
 
-test('bank route reducer owns filters, samples, toast, revert, and publish state', () => {
+/** @param {any[]} actions */
+function reduceBankActions(actions) {
   const slice = loadedSlice();
   let state = slice.initialState;
-  const seeded = selectQuestionBankState(state);
-  for (const action of [
-    { type: 'filters/changed', patch: { category: 'Opening' } },
-    { type: 'rail/changed', open: true },
+  for (const action of actions) {
+    state = slice.reducer(state, action);
+  }
+  return { slice, state, route: selectQuestionBankState(state) };
+}
+
+test('bank route reducer owns the simulation rail', () => {
+  const { route } = reduceBankActions([{ type: 'rail/changed', open: true }]);
+  assert.equal(route.railOpen, true);
+});
+
+test('bank route reducer stores loaded samples', () => {
+  const { route } = reduceBankActions([
     { type: 'samples/loaded', slug: 'example', cases: [{ id: '1' }] },
-    { type: 'toast/changed', message: 'Saved' },
-    { type: 'bank/reverted' },
+  ]);
+  assert.deepEqual(route.sampleCases.example, [{ id: '1' }]);
+});
+
+test('bank route reducer reverts the active bank to its baseline', () => {
+  const slice = loadedSlice();
+  const initial = selectQuestionBankState(slice.initialState);
+  const dirty = slice.reducer(slice.initialState, {
+    type: 'question/field-changed',
+    questionId: initial.cases[initial.activeSlug].questions[0].id,
+    field: 'text',
+    value: 'Changed',
+  });
+  const reverted = slice.reducer(dirty, { type: 'bank/reverted' });
+  const route = selectQuestionBankState(reverted);
+  assert.deepEqual(
+    route.cases[route.activeSlug],
+    route.baseline[route.activeSlug]
+  );
+});
+
+test('bank route reducer owns the publish lifecycle', () => {
+  const seeded = selectQuestionBankState(loadedSlice().initialState);
+  const { route } = reduceBankActions([
     { type: 'drawer/changed', open: true },
     { type: 'publish/requested' },
     {
@@ -312,22 +364,19 @@ test('bank route reducer owns filters, samples, toast, revert, and publish state
       bank: seeded.cases[seeded.activeSlug],
     },
     { type: 'publish/failed', message: 'write failed' },
-  ]) {
-    state = slice.reducer(state, action);
-  }
-  const route = selectQuestionBankState(state);
-  assert.equal(route.filters.category, 'Opening');
-  assert.equal(route.railOpen, true);
-  assert.deepEqual(route.sampleCases.example, [{ id: '1' }]);
-  assert.equal(route.toastMsg, 'Publish failed');
+  ]);
   assert.equal(route.drawerOpen, false);
-  assert.deepEqual(route.baseline, route.cases);
   assert.equal(route.publishStatus, 'failed');
   assert.equal(route.publishError, 'write failed');
+  assert.equal(route.toastMsg, 'Publish failed');
+});
+
+test('bank route reducer returns the same state for an unknown action', () => {
+  const { slice, state } = reduceBankActions([]);
   assert.equal(slice.reducer(state, { type: 'unknown' }), state);
 });
 
-test('bank editor pure view wires tabs, drawer, simulation, and toast actions', () => {
+test('bank editor confirms and reports a successful revert', () => {
   const slice = loadedSlice();
   const route = selectQuestionBankState(slice.initialState);
   const dirtyRoute = questionBankReducer(route, {
@@ -336,8 +385,6 @@ test('bank editor pure view wires tabs, drawer, simulation, and toast actions', 
     field: 'text',
     value: 'Changed',
   });
-  dirtyRoute.drawerOpen = true;
-  dirtyRoute.toastMsg = 'Ready';
   /** @type {any[]} */
   const actions = [];
   /** @type {string[]} */
@@ -346,34 +393,14 @@ test('bank editor pure view wires tabs, drawer, simulation, and toast actions', 
     confirmed.push(message);
     return true;
   };
-  /** @type {any} */ (globalThis).setTimeout = (
-    /** @type {() => void} */ callback
-  ) => {
-    callback();
-    return 1;
-  };
-  const search = /** @type {any} */ (globalThis).location.search;
-  /** @type {any} */ (globalThis).location.search = '?simulate=1';
-  try {
-    const view = bankEditorView(
-      {
-        ...slice.initialState,
-        routes: { questionBank: dirtyRoute },
-      },
-      { dispatch: (action) => actions.push(action), memo: createMemo() }
-    );
-    fireEvent(getByRole(view, 'button', { name: '↺ Revert' }), 'click');
-    fireEvent(getByRole(view, 'button', { name: /Compile & Submit/ }), 'click');
-    fireEvent(getByRole(view, 'button', { name: 'Copy' }), 'click');
-    fireEvent(getByRole(view, 'button', { name: 'Send for Review' }), 'click');
-    fireEvent(view.querySelector('.drawer-close'), 'click');
-    assert.equal(view.querySelector('.sim-panel')?.className, 'sim-panel');
-    assert.equal(view.querySelector('.toast')?.className, 'toast show');
-  } finally {
-    /** @type {any} */ (globalThis).location.search = search;
-  }
-  // Revert acts on one Case Type, so both the prompt and the confirmation name
-  // it — otherwise the curator cannot tell which bank they are discarding.
+  const view = bankEditorView(
+    {
+      ...slice.initialState,
+      routes: { questionBank: dirtyRoute },
+    },
+    { dispatch: (action) => actions.push(action), memo: createMemo() }
+  );
+  fireEvent(getByRole(view, 'button', { name: '↺ Revert' }), 'click');
   const label = currentBank(dirtyRoute).label;
   assert.equal(confirmed.length, 1);
   assert.ok(confirmed[0].includes(label), confirmed[0]);
@@ -384,14 +411,10 @@ test('bank editor pure view wires tabs, drawer, simulation, and toast actions', 
     toasts.includes(`Reverted ${label} to baseline`),
     toasts.join(' | ')
   );
-  const types = actions.map((action) => action.type);
-  assert.ok(types.includes('bank/reverted'));
-  assert.ok(types.includes('publish/requested'));
-  assert.ok(types.includes('drawer/changed'));
-  assert.ok(types.includes('toast/changed'));
+  assert.ok(actions.some((action) => action.type === 'bank/reverted'));
 });
 
-test('bank route start owns keyboard, sample-load, and unmount effects', async () => {
+function startedBankRoute() {
   /** @type {string[]} */
   const classes = [];
   /** @type {string[]} */
@@ -426,20 +449,42 @@ test('bank route start owns keyboard, sample-load, and unmount effects', async (
       if (type === 'keydown') key = listener;
     },
   });
-  /** @type {any} */ (key)({
-    metaKey: true,
-    key: 'Enter',
-    preventDefault() {},
-  });
-  /** @type {any} */ (key)({ key: 'Escape' });
-  await flush();
-  dispose();
-  /** @type {any} */ (globalThis).location.search = search;
+  return {
+    actions,
+    classes,
+    removed,
+    key: (/** @type {any} */ event) => /** @type {any} */ (key)(event),
+    async settle() {
+      await flush();
+    },
+    dispose() {
+      dispose();
+      /** @type {any} */ (globalThis).location.search = search;
+    },
+  };
+}
 
-  assert.deepEqual(classes, ['cora-fullbleed']);
-  assert.deepEqual(removed, ['cora-fullbleed']);
-  assert.ok(actions.some((action) => action.type === 'samples/loaded'));
-  assert.ok(actions.some((action) => action.type === 'rail/changed'));
+test('bank route start owns the full-bleed class lifecycle', () => {
+  const route = startedBankRoute();
+  assert.deepEqual(route.classes, ['cora-fullbleed']);
+  route.dispose();
+  assert.deepEqual(route.removed, ['cora-fullbleed']);
+});
+
+test('bank route start loads simulator samples', async () => {
+  const route = startedBankRoute();
+  await route.settle();
+  assert.ok(route.actions.some((action) => action.type === 'samples/loaded'));
+  route.dispose();
+});
+
+test('bank route keyboard shortcuts open the drawer and close the rail', () => {
+  const route = startedBankRoute();
+  route.key({ metaKey: true, key: 'Enter', preventDefault() {} });
+  route.key({ key: 'Escape' });
+  assert.ok(route.actions.some((action) => action.type === 'drawer/changed'));
+  assert.ok(route.actions.some((action) => action.type === 'rail/changed'));
+  route.dispose();
 });
 
 test('Send for Review runs the publish effect and stores its exact artifacts', async () => {

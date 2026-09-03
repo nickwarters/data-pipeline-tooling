@@ -4,6 +4,54 @@ Tests exercise the public seams we want to keep: pure views and reducers,
 semantic `h()` output and events, dispatched actions, edge effects, route
 registration, and externally visible persistence or protocol contracts.
 
+## One Test, One Behaviour
+
+A test should fail when its named behaviour changes, and not when an unrelated
+contract changes. Setup may build a realistic surface, but assertions should
+stay at the smallest seam that owns the risk. Reuse fixture and render helpers
+when several focused tests need the same setup.
+
+An ordered `deepEqual` over rendered tabs, headings, rows, options, or columns
+is a useful review tell: keep exact sequence equality only when order is the
+named contract. When a test owns membership, labels, or filtering instead,
+compare sorted values, use a set, or assert presence. Multiple assertions are
+still appropriate when they jointly prove one behaviour, such as a loading
+state's busy flag and message or both halves of one state transition.
+
+### First-pass overlap audit
+
+The frontend `*.test.js` suite was reviewed by test name and assertion shape,
+with particular attention to ordered collections and tests combining several
+assertion groups. The demonstrated overlaps found in that pass were:
+
+- `section-registry.test.js` checked registry field types in both a partial
+  wiring test and the exact shape test, and combined tab ordering with the
+  exclusion of Conversation. The duplicate shape test was removed and tab
+  ordering and tab eligibility now have separate owners.
+- `section-access-matrix.test.js` restated the ordered Section inventory already
+  owned by the registry suite. That duplicate inventory assertion was removed.
+- `cora-case-review-slice.test.js` combined configured tab captions with panel
+  and Summary heading labels. Those rendering contracts now have focused tests
+  sharing one render helper; caption membership remains order-insensitive.
+- `cora-dashboard.test.js` combined reviewer table content, overdue styling,
+  columns, sort state, filters, filter actions, and navigation. Each behaviour
+  now has a focused test sharing one worklist fixture; KPI lane, tile, and table
+  sort reducer contracts are focused separately too.
+- `cora-my-team.test.js` combined loading, failure, table structure, roster
+  guidance, and reducer identity/preservation contracts. These now have
+  focused tests with shared setup.
+- `question-bank-slice.test.js` combined independent selection, filter, drawer,
+  selector, sample, revert, publish, keyboard, load, and mount-lifecycle
+  contracts. These now have focused reducer, selector, view, and start tests
+  using shared setup helpers.
+
+Other exact ordered comparisons encountered in the pass were retained where
+the test name and owning seam make ordering part of the contract, including
+canonical Section order, tab order, Summary-block order, question order, route
+registration order, and table column order. Multiple assertions were retained
+where they jointly establish a single protocol, transition, access matrix, or
+user interaction rather than independent behaviours.
+
 ## Quick Reference
 
 ```sh

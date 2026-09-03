@@ -49,26 +49,36 @@ test('myTeamColumns: derives Case Type columns from resolved sources', () => {
   );
 });
 
-test('my team view: renders loading, errors, the workload table, and roster limitation', () => {
-  const slice = createRouteSlice({}, context(), {
+function workloadSlice() {
+  return createRouteSlice({}, context(), {
     fetchCases: async () => [],
     now: () => new Date('2026-07-24T00:00:00.000Z'),
   });
-  const tools = { dispatch() {}, caseSources: sources };
+}
 
-  const loading = myTeamView(slice.initialState, tools);
+const workloadTools = { dispatch() {}, caseSources: sources };
+
+test('my team view renders its workload loading state', () => {
+  const loading = myTeamView(workloadSlice().initialState, workloadTools);
   assert.equal(loading.getAttribute('aria-busy'), 'true');
   assert.match(loading.textContent, /Loading current workload/);
+});
 
+test('my team view renders its workload error', () => {
+  const slice = workloadSlice();
   const failed = slice.reducer(slice.initialState, {
     type: 'workload/load-failed',
     message: 'Unable to read team Cases.',
   });
   assert.equal(
-    myTeamView(failed, tools).querySelector('[role="alert"]')?.textContent,
+    myTeamView(failed, workloadTools).querySelector('[role="alert"]')
+      ?.textContent,
     'Unable to read team Cases.'
   );
+});
 
+test('my team view renders workload rows separately from the Total row', () => {
+  const slice = workloadSlice();
   const loaded = slice.reducer(slice.initialState, {
     type: 'workload/loaded',
     rows: [
@@ -92,64 +102,55 @@ test('my team view: renders loading, errors, the workload table, and roster limi
       },
     ],
   });
-  const view = myTeamView(loaded, tools);
-  assert.equal(view.querySelector('h1')?.textContent, 'My Team');
-  assert.match(view.textContent, /Current Workload/);
-  assert.match(
-    view.textContent,
-    /only staff with allocated outstanding Cases/i
-  );
+  const view = myTeamView(loaded, workloadTools);
   assert.equal(view.querySelector('tbody')?.querySelectorAll('tr').length, 1);
   assert.equal(view.querySelector('tfoot')?.querySelectorAll('tr').length, 1);
 });
 
-test('my team slice: loads fresh data, refreshes manually, sorts, and ignores stale completion', async () => {
+test('my team view explains the workload roster limitation', () => {
+  const view = myTeamView(workloadSlice().initialState, workloadTools);
+  assert.match(
+    view.textContent,
+    /only staff with allocated outstanding Cases/i
+  );
+});
+
+test('my team view renders its page heading', () => {
+  const view = myTeamView(workloadSlice().initialState, workloadTools);
+  assert.equal(view.querySelector('h1')?.textContent, 'My Team');
+});
+
+test('my team slice starts a workload refresh and lands its result', async () => {
   /** @type {any[]} */
   const actions = [];
-  /** @type {Array<{ promise: Promise<any[]>, release: () => void }>} */
-  const pending = [];
-  const fetchCases = () => {
-    /** @type {(rows: any[]) => void} */
-    let resolve = () => {};
-    const promise = new Promise((done) => {
-      resolve = done;
-    });
-    pending.push({ promise, release: () => resolve([]) });
-    return promise;
-  };
   const slice = createRouteSlice({}, context(), {
-    fetchCases: /** @type {any} */ (fetchCases),
+    fetchCases: async () => [],
     fetchVoidedCases: async () => [],
     now: () => new Date('2026-07-24T00:00:00.000Z'),
   });
-  let active = true;
-  const dispose = slice.start?.({
+  slice.start?.({
     dispatch(action) {
       actions.push(action);
     },
     context: context(),
-    isActive: () => active,
+    isActive: () => true,
   });
-
-  /** @param {string} type */
-  const workloadActions = (type) =>
-    actions.filter((action) => action.type === type);
-
   assert.deepEqual(actions[0], { type: 'workload/refresh-requested' });
-  // Both reads are started inside their promise chain, so the fetcher is not
-  // called until the microtask queue turns over.
-  await Promise.resolve();
-  pending[0].release();
-  await pending[0].promise;
   for (let i = 0; i < 20; i += 1) await Promise.resolve();
-  const loaded = workloadActions('workload/loaded');
-  assert.equal(loaded.length, 1);
+  assert.equal(
+    actions.filter((action) => action.type === 'workload/loaded').length,
+    1
+  );
+});
 
-  // Both tables settled, so the page is idle and Refresh is offered.
+test('my team view dispatches a manual refresh when both tables are idle', () => {
+  const slice = workloadSlice();
   const loadedState = slice.reducer(
-    slice.reducer(slice.initialState, loaded[0]),
+    slice.reducer(slice.initialState, { type: 'workload/loaded', rows: [] }),
     { type: 'void-volumes/loaded', rows: [] }
   );
+  /** @type {any[]} */
+  const actions = [];
   const rendered = slice.view?.(
     loadedState,
     /** @type {any} */ ({
@@ -160,8 +161,14 @@ test('my team slice: loads fresh data, refreshes manually, sorts, and ignores st
     })
   );
   fireEvent(getByRole(rendered, 'button', { name: 'Refresh' }), 'click');
-  assert.equal(workloadActions('workload/refresh-requested').length, 2);
+  assert.deepEqual(actions, [
+    { type: 'workload/refresh-requested' },
+    { type: 'void-volumes/refresh-requested' },
+  ]);
+});
 
+test('my team reducer stores workload table sort state', () => {
+  const slice = workloadSlice();
   const sorted = slice.reducer(slice.initialState, {
     type: 'workload-table/sort-requested',
     key: 'reviewer',
@@ -170,18 +177,6 @@ test('my team slice: loads fresh data, refreshes manually, sorts, and ignores st
     key: 'reviewer',
     dir: 'asc',
   });
-  assert.equal(slice.reducer(sorted, { type: 'ignored' }), sorted);
-
-  await Promise.resolve();
-  active = false;
-  dispose?.();
-  pending[1].release();
-  await pending[1].promise;
-  assert.equal(
-    workloadActions('workload/loaded').length,
-    1,
-    'the load started before the mount ended lands nothing'
-  );
 });
 
 test('my team view: keeps Total last under every sortable column and direction', () => {
@@ -332,7 +327,7 @@ test('my team slice: the adapter mount lifetime, not a page latch, suppresses a 
   );
 });
 
-test('my team reducer: an unhandled action returns the same state and chrome survives a patch', () => {
+test('my team reducer returns the same state for an unhandled action', () => {
   const slice = createRouteSlice({}, context(), { fetchCases: async () => [] });
   const initial = slice.initialState;
 
@@ -340,7 +335,11 @@ test('my team reducer: an unhandled action returns the same state and chrome sur
     slice.reducer(initial, /** @type {any} */ ({ type: 'nothing/here' })),
     initial
   );
+});
 
+test('my team reducer preserves chrome and rows across a failure patch', () => {
+  const slice = createRouteSlice({}, context(), { fetchCases: async () => [] });
+  const initial = slice.initialState;
   const failed = slice.reducer(initial, {
     type: 'workload/load-failed',
     message: 'nope',

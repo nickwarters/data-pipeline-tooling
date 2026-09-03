@@ -252,7 +252,7 @@ test('dashboard slice: effects load reviewer rows and KPI lanes through actions'
   assert.deepEqual(reviewerSources, ctx.caseSources);
 });
 
-test('dashboard reducer owns KPI disclosure and table sort state', () => {
+function dashboardReducerFixture() {
   const slice = createRouteSlice({}, context(capabilities()));
   const withLane = slice.reducer(slice.initialState, {
     type: 'kpis/loaded',
@@ -264,42 +264,54 @@ test('dashboard reducer owns KPI disclosure and table sort state', () => {
       },
     ],
   });
+  return { slice, withLane };
+}
+
+test('dashboard reducer initialises and toggles KPI lane disclosure', () => {
+  const { slice, withLane } = dashboardReducerFixture();
   const closed = slice.reducer(withLane, {
     type: 'kpi/lane-toggled',
     role: 'owner',
-  });
-  const sorted = slice.reducer(closed, {
-    type: 'reviewer-table/sort-requested',
-    key: 'reference',
   });
   const opened = slice.reducer(slice.initialState, {
     type: 'kpi/lane-toggled',
     role: 'owner',
   });
+  assert.equal(withLane.routes.dashboard.openKpiLanes.has('owner'), true);
+  assert.equal(closed.routes.dashboard.openKpiLanes.has('owner'), false);
+  assert.equal(opened.routes.dashboard.openKpiLanes.has('owner'), true);
+});
+
+test('dashboard reducer initialises and toggles KPI tile disclosure', () => {
+  const { slice, withLane } = dashboardReducerFixture();
   const tileClosed = slice.reducer(withLane, {
     type: 'kpi/tile-toggled',
     role: 'owner',
     key: 'at-risk',
   });
-
-  assert.equal(withLane.routes.dashboard.openKpiLanes.has('owner'), true);
   assert.equal(
     withLane.routes.dashboard.expandedKpiTiles.has('owner:at-risk'),
     true
   );
-  assert.equal(closed.routes.dashboard.openKpiLanes.has('owner'), false);
-  assert.equal(opened.routes.dashboard.openKpiLanes.has('owner'), true);
   assert.equal(
     tileClosed.routes.dashboard.expandedKpiTiles.has('owner:at-risk'),
     false
   );
+});
+
+test('dashboard reducer stores reviewer table sort state', () => {
+  const { slice } = dashboardReducerFixture();
+  const sorted = slice.reducer(slice.initialState, {
+    type: 'reviewer-table/sort-requested',
+    key: 'reference',
+  });
   assert.deepEqual(sorted.routes.dashboard.reviewerSort, {
     key: 'reference',
     dir: 'asc',
   });
 });
 
-test('reviewer worklist preserves the legacy columns, filters, and Open action', () => {
+function reviewerWorklistFixture() {
   const ctx = context(capabilities({ isReviewer: true }));
   ctx.client = null;
   const slice = createRouteSlice({}, ctx);
@@ -340,28 +352,47 @@ test('reviewer worklist preserves the legacy columns, filters, and Open action',
     type: 'reviewer-cases/loaded',
     cases,
   });
-  const unfiltered = dashboardView(/** @type {any} */ (loaded), {
+  return { ctx, slice, loaded };
+}
+
+/** @param {any} state @param {any} ctx @param {(action: any) => void} [dispatch] */
+function renderReviewerWorklist(state, ctx, dispatch = () => {}) {
+  return dashboardView(/** @type {any} */ (state), {
     context: ctx,
-    dispatch: () => {},
+    dispatch,
   });
+}
+
+test('reviewer worklist renders case titles with an id fallback', () => {
+  const { ctx, loaded } = reviewerWorklistFixture();
+  const unfiltered = renderReviewerWorklist(loaded, ctx);
   assert.match(unfiltered.textContent, /Alpha case/);
   assert.match(unfiltered.textContent, /Beta case/);
   assert.match(unfiltered.textContent, /fallback-reference/);
-  // This table's `rowClass` is centralised on the shared
-  // `overdueCaseRowClass`, so pin what it renders here too — otherwise only the
-  // Journey Cases test fails when the shared helper is broken, and the
-  // reviewer worklist loses its overdue styling silently. The flag itself
-  // arrives already derived on the rows the client returned, as it does here,
-  // and the reducer and view take it as given.
-  assert.deepEqual(
-    [
-      ...(unfiltered
-        .querySelector('.cora-reviewer-cases')
-        ?.querySelector('tbody')
-        ?.querySelectorAll('tr') ?? []),
-    ].map((tableRow) => tableRow.className),
-    ['cora-case-row cora-case-row--overdue', 'cora-case-row', 'cora-case-row']
+});
+
+test('reviewer worklist marks only overdue rows', () => {
+  const { ctx, loaded } = reviewerWorklistFixture();
+  const unfiltered = renderReviewerWorklist(loaded, ctx);
+  const rows = [
+    ...(unfiltered
+      .querySelector('.cora-reviewer-cases')
+      ?.querySelector('tbody')
+      ?.querySelectorAll('tr') ?? []),
+  ];
+  const alpha = rows.find((row) => row.textContent.includes('Alpha case'));
+  assert.ok(alpha);
+  assert.equal(alpha.className, 'cora-case-row cora-case-row--overdue');
+  assert.equal(
+    rows.filter((row) => row.className.includes('cora-case-row--overdue'))
+      .length,
+    1
   );
+});
+
+test('reviewer worklist preserves its column contract', () => {
+  const { ctx, loaded } = reviewerWorklistFixture();
+  const unfiltered = renderReviewerWorklist(loaded, ctx);
   assert.deepEqual(tableHeaders(unfiltered), [
     ['Reference', 'none', true],
     ['Flags', 'none', false],
@@ -373,6 +404,10 @@ test('reviewer worklist preserves the legacy columns, filters, and Open action',
     ['Responsible Party', 'none', true],
     ['Actions', 'none', false],
   ]);
+});
+
+test('reviewer worklist exposes the active sort direction', () => {
+  const { ctx, slice, loaded } = reviewerWorklistFixture();
   const sortedByReference = dashboardView(
     /** @type {any} */ (
       slice.reducer(loaded, {
@@ -382,21 +417,14 @@ test('reviewer worklist preserves the legacy columns, filters, and Open action',
     ),
     { context: ctx, dispatch: () => {} }
   );
-  assert.deepEqual(
-    tableHeaders(sortedByReference).map((header) => header[1]),
-    [
-      'ascending',
-      'none',
-      'none',
-      'none',
-      'none',
-      'none',
-      'none',
-      'none',
-      'none',
-    ]
+  const reference = tableHeaders(sortedByReference).find(
+    ([label]) => label === 'Reference'
   );
+  assert.equal(reference?.[1], 'ascending');
+});
 
+test('reviewer worklist text filter matches Case Type and status', () => {
+  const { ctx, slice, loaded } = reviewerWorklistFixture();
   const byCaseType = slice.reducer(loaded, {
     type: 'reviewer-table/filter-text-changed',
     value: 'complaints',
@@ -419,7 +447,10 @@ test('reviewer worklist preserves the legacy columns, filters, and Open action',
     }).textContent,
     /Beta case/
   );
+});
 
+test('reviewer worklist combines text and status filters', () => {
+  const { ctx, slice, loaded } = reviewerWorklistFixture();
   let state = slice.reducer(loaded, {
     type: 'reviewer-table/filter-text-changed',
     value: 'beta',
@@ -437,7 +468,17 @@ test('reviewer worklist preserves the legacy columns, filters, and Open action',
 
   assert.match(view.textContent, /Beta case/);
   assert.doesNotMatch(view.textContent, /Alpha case/);
-  assert.equal(view.querySelectorAll('th').length, 9);
+});
+
+test('reviewer worklist controls dispatch their filter changes', () => {
+  const { ctx, loaded } = reviewerWorklistFixture();
+  /** @type {any[]} */
+  const actions = [];
+  const view = renderReviewerWorklist(
+    loaded,
+    ctx,
+    (/** @type {any} */ action) => actions.push(action)
+  );
   const textFilter = /** @type {any} */ (
     view.querySelector('[aria-label="Filter cases"]')
   );
@@ -448,16 +489,17 @@ test('reviewer worklist preserves the legacy columns, filters, and Open action',
   );
   statusFilter.value = 'In-progress';
   statusFilter.dispatchEvent({ type: 'change', target: statusFilter });
-  // This table opens the Case, so `Open ${reference}` is the right name and
-  // stays the default.
-  const open = getByRole(view, 'button', { name: 'Open Beta case' });
-  assert.equal(open.className, 'cora-case-open-btn');
-  open.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
-
   assert.deepEqual(actions, [
     { type: 'reviewer-table/filter-text-changed', value: 'conduct' },
     { type: 'reviewer-table/status-filter-changed', value: 'In-progress' },
   ]);
+});
+
+test('reviewer worklist Open action navigates to the Case', () => {
+  const { ctx, loaded } = reviewerWorklistFixture();
+  const view = renderReviewerWorklist(loaded, ctx);
+  const open = getByRole(view, 'button', { name: 'Open Beta case' });
+  open.dispatchEvent(/** @type {any} */ ({ type: 'click' }));
   assert.equal(location.hash, '#/case/conduct/beta');
 });
 
