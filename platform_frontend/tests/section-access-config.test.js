@@ -8,9 +8,30 @@ import {
   openAppeal,
   evaluateAccess,
   showInSummary,
+  summarySectionsFor,
   SECTIONS,
   SUMMARY_SECTIONS,
 } from './helpers/section-access.js';
+
+/** @typedef {import('../src/services/section-access.js').Section} Section */
+/** @typedef {import('../src/services/section-access.js').Role} Role */
+/** @typedef {import('../src/services/section-access.js').Mode} Mode */
+
+/**
+ * The viewer's resolved mode per Section, as `CaseMachine` hands it to the
+ * loader.
+ * @param {Role[]} roles
+ * @param {import('../src/sharepoint-client.js').CaseRow} caseRow
+ * @param {import('../src/sharepoint-client.js').CaseTypeConfig} cfg
+ * @returns {Record<Section, Mode>}
+ */
+function accessFor(roles, caseRow, cfg) {
+  return /** @type {Record<Section, Mode>} */ (
+    Object.fromEntries(
+      SECTIONS.map((s) => [s, evaluateAccess(s, roles, caseRow, cfg)])
+    )
+  );
+}
 
 // Capability: case-type configuration and summary visibility.
 
@@ -354,4 +375,99 @@ test('showInSummary: a role list resolves false when no roles are supplied', () 
     sections: { issues: { showInSummary: ['controls'] } },
   });
   assert.equal(showInSummary('issues', cfg), false);
+});
+
+// --- summarySectionsFor: composing the Summary from access + config ---
+
+test('summarySectionsFor: Case Details is composed for the Responsible Party once they read the Summary', () => {
+  // The Details tab is hidden from the Responsible Party; the Case Details
+  // fields reach them as the first block of the Summary instead.
+  const cfg = makeConfig();
+  const c = makeCase({ status: 'Actions In Progress' });
+  const access = accessFor(['responsibleParty'], c, cfg);
+  assert.equal(access.details, 'hidden');
+  assert.equal(access.summary, 'read-only');
+  assert.deepEqual(summarySectionsFor(access, cfg, ['responsibleParty']), [
+    'details',
+  ]);
+});
+
+test('summarySectionsFor: the Responsible Party Manager reads Case Details through a Completed Summary', () => {
+  const cfg = makeConfig();
+  const c = makeCase({ status: 'Completed' });
+  const access = accessFor(['responsiblePartyManager'], c, cfg);
+  assert.equal(access.details, 'hidden');
+  assert.deepEqual(
+    summarySectionsFor(access, cfg, ['responsiblePartyManager']),
+    ['details']
+  );
+});
+
+test('summarySectionsFor: no Summary, no Case Details block', () => {
+  // While In-progress the Responsible Party has no Summary, and a block folded
+  // into a Summary that is not there is composed for nobody.
+  const cfg = makeConfig();
+  const c = makeCase({ status: 'In-progress' });
+  const access = accessFor(['responsibleParty'], c, cfg);
+  assert.equal(access.summary, 'hidden');
+  assert.deepEqual(summarySectionsFor(access, cfg, ['responsibleParty']), []);
+});
+
+test('summarySectionsFor: membership still governs a Section read through the Summary', () => {
+  // A Case Type that leaves `details` out of `sections` has no Case Details
+  // anywhere — the fold puts an existing block on the Summary, it does not
+  // conjure one.
+  const cfg = makeConfig({ sections: { summary: {}, conversation: {} } });
+  const c = makeCase({ status: 'Actions In Progress' });
+  const access = accessFor(['responsibleParty'], c, cfg);
+  assert.deepEqual(summarySectionsFor(access, cfg, ['responsibleParty']), []);
+});
+
+test('summarySectionsFor: a Case Type can still switch Case Details off the Summary', () => {
+  const cfg = makeConfig({
+    sections: { details: { showInSummary: false }, summary: {} },
+  });
+  const c = makeCase({ status: 'Actions In Progress' });
+  const access = accessFor(['responsibleParty'], c, cfg);
+  assert.deepEqual(summarySectionsFor(access, cfg, ['responsibleParty']), []);
+});
+
+test('summarySectionsFor: every other block still needs its own tab visible', () => {
+  // Naming the Responsible Party on the Questions list cannot show them a
+  // Section the matrix hides — the role list narrows and never widens.
+  const cfg = makeConfig({
+    sections: {
+      details: {},
+      questions: { showInSummary: ['responsibleParty'] },
+      notes: { showInSummary: true },
+      summary: {},
+    },
+  });
+  const c = makeCase({ status: 'Actions In Progress' });
+  const access = accessFor(['responsibleParty'], c, cfg);
+  assert.equal(access.questions, 'hidden');
+  assert.equal(access.notes, 'hidden');
+  assert.deepEqual(summarySectionsFor(access, cfg, ['responsibleParty']), [
+    'details',
+  ]);
+});
+
+test('summarySectionsFor: a reviewer-side viewer is composed the blocks they can see, in render order', () => {
+  const cfg = makeConfig({
+    sections: {
+      details: {},
+      questions: {},
+      issues: {},
+      notes: { showInSummary: true },
+      summary: {},
+    },
+  });
+  const c = makeCase({ status: 'In-progress' });
+  const access = accessFor(['assignedReviewer'], c, cfg);
+  assert.deepEqual(summarySectionsFor(access, cfg, ['assignedReviewer']), [
+    'details',
+    'questions',
+    'issues',
+    'notes',
+  ]);
 });

@@ -19,9 +19,8 @@ import {
 } from '../evaluators/general-questions.js';
 import {
   reachedReportable,
-  showInSummary,
+  summarySectionsFor,
   SECTIONS,
-  SUMMARY_SECTIONS,
 } from '../services/section-access.js';
 import { CaseMachine } from './case-machine.js';
 import { resolveSectionLabels } from './section-labels.js';
@@ -332,11 +331,7 @@ export class CaseLoader {
       return;
     }
 
-    // Access first: that AND is what keeps a Case Type's role list
-    // narrowing-only.
-    this.summarySections = SUMMARY_SECTIONS.filter(
-      (s) => this.access[s] !== 'hidden' && showInSummary(s, config, roles)
-    );
+    this.summarySections = summarySectionsFor(this.access, config, roles);
 
     this.loaded = true;
 

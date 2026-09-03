@@ -591,7 +591,8 @@ test('CaseLoader.load(): a Summary role list narrows the blocks, and access stil
    */
   const loadAs = async (userId, capabilities) => {
     const loader = makeLoader({
-      row: { caseType: slug },
+      // Reportable, so the Responsible Party has a Summary to be composed.
+      row: { caseType: slug, status: 'Actions In Progress' },
       currentUserId: userId,
       capabilities,
     });
@@ -605,10 +606,13 @@ test('CaseLoader.load(): a Summary role list narrows the blocks, and access stil
   assert.deepEqual(controls.summarySections, ['details', 'issues']);
 
   // The Responsible Party is named on the Questions list, but the matrix
-  // hides Questions from them — the list narrows and never widens.
+  // hides Questions from them — the list narrows and never widens. Case
+  // Details is the one block they get without its tab: it is folded into the
+  // Summary they read.
   const responsibleParty = await loadAs('u2', caps());
   assert.equal(responsibleParty.accessDenied, false);
-  assert.deepEqual(responsibleParty.summarySections, []);
+  assert.equal(responsibleParty.access.details, 'hidden');
+  assert.deepEqual(responsibleParty.summarySections, ['details']);
 });
 
 test('CaseLoader.load(): a pre-rename versioned export maps its category to questionGroup', async () => {
