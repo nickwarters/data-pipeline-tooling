@@ -344,7 +344,12 @@ What each field does, and how to choose its value:
   Any one of the viewer's roles matching is enough. The list can only **narrow**:
   the Section's access mode is resolved first, so naming a role never shows it a
   Section it is otherwise denied — this composes the Summary, it does not grant
-  access. The valid names are the `ROLES` list in
+  access. The one Section whose block is gated on the _Summary's_ access rather
+  than its own tab's is `details`: the Responsible Party side has no Details
+  tab and reads the Case Details as the first Summary block instead, so the
+  block appears for them whenever the Summary does (`summarySectionsFor` in
+  `src/services/section-access.js`). Membership and `showInSummary` still
+  apply to it as to any other block. The valid names are the `ROLES` list in
   `src/services/section-access.js`; `npm run verify` rejects anything else.
   Reach for it only when a block genuinely reads differently for different
   audiences — the boolean form stays the default.

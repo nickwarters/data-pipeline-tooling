@@ -260,6 +260,48 @@ export function showInSummary(section, caseTypeConfig, roles = []) {
 }
 
 /**
+ * The Sections a viewer reads *through* the Summary rather than on their own
+ * tab, so their Summary block follows the Summary's access mode instead of the
+ * tab's.
+ *
+ * Case Details is the one. Its `MATRIX` row hides the tab from the Responsible
+ * Party and their Manager, because a Details tab beside the Summary would be a
+ * second tab saying the same thing; the fields that frame the Case reach them
+ * as the first block of the Summary instead. Gating that block on the tab's
+ * mode composed a Summary for exactly those viewers with the Case Details
+ * missing — the opposite of what hiding the tab was for.
+ *
+ * @type {readonly Section[]}
+ */
+const READ_THROUGH_SUMMARY = Object.freeze(['details']);
+
+/**
+ * The Summary blocks composed for a viewer, in render order: each Summary
+ * Section the viewer may see whose block the Case Type composes for their
+ * roles.
+ *
+ * Access first: that AND is what keeps a Case Type's `showInSummary` role list
+ * narrowing-only, so naming a role never shows it a Section the matrix hides.
+ * The mode consulted is the Section's own, except for a Section in
+ * `READ_THROUGH_SUMMARY`, whose block appears whenever the Summary itself does.
+ * Membership still governs: a Section absent from the Case Type's `sections`
+ * resolves `false` in `showInSummary` and is composed for nobody.
+ *
+ * @param {Record<Section, Mode>} access The viewer's resolved mode per Section.
+ * @param {CaseTypeConfig} caseTypeConfig
+ * @param {Role[]} roles The viewer's resolved roles for this Case.
+ * @returns {Section[]}
+ */
+export function summarySectionsFor(access, caseTypeConfig, roles) {
+  return SUMMARY_SECTIONS.filter((section) => {
+    const gate = READ_THROUGH_SUMMARY.includes(section) ? 'summary' : section;
+    return (
+      access[gate] !== 'hidden' && showInSummary(section, caseTypeConfig, roles)
+    );
+  });
+}
+
+/**
  * Default access matrix. Function-valued cells receive the CaseRow and
  * CaseTypeConfig and return a Mode. Keyed by the registry's Section ids; a
  * contract test asserts the two key sets never drift. The RBAC policy itself
@@ -268,8 +310,9 @@ export function showInSummary(section, caseTypeConfig, roles = []) {
  */
 export const MATRIX = {
   // Case Details. Observed read-only by the reviewing/owning/Controls roles;
-  // for the Responsible Party and their Manager these fields are folded into
-  // the Summary they read.
+  // for the Responsible Party and their Manager the tab is hidden and the same
+  // fields are folded into the Summary they read — `summarySectionsFor` gates
+  // that block on the Summary's mode, not on this row.
   details: {
     assignedReviewer: 'read-only',
     otherReviewer: 'read-only',

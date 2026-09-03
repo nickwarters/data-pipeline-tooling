@@ -94,6 +94,16 @@ not the extension seam for Palimpsest generic tables.
 > remain the real boundary. The boolean form and the registry defaults are
 > unchanged, so no existing Case Type's Summary moves.
 
+> **Update (Case Details reaches the Responsible Party's Summary):** the
+> access-first AND above consulted each Section's _own_ mode, which for Case
+> Details is `hidden` on the Responsible Party side — so the one block those
+> viewers were meant to read through the Summary (the Details tab is hidden from
+> them precisely because the Summary carries it) was never composed for them.
+> The rule now lives in `summarySectionsFor` in `src/services/section-access.js`
+> and consults the Summary's mode for `details`, the Section's own for every
+> other block. Still narrowing-only: a role list cannot widen, `showInSummary`
+> and `sections` membership apply unchanged, and no reviewer-side Summary moves.
+
 ## Demonstration
 
 Complaints declares the complete current `dashboardPanels` set and retains its
