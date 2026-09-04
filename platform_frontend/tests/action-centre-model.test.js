@@ -49,6 +49,29 @@ function reason(id) {
   return r;
 }
 
+// The waiting age counts calendar dates in the viewer's own zone, so this
+// file pins the zone once, exactly as the pipeline suite pins its calendar to
+// UTC: the midnight-UTC fixtures below then mean the dates they read as. A
+// test whose subject is the zone sets its own inside `inTimeZone`.
+process.env.TZ = 'UTC';
+
+/**
+ * @template T
+ * @param {string} zone
+ * @param {() => T} run
+ * @returns {T}
+ */
+function inTimeZone(zone, run) {
+  const previous = process.env.TZ;
+  process.env.TZ = zone;
+  try {
+    return run();
+  } finally {
+    if (previous === undefined) delete process.env.TZ;
+    else process.env.TZ = previous;
+  }
+}
+
 const NOW = new Date('2026-07-04T00:00:00Z');
 
 test('ACTION_CENTRE_REASONS: fixed priority order, labels, roles, tones', () => {
@@ -411,6 +434,76 @@ test('waitingInfo: an explicit SLA widens and narrows the breach', () => {
   assert.equal(waitingInfo(row, appeals, NOW, 2).breached, true);
   // The age and the wording are unaffected — only the judgement moves.
   assert.equal(waitingInfo(row, appeals, NOW, 30).label, 'raised 5 days ago');
+});
+
+test('waitingInfo: the age counts calendar days, not elapsed 24-hour periods', () => {
+  const inProgress = reason('inProgress');
+  // Allocated mid-afternoon; the next morning is one day old even though
+  // fewer than twenty-four hours have passed.
+  const row = caseRow({ assignedAt: '2026-07-03T15:00:00Z' });
+  const nextMorning = new Date('2026-07-04T09:00:00Z');
+  assert.equal(waitingInfo(row, inProgress, nextMorning).days, 1);
+  assert.equal(
+    waitingInfo(row, inProgress, nextMorning).label,
+    '1 day in progress'
+  );
+  // Later the same day it is still one day old, not two.
+  assert.equal(
+    waitingInfo(row, inProgress, new Date('2026-07-04T23:59:59Z')).days,
+    1
+  );
+  // And earlier on the day it was allocated it is zero, however many hours.
+  assert.equal(
+    waitingInfo(row, inProgress, new Date('2026-07-03T23:30:00Z')).days,
+    0
+  );
+});
+
+test("waitingInfo: the calendar days are the viewer's own, not Greenwich's", () => {
+  const inProgress = reason('inProgress');
+  // 23:30 UTC on the 3rd is already 00:30 on the 4th in British Summer Time,
+  // so a Case allocated at 22:30 UTC (23:30 BST, the 3rd) is one day old
+  // there and still zero days old at Greenwich.
+  const row = caseRow({ assignedAt: '2026-07-03T22:30:00Z' });
+  const justAfterLocalMidnight = new Date('2026-07-03T23:30:00Z');
+  assert.equal(
+    inTimeZone(
+      'Europe/London',
+      () => waitingInfo(row, inProgress, justAfterLocalMidnight).days
+    ),
+    1
+  );
+  assert.equal(
+    inTimeZone(
+      'UTC',
+      () => waitingInfo(row, inProgress, justAfterLocalMidnight).days
+    ),
+    0
+  );
+});
+
+test("waitingInfo: a remediationDueDate is judged against the viewer's calendar date", () => {
+  const awaitingFrontline = reason('awaitingFrontline');
+  const row = caseRow({
+    status: CASE_STATUS.ACTIONS_IN_PROGRESS,
+    awaitingSince: '2026-07-01T00:00:00Z',
+    remediationDueDate: '2026-07-04',
+  });
+  // Half past midnight on the 5th in London is still the 4th at Greenwich:
+  // the chip reads "1 day over" for a London viewer, "due today" in UTC.
+  const justAfterLocalMidnight = new Date('2026-07-04T23:30:00Z');
+  assert.deepEqual(
+    inTimeZone('Europe/London', () =>
+      waitingInfo(row, awaitingFrontline, justAfterLocalMidnight)
+    ),
+    { days: 4, label: '1 day over', breached: true }
+  );
+  assert.deepEqual(
+    inTimeZone('UTC', () =>
+      waitingInfo(row, awaitingFrontline, justAfterLocalMidnight)
+    ),
+    { days: 3, label: 'due today', breached: false }
+  );
 });
 
 test('waitingInfo: singular day is not pluralised', () => {

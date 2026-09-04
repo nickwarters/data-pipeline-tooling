@@ -513,7 +513,12 @@ and In progress that claims it, and in no other, so the four counts partition th
 Reviewer's worklist. A flag the Case carries beyond the group it is filed under is
 noted on its row ("also on hold"), which is what accounts for its absence from the
 group that flag names. **Appeals to work** is a **Controls** group and sits outside
-that ordering.
+that ordering. A row's **waiting** age is a count of **calendar days** on the
+viewer's own calendar, never of elapsed hours: a Case allocated yesterday afternoon
+is one day old this morning, and it stays one day old until the viewer's midnight.
+The same rule judges an `Actions In Progress` row against its `remediationDueDate`,
+so "due today" holds until that midnight and "1 day over" begins the moment it
+passes.
 
 **Allocation Capacity**:
 A **Reviewer** may hold at most three non-held **`In-progress` Cases** in total

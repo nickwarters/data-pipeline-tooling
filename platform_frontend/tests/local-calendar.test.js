@@ -21,6 +21,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  daysBetweenDateKeys,
   isDateKey,
   shiftDateKey,
   startOfLocalDay,
@@ -173,6 +174,25 @@ test('shiftDateKey: whole calendar days, including across a zone change', () => 
   assert.deepEqual(inTimeZone('Europe/London', shifts), expected);
   assert.deepEqual(inTimeZone('Pacific/Kiritimati', shifts), expected);
   assert.deepEqual(inTimeZone('Pacific/Midway', shifts), expected);
+});
+
+test('daysBetweenDateKeys: whole calendar days, signed, the same in every zone', () => {
+  const counts = () => [
+    daysBetweenDateKeys('2026-08-10', '2026-08-10'),
+    daysBetweenDateKeys('2026-08-10', '2026-08-11'),
+    daysBetweenDateKeys('2026-08-11', '2026-08-10'),
+    daysBetweenDateKeys('2026-08-31', '2026-09-01'),
+    daysBetweenDateKeys('2025-12-31', '2026-01-01'),
+    // British Summer Time begins on 29 March 2026; the 28th to the 30th is
+    // two days, not one and twenty-three twenty-fourths.
+    daysBetweenDateKeys('2026-03-28', '2026-03-30'),
+    daysBetweenDateKeys('2026-01-01', '2026-12-31'),
+  ];
+  const expected = [0, 1, -1, 1, 1, 2, 364];
+
+  assert.deepEqual(inTimeZone('Europe/London', counts), expected);
+  assert.deepEqual(inTimeZone('Pacific/Kiritimati', counts), expected);
+  assert.deepEqual(inTimeZone('Pacific/Midway', counts), expected);
 });
 
 test('weekdayOfDateKey: the weekday of a date, not of an instant', () => {
