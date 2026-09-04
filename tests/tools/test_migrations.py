@@ -6,6 +6,7 @@ from tools.migrations import (
     LEDGER_TABLE,
     MIGRATIONS_ROOT,
     MigrationError,
+    MigrationFailed,
     MigrationRunner,
     discover_targets,
     is_under_migration_control,
@@ -256,6 +257,34 @@ def test_a_failing_migration_leaves_no_ledger_row_and_no_partial_ddl(tmp_path):
     assert [row[0] for row in _ledger(tmp_path / "silver.db")] == [
         "0001_create_cases.sql"
     ]
+
+
+def test_apply_each_yields_each_migration_only_once_it_has_committed(tmp_path):
+    # The progress seam the operator CLI reports from: a file is yielded after
+    # its ledger row is in, so a consumer printing as it goes never announces a
+    # file that then fails. The failing file is raised, not yielded, and it
+    # names itself and SQLite's reason apart from the message.
+    migrations = tmp_path / "migrations"
+    _write(migrations, "0001_create_cases.sql", CREATE_CASES)
+    _write(migrations, "0002_broken.sql", "CRATE TABLE oops (y INTEGER);\n")
+    _write(migrations, "0003_never.sql", "CREATE TABLE never (y INTEGER);\n")
+    seen = []
+
+    with pytest.raises(MigrationFailed) as info:
+        for migration in _runner(tmp_path).apply_each():
+            assert [row[0] for row in _ledger(tmp_path / "silver.db")] == [
+                migration.name
+            ]
+            seen.append(migration.name)
+
+    assert seen == ["0001_create_cases.sql"]
+    assert info.value.migration.name == "0002_broken.sql"
+    assert info.value.reason == 'near "CRATE": syntax error'
+    assert str(info.value) == (
+        f"Migration failed: {migrations / '0002_broken.sql'}: "
+        'near "CRATE": syntax error'
+    )
+    assert "never" not in _tables(tmp_path / "silver.db")
 
 
 def test_a_failed_migration_is_simply_retried_once_it_is_fixed(tmp_path):

@@ -64,6 +64,7 @@ from tools.environments import ENV_VAR, known_environments, resolve_base_dir
 from tools.migrations import (
     MIGRATIONS_ROOT,
     MigrationError,
+    MigrationFailed,
     MigrationRunner,
     MigrationTarget,
     discover_targets,
@@ -275,6 +276,11 @@ def _migrate(args: argparse.Namespace) -> int:
     ``orchestrate`` uses); the command exits non-zero at the end if anything
     failed.
 
+    The report is one block per database — its namespace and file on a header
+    line, its status beneath, then one line per outstanding migration — and all
+    of it goes to stdout, failures included: a block split across two streams
+    reassembles in the wrong order once they are captured together.
+
     ``--subject <subject>`` and ``--database <subject>/<database>`` narrow the
     walk to the named target(s) — one subject on a share whose other subjects
     are being worked on, or a new baseline being landed on its own — without
@@ -302,33 +308,68 @@ def _migrate(args: argparse.Namespace) -> int:
             return 1
     registry = StoreRegistry(base_dir)
     width = max(len(target.namespace) for target in targets)
-    outstanding = current = failed = 0
+    outcomes = {"pending": 0, "applied": 0, "current": 0, "failed": 0}
     for target in targets:
         db_path = registry.db_file(target.namespace)
-        label = f"{target.namespace.ljust(width)}  {db_path}"
-        runner = MigrationRunner(db_path, target.directory)
-        try:
-            migrations = runner.pending() if args.check else runner.apply()
-        except MigrationError as exc:
-            print(f"{label}  FAILED: {exc}", file=sys.stderr)
-            failed += 1
-            continue
-        if not migrations:
-            print(f"{label}  up to date")
-            current += 1
-            continue
-        outstanding += 1
-        names = ", ".join(migration.name for migration in migrations)
-        verb = "pending" if args.check else "applied"
-        print(f"{label}  {verb} {len(migrations)}: {names}")
+        print(f"{target.namespace.ljust(width)}  {db_path}")
+        outcome = _migrate_one(MigrationRunner(db_path, target.directory), args.check)
+        outcomes[outcome] += 1
     action, state = ("checked", "pending") if args.check else ("migrated", "applied")
     print(
-        f"{action} {len(targets)} database(s): {outstanding} {state}, "
-        f"{current} up to date, {failed} failed"
+        f"{action} {len(targets)} database(s): {outcomes[state]} {state}, "
+        f"{outcomes['current']} up to date, {outcomes['failed']} failed"
     )
-    if failed or (args.check and outstanding):
+    if outcomes["failed"] or outcomes["pending"]:
         return 1
     return 0
+
+
+def _migrate_one(runner: MigrationRunner, check: bool) -> str:
+    """Report one database under its header line; return its outcome.
+
+    The block is the database's status — ``up to date``, ``N pending``, or a
+    ``FAILED`` naming why the set cannot be trusted — followed by one line per
+    migration that was outstanding. Already-applied migrations are not listed:
+    the ledger holds them, and the operator asked what still needs doing. With
+    ``check`` the outstanding files are named and nothing more; otherwise each
+    line carries what became of it — ``applied``, ``FAILED`` with SQLite's
+    reason, or ``not attempted`` for the files behind the failure, which the
+    runner leaves untouched.
+
+    Returns one of ``current`` / ``pending`` / ``applied`` / ``failed`` for the
+    summary, where ``pending`` is the check-mode counterpart of ``applied``: an
+    outstanding set that was reported rather than run.
+    """
+    try:
+        pending = runner.pending()
+    except MigrationError as exc:
+        print(f"  FAILED: {exc}")
+        return "failed"
+    if not pending:
+        print("  up to date")
+        return "current"
+    print(f"  {len(pending)} pending")
+    name_width = max(len(migration.name) for migration in pending)
+    if check:
+        for migration in pending:
+            print(f"    {migration.name}")
+        return "pending"
+    landed = 0
+    try:
+        for migration in runner.apply_each():
+            print(f"    {migration.name.ljust(name_width)}  applied")
+            landed += 1
+    except MigrationFailed as exc:
+        print(f"    {exc.migration.name.ljust(name_width)}  FAILED: {exc.reason}")
+        for migration in pending[landed + 1 :]:
+            print(f"    {migration.name.ljust(name_width)}  not attempted")
+        return "failed"
+    except MigrationError as exc:
+        # The set stopped being trustworthy between the report and the apply —
+        # a file edited underneath us. Not a per-file outcome, so say so once.
+        print(f"  FAILED: {exc}")
+        return "failed"
+    return "applied"
 
 
 def _select_targets(

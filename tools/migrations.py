@@ -56,6 +56,7 @@ import hashlib
 import os
 import re
 import sqlite3
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -70,6 +71,7 @@ __all__ = [
     "AppliedMigration",
     "Migration",
     "MigrationError",
+    "MigrationFailed",
     "MigrationRunner",
     "MigrationTarget",
     "discover_targets",
@@ -116,6 +118,21 @@ class MigrationError(PipelineError):
     """
 
     category = ErrorCategory.CONFIG
+
+
+class MigrationFailed(MigrationError):
+    """One migration's SQL would not run.
+
+    Carries the :class:`Migration` that failed and SQLite's own ``reason``
+    separately from the message, so a report can put the reason beside the
+    file's name rather than repeat its full path. The message still names the
+    path in full — it is what an operator greps for.
+    """
+
+    def __init__(self, migration: Migration, reason: str) -> None:
+        super().__init__(f"Migration failed: {migration.path}: {reason}")
+        self.migration = migration
+        self.reason = reason
 
 
 @dataclass(frozen=True)
@@ -242,15 +259,29 @@ class MigrationRunner:
     def apply(self) -> list[Migration]:
         """Apply every pending migration in order; return the ones applied.
 
+        :meth:`apply_each` drained to a list — the same rules, minus the
+        progress. A failure raises :class:`MigrationFailed` naming the file;
+        the ones applied before it stay applied (see :meth:`apply_each`).
+        """
+        return list(self.apply_each())
+
+    def apply_each(self) -> Iterator[Migration]:
+        """Apply every pending migration in order, yielding each as it commits.
+
         Applying nothing writes nothing — no connection is opened, so a current
         database costs no write lock. Otherwise each file commits with its own
-        ledger row, and the first failure aborts: the files before it stay
-        applied and committed, the failing one leaves neither DDL nor a ledger
-        row, and the ones after it are untouched.
+        ledger row and is yielded once it has, so a caller reporting progress
+        prints a file only after it has landed. The first failure aborts with
+        :class:`MigrationFailed`: the files before it stay applied and
+        committed, the failing one leaves neither DDL nor a ledger row, and the
+        ones after it are untouched.
+
+        One connection serves the whole batch and is held open between yields,
+        so drain the iterator rather than abandoning it part-way.
         """
         outstanding = self.pending()
         if not outstanding:
-            return []
+            return
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         con = connect(self._db_path, self._busy_timeout_ms)
         # PEP 249 transaction control: unlike the legacy default it holds DDL
@@ -260,9 +291,9 @@ class MigrationRunner:
         try:
             for migration in outstanding:
                 _apply_one(con, migration)
+                yield migration
         finally:
             con.close()
-        return outstanding
 
     def _read_connection(self) -> sqlite3.Connection | None:
         """A connection to an existing, ledger-carrying database, or ``None``.
@@ -378,4 +409,4 @@ def _apply_one(con: sqlite3.Connection, migration: Migration) -> None:
         con.commit()
     except sqlite3.Error as exc:
         con.rollback()
-        raise MigrationError(f"Migration failed: {migration.path}: {exc}") from exc
+        raise MigrationFailed(migration, str(exc)) from exc

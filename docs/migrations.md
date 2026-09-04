@@ -163,10 +163,21 @@ runner = MigrationRunner(
     migrations_directory("sharepoint_cases", "silver"),
 )
 
-runner.pending()   # -> [Migration, ...]  what apply() would do; writes nothing
-runner.apply()     # -> [Migration, ...]  what it did, in order
-runner.applied()   # -> [AppliedMigration, ...]  the ledger's contents
+runner.pending()     # -> [Migration, ...]  what apply() would do; writes nothing
+runner.apply()       # -> [Migration, ...]  what it did, in order
+runner.apply_each()  # -> Iterator[Migration]  the same, yielding each as it commits
+runner.applied()     # -> [AppliedMigration, ...]  the ledger's contents
 ```
+
+`apply` is `apply_each` drained to a list. The iterator form is what the
+operator CLI reports from: a migration is yielded only once its ledger row is
+in, so a caller printing as it goes never announces a file that then fails. It
+holds one connection open across the batch, so drain it rather than abandoning
+it part-way. A file whose SQL will not run raises `MigrationFailed` — a
+`MigrationError` that also carries the `migration` and SQLite's `reason`
+separately from its message, so a report can put the reason beside the file's
+name; the set-level faults (a misnamed file, a duplicate version, an edited
+applied file) raise the base `MigrationError`.
 
 `pending` is separate from `apply` so an operator can be told what is
 outstanding without anything being written — no transaction, no database file

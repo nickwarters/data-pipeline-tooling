@@ -834,8 +834,41 @@ def test_migrate_applies_every_database_the_tree_names(tmp_path):
     assert "cases" in _tables(base / "cases" / "raw.db")
     assert "cases" in _tables(base / "cases" / "silver.db")
     assert "events" in _tables(base / "activity" / "gold.db")
-    assert "applied 1: 0001_create_cases.sql" in result.stdout
+    # One block per database: a header naming it and its file, its status, then
+    # one line per outstanding file with what became of it.
+    lines = result.stdout.splitlines()
+    (header,) = [
+        i
+        for i, line in enumerate(lines)
+        if line.startswith("cases/raw ") and line.endswith(str(Path("cases/raw.db")))
+    ]
+    assert lines[header + 1 : header + 3] == [
+        "  1 pending",
+        "    0001_create_cases.sql  applied",
+    ]
     assert "migrated 3 database(s): 3 applied, 0 up to date, 0 failed" in result.stdout
+
+
+def test_migrate_reports_each_outstanding_file_and_nothing_already_applied(tmp_path):
+    # The block lists what still needs doing, in order, with what became of it;
+    # a file the ledger already holds is not named again on a later run.
+    tree = tmp_path / "migrations"
+    _migration(tree, "cases", "raw", "0001_create_cases.sql", CREATE_CASES)
+    base = tmp_path / "data"
+    _cli("migrate", "--base-dir", str(base), "--migrations-root", str(tree))
+    _migration(tree, "cases", "raw", "0002_create_events.sql", CREATE_EVENTS)
+    add_index = "CREATE INDEX ix ON events (event_id);\n"
+    _migration(tree, "cases", "raw", "0003_add_index.sql", add_index)
+
+    result = _cli("migrate", "--base-dir", str(base), "--migrations-root", str(tree))
+
+    assert result.returncode == 0, result.stderr
+    assert (
+        "  2 pending\n"
+        "    0002_create_events.sql  applied\n"
+        "    0003_add_index.sql      applied\n"
+    ) in result.stdout
+    assert "0001_create_cases.sql" not in result.stdout
 
 
 def test_migrate_reports_a_database_that_is_already_current(tmp_path):
@@ -863,7 +896,7 @@ def test_migrate_check_exits_non_zero_and_writes_nothing_when_pending(tmp_path):
     )
 
     assert result.returncode == 1
-    assert "pending 1: 0001_create_cases.sql" in result.stdout
+    assert "  1 pending\n    0001_create_cases.sql\n" in result.stdout
     assert "checked 1 database(s): 1 pending, 0 up to date, 0 failed" in result.stdout
     assert not (base / "cases" / "raw.db").exists()
 
@@ -935,19 +968,47 @@ def test_migrate_explicit_base_dir_overrides_the_environment(tmp_path):
 def test_migrate_isolates_one_broken_subject_from_the_rest(tmp_path):
     # Each database is independent, with its own ledger, so a bad set in one
     # must not decide whether the others get migrated — but the command still
-    # exits non-zero.
+    # exits non-zero. The failure sits in its database's block on stdout with
+    # the rest of the report, not on a separate stream that would reorder it.
     tree = tmp_path / "migrations"
-    _migration(tree, "broken", "raw", "0001_bad.sql", "CRATE TABLE oops (x INT);\n")
+    _migration(tree, "broken", "raw", "0001_ok.sql", "CREATE TABLE ok (x INT);\n")
+    _migration(tree, "broken", "raw", "0002_bad.sql", "CRATE TABLE oops (x INT);\n")
+    _migration(tree, "broken", "raw", "0003_after.sql", "CREATE TABLE later (x INT);\n")
     _migration(tree, "cases", "raw", "0001_create_cases.sql", CREATE_CASES)
     base = tmp_path / "data"
 
     result = _cli("migrate", "--base-dir", str(base), "--migrations-root", str(tree))
 
     assert result.returncode == 1
-    assert "FAILED" in result.stderr
-    assert "0001_bad.sql" in result.stderr
+    assert (
+        "  3 pending\n"
+        "    0001_ok.sql     applied\n"
+        '    0002_bad.sql    FAILED: near "CRATE": syntax error\n'
+        "    0003_after.sql  not attempted\n"
+    ) in result.stdout
+    assert result.stderr == ""
+    assert _tables(base / "broken" / "raw.db") >= {"ok"}
+    assert "later" not in _tables(base / "broken" / "raw.db")
     assert "cases" in _tables(base / "cases" / "raw.db")
     assert "migrated 2 database(s): 1 applied, 0 up to date, 1 failed" in result.stdout
+
+
+def test_migrate_reports_an_untrustworthy_set_as_the_database_status(tmp_path):
+    # A migration edited after it was applied is not a per-file outcome — the
+    # set as a whole cannot be applied — so it is the database's status line.
+    tree = tmp_path / "migrations"
+    path = _migration(tree, "cases", "raw", "0001_create_cases.sql", CREATE_CASES)
+    base = tmp_path / "data"
+    _cli("migrate", "--base-dir", str(base), "--migrations-root", str(tree))
+    path.write_text("CREATE TABLE cases (case_id TEXT);\n", encoding="utf-8")
+
+    result = _cli(
+        "migrate", "--base-dir", str(base), "--migrations-root", str(tree), "--check"
+    )
+
+    assert result.returncode == 1
+    assert "\n  FAILED: Migration was edited after it was applied" in result.stdout
+    assert "checked 1 database(s): 0 pending, 0 up to date, 1 failed" in result.stdout
 
 
 def test_migrate_reports_an_empty_tree_without_failing(tmp_path):
