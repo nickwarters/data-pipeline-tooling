@@ -286,7 +286,9 @@ What each field does, and how to choose its value:
   and omitting a key means "use the default", never "no threshold".
   - **`actionCentreSlaDays`** — how long a Case may sit in each Action Centre
     reason group before its waiting chip reads as breached, e.g.
-    `{ awaitingFrontline: 14 }`. Partial: name only the reasons you differ on.
+    `{ awaitingFrontline: 14 }`. Counted in calendar days on the viewer's own
+    calendar, so a Case that entered a group yesterday afternoon is one day
+    old this morning. Partial: name only the reasons you differ on.
     The reason ids are the ones in `ACTION_CENTRE_REASONS` — currently
     `overdue`, `awaitingFrontline`, `onHold`, `appeals` and `inProgress`;
     `npm run verify` rejects any other key. (`reopened` was removed by issue

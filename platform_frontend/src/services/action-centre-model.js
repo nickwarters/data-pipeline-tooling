@@ -44,8 +44,7 @@
 
 import { APPEALS_ENABLED } from '../config/features.js';
 import { CASE_STATUS, OUTSTANDING_STATUSES } from '../lib/case-statuses.js';
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
+import { daysBetweenDateKeys, toLocalDateKey } from '../lib/local-calendar.js';
 
 /**
  * `N day` / `N days`, guarding the singular. Callers wrap this with the
@@ -343,8 +342,15 @@ export function mergeWorstFirstWindow(perSourceRows, reason, skip, top) {
 }
 
 /**
- * Whole days a Case has been waiting on a reason's clock. Never negative; a
- * missing clock reads as 0.
+ * Calendar days a Case has been waiting on a reason's clock. Never negative; a
+ * missing or unreadable clock reads as 0.
+ *
+ * The clock is an instant and the age is a count of dates: a Case allocated
+ * yesterday afternoon is one day old this morning, not zero days old until
+ * the same time of day comes round again. So both ends are taken to the
+ * viewer's local calendar date first and the days are counted between the
+ * dates, never between the instants — elapsed hours divided by twenty-four
+ * would make the chip tick over at the allocation's time of day.
  *
  * @param {CaseRow} caseRow
  * @param {Reason} reason
@@ -356,10 +362,12 @@ function daysWaiting(caseRow, reason, now = new Date()) {
     caseRow[reason.clockField]
   );
   if (!at) return 0;
-  const clockTime = Date.parse(at);
-  if (Number.isNaN(clockTime)) return 0;
-  const diff = now.getTime() - clockTime;
-  return Math.max(0, Math.floor(diff / MS_PER_DAY));
+  const clockDate = toLocalDateKey(at);
+  if (clockDate === null) return 0;
+  return Math.max(
+    0,
+    daysBetweenDateKeys(clockDate, /** @type {string} */ (toLocalDateKey(now)))
+  );
 }
 
 /**
@@ -378,10 +386,13 @@ function daysWaiting(caseRow, reason, now = new Date()) {
  * @returns {{ days: number, label: string, breached: boolean }}
  */
 function dueDateInfo(caseRow, reason, now) {
-  const due = new Date(
-    `${String(caseRow.remediationDueDate).slice(0, 10)}T00:00:00.000Z`
+  // The due date is already a calendar date; only `now` needs taking to one.
+  // A date-to-date count, like `daysWaiting`, so "due today" holds until the
+  // viewer's own midnight and "1 day over" begins the moment it passes.
+  const overDays = daysBetweenDateKeys(
+    String(caseRow.remediationDueDate).slice(0, 10),
+    /** @type {string} */ (toLocalDateKey(now))
   );
-  const overDays = Math.floor((now.getTime() - due.getTime()) / MS_PER_DAY);
   const label =
     overDays > 0
       ? `${dayCount(overDays)} over`
