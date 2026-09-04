@@ -611,16 +611,46 @@ like for a subject following the medallion, not a shape this command requires.
 
 ```console
 $ python -m cli migrate --base-dir /data
-sharepoint_cases/raw     /data/sharepoint_cases/raw.db     applied 1: 0001_create_initial_tables.sql
-sharepoint_cases/silver  /data/sharepoint_cases/silver.db  applied 1: 0001_create_initial_tables.sql
-sharepoint_cases/gold    /data/sharepoint_cases/gold.db    up to date
+sharepoint_cases/raw     /data/sharepoint_cases/raw.db
+  1 pending
+    0001_create_initial_tables.sql  applied
+sharepoint_cases/silver  /data/sharepoint_cases/silver.db
+  1 pending
+    0001_create_initial_tables.sql  applied
+sharepoint_cases/gold    /data/sharepoint_cases/gold.db
+  up to date
 migrated 3 database(s): 2 applied, 1 up to date, 0 failed
 ```
 
-Each database is independent, with its own ledger, so a failure
-in one is reported to stderr and the walk continues to the rest — the same
-per-item failure isolation `orchestrate` applies to scheduled work. The command
-exits non-zero if anything failed.
+The report is one block per database. The header names the database as the
+tree names it and the file it lands in; the line beneath is its status —
+`up to date`, or how many migrations were outstanding when the command found it;
+then one line per outstanding migration with what became of it. Migrations the
+ledger already holds are not listed: the operator asked what still needs doing.
+
+Each database is independent, with its own ledger, so a failure in one is
+reported in its block and the walk continues to the rest — the same per-item
+failure isolation `orchestrate` applies to scheduled work. Within a database the
+runner stops at the first file that will not run: the files before it stay
+applied, the failing one shows SQLite's reason, and the ones behind it are
+`not attempted`. A set that cannot be trusted at all — a file edited after it
+was applied, two files claiming one version — has no per-file outcome, so the
+`FAILED` is the database's status line instead. The whole report, failures
+included, goes to stdout: a block split across two streams reassembles in the
+wrong order once they are captured together. The command exits non-zero if
+anything failed.
+
+```console
+$ python -m cli migrate --base-dir /data
+sharepoint_cases/raw     /data/sharepoint_cases/raw.db
+  3 pending
+    0002_add_case_type_index.sql  applied
+    0003_add_void_reason.sql      FAILED: near "CRATE": syntax error
+    0004_add_owner_index.sql      not attempted
+sharepoint_cases/silver  /data/sharepoint_cases/silver.db
+  FAILED: Migration was edited after it was applied: /repo/migrations/sharepoint_cases/silver/0001_create_initial_tables.sql (recorded checksum 3f2a..., file is 9c41...)
+migrated 2 database(s): 0 applied, 0 up to date, 2 failed
+```
 
 ### `--subject` / `--database` — migrate part of the tree, not all of it
 
@@ -633,13 +663,22 @@ Everything else is unchanged: the selected targets are walked in tree order,
 
 ```console
 $ python -m cli migrate --base-dir /data --subject sharepoint_cases
-sharepoint_cases/gold        /data/sharepoint_cases/gold.db        applied 1: 0002_add_void_reason_note.sql
-sharepoint_cases/quarantine  /data/sharepoint_cases/quarantine.db  applied 1: 0003_add_void_reason_note.sql
-sharepoint_cases/raw         /data/sharepoint_cases/raw.db         applied 1: 0002_add_void_reason_note.sql
-sharepoint_cases/silver      /data/sharepoint_cases/silver.db      applied 1: 0002_add_void_reason_note.sql
+sharepoint_cases/gold        /data/sharepoint_cases/gold.db
+  1 pending
+    0002_add_void_reason_note.sql  applied
+sharepoint_cases/quarantine  /data/sharepoint_cases/quarantine.db
+  1 pending
+    0003_add_void_reason_note.sql  applied
+sharepoint_cases/raw         /data/sharepoint_cases/raw.db
+  1 pending
+    0002_add_void_reason_note.sql  applied
+sharepoint_cases/silver      /data/sharepoint_cases/silver.db
+  1 pending
+    0002_add_void_reason_note.sql  applied
 migrated 4 database(s): 4 applied, 0 up to date, 0 failed
 $ python -m cli migrate --base-dir /data --database sharepoint_cases/silver
-sharepoint_cases/silver  /data/sharepoint_cases/silver.db  up to date
+sharepoint_cases/silver  /data/sharepoint_cases/silver.db
+  up to date
 migrated 1 database(s): 0 applied, 1 up to date, 0 failed
 ```
 
@@ -666,12 +705,18 @@ migrations?") and safe to run against a live share.
 
 ```console
 $ python -m cli migrate --base-dir /data --check
-sharepoint_cases/raw     /data/sharepoint_cases/raw.db     pending 1: 0002_add_case_type_index.sql
-sharepoint_cases/silver  /data/sharepoint_cases/silver.db  up to date
+sharepoint_cases/raw     /data/sharepoint_cases/raw.db
+  1 pending
+    0002_add_case_type_index.sql
+sharepoint_cases/silver  /data/sharepoint_cases/silver.db
+  up to date
 checked 2 database(s): 1 pending, 1 up to date, 0 failed
 $ echo $?
 1
 ```
+
+The blocks are the same shape as a real run's; the outstanding files are named
+without an outcome, because nothing was attempted.
 
 **It is deliberately not wired into `run` or `orchestrate`.** A pipeline can be
 invoked directly as `python -m pipelines.<name>`, which would bypass such a
