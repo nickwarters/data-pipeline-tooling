@@ -16,6 +16,8 @@
  * would start disagreeing with itself about which day a Case landed on.
  */
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
 /** @param {number} value @returns {string} */
 function twoDigits(value) {
   return String(value).padStart(2, '0');
@@ -90,6 +92,26 @@ export function shiftDateKey(dateKey, days) {
   const anchor = new Date(`${dateKey}T00:00:00.000Z`);
   anchor.setUTCDate(anchor.getUTCDate() + days);
   return anchor.toISOString().slice(0, 10);
+}
+
+/**
+ * Whole calendar days from one date key to another: `0` for the same date,
+ * `1` for consecutive dates, negative when `to` is before `from`.
+ *
+ * Key arithmetic anchored in UTC, like `shiftDateKey`, so the answer is an
+ * exact integer everywhere: a local anchor would make the day a zone shifts
+ * 23 or 25 hours, and dividing that by 24 would round it away. This is the
+ * arithmetic for "how many days old is this?" — a question about dates, not
+ * about how many hours have elapsed since an instant.
+ *
+ * @param {string} from `YYYY-MM-DD`
+ * @param {string} to `YYYY-MM-DD`
+ * @returns {number}
+ */
+export function daysBetweenDateKeys(from, to) {
+  const start = Date.parse(`${from}T00:00:00.000Z`);
+  const end = Date.parse(`${to}T00:00:00.000Z`);
+  return Math.round((end - start) / MS_PER_DAY);
 }
 
 /**
