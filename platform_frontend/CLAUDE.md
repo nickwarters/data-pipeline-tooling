@@ -460,6 +460,8 @@ src/
     registry.js                 # plugin registry and adapter shims
     details/
       details-plugin.js         # Case Details section plugin
+    notes/
+      notes-plugin.js           # Notes section plugin
 
   views/                        # generic store-driven pure renderers
     case-columns.js             # shared Case-table column descriptors (#515): the Case-aware consumer of
