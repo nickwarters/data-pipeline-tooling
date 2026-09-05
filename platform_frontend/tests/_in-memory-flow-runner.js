@@ -14,7 +14,7 @@ import {
   completionPatch,
 } from '../src/pages/cora-case-review/completion-actions.js';
 import { openAppealOf } from '../src/evaluators/appeal-state.js';
-import { MATRIX } from '../src/services/section-access.js';
+import { getSectionPlugin } from '../src/sections/registry.js';
 import { postConversationMessage } from '../src/pages/cora-case-review/conversation-view.js';
 import { createAppealEffects } from '../src/pages/cora-case-review/appeal-effects.js';
 import {
@@ -471,23 +471,18 @@ export function createInMemoryFlowRunner(state, opts = {}) {
       /** @type {import('../src/services/section-access.js').Role[]} */ (
         loader.machine?.roles ?? []
       );
-    /** @type {Record<import('../src/services/section-access.js').Mode, number>} */
-    const rank = { edit: 3, 'read-only': 1, hidden: 0 };
-    /** @type {import('../src/services/section-access.js').Mode} */
-    let best = 'hidden';
-    for (const role of roles) {
-      const cell = MATRIX[section][role];
-      const mode =
-        typeof cell === 'function'
-          ? cell(
-              /** @type {any} */ (caseRow),
-              /** @type {any} */ (loader.config),
-              []
-            )
-          : cell;
-      if (rank[mode] > rank[best]) best = mode;
-    }
-    return best;
+    const plugin = getSectionPlugin(section);
+    return plugin
+      ? plugin.evaluateAccess({
+          caseRow: /** @type {any} */ (caseRow),
+          roles,
+          sectionConfig: {
+            appealsEnabled: true,
+            ...(loader.config?.sections?.[section] ?? {}),
+          },
+          config: loader.config,
+        })
+      : 'hidden';
   }
 
   /** @param {Extract<FlowAction, { type: 'raiseAppeal' }>} action */

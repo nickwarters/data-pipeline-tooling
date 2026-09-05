@@ -64,7 +64,7 @@ test('registerSectionPlugin registers a new plugin and overrides existing', () =
   assert.equal(getSectionPlugin('details'), detailsOverride);
 });
 
-test('adapter shim evaluateAccess delegates to MATRIX', () => {
+test('plugin evaluateAccess evaluates role access correctly', () => {
   const details = getSectionPlugin('details');
   assert.ok(details);
 
@@ -83,7 +83,7 @@ test('adapter shim evaluateAccess delegates to MATRIX', () => {
   assert.equal(hiddenMode, 'hidden');
 });
 
-test('adapter shim view delegates to SECTION_PANELS', () => {
+test('plugin view renders with panelContext', () => {
   const details = getSectionPlugin('details');
   assert.ok(details);
   assert.equal(typeof details.view, 'function');
