@@ -23,7 +23,6 @@ import {
 } from './cora-case-review/case-actions.js';
 import { createQuestionPanelView } from './cora-case-review/question-panel-view.js';
 import {
-  conversationView,
   postConversationMessage,
   refreshConversation,
 } from './cora-case-review/conversation-view.js';
@@ -1112,40 +1111,43 @@ export function createRouteSlice(params, context) {
       );
     }
 
+    const conversationPlugin = getSectionPlugin('conversation');
     parts.conversation.hidden =
       snapshot.access.conversation === 'hidden' || route.conversationHidden;
     tools.render(
       parts.conversation,
       snapshot.access.conversation === 'hidden'
         ? null
-        : conversationView({
-            messages: caseRow.conversation,
-            access: snapshot.access.conversation,
-            heading: snapshot.sectionLabels.conversation.heading,
-            onClose: () => {
-              tools.dispatch({ type: 'case/conversation-toggled' });
-              /** @type {HTMLElement | null} */ (
-                parts.header.querySelector('.cora-conversation-toggle-btn')
-              )?.focus();
-            },
-            onSend: async (body) => {
-              await postConversationMessage({
-                client: context.client,
-                saveQueue: context.saveQueue,
-                caseId: caseId(),
-                messages: caseRow.conversation,
-                currentUser,
-                roles: snapshot.machine?.roles ?? [],
-                caseListOptions: snapshot.caseListOptions,
-                body,
-                onMessages: (messages) =>
-                  tools.dispatch({
-                    type: 'case/conversation-changed',
-                    messages,
-                  }),
-              });
-            },
-          })
+        : conversationPlugin && typeof conversationPlugin.view === 'function'
+          ? conversationPlugin.view({
+              ...panelContext,
+              actions: {
+                ...panelActions,
+                onClose: () => {
+                  /** @type {HTMLElement | null} */ (
+                    parts.header.querySelector('.cora-conversation-toggle-btn')
+                  )?.focus();
+                },
+                postConversationMessage: async (body) => {
+                  await postConversationMessage({
+                    client: context.client,
+                    saveQueue: context.saveQueue,
+                    caseId: caseId(),
+                    messages: caseRow.conversation,
+                    currentUser,
+                    roles: snapshot.machine?.roles ?? [],
+                    caseListOptions: snapshot.caseListOptions,
+                    body,
+                    onMessages: (messages) =>
+                      tools.dispatch({
+                        type: 'case/conversation-changed',
+                        messages,
+                      }),
+                  });
+                },
+              },
+            })
+          : null
     );
   }
 
