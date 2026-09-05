@@ -37,6 +37,7 @@ import { SECTION_PANELS } from '../pages/cora-case-review/section-panels.js';
 import { DEFAULT_SECTION_LABELS } from '../lib/section-labels.js';
 import { DetailsPlugin } from './details/details-plugin.js';
 import { NotesPlugin } from './notes/notes-plugin.js';
+import { ConversationPlugin } from './conversation/conversation-plugin.js';
 
 /** @type {Map<string, SectionPlugin>} */
 const registry = new Map();
@@ -54,6 +55,10 @@ export function resetSectionRegistry() {
     }
     if (entry.id === 'notes') {
       registry.set(entry.id, NotesPlugin);
+      continue;
+    }
+    if (entry.id === 'conversation') {
+      registry.set(entry.id, ConversationPlugin);
       continue;
     }
     registry.set(entry.id, {
