@@ -14,6 +14,11 @@ import {
 import { anyRemediationRequired } from '../evaluators/remediation-status.js';
 import { tabEntries } from '../lib/section-registry.js';
 import {
+  getSectionPlugins,
+  getSectionPlugin,
+  registerSectionPlugin,
+} from '../sections/registry.js';
+import {
   createCaseReviewSaveEffect,
   observeSaveStatus,
 } from './cora-case-review/case-actions.js';

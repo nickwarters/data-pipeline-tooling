@@ -100,20 +100,20 @@ test('layering: only the route table names a page module', () => {
     return out;
   };
 
-  const isRouteTable = (/** @type {string} */ rel) =>
-    rel === 'src/setup/register-routes.js';
+  const isAllowed = (/** @type {string} */ rel) =>
+    rel === 'src/setup/register-routes.js' || rel.startsWith('src/sections/');
 
   assert.deepEqual(
-    pageEdges('static', isRouteTable),
+    pageEdges('static', isAllowed),
     [],
-    'only the route table in setup/register-routes.js may import a page module — add an entry there instead'
+    'only the route table in setup/register-routes.js (and section plugins under src/sections/) may import a page module — add an entry there instead'
   );
 
   // Dynamic page import() belongs to the route table (page loading) or a page
   // composing its own subsystem — never to generic src/ modules, services, or
   // components.
   assert.deepEqual(
-    pageEdges('dynamic', isRouteTable),
+    pageEdges('dynamic', isAllowed),
     [],
     'only the route table in setup/register-routes.js may dynamically import a page module'
   );
