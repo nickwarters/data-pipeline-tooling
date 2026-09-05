@@ -44,6 +44,7 @@ import { AppealReviewPlugin } from './appeals/appeal-review-plugin.js';
 import { QuestionsPlugin } from './questions/questions-plugin.js';
 import { IssuesPlugin } from './issues/issues-plugin.js';
 import { RemediationPlugin } from './remediation/remediation-plugin.js';
+import { SummaryPlugin } from './summary/summary-plugin.js';
 
 /** @type {Map<string, SectionPlugin>} */
 const registry = new Map();
@@ -65,6 +66,10 @@ export function resetSectionRegistry() {
     }
     if (entry.id === 'issues') {
       registry.set(entry.id, IssuesPlugin);
+      continue;
+    }
+    if (entry.id === 'summary') {
+      registry.set(entry.id, SummaryPlugin);
       continue;
     }
     if (entry.id === 'remediation') {
@@ -91,10 +96,13 @@ export function resetSectionRegistry() {
       registry.set(entry.id, AppealReviewPlugin);
       continue;
     }
-    registry.set(entry.id, {
-      ...entry,
-      tab: defaultTabIds.has(entry.id),
-      defaultLabels: DEFAULT_SECTION_LABELS[entry.id],
+    const fallbackEntry = /** @type {typeof SECTION_REGISTRY[number]} */ (
+      entry
+    );
+    registry.set(fallbackEntry.id, {
+      ...fallbackEntry,
+      tab: defaultTabIds.has(fallbackEntry.id),
+      defaultLabels: DEFAULT_SECTION_LABELS[fallbackEntry.id],
       evaluateAccess: (ctx) => {
         const roles = ctx.roles?.length
           ? ctx.roles
@@ -102,7 +110,7 @@ export function resetSectionRegistry() {
         /** @type {Mode} */
         let best = 'hidden';
         for (const role of roles) {
-          const cell = MATRIX[entry.id]?.[role];
+          const cell = MATRIX[fallbackEntry.id]?.[role];
           /** @type {Mode} */
           const mode =
             typeof cell === 'function'
@@ -116,13 +124,10 @@ export function resetSectionRegistry() {
         }
         return best;
       },
-      view: (pCtx) => SECTION_PANELS[entry.id]?.(pCtx) ?? null,
+      view: (pCtx) => SECTION_PANELS[fallbackEntry.id]?.(pCtx) ?? null,
     });
   }
 }
-
-// Initialize with legacy adapter shims for unmigrated sections
-resetSectionRegistry();
 
 /**
  * Register a section plugin. Replaces any existing registration with the same id.
@@ -137,6 +142,9 @@ export function registerSectionPlugin(plugin) {
  * @returns {SectionPlugin[]}
  */
 export function getSectionPlugins() {
+  if (registry.size === 0) {
+    resetSectionRegistry();
+  }
   return Array.from(registry.values());
 }
 
@@ -146,5 +154,8 @@ export function getSectionPlugins() {
  * @returns {SectionPlugin | undefined}
  */
 export function getSectionPlugin(id) {
+  if (registry.size === 0) {
+    resetSectionRegistry();
+  }
   return registry.get(id);
 }
