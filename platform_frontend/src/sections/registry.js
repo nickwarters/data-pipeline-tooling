@@ -36,6 +36,7 @@ import { MATRIX } from '../services/section-access.js';
 import { SECTION_PANELS } from '../pages/cora-case-review/section-panels.js';
 import { DEFAULT_SECTION_LABELS } from '../lib/section-labels.js';
 import { DetailsPlugin } from './details/details-plugin.js';
+import { AdminDetailsPlugin } from './admin-details/admin-details-plugin.js';
 import { NotesPlugin } from './notes/notes-plugin.js';
 import { ConversationPlugin } from './conversation/conversation-plugin.js';
 import { AmendOutcomePlugin } from './amend-outcome/amend-outcome-plugin.js';
@@ -52,8 +53,18 @@ const registry = new Map();
 /** @type {Record<Mode, number>} */
 const RANK = { edit: 3, 'read-only': 1, hidden: 0 };
 
+let initialized = false;
+
+function ensureInitialized() {
+  if (!initialized) {
+    initialized = true;
+    resetSectionRegistry();
+  }
+}
+
 export function resetSectionRegistry() {
   registry.clear();
+  initialized = true;
   const defaultTabIds = new Set(tabEntries().map((entry) => entry.id));
   for (const entry of SECTION_REGISTRY) {
     if (entry.id === 'details') {
@@ -96,9 +107,8 @@ export function resetSectionRegistry() {
       registry.set(entry.id, AppealReviewPlugin);
       continue;
     }
-    const fallbackEntry = /** @type {typeof SECTION_REGISTRY[number]} */ (
-      entry
-    );
+    const fallbackEntry =
+      /** @type {typeof SECTION_REGISTRY[number]} */ (entry);
     registry.set(fallbackEntry.id, {
       ...fallbackEntry,
       tab: defaultTabIds.has(fallbackEntry.id),
@@ -127,6 +137,8 @@ export function resetSectionRegistry() {
       view: (pCtx) => SECTION_PANELS[fallbackEntry.id]?.(pCtx) ?? null,
     });
   }
+  // Register plugins that aren't part of legacy SECTION_REGISTRY
+  registry.set(AdminDetailsPlugin.id, AdminDetailsPlugin);
 }
 
 /**
@@ -134,6 +146,7 @@ export function resetSectionRegistry() {
  * @param {SectionPlugin} plugin
  */
 export function registerSectionPlugin(plugin) {
+  ensureInitialized();
   registry.set(plugin.id, plugin);
 }
 
@@ -142,9 +155,7 @@ export function registerSectionPlugin(plugin) {
  * @returns {SectionPlugin[]}
  */
 export function getSectionPlugins() {
-  if (registry.size === 0) {
-    resetSectionRegistry();
-  }
+  ensureInitialized();
   return Array.from(registry.values());
 }
 
@@ -154,8 +165,39 @@ export function getSectionPlugins() {
  * @returns {SectionPlugin | undefined}
  */
 export function getSectionPlugin(id) {
-  if (registry.size === 0) {
-    resetSectionRegistry();
-  }
+  ensureInitialized();
   return registry.get(id);
+}
+
+/**
+ * Evaluate access for all registered section plugins.
+ * @param {object} params
+ * @param {CaseRow} params.caseRow
+ * @param {Role[]} params.roles
+ * @param {Capabilities} [params.capabilities]
+ * @param {CaseTypeConfig} [params.config]
+ * @param {QuestionDefinition[]} [params.catalogue]
+ * @returns {Record<string, Mode>}
+ */
+export function evaluateSectionsAccess({
+  caseRow,
+  roles,
+  capabilities = /** @type {Capabilities} */ ({}),
+  config = /** @type {any} */ ({}),
+  catalogue = [],
+}) {
+  /** @type {Record<string, Mode>} */
+  const access = {};
+  for (const plugin of getSectionPlugins()) {
+    const sectionConfig = config?.sections?.[plugin.id];
+    access[plugin.id] = plugin.evaluateAccess({
+      caseRow,
+      roles,
+      capabilities,
+      sectionConfig,
+      catalogue,
+      config,
+    });
+  }
+  return access;
 }

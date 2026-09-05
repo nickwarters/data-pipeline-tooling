@@ -136,6 +136,8 @@ test('the panel map owns completion on Summary and Void on Case Details', () => 
     selectResponsibleParty: () => {},
     requestResponsiblePartySearch: () => {},
     save: { fieldEdited: () => {} },
+    editDetailField: () => {},
+    editCaseField: () => {},
     appeals: /** @type {any} */ ({}),
     onComplete: () => {},
     onVoid: () => {},

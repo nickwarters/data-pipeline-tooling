@@ -68,6 +68,10 @@ const config = {
     appealRequest: {},
     appealReview: {},
     amendOutcome: {},
+    adminDetails: {
+      enabled: true,
+      editableFields: ['title', 'dueDate', 'complaintRef'],
+    },
   },
   // Every Question Group here is a homogeneous run of Outcome-scored Questions
   // about one part of the complaint, and a Reviewer who finds that part sound

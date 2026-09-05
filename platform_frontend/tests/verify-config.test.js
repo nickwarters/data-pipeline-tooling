@@ -352,6 +352,118 @@ test('checkCaseTypes rejects malformed explicit sections values', async () => {
   }
 });
 
+test('checkCaseTypes validates adminDetails section configuration', async () => {
+  // enabled must be boolean
+  const badEnabled = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(
+        demoConfig({
+          sections: {
+            summary: {},
+            adminDetails: { enabled: 'yes' },
+          },
+        })
+      ),
+    ],
+  });
+  assert.equal(badEnabled.length, 1);
+  assert.match(badEnabled[0].message, /adminDetails\.enabled/);
+  assert.match(badEnabled[0].message, /must be a boolean/);
+
+  // editableFields must be an array
+  const badEditable = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(
+        demoConfig({
+          sections: {
+            summary: {},
+            adminDetails: { enabled: true, editableFields: 'title' },
+          },
+        })
+      ),
+    ],
+  });
+  assert.equal(badEditable.length, 1);
+  assert.match(badEditable[0].message, /adminDetails\.editableFields/);
+  assert.match(badEditable[0].message, /must be an array of field names/);
+
+  // editableFields cannot contain non-string entries
+  const nonStringEntry = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(
+        demoConfig({
+          sections: {
+            summary: {},
+            adminDetails: { enabled: true, editableFields: [123] },
+          },
+        })
+      ),
+    ],
+  });
+  assert.equal(nonStringEntry.length, 1);
+  assert.match(nonStringEntry[0].message, /entry must be a string/);
+
+  // editableFields cannot contain lifecycle fields
+  const lifecycleField = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(
+        demoConfig({
+          sections: {
+            summary: {},
+            adminDetails: {
+              enabled: true,
+              editableFields: ['title', 'status', 'assignedReviewer'],
+            },
+          },
+        })
+      ),
+    ],
+  });
+  assert.equal(lifecycleField.length, 2);
+  assert.match(joined(lifecycleField), /status/);
+  assert.match(joined(lifecycleField), /assignedReviewer/);
+  assert.match(joined(lifecycleField), /lifecycle\/allocation-owned/);
+
+  // editableFields cannot contain unknown fields
+  const unknownField = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(
+        demoConfig({
+          detailFields: [{ key: 'refNum', label: 'Ref' }],
+          sections: {
+            summary: {},
+            adminDetails: {
+              enabled: true,
+              editableFields: ['refNum', 'complaintRefx'],
+            },
+          },
+        })
+      ),
+    ],
+  });
+  assert.equal(unknownField.length, 1);
+  assert.match(unknownField[0].message, /unknown field "complaintRefx"/);
+
+  // valid configuration with core allowed fields and declared detailFields
+  const valid = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(
+        demoConfig({
+          detailFields: [{ key: 'refNum', label: 'Ref' }],
+          sections: {
+            summary: {},
+            adminDetails: {
+              enabled: true,
+              editableFields: ['title', 'dueDate', 'refNum'],
+            },
+          },
+        })
+      ),
+    ],
+  });
+  assert.deepEqual(valid, []);
+});
+
 test('checkCaseTypes validates the Conversation initiating side', async () => {
   for (const initiatedBy of ['frontline', 'assignedReviewer', true]) {
     const failures = await checkCaseTypes({

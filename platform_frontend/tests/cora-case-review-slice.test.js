@@ -5464,3 +5464,211 @@ test('a Case Type that renames every Section renames every tab and every heading
     );
   }
 });
+
+test('Admin Details: merges detail fields across a re-render when details blob is present', () => {
+  /** @type {{ id: string, field: string, value: any }[]} */
+  const queued = [];
+  const saveQueue = {
+    enqueue: (
+      /** @type {string} */ id,
+      /** @type {string} */ field,
+      /** @type {any} */ value
+    ) => queued.push({ id, field, value }),
+  };
+  const loaded = snapshot();
+  loaded.access = { ...loaded.access, adminDetails: 'edit' };
+  loaded.caseRow = {
+    ...loaded.caseRow,
+    id: 'c1',
+    details: { refA: 'initialA' },
+  };
+  loaded.config = {
+    ...loaded.config,
+    detailFields: [
+      { key: 'refA', label: 'Ref A' },
+      { key: 'refB', label: 'Ref B' },
+    ],
+    sections: {
+      adminDetails: {
+        enabled: true,
+        editableFields: ['refA', 'refB'],
+      },
+    },
+  };
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: loaded,
+  });
+
+  const view = renderShippedState(
+    state,
+    {
+      capabilities: { ...chrome.permissions, isMaintainer: true },
+      saveQueue,
+    },
+    undefined,
+    { caseType: 'example-review', id: 'c1' }
+  );
+
+  const inputA = /** @type {HTMLInputElement | null} */ (
+    view.container.querySelector('#admin-field-refA')
+  );
+  assert.ok(inputA, 'inputA found');
+  inputA.value = 'A1';
+  fireEvent(inputA, 'change');
+
+  assert.deepEqual(queued[queued.length - 1], {
+    id: 'c1',
+    field: 'details',
+    value: { refA: 'A1' },
+  });
+
+  const inputB = /** @type {HTMLInputElement | null} */ (
+    view.container.querySelector('#admin-field-refB')
+  );
+  assert.ok(inputB, 'inputB found');
+  inputB.value = 'B1';
+  fireEvent(inputB, 'change');
+
+  assert.deepEqual(queued[queued.length - 1], {
+    id: 'c1',
+    field: 'details',
+    value: { refA: 'A1', refB: 'B1' },
+  });
+
+  view.dispose();
+});
+
+test('Admin Details: merges detail fields across a re-render when details is initially undefined', () => {
+  /** @type {{ id: string, field: string, value: any }[]} */
+  const queued = [];
+  const saveQueue = {
+    enqueue: (
+      /** @type {string} */ id,
+      /** @type {string} */ field,
+      /** @type {any} */ value
+    ) => queued.push({ id, field, value }),
+  };
+  const loaded = snapshot();
+  loaded.access = { ...loaded.access, adminDetails: 'edit' };
+  loaded.caseRow = {
+    ...loaded.caseRow,
+    id: 'c1',
+    details: undefined,
+  };
+  loaded.config = {
+    ...loaded.config,
+    detailFields: [
+      { key: 'refA', label: 'Ref A' },
+      { key: 'refB', label: 'Ref B' },
+    ],
+    sections: {
+      adminDetails: {
+        enabled: true,
+        editableFields: ['refA', 'refB'],
+      },
+    },
+  };
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: loaded,
+  });
+
+  const view = renderShippedState(
+    state,
+    {
+      capabilities: { ...chrome.permissions, isMaintainer: true },
+      saveQueue,
+    },
+    undefined,
+    { caseType: 'example-review', id: 'c1' }
+  );
+
+  const inputA = /** @type {HTMLInputElement | null} */ (
+    view.container.querySelector('#admin-field-refA')
+  );
+  assert.ok(inputA, 'inputA found');
+  inputA.value = 'A1';
+  fireEvent(inputA, 'change');
+
+  assert.deepEqual(queued[queued.length - 1], {
+    id: 'c1',
+    field: 'details',
+    value: { refA: 'A1' },
+  });
+
+  const inputB = /** @type {HTMLInputElement | null} */ (
+    view.container.querySelector('#admin-field-refB')
+  );
+  assert.ok(inputB, 'inputB found');
+  inputB.value = 'B1';
+  fireEvent(inputB, 'change');
+
+  assert.deepEqual(queued[queued.length - 1], {
+    id: 'c1',
+    field: 'details',
+    value: { refA: 'A1', refB: 'B1' },
+  });
+
+  view.dispose();
+});
+
+test('the reducer rejects a case/admin-field-edited for a lifecycle field and accepts allowed core fields', () => {
+  const loaded = snapshot();
+  loaded.caseRow = {
+    ...loaded.caseRow,
+    status: 'In-progress',
+    title: 'Original Title',
+  };
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: loaded,
+  });
+
+  const afterLifecycle = caseReviewReducer(state, {
+    type: 'case/admin-field-edited',
+    field: 'status',
+    value: 'Completed',
+  });
+  assert.equal(
+    afterLifecycle.routes.caseReview.snapshot?.caseRow?.status,
+    'In-progress',
+    'a lifecycle field dispatched through admin-field-edited is ignored'
+  );
+  assert.equal(
+    afterLifecycle,
+    state,
+    'and the state is returned unchanged, so nothing re-renders'
+  );
+
+  const afterTitle = caseReviewReducer(state, {
+    type: 'case/admin-field-edited',
+    field: 'title',
+    value: 'New Title',
+  });
+  assert.equal(
+    afterTitle.routes.caseReview.snapshot?.caseRow?.title,
+    'New Title',
+    'allowed core fields write to the caseRow'
+  );
+});
+
+test('the reducer accepts a case/details-edited and updates the details blob', () => {
+  const loaded = snapshot();
+  loaded.caseRow = { ...loaded.caseRow, details: { old: 'value' } };
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: loaded,
+  });
+
+  const nextDetails = { old: 'value', newField: 'added' };
+  const afterDetails = caseReviewReducer(state, {
+    type: 'case/details-edited',
+    details: nextDetails,
+  });
+  assert.deepEqual(
+    afterDetails.routes.caseReview.snapshot?.caseRow?.details,
+    nextDetails,
+    'details blob is replaced with the merged details'
+  );
+});
