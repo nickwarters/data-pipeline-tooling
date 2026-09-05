@@ -39,6 +39,8 @@ import { DetailsPlugin } from './details/details-plugin.js';
 import { NotesPlugin } from './notes/notes-plugin.js';
 import { ConversationPlugin } from './conversation/conversation-plugin.js';
 import { AmendOutcomePlugin } from './amend-outcome/amend-outcome-plugin.js';
+import { AppealRequestPlugin } from './appeals/appeal-request-plugin.js';
+import { AppealReviewPlugin } from './appeals/appeal-review-plugin.js';
 
 /** @type {Map<string, SectionPlugin>} */
 const registry = new Map();
@@ -64,6 +66,14 @@ export function resetSectionRegistry() {
     }
     if (entry.id === 'amendOutcome') {
       registry.set(entry.id, AmendOutcomePlugin);
+      continue;
+    }
+    if (entry.id === 'appealRequest') {
+      registry.set(entry.id, AppealRequestPlugin);
+      continue;
+    }
+    if (entry.id === 'appealReview') {
+      registry.set(entry.id, AppealReviewPlugin);
       continue;
     }
     registry.set(entry.id, {
