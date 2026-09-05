@@ -43,6 +43,8 @@
  *   caseId: () => string,
  *   dispatch: (action:
  *     | {type: 'case/answers-edited', answers: Record<string, Answer>}
+ *     | {type: 'case/details-edited', details: Record<string, string>}
+ *     | {type: 'case/admin-field-edited', field: string, value: string}
  *     | {type: 'case/field-edited', field: PlainTextCaseField, value: string}
  *     | {type: 'case/on-hold-changed', onHold: boolean, placedOnHoldAt: string | null}
  *     | {type: 'case/responsible-party-changed', loginName: string, displayName: string}
@@ -62,6 +64,28 @@ export function createCaseReviewSaveEffect({
     answersEdited(answers) {
       dispatch({ type: 'case/answers-edited', answers });
       saveQueue.enqueue(caseId(), 'answers', answers);
+    },
+    /**
+     * The Case Type's own detail fields, which live inside the `details` JSON blob
+     * rather than as columns. The whole blob is written, so the caller passes the
+     * merged object — same contract as `answersEdited`.
+     *
+     * @param {Record<string, string>} details
+     */
+    detailsEdited(details) {
+      dispatch({ type: 'case/details-edited', details });
+      saveQueue.enqueue(caseId(), 'details', details);
+    },
+    /**
+     * A top-level Case column edited from the Admin Details override. Deliberately
+     * not `fieldEdited`: that union stays shut to the two Notes fields, and the
+     * reducer branch below is what decides which columns an override may move.
+     *
+     * @param {string} field @param {string} value
+     */
+    adminFieldEdited(field, value) {
+      dispatch({ type: 'case/admin-field-edited', field, value });
+      saveQueue.enqueue(caseId(), field, value);
     },
     /**
      * A plain-text Case field edited in the Notes Section — `notes` or

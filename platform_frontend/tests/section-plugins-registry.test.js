@@ -17,14 +17,13 @@ beforeEach(() => {
   resetSectionRegistry();
 });
 
-test('getSectionPlugins initially returns adapter shims for all SECTION_REGISTRY entries', () => {
+test('getSectionPlugins initially returns plugins for all SECTION_REGISTRY entries plus registered plugins', () => {
   const plugins = getSectionPlugins();
-  assert.equal(plugins.length, SECTION_REGISTRY.length);
   const ids = plugins.map((p) => p.id);
-  assert.deepEqual(
-    ids,
-    SECTION_REGISTRY.map((e) => e.id)
-  );
+  for (const entry of SECTION_REGISTRY) {
+    assert.ok(ids.includes(entry.id));
+  }
+  assert.ok(ids.includes('adminDetails'));
 });
 
 test('getSectionPlugin returns plugin by id or undefined if missing', () => {

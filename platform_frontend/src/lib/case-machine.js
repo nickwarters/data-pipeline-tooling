@@ -6,6 +6,7 @@
 // through the loader, so it is plain domain state, not a UI orchestration
 // layer around view rendering.
 
+import { evaluateSectionsAccess } from '../sections/registry.js';
 import {
   evaluateAccess,
   isFrozen,
@@ -74,17 +75,14 @@ export class CaseMachine {
 
     this.roles = resolveRoles(caseRow, currentUser.id, capabilities);
 
-    /** @type {Record<import('../services/section-access.js').Section, import('../services/section-access.js').Mode>} */
-    this.access = /** @type {any} */ ({});
-    for (const s of SECTIONS) {
-      this.access[s] = evaluateAccess(
-        s,
-        this.roles,
-        caseRow,
-        config,
-        this.catalogue
-      );
-    }
+    /** @type {Record<string, import('../services/section-access.js').Mode>} */
+    this.access = evaluateSectionsAccess({
+      caseRow,
+      roles: this.roles,
+      capabilities: this.capabilities,
+      config,
+      catalogue: this.catalogue,
+    });
   }
 
   /**

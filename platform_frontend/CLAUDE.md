@@ -458,6 +458,8 @@ src/
 
   sections/                     # pluggable case review sections
     registry.js                 # plugin registry and adapter shims
+    admin-details/
+      admin-details-plugin.js   # Admin details override section plugin
     details/
       details-plugin.js         # Case Details section plugin
     questions/

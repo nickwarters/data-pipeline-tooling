@@ -23,6 +23,11 @@ import {
 } from '../src/evaluators/applicability-evaluator.js';
 import { validateCaptureGroups } from '../src/evaluators/issue-capture.js';
 import { sectionIds } from '../src/lib/section-registry.js';
+import {
+  ALLOWED_ADMIN_CORE_FIELDS,
+  FORBIDDEN_ADMIN_LIFECYCLE_FIELDS,
+} from '../src/sections/admin-details/admin-details-plugin.js';
+import { getSectionPlugins } from '../src/sections/registry.js';
 import { ROLES } from '../src/services/section-access.js';
 import { isVoidReasonKey, VOID_REASONS } from '../src/lib/void-reasons.js';
 import { ACTION_CENTRE_REASONS } from '../src/services/action-centre-model.js';
@@ -664,7 +669,10 @@ function ignoredSiblingKeys(cond) {
  * @returns {Failure[]}
  */
 function checkSections(slug, file, config) {
-  const known = new Set(sectionIds());
+  const known = new Set([
+    ...sectionIds(),
+    ...getSectionPlugins().map((p) => p.id),
+  ]);
   const knownRoles = new Set(ROLES);
   /** @param {string} message @returns {Failure} */
   const fail = (message) => ({
@@ -731,6 +739,60 @@ function checkSections(slug, file, config) {
             `Case Type "${slug}": \`sections.conversation.initiatedBy\` must be "reviewer" or "responsibleParty"`
           )
         );
+      }
+      if (key === 'adminDetails') {
+        const adminConfig = value;
+        if (
+          adminConfig?.enabled !== undefined &&
+          typeof adminConfig.enabled !== 'boolean'
+        ) {
+          failures.push(
+            fail(
+              `Case Type "${slug}": \`sections.adminDetails.enabled\` must be a boolean`
+            )
+          );
+        }
+        const editable = adminConfig?.editableFields;
+        if (editable !== undefined) {
+          if (!Array.isArray(editable)) {
+            failures.push(
+              fail(
+                `Case Type "${slug}": \`sections.adminDetails.editableFields\` must be an array of field names`
+              )
+            );
+          } else {
+            const declaredDetailKeys = new Set(
+              (config?.detailFields ?? []).map((/** @type {any} */ f) => f.key)
+            );
+            const forbidden = new Set(FORBIDDEN_ADMIN_LIFECYCLE_FIELDS);
+            const allowedCore = new Set(ALLOWED_ADMIN_CORE_FIELDS);
+
+            for (const field of editable) {
+              if (typeof field !== 'string') {
+                failures.push(
+                  fail(
+                    `Case Type "${slug}": \`sections.adminDetails.editableFields\` entry must be a string`
+                  )
+                );
+              } else if (forbidden.has(field)) {
+                failures.push(
+                  fail(
+                    `Case Type "${slug}": \`sections.adminDetails.editableFields\` contains lifecycle/allocation-owned field "${field}" — lifecycle and allocation decisions belong in code, not descriptor data`
+                  )
+                );
+              } else if (
+                !allowedCore.has(field) &&
+                !declaredDetailKeys.has(field)
+              ) {
+                failures.push(
+                  fail(
+                    `Case Type "${slug}": unknown field "${field}" in \`sections.adminDetails.editableFields\` — must be a declared detailField or allowed Case field`
+                  )
+                );
+              }
+            }
+          }
+        }
       }
       return failures;
     }
