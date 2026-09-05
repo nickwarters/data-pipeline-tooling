@@ -466,6 +466,9 @@ src/
       conversation-plugin.js    # Conversation overlay plugin
     amend-outcome/
       amend-outcome-plugin.js   # Amend Outcome section plugin
+    appeals/
+      appeal-request-plugin.js  # Appeal Request section plugin
+      appeal-review-plugin.js   # Appeal Review section plugin
 
   views/                        # generic store-driven pure renderers
     case-columns.js             # shared Case-table column descriptors (#515): the Case-aware consumer of
