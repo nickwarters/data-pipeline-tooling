@@ -462,6 +462,10 @@ src/
       details-plugin.js         # Case Details section plugin
     questions/
       questions-plugin.js       # Questions bank section plugin
+    issues/
+      issues-plugin.js          # Issues capture section plugin
+    remediation/
+      remediation-plugin.js     # Remediation tracking section plugin
     notes/
       notes-plugin.js           # Notes section plugin
     conversation/
