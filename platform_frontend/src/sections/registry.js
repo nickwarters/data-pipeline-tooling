@@ -35,6 +35,7 @@ import { SECTION_REGISTRY, tabEntries } from '../lib/section-registry.js';
 import { MATRIX } from '../services/section-access.js';
 import { SECTION_PANELS } from '../pages/cora-case-review/section-panels.js';
 import { DEFAULT_SECTION_LABELS } from '../lib/section-labels.js';
+import { DetailsPlugin } from './details/details-plugin.js';
 
 /** @type {Map<string, SectionPlugin>} */
 const registry = new Map();
@@ -46,6 +47,10 @@ export function resetSectionRegistry() {
   registry.clear();
   const defaultTabIds = new Set(tabEntries().map((entry) => entry.id));
   for (const entry of SECTION_REGISTRY) {
+    if (entry.id === 'details') {
+      registry.set(entry.id, DetailsPlugin);
+      continue;
+    }
     registry.set(entry.id, {
       ...entry,
       tab: defaultTabIds.has(entry.id),
