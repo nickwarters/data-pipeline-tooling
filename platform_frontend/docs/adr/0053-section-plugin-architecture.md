@@ -101,10 +101,12 @@ The Section Plugin Architecture satisfies this constraint:
 ### Positive
 
 - **Cohesion:** Section access, tab metadata, labels, and rendering live together in a single plugin module per section (`src/sections/<section>/<section>-plugin.js`).
-- **Extensibility:** Case types can introduce specialized sections (such as `adminDetails`) or customize section labels and access through Case Type configuration without altering core framework files.
+- **Extensibility:** A Case Type can enable, disable and configure a Section through its `sections` descriptor without touching that Section's code, and a new Section is authored as one module rather than as edits spread across an access matrix, a panel map and a registry. It is not free of framework edits: `adminDetails` needed a `SectionConfig` shape, a `verify-config.js` rule and a reducer branch, because a descriptor may select behaviour but may not introduce it.
 - **Robust Testing:** Every section plugin is independently unit-tested for contract conformance, access evaluation, and view rendering.
 - **Clean Architecture:** Eliminates legacy `MATRIX` and `SECTION_PANELS` drift risks and achieves 0 dead code across the frontend.
 
 ### Negative / Trade-offs
 
 - Tests verifying section access must now either call `evaluateAccess` or `getSectionPlugin(id).evaluateAccess(...)` instead of inspecting matrix cell functions directly.
+- Layout metadata is stated twice: `SECTION_REGISTRY` in `src/lib/section-registry.js` still declares `tab`, `tabOrder`, `summaryBlock`, `summaryOrder` and `showInSummaryDefault`, and each plugin restates the same five. The registry remains the authority for the `Section` id union, `SECTIONS` and `SUMMARY_SECTIONS`; the plugin's `tab`/`tabOrder` are what the render loop sorts by. Tests hold the two in step rather than one deriving from the other, so a Section added to only one of them fails loudly but the duplication is real. Consolidating on one of the two is deferred, not decided.
+- A plugin whose id is absent from `SECTION_REGISTRY` — `adminDetails` today — is outside the `Section` union, which is why a Case Type's `sections` map and the render snapshot's `access` are typed `Record<string, …>` rather than keyed by that union. The compile-time check on a mistyped `sections` key is recovered at runtime by `verify-config.js` and a registry contract test.
