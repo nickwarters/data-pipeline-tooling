@@ -145,7 +145,7 @@ function appealRaiser(config) {
  * @param {QuestionDefinition[]} catalogue
  * @returns {boolean}
  */
-function remediationTabIsLive(caseRow, catalogue) {
+export function remediationTabIsLive(caseRow, catalogue) {
   return (
     reachedReportable(caseRow) &&
     hasTrackableRemediation(catalogue, caseRow.answers)
