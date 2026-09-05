@@ -456,6 +456,11 @@ src/
       question-bank-source.js
       simulate-panel.js         # pure golden-tested impact-simulation view
 
+  sections/                     # pluggable case review sections
+    registry.js                 # plugin registry and adapter shims
+    details/
+      details-plugin.js         # Case Details section plugin
+
   views/                        # generic store-driven pure renderers
     case-columns.js             # shared Case-table column descriptors (#515): the Case-aware consumer of
                                 #   data-table.js, and the fixed column set for every Case Type (ADR-0040)
