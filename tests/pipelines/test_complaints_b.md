@@ -1,0 +1,139 @@
+```python
+"""Tests for ``complaints_b`` ingest.
+
+Step tests run in memory; the bundled sample covers the filesystem path.
+"""
+
+from __future__ import annotations
+
+import shutil
+from pathlib import Path
+
+import pytest
+
+from framework.core import ValidationError
+from framework.run.run_context import RunContext, active_context
+from pipelines.complaints_b.pipeline import FEED_NAME, run, to_raw, to_silver
+from tests.framework_testing import (
+    RecordingRunLog,
+    RecordingWriter,
+    assert_rows_equal,
+    given_rows,
+    read_rows,
+)
+from tools.medallion import medallion
+from tools.store import StoreRegistry
+
+
+def test_bundled_sample_feed_refines_through_to_silver(tmp_path):
+    landing = tmp_path / "landing_zone"
+    landing.mkdir(parents=True)
+
+    sample_dir = (
+        Path(__file__).parent.parent.parent
+        / "pipelines"
+        / "complaints_b"
+        / "sample_data"
+    )
+    shutil.copy(sample_dir / f"{FEED_NAME}.csv", landing / f"{FEED_NAME}.csv")
+
+    run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
+
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
+
+    raw = read_rows(med.raw, FEED_NAME)
+    assert len(raw) == 3
+
+    silver = read_rows(med.silver, FEED_NAME)
+    assert len(silver) == 3
+
+
+def test_to_raw_gates_source_columns():
+    writer = RecordingWriter()
+    # Missing 'priority' column
+    reader = given_rows(
+        [{"record_id": "c1", "category": "sales", "received_date": "2026-07-20"}]
+    )
+
+    with pytest.raises(ValidationError, match="missing required column.*priority"):
+        to_raw(reader, writer)
+
+    assert len(writer.writes) == 0
+
+
+def test_to_silver_quarantines_value_rule_breaches():
+    run_log = RecordingRunLog()
+    writer = RecordingWriter()
+    reject_writer = RecordingWriter()
+
+    # R001 is valid (priority="high")
+    # R002 breaches the OneOf rule (priority="urgent")
+    reader = given_rows(
+        [
+            {
+                "record_id": "R001",
+                "category": "sales",
+                "priority": "high",
+                "received_date": "2026-07-20",
+                "run_id": "1",
+            },
+            {
+                "record_id": "R002",
+                "category": "support",
+                "priority": "urgent",
+                "received_date": "2026-07-20",
+                "run_id": "1",
+            },
+        ]
+    )
+
+    with active_context(RunContext(pipeline=FEED_NAME, run_log=run_log)):
+        to_silver(reader, writer, reject_writer)
+
+    # The good row reaches the main writer
+    assert_rows_equal(
+        writer,
+        [
+            {
+                "record_id": "R001",
+                "category": "sales",
+                "priority": "high",
+                "received_date": "2026-07-20",
+            }
+        ],
+        ignoring=["run_id"],
+    )
+
+    # The bad row is routed to the reject writer
+    rejects = reject_writer.writes[0].to_pandas().to_dict("records")
+    assert len(rejects) == 1
+    assert rejects[0]["record_id"] == "R002"
+    assert (
+        "outside" in rejects[0]["failed_rule"]
+        or "has value(s)" in rejects[0]["failed_rule"]
+    )
+
+    # The run log captured the partition statistics
+    q_record = next(r for r in run_log.records if r["step"] == "silver:quarantine")
+    assert q_record["rows_in"] == 2
+    assert q_record["rows_out"] == 1
+    assert q_record["rows_quarantined"] == 1
+
+
+def test_to_silver_aborts_on_structural_breaches():
+    writer = RecordingWriter()
+    reject_writer = RecordingWriter()
+
+    # Missing 'priority', which violates the schema structurally.
+    # Structural breaches still abort and bypass quarantine.
+    reader = given_rows(
+        [{"record_id": "c1", "category": "sales", "received_date": "2026-07-20"}]
+    )
+
+    with pytest.raises(ValidationError, match="missing column 'priority'"):
+        to_silver(reader, writer, reject_writer)
+
+    assert len(writer.writes) == 0
+    assert len(reject_writer.writes) == 0
+
+```

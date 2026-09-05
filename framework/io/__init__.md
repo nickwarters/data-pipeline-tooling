@@ -1,0 +1,91 @@
+```python
+"""Public facade: moving data across the boundary — sources, sinks, strategies.
+
+The stable import surface for getting a feed *in* and a result *out*: every
+:class:`Reader` and :class:`Writer` and the load strategies a Writer carries. The
+:class:`~framework.core.dataset.Dataset` they move is the foundational vocabulary
+on ``framework.core``. Where a feed *lands* — the namespace ``Store`` /
+``StoreRegistry`` (one logical database → file) and the raw/silver/gold medallion
+profile over it — is **application infrastructure** in the sibling ``tools``
+package (``tools.store``, ``tools.medallion``), not framework vocabulary.
+
+Import from here rather than the underlying modules::
+
+    from framework.io import CsvReader, CsvWriter, Refresh
+
+The modules behind this facade (``framework.io.readers``, ``framework.io.writers``,
+``framework.io.strategy``) are internal layout: re-exports here are the public
+contract, the submodule paths are not. See ``docs/public-api.md``.
+"""
+
+from framework.core.protocols import RUN_PROVENANCE_COLUMN
+from framework.io.readers import (
+    CsvReader,
+    DatasetReader,
+    ExcelReader,
+    GlobCsvReader,
+    Reader,
+    SqliteReader,
+    StrictCsvParseError,
+    StrictCsvReader,
+)
+from framework.io.strategy import (
+    AccumulateByRun,
+    AppendOnly,
+    InsertIfAbsent,
+    InsertOrIgnore,
+    LoadStrategy,
+    Refresh,
+    UpsertStrategy,
+)
+from framework.io.writers import (
+    AccumulateByRunWriter,
+    AppendOnlyConflictError,
+    CsvWriter,
+    ExcelWriter,
+    JsonWriter,
+    MissingTableError,
+    QuarantineWriter,
+    SqliteAppendOnlyWriter,
+    SqliteInsertIfAbsentWriter,
+    SqliteInsertOrIgnoreWriter,
+    SqliteTruncateReloadWriter,
+    SqliteUpsertWriter,
+    StdoutWriter,
+    Writer,
+)
+
+__all__ = [
+    "Reader",
+    "DatasetReader",
+    "CsvReader",
+    "StrictCsvReader",
+    "StrictCsvParseError",
+    "GlobCsvReader",
+    "ExcelReader",
+    "SqliteReader",
+    "Writer",
+    "RUN_PROVENANCE_COLUMN",
+    "CsvWriter",
+    "ExcelWriter",
+    "JsonWriter",
+    "SqliteTruncateReloadWriter",
+    "AccumulateByRunWriter",
+    "QuarantineWriter",
+    "StdoutWriter",
+    "LoadStrategy",
+    "Refresh",
+    "AccumulateByRun",
+    "UpsertStrategy",
+    "SqliteUpsertWriter",
+    "InsertOrIgnore",
+    "SqliteInsertOrIgnoreWriter",
+    "InsertIfAbsent",
+    "SqliteInsertIfAbsentWriter",
+    "AppendOnly",
+    "SqliteAppendOnlyWriter",
+    "AppendOnlyConflictError",
+    "MissingTableError",
+]
+
+```

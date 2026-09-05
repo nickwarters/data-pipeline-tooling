@@ -1,0 +1,516 @@
+```python
+"""Immediate pipeline steps for procedural authoring.
+
+Each step returns a ``Dataset`` and, within an active ``RunContext``, emits
+run-log records equivalent to deferred execution. Without an active context,
+work executes without recording.
+"""
+
+from __future__ import annotations
+
+import contextvars
+import re
+import time
+from contextlib import contextmanager
+from typing import Any, Iterator
+
+from framework.core.dataset import Dataset
+from framework.core.errors import ErrorCategory, PipelineError
+from framework.core.protocols import Processor, Reader, Validator, Writer
+from framework.core.validators import ValidationError
+from framework.run.run_context import RunContext, current_context
+
+__all__ = [
+    "coerce",
+    "enforce",
+    "explain",
+    "quarantine",
+    "read",
+    "step",
+    "transform",
+    "validate",
+    "write",
+    "write_trace",
+]
+
+
+class StepError(PipelineError):
+    """Raised when an eager step is handed something it cannot work with."""
+
+    category = ErrorCategory.CONFIG
+
+
+# Step names must be stable run-log keys. Explicit names win; otherwise reads and
+# writes use their verb and transforms/validators use their component name.
+
+_CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
+
+
+def _snake(text: str) -> str:
+    return _CAMEL_BOUNDARY.sub("_", text).lower()
+
+
+def _component_name(component: object, fallback: str) -> str:
+    """The most informative stable name for ``component``, else ``fallback``."""
+    # A bound method (``obj.method``) describes itself best by its owner.
+    owner = getattr(component, "__self__", None)
+    if owner is not None:
+        return _snake(type(owner).__name__)
+    if isinstance(component, type):
+        return _snake(component.__name__)
+    own_name = getattr(component, "__name__", None)
+    if own_name:
+        # A lambda has a ``__name__`` of "<lambda>", which names nothing.
+        return fallback if own_name == "<lambda>" else _snake(own_name)
+    cls = type(component)
+    if cls.__name__ in {"function", "builtin_function_or_method", "partial"}:
+        return fallback
+    return _snake(cls.__name__)
+
+
+def _unique_step_name(context: RunContext | None, name: str) -> str:
+    """``name``, suffixed if this run has already recorded a step by that name.
+
+    Two coercions in one pipeline are ``schema_coercion`` and
+    ``schema_coercion-2``, so every record still names exactly one step -- the
+    promise the run log makes and the registry relies on.
+    """
+    if context is None:
+        return name
+    seen: dict[str, int] = getattr(context, "_eager_step_names", None)
+    if seen is None:
+        seen = {}
+        context._eager_step_names = seen
+    count = seen.get(name, 0) + 1
+    seen[name] = count
+    return name if count == 1 else f"{name}-{count}"
+
+
+@contextmanager
+def step(
+    name: str,
+    *,
+    rows_in: int | None = None,
+    committed: bool = False,
+) -> Iterator[Any]:
+    """Record an arbitrary block of an author's own code as one run-log step.
+
+    The escape hatch that keeps procedural code first-class: whatever a feed
+    needs to do that no step covers -- calling a service, reconciling two frames
+    by hand -- still shows up in the run log as a timed, named step rather than
+    as an unexplained gap between two recorded ones::
+
+        with step("fetch-reference-data") as metrics:
+            reference = download(url)
+            metrics.rows_out = len(reference)
+
+    Yields the same mutable :class:`~tools.observability.run_log.StepMetrics` the
+    deferred builder fills in, so ``rows_out`` / ``warn_hits`` are set the same
+    way. Outside a run context it yields a throwaway tally and records nothing.
+    """
+    context = current_context()
+    if context is None or context.run_log is None:
+        from tools.observability.run_log import StepMetrics
+
+        yield StepMetrics()
+        return
+    unique = _unique_step_name(context, name)
+    with context.run_log.step(
+        context.pipeline_run_id,
+        context.label or (context.pipeline or ""),
+        unique,
+        rows_in=rows_in,
+        committed=committed,
+        logical_run_id=context.logical_run_id,
+    ) as metrics:
+        yield metrics
+
+
+def _locations(component: object) -> list[dict[str, str]] | None:
+    """What a component reported touching, copied so a later read can't mutate it."""
+    locations = getattr(component, "data_locations", None)
+    return list(locations) if locations else None
+
+
+def _drain_retries(component: object) -> list[str]:
+    """Retry warnings a Reader/Writer accumulated, for this step's warn hits."""
+    attempts = getattr(component, "retry_attempts", None)
+    return list(attempts) if attempts else []
+
+
+@contextmanager
+def _record(
+    name: str,
+    kind: str,
+    *,
+    rows_in: int | None = None,
+) -> Iterator[dict[str, Any]]:
+    """Time one eager step and emit its single run-log record.
+
+    ``kind`` is the step's node type as a dry-run preview reports it (``Read``,
+    ``Transform``, …), the same word the deferred builder's node puts there, so
+    ``cli run --dry-run`` reads identically against either authoring model.
+
+    Yields a mutable dict the caller fills in (``rows_out``, ``committed``,
+    ``warn_hits``, ``data_locations``, ``rows_quarantined``, ``note``). One
+    record per step, on both the success and the failure path -- the same
+    contract :meth:`framework.run.builder.Node.execute` keeps for a node.
+    """
+    context = current_context()
+    outcome: dict[str, Any] = {
+        "rows_out": None,
+        "rows_quarantined": None,
+        "rows_excluded": None,
+        "committed": False,
+        "warn_hits": [],
+        "data_locations": None,
+        "note": None,
+        "result": None,
+    }
+    if context is None or context.run_log is None:
+        # No run above us: do the work, record nothing. An author debugging a
+        # single step in a scratch file gets no ceremony and no run log.
+        yield outcome
+        return
+
+    unique = _unique_step_name(context, name)
+    pipeline = context.label or (context.pipeline or "")
+    started = time.perf_counter()
+    try:
+        yield outcome
+    except Exception as exc:
+        context.run_log.record(
+            context.pipeline_run_id,
+            pipeline,
+            unique,
+            "error",
+            logical_run_id=context.logical_run_id,
+            rows_in=rows_in,
+            duration=time.perf_counter() - started,
+            errors=[str(exc)],
+            error_category=getattr(exc, "category", None),
+            warn_hits=outcome["warn_hits"] or None,
+        )
+        if context.dry_run and context.dry_run_report is not None:
+            context.dry_run_report.observe(unique, kind, note=f"FAILED: {exc}")
+        raise
+    context.run_log.record(
+        context.pipeline_run_id,
+        pipeline,
+        unique,
+        "ok",
+        logical_run_id=context.logical_run_id,
+        rows_in=rows_in,
+        rows_out=outcome["rows_out"],
+        rows_quarantined=outcome["rows_quarantined"],
+        rows_excluded=outcome["rows_excluded"],
+        duration=time.perf_counter() - started,
+        warn_hits=outcome["warn_hits"] or None,
+        committed=bool(outcome["committed"]),
+        data_locations=outcome["data_locations"],
+    )
+    if context.dry_run and context.dry_run_report is not None:
+        context.dry_run_report.observe(
+            unique, kind, outcome["result"], note=outcome["note"]
+        )
+
+
+# Eager transforms report stages through the trace opened by ``explain``.
+
+_ACTIVE_TRACE: contextvars.ContextVar[Any] = contextvars.ContextVar(
+    "active_row_trace", default=None
+)
+
+
+@contextmanager
+def explain(id_column: str, *, score_column: str | None = None) -> Iterator[Any]:
+    """Trace, row by row, what every step inside this block did to a population.
+
+    A governance question -- *why is this Case not in the pool?* -- that a row
+    count cannot answer. The first :func:`read` inside the block seeds the ledger
+    with everything considered; each :func:`transform` records whether a row
+    survived it and, when it did not, which stage excluded it. Hand the result to
+    :func:`write_trace` to publish it::
+
+        with explain("case_ref", score_column="priority_score") as trace:
+            pool = read(candidates)
+            pool = transform(Filter(eligible, name="eligibility"), pool)
+            ...
+        write_trace(trace_writer, trace, pool)
+
+    A processor says what it is by carrying ``trace_role`` ("filter", "gate",
+    "score", "join") and ``trace_name``; without them a stage that drops rows is
+    still recorded, named for its own class.
+
+    Yields the :class:`~framework.run.trace.RowTrace` accumulating the verdicts.
+    """
+    from framework.run.trace import RowTrace
+
+    trace = RowTrace(id_column, score_column=score_column)
+    token = _ACTIVE_TRACE.set(trace)
+    try:
+        yield trace
+    finally:
+        _ACTIVE_TRACE.reset(token)
+
+
+def write_trace(
+    writer: Writer,
+    trace: Any,
+    survivors: Dataset,
+    *,
+    name: str = "explain",
+) -> Dataset:
+    """Rank the survivors, publish the trace, and return ``survivors`` unchanged.
+
+    The step's row counts are the *trace's* -- how many were considered, how
+    many survived, how many a gate excluded -- rather than this step's own input
+    and output, because those are the numbers the question is about. Under a dry
+    run the trace is still built, so its shape is previewed, and nothing commits.
+    """
+    survivors = _require_dataset(survivors, "write_trace")
+    context = current_context()
+    with _record(name, "Explain", rows_in=trace.considered) as outcome:
+        traced = trace.finalize(survivors)
+        outcome["rows_in"] = trace.considered
+        outcome["rows_out"] = trace.selected
+        outcome["rows_excluded"] = trace.excluded
+        outcome["result"] = traced
+        if context is not None and context.dry_run:
+            outcome["note"] = (
+                f"would write trace: {len(traced)} row(s) "
+                f"({trace.selected} selected, {trace.excluded} excluded)"
+            )
+            return survivors
+        writer.write(traced)
+        outcome["committed"] = True
+        outcome["data_locations"] = _locations(writer)
+    return survivors
+
+
+def _require_dataset(value: object, verb: str) -> Dataset:
+    """Fail loudly, and early, when a step is handed something that isn't data.
+
+    The commonest slip converting a deferred pipeline is leaving a builder node
+    in place of its dataset, so the message says exactly that rather than
+    surfacing as an ``AttributeError`` three steps later.
+    """
+    if isinstance(value, Dataset):
+        return value
+    raise StepError(
+        f"{verb}() expects a Dataset, got {type(value).__name__}. "
+        "Eager steps pass the data itself, not a builder node: write "
+        "`data = transform(processor, data)`, not `p.transform(...)`."
+    )
+
+
+def read(reader: Reader, *, name: str | None = None) -> Dataset:
+    """Read a source now and return its rows.
+
+    Records one ``read`` step with the row count and whatever the Reader
+    reported touching, so the run log names the file or table the rows came from.
+    """
+    step_name = name or "read"
+    with _record(step_name, "Read") as outcome:
+        try:
+            dataset = reader.read()
+        finally:
+            outcome["warn_hits"].extend(_drain_retries(reader))
+        outcome["rows_out"] = len(dataset)
+        outcome["data_locations"] = _locations(reader)
+        outcome["result"] = dataset
+    trace = _ACTIVE_TRACE.get()
+    if trace is not None and not trace.considered:
+        # The population entering the traced stages: the first read inside an
+        # ``explain`` block, matching the builder's first read node.
+        trace.consider(dataset)
+    return dataset
+
+
+def transform(
+    processor: Processor, *datasets: Dataset, name: str | None = None
+) -> Dataset:
+    """Apply ``processor`` to ``datasets`` now and return the result.
+
+    The argument order matches the deferred builder's ``p.transform(processor,
+    node)``, so converting a pipeline is mechanical: drop the ``p.``, pass the
+    data instead of the node, drop the ``name=``.
+
+    **Several datasets go in the same way they did as several input nodes.** The
+    builder called ``func(*datasets)``, and so does this, so a fan-in written for
+    one works unchanged in the other::
+
+        joined = transform(join_threads_to_cases, threads, cases, name="join-case")
+
+    The **first** dataset is the one the record's ``rows_in`` counts and the one
+    an ``explain`` trace treats as the rows entering the stage -- the same
+    convention the builder's ``TransformNode`` used, since a fan-in's later
+    inputs are the reference side rather than the flow being narrowed.
+    """
+    if not datasets:
+        raise StepError(
+            "transform() needs at least one Dataset to work on: write "
+            "`data = transform(processor, data)`."
+        )
+    datasets = tuple(_require_dataset(d, "transform") for d in datasets)
+    step_name = name or _component_name(processor, "transform")
+    with _record(step_name, "Transform", rows_in=len(datasets[0])) as outcome:
+        result = processor(*datasets)
+        outcome["rows_out"] = len(result) if isinstance(result, Dataset) else None
+        outcome["result"] = result
+    _observe(processor, step_name, datasets[0], result)
+    return result
+
+
+def _observe(processor: object, step_name: str, before: Dataset, after: object) -> None:
+    """Report one stage to the ambient ``explain`` trace, when there is one."""
+    trace = _ACTIVE_TRACE.get()
+    if trace is None or not isinstance(after, Dataset):
+        return
+    owner = getattr(processor, "__self__", processor)
+    trace.observe(
+        getattr(owner, "trace_role", None),
+        getattr(owner, "trace_name", type(owner).__name__ if owner else step_name),
+        before,
+        after,
+    )
+
+
+def validate(
+    validator: Validator,
+    dataset: Dataset,
+    *,
+    name: str | None = None,
+    severity: str = "error",
+) -> Dataset:
+    """Check ``dataset`` now; return it unchanged so the step can be chained.
+
+    A validator's contract is raise-or-nothing. At ``severity="warn"`` a
+    :class:`ValidationError` is downgraded to a warn hit on the record and the
+    run continues; anything else -- a typo'd column, a half-written validator --
+    propagates with its traceback, so a run never reports success for a check
+    that did not actually happen.
+    """
+    dataset = _require_dataset(dataset, "validate")
+    step_name = name or _component_name(validator, "validate")
+    with _record(step_name, "Validate", rows_in=len(dataset)) as outcome:
+        try:
+            validator.validate(dataset)
+        except ValidationError as exc:
+            if severity != "warn":
+                raise
+            outcome["warn_hits"].append(f"{step_name}: {exc}")
+        outcome["rows_out"] = len(dataset)
+        outcome["result"] = dataset
+    return dataset
+
+
+def write(writer: Writer, dataset: Dataset, *, name: str | None = None) -> Dataset:
+    """Write ``dataset`` now; return it unchanged so the step can be chained.
+
+    Under ``RunContext(dry_run=True)`` the commit is skipped and the intent is
+    previewed instead, exactly as the deferred write node does -- so ``cli run
+    --dry-run`` stays safe against an eager pipeline.
+    """
+    dataset = _require_dataset(dataset, "write")
+    step_name = name or "write"
+    context = current_context()
+    with _record(step_name, "Write", rows_in=len(dataset)) as outcome:
+        outcome["rows_out"] = len(dataset)
+        outcome["result"] = dataset
+        if context is not None and context.dry_run:
+            outcome["note"] = f"would write {len(dataset)} row(s)"
+            return dataset
+        try:
+            writer.write(dataset)
+        finally:
+            outcome["warn_hits"].extend(_drain_retries(writer))
+        outcome["committed"] = True
+        outcome["data_locations"] = _locations(writer)
+    return dataset
+
+
+def quarantine(
+    partitioner: Any,
+    reject_writer: Writer,
+    dataset: Dataset,
+    *,
+    name: str | None = None,
+) -> Dataset:
+    """Split ``dataset`` now, write the rejects, and return the rows that passed.
+
+    The rejects are stamped with the run's ``logical_run_id`` and ``load_date``
+    -- the two columns the quarantine table is keyed and dated by. The attempt
+    behind the row is not stamped here: the ``QuarantineWriter`` sets the
+    reserved provenance column, as every table-backed Writer does.
+    """
+    dataset = _require_dataset(dataset, "quarantine")
+    step_name = name or "quarantine"
+    context = current_context()
+    with _record(step_name, "Quarantine", rows_in=len(dataset)) as outcome:
+        good, rejected = partitioner.partition(dataset)
+        outcome["rows_quarantined"] = len(rejected)
+        outcome["rows_out"] = len(good)
+        outcome["result"] = good
+        if context is not None and context.dry_run:
+            outcome["note"] = f"would quarantine {len(rejected)} row(s)"
+            return good
+        if len(rejected) > 0:
+            frame = rejected.to_pandas()
+            if context is not None:
+                frame["logical_run_id"] = context.logical_run_id
+                frame["load_date"] = context.load_date
+            reject_writer.write(Dataset.from_pandas(frame))
+            outcome["committed"] = True
+    return good
+
+
+def coerce(schema: type, dataset: Dataset, *, name: str | None = None) -> Dataset:
+    """Cast ``dataset``'s declared columns to the dtypes ``schema`` declares.
+
+    Sugar for ``transform(SchemaCoercion(schema), dataset)`` -- the coerce half
+    of the schema adapter, imported for you so a feed needs one import fewer.
+    """
+    from framework.transform.coercion import SchemaCoercion
+
+    return transform(SchemaCoercion(schema), dataset, name=name or "coerce")
+
+
+def enforce(
+    schema: type,
+    dataset: Dataset,
+    *,
+    reject_writer: Writer | None = None,
+    name: str | None = None,
+) -> Dataset:
+    """Coerce to ``schema``, optionally quarantine value-rule breaches, then check it.
+
+    The three-step sequence a silver step repeats, in the order that makes it
+    correct: coerce the dtypes storage lost, route value-rule breaches to
+    quarantine so the good rows still land, then validate the declared schema.
+    Getting that order wrong is a real and easy mistake, so it is made once here.
+
+    Each part still records its **own** step -- ``coerce``, ``quarantine``,
+    ``schema_validator`` -- so the run log and the debugger show the same three
+    operations they would if they had been written out by hand. It is shorthand,
+    not a black box; write the three calls yourself whenever that reads better.
+
+    ``name`` prefixes all three, for a feed that enforces the same schema several
+    times in one run and needs the log to say which one -- ``claims:coerce``,
+    ``appeals:coerce`` -- rather than ``coerce`` and ``coerce-2``.
+    """
+    from framework.core.schema import SchemaValidator
+    from framework.transform.quarantine import SchemaValueRulePartitioner
+
+    at = f"{name}:" if name else ""
+    dataset = coerce(schema, dataset, name=f"{at}coerce")
+    if reject_writer is not None:
+        dataset = quarantine(
+            SchemaValueRulePartitioner(schema),
+            reject_writer,
+            dataset,
+            name=f"{at}quarantine",
+        )
+    return validate(SchemaValidator(schema), dataset, name=f"{at}schema_validator")
+
+```
