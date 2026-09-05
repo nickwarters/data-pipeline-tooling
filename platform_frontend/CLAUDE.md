@@ -464,6 +464,8 @@ src/
       questions-plugin.js       # Questions bank section plugin
     issues/
       issues-plugin.js          # Issues capture section plugin
+    summary/
+      summary-plugin.js         # Summary roll-up section plugin
     remediation/
       remediation-plugin.js     # Remediation tracking section plugin
     notes/
