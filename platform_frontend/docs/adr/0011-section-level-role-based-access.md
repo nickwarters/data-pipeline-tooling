@@ -2,9 +2,9 @@
 
 ## Status
 
-Accepted as amended by ADR-0016, ADR-0022, ADR-0026, ADR-0027, ADR-0032,
-ADR-0037 (which adds the `reviewerManager` Role and makes the **Responsible
-Party Manager** a Conversation participant), and
+Superseded by [ADR-0053](./0053-section-plugin-architecture.md) for section access
+evaluation (monolithic matrix replaced by per-plugin `evaluateAccess`). Previously
+accepted as amended by ADR-0016, ADR-0022, ADR-0026, ADR-0027, ADR-0032, ADR-0037, and
 [ADR-0038](./0038-manager-fields-split-reporting-snapshot-vs-live-access-role.md)
 (which decides that the `responsiblePartyManager` Role is resolved **live** from
 the directory rather than from the denormalised Case row field, while

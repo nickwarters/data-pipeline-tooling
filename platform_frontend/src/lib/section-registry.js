@@ -1,51 +1,43 @@
 // @ts-check
 /**
- * Data-driven registry of the built-in Case Review Sections — the single source
- * of truth for which Sections exist and how they are ordered. Its two
- * consumers derive their structures from it: `services/section-access.js`
- * (`SECTIONS`, `SUMMARY_SECTIONS`, `showInSummaryDefault`) and
- * `pages/cora-case-review.js` (`tabEntries()` for the tab strip and render
- * loop). A contract test asserts nothing re-lists Section ids independently.
+ * Case Review Section registry.
  *
- * The registry does not say how a Section's panel is rendered — that is
- * `SECTION_PANELS` in `pages/cora-case-review/section-panels.js`, which lives
- * with the page because `src/lib/` must not import `src/pages/**`. Nor does it
- * own the role→mode access policy, which stays in `MATRIX`.
+ * Built-in static Section definitions and derivers for Section IDs and Summary blocks.
+ * Individual SectionPlugins are registered and managed via `sections/registry.js`.
  */
 
 /**
  * The Section id union, projected from `SECTION_REGISTRY` rather than restated
- * by hand: an entry below is the only place a Section id is written, and the
- * `MATRIX` key set, the Case Type `sections` allow-list, the tab list and the
- * Summary block set all derive from it.
+ * anywhere.
  *
- * Adding a Section is: an entry here, plus its `MATRIX` access row (policy, not
- * existence — deliberately hand-written), its `DEFAULT_SECTION_LABELS`
- * `{ tab, heading }` pair, and — for a tab Section — its `SECTION_PANELS`
- * renderer. `tsc` demands the first two, a test the third.
+ * Declared as a separate type alias so it is an exportable named type in JSDoc;
+ * `const` on `SECTION_REGISTRY` narrows the array element's `.id` to literal
+ * string types rather than `string`, so this union resolves to the ten names
+ * rather than widening.
  *
  * @typedef {(typeof SECTION_REGISTRY)[number]['id']} Section
  */
 
 /**
- * One entry per built-in Section.
+ * A Section definition in the registry.
  *
- * @typedef {object} SectionDefinition
+ * @typedef {Object} SectionDefinition
  * @property {Section} id
- *   The Section id — the key used across the access matrix, the tab list, the
- *   Case Type `sections` allow-list and the Summary block set.
+ *   Canonical identifier for the Section across the registry, plugins, and the route slice.
  * @property {boolean} tab
- *   Whether the Section appears as a tab on the Case Review page. All Sections
- *   are tabs except `conversation`, which is a floating overlay.
+ *   Whether this Section has a dedicated tab on the Case Review page.
  * @property {number} tabOrder
- *   Left-to-right order among the visible tabs. Ignored when `tab` is `false`.
+ *   Position in the tab strip (1-based, left to right). Ignored when `tab` is
+ *   false.
  * @property {boolean} summaryBlock
- *   Whether the Section can contribute a block to the read-only Summary Section.
+ *   Whether this Section can contribute a block to the Summary Section.
  * @property {number} summaryOrder
- *   Render order among Summary blocks. Ignored when `summaryBlock` is `false`.
+ *   Position within the Summary view (1-based, top to bottom). Ignored when
+ *   `summaryBlock` is false.
  * @property {boolean} showInSummaryDefault
- *   The default value of the per-Section `showInSummary` flag when a Case Type
- *   declares no explicit override. Notes defaults off; every other Section on.
+ *   Default visibility in Summary when the Case Type does not configure
+ *   `showInSummary`. Ignored when `summaryBlock` is false. Notes defaults off;
+ *   every other Section on.
  */
 
 /**
@@ -60,111 +52,99 @@
  * from them, and a widening annotation would erase them. Entry *shape* is still
  * checked, via each helper's `registry` parameter default.
  */
-export const SECTION_REGISTRY = /** @type {const} */ ([
-  {
-    id: 'details',
-    tab: true,
-    tabOrder: 1,
-    summaryBlock: true,
-    summaryOrder: 1,
-    showInSummaryDefault: true,
-  },
-  {
-    id: 'questions',
-    tab: true,
-    tabOrder: 2,
-    summaryBlock: true,
-    summaryOrder: 2,
-    showInSummaryDefault: true,
-  },
-  {
-    id: 'issues',
-    tab: true,
-    tabOrder: 3,
-    summaryBlock: true,
-    summaryOrder: 3,
-    showInSummaryDefault: true,
-  },
-  {
-    id: 'summary',
-    tab: true,
-    tabOrder: 4,
-    summaryBlock: false,
-    summaryOrder: 0,
-    showInSummaryDefault: true,
-  },
-  {
-    id: 'remediation',
-    tab: true,
-    tabOrder: 5,
-    summaryBlock: true,
-    summaryOrder: 4,
-    showInSummaryDefault: true,
-  },
-  {
-    id: 'notes',
-    tab: true,
-    tabOrder: 6,
-    summaryBlock: true,
-    summaryOrder: 5,
-    showInSummaryDefault: false,
-  },
-  {
-    id: 'conversation',
-    tab: false,
-    tabOrder: 0,
-    summaryBlock: false,
-    summaryOrder: 0,
-    showInSummaryDefault: true,
-  },
-  {
-    id: 'appealRequest',
-    tab: true,
-    tabOrder: 7,
-    summaryBlock: false,
-    summaryOrder: 0,
-    showInSummaryDefault: true,
-  },
-  {
-    id: 'appealReview',
-    tab: true,
-    tabOrder: 8,
-    summaryBlock: false,
-    summaryOrder: 0,
-    showInSummaryDefault: true,
-  },
-  {
-    id: 'amendOutcome',
-    tab: true,
-    tabOrder: 9,
-    summaryBlock: false,
-    summaryOrder: 0,
-    showInSummaryDefault: true,
-  },
-]);
+export const SECTION_REGISTRY = Object.freeze(
+  /** @type {const} */ ([
+    {
+      id: 'details',
+      tab: true,
+      tabOrder: 1,
+      summaryBlock: true,
+      summaryOrder: 1,
+      showInSummaryDefault: true,
+    },
+    {
+      id: 'questions',
+      tab: true,
+      tabOrder: 2,
+      summaryBlock: true,
+      summaryOrder: 2,
+      showInSummaryDefault: true,
+    },
+    {
+      id: 'issues',
+      tab: true,
+      tabOrder: 3,
+      summaryBlock: true,
+      summaryOrder: 3,
+      showInSummaryDefault: true,
+    },
+    {
+      id: 'summary',
+      tab: true,
+      tabOrder: 4,
+      summaryBlock: false,
+      summaryOrder: 0,
+      showInSummaryDefault: true,
+    },
+    {
+      id: 'remediation',
+      tab: true,
+      tabOrder: 5,
+      summaryBlock: true,
+      summaryOrder: 4,
+      showInSummaryDefault: true,
+    },
+    {
+      id: 'notes',
+      tab: true,
+      tabOrder: 6,
+      summaryBlock: true,
+      summaryOrder: 5,
+      showInSummaryDefault: false,
+    },
+    {
+      id: 'conversation',
+      tab: false,
+      tabOrder: 0,
+      summaryBlock: false,
+      summaryOrder: 0,
+      showInSummaryDefault: true,
+    },
+    {
+      id: 'appealRequest',
+      tab: true,
+      tabOrder: 7,
+      summaryBlock: false,
+      summaryOrder: 0,
+      showInSummaryDefault: true,
+    },
+    {
+      id: 'appealReview',
+      tab: true,
+      tabOrder: 8,
+      summaryBlock: false,
+      summaryOrder: 0,
+      showInSummaryDefault: true,
+    },
+    {
+      id: 'amendOutcome',
+      tab: true,
+      tabOrder: 9,
+      summaryBlock: false,
+      summaryOrder: 0,
+      showInSummaryDefault: true,
+    },
+  ])
+);
 
 /**
- * The Section ids in canonical (declaration) order; re-exported by
- * `services/section-access.js` as `SECTIONS`.
+ * The Section ids in canonical order.
  *
  * @param {readonly SectionDefinition[]} [registry]
  * @returns {Section[]}
  */
 export function sectionIds(registry = SECTION_REGISTRY) {
   return registry.map((entry) => entry.id);
-}
-
-/**
- * The tab Sections in left-to-right order. Callers place each panel by `id`; the
- * label is resolved per Case Type by `resolveSectionLabels`.
- *
- * @param {readonly SectionDefinition[]} [registry]
- * @returns {SectionDefinition[]}
- */
-export function tabEntries(registry = SECTION_REGISTRY) {
-  return registry
-    .filter((entry) => entry.tab)
-    .sort((a, b) => a.tabOrder - b.tabOrder);
 }
 
 /**
@@ -182,9 +162,9 @@ export function summaryBlockIds(registry = SECTION_REGISTRY) {
 }
 
 /**
- * Look up a Section definition by id.
+ * Look up a Section definition by its canonical id.
  *
- * @param {string} id
+ * @param {Section} id
  * @param {readonly SectionDefinition[]} [registry]
  * @returns {SectionDefinition | undefined}
  */

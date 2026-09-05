@@ -11,7 +11,6 @@ import assert from 'node:assert/strict';
 
 import {
   evaluateAccess as evaluateAccessWithCatalogue,
-  MATRIX,
   remediationAudience,
   resolveRoles,
   showInSummary,
@@ -22,59 +21,25 @@ import {
 } from '../../src/services/section-access.js';
 
 import { makeCaseRow, makePermissions } from './fixtures.js';
+import { getSectionPlugin } from '../../src/sections/registry.js';
 
 /**
- * The Case's resolved Question catalogue, holding the one Question the fixture
- * Cases below answer. The Remediation cells ask whether the tab would render a
- * row, which is a question about the catalogue and not only the Answers blob
- * — so a Case that carries remediation needs its Question to exist.
+ * Fixture: Question catalogue with one Yes/No failure.
  *
- * @type {import('../../src/sharepoint-client.js').QuestionDefinition[]}
- */
+ * Stamped on a Case so the Remediation Section has a Question to evaluate:
+ * without a catalogue, or without a failure in it, the Remediation cells
+ * resolve `hidden` regardless of status or role.
+ *
+ * @type {import('../../src/sharepoint-client.js').QuestionDefinition[]}\n */
 export const CATALOGUE = [
   {
     id: 'q1',
-    text: 'Greeted the customer?',
+    text: 'A Question?',
     responseType: 'yes-no-na',
     failureValues: ['No'],
     deprecated: false,
   },
 ];
-
-/**
- * `evaluateAccess` against `CATALOGUE` unless a test supplies its own — the
- * ordinary case being that the Case's Questions are loaded.
- *
- * **This default is the shim's, not production's.** `evaluateAccess` in
- * `src/services/section-access.js` defaults `catalogue` to `[]` and so fails
- * closed: no Questions, no remediation rows, no Remediation Section. A test that
- * wants that path must pass `[]` explicitly — importing this helper and omitting
- * the argument silently supplies a populated catalogue instead, which is the
- * opposite of the production default. `section-access-lifecycle.test.js` covers
- * the fail-closed path directly.
- *
- * @param {Section} section
- * @param {Role[]} roles
- * @param {CaseRow} caseRow
- * @param {CaseTypeConfig} config
- * @param {import('../../src/sharepoint-client.js').QuestionDefinition[]} [catalogue]
- * @returns {Mode}
- */
-export function evaluateAccess(
-  section,
-  roles,
-  caseRow,
-  config,
-  catalogue = CATALOGUE
-) {
-  return evaluateAccessWithCatalogue(
-    section,
-    roles,
-    caseRow,
-    config,
-    catalogue
-  );
-}
 
 /**
  * The shared Case fixture, narrowed to what these suites pair it with: the
@@ -107,6 +72,7 @@ export function makeConfig(overrides = {}) {
  * A Case whose failed Answer carries a Reviewer-selected Remediation Action —
  * the store the Issues tab actually writes (`answer.remediationActions`), and so
  * the one the Remediation Section's visibility gate reads.
+ *
  * @param {Partial<CaseRow>} [overrides]
  * @returns {CaseRow}
  */
@@ -149,6 +115,7 @@ export function caps(overrides = {}) {
 
 /**
  * Assert `evaluateAccess` for every (section, role) pair in an expected grid.
+ *
  * @param {Partial<Record<Section, Partial<Record<Role, Mode>>>>} grid
  * @param {CaseRow} caseRow
  * @param {CaseTypeConfig} config
@@ -168,35 +135,46 @@ export function assertGrid(grid, caseRow, config) {
 }
 
 /**
- * The access policy one `MATRIX` cell states, read without going through
+ * The access policy one plugin states, read directly without going through
  * `evaluateAccess`.
  *
  * This exists for the Appeal Sections and nothing else. Appeals are switched
  * off in this build, so `evaluateAccess` answers `hidden` for both of them
- * ahead of the matrix — which is the behaviour the app must have, and is
- * asserted as such in `appeals-feature-switch.test.js`. But the rows themselves
- * are the policy Appeals resume under, and a policy nothing exercises is a
- * policy that rots: the raiser default, the Completed-only gate, the
+ * ahead of the plugin \u2014 which is the behaviour the app must have, and is
+ * asserted as such in `appeals-feature-switch.test.js`. But the access rules
+ * themselves are the policy Appeals resume under, and a policy nothing exercises
+ * is a policy that rots: the raiser default, the Completed-only gate, the
  * no-Appeal-yet and resolved-Appeal modes would all go untested for as long as
  * the switch stands, and be rediscovered by whoever removes it.
  *
- * So the Appeal cells are tested here at the matrix, and the switch is tested
+ * So the Appeal cells are tested here at the plugin directly, and the switch is tested
  * at `evaluateAccess`. When the switch goes, these callers can move back to
  * `assertGrid`/`evaluateAccess` unchanged in expectation.
  *
  * @param {Section} section
- * @param {Role} role
+ * @param {Role | Role[]} role
  * @param {CaseRow} caseRow
  * @param {CaseTypeConfig} config
  * @returns {Mode}
  */
 export function matrixMode(section, role, caseRow, config) {
-  const cell = MATRIX[section][role];
-  return typeof cell === 'function' ? cell(caseRow, config, CATALOGUE) : cell;
+  const plugin = getSectionPlugin(section);
+  if (!plugin) throw new Error(`Unknown section plugin: ${section}`);
+  const roles = Array.isArray(role) ? role : [role];
+  return plugin.evaluateAccess({
+    caseRow,
+    roles,
+    config,
+    sectionConfig: {
+      appealsEnabled: true,
+      ...(config?.sections?.[section] ?? {}),
+    },
+    catalogue: CATALOGUE,
+  });
 }
 
 /**
- * `assertGrid`, but reading the `MATRIX` rows directly — see `matrixMode`.
+ * `assertGrid`, but reading the plugin policies directly — see `matrixMode`.
  *
  * @param {Partial<Record<Section, Partial<Record<Role, Mode>>>>} grid
  * @param {CaseRow} caseRow
@@ -210,10 +188,36 @@ export function assertMatrixGrid(grid, caseRow, config) {
       assert.equal(
         matrixMode(section, role, caseRow, config),
         row[role],
-        `${section} × ${role} (matrix policy)`
+        `${section} × ${role} (plugin policy)`
       );
     }
   }
+}
+
+/**
+ * Call `evaluateAccess` with `CATALOGUE` supplied so Remediation cells can
+ * evaluate properly.
+ *
+ * @param {Section} section
+ * @param {Role[]} roles
+ * @param {CaseRow} caseRow
+ * @param {CaseTypeConfig} config
+ * @returns {Mode}
+ */
+export function evaluateAccess(
+  section,
+  roles,
+  caseRow,
+  config,
+  catalogue = CATALOGUE
+) {
+  return evaluateAccessWithCatalogue(
+    section,
+    roles,
+    caseRow,
+    config,
+    catalogue
+  );
 }
 
 export {

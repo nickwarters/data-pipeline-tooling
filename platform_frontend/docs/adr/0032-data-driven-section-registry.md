@@ -4,9 +4,10 @@ Date: 2026-07-11
 
 ## Status
 
-Accepted
+Superseded in part by [ADR-0053](./0053-section-plugin-architecture.md) (panel view
+rendering and access policy migrated to cohesive `SectionPlugin` modules).
 
-The code-owned Section vocabulary remains current. Views consume it through the
+The code-owned Section layout vocabulary remains current in `SECTION_REGISTRY`. Views consume it through the
 store-driven model in
 [ADR-0034](./0034-store-driven-views-supersede-component-owned-state.md), while
 [ADR-0035](./0035-case-type-descriptors-express-variation-behaviour-stays-in-code.md)

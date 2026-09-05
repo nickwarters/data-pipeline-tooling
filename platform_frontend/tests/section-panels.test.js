@@ -4,60 +4,37 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom, findByClass } from './_dom-stub.js';
 import { fireEvent } from './helpers/semantic-dom.js';
-import { SECTION_REGISTRY, tabEntries } from '../src/lib/section-registry.js';
 import { resolveSectionLabels } from '../src/lib/section-labels.js';
 import { makeCaseRow, makeChrome } from './helpers/fixtures.js';
+import {
+  getSectionPlugin,
+  getSectionPlugins,
+} from '../src/sections/registry.js';
 
 installDom();
 
-const { SECTION_PANELS } =
-  await import('../src/pages/cora-case-review/section-panels.js');
 const { createQuestionPanelView } =
   await import('../src/pages/cora-case-review/question-panel-view.js');
 
-/**
- * The point of the panel map: the Case Review render loop no longer
- * branches on Section id, so a Section added to the registry with no panel used
- * to be invisible — it got a tab and an empty panel. These two assertions are
- * the replacement for that branch chain's implicit exhaustiveness.
- */
-
-test('every tab Section has a panel renderer', () => {
-  assert.deepEqual(
-    tabEntries()
-      .map((entry) => entry.id)
-      .sort(),
-    Object.keys(SECTION_PANELS).sort()
-  );
+test('every tab Section plugin provides a view renderer', () => {
+  const tabIds = getSectionPlugins()
+    .filter((p) => p.tab)
+    .map((p) => p.id);
+  for (const id of tabIds) {
+    const plugin = getSectionPlugin(id);
+    assert.ok(plugin, `plugin ${id} must exist`);
+    assert.equal(typeof plugin.view, 'function', `plugin ${id} must have view`);
+  }
 });
 
-test('adding a tab Section without a panel breaks the correspondence', () => {
-  const withNewSection = [
-    ...SECTION_REGISTRY,
-    {
-      id: /** @type {any} */ ('reworkedThing'),
-      tab: true,
-      tabOrder: 10,
-      summaryBlock: false,
-      summaryOrder: 0,
-      showInSummaryDefault: true,
-    },
-  ];
-  const ids = tabEntries(withNewSection)
-    .map((entry) => entry.id)
-    .sort();
-  assert.notDeepEqual(ids, Object.keys(SECTION_PANELS).sort());
-  assert.equal(
-    ids.filter((id) => !(id in SECTION_PANELS)).join(),
-    'reworkedThing'
-  );
+test('conversation plugin is registered and has view, but is not a tab', () => {
+  const plugin = getSectionPlugin('conversation');
+  assert.ok(plugin);
+  assert.equal(plugin.tab, false);
+  assert.equal(typeof plugin.view, 'function');
 });
 
-test('conversation is not a panel — it is a floating overlay', () => {
-  assert.equal('conversation' in SECTION_PANELS, false);
-});
-
-test('the panel map owns completion on Summary and Void on Case Details', () => {
+test('plugins own completion on Summary and Void on Case Details', () => {
   const chrome = makeChrome({ currentUser: { id: 'u1' } });
   const caseRow = makeCaseRow({
     id: 'c1',
@@ -152,12 +129,12 @@ test('the panel map owns completion on Summary and Void on Case Details', () => 
     actions,
   };
 
-  const summaryPanel = SECTION_PANELS.summary;
-  const detailsPanel = SECTION_PANELS.details;
-  assert.ok(summaryPanel);
-  assert.ok(detailsPanel);
-  const summary = summaryPanel(context);
-  const details = detailsPanel(context);
+  const summaryPlugin = getSectionPlugin('summary');
+  const detailsPlugin = getSectionPlugin('details');
+  assert.ok(summaryPlugin);
+  assert.ok(detailsPlugin);
+  const summary = summaryPlugin.view(context);
+  const details = detailsPlugin.view(context);
   assert.ok(findByClass({ _children: summary }, 'cora-completion'));
   assert.equal(findByClass({ _children: summary }, 'cora-void'), null);
   assert.ok(findByClass({ _children: details }, 'cora-void'));
@@ -185,7 +162,9 @@ test('the issues panel names the Responsible Party rather than showing their acc
       dispatch: () => {},
       actions: { currentAnswers: () => ({}), editAnswers: () => {} },
     };
-    const nodes = /** @type {any} */ (SECTION_PANELS.issues)(ctx);
+    const plugin = getSectionPlugin('issues');
+    assert.ok(plugin);
+    const nodes = plugin.view(ctx);
     return findByClass({ _children: nodes }, 'cora-responsible-party-value');
   };
 
@@ -230,8 +209,9 @@ test('the remediation panel offers only the resolutions the Case Type declares',
     actions: { currentAnswers: () => ({}), editAnswers: () => {} },
   };
 
-  const panel = /** @type {any} */ (SECTION_PANELS.remediation);
-  const nodes = panel(ctx);
+  const plugin = getSectionPlugin('remediation');
+  assert.ok(plugin);
+  const nodes = plugin.view(ctx);
   const select = findByClass(
     { _children: nodes },
     'cora-tracking-status-select'
@@ -276,7 +256,9 @@ test('a Group Outcome on the questions panel answers the whole group at once', (
     },
   };
 
-  const nodes = /** @type {any} */ (SECTION_PANELS.questions)(ctx);
+  const plugin = getSectionPlugin('questions');
+  assert.ok(plugin);
+  const nodes = plugin.view(ctx);
   const select = findByClass({ _children: nodes }, 'cora-group-outcome');
   select.value = 'Poor';
   fireEvent(select, 'change');
@@ -305,7 +287,9 @@ function amendReasonSelect(config) {
     dispatch: () => {},
     actions: { appeals: { amend: () => {} } },
   };
-  const panel = /** @type {any} */ (SECTION_PANELS.amendOutcome)(ctx);
+  const plugin = getSectionPlugin('amendOutcome');
+  assert.ok(plugin);
+  const panel = plugin.view(ctx);
   return findByClass(panel, 'cora-amend-outcome-reason');
 }
 

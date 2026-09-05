@@ -47,6 +47,54 @@ test('DetailsPlugin evaluates access correctly across all 9 roles', () => {
   }
 });
 
+test('multi-role access: most permissive mode wins across overlapping roles', () => {
+  // Overlapping RP-side and reviewer-side roles: reviewer-side read-only must win
+  assert.equal(
+    DetailsPlugin.evaluateAccess({
+      caseRow: /** @type {any} */ ({ status: 'Allocated' }),
+      roles: ['responsibleParty', 'controls'],
+    }),
+    'read-only'
+  );
+  assert.equal(
+    DetailsPlugin.evaluateAccess({
+      caseRow: /** @type {any} */ ({ status: 'Allocated' }),
+      roles: ['responsiblePartyManager', 'caseTypeOwner'],
+    }),
+    'read-only'
+  );
+  assert.equal(
+    DetailsPlugin.evaluateAccess({
+      caseRow: /** @type {any} */ ({ status: 'Allocated' }),
+      roles: ['responsibleParty', 'journeyOwner'],
+    }),
+    'read-only'
+  );
+  assert.equal(
+    DetailsPlugin.evaluateAccess({
+      caseRow: /** @type {any} */ ({ status: 'Allocated' }),
+      roles: ['responsiblePartyManager', 'reviewerManager'],
+    }),
+    'read-only'
+  );
+
+  // Purely hidden roles remain hidden
+  assert.equal(
+    DetailsPlugin.evaluateAccess({
+      caseRow: /** @type {any} */ ({ status: 'Allocated' }),
+      roles: ['responsibleParty', 'responsiblePartyManager'],
+    }),
+    'hidden'
+  );
+  assert.equal(
+    DetailsPlugin.evaluateAccess({
+      caseRow: /** @type {any} */ ({ status: 'Allocated' }),
+      roles: ['none', 'assignedReviewer'],
+    }),
+    'read-only'
+  );
+});
+
 test('DetailsPlugin view renders case details and void control when active', () => {
   const panelContext = /** @type {any} */ ({
     snapshot: {
