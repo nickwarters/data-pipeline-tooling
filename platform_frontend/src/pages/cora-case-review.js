@@ -12,7 +12,6 @@ import {
   evaluate,
 } from '../evaluators/applicability-evaluator.js';
 import { anyRemediationRequired } from '../evaluators/remediation-status.js';
-import { tabEntries } from '../lib/section-registry.js';
 import {
   getSectionPlugins,
   getSectionPlugin,
@@ -34,7 +33,6 @@ import {
   answerEdited,
   issueCaptured,
 } from './cora-case-review/answer-actions.js';
-import { SECTION_PANELS } from './cora-case-review/section-panels.js';
 import {
   completeCase,
   completionPatch,
@@ -64,8 +62,8 @@ import { voidReasonText } from '../lib/void-reasons.js';
  *   Set when the as-reviewed Question Bank was stamped on the row but its
  *   versioned export could not be fetched, so the *live* catalogue is what the
  *   page is showing. Rendered as a page-level banner — see `versionWarningView`.
- * @property {Record<import('../services/section-access.js').Section, import('../services/section-access.js').Mode>} access
- * @property {import('../sharepoint-client.js').ResolvedSectionLabels} sectionLabels
+ * @property {Record<string, import('../services/section-access.js').Mode>} access
+ * @property {import('../sharepoint-client.js').ResolvedSectionLabels & Record<string, { tab: string, heading: string }>} sectionLabels
  * @property {import('../lib/case-machine.js').CaseMachine | null} machine
  * @property {import('../sharepoint-client.js').CaseListOptions} caseListOptions
  */
@@ -133,7 +131,15 @@ export function createInitialCaseReviewState(chrome) {
 /** @param {CaseReviewSnapshot | null} snapshot */
 function visibleCaseTabs(snapshot) {
   if (!snapshot) return [];
-  return tabEntries().filter((entry) => snapshot.access[entry.id] !== 'hidden');
+  const plugins = getSectionPlugins();
+  return plugins
+    .filter(
+      (plugin) =>
+        plugin.tab &&
+        snapshot.access[plugin.id] &&
+        snapshot.access[plugin.id] !== 'hidden'
+    )
+    .sort((a, b) => a.tabOrder - b.tabOrder);
 }
 
 /**
@@ -736,12 +742,12 @@ export function createRouteSlice(params, context) {
     });
     /** @type {Record<string, HTMLElement>} */
     const panels = {};
-    for (const entry of tabEntries()) {
-      panels[entry.id] = h('div', {
+    for (const plugin of getSectionPlugins().filter((p) => p.tab)) {
+      panels[plugin.id] = h('div', {
         className: 'cora-tabs-panel',
         role: 'tabpanel',
-        id: `case-panel-${entry.id}`,
-        'aria-labelledby': `case-tab-${entry.id}`,
+        id: `case-panel-${plugin.id}`,
+        'aria-labelledby': `case-tab-${plugin.id}`,
         tabindex: '0',
         hidden: true,
       });
@@ -1055,24 +1061,26 @@ export function createRouteSlice(params, context) {
     );
     tools.render(
       parts.tablist,
-      tabs.map((entry) => {
-        const selected = route.activeTab === entry.id;
+      tabs.map((plugin) => {
+        const selected = route.activeTab === plugin.id;
+        const label =
+          snapshot.sectionLabels[plugin.id]?.tab ?? plugin.defaultLabels.tab;
         return h(
           'button',
           {
-            key: `tab-${entry.id}`,
+            key: `tab-${plugin.id}`,
             className: 'cora-tabs-tab',
             role: 'tab',
-            id: `case-tab-${entry.id}`,
-            'aria-controls': `case-panel-${entry.id}`,
+            id: `case-tab-${plugin.id}`,
+            'aria-controls': `case-panel-${plugin.id}`,
             'aria-selected': String(selected),
             tabindex: selected ? '0' : '-1',
             onclick: () =>
-              tools.dispatch({ type: 'case/tab-selected', id: entry.id }),
+              tools.dispatch({ type: 'case/tab-selected', id: plugin.id }),
             onkeydown: (/** @type {KeyboardEvent} */ event) =>
               selectAdjacentTab(event, tabs, route.activeTab, tools.dispatch),
           },
-          snapshot.sectionLabels[entry.id].tab
+          label
         );
       })
     );
@@ -1089,14 +1097,18 @@ export function createRouteSlice(params, context) {
       dispatch: tools.dispatch,
       actions: panelActions,
     };
-    for (const entry of tabEntries()) {
-      const panel = parts.panels[entry.id];
-      const visible = snapshot.access[entry.id] !== 'hidden';
-      panel.hidden = !visible || route.activeTab !== entry.id;
-      const panelView = SECTION_PANELS[entry.id];
+    for (const plugin of getSectionPlugins().filter((p) => p.tab)) {
+      const panel = parts.panels[plugin.id];
+      if (!panel) continue;
+      const visible =
+        Boolean(snapshot.access[plugin.id]) &&
+        snapshot.access[plugin.id] !== 'hidden';
+      panel.hidden = !visible || route.activeTab !== plugin.id;
       tools.render(
         panel,
-        visible && panelView ? panelView(panelContext) : null
+        visible && typeof plugin.view === 'function'
+          ? plugin.view(panelContext)
+          : null
       );
     }
 
