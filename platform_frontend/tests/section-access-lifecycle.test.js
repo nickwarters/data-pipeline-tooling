@@ -14,7 +14,6 @@ import {
   ROLES,
   SECTIONS,
 } from './helpers/section-access.js';
-import { MATRIX } from '../src/services/section-access.js';
 
 /** @typedef {import('../src/services/section-access.js').Role} Role */
 
@@ -386,7 +385,7 @@ test('acceptance: the Adviser (Responsible Party) sees only Summary + Conversati
 });
 
 test('acceptance: Appeal Request belongs to the configured raiser alone', () => {
-  const roles = /** @type {Role[]} */ (Object.keys(MATRIX.appealRequest));
+  const roles = /** @type {Role[]} */ ([...ROLES]);
   for (const raisedBy of /** @type {const} */ ([
     'journeyOwner',
     'responsiblePartyManager',
@@ -681,7 +680,7 @@ test('remediationAudience: every Role in the matrix is classified deliberately',
     none: 'responsibleParty',
   };
 
-  const roles = /** @type {Role[]} */ (Object.keys(MATRIX.remediation));
+  const roles = /** @type {Role[]} */ ([...ROLES]);
   assert.deepEqual(
     roles.slice().sort(),
     Object.keys(expected).sort(),
@@ -751,4 +750,53 @@ test('conversation: the Manager reaching the Remediation tab has a Conversation 
       role
     );
   }
+});
+
+test('multi-role access: most permissive mode wins across overlapping roles', () => {
+  const cfg = makeConfig();
+  const c = makeCase({ status: 'In-progress' });
+
+  // details: responsibleParty + controls -> controls grants read-only
+  assert.equal(
+    evaluateAccess('details', ['responsibleParty', 'controls'], c, cfg),
+    'read-only'
+  );
+
+  // details: responsiblePartyManager + caseTypeOwner -> caseTypeOwner grants read-only
+  assert.equal(
+    evaluateAccess(
+      'details',
+      ['responsiblePartyManager', 'caseTypeOwner'],
+      c,
+      cfg
+    ),
+    'read-only'
+  );
+
+  // summary: responsibleParty + controls -> controls grants read-only
+  assert.equal(
+    evaluateAccess('summary', ['responsibleParty', 'controls'], c, cfg),
+    'read-only'
+  );
+
+  // summary: responsiblePartyManager + otherReviewer -> otherReviewer grants read-only
+  assert.equal(
+    evaluateAccess(
+      'summary',
+      ['responsiblePartyManager', 'otherReviewer'],
+      c,
+      cfg
+    ),
+    'read-only'
+  );
+
+  // matrixMode with multi-roles matches evaluateAccess
+  assert.equal(
+    matrixMode('details', ['responsibleParty', 'controls'], c, cfg),
+    'read-only'
+  );
+  assert.equal(
+    matrixMode('summary', ['responsibleParty', 'controls'], c, cfg),
+    'read-only'
+  );
 });

@@ -10,8 +10,7 @@ import {
 
 installDom();
 
-const { SECTION_PANELS } =
-  await import('../src/pages/cora-case-review/section-panels.js');
+const { getSectionPlugin } = await import('../src/sections/registry.js');
 const { default: complaintsConfig } =
   await import('../case-types/complaints.js');
 const { resolveSectionLabels } = await import('../src/lib/section-labels.js');
@@ -39,7 +38,9 @@ const CATALOGUE = [
 function issuesPanel(options = {}) {
   /** @type {any[]} */
   const calls = [];
-  const nodes = /** @type {any} */ (SECTION_PANELS.issues)({
+  const plugin = getSectionPlugin('issues');
+  if (!plugin) throw new Error('Missing issues plugin');
+  const nodes = /** @type {any} */ (plugin.view)({
     snapshot: {
       catalogue: CATALOGUE,
       answers: { q1: { value: 'No', capture: options.capture ?? {} } },

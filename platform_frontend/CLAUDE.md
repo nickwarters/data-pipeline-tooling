@@ -42,15 +42,14 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   `listRoadmapItems()` takes none, so wrapping it would read as covered while
   cancelling nothing. The contract test names that exemption and fails if it
   stops being true.
-- **Case Review Sections are data plus a panel renderer.** `lib/section-registry.js`
-  (ADR-0032) says which Sections exist and in what order; `pages/cora-case-review/section-panels.js`
-  says how each one's panel is filled, keyed by Section id — including the
-  Summary-owned completion control and Case Details-owned Void control — the render loop in
-  `cora-case-review.js` never branches on the id. **Adding a Section recipe:** an
-  entry in `SECTION_REGISTRY` + its `MATRIX` access row in `services/section-access.js`
-  - its `DEFAULT_SECTION_LABELS` `{ tab, heading }` pair + a `SECTION_PANELS` renderer. `tsc` demands
-    the first three; `tests/section-panels.test.js` demands the fourth. The panel map
-    lives with the page, not the registry, because `src/lib/` must not import `src/pages/**`.
+- **Case Review Sections are SectionPlugin objects (ADR-0053).** `lib/section-registry.js`
+  declares the built-in layout ordering metadata (`SECTION_REGISTRY`), while each section's
+  runtime behavior, RBAC access evaluation, default labels, and view rendering are encapsulated
+  in its `SectionPlugin` under `src/sections/` (ADR-0053). The render loop in `cora-case-review.js`
+  queries `getSectionPlugins()` dynamically. **Adding a Section recipe:** author a `SectionPlugin`
+  in `src/sections/<name>/<name>-plugin.js` declaring metadata, `defaultLabels`, `evaluateAccess`,
+  and `view`; add an entry to `SECTION_REGISTRY` in `src/lib/section-registry.js`; and register
+  the plugin in `src/sections/registry.js`.
 - **One authoring model.** Views are synchronous and side-effect free. They do
   not import clients or persistence services. Start with
   [`docs/guide/add-a-page.md`](./docs/guide/add-a-page.md); use
@@ -385,7 +384,7 @@ src/
     cora-case-review.js        # store slice + pure tab shell
     cora-case-review/          # store actions/effects and pure Section views
       answer-actions.js        # the pure Answer mutations; the store is the single owner (#510)
-      section-panels.js        # SECTION_PANELS: one panel renderer per tab Section, keyed by id (#512); owns tab action placement
+      section-panels.js        # shared PanelContext and PanelActions typedefs for SectionPlugins (#512, #886)
       details-view.js          # config-driven, read-only Case Details pure view (mirrors current Section behaviour)
       case-actions.js          # Answer dispatch -> unchanged SaveQueue; save status dispatch bridge
       group-outcome-view.js    # pure Group Outcome control, the Questions one Group Outcome writes to,
