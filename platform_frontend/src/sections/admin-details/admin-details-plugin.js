@@ -80,6 +80,11 @@ export const AdminDetailsPlugin = {
     const forbidden = new Set(FORBIDDEN_ADMIN_LIFECYCLE_FIELDS);
     const allowedCore = new Set(ALLOWED_ADMIN_CORE_FIELDS);
 
+    // Indexed by a name that is only known at runtime, so it cannot be checked
+    // against `CaseRow`'s keys. Hoisted rather than cast inline because the
+    // formatter moves an inline cast off the expression it applies to.
+    const row = /** @type {any} */ (caseRow);
+
     const editableFields = rawFields.filter(
       (field) =>
         typeof field === 'string' &&
@@ -102,7 +107,7 @@ export const AdminDetailsPlugin = {
           const isDetailField = declaredDetailKeys.has(field);
           const initialValue = isDetailField
             ? (caseRow?.details?.[field] ?? '')
-            : /** @type {any} */ (caseRow?.[field] ?? '');
+            : (row?.[field] ?? '');
 
           return h(
             'div',
