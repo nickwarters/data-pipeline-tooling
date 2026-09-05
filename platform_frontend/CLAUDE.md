@@ -462,6 +462,8 @@ src/
       details-plugin.js         # Case Details section plugin
     notes/
       notes-plugin.js           # Notes section plugin
+    conversation/
+      conversation-plugin.js    # Conversation overlay plugin
 
   views/                        # generic store-driven pure renderers
     case-columns.js             # shared Case-table column descriptors (#515): the Case-aware consumer of
