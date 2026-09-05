@@ -460,6 +460,8 @@ src/
     registry.js                 # plugin registry and adapter shims
     details/
       details-plugin.js         # Case Details section plugin
+    questions/
+      questions-plugin.js       # Questions bank section plugin
     notes/
       notes-plugin.js           # Notes section plugin
     conversation/
