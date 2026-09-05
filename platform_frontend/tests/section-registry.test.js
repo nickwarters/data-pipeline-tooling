@@ -18,6 +18,7 @@ import {
 } from '../src/services/section-access.js';
 import { DEFAULT_SECTION_LABELS } from '../src/lib/section-labels.js';
 import { CASE_TYPE_IMPORTERS } from '../case-types/manifest.js';
+import { getSectionPlugins } from '../src/sections/registry.js';
 
 // --- The registry itself ---
 
@@ -104,7 +105,10 @@ test('DEFAULT_SECTION_LABELS keys equal the registry Section ids', () => {
 
 test('registry ids ⊇ every `sections` key declared by every Case Type', async () => {
   /** @type {Set<string>} */
-  const known = new Set(sectionIds());
+  const known = new Set([
+    ...sectionIds(),
+    ...getSectionPlugins().map((p) => p.id),
+  ]);
   for (const [slug, importer] of Object.entries(CASE_TYPE_IMPORTERS)) {
     const { default: config } = await importer();
     for (const key of Object.keys(config.sections ?? {})) {

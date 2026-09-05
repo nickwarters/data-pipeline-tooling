@@ -39,6 +39,7 @@ import {
 import { voidPatch } from './cora-case-review/void-actions.js';
 import { evaluateAccess } from '../services/section-access.js';
 import { voidReasonText } from '../lib/void-reasons.js';
+import { ALLOWED_ADMIN_CORE_FIELDS } from '../sections/admin-details/admin-details-plugin.js';
 
 /** @typedef {import('../services/save-queue.js').SaveStatus} SaveStatus */
 /** @typedef {import('../lib/people-search.js').PeopleSearchState} PeopleSearchState */
@@ -442,6 +443,19 @@ export function caseReviewReducer(state, action) {
       caseRow: { ...route.snapshot.caseRow, [action.field]: action.value },
     });
   }
+  if (action.type === 'case/details-edited' && route.snapshot?.caseRow) {
+    return patchSnapshot(state, {
+      caseRow: { ...route.snapshot.caseRow, details: action.details },
+    });
+  }
+  if (action.type === 'case/admin-field-edited' && route.snapshot?.caseRow) {
+    // Same reasoning as `case/field-edited` above: the reducer takes `any`, so a
+    // raw dispatch still compiles. The allow-list is the guard, not the caller.
+    if (!ALLOWED_ADMIN_CORE_FIELDS.includes(action.field)) return state;
+    return patchSnapshot(state, {
+      caseRow: { ...route.snapshot.caseRow, [action.field]: action.value },
+    });
+  }
   if (action.type === 'case/on-hold-changed' && route.snapshot?.caseRow) {
     return patchSnapshot(state, {
       caseRow: {
@@ -711,6 +725,13 @@ export function createRouteSlice(params, context) {
    * @type {Record<string, import('../sharepoint-client.js').Answer>}
    */
   let currentAnswers = {};
+  /**
+   * The Case's detail blob as last *written*, for the same reason `currentAnswers`
+   * exists: a callback that captured a render's blob is one edit behind for as
+   * long as it outlives that render.
+   * @type {Record<string, string>}
+   */
+  let currentDetails = {};
   /** @type {string} */
   let currentResponsibleParty = '';
 
@@ -725,6 +746,12 @@ export function createRouteSlice(params, context) {
     if (next === null) return;
     currentAnswers = next;
     save.answersEdited(next);
+  }
+
+  /** @param {string} field @param {string} value */
+  function editDetailField(field, value) {
+    currentDetails = { ...currentDetails, [field]: value };
+    save.detailsEdited(currentDetails);
   }
 
   /** @param {Element} container */
@@ -835,6 +862,7 @@ export function createRouteSlice(params, context) {
     // here because a load, refresh or conflict resolution reaches the store
     // without passing through `editAnswers`.
     currentAnswers = snapshot.answers;
+    currentDetails = snapshot.caseRow?.details ?? {};
     currentResponsibleParty = caseRow.responsibleParty;
     loadedCaseId = caseRow.id;
 
@@ -1005,6 +1033,8 @@ export function createRouteSlice(params, context) {
       selectResponsibleParty,
       requestResponsiblePartySearch,
       save,
+      editDetailField,
+      editCaseField: save.adminFieldEdited,
       appeals,
       onComplete,
       onVoid,
@@ -1106,7 +1136,10 @@ export function createRouteSlice(params, context) {
       tools.render(
         panel,
         visible && typeof plugin.view === 'function'
-          ? plugin.view(panelContext)
+          ? plugin.view({
+              ...panelContext,
+              sectionConfig: config?.sections?.[plugin.id],
+            })
           : null
       );
     }

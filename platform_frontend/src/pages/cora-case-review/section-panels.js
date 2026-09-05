@@ -75,6 +75,7 @@ import { voidControl, voidControlView } from './void-actions.js';
  *   restated so a field added there cannot drift from what panels read.
  * @property {(action: any) => unknown} dispatch
  * @property {PanelActions} actions
+ * @property {import('../../sharepoint-client.js').SectionConfig} [sectionConfig]
  */
 
 /**
@@ -96,6 +97,12 @@ import { voidControl, voidControlView } from './void-actions.js';
  *   else on the SaveQueue bridge, and the field itself may only be one of the
  *   plain-text Case fields. Restating `field` as a bare `string` here would widen
  *   the effect's own union straight back open at the seam panels actually call.
+ * @property {(field: string, value: string) => void} editDetailField
+ *   Merge one Case Type detail field into the `details` blob and persist the
+ *   whole blob. The merge is the route slice's, not the caller's.
+ * @property {(field: string, value: string) => void} editCaseField
+ *   A top-level Case column, for the Admin Details override only. The reducer
+ *   holds it to `ALLOWED_ADMIN_CORE_FIELDS`.
  * @property {ReturnType<typeof import('./appeal-effects.js').createAppealEffects>} appeals
  *   The whole effect object, not a hand-written shape — these three are the
  *   persisted Appeal and Amended Outcome state transitions, so their argument
