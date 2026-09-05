@@ -31,7 +31,7 @@
  * @property {(panelContext: PanelContext) => Node | Node[] | null} view
  */
 
-import { SECTION_REGISTRY } from '../lib/section-registry.js';
+import { SECTION_REGISTRY, tabEntries } from '../lib/section-registry.js';
 import { MATRIX } from '../services/section-access.js';
 import { SECTION_PANELS } from '../pages/cora-case-review/section-panels.js';
 import { DEFAULT_SECTION_LABELS } from '../lib/section-labels.js';
@@ -44,9 +44,11 @@ const RANK = { edit: 3, 'read-only': 1, hidden: 0 };
 
 export function resetSectionRegistry() {
   registry.clear();
+  const defaultTabIds = new Set(tabEntries().map((entry) => entry.id));
   for (const entry of SECTION_REGISTRY) {
     registry.set(entry.id, {
       ...entry,
+      tab: defaultTabIds.has(entry.id),
       defaultLabels: DEFAULT_SECTION_LABELS[entry.id],
       evaluateAccess: (ctx) => {
         const roles = ctx.roles?.length
