@@ -41,6 +41,7 @@ import { ConversationPlugin } from './conversation/conversation-plugin.js';
 import { AmendOutcomePlugin } from './amend-outcome/amend-outcome-plugin.js';
 import { AppealRequestPlugin } from './appeals/appeal-request-plugin.js';
 import { AppealReviewPlugin } from './appeals/appeal-review-plugin.js';
+import { QuestionsPlugin } from './questions/questions-plugin.js';
 
 /** @type {Map<string, SectionPlugin>} */
 const registry = new Map();
@@ -54,6 +55,10 @@ export function resetSectionRegistry() {
   for (const entry of SECTION_REGISTRY) {
     if (entry.id === 'details') {
       registry.set(entry.id, DetailsPlugin);
+      continue;
+    }
+    if (entry.id === 'questions') {
+      registry.set(entry.id, QuestionsPlugin);
       continue;
     }
     if (entry.id === 'notes') {
