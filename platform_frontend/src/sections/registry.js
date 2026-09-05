@@ -38,6 +38,7 @@ import { DEFAULT_SECTION_LABELS } from '../lib/section-labels.js';
 import { DetailsPlugin } from './details/details-plugin.js';
 import { NotesPlugin } from './notes/notes-plugin.js';
 import { ConversationPlugin } from './conversation/conversation-plugin.js';
+import { AmendOutcomePlugin } from './amend-outcome/amend-outcome-plugin.js';
 
 /** @type {Map<string, SectionPlugin>} */
 const registry = new Map();
@@ -59,6 +60,10 @@ export function resetSectionRegistry() {
     }
     if (entry.id === 'conversation') {
       registry.set(entry.id, ConversationPlugin);
+      continue;
+    }
+    if (entry.id === 'amendOutcome') {
+      registry.set(entry.id, AmendOutcomePlugin);
       continue;
     }
     registry.set(entry.id, {
