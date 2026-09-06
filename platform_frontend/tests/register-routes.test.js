@@ -549,3 +549,78 @@ test('landing: Controls yields to a user who also has a queue of their own', () 
 
   assert.deepEqual(ranks, [30], 'Controls is the last of the landing ranks');
 });
+
+// --- An unauthorised direct visit bounces before anything mounts ---
+
+/**
+ * The real entry for a route, with only its page module swapped for a spy —
+ * so the guard under test is the one the application actually declares.
+ *
+ * @param {string} id
+ * @param {any} context
+ * @returns {{ mount: (container: any, params: any) => unknown, mounted: string[] }}
+ */
+function handlerFor(id, context) {
+  const config = /** @type {any} */ (APP_CONFIG);
+  const original = config.pagePlugins;
+  /** @type {string[]} */
+  const mounted = [];
+  const spyPage = {
+    createRouteSlice: () => {
+      mounted.push(id);
+      return {
+        initialState: {},
+        reducer: (/** @type {any} */ s) => s,
+        render() {},
+      };
+    },
+  };
+  config.pagePlugins = original.map((/** @type {any} */ plugin) =>
+    plugin.id === id ? { ...plugin, page: spyPage } : plugin
+  );
+  /** @type {Record<string, any>} */
+  const handlers = {};
+  try {
+    registerRoutes(
+      /** @type {any} */ ({
+        register: (
+          /** @type {string} */ pattern,
+          /** @type {any} */ handler
+        ) => {
+          handlers[pattern] = handler;
+        },
+      }),
+      context
+    );
+  } finally {
+    config.pagePlugins = original;
+  }
+  const plugin = original.find((/** @type {any} */ entry) => entry.id === id);
+  return { mount: handlers[plugin.paths[0]].mount, mounted };
+}
+
+for (const [id, capability] of [
+  ['my-stats', 'isReviewer'],
+  ['team-stats', 'isReviewerManager'],
+]) {
+  test(`${id}: an unauthorised direct visit lands on #/ without mounting the slice`, async () => {
+    replacedUrls.length = 0;
+    const denied = handlerFor(id, makeContext([], { [capability]: false }));
+    await denied.mount({ replaceChildren() {} }, {});
+
+    assert.deepEqual(replacedUrls, ['/SitePages/app.aspx#/']);
+    assert.deepEqual(
+      denied.mounted,
+      [],
+      'no slice, store or effect runs for an ineligible user'
+    );
+
+    // The other half, or the assertion above would pass for any reason at all.
+    replacedUrls.length = 0;
+    const allowed = handlerFor(id, makeContext([], { [capability]: true }));
+    await allowed.mount({ replaceChildren() {} }, {});
+
+    assert.deepEqual(replacedUrls, [], 'an eligible user is not bounced');
+    assert.deepEqual(allowed.mounted, [id], 'and their page mounts');
+  });
+}
