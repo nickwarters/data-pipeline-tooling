@@ -7,9 +7,10 @@ Date: 2026-09-05
 Accepted as amended by
 [ADR-0054](./0054-application-config-is-the-composition-root.md): a Section
 still declares itself, but the list of them is named by the application's
-composition root rather than by `src/sections/registry.js`. Two sections below
-are stale as a result — **Registry & Lifecycle**, **The irreducible part** and
-**Types** — and each carries a pointer to the amendment that supersedes it.
+composition root rather than by `src/sections/registry.js`. Four sections below
+are stale as a result — **Registry & Lifecycle**, the first amendment's **What
+changed**, **The irreducible part** and **Types** — and each carries a pointer
+to the amendment that supersedes it.
 A separate **Correction** at the end records a claim this ADR made that was not
 true when it was written.
 
@@ -148,25 +149,35 @@ export const DetailsPlugin = /** @type {const} */ ({ id: 'details', ... });
 
 ### What changed
 
-- `src/lib/section-registry.js` is deleted. `src/sections/registry.js` holds the
-  manifest, and `sectionIds`, `summaryBlockIds`, `showInSummaryDefaultOf` and
-  `defaultSectionLabels` are all projected from it.
-- `DEFAULT_SECTION_LABELS` is deleted. A Section's tab caption and panel heading
-  are part of what it is, so they live on the plugin. They had already drifted:
-  the map said the Questions tab read `Review` and the plugin said `Questions`,
-  and the map silently won for all ten Sections.
+> **Stale in one respect:** what this amendment did, it did — but the manifest
+> it moved things onto has since moved again, to `src/app-config.js`. Written in
+> the past tense below so it stays a correct record of that change rather than a
+> claim about the code today. See _Amendment: the application composes the
+> Sections_ below.
+
+- `src/lib/section-registry.js` was deleted. `src/sections/registry.js` took
+  over the manifest, and `sectionIds`, `summaryBlockIds`,
+  `showInSummaryDefaultOf` and `defaultSectionLabels` were all projected from
+  it.
+- `DEFAULT_SECTION_LABELS` was deleted. A Section's tab caption and panel
+  heading are part of what it is, so they live on the plugin. They had already
+  drifted: the map said the Questions tab read `Review` and the plugin said
+  `Questions`, and the map silently won for all ten Sections.
 - The contract moved to `src/sections/contract.js`, which names no plugin. With
   it in `registry.js` the union referenced itself through the plugins.
 - The lifecycle predicates moved to `src/evaluators/case-lifecycle.js`. Plugins
   imported them upward from `services/section-access.js`, which reaches the
   plugins back through the registry; with the manifest evaluated during module
   loading that cycle is a temporal dead zone rather than a tolerable knot.
-- The manifest is a **function**, not a module-scope array, for the same reason:
-  a plugin's `view` imports the page components it renders, and those reach back
-  here. A function body is not evaluated until it is called.
-- `sectionIds()` and friends read the **live registry**, not the built-in
-  manifest, so a plugin registered at boot appears in them. Reading the manifest
-  instead would reintroduce exactly the membership gap described above.
+- The manifest became a **function**, not a module-scope array, for the same
+  reason: a plugin's `view` imports the page components it renders, and those
+  reach back here. A function body is not evaluated until it is called. The
+  later amendment removes the need for that dodge entirely — an engine that
+  imports no plugin has no binding to read early.
+- `sectionIds()` and friends read the **live registry**, not the list the engine
+  was seeded from, so a plugin registered after boot appears in them. Reading
+  the seed list instead would reintroduce exactly the membership gap described
+  above. That one is still true.
 
 ### The irreducible part
 
