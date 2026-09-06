@@ -288,7 +288,7 @@
  * `CaseTypeConfig.labels` above — that is the reporting Label catalogue
  * assigned to Question Definitions, unrelated to this presentation copy.
  *
- * @typedef {Partial<Record<import('./sections/registry.js').Section, string | { heading?: string, tab?: string }>>} SectionLabels
+ * @typedef {Partial<Record<import('./app-config.js').Section, string | { heading?: string, tab?: string }>>} SectionLabels
  */
 
 /**
@@ -599,7 +599,7 @@
  * eligibleGroups?: string[],
  * listName?: string,
  * reviewerGroup?: string,
- * sections?: Partial<Record<import('./sections/registry.js').Section, SectionConfig>>,
+ * sections?: Partial<Record<import('./app-config.js').Section, SectionConfig>>,
  * allowBulkOutcome?: boolean,
  * questionGroups?: Record<string, QuestionGroupConfig>,
  * appeal?: AppealConfig,

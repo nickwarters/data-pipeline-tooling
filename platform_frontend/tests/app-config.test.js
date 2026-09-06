@@ -41,6 +41,22 @@ test('the engine runs on the list the composition root hands it', () => {
   assert.deepEqual([...sectionIds()].sort(), COMPOSED_SECTION_IDS);
 });
 
+test('a Case Type keyed by a Section nothing composes is a compile error', () => {
+  // The property the composition root buys over an application-owned second
+  // registry: `sections` stays `Partial<Record<Section, …>>`, so a mistyped key
+  // is caught by tsc rather than deferred to `verify-config`.
+  /** @type {import('../src/sharepoint-client.js').CaseTypeConfig['sections']} */
+  const sections = {
+    summary: {},
+    // @ts-expect-error 'summaryX' is not a Section this application composes.
+    // If this directive reports itself unused, `sections` has widened to
+    // `Record<string, SectionConfig>` and Case Type keys are unchecked.
+    summaryX: {},
+  };
+
+  assert.deepEqual(Object.keys(sections ?? {}), ['summary', 'summaryX']);
+});
+
 test('the Section union rejects an id this application does not compose', () => {
   /** @type {(id: import('../src/app-config.js').Section) => string} */
   const takesSection = (id) => id;
