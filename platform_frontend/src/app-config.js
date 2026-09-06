@@ -42,6 +42,8 @@ import { AppealReviewPlugin } from './sections/appeals/appeal-review-plugin.js';
 import { AmendOutcomePlugin } from './sections/amend-outcome/amend-outcome-plugin.js';
 import { SecondReviewPlugin } from './sections/second-review/second-review-plugin.js';
 
+import { CASE_TYPE_ENTRIES } from '../case-types/entries.js';
+
 import * as homePage from './pages/home.js';
 import * as dashboardPage from './pages/cora-dashboard.js';
 import * as myStatsPage from './pages/cora-my-stats.js';
@@ -98,6 +100,25 @@ export const APP_CONFIG = {
     AmendOutcomePlugin,
     SecondReviewPlugin,
   ]),
+
+  /**
+   * The Case Types this application has, held as thunks — and that asymmetry
+   * with the two lists above is deliberate. A Section plugin and a page module
+   * are cheap and needed at boot, so they are static imports; a Case Type
+   * config is expensive and needed on demand, and its `slug` and `displayName`
+   * have to be readable without evaluating it at all, because the
+   * boot-critical synchronous permissions config composes three SharePoint
+   * group names from the display name. Do not fold the three into one shape.
+   *
+   * Declared in `case-types/entries.js` rather than inline here, because
+   * `case-types/manifest.js` derives from the same declaration and cannot
+   * reach this file: the Section and page imports above lead back to it
+   * through the services, and a manifest that imported the config would read
+   * it mid-evaluation and fail boot.
+   *
+   * @type {readonly import('../case-types/manifest.js').CaseTypeEntry[]}
+   */
+  caseTypes: CASE_TYPE_ENTRIES,
 
   /**
    * Every hash this application answers, and the page behind it.

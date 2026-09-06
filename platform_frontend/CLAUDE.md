@@ -111,7 +111,7 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   the shape of a page, and the
   [render loop explainer](./docs/render-loop-explainer.html) for the runtime
   mechanics — dispatch, reducer, view, and how `render()` commits.
-- **Case Type config as JS modules; Question Bank content as SharePoint-hosted text artifacts.** One module per Case Type under `case-types/{slug}.js`, lazy-loaded via `case-types/manifest.js`. Question Bank content (Question Definitions, labels, and Outcome vocabulary) lives in `case-types/banks/{slug}.txt`, stored in the SharePoint Style Library and loaded through `case-types/load-bank.js` as part of the Case Type config. There is no shared Question Definitions list and no planned runtime join to one. `HttpSharePointClient`/`MockSharePointClient` expose `getBankVersion`/`getVersionedExport` for ADR-0021's immutable, point-in-time exports on reportable Cases. **Both read the same files**: the bank and each published version are `.txt` artifacts in `case-types/banks/`, named by `src/lib/bank-artifacts.js` and resolved relative to the module that reads them — so a deploy reads its own artifacts and there is no second per-environment path to declare. **The bank declares its own version**: `version` in `{slug}.txt` is the identifier the reportable milestone stamps onto a Case, read verbatim and never recomputed, and the bank's `history` is the ordered timeline of every version it has been published as; both are hand-maintained and `scripts/verify-config.js` holds them to the files on disk (declared version published and content-matching, history complete in both directions). The mock reads those artifacts itself rather than being seeded with copies, so the dev loop and a deploy cannot disagree about what a version contains; a test may still hand it explicit versions, which win over the files. Two fixture Cases are stamped against older versions and open against the questions they were reviewed with, one of which no longer exists in the live bank. Editing a bank means publishing the new version — declare an identifier and save the copy by hand, or let `node scripts/publish-bank.js` mint one; the gate fails if the bank's content has moved past the version it declares, because a Case completed against it would freeze on the published content rather than what was reviewed.
+- **Case Type config as JS modules; Question Bank content as SharePoint-hosted text artifacts.** One module per Case Type under `case-types/{slug}.js`, declared in `case-types/entries.js` — which `APP_CONFIG.caseTypes` names — and lazy-loaded via the live registry in `case-types/manifest.js`. Every Case Type is reached through a thunk, deliberately and unlike the Sections and pages beside it in the config: `slug` and `displayName` have to be readable without evaluating a Case Type module, because the boot-critical synchronous permissions config composes three SharePoint group names from the display name. Question Bank content (Question Definitions, labels, and Outcome vocabulary) lives in `case-types/banks/{slug}.txt`, stored in the SharePoint Style Library and loaded through `case-types/load-bank.js` as part of the Case Type config. There is no shared Question Definitions list and no planned runtime join to one. `HttpSharePointClient`/`MockSharePointClient` expose `getBankVersion`/`getVersionedExport` for ADR-0021's immutable, point-in-time exports on reportable Cases. **Both read the same files**: the bank and each published version are `.txt` artifacts in `case-types/banks/`, named by `src/lib/bank-artifacts.js` and resolved relative to the module that reads them — so a deploy reads its own artifacts and there is no second per-environment path to declare. **The bank declares its own version**: `version` in `{slug}.txt` is the identifier the reportable milestone stamps onto a Case, read verbatim and never recomputed, and the bank's `history` is the ordered timeline of every version it has been published as; both are hand-maintained and `scripts/verify-config.js` holds them to the files on disk (declared version published and content-matching, history complete in both directions). The mock reads those artifacts itself rather than being seeded with copies, so the dev loop and a deploy cannot disagree about what a version contains; a test may still hand it explicit versions, which win over the files. Two fixture Cases are stamped against older versions and open against the questions they were reviewed with, one of which no longer exists in the live bank. Editing a bank means publishing the new version — declare an identifier and save the copy by hand, or let `node scripts/publish-bank.js` mint one; the gate fails if the bank's content has moved past the version it declares, because a Case completed against it would freeze on the published content rather than what was reviewed.
 - **JSDoc + `tsc --checkJs` for types**. No `.ts` files; the deployed JS is the source JS. `npm run check` runs `tsc --noEmit --checkJs --allowJs`.
 - **Per-Case-Type `showWhen` graph + `outcome` function**. Applicability is data (declarative `showWhen`); outcome is code (exported function). Same module, one place to look.
 - **Case storage: everything on the Case row**. `Answers` and `Conversation` as JSON blobs on a per-Case-Type SharePoint list row. Notes as plain text. Field-level PATCH only.
@@ -335,10 +335,13 @@ src/
   app.js                        # entry point
   app-config.js                 # THE composition root: the one place naming what this application
                                 #   is made of — its Sections (APP_CONFIG.sectionPlugins, and the
-                                #   Section id union projected from them) and its pages
+                                #   Section id union projected from them), its pages
                                 #   (APP_CONFIG.pagePlugins, every hash route and the module behind
-                                #   it, statically imported bar the Question Bank thunk). The one
-                                #   file the layering contract lets name a page module (ADR-0054)
+                                #   it, statically imported bar the Question Bank thunk), and its
+                                #   Case Types (APP_CONFIG.caseTypes, thunks — see
+                                #   case-types/entries.js for why that asymmetry is load-bearing).
+                                #   The one file the layering contract lets name a page module
+                                #   (ADR-0054)
   sharepoint-client.js          # shared typedefs (SharePointClient interface)
 
   lib/                          # framework-level primitives (no domain knowledge)
@@ -620,8 +623,16 @@ src/
     cora-styles.css
 
 case-types/                     # one module per Case Type, lazy-loaded via manifest.js
-  manifest.js                   # CASE_TYPES: THE Case Type registry (slug + displayName +
-                                #   lazy importer/bank thunks); CASE_TYPE_IMPORTERS,
+  entries.js                    # CASE_TYPE_ENTRIES: THE declaration of which Case Types this
+                                #   application has (slug + displayName + lazy importer/bank
+                                #   thunks), named by APP_CONFIG.caseTypes. EVERYTHING here is a
+                                #   thunk and that is load-bearing: the synchronous permissions
+                                #   config composes SharePoint group names from displayName without
+                                #   evaluating a Case Type module. Its own module because both the
+                                #   composition root and the manifest read it and neither may reach
+                                #   the other — see the comment in the file
+  manifest.js                   # CASE_TYPES: the LIVE Case Type registry, derived from entries.js
+                                #   plus anything registerCaseType() appends; CASE_TYPE_IMPORTERS,
                                 #   QUESTION_BANK_IMPORTERS and permissions.caseTypes derive from it
   load-bank.js                  # loads a bank .txt artifact as parsed JSON (see Gotchas)
   general-questions.js          # shared General Question catalogue + resolveGeneralQuestions (#489)
