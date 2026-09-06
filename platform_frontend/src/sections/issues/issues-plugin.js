@@ -7,6 +7,7 @@ import {
   remediationFreeFormEdited,
   remediationRequiredSet,
 } from '../../pages/cora-case-review/answer-actions.js';
+import { issuesSummaryView } from '../../pages/cora-case-review/issues-summary-view.js';
 
 /** @satisfies {import('../contract.js').SectionPlugin} */
 export const IssuesPlugin = /** @type {const} */ ({
@@ -34,6 +35,8 @@ export const IssuesPlugin = /** @type {const} */ ({
     }
     return 'hidden';
   },
+
+  summaryView: issuesSummaryView,
 
   view({ snapshot, caseRow, config, route, dispatch, actions }) {
     const canEditIssues = snapshot?.machine?.canEditIssues ?? false;

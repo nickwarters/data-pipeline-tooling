@@ -2,19 +2,11 @@
 import { h } from '../../lib/html.js';
 import { getSectionPlugin } from '../../sections/registry.js';
 import { Outcome } from './outcome-view.js';
-import { buildSummaryModel } from '../../evaluators/summary-model.js';
-import {
-  REMEDIATION_DETAIL_LABELS,
-  REMEDIATION_STATUS_LABELS,
-  remediationRows,
-} from '../../evaluators/remediation-status.js';
 import { reachedReportable } from '../../services/section-access.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
 import { currentOutcome } from '../../evaluators/amended-outcome.js';
-import { CaptureGroups } from '../../components/sections/cora-capture-groups.js';
 import { generalAnswerKey } from '../../evaluators/general-questions.js';
 import { GENERAL_QUESTIONS_TITLE } from './general-questions-view.js';
-import { COPY as REMEDIATION_COPY } from './remediation-tracking-view.js';
 
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../../sharepoint-client.js').OutcomeResult} OutcomeResult */
@@ -167,178 +159,7 @@ function renderSectionBlock(props, section, caseRow) {
         labelsOf(props)[section]?.heading ?? plugin.defaultLabels.heading,
     });
   }
-  if (section === 'issues') {
-    return renderIssues(props);
-  }
-  if (section === 'remediation') {
-    return renderRemediationTracking(props);
-  }
-  if (section === 'notes') {
-    return h(
-      'section',
-      { className: 'cora-summary-notes' },
-      h('h3', {}, labelsOf(props).notes.heading),
-      h('p', {}, caseRow.notes)
-    );
-  }
   return null;
-}
-
-/**
- * The **Issues** Summary block: failed Answers
- * with their configured Remediation Actions and captured Issue detail.
- * @param {SummaryProps} props
- * @returns {HTMLElement}
- */
-function renderIssues(props) {
-  const { remediationActionCount, failures } = buildSummaryModel(
-    props.catalogue,
-    props.answers
-  );
-
-  return h(
-    'section',
-    { className: 'cora-summary-remediation' },
-    h('h3', {}, labelsOf(props).issues.heading),
-    h('p', {}, `Remediation Actions: ${remediationActionCount}`),
-    failures.length === 0
-      ? h('p', {}, 'No failures.')
-      : h('ul', {}, ...failures.map((failure) => renderFailure(props, failure)))
-  );
-}
-
-/**
- * The **Remediation** tracking Summary block: the case-level
- * `remediationDueDate` plus one entry per *Question* carrying remediation, with
- * how the Reviewer resolved it.
- *
- * It reads `remediationRows` — the same rows the Remediation tab renders, so
- * the two tabs of one Case cannot contradict each other.
- *
- * The resolution's *details / justification* follows the **audience**, exactly
- * as the Remediation tab does: withheld from the `responsibleParty` side, whose
- * rendering strips the Reviewer's record-of-truth fields, and shown
- * to reviewer-side observers, whose `!canResolve` branch on the tab renders it.
- *
- * @param {SummaryProps} props
- * @returns {HTMLElement}
- */
-function renderRemediationTracking(props) {
-  const rows = remediationRows(props.catalogue, props.answers);
-  const dueDate = props.caseRow?.remediationDueDate;
-  // Absent audience means the narrower rendering: a caller that has not said who
-  // is reading does not get to leak the Reviewer's fields.
-  const reviewerSide = props.audience === 'reviewer';
-
-  return h(
-    'section',
-    { className: 'cora-summary-remediation-tracking' },
-    h('h3', {}, labelsOf(props).remediation.heading),
-    h(
-      'p',
-      {},
-      dueDate
-        ? `Remediation due: ${dueDate}`
-        : REMEDIATION_COPY.remediationDueNone
-    ),
-    rows.length === 0
-      ? h('p', {}, REMEDIATION_COPY.noActionsSent)
-      : h('ul', {}, ...rows.map((row) => renderTrackedRow(row, reviewerSide)))
-  );
-}
-
-/**
- * @param {import('../../evaluators/remediation-status.js').RemediationRow} row
- * @param {boolean} reviewerSide Whether to show the resolution's details / justification.
- * @returns {HTMLElement}
- */
-function renderTrackedRow(row, reviewerSide) {
-  const { question } = row;
-  const detailed =
-    reviewerSide && row.status && row.status !== 'complete' && row.details;
-  return h(
-    'li',
-    {},
-    categoryEyebrow(question.category),
-    question.questionGroup
-      ? h('p', { className: 'cora-remediation-group' }, question.questionGroup)
-      : null,
-    h('p', { className: 'cora-remediation-question' }, question.text),
-    h(
-      'ul',
-      {},
-      ...row.actions.map((action) => h('li', {}, action.text)),
-      ...(row.freeForm ? [h('li', {}, row.freeForm)] : [])
-    ),
-    h(
-      'p',
-      {},
-      row.status
-        ? `Status: ${REMEDIATION_STATUS_LABELS[row.status]}`
-        : REMEDIATION_COPY.awaitingReviewer
-    ),
-    detailed
-      ? h(
-          'p',
-          { className: 'cora-summary-tracking-details' },
-          `${REMEDIATION_DETAIL_LABELS[/** @type {'partial' | 'cancelled'} */ (row.status)]}: ${row.details}`
-        )
-      : null
-  );
-}
-
-/**
- * @param {SummaryProps} props
- * @param {import('../../evaluators/summary-model.js').SummaryFailure} failure
- * @returns {HTMLElement}
- */
-function renderFailure(props, failure) {
-  return h(
-    'li',
-    {},
-    categoryEyebrow(failure.category),
-    failure.questionGroup
-      ? h('p', { className: 'cora-remediation-group' }, failure.questionGroup)
-      : null,
-    h('p', { className: 'cora-remediation-question' }, failure.text),
-    h(
-      'p',
-      { className: 'cora-remediation-answer' },
-      `Answer: ${failure.answer}`
-    ),
-    failure.actions.length
-      ? h('ul', {}, ...failure.actions.map((text) => h('li', {}, text)))
-      : null,
-    renderCapture(props, failure.id)
-  );
-}
-
-/**
- * @param {SummaryProps} props
- * @param {string} questionId
- * @returns {HTMLElement | null}
- */
-function renderCapture(props, questionId) {
-  if (!props.captureGroups?.length) return null;
-  const capture = props.answers[questionId]?.capture;
-  if (!capture || Object.keys(capture).length === 0) return null;
-
-  return h(
-    'div',
-    { className: 'cora-summary-capture' },
-    ...CaptureGroups({
-      groups: props.captureGroups,
-      capture,
-      canCapture: false,
-      namePrefix: `summary-${questionId}-`,
-      collapsed: new Map(),
-      // Read-only, so no picker is ever built and nothing can search.
-      peopleSearch: {},
-      onToggle() {},
-      onCapture() {},
-      onPersonQuery() {},
-    })
-  );
 }
 
 /**
@@ -349,10 +170,13 @@ function renderCapture(props, questionId) {
  * Absent when the Question Definition declares no Category, because the level
  * is optional and an empty eyebrow says nothing.
  *
+ * Exported rather than moved: it is shared by the Issues and Remediation
+ * blocks, and the Summary's shared block helpers live with the Summary.
+ *
  * @param {string | null | undefined} category
  * @returns {HTMLElement | null}
  */
-function categoryEyebrow(category) {
+export function categoryEyebrow(category) {
   return category
     ? h('p', { className: 'cora-summary-category' }, category)
     : null;
