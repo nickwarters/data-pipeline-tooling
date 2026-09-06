@@ -19,7 +19,12 @@
  *   The route slice's view state, as the page holds it. Referenced rather than
  *   restated so a field added there cannot drift from what panels read.
  * @property {(action: any) => unknown} dispatch
- * @property {PanelActions} actions
+ * @property {PanelActions & Record<string, any>} actions
+ *   The page's own callbacks, plus each Section's own namespace under its id —
+ *   `actions[sectionId].whatever(...)`. Intersected rather than widened so the
+ *   page's members keep their types while a Section's stay its own business.
+ *   The page's members go in last when this is built, so a Section cannot
+ *   shadow one by choosing its id.
  * @property {import('../../sharepoint-client.js').SectionConfig} [sectionConfig]
  * @property {any} [sectionState]
  *   This Section's own slice of `route.sections`, and only this Section's. The
@@ -42,11 +47,6 @@
  * @property {(questionId: string, fieldKey: string, query: string) => void} requestCaptureSearch
  * @property {(party: { loginName: string, displayName: string }) => void} selectResponsibleParty
  * @property {(query: string) => void} requestResponsiblePartySearch
- * @property {{ fieldEdited: (field: import('./case-actions.js').PlainTextCaseField, value: string) => void }} save
- *   Narrowed on purpose, twice over: panels may report a field edit and nothing
- *   else on the SaveQueue bridge, and the field itself may only be one of the
- *   plain-text Case fields. Restating `field` as a bare `string` here would widen
- *   the effect's own union straight back open at the seam panels actually call.
  * @property {ReturnType<typeof import('./appeal-effects.js').createAppealEffects>} appeals
  *   The whole effect object, not a hand-written shape — these three are the
  *   persisted Appeal and Amended Outcome state transitions, so their argument

@@ -440,21 +440,6 @@ export function caseReviewReducer(state, action) {
       access: { ...route.snapshot.access, conversation },
     });
   }
-  if (action.type === 'case/field-edited' && route.snapshot?.caseRow) {
-    // This branch writes a computed key, so it is the one place a caller could
-    // put any Case Row field into the store. `fieldEdited`'s parameter is typed
-    // to the plain-text fields, but the reducer takes `any`, so a raw
-    // `tools.dispatch` still compiles. Ignore anything else: `status` and
-    // `assignedReviewer` are what `snapshot.machine`'s guards read from their
-    // own load-time copy, so a write here would move the row while every `can*`
-    // answer stayed behind.
-    if (action.field !== 'notes' && action.field !== 'caseJustification') {
-      return state;
-    }
-    return patchSnapshot(state, {
-      caseRow: { ...route.snapshot.caseRow, [action.field]: action.value },
-    });
-  }
   if (action.type === 'case/on-hold-changed' && route.snapshot?.caseRow) {
     return patchSnapshot(state, {
       caseRow: {
@@ -1230,7 +1215,6 @@ export function createRouteSlice(params, context) {
       requestCaptureSearch,
       selectResponsibleParty,
       requestResponsiblePartySearch,
-      save,
       appeals,
       onComplete,
       onVoid,

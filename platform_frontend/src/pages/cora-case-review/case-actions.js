@@ -5,34 +5,14 @@
 /** @typedef {import('../../services/save-queue.js').SaveStatus} SaveStatus */
 
 /**
- * The plain-text Case Row fields the Notes Section edits, and the **only**
- * fields `fieldEdited` may write.
+ * Route effect for Case persistence — Answers, the on-hold latch and the
+ * Responsible Party. User edits enter the store first, then the unchanged
+ * SaveQueue owns field-level debounce and ETag concurrency.
  *
- * A closed union rather than `string` on purpose. `fieldEdited` is the one
- * generic Case Row writer, so a caller passing `status` or `assignedReviewer`
- * would advance `snapshot.caseRow` while `snapshot.machine` kept the copy of the
- * row it was constructed with at load. Every `machine.can*` guard reads exactly
- * those two fields, so the store would show the new value while completion and
- * Issue editing answered from the old one. The reducer branch ignores anything
- * else, so a raw dispatch cannot route around the type.
- *
- * Lifecycle fields have their own writer: `CaseMachine`'s transitions, persisted
- * by `completeCase` and folded back in through `case/case-row-patched`.
- *
- * `responsibleParty` is a plain-text Case Row field too, and is still not one of
- * these. Access resolution grants the Responsible Party Role by matching that
- * field against the current user, so it is read by exactly the same frozen
- * matrix `status` and `assignedReviewer` are — hence `responsiblePartyChanged`,
- * its own action, and its own reducer branches that say in one place what a
- * mid-session change does and does not move.
- *
- * @typedef {'notes' | 'caseJustification'} PlainTextCaseField
- */
-
-/**
- * Route effect for Case persistence — Answers, the on-hold latch, and the plain
- * text fields of the Notes Section. User edits enter the store first, then the
- * unchanged SaveQueue owns field-level debounce and ETag concurrency.
+ * There is no generic Case Row field writer here any more. The Notes Section
+ * persists its own two columns through the Section write seam, which checks
+ * them against what that Section declared; a writer that took any field and a
+ * type to keep it honest was the thing the seam replaced.
  *
  * `caseId` is a getter, not a value: the effect is built with the route, before
  * the Case has loaded, and every write must address the row that was actually
@@ -43,7 +23,6 @@
  *   caseId: () => string,
  *   dispatch: (action:
  *     | {type: 'case/answers-edited', answers: Record<string, Answer>}
- *     | {type: 'case/field-edited', field: PlainTextCaseField, value: string}
  *     | {type: 'case/on-hold-changed', onHold: boolean, placedOnHoldAt: string | null}
  *     | {type: 'case/responsible-party-changed', loginName: string, displayName: string}
  *     | {type: 'case/responsible-party-cleared'}
@@ -64,20 +43,13 @@ export function createCaseReviewSaveEffect({
       saveQueue.enqueue(caseId(), 'answers', answers);
     },
     /**
-     * A plain-text Case field edited in the Notes Section — `notes` or
-     * `caseJustification`, and nothing else. See `PlainTextCaseField` for why
-     * the parameter is a closed union rather than a `string`.
-     *
-     * @param {PlainTextCaseField} field @param {string} value
-     */
-    fieldEdited(field, value) {
-      dispatch({ type: 'case/field-edited', field, value });
-      saveQueue.enqueue(caseId(), field, value);
-    },
-    /**
      * The Case-level Responsible Party — who the Remediation Actions are sent
-     * to. Its own writer rather than a `fieldEdited` call: see
-     * `PlainTextCaseField` for why that union stays shut.
+     * to. Its own writer, and not something a Section may declare: access
+     * resolution grants the Responsible Party Role by matching this field
+     * against the current user, so it is read by exactly the frozen matrix
+     * `status` and `assignedReviewer` are. Hence its own action and its own
+     * reducer branches, which say in one place what a mid-session change does
+     * and does not move.
      *
      * Only the account is persisted; it is the identity the Case is stored and
      * matched against. The display name travels with the action so the page can

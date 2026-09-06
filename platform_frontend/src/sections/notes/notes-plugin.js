@@ -14,6 +14,15 @@ export const NotesPlugin = /** @type {const} */ ({
   showInSummaryDefault: false,
   defaultLabels: { tab: 'Notes', heading: 'Notes' },
 
+  // The two plain-text Case Row columns this Section edits, and the whole of
+  // what it may persist. Declared here rather than in a Case Type descriptor:
+  // what a Section writes is a fact about the Section.
+  writes: { fields: ['notes', 'caseJustification'] },
+
+  // `persist` already carries this Section's declaration and the framework's
+  // refusals, so there is nothing to add between it and the view.
+  createActions: ({ persist }) => ({ fieldEdited: persist }),
+
   evaluateAccess({ caseRow, roles }) {
     if (roles.includes('assignedReviewer')) {
       const status = caseRow?.status;
@@ -38,7 +47,7 @@ export const NotesPlugin = /** @type {const} */ ({
       heading: snapshot?.sectionLabels?.notes?.heading ?? 'Notes',
       placeholders: config?.placeholders ?? {},
       onFieldInput: (field, value) =>
-        actions?.save?.fieldEdited?.(field, value),
+        actions?.notes?.fieldEdited?.(field, value),
     });
   },
 });

@@ -2,7 +2,7 @@
 import './_register-example-review.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom, flush, waitFor } from './_dom-stub.js';
+import { installDom, flush, waitFor, findAllByClass } from './_dom-stub.js';
 import {
   fireEvent,
   getByRole,
@@ -872,10 +872,11 @@ test('state: clearing the Responsible Party removes its display name and preserv
   );
 });
 
-test('the reducer ignores a case/field-edited naming the Responsible Party', () => {
-  // The field has its own action and its own writer precisely because the
-  // generic plain-text writer would be the wrong path for a value that resolves
-  // a Role.
+test('the reducer refuses a Section write naming the Responsible Party', () => {
+  // The field has its own action and its own writer precisely because a
+  // Section's write seam would be the wrong path for a value that resolves a
+  // Role: access resolution matches it against the current user, from the copy
+  // of the row it was built with at load.
   const loaded = snapshot();
   loaded.caseRow = { ...loaded.caseRow, responsibleParty: '' };
   const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
@@ -885,7 +886,8 @@ test('the reducer ignores a case/field-edited naming the Responsible Party', () 
 
   assert.equal(
     caseReviewReducer(state, {
-      type: 'case/field-edited',
+      type: 'case/section-write',
+      section: 'notes',
       field: 'responsibleParty',
       value: 'jsmith',
     }),
@@ -2037,7 +2039,8 @@ test('case page reducer keeps conversation and field state behind loaded access'
   );
   assert.equal(
     caseReviewReducer(initial, {
-      type: 'case/field-edited',
+      type: 'case/section-write',
+      section: 'notes',
       field: 'notes',
       value: 'x',
     }),
@@ -2073,7 +2076,8 @@ test('case page reducer keeps conversation and field state behind loaded access'
     { body: 'Updated message' },
   ]);
   state = caseReviewReducer(state, {
-    type: 'case/field-edited',
+    type: 'case/section-write',
+    section: 'notes',
     field: 'notes',
     value: 'Updated note',
   });
@@ -3494,7 +3498,7 @@ test('route: Notes and Conversation write through store-owned callbacks', async 
   ]);
 });
 
-test('Notes effect: a Case field edit dispatches then enqueues against the loaded Case id', () => {
+test('save effect: a write dispatches then enqueues against the loaded Case id', () => {
   /** @type {any[]} */
   const queued = [];
   /** @type {any[]} */
@@ -3516,20 +3520,13 @@ test('Notes effect: a Case field edit dispatches then enqueues against the loade
   // whatever the getter resolves to at write time — not what it resolved to at
   // construction.
   loadedCaseId = 'c1';
-  save.fieldEdited('notes', 'Store-owned note');
-  save.fieldEdited('caseJustification', 'Because.');
+  save.answersEdited({ q1: { value: 'Yes' } });
 
   assert.deepEqual(queued, [
-    { id: 'c1', field: 'notes', value: 'Store-owned note' },
-    { id: 'c1', field: 'caseJustification', value: 'Because.' },
+    { id: 'c1', field: 'answers', value: { q1: { value: 'Yes' } } },
   ]);
   assert.deepEqual(dispatched, [
-    { type: 'case/field-edited', field: 'notes', value: 'Store-owned note' },
-    {
-      type: 'case/field-edited',
-      field: 'caseJustification',
-      value: 'Because.',
-    },
+    { type: 'case/answers-edited', answers: { q1: { value: 'Yes' } } },
   ]);
 });
 
@@ -3589,80 +3586,6 @@ test('Responsible Party clear effect: dispatches its action and queues an empty 
     { id: 'c1', field: 'responsibleParty', value: '' },
   ]);
   assert.deepEqual(dispatched, [{ type: 'case/responsible-party-cleared' }]);
-});
-
-test('Notes effect: `fieldEdited` takes only the plain-text Case fields — a type, not a convention', () => {
-  /**
-   * `fieldEdited` is the one *generic* Case Row writer: its reducer branch
-   * assigns `[action.field]` onto `snapshot.caseRow`. `snapshot.machine` holds
-   * its own load-time copy of the row, and every `machine.can*` guard reads
-   * exactly `status` and `assignedReviewer` — so a caller writing either
-   * through here would move the store's row while completion, capture,
-   * capture and Remediation selection kept answering from the old one.
-   *
-   * The assertion here is `tsc`, not the runtime: each `@ts-expect-error`
-   * fails the build with "Unused '@ts-expect-error' directive" the moment the
-   * parameter widens back to `string`. Nothing is invoked — this is a
-   * persistence path, and a nonsense write has no business reaching even a
-   * stubbed queue.
-   *
-   * @param {ReturnType<typeof createCaseReviewSaveEffect>} save
-   */
-  const typeContract = (save) => {
-    save.fieldEdited('notes', 'ok');
-    save.fieldEdited('caseJustification', 'ok');
-    // @ts-expect-error — `status` is a lifecycle field. It is written by
-    // CaseMachine's transitions and folded in via `case/case-row-patched`.
-    save.fieldEdited('status', 'Completed');
-    // @ts-expect-error — `assignedReviewer` is the other field the machine's
-    // guards read, and is not the Notes Section's to edit.
-    save.fieldEdited('assignedReviewer', 'someone-else');
-    // @ts-expect-error — `responsibleParty` resolves a Role, so it has its own
-    // action and its own writer rather than riding the generic one.
-    save.fieldEdited('responsibleParty', 'jsmith');
-  };
-  assert.equal(typeof typeContract, 'function');
-});
-
-test('the reducer ignores a case/field-edited for a field outside the plain-text pair', () => {
-  // The type closes the effect seam, but `caseReviewReducer` takes `any`, so a
-  // raw `tools.dispatch` from anywhere in the page still compiles. This is the
-  // one branch that writes a computed key, so it is the last entrance: a
-  // `status` write here would advance the row while every `machine.can*`
-  // guard kept answering from its own load-time copy.
-  const loaded = snapshot();
-  loaded.caseRow = { ...loaded.caseRow, status: 'In-progress', notes: 'kept' };
-  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
-    type: 'case/load-finished',
-    snapshot: loaded,
-  });
-
-  const afterLifecycle = caseReviewReducer(state, {
-    type: 'case/field-edited',
-    field: 'status',
-    value: 'Completed',
-  });
-  assert.equal(
-    afterLifecycle.routes.caseReview.snapshot?.caseRow?.status,
-    'In-progress',
-    'a lifecycle field dispatched through the generic writer is ignored'
-  );
-  assert.equal(
-    afterLifecycle,
-    state,
-    'and the state is returned unchanged, so nothing re-renders'
-  );
-
-  const afterNotes = caseReviewReducer(state, {
-    type: 'case/field-edited',
-    field: 'notes',
-    value: 'edited',
-  });
-  assert.equal(
-    afterNotes.routes.caseReview.snapshot?.caseRow?.notes,
-    'edited',
-    'the plain-text fields still write'
-  );
 });
 
 test('the route writes to the loaded Case row id, not the route param that found it', () => {
@@ -5730,25 +5653,25 @@ test("section actions: a Section cannot shadow one of the page's own", async () 
   const shadow = { builds: 0, seen: /** @type {any[]} */ ([]) };
   // An id chosen to collide with a PanelActions member. The page's members go
   // in last, so they win; nothing has to throw and no id is reserved.
-  registerSectionPlugin(actionSection('save', shadow));
+  registerSectionPlugin(actionSection('editAnswers', shadow));
 
   try {
     const loaded = caseReviewReducer(createInitialCaseReviewState(chrome), {
       type: 'case/load-finished',
       snapshot: {
         ...snapshot(),
-        access: { ...snapshot().access, save: 'read-only' },
+        access: { ...snapshot().access, editAnswers: 'read-only' },
       },
     });
     renderShippedState(loaded);
 
     const actions = shadow.seen.at(-1);
     assert.equal(
-      typeof actions.save.fieldEdited,
+      typeof actions.editAnswers,
       'function',
-      "the page's own save bridge is intact"
+      "the page's own member is intact, not replaced by a namespace"
     );
-    assert.equal(actions.save.edited, undefined);
+    assert.equal(actions.editAnswers.edited, undefined);
   } finally {
     configureAppSections();
   }
@@ -5927,4 +5850,38 @@ test('section writes: a Section declaring nothing persists nothing', async () =>
   } finally {
     configureAppSections();
   }
+});
+
+test('Notes: an edit reaches the SaveQueue through the Section seam, end to end', () => {
+  // The seam moved; SaveQueue did not. The same `enqueue(caseId, field,
+  // value)` call is what carries the debounce and the ETag concurrency, so
+  // what this pins is that the Notes Section still makes it — with the loaded
+  // Case's id, not the route param that found it.
+  /** @type {any[]} */
+  const enqueued = [];
+  const loaded = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: {
+      ...snapshot(),
+      access: { ...snapshot().access, notes: 'edit' },
+    },
+  });
+  const view = renderShippedState(loaded, {
+    saveQueue: {
+      subscribeStatus: () => () => {},
+      enqueue: (/** @type {any[]} */ ...args) => enqueued.push(args),
+    },
+  });
+
+  const textareas = findAllByClass(view.container, 'cora-notes-input');
+  assert.equal(textareas.length, 1, 'the Notes panel is rendered and editable');
+  textareas[0].value = 'A reviewer note';
+  fireEvent(textareas[0], 'input');
+
+  assert.deepEqual(enqueued, [['c1', 'notes', 'A reviewer note']]);
+  assert.equal(
+    view.state.routes.caseReview.snapshot.caseRow.notes,
+    'A reviewer note',
+    'and the store moved first, as it always did'
+  );
 });
