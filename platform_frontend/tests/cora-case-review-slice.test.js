@@ -5508,3 +5508,132 @@ test("section state: a Section's slice survives a re-render and starts empty on 
     {}
   );
 });
+
+// --- A Section's own reducer ---
+
+/**
+ * A Section that holds a counter and a note, so a test can watch its slice and
+ * only its slice move.
+ *
+ * @param {string} id
+ * @returns {any}
+ */
+function countingSection(id) {
+  return {
+    id,
+    tab: false,
+    tabOrder: 99,
+    summaryBlock: false,
+    summaryOrder: 0,
+    showInSummaryDefault: false,
+    defaultLabels: { tab: id, heading: id },
+    evaluateAccess: () => 'hidden',
+    view: () => null,
+    reduce: (/** @type {any} */ sectionState, /** @type {any} */ action) => {
+      if (action.type !== 'fixture/bumped') return sectionState;
+      return { count: (sectionState?.count ?? 0) + 1, by: action.by ?? id };
+    },
+  };
+}
+
+/** @param {() => unknown} run */
+async function withFixtureSections(run) {
+  const { registerSectionPlugin } = await import('../src/sections/registry.js');
+  registerSectionPlugin(countingSection('alphaSection'));
+  registerSectionPlugin(countingSection('betaSection'));
+  try {
+    return await run();
+  } finally {
+    configureAppSections();
+  }
+}
+
+/** A real store over the real reducer — a dispatch, not a reducer call. */
+async function storeFor() {
+  const { createStore } = await import('../src/core/store.js');
+  return createStore({
+    initialState: caseReviewReducer(createInitialCaseReviewState(chrome), {
+      type: 'case/load-finished',
+      snapshot: snapshot(),
+    }),
+    reducer: caseReviewReducer,
+    onStateChange: () => {},
+    schedule: () => {},
+  });
+}
+
+test("section reducer: a Section's action moves its own slice, through a real dispatch", async () => {
+  await withFixtureSections(async () => {
+    const store = await storeFor();
+
+    store.dispatch({ type: 'fixture/bumped', section: 'alphaSection' });
+    store.dispatch({ type: 'fixture/bumped', section: 'alphaSection' });
+
+    assert.deepEqual(store.getState().routes.caseReview.sections, {
+      alphaSection: { count: 2, by: 'alphaSection' },
+    });
+  });
+});
+
+test("section reducer: one Section's action never touches another's slice", async () => {
+  await withFixtureSections(async () => {
+    const store = await storeFor();
+
+    store.dispatch({ type: 'fixture/bumped', section: 'alphaSection' });
+    const alphaSlice = store.getState().routes.caseReview.sections.alphaSection;
+    store.dispatch({ type: 'fixture/bumped', section: 'betaSection' });
+
+    const { sections } = store.getState().routes.caseReview;
+    assert.deepEqual(sections.betaSection, { count: 1, by: 'betaSection' });
+    assert.equal(
+      sections.alphaSection,
+      alphaSlice,
+      "the other Section's slice is the same object, not a rebuilt equal one"
+    );
+  });
+});
+
+test('section reducer: a Section that returns what it was given changes nothing', async () => {
+  await withFixtureSections(async () => {
+    const store = await storeFor();
+    const before = store.getState();
+
+    // Not this Section's action: the fixture hands its slice straight back.
+    store.dispatch({ type: 'fixture/ignored', section: 'alphaSection' });
+
+    assert.equal(store.getState(), before, 'no new state, so no re-render');
+  });
+});
+
+test('section reducer: an action naming an unregistered Section is a no-op', async () => {
+  await withFixtureSections(async () => {
+    const store = await storeFor();
+    const before = store.getState();
+
+    // The ordinary reason for this is a Case Type that does not compose the
+    // Section. Not the reducer's place to have an opinion, and certainly not
+    // to throw on the render path.
+    store.dispatch({ type: 'fixture/bumped', section: 'noSuchSection' });
+    store.dispatch({ type: 'fixture/bumped' });
+
+    assert.equal(store.getState(), before);
+  });
+});
+
+test("section reducer: the page's own branches still win", async () => {
+  await withFixtureSections(async () => {
+    const store = await storeFor();
+
+    // An action the page answers, carrying a section id as well. The page's
+    // branch returns first, so the Section never sees it.
+    store.dispatch({
+      type: 'case/tab-selected',
+      id: 'notes',
+      section: 'alphaSection',
+    });
+
+    const route = store.getState().routes.caseReview;
+    assert.equal(route.activeTab, 'notes');
+    assert.deepEqual(route.sections, {});
+  });
+});

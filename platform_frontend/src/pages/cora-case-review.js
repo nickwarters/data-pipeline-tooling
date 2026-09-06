@@ -501,7 +501,41 @@ export function caseReviewReducer(state, action) {
     if (action.status === route.saveStatus) return state;
     return patchRoute(state, 'caseReview', { saveStatus: action.status });
   }
-  return state;
+  return reduceSection(state, action);
+}
+
+/**
+ * A Section's own state transition, over its own slice and nothing else.
+ *
+ * Last, after every branch above, so a Section can never intercept an action
+ * the page already answers. Keyed off `action.section` rather than offered to
+ * every plugin in turn: the render path is on a keystroke budget, and a fold
+ * over every Section per dispatch would put the cost of adding one on all the
+ * others.
+ *
+ * An action naming a Section that is not registered is a no-op. A Case Type
+ * that does not compose a Section is the ordinary reason for that, and it is
+ * not the reducer's place to have an opinion about it.
+ *
+ * @param {CaseReviewState} state
+ * @param {any} action
+ * @returns {CaseReviewState}
+ */
+function reduceSection(state, action) {
+  if (typeof action?.section !== 'string') return state;
+  const reduce = getSectionPlugin(action.section)?.reduce;
+  if (!reduce) return state;
+
+  const route = state.routes.caseReview;
+  const before = route.sections[action.section];
+  const after = reduce(before, action);
+  // Identity guard, the same one every branch above carries: a Section that
+  // returns the slice it was given has said the action was not its own, and a
+  // new state object would re-render the page for nothing.
+  if (after === before) return state;
+  return patchRoute(state, 'caseReview', {
+    sections: { ...route.sections, [action.section]: after },
+  });
 }
 
 /**
