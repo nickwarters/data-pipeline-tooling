@@ -9,6 +9,7 @@
  * @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition
  * @typedef {import('../services/permissions.js').Capabilities} Capabilities
  * @typedef {import('../pages/cora-case-review/section-panels.js').PanelContext} PanelContext
+ * @typedef {import('../pages/cora-case-review/summary-view.js').SummaryBlockProps} SummaryBlockProps
  */
 
 /**
@@ -29,6 +30,16 @@
  *   config?: CaseTypeConfig,
  * }) => Mode} evaluateAccess
  * @property {(panelContext: PanelContext) => Node | Node[] | null} view
+ * @property {(props: SummaryBlockProps) => Node | null} [summaryView]
+ *   Optional. Renders this Section's block inside the Summary, for a Section
+ *   that declares `summaryBlock`. Absent means the Section contributes no
+ *   block, whatever `summaryBlock` says — a Section that claims a block and
+ *   does not draw one is a mistake, not a blank.
+ *
+ *   Handed the same props the Summary itself renders from, plus `heading`: the
+ *   Case Type's override for this Section if it declares one, otherwise the
+ *   Section's own `defaultLabels.heading`. Resolved by the caller so a block
+ *   never has to name its own id to look its copy up.
  */
 
 export {};
