@@ -770,3 +770,63 @@ test('question-bank: the route is guarded to the same people as its link', () =>
     assert.equal(entry.guard(caps), allowed, JSON.stringify(overrides));
   }
 });
+
+// --- Case Review: two hashes, one page, and no nav ---
+
+test('case review: both hash shapes reach the page, with their own params', async () => {
+  const { Router } = await import('../src/lib/router.js');
+  const config = /** @type {any} */ (APP_CONFIG);
+  const original = config.pagePlugins;
+  /** @type {any[]} */
+  const mounted = [];
+  config.pagePlugins = original.map((/** @type {any} */ plugin) =>
+    plugin.id === 'case'
+      ? {
+          ...plugin,
+          page: {
+            createRouteSlice: (/** @type {any} */ params) => {
+              mounted.push(params);
+              return {
+                initialState: {},
+                reducer: (/** @type {any} */ s) => s,
+                render() {},
+              };
+            },
+          },
+        }
+      : plugin
+  );
+
+  try {
+    // `navigate` rather than `init`: init also subscribes to hashchange and
+    // navigates wherever the stubbed location points, and neither is what is
+    // under test here. The spy slice renders nothing, so it needs no container.
+    const router = new Router();
+    registerRoutes(/** @type {any} */ (router), makeContext());
+    await router.navigate('#/case/complaints/c1');
+    await router.navigate('#/case/c1');
+  } finally {
+    config.pagePlugins = original;
+  }
+
+  assert.deepEqual(mounted, [
+    { caseType: 'complaints', id: 'c1', queryString: '' },
+    { id: 'c1', queryString: '' },
+  ]);
+});
+
+test('case review is not a destination: no nav item and no landing rule', () => {
+  // Asserted rather than left implicit. Nobody navigates to a Case from the
+  // bar and nobody lands on one, and an entry that quietly grew either would
+  // put a Case in the nav for every user.
+  const entry = APP_CONFIG.pagePlugins.find((plugin) => plugin.id === 'case');
+  assert.ok(entry);
+  assert.equal(entry.nav, undefined);
+  assert.equal(entry.defaultFor, undefined);
+  assert.deepEqual(entry.paths, ['#/case/:caseType/:id', '#/case/:id']);
+  assert.ok(
+    !navItemsFor(makePermissions({ isReviewer: true })).some(
+      (item) => item.id === 'case'
+    )
+  );
+});
