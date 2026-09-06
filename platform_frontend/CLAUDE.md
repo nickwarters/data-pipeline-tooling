@@ -366,7 +366,10 @@ src/
     response-options.js         # single source of truth for response options + the NA_VALUE literal (#391)
     route-error-panel.js        # shared route-failure panel, used by router.js and core/store-route.js (#437)
     router.js                   # hash-based SPA router
-    section-labels.js           # DEFAULT_SECTION_LABELS + per-Case-Type sectionLabels overrides
+    section-labels.js           # the resolved Section display copy: each Section's own declared
+                                #   defaultLabels with a Case Type's sectionLabels overrides applied
+                                #   over the top. Derived, never restated — the constant that used to
+                                #   hold it silently won over the plugins for all ten Sections
     showwhen-tree.js            # generic showWhen tree parse/serialise/mutate (was question-bank/)
     void-reasons.js             # VOID_REASONS: the framework-owned Void Reason vocabulary a
                                 #   Case Type may narrow but not extend
