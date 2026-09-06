@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 import { installDom, findByClass } from './_dom-stub.js';
 import { fireEvent } from './helpers/semantic-dom.js';
-import { CaseMachine } from '../src/lib/case-machine.js';
+import { createCaseLifecycleView } from '../src/lib/case-lifecycle-view.js';
 import { CASE_STATUS } from '../src/lib/case-statuses.js';
 import {
   completeCase,
@@ -60,9 +60,13 @@ const CATALOGUE = [
 
 /** @param {import('../src/sharepoint-client.js').QuestionDefinition[]} [catalogue] */
 function machine(catalogue = CATALOGUE) {
-  return new CaseMachine(CASE_ROW, { id: 'u1' }, CAPABILITIES, CONFIG, {
+  return createCaseLifecycleView({
+    caseRow: CASE_ROW,
+    currentUserId: 'u1',
+    capabilities: CAPABILITIES,
+    config: CONFIG,
     catalogue,
-  });
+  }).machine;
 }
 
 test('completionControlView renders the existing completion control markup and callback', () => {

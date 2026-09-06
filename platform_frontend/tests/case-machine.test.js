@@ -1,21 +1,18 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CaseMachine, isReportable } from '../src/lib/case-machine.js';
+import { CaseMachine } from '../src/lib/case-machine.js';
+import { isReportable } from '../src/evaluators/case-lifecycle.js';
 import { CASE_STATUS } from '../src/lib/case-statuses.js';
 import { addWorkingDays } from '../src/lib/add-working-days.js';
 import {
   ENGLAND_WALES_HOLIDAYS,
   REMEDIATION_SLA_WORKING_DAYS,
 } from '../src/config/working-days.js';
-import { makeCaseRow, makePermissions } from './helpers/fixtures.js';
+import { makeCaseRow } from './helpers/fixtures.js';
 import { configureAppSections } from './helpers/configure-sections.js';
 
 configureAppSections();
-const NO_CAPABILITIES = makePermissions({
-  isReviewer: false,
-  isVisitor: true,
-});
 
 const BASE_ROW = makeCaseRow({
   id: 'c1',
@@ -71,11 +68,20 @@ function machineFor(
   return new CaseMachine(
     { ...BASE_ROW, status, ...overrides },
     { id: 'u1' },
-    NO_CAPABILITIES,
     config,
     { catalogue }
   );
 }
+
+test('CaseMachine reports whether the Case has passed the reportable milestone', () => {
+  assert.equal(machineFor('In-progress').reportable, false);
+  assert.equal(machineFor('Actions In Progress').reportable, true);
+  assert.equal(machineFor('Completed').reportable, true);
+  // Void freezes the Case without ever making it reportable, so the freeze is
+  // its own question rather than something read off this.
+  assert.equal(machineFor('Void').reportable, false);
+  assert.equal(isReportable('In-progress'), false);
+});
 
 test('CaseMachine stamps questionBankVersion only when supplied', () => {
   const machine = machineFor('In-progress');
@@ -100,57 +106,10 @@ test('CaseMachine stamps questionBankVersion only when supplied', () => {
   );
 });
 
-test('CaseMachine lifecycle capabilities freeze at the reportable milestone', () => {
-  assert.equal(isReportable('In-progress'), false);
-  assert.equal(isReportable('Actions In Progress'), true);
-  assert.equal(isReportable('Completed'), true);
-
-  assert.equal(machineFor('In-progress').reportable, false);
-  assert.equal(machineFor('Actions In Progress').reportable, true);
-  assert.equal(machineFor('Completed').reportable, true);
-  assert.equal(machineFor('In-progress').canComplete, true);
-  assert.equal(machineFor('Actions In Progress').canComplete, false);
-  assert.equal(machineFor('Completed').canComplete, false);
-});
-
-test('CaseMachine: a voided Case can be neither completed nor edited', () => {
-  // Void freezes the Case without ever making it reportable, so the freeze has
-  // to be asked as its own question rather than read off `reportable`.
-  const machine = machineFor('Void');
-  assert.equal(machine.reportable, false);
-  assert.equal(machine.canComplete, false);
-  assert.equal(machine.canEditIssues, false);
-
-  // The access matrix already answers `read-only` on a voided Case, so both
-  // getters would be false whatever guard stood beside it. Forcing `edit`
-  // leaves the machine's own freeze guard as the only thing that can say no —
-  // which is the rule being claimed here.
-  machine.access.questions = 'edit';
-  machine.access.issues = 'edit';
-  assert.equal(machine.canComplete, false, 'the freeze guard, not the matrix');
-  assert.equal(
-    machine.canEditIssues,
-    false,
-    'the freeze guard, not the matrix'
-  );
-});
-
-test('CaseMachine: only the Assigned Reviewer of a live Case may void it', () => {
-  assert.equal(machineFor('In-progress').canVoid, true);
-  assert.equal(machineFor('Actions In Progress').canVoid, true);
-  assert.equal(machineFor('Completed').canVoid, false);
-  assert.equal(machineFor('Void').canVoid, false);
-  assert.equal(
-    machineFor('In-progress', EMPTY_CONFIG, { assignedReviewer: 'u9' }).canVoid,
-    false
-  );
-});
-
 test('CaseMachine void stamps the terminal fields and no Outcome', () => {
   const machine = new CaseMachine(
     { ...BASE_ROW, status: 'In-progress', onHold: true },
     { id: 'u1' },
-    NO_CAPABILITIES,
     EMPTY_CONFIG,
     { catalogue: CATALOGUE, now: () => new Date('2026-03-04T09:00:00Z') }
   );
@@ -185,7 +144,6 @@ test('CaseMachine void records the words written under a reason that has no mean
   const machine = new CaseMachine(
     { ...BASE_ROW, status: 'In-progress' },
     { id: 'u1' },
-    NO_CAPABILITIES,
     EMPTY_CONFIG,
     { catalogue: CATALOGUE, now: () => new Date('2026-03-04T09:00:00Z') }
   );
@@ -198,57 +156,6 @@ test('CaseMachine void records the words written under a reason that has no mean
   // Whitespace is not a written reason; the control gates on the same rule, so
   // this is the second half of one guard rather than a second guard.
   assert.equal(machine.transitionToVoid('other', '   ').voidReasonNote, null);
-});
-
-test('CaseMachine Issues editing needs no Case Type opt-in and freezes at reportable', () => {
-  // No configuration flag stands between a Case Type and its Issue Capture
-  // Fields: the Assigned Reviewer of a pre-reportable Case may edit them.
-  assert.equal(machineFor('In-progress').canEditIssues, true);
-  assert.equal(machineFor('Actions In Progress').canEditIssues, false);
-  assert.equal(machineFor('Completed').canEditIssues, false);
-
-  // Someone else's Case: the Issues tab is not theirs to edit.
-  assert.equal(
-    machineFor('In-progress', EMPTY_CONFIG, { assignedReviewer: 'u9' })
-      .canEditIssues,
-    false
-  );
-});
-
-test('CaseMachine permits the final close only for the Assigned Reviewer of an Actions In Progress Case', () => {
-  // The *content* half of the gate — every Question's remediation resolved —
-  // lives in completionControl/completionPatch, which see the live Answers.
-  /** @type {Record<string, import('../src/sharepoint-client.js').Answer>} */
-  const answers = {
-    'q-a': {
-      value: 'No',
-      remediationActions: [{ id: 'a1', text: 'Call back' }],
-    },
-  };
-
-  assert.equal(
-    machineFor('Actions In Progress', ACTIONS_CONFIG, { answers })
-      .mayResolveRemediation,
-    true
-  );
-  assert.equal(
-    machineFor('In-progress', ACTIONS_CONFIG, { answers })
-      .mayResolveRemediation,
-    false,
-    'nothing to close before the actions are sent'
-  );
-  assert.equal(
-    machineFor('Completed', ACTIONS_CONFIG, { answers }).mayResolveRemediation,
-    false,
-    'and nothing to close once the Case is closed'
-  );
-  assert.equal(
-    machineFor('Actions In Progress', ACTIONS_CONFIG, {
-      answers,
-      assignedReviewer: 'other',
-    }).mayResolveRemediation,
-    false
-  );
 });
 
 test('CaseMachine Send Actions stamps the reportable snapshot without completedAt', () => {
@@ -363,29 +270,17 @@ test('CaseMachine does not stamp hadRemediation for a Question that has left the
   assert.equal(fields.hadRemediation, false);
   assert.equal(fields.effectiveHadRemediation, false);
 
-  // …and the tab it would have been resolved on is not offered either.
-  assert.equal(
-    machineFor(
-      'Actions In Progress',
-      EMPTY_CONFIG,
-      { answers: orphaned },
-      deprecated
-    ).access.remediation,
-    'hidden'
-  );
+  // The other half — that the Section it would have been resolved on is not
+  // offered either — is an access question, and lives with the permissions.
 });
 
 test('CaseMachine stamps every lifecycle timestamp from the injected clock', () => {
   const now = () => new Date('2026-07-23T09:30:00.000Z');
   /** @param {'In-progress'|'Actions In Progress'} status */
   const machine = (status) =>
-    new CaseMachine(
-      { ...BASE_ROW, status },
-      { id: 'u1' },
-      NO_CAPABILITIES,
-      EMPTY_CONFIG,
-      { now }
-    );
+    new CaseMachine({ ...BASE_ROW, status }, { id: 'u1' }, EMPTY_CONFIG, {
+      now,
+    });
 
   const sendActions = machine('In-progress').transitionToActionsInProgress(
     null,

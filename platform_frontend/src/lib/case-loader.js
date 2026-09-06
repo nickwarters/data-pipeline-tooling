@@ -1,6 +1,6 @@
 // @ts-check
 // CaseLoader loads the Case Review page: the Case row, the (possibly
-// as-reviewed) catalogue, the Case Type config, the CaseMachine and its
+// as-reviewed) catalogue, the Case Type config, the lifecycle view and its
 // resolved Section access. It hands the result over once, as a plain
 // snapshot, and owns no Answer mutation — the
 // store is the single Answer owner and the route's answer-actions are the only
@@ -22,7 +22,7 @@ import {
   summarySectionsFor,
   sectionIds,
 } from '../services/section-access.js';
-import { CaseMachine } from './case-machine.js';
+import { createCaseLifecycleView } from './case-lifecycle-view.js';
 import { resolveSectionLabels } from './section-labels.js';
 import {
   InvalidCaseTypeConfigError,
@@ -134,7 +134,12 @@ export class CaseLoader {
      */
     this.versionWarning = null;
 
-    /** @type {CaseMachine | null} */
+    /**
+     * What the page reads about this Case's permissions and transitions —
+     * plain data plus functions, never an instance.
+     *
+     * @type {import('../evaluators/case-lifecycle.js').CaseLifecycleView | null}
+     */
     this.machine = null;
     /** @type {Record<string, import('../services/section-access.js').Mode>} */
     this.access = /** @type {any} */ ({});
@@ -309,21 +314,18 @@ export class CaseLoader {
 
     const actualUserId = this.currentUserId || currentUser.id;
 
-    // The resolved catalogue — live bank while In-progress, the stamped
-    // versioned export once reportable, `failureValues` derived either way — is
-    // what decides whether this Case carries remediation, so the lifecycle model
-    // gets the same one the tabs render from.
-    this.machine = new CaseMachine(
+    // Who this viewer is on this Case, what each Section lets them do about it,
+    // and how each transition writes it. Composed in one place so the loader
+    // and its tests cannot put the two halves together differently.
+    const { roles, access, machine } = createCaseLifecycleView({
       caseRow,
-      { id: actualUserId },
-      this.capabilities,
+      currentUserId: actualUserId,
+      capabilities: this.capabilities,
       config,
-      {
-        catalogue: this.catalogue,
-      }
-    );
-    this.access = this.machine.access;
-    const roles = this.machine.roles;
+      catalogue: this.catalogue,
+    });
+    this.access = access;
+    this.machine = machine;
 
     if (sectionIds().every((s) => this.access[s] === 'hidden')) {
       this.accessDenied = true;
