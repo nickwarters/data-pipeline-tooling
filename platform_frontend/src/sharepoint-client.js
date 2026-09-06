@@ -504,7 +504,7 @@
  * message exists, the other side may reply. When omitted, either side may
  * start the Conversation for backwards compatibility.
  *
- * @typedef {{ showInSummary?: boolean | import('./services/section-access.js').Role[], allowMessagesWhen?: import('./lib/case-statuses.js').CaseStatus[], initiatedBy?: 'reviewer' | 'responsibleParty', enabled?: boolean, editableFields?: string[] }} SectionConfig
+ * @typedef {{ showInSummary?: boolean | import('./services/section-access.js').Role[], allowMessagesWhen?: import('./lib/case-statuses.js').CaseStatus[], initiatedBy?: 'reviewer' | 'responsibleParty' }} SectionConfig
  */
 
 /**
