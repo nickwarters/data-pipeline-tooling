@@ -1,7 +1,6 @@
 // @ts-check
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
-import { DEFAULT_SECTION_LABELS } from '../../lib/section-labels.js';
 import { isRemediationOverdue } from '../../evaluators/overdue-evaluator.js';
 import {
   REMEDIATION_STATUSES,
@@ -61,11 +60,7 @@ export const COPY = Object.freeze({
  * @returns {Node[]}
  */
 export function RemediationTracking(props) {
-  const heading = h(
-    'h2',
-    {},
-    props.heading ?? DEFAULT_SECTION_LABELS.remediation.heading
-  );
+  const heading = h('h2', {}, props.heading ?? 'Remediation');
   const rows = remediationRows(props.catalogue, props.answers);
   // This tab tracks the remediation clock, not the review one.
   const caseRow = props.caseRow ?? null;

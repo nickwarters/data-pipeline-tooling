@@ -1,7 +1,6 @@
 // @ts-check
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
-import { DEFAULT_SECTION_LABELS } from '../../lib/section-labels.js';
 import { isFailure } from '../../evaluators/failure-evaluator.js';
 import { buildCaptureControl } from '../../lib/capture-engine.js';
 import { openAppealOf } from '../../evaluators/appeal-state.js';
@@ -46,9 +45,7 @@ import { openAppealOf } from '../../evaluators/appeal-state.js';
  */
 export function AppealSection(props) {
   const children = [];
-  children.push(
-    h('h2', {}, props.heading ?? DEFAULT_SECTION_LABELS.appealRequest.heading)
-  );
+  children.push(h('h2', {}, props.heading ?? 'Appeal'));
 
   for (const appeal of appealsFrom(props)) {
     children.push(renderAppealItem(appeal));

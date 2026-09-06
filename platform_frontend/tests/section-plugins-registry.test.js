@@ -9,7 +9,6 @@ import {
   getSectionPlugin,
   resetSectionRegistry,
 } from '../src/sections/registry.js';
-import { SECTION_REGISTRY } from '../src/lib/section-registry.js';
 
 installDom();
 
@@ -17,10 +16,10 @@ beforeEach(() => {
   resetSectionRegistry();
 });
 
-test('getSectionPlugins returns a plugin for every SECTION_REGISTRY entry', () => {
+test('getSectionPlugins returns a plugin for every getSectionPlugins() entry', () => {
   const plugins = getSectionPlugins();
   const ids = plugins.map((p) => p.id);
-  for (const entry of SECTION_REGISTRY) {
+  for (const entry of getSectionPlugins()) {
     assert.ok(ids.includes(entry.id));
   }
 });

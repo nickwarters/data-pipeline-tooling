@@ -24,7 +24,7 @@ test('IssuesPlugin has correct contract properties and is registered', () => {
   assert.equal(IssuesPlugin.showInSummaryDefault, true);
   assert.deepEqual(IssuesPlugin.defaultLabels, {
     tab: 'Issues',
-    heading: 'Issues & Remediation Required',
+    heading: 'Issues',
   });
 });
 
@@ -177,7 +177,7 @@ test('RemediationPlugin has correct contract properties and is registered', () =
   assert.equal(RemediationPlugin.showInSummaryDefault, true);
   assert.deepEqual(RemediationPlugin.defaultLabels, {
     tab: 'Remediation',
-    heading: 'Remediation Actions',
+    heading: 'Remediation',
   });
 });
 

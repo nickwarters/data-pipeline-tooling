@@ -288,14 +288,14 @@
  * `CaseTypeConfig.labels` above — that is the reporting Label catalogue
  * assigned to Question Definitions, unrelated to this presentation copy.
  *
- * @typedef {Partial<Record<import('./lib/section-registry.js').Section, string | { heading?: string, tab?: string }>>} SectionLabels
+ * @typedef {Partial<Record<import('./sections/registry.js').Section, string | { heading?: string, tab?: string }>>} SectionLabels
  */
 
 /**
  * The resolved shape `resolveSectionLabels` returns: every Section present,
  * every entry a complete pair, so no consumer normalises on the read path.
  *
- * @typedef {Record<import('./lib/section-registry.js').Section, { tab: string, heading: string }>} ResolvedSectionLabels
+ * @typedef {Record<string, { tab: string, heading: string }>} ResolvedSectionLabels
  */
 
 /**
@@ -511,7 +511,7 @@
  * Per-Case-Type appeal flow configuration. `raisedBy` names the role that may
  * raise an Appeal — the **Journey Owner** for Complaints-style journeys,
  * otherwise the **Responsible Party Manager**. Resolution is always Controls,
- * owned in code by the `appealReview` row in `services/section-access.js`.
+ * owned in code by the `appealReview` Section plugin.
  *
  * @typedef {{ raisedBy: 'journeyOwner' | 'responsiblePartyManager' }} AppealConfig
  */
@@ -599,7 +599,7 @@
  * eligibleGroups?: string[],
  * listName?: string,
  * reviewerGroup?: string,
- * sections?: Record<string, SectionConfig>,
+ * sections?: Partial<Record<import('./sections/registry.js').Section, SectionConfig>>,
  * allowBulkOutcome?: boolean,
  * questionGroups?: Record<string, QuestionGroupConfig>,
  * appeal?: AppealConfig,

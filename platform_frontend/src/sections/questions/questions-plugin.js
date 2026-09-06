@@ -1,6 +1,6 @@
 // src/sections/questions/questions-plugin.js
 // @ts-check
-import { isFrozen } from '../../services/section-access.js';
+import { isFrozen } from '../../evaluators/case-lifecycle.js';
 import { withGeneralQuestions } from '../../pages/cora-case-review/general-questions-view.js';
 import { resolveGeneralQuestionsPlacement } from '../../evaluators/general-questions.js';
 import { groupOutcomeSet } from '../../pages/cora-case-review/answer-actions.js';
@@ -35,15 +35,15 @@ function questionsPanel(snapshot, questionsView, onAnswer, onGroupOutcome) {
   );
 }
 
-/** @type {import('../registry.js').SectionPlugin} */
-export const QuestionsPlugin = {
+/** @satisfies {import('../contract.js').SectionPlugin} */
+export const QuestionsPlugin = /** @type {const} */ ({
   id: 'questions',
   tab: true,
   tabOrder: 2,
   summaryBlock: true,
   summaryOrder: 2,
   showInSummaryDefault: true,
-  defaultLabels: { tab: 'Questions', heading: 'Question Bank Review' },
+  defaultLabels: { tab: 'Review', heading: 'Questions' },
 
   evaluateAccess({ caseRow, roles }) {
     if (roles.includes('assignedReviewer')) {
@@ -84,4 +84,4 @@ export const QuestionsPlugin = {
         )
     );
   },
-};
+});

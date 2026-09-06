@@ -22,7 +22,7 @@ import {
   showWhenReferences,
 } from '../src/evaluators/applicability-evaluator.js';
 import { validateCaptureGroups } from '../src/evaluators/issue-capture.js';
-import { sectionIds } from '../src/lib/section-registry.js';
+import { sectionIds } from '../src/sections/registry.js';
 import { ROLES } from '../src/services/section-access.js';
 import { isVoidReasonKey, VOID_REASONS } from '../src/lib/void-reasons.js';
 import { ACTION_CENTRE_REASONS } from '../src/services/action-centre-model.js';

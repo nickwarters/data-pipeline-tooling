@@ -5,20 +5,17 @@ import {
   postConversationMessage,
 } from '../../pages/cora-case-review/conversation-view.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
-import { conversationSideOf } from '../../services/section-access.js';
+import { conversationSideOf } from '../../evaluators/case-lifecycle.js';
 
-/** @type {import('../registry.js').SectionPlugin} */
-export const ConversationPlugin = {
+/** @satisfies {import('../contract.js').SectionPlugin} */
+export const ConversationPlugin = /** @type {const} */ ({
   id: 'conversation',
   tab: false,
   tabOrder: 0,
   summaryBlock: false,
   summaryOrder: 0,
   showInSummaryDefault: false,
-  defaultLabels: {
-    tab: 'Conversation',
-    heading: 'Case Conversation',
-  },
+  defaultLabels: { tab: 'Conversation', heading: 'Conversation' },
 
   evaluateAccess({ caseRow, roles, sectionConfig, config }) {
     if (
@@ -92,4 +89,4 @@ export const ConversationPlugin = {
       },
     });
   },
-};
+});

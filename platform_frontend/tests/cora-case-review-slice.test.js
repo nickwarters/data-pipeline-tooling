@@ -45,7 +45,7 @@ const { default: exampleReviewConfig } =
   await import('./_example-review-case-type.js');
 const { default: complaintsConfig } =
   await import('../case-types/complaints.js');
-const { evaluateAccess, SECTIONS } =
+const { evaluateAccess, sectionIds } =
   await import('../src/services/section-access.js');
 const { resolveSectionLabels } = await import('../src/lib/section-labels.js');
 const { COPY: OUTCOME_COPY } =
@@ -5349,7 +5349,7 @@ function everySectionVisibleCase() {
   const roles = ['assignedReviewer', 'journeyOwner', 'controls'];
   /** @type {any} */
   const access = {};
-  for (const section of SECTIONS) {
+  for (const section of sectionIds()) {
     access[section] = evaluateAccess(section, roles, row, config, catalogue);
   }
   // The two Appeal Sections come from the access policy rather than the

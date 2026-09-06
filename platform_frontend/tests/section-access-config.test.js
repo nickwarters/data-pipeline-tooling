@@ -9,8 +9,8 @@ import {
   evaluateAccess,
   showInSummary,
   summarySectionsFor,
-  SECTIONS,
-  SUMMARY_SECTIONS,
+  sectionIds,
+  summaryBlockIds,
 } from './helpers/section-access.js';
 
 /** @typedef {import('../src/services/section-access.js').Section} Section */
@@ -28,7 +28,7 @@ import {
 function accessFor(roles, caseRow, cfg) {
   return /** @type {Record<Section, Mode>} */ (
     Object.fromEntries(
-      SECTIONS.map((s) => [s, evaluateAccess(s, roles, caseRow, cfg)])
+      sectionIds().map((s) => [s, evaluateAccess(s, roles, caseRow, cfg)])
     )
   );
 }
@@ -43,7 +43,7 @@ test('none role → hidden everywhere', () => {
     status: 'Completed',
     appeals: [openAppeal()],
   });
-  for (const s of SECTIONS) {
+  for (const s of sectionIds()) {
     assert.equal(evaluateAccess(s, ['none'], c, cfg), 'hidden', `section ${s}`);
   }
 });
@@ -85,7 +85,7 @@ test('evaluateAccess: sections undefined → defaults to all enabled', () => {
 test('evaluateAccess: empty sections object → all hidden', () => {
   const cfg = makeConfig({ sections: {} });
   const c = makeCase();
-  for (const s of SECTIONS) {
+  for (const s of sectionIds()) {
     assert.equal(
       evaluateAccess(s, ['assignedReviewer'], c, cfg),
       'hidden',
@@ -313,9 +313,9 @@ test('evaluateAccess: allowMessagesWhen cannot reopen the Conversation on a term
 
 // --- showInSummary ---
 
-test('SUMMARY_SECTIONS lists the Sections that can appear as Summary blocks', () => {
+test('summaryBlockIds() lists the Sections that can appear as Summary blocks', () => {
   assert.deepEqual(
-    [...SUMMARY_SECTIONS],
+    [...summaryBlockIds()],
     ['details', 'questions', 'issues', 'remediation', 'notes']
   );
 });

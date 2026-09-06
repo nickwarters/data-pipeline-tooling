@@ -6,18 +6,15 @@ import {
   voidControlView,
 } from '../../pages/cora-case-review/void-actions.js';
 
-/** @type {import('../registry.js').SectionPlugin} */
-export const DetailsPlugin = {
+/** @satisfies {import('../contract.js').SectionPlugin} */
+export const DetailsPlugin = /** @type {const} */ ({
   id: 'details',
   tab: true,
   tabOrder: 1,
   summaryBlock: true,
   summaryOrder: 1,
   showInSummaryDefault: true,
-  defaultLabels: {
-    tab: 'Details',
-    heading: 'Case Details',
-  },
+  defaultLabels: { tab: 'Details', heading: 'Case Details' },
 
   evaluateAccess({ roles }) {
     const reviewerSide = [
@@ -59,4 +56,4 @@ export const DetailsPlugin = {
     });
     return voidView ? [details, voidView] : [details];
   },
-};
+});

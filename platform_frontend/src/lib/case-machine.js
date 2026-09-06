@@ -12,7 +12,7 @@ import {
   isFrozen,
   isReportable,
   resolveRoles,
-  SECTIONS,
+  sectionIds,
 } from '../services/section-access.js';
 
 // Re-exported from its leaf home in section-access.js (the access matrix also

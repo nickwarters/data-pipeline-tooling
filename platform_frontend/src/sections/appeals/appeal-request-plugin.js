@@ -4,15 +4,19 @@ import { h } from '../../lib/html.js';
 import { AppealSection } from '../../pages/cora-case-review/appeal-view.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
 
-/** @type {import('../registry.js').SectionPlugin} */
-export const AppealRequestPlugin = {
+/** A Section names its own default copy; hoisted so the plugin object does
+ * not reference itself while its own type is being inferred. */
+const APPEAL_REQUEST_LABELS = { tab: 'Appeal', heading: 'Appeal' };
+
+/** @satisfies {import('../contract.js').SectionPlugin} */
+export const AppealRequestPlugin = /** @type {const} */ ({
   id: 'appealRequest',
   tab: true,
   tabOrder: 7,
   summaryBlock: false,
   summaryOrder: 0,
   showInSummaryDefault: false,
-  defaultLabels: { tab: 'Appeal', heading: 'Request Appeal' },
+  defaultLabels: APPEAL_REQUEST_LABELS,
 
   evaluateAccess({ roles, caseRow, config }) {
     if (!caseRow || caseRow.status !== CASE_STATUS.COMPLETED) return 'hidden';
@@ -29,7 +33,7 @@ export const AppealRequestPlugin = {
       answers: snapshot?.answers ?? {},
       heading:
         snapshot?.sectionLabels?.appealRequest?.heading ??
-        AppealRequestPlugin.defaultLabels.heading,
+        APPEAL_REQUEST_LABELS.heading,
       onRaise: (input) => {
         if (actions?.appeals?.raise) {
           actions.appeals.raise({
@@ -48,4 +52,4 @@ export const AppealRequestPlugin = {
       ...(Array.isArray(children) ? children : [children])
     );
   },
-};
+});

@@ -4,32 +4,45 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import {
-  SECTION_REGISTRY,
+  getSectionPlugins,
   sectionIds,
   summaryBlockIds,
-  sectionById,
-} from '../src/lib/section-registry.js';
-import { SECTIONS, SUMMARY_SECTIONS } from '../src/services/section-access.js';
-import { DEFAULT_SECTION_LABELS } from '../src/lib/section-labels.js';
+  getSectionPlugin,
+  showInSummaryDefaultOf,
+  registerSectionPlugin,
+  resetSectionRegistry,
+} from '../src/sections/registry.js';
+import { defaultSectionLabels } from '../src/lib/section-labels.js';
 import { CASE_TYPE_IMPORTERS } from '../case-types/manifest.js';
-import { getSectionPlugins } from '../src/sections/registry.js';
 
 // Capability: data-driven Section registry single-source contracts.
 
 // --- Registry basics ---
 
-test('SECTION_REGISTRY is frozen', () => {
-  assert.ok(Object.isFrozen(SECTION_REGISTRY));
+test('the manifest is the canonical Section order, and is stable', () => {
+  assert.deepEqual(sectionIds(), [
+    'details',
+    'questions',
+    'issues',
+    'summary',
+    'remediation',
+    'notes',
+    'conversation',
+    'appealRequest',
+    'appealReview',
+    'amendOutcome',
+  ]);
+  assert.deepEqual(sectionIds(), sectionIds(), 'repeated reads agree');
 });
 
-test('SECTION_REGISTRY entries have unique ids', () => {
-  const ids = SECTION_REGISTRY.map((e) => e.id);
+test('getSectionPlugins() entries have unique ids', () => {
+  const ids = getSectionPlugins().map((e) => e.id);
   const unique = new Set(ids);
   assert.equal(ids.length, unique.size);
 });
 
-test('SECTION_REGISTRY entries have unique non-zero tab orders among tabs', () => {
-  const tabs = SECTION_REGISTRY.filter((e) => e.tab);
+test('getSectionPlugins() entries have unique non-zero tab orders among tabs', () => {
+  const tabs = getSectionPlugins().filter((e) => e.tab);
   const orders = tabs.map((e) => e.tabOrder);
   assert.equal(orders.length, new Set(orders).size);
   for (const order of orders) {
@@ -37,9 +50,9 @@ test('SECTION_REGISTRY entries have unique non-zero tab orders among tabs', () =
   }
 });
 
-test('SECTION_REGISTRY entries have unique non-zero summary orders among summary blocks', () => {
-  const blocks = SECTION_REGISTRY.filter((e) => e.summaryBlock);
-  const orders = blocks.map((e) => e.summaryOrder);
+test('getSectionPlugins() entries have unique non-zero summary orders among summary blocks', () => {
+  const blocks = getSectionPlugins().filter((e) => e.summaryBlock);
+  const orders = blocks.map((e) => e.summaryOrder ?? 0);
   assert.equal(orders.length, new Set(orders).size);
   for (const order of orders) {
     assert.ok(order > 0, `summaryOrder ${order} must be positive`);
@@ -48,16 +61,16 @@ test('SECTION_REGISTRY entries have unique non-zero summary orders among summary
 
 // --- Derivers preserve the exact shapes the pre-registry code exported ---
 
-test('SECTIONS is derived from the registry', () => {
-  assert.deepEqual([...SECTIONS], sectionIds());
+test('sectionIds() is derived from the registry', () => {
+  assert.deepEqual([...sectionIds()], sectionIds());
 });
 
-test('SUMMARY_SECTIONS is derived from the registry (summary blocks in order)', () => {
-  assert.deepEqual([...SUMMARY_SECTIONS], summaryBlockIds());
+test('summaryBlockIds() is derived from the registry (summary blocks in order)', () => {
+  assert.deepEqual([...summaryBlockIds()], summaryBlockIds());
   // Unchanged observable set: Conversation, Summary itself and the appeal /
   // amend Sections never appear as Summary blocks.
   assert.deepEqual(
-    [...SUMMARY_SECTIONS],
+    [...summaryBlockIds()],
     ['details', 'questions', 'issues', 'remediation', 'notes']
   );
 });
@@ -103,9 +116,9 @@ test('every registered SectionPlugin conforms to the contract', () => {
   }
 });
 
-test('DEFAULT_SECTION_LABELS keys equal the registry Section ids (no drift)', () => {
+test('defaultSectionLabels() keys equal the registry Section ids (no drift)', () => {
   assert.deepEqual(
-    [...Object.keys(DEFAULT_SECTION_LABELS)].sort(),
+    [...Object.keys(defaultSectionLabels())].sort(),
     [...sectionIds()].sort()
   );
 });
@@ -129,31 +142,52 @@ test('registry ids ⊇ every `sections` key declared by every Case Type', async 
 
 // --- Parameterized derivers allow fixtures to simulate additions ---
 
-test('adding a Section to a fixture registry flows into every derived structure', () => {
-  /** @type {any[]} */
-  const withRisk = [
-    ...SECTION_REGISTRY,
-    {
-      id: 'riskAssessment',
-      tab: true,
-      tabOrder: 99,
-      summaryBlock: true,
-      summaryOrder: 99,
-      showInSummaryDefault: true,
-    },
-  ];
-
-  // One new definition in a custom registry causes the new Section to
-  // appear in the canonical id list, as the last tab, and as the last Summary
-  // block.
-  assert.equal(sectionIds(withRisk).at(-1), 'riskAssessment');
-  assert.equal(summaryBlockIds(withRisk).at(-1), 'riskAssessment');
+test('a registered Section flows into every derived structure', () => {
+  /** @type {any} */
+  const fixture = {
+    id: 'fixtureSection',
+    tab: true,
+    tabOrder: 99,
+    summaryBlock: true,
+    summaryOrder: 99,
+    showInSummaryDefault: false,
+    defaultLabels: { tab: 'Fixture', heading: 'Fixture' },
+    evaluateAccess: () => 'hidden',
+    view: () => null,
+  };
+  registerSectionPlugin(fixture);
+  try {
+    assert.ok(
+      sectionIds().includes('fixtureSection'),
+      'appears in the id list'
+    );
+    assert.equal(
+      summaryBlockIds().at(-1),
+      'fixtureSection',
+      'sorts into the Summary blocks by its own summaryOrder'
+    );
+    assert.equal(
+      showInSummaryDefaultOf(/** @type {any} */ ('fixtureSection')),
+      false
+    );
+    assert.equal(
+      defaultSectionLabels().fixtureSection.tab,
+      'Fixture',
+      'its own labels are the defaults — nothing restates them'
+    );
+  } finally {
+    resetSectionRegistry();
+  }
+  assert.ok(
+    !sectionIds().includes('fixtureSection'),
+    'reset restores the built-ins'
+  );
 });
 
 // --- Contract: the Section id union is stated in exactly one place ---
 
 test('the Section id union is stated in exactly one place', () => {
-  // `Section` is projected from `SECTION_REGISTRY` in `section-registry.js`.
+  // `Section` is projected from `getSectionPlugins()` in `section-registry.js`.
   // Nowhere in `src/` should an independent union of Section ids appear.
   // We check for a pattern of quoted section names separated by pipes in
   // JSDoc typedef comments outside `section-registry.js`.
@@ -172,28 +206,42 @@ test('the Section id union is stated in exactly one place', () => {
   );
 });
 
-// --- sectionById helper ---
+// --- getSectionPlugin helper ---
 
-test('sectionById resolves entries and returns undefined for unknown ids', () => {
-  assert.equal(sectionById('notes')?.showInSummaryDefault, false);
-  assert.equal(sectionById('details')?.showInSummaryDefault, true);
-  assert.equal(sectionById(/** @type {any} */ ('nope')), undefined);
+test('getSectionPlugin resolves entries and returns undefined for unknown ids', () => {
+  assert.equal(showInSummaryDefaultOf('notes'), false);
+  assert.equal(showInSummaryDefaultOf('details'), true);
+  assert.equal(getSectionPlugin(/** @type {any} */ ('nope')), undefined);
 });
 
-test('every registry entry declares exactly the SectionDefinition fields', () => {
-  const expectedKeys = [
-    'id',
-    'tab',
-    'tabOrder',
-    'summaryBlock',
-    'summaryOrder',
-    'showInSummaryDefault',
-  ].sort();
-  for (const entry of SECTION_REGISTRY) {
-    assert.deepEqual(
-      Object.keys(entry).sort(),
-      expectedKeys,
-      `${entry.id} field set`
+test('every Section declares its own layout metadata', () => {
+  for (const plugin of getSectionPlugins()) {
+    assert.equal(typeof plugin.tab, 'boolean', `${plugin.id}.tab`);
+    assert.equal(typeof plugin.tabOrder, 'number', `${plugin.id}.tabOrder`);
+    assert.equal(
+      typeof plugin.summaryBlock,
+      'boolean',
+      `${plugin.id}.summaryBlock`
+    );
+    assert.equal(
+      typeof plugin.summaryOrder,
+      'number',
+      `${plugin.id}.summaryOrder`
+    );
+    assert.equal(
+      typeof plugin.showInSummaryDefault,
+      'boolean',
+      `${plugin.id}.showInSummaryDefault`
+    );
+    assert.equal(
+      typeof plugin.defaultLabels?.tab,
+      'string',
+      `${plugin.id}.defaultLabels.tab`
+    );
+    assert.equal(
+      typeof plugin.defaultLabels?.heading,
+      'string',
+      `${plugin.id}.defaultLabels.heading`
     );
   }
 });

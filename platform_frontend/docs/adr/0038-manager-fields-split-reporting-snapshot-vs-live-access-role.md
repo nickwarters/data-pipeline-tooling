@@ -158,13 +158,13 @@ reporting field) and 2 (for the access-control field).
 
 ### The two fields are different species and stop sharing a mechanism
 
-|               | `assignedReviewerManager`                                             | `responsiblePartyManager`                           |
-| ------------- | --------------------------------------------------------------------- | --------------------------------------------------- |
-| Purpose       | Reporting / query key                                                 | Section access Role                                 |
-| Semantics     | **Operational**: allocation-time cache/query input                   | **Current**: always resolved live                   |
-| Authority     | Case row for live queries; Staff Hierarchy for settled history        | The directory, at page load                         |
-| Mechanism     | Allocation-time lookup and same-PATCH stamp                           | Read-time resolution                                |
-| Stored column | Operational input, not a frozen reporting snapshot                   | Retained as a written record, **not** authoritative |
+|               | `assignedReviewerManager`                                      | `responsiblePartyManager`                           |
+| ------------- | -------------------------------------------------------------- | --------------------------------------------------- |
+| Purpose       | Reporting / query key                                          | Section access Role                                 |
+| Semantics     | **Operational**: allocation-time cache/query input             | **Current**: always resolved live                   |
+| Authority     | Case row for live queries; Staff Hierarchy for settled history | The directory, at page load                         |
+| Mechanism     | Allocation-time lookup and same-PATCH stamp                    | Read-time resolution                                |
+| Stored column | Operational input, not a frozen reporting snapshot             | Retained as a written record, **not** authoritative |
 
 ### `assignedReviewerManager` — an allocation-time cache, with future repair conditional
 

@@ -22,8 +22,8 @@ test('QuestionsPlugin has correct contract properties and is registered', () => 
   assert.equal(QuestionsPlugin.summaryOrder, 2);
   assert.equal(QuestionsPlugin.showInSummaryDefault, true);
   assert.deepEqual(QuestionsPlugin.defaultLabels, {
-    tab: 'Questions',
-    heading: 'Question Bank Review',
+    tab: 'Review',
+    heading: 'Questions',
   });
 });
 
