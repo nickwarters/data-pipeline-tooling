@@ -650,3 +650,61 @@ test("my-team: the link and the route are both a Reviewer Manager's", () => {
   );
   assert.ok(!navItemsFor(other).some((item) => item.href === '#/my-team'));
 });
+
+test('landing: an Adviser starts on their own Case list', () => {
+  assert.equal(
+    resolveDefaultLandingPath(
+      makePermissions({ isReviewer: false, isAdviser: true })
+    ),
+    '#/my-cases'
+  );
+});
+
+test('landing: an Adviser who is also Controls resolves by rank, not by list order', () => {
+  // Both rules match. Neither predicate negates the other — the old draft's
+  // `&& !caps.isReviewer` pattern encoded precedence inside one of two
+  // predicates, invisible from the other. The rank says it out loud.
+  const both = makePermissions({
+    isReviewer: false,
+    isAdviser: true,
+    isControls: true,
+  });
+
+  assert.equal(resolveDefaultLandingPath(both), '#/my-cases');
+  assert.deepEqual(
+    APP_CONFIG.pagePlugins
+      .filter((plugin) => plugin.defaultFor?.(both))
+      .map((plugin) => plugin.id),
+    ['my-cases', 'search'],
+    'both rules match; the rank picks'
+  );
+});
+
+test('the Case-list routes carry no nav item, as they did not before', () => {
+  // The ticket asked for a nav entry on each of these three and also for
+  // "links and order unchanged per persona". They cannot both hold: none of
+  // the three has a link today, so adding one would change every persona's
+  // bar. The constraint every ticket in the phase shares wins.
+  for (const id of ['team-cases', 'my-cases', 'journey-cases']) {
+    const entry = APP_CONFIG.pagePlugins.find((plugin) => plugin.id === id);
+    assert.equal(entry?.nav, undefined, `${id} has no nav item`);
+  }
+});
+
+test('journey-cases guards on the capability, not on the resolved sources', () => {
+  const entry = APP_CONFIG.pagePlugins.find(
+    (plugin) => plugin.id === 'journey-cases'
+  );
+  assert.equal(
+    entry?.guard?.(
+      makePermissions({ isReviewer: false, ownedJourneyCaseTypes: ['c'] })
+    ),
+    true
+  );
+  assert.equal(
+    entry?.guard?.(
+      makePermissions({ isReviewer: false, ownedJourneyCaseTypes: [] })
+    ),
+    false
+  );
+});

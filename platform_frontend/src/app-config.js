@@ -163,7 +163,17 @@ export const APP_CONFIG = {
       page: caseReviewPage,
     },
     { id: 'team-cases', paths: ['#/team-cases'], page: teamCasesPage },
-    { id: 'my-cases', paths: ['#/my-cases'], page: responsiblePartyPage },
+    {
+      id: 'my-cases',
+      paths: ['#/my-cases'],
+      page: responsiblePartyPage,
+      // A Responsible Party's own queue is where their day starts. Ranked
+      // behind the Reviewer rule and ahead of Controls: precedence between the
+      // three lives in these numbers and nowhere else, so no predicate has to
+      // negate another one to express it.
+      defaultFor: (caps) => caps.isAdviser,
+      defaultForOrder: 20,
+    },
     {
       id: 'journey-cases',
       paths: ['#/journey-cases'],
