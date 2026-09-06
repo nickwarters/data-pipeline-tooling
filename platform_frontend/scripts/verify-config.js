@@ -22,6 +22,7 @@ import {
   showWhenReferences,
 } from '../src/evaluators/applicability-evaluator.js';
 import { validateCaptureGroups } from '../src/evaluators/issue-capture.js';
+import { captureFieldTypeNames } from '../src/capture-fields/registry.js';
 import { APP_CONFIG } from '../src/app-config.js';
 import { ROLES } from '../src/services/section-access.js';
 import { isVoidReasonKey, VOID_REASONS } from '../src/lib/void-reasons.js';
@@ -226,8 +227,15 @@ function caseTypeFile(entry) {
   return resolved ?? MANIFEST;
 }
 
-/** The Issue Capture Field types the capture engine renders. */
-const CAPTURE_FIELD_TYPES = ['text', 'textarea', 'select', 'radio', 'person'];
+/**
+ * The Issue Capture Field types the capture engine renders.
+ *
+ * Read off the registry rather than restated, so a type that is registered is
+ * a type a Case Type may declare, with nothing to keep in step. `person` is
+ * still named by hand: it has not moved to a type module yet, and until it does
+ * the gate would reject a Case Type that already uses it.
+ */
+const CAPTURE_FIELD_TYPES = [...captureFieldTypeNames(), 'person'];
 
 /** The types whose value is chosen from a declared list. */
 const CHOICE_CAPTURE_TYPES = ['select', 'radio'];
