@@ -83,6 +83,43 @@ import { APP_CONFIG } from '../app-config.js';
  */
 
 /**
+ * The nav bar's items for this user, in the order the bar draws them.
+ *
+ * An item is visible when its own `nav.isVisible` says so, or — where it does
+ * not say — when the route's `guard` would admit the user. A page with neither
+ * is open to everyone, which is what a nav entry with no predicate means.
+ *
+ * Nothing is caught here, deliberately. A predicate that throws is a mistake in
+ * the composition root, and the nav's failure is already fatal and visible:
+ * boot renders the error panel. Catching per entry would drop one link
+ * silently, and a missing nav item is indistinguishable from "you do not have
+ * permission to see that" — the failure this application has been burned by
+ * often enough to name a banner after it.
+ *
+ * @param {Capabilities} capabilities
+ * @returns {{ id: string, label: string, href: string }[]}
+ */
+export function navItemsFor(capabilities) {
+  /** @type {{ id: string, label: string, href: string, order: number }[]} */
+  const items = [];
+  for (const plugin of APP_CONFIG.pagePlugins) {
+    const { nav, guard } = plugin;
+    if (!nav) continue;
+    const isVisible = nav.isVisible ?? guard;
+    if (isVisible && !isVisible(capabilities)) continue;
+    items.push({
+      id: plugin.id,
+      label: nav.label,
+      href: plugin.paths[0],
+      order: nav.order,
+    });
+  }
+  return items
+    .sort((a, b) => a.order - b.order)
+    .map(({ id, label, href }) => ({ id, label, href }));
+}
+
+/**
  * Where a user lands when no rule claims them.
  *
  * `#/` rather than `#/dashboard`: an unmatched viewer is by definition someone

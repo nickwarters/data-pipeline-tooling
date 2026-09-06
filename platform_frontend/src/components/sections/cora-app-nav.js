@@ -1,8 +1,6 @@
 // @ts-check
 import { h } from '../../lib/html.js';
 
-/** @typedef {import('../../services/permissions.js').Capabilities} Capabilities */
-
 /**
  * @typedef {{ el: HTMLElement, href: string }} NavItemRef
  */
@@ -39,16 +37,28 @@ export function updateActiveNavItems(navItems, hash) {
 }
 
 /**
- * @param {{ capabilities: Capabilities, hash: string }} props
+ * The nav bar, drawn from items it is handed.
+ *
+ * It reads no capability and names no page. Which links a user gets, and in
+ * what order, is a property of what the application is composed of, so it is
+ * answered where that is declared and passed in — which also means this can be
+ * rendered in a test without the application's configuration, and two tests
+ * cannot interfere by configuring it differently.
+ *
+ * @param {{
+ *   items: { id: string, label: string, href: string }[],
+ *   brandHref: string,
+ *   hash: string
+ * }} props
  * @returns {{ node: HTMLElement, navItems: NavItemRef[] }}
  */
-export function AppNav({ capabilities, hash }) {
+export function AppNav({ items, brandHref, hash }) {
   /** @type {NavItemRef[]} */
   const navItems = [];
   const brand = h(
     'a',
     {
-      href: '#/dashboard',
+      href: brandHref,
       className: 'cora-app-nav-brand',
       'aria-label': 'CORA — home',
     },
@@ -57,41 +67,8 @@ export function AppNav({ capabilities, hash }) {
   );
 
   const itemsEl = h('div', { className: 'cora-app-nav-items', role: 'list' });
-
-  const {
-    isReviewer,
-    ownedCaseTypes,
-    isAdviser,
-    isReviewerManager,
-    isControls,
-    canSearchCases,
-  } = capabilities;
-  const isOwner = ownedCaseTypes.length > 0;
-  // Controls belong here too: without them a Controls-only account reached no
-  // nav item at all, not even the Dashboard.
-  const hasAnyRole =
-    isReviewer || isAdviser || isReviewerManager || isOwner || isControls;
-
-  if (hasAnyRole) {
-    itemsEl.appendChild(AppNavItem('Dashboard', '#/dashboard', navItems));
-    itemsEl.appendChild(AppNavItem('Roadmap', '#/roadmap', navItems));
-  }
-  if (isReviewer) {
-    itemsEl.appendChild(AppNavItem('My Stats', '#/my-stats', navItems));
-  }
-  if (isReviewerManager) {
-    itemsEl.appendChild(AppNavItem('Team Stats', '#/team-stats', navItems));
-  }
-  if (isOwner) {
-    itemsEl.appendChild(
-      AppNavItem('Question Bank', '#/question-bank', navItems)
-    );
-  }
-  if (isReviewerManager) {
-    itemsEl.appendChild(AppNavItem('My Team', '#/my-team', navItems));
-  }
-  if (canSearchCases) {
-    itemsEl.appendChild(AppNavItem('Search', '#/search', navItems));
+  for (const item of items) {
+    itemsEl.appendChild(AppNavItem(item.label, item.href, navItems));
   }
 
   const node = h('div', { className: 'cora-app-nav-bar' }, brand, itemsEl);
