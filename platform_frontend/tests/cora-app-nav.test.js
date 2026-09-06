@@ -272,6 +272,10 @@ const PERSONAS = [
     { ownedCaseTypes: ['complaints'] },
     ['#/dashboard', '#/roadmap', '#/question-bank'],
   ],
+  // A Maintainer owns the banks across every Case Type and had no link to the
+  // editor at all. They hold no working role, so they get that and nothing
+  // else.
+  ['maintainer', { isMaintainer: true }, ['#/question-bank']],
   [
     'reviewer who also manages and owns',
     {

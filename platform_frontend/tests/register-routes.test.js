@@ -249,7 +249,9 @@ test('route table: the host substitute is the page that actually mounts', async 
       },
     }),
     /** @type {any} */ ({
-      ...makeContext(),
+      // A Maintainer: the editor route is guarded now, so the mount only
+      // happens for someone allowed to open it.
+      ...makeContext([], { isMaintainer: true }),
       loadQuestionBankEditor: async () => substitute,
     })
   );
@@ -303,6 +305,7 @@ test('route table: only the eligibility-gated routes guard their mount', () => {
   assert.deepEqual(gated, [
     'my-stats',
     'team-stats',
+    'question-bank',
     'journey-cases',
     'my-team',
     'search',
@@ -744,4 +747,26 @@ test('landing: home is the fallback and never a rule', () => {
   const unmatched = resolveCapabilities([]);
   assert.equal(unmatched.isVisitor, true);
   assert.equal(resolveDefaultLandingPath(unmatched), FALLBACK_LANDING_PATH);
+});
+
+test('question-bank: the route is guarded to the same people as its link', () => {
+  // Decided rather than left: a nav item narrower than its route meant anyone
+  // with the URL could open the editor. What protects a bank is the
+  // SharePoint list ACL; this makes the offer and the reachable agree.
+  const entry = APP_CONFIG.pagePlugins.find(
+    (plugin) => plugin.id === 'question-bank'
+  );
+  assert.ok(entry?.guard);
+  assert.equal(entry.nav?.isVisible, undefined, 'stated once, not twice');
+
+  for (const [allowed, overrides] of /** @type {[boolean, any][]} */ ([
+    [true, { ownedCaseTypes: ['complaints'] }],
+    [true, { isMaintainer: true }],
+    [false, { isReviewer: true }],
+    [false, { isReviewerManager: true }],
+    [false, {}],
+  ])) {
+    const caps = makePermissions({ isReviewer: false, ...overrides });
+    assert.equal(entry.guard(caps), allowed, JSON.stringify(overrides));
+  }
 });

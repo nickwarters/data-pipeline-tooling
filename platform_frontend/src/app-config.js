@@ -160,11 +160,15 @@ export const APP_CONFIG = {
       paths: ['#/question-bank'],
       load: () => import('./pages/question-bank/cora-bank-editor.js'),
       loadOverride: (context) => context.loadQuestionBankEditor,
-      nav: {
-        label: 'Question Bank',
-        order: 50,
-        isVisible: (caps) => caps.ownedCaseTypes.length > 0,
-      },
+      // Guarded as well as linked, and the two say it once. The link was a
+      // Case Type Owner's while the route was open, so anyone with the URL
+      // could open the editor; that is UX inconsistency rather than a hole —
+      // the SharePoint list ACLs are what actually protect a bank — but a
+      // link narrower than its route is worth closing while both are being
+      // declared in one place. Maintainers are in it: they own the banks
+      // across every Case Type and had no link to the editor at all.
+      guard: (caps) => caps.ownedCaseTypes.length > 0 || caps.isMaintainer,
+      nav: { label: 'Question Bank', order: 50 },
     },
     {
       id: 'case',
