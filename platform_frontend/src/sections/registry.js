@@ -21,16 +21,6 @@
  * @typedef {import('../services/permissions.js').Capabilities} Capabilities
  */
 
-/**
- * The Section id union, taken from the composition root — the one place that
- * says what this application is made of, at the type level as well as the value
- * one. A type-only edge: this module imports nothing at runtime, which is what
- * unknots the cycle that used to run from the services through here into the
- * plugins and back out through their views.
- *
- * @typedef {import('../app-config.js').Section} Section
- */
-
 /** @type {Map<string, SectionPlugin>} */
 const registry = new Map();
 
@@ -162,10 +152,12 @@ export function evaluateSectionsAccess({
  * The Section ids as currently registered, in manifest-then-registration
  * order — which is not a meaningful order; see the manifest above.
  *
- * `string[]` rather than `Section[]` on purpose: a plugin registered after boot
- * is in this list and cannot be in a union projected from the composition root.
- * `Section` stays the compile-time set that Case Type config and the access map
- * are keyed by.
+ * `string[]` rather than the composition root's `Section` union on purpose, and
+ * for two reasons that point the same way: a plugin registered after boot is in
+ * this list and cannot be in a union projected from what boot composed, and
+ * this engine does not know the set in the first place. `Section` is the
+ * compile-time set Case Type config and the access map are keyed by, and it
+ * lives with the config that names it.
  *
  * @returns {string[]}
  */
@@ -200,31 +192,38 @@ export function showInSummaryDefaultOf(id) {
  * The default tab caption and panel heading for every Section, as each plugin
  * declares them. A Case Type's `sectionLabels` layer over this.
  *
- * @returns {Record<Section, { tab: string, heading: string }>}
+ * Keyed by `string` rather than by the composed union, for the same reason the
+ * id lists are: this is read off the live registry, which holds whatever was
+ * configured plus anything registered on top of it.
+ *
+ * @returns {Record<string, { tab: string, heading: string }>}
  */
 export function defaultSectionLabels() {
-  return /** @type {Record<Section, { tab: string, heading: string }>} */ (
-    Object.fromEntries(
-      getSectionPlugins().map((plugin) => [
-        plugin.id,
-        { ...plugin.defaultLabels },
-      ])
-    )
+  return Object.fromEntries(
+    getSectionPlugins().map((plugin) => [
+      plugin.id,
+      { ...plugin.defaultLabels },
+    ])
   );
 }
 
 /**
  * A Case Type's configuration for one Section, if it declares one.
  *
- * The cast is the one place a plugin's `id` meets the `Section`-keyed config
- * map. `SectionPlugin.id` is `string` in the contract on purpose — typing it as
- * `Section` would make the contract reference the union that is projected from
- * the plugins that satisfy it.
+ * The cast widens the config map rather than narrowing the id, which is the
+ * direction that matches who knows what: a Case Type author is held to the
+ * composed Section union when they write `sections`, and this engine — which
+ * does not know that union — only looks a key up in it. `SectionPlugin.id` is
+ * `string` in the contract for the same reason.
  *
  * @param {CaseTypeConfig | undefined} config
  * @param {string} id
  * @returns {import('../sharepoint-client.js').SectionConfig | undefined}
  */
 export function sectionConfigFor(config, id) {
-  return config?.sections?.[/** @type {Section} */ (id)];
+  const sections =
+    /** @type {Record<string, import('../sharepoint-client.js').SectionConfig> | undefined} */ (
+      config?.sections
+    );
+  return sections?.[id];
 }

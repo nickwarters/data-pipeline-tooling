@@ -34,7 +34,7 @@ import {
   sectionConfigFor,
 } from '../sections/registry.js';
 
-/** @typedef {import('../sections/registry.js').Section} Section */
+/** @typedef {import('../app-config.js').Section} Section */
 
 /**
  * Access modes a section can resolve to for a viewer.
