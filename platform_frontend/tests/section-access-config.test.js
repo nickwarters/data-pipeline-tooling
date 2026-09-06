@@ -12,7 +12,9 @@ import {
   sectionIds,
   summaryBlockIds,
 } from './helpers/section-access.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
+configureAppSections();
 /** @typedef {import('../src/services/section-access.js').Section} Section */
 /** @typedef {import('../src/services/section-access.js').Role} Role */
 /** @typedef {import('../src/services/section-access.js').Mode} Mode */

@@ -9,8 +9,8 @@ Before doing any non-trivial work in this repo, read:
 1. **[CONTEXT.md](./CONTEXT.md)** — domain language. Use these terms exactly when discussing or coding (`Case Type`, `Question Definition`, `Applicable Question`, `Answer`, `Remediation Action`, `Reviewer`, `Responsible Party`, `Case Type Owner`, `Conversation`, `Outcome`).
 2. **[docs/guide/add-a-page.md](./docs/guide/add-a-page.md)** — the one-page
    authoring path: state → `h()`/`svg()`, actions, effects, route entry, and tests.
-3. **[docs/adr/](./docs/adr/)** — 52 architecture decisions, numbered
-   (`0001`–`0052`). Read the status before relying on an older decision, and do
+3. **[docs/adr/](./docs/adr/)** — 54 architecture decisions, numbered
+   (`0001`–`0054`). Read the status before relying on an older decision, and do
    not deviate from an accepted ADR without surfacing the deviation explicitly.
 
 ## Project overview
@@ -42,20 +42,31 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   `listRoadmapItems()` takes none, so wrapping it would read as covered while
   cancelling nothing. The contract test names that exemption and fails if it
   stops being true.
-- **Case Review Sections declare themselves (ADR-0053).** A Section is one module
-  under `src/sections/<name>/<name>-plugin.js` carrying everything about it: its
-  id, tab and Summary placement, default copy, per-Case-Type access rule and
-  view. `src/sections/registry.js` holds the manifest — the ordered list of those
-  modules — and every derived structure (`sectionIds`, `summaryBlockIds`, the
-  default labels, and the `Section` id union) is projected from it. Nothing
-  restates a Section's facts anywhere else. Each plugin uses `@satisfies` rather
-  than `@type` so its literal `id` survives inference; that is what lets the type
-  union come from the plugins instead of a second table.
+- **Case Review Sections declare themselves (ADR-0053), and the application
+  composes them (ADR-0054).** A Section is one module under
+  `src/sections/<name>/<name>-plugin.js` carrying everything about it: its id,
+  tab and Summary placement, default copy, per-Case-Type access rule and view.
+  `src/app-config.js` — the composition root — is the one place that says which
+  Sections this application is made of, and every derived structure
+  (`sectionIds`, `summaryBlockIds`, the default labels, and the `Section` id
+  union) is projected from that list. Nothing restates a Section's facts
+  anywhere else. Each plugin uses `@satisfies` rather than `@type` so its
+  literal `id` survives inference; that is what lets the type union come from
+  the plugins instead of a second table, and a widening `@type` on
+  `APP_CONFIG.sectionPlugins` silently turns it into `string`.
+  `src/sections/registry.js` is the **engine**: it imports no plugin and no
+  config, and boot hands it the list with `configureSections()` before anything
+  mounts. A read before that **throws** — there is nothing to fall back to, and
+  an empty registry would answer "every Section is hidden", which denies access
+  to every Case and renders a blank application with nothing in the console. A
+  test that reads a Section therefore composes one first, via
+  `tests/helpers/configure-sections.js`; composing again is also how it puts
+  back what it composed, so there is no separate reset.
   **Adding a Section recipe:** author the plugin module, then add one import and
-  one entry to the manifest in `src/sections/registry.js`. A build step is banned
+  one entry to `src/app-config.js`. A build step is banned
   (ADR-0041), so nothing can discover modules at runtime — naming it once in the
-  manifest is irreducible, the same way `setup/register-routes.js` is the one
-  place a page is named. Enabling it for a Case Type is that Case Type's
+  composition root is irreducible, the same way `setup/register-routes.js` is the
+  one place a page is named. Enabling it for a Case Type is that Case Type's
   `sections` entry, since the descriptor is an allow-list, and
   `scripts/scaffold_case_type.py` carries the template new Case Types are
   scaffolded from.
@@ -468,7 +479,10 @@ src/
 
   sections/                     # self-declaring Case Review Sections
     contract.js                 # the SectionPlugin contract (names no plugin, so the union can project)
-    registry.js                 # the manifest, the Section id union, and every derivation from it
+    registry.js                 # THE Section engine: holds Sections and derives from them, and
+                                #   knows which exist only because boot configures it. Imports no
+                                #   plugin and no config, which is what unknots the cycle; a read
+                                #   before configureSections() throws rather than answering empty
     details/
       details-plugin.js         # Case Details section plugin
     questions/

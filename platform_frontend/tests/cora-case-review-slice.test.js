@@ -12,7 +12,9 @@ import {
 } from './helpers/semantic-dom.js';
 import { registerCaseType } from '../case-types/manifest.js';
 import { makeCaseRow, makeChrome } from './helpers/fixtures.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
+configureAppSections();
 installDom();
 
 // A second fixture Case Type whose config never arrives. `CaseLoader.load()`

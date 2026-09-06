@@ -10,7 +10,9 @@ import {
   getSectionPlugin,
   getSectionPlugins,
 } from '../src/sections/registry.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
+configureAppSections();
 installDom();
 
 const { createQuestionPanelView } =

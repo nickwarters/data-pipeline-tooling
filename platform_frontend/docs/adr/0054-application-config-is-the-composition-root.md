@@ -4,7 +4,7 @@ Date: 2026-09-06
 
 ## Status
 
-Proposed.
+Accepted.
 
 Amends [ADR-0053](./0053-section-plugin-architecture.md), which made a Section
 declare itself but left the framework naming every Section, so every Section is

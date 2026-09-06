@@ -14,7 +14,9 @@ import {
   readyToClose,
 } from '../src/pages/cora-case-review/completion-actions.js';
 import { makeCaseRow, makePermissions } from './helpers/fixtures.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
+configureAppSections();
 isolateBrowserGlobals();
 installDom();
 /** @type {any} */ (globalThis).location = { hash: '' };

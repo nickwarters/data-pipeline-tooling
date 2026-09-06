@@ -14,6 +14,10 @@ const { getSectionPlugin } = await import('../src/sections/registry.js');
 const { default: complaintsConfig } =
   await import('../case-types/complaints.js');
 const { resolveSectionLabels } = await import('../src/lib/section-labels.js');
+const { configureAppSections } =
+  await import('./helpers/configure-sections.js');
+
+configureAppSections();
 
 const PERSON = { loginName: 'corp\\jsmith', displayName: 'Jane Smith' };
 

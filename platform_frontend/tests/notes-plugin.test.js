@@ -5,15 +5,14 @@ import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
 import { fireEvent } from './helpers/semantic-dom.js';
 import { NotesPlugin } from '../src/sections/notes/notes-plugin.js';
-import {
-  getSectionPlugin,
-  resetSectionRegistry,
-} from '../src/sections/registry.js';
+import { getSectionPlugin } from '../src/sections/registry.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
+configureAppSections();
 installDom();
 
 test('NotesPlugin has correct contract properties and is registered', () => {
-  resetSectionRegistry();
+  configureAppSections();
   assert.equal(getSectionPlugin('notes'), NotesPlugin);
   assert.equal(NotesPlugin.id, 'notes');
   assert.equal(NotesPlugin.tab, true);

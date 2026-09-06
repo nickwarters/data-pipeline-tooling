@@ -82,9 +82,9 @@ re-gating something on the way back in is as much a defect as missing a gate.
   matrix). Controls amends a reportable Case's Outcome whether or not an Appeal
   prompted it, so it is a standalone capability that happens to sit in the same
   ADR cluster. It stays live.
-- **The Section manifest** (`src/sections/registry.js`). The `appealRequest`
-  and `appealReview` entries stay. The registry says which Sections _exist_ and
-  in what order; access says who may _see_ one. Filtering the registry would
+- **The composition root** (`src/app-config.js`). The `appealRequest`
+  and `appealReview` entries stay. The composed list says which Sections
+  _exist_; access says who may _see_ one. Filtering that list would
   also erase the `Section` id union those entries project into, breaking `tsc`
   for the access matrix and the Case Type `sections` allow-list — so the gate
   belongs at the access seam, which already has `hidden` as a first-class

@@ -4,7 +4,9 @@ import assert from 'node:assert/strict';
 
 import { installDom } from './_dom-stub.js';
 import { makeCaseRow, makePermissions } from './helpers/fixtures.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
+configureAppSections();
 installDom();
 /** @type {any} */ (globalThis).location = { hash: '' };
 

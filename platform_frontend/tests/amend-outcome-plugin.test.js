@@ -5,16 +5,15 @@ import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
 import { fireEvent, getByRole } from './helpers/semantic-dom.js';
 import { AmendOutcomePlugin } from '../src/sections/amend-outcome/amend-outcome-plugin.js';
-import {
-  getSectionPlugin,
-  resetSectionRegistry,
-} from '../src/sections/registry.js';
+import { getSectionPlugin } from '../src/sections/registry.js';
 import { CASE_STATUS } from '../src/lib/case-statuses.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
+configureAppSections();
 installDom();
 
 test('AmendOutcomePlugin has correct contract properties and is registered', () => {
-  resetSectionRegistry();
+  configureAppSections();
   assert.equal(getSectionPlugin('amendOutcome'), AmendOutcomePlugin);
   assert.equal(AmendOutcomePlugin.id, 'amendOutcome');
   assert.equal(AmendOutcomePlugin.tab, true);

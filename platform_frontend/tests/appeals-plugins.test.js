@@ -6,16 +6,15 @@ import { installDom } from './_dom-stub.js';
 import { fireEvent, getByRole } from './helpers/semantic-dom.js';
 import { AppealRequestPlugin } from '../src/sections/appeals/appeal-request-plugin.js';
 import { AppealReviewPlugin } from '../src/sections/appeals/appeal-review-plugin.js';
-import {
-  getSectionPlugin,
-  resetSectionRegistry,
-} from '../src/sections/registry.js';
+import { getSectionPlugin } from '../src/sections/registry.js';
 import { CASE_STATUS } from '../src/lib/case-statuses.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
+configureAppSections();
 installDom();
 
 test('AppealRequestPlugin has correct contract properties and is registered', () => {
-  resetSectionRegistry();
+  configureAppSections();
   assert.equal(getSectionPlugin('appealRequest'), AppealRequestPlugin);
   assert.equal(AppealRequestPlugin.id, 'appealRequest');
   assert.equal(AppealRequestPlugin.tab, true);
@@ -150,7 +149,7 @@ test('AppealRequestPlugin view renders section and handles raise submission', ()
 });
 
 test('AppealReviewPlugin has correct contract properties and is registered', () => {
-  resetSectionRegistry();
+  configureAppSections();
   assert.equal(getSectionPlugin('appealReview'), AppealReviewPlugin);
   assert.equal(AppealReviewPlugin.id, 'appealReview');
   assert.equal(AppealReviewPlugin.tab, true);

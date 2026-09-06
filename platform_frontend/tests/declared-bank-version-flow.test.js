@@ -42,7 +42,9 @@ import {
   compileExport,
 } from '../src/pages/question-bank/question-bank-compile.js';
 import { computeConfiguredOutcome } from '../src/evaluators/configured-outcome.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
+configureAppSections();
 const SLUG = 'single-question-review';
 const LIST = 'Cases-SingleQuestionReview';
 const AS_REVIEWED_TEXT = 'Was the single question handled correctly?';

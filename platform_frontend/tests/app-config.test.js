@@ -5,8 +5,10 @@ import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
 import { APP_CONFIG } from '../src/app-config.js';
 import { sectionIds } from '../src/sections/registry.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
 installDom();
+configureAppSections();
 
 // Capability: the composition root names what this application is made of, and
 // the Section id union is projected from that naming rather than restated.
@@ -33,9 +35,9 @@ test('APP_CONFIG composes the ten Sections this application has', () => {
   );
 });
 
-test('the composition root and the engine still name the same Sections', () => {
-  // Two lists exist for exactly as long as it takes boot to start handing the
-  // engine the composed one. Nothing else would notice them drifting apart.
+test('the engine runs on the list the composition root hands it', () => {
+  // The engine has no list of its own, so this is the composed list coming
+  // back out — the same round trip boot makes.
   assert.deepEqual([...sectionIds()].sort(), COMPOSED_SECTION_IDS);
 });
 

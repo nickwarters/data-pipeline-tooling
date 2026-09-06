@@ -10,7 +10,9 @@ import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 import { makeLoader } from './helpers/case-loader.js';
 import { caps } from './helpers/section-access.js';
 import { makeCaseRow } from './helpers/fixtures.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
+configureAppSections();
 isolateBrowserGlobals();
 
 let fixtureSequence = 0;

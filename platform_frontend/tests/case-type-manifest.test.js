@@ -20,7 +20,9 @@ import {
   validateGeneralQuestions,
   validateAnswerKeyNamespace,
 } from '../src/evaluators/general-questions.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
+configureAppSections();
 /**
  * The three assertions below pin today's registry as a CLOSED set: they name
  * `complaints` literally, because `UnknownCaseTypeError` puts the known slugs in

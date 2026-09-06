@@ -5,16 +5,15 @@ import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
 import { IssuesPlugin } from '../src/sections/issues/issues-plugin.js';
 import { RemediationPlugin } from '../src/sections/remediation/remediation-plugin.js';
-import {
-  getSectionPlugin,
-  resetSectionRegistry,
-} from '../src/sections/registry.js';
+import { getSectionPlugin } from '../src/sections/registry.js';
 import { CASE_STATUS } from '../src/lib/case-statuses.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
+configureAppSections();
 installDom();
 
 test('IssuesPlugin has correct contract properties and is registered', () => {
-  resetSectionRegistry();
+  configureAppSections();
   assert.equal(getSectionPlugin('issues'), IssuesPlugin);
   assert.equal(IssuesPlugin.id, 'issues');
   assert.equal(IssuesPlugin.tab, true);
@@ -167,7 +166,7 @@ test('IssuesPlugin view renders remediation section and handles dispatch callbac
 });
 
 test('RemediationPlugin has correct contract properties and is registered', () => {
-  resetSectionRegistry();
+  configureAppSections();
   assert.equal(getSectionPlugin('remediation'), RemediationPlugin);
   assert.equal(RemediationPlugin.id, 'remediation');
   assert.equal(RemediationPlugin.tab, true);

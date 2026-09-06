@@ -10,7 +10,9 @@ import {
   assertMatrixGrid,
   sectionIds,
 } from './helpers/section-access.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
+configureAppSections();
 // Capability: the complete role-by-section access matrix.
 
 // --- The Section set ---

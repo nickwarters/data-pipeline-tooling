@@ -7,13 +7,14 @@ import {
   registerSectionPlugin,
   getSectionPlugins,
   getSectionPlugin,
-  resetSectionRegistry,
 } from '../src/sections/registry.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
+configureAppSections();
 installDom();
 
 beforeEach(() => {
-  resetSectionRegistry();
+  configureAppSections();
 });
 
 test('getSectionPlugins returns a plugin for every getSectionPlugins() entry', () => {

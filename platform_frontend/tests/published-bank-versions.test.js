@@ -28,7 +28,9 @@ import { CaseLoader } from '../src/lib/case-loader.js';
 import complaintsConfig from '../case-types/complaints.js';
 import { caps } from './helpers/section-access.js';
 import { isolateBrowserGlobals } from './helpers/browser-globals.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
+configureAppSections();
 isolateBrowserGlobals();
 
 /**

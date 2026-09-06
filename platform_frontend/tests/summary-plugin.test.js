@@ -4,16 +4,15 @@ import assert from 'node:assert/strict';
 
 import { installDom } from './_dom-stub.js';
 import { SummaryPlugin } from '../src/sections/summary/summary-plugin.js';
-import {
-  getSectionPlugin,
-  resetSectionRegistry,
-} from '../src/sections/registry.js';
+import { getSectionPlugin } from '../src/sections/registry.js';
 import { CASE_STATUS } from '../src/lib/case-statuses.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
+configureAppSections();
 installDom();
 
 test('SummaryPlugin has correct contract properties and is registered', () => {
-  resetSectionRegistry();
+  configureAppSections();
   assert.equal(getSectionPlugin('summary'), SummaryPlugin);
   assert.equal(SummaryPlugin.id, 'summary');
   assert.equal(SummaryPlugin.tab, true);
