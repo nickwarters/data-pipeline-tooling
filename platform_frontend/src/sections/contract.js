@@ -30,6 +30,18 @@
  *   config?: CaseTypeConfig,
  * }) => Mode} evaluateAccess
  * @property {(panelContext: PanelContext) => Node | Node[] | null} view
+ * @property {(sectionState: any, action: any) => any} [reduce]
+ *   Optional. This Section's own state transitions, over its own slice of
+ *   `route.sections` and nothing else — it is handed that slice and what it
+ *   returns replaces it, so it can neither read nor write another Section's.
+ *
+ *   Reached by the page's reducer only for an action that names this Section
+ *   (`action.section === plugin.id`), after every one of the page's own
+ *   branches. A lookup rather than a fold over every plugin per dispatch: the
+ *   render path is on a keystroke budget, and offering each Section every
+ *   action would put the cost of a new Section on every other one.
+ *
+ *   Returning the slice it was given is how a Section says "not mine".
  * @property {(props: SummaryBlockProps) => Node | null} [summaryView]
  *   Optional. Renders this Section's block inside the Summary, for a Section
  *   that declares `summaryBlock`. Absent means the Section contributes no
