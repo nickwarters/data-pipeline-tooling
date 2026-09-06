@@ -9,7 +9,9 @@ import {
   REMEDIATION_SLA_WORKING_DAYS,
 } from '../src/config/working-days.js';
 import { makeCaseRow, makePermissions } from './helpers/fixtures.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
+configureAppSections();
 const NO_CAPABILITIES = makePermissions({
   isReviewer: false,
   isVisitor: true,

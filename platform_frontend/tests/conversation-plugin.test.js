@@ -5,15 +5,14 @@ import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
 import { fireEvent, getByRole } from './helpers/semantic-dom.js';
 import { ConversationPlugin } from '../src/sections/conversation/conversation-plugin.js';
-import {
-  getSectionPlugin,
-  resetSectionRegistry,
-} from '../src/sections/registry.js';
+import { getSectionPlugin } from '../src/sections/registry.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
+configureAppSections();
 installDom();
 
 test('ConversationPlugin has correct contract properties and is registered', () => {
-  resetSectionRegistry();
+  configureAppSections();
   assert.equal(getSectionPlugin('conversation'), ConversationPlugin);
   assert.equal(ConversationPlugin.id, 'conversation');
   assert.equal(ConversationPlugin.tab, false);

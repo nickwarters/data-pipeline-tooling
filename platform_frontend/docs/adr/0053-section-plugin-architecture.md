@@ -4,7 +4,10 @@ Date: 2026-09-05
 
 ## Status
 
-Accepted
+Accepted as amended by
+[ADR-0054](./0054-application-config-is-the-composition-root.md): a Section
+still declares itself, but the list of them is named by the application's
+composition root rather than by `src/sections/registry.js`.
 
 Supersedes the monolithic access matrix in [ADR-0011](./0011-section-level-role-based-access.md)
 and the static panel map in [ADR-0032](./0032-data-driven-section-registry.md).

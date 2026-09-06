@@ -6,7 +6,9 @@ import {
   resolveSectionLabels,
 } from '../src/lib/section-labels.js';
 import { getSectionPlugins } from '../src/sections/registry.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
+configureAppSections();
 test('every registered Section has a non-empty default label pair', () => {
   assert.deepEqual(
     Object.keys(defaultSectionLabels()).sort(),

@@ -11,7 +11,9 @@ import {
   queryAllByText,
   queryByRole,
 } from './helpers/semantic-dom.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
+configureAppSections();
 installDom();
 
 const { summaryView } =

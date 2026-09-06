@@ -6,11 +6,13 @@ import { installDom } from './_dom-stub.js';
 import {
   configureSections,
   getSectionPlugin,
-  resetSectionRegistry,
+  registerSectionPlugin,
   sectionIds,
 } from '../src/sections/registry.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
 installDom();
+configureAppSections();
 
 // Capability: the composition root tells the Section engine what this
 // application is made of, and says so once.
@@ -36,7 +38,22 @@ function fakeSection(id) {
 }
 
 afterEach(() => {
-  resetSectionRegistry();
+  // Back to what this application composes, not to a built-in list: the engine
+  // has none. Composing again is the whole of putting it back.
+  configureAppSections();
+});
+
+test('composing again discards whatever was registered on top', () => {
+  configureSections([fakeSection('alpha')]);
+  registerSectionPlugin(fakeSection('beta'));
+  assert.deepEqual(sectionIds(), ['alpha', 'beta']);
+
+  configureSections([fakeSection('alpha')]);
+  assert.deepEqual(
+    sectionIds(),
+    ['alpha'],
+    'the list says what the application is not made of, too'
+  );
 });
 
 test('configureSections replaces the registry wholesale', () => {

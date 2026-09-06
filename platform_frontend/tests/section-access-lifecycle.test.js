@@ -14,7 +14,9 @@ import {
   ROLES,
   sectionIds,
 } from './helpers/section-access.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
+configureAppSections();
 /** @typedef {import('../src/services/section-access.js').Role} Role */
 
 // Capability: status transitions and most-permissive role composition.

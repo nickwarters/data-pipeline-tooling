@@ -2,6 +2,16 @@
 // @ts-check
 
 /**
+ * The Section engine. It knows how to hold Sections and how to derive things
+ * from them; it does not know which Sections exist. That list is pushed in by
+ * `configureSections` from the composition root at boot, so an application
+ * Section and a built-in one are the same kind of thing — there is no
+ * framework list for one of them to be missing from.
+ *
+ * Nothing is imported here at runtime, deliberately.
+ */
+
+/**
  * @typedef {import('./contract.js').SectionPlugin} SectionPlugin
  * @typedef {import('../services/section-access.js').Mode} Mode
  * @typedef {import('../services/section-access.js').Role} Role
@@ -11,58 +21,12 @@
  * @typedef {import('../services/permissions.js').Capabilities} Capabilities
  */
 
-import { DetailsPlugin } from './details/details-plugin.js';
-import { NotesPlugin } from './notes/notes-plugin.js';
-import { ConversationPlugin } from './conversation/conversation-plugin.js';
-import { AmendOutcomePlugin } from './amend-outcome/amend-outcome-plugin.js';
-import { AppealRequestPlugin } from './appeals/appeal-request-plugin.js';
-import { AppealReviewPlugin } from './appeals/appeal-review-plugin.js';
-import { QuestionsPlugin } from './questions/questions-plugin.js';
-import { IssuesPlugin } from './issues/issues-plugin.js';
-import { RemediationPlugin } from './remediation/remediation-plugin.js';
-import { SummaryPlugin } from './summary/summary-plugin.js';
-
-/**
- * The built-in Sections. This is the manifest: a Section exists because its
- * module is imported and listed here, and nothing else names it.
- *
- * The order of this array carries no meaning. The two orders that do are each
- * plugin's own `tabOrder` and `summaryOrder`, which the tab strip and the
- * Summary sort by; both accept fractional values, so a Section slots between
- * two others without renumbering them. `sectionIds()`'s only caller asks
- * whether every Section is hidden, which no order affects — so do not read a
- * canonical order into this list, and do not add one without a reader.
- *
- * A function rather than a module-scope array, and that is load-bearing. A
- * plugin's `view` imports the page components it renders, and those reach back
- * to this module through the services they use — so an array evaluated while
- * this module is first being imported reads a plugin binding that is still in
- * its temporal dead zone. A function body is not evaluated until it is called.
- *
- * Scheduled for removal along with the fallback that reads it: the list this
- * engine runs on is the one the composition root hands it. Until then the two
- * lists are held equal by a test, because nothing else would notice them
- * drifting apart.
- */
-function builtInSectionPlugins() {
-  return /** @type {const} */ ([
-    DetailsPlugin,
-    QuestionsPlugin,
-    IssuesPlugin,
-    SummaryPlugin,
-    RemediationPlugin,
-    NotesPlugin,
-    ConversationPlugin,
-    AppealRequestPlugin,
-    AppealReviewPlugin,
-    AmendOutcomePlugin,
-  ]);
-}
-
 /**
  * The Section id union, taken from the composition root — the one place that
  * says what this application is made of, at the type level as well as the value
- * one. A type-only edge, so the engine still loads nothing.
+ * one. A type-only edge: this module imports nothing at runtime, which is what
+ * unknots the cycle that used to run from the services through here into the
+ * plugins and back out through their views.
  *
  * @typedef {import('../app-config.js').Section} Section
  */
@@ -73,39 +37,37 @@ const registry = new Map();
 /**
  * Whether the composition root has told this engine what the application is
  * made of. Starts false, and `configureSections` is the only thing that sets
- * it: it is the fact the lazy fallback below is scheduled to be replaced by,
- * so nothing else may claim it.
+ * it.
  */
 let configured = false;
 
-/** Whether the lazy fallback has already seeded the built-ins. */
-let seeded = false;
-
 /**
- * The lazy fallback: a read that arrives before anything configured the engine
- * seeds it with the built-ins so it answers something rather than nothing.
+ * Refuse to answer before the composition root has said what this application
+ * is made of.
  *
- * Scheduled for removal. Once boot configures the engine, a read before that
- * has to throw instead — with no built-ins there is nothing to fall back to,
- * and an empty registry answers "every Section is hidden", which reads as a
- * Case nobody may open rather than as a mistake. Do not build on this.
+ * Throwing is the whole point. There is no list to fall back to, and an empty
+ * registry does not read as an empty registry anywhere downstream: the Case
+ * loader asks whether every Section is hidden, which is vacuously true over no
+ * Sections, so it denies access to every Case and renders a blank application
+ * with nothing in the console. A missing configuration must look like a
+ * missing configuration.
  */
-function ensureInitialized() {
-  if (configured || seeded) return;
-  resetSectionRegistry();
-}
-
-export function resetSectionRegistry() {
-  registry.clear();
-  seeded = true;
-  for (const plugin of builtInSectionPlugins()) {
-    registry.set(plugin.id, plugin);
+function assertConfigured() {
+  if (!configured) {
+    throw new Error(
+      'Sections read before configureSections() — boot must configure the ' +
+        'engine before any route mounts.'
+    );
   }
 }
 
 /**
  * Configure the engine with the Sections this application is composed of.
  * Called once during boot, before any route mounts.
+ *
+ * Replaces wholesale, so calling it again is also how a caller puts back what
+ * it composed: there is no separate reset, because a list that says what the
+ * application is made of already says what it is not made of.
  *
  * A duplicate id throws rather than replacing the earlier entry.
  * `registerSectionPlugin` replaces on purpose — a test standing one Section in
@@ -134,7 +96,7 @@ export function configureSections(plugins) {
  * @param {SectionPlugin} plugin
  */
 export function registerSectionPlugin(plugin) {
-  ensureInitialized();
+  assertConfigured();
   if (!plugin || !plugin.id) {
     throw new Error('registerSectionPlugin requires a plugin with an id');
   }
@@ -148,7 +110,7 @@ export function registerSectionPlugin(plugin) {
  * @returns {SectionPlugin | undefined}
  */
 export function getSectionPlugin(id) {
-  ensureInitialized();
+  assertConfigured();
   return registry.get(id);
 }
 
@@ -158,7 +120,7 @@ export function getSectionPlugin(id) {
  * @returns {SectionPlugin[]}
  */
 export function getSectionPlugins() {
-  ensureInitialized();
+  assertConfigured();
   return Array.from(registry.values());
 }
 

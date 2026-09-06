@@ -22,7 +22,7 @@ import {
   showWhenReferences,
 } from '../src/evaluators/applicability-evaluator.js';
 import { validateCaptureGroups } from '../src/evaluators/issue-capture.js';
-import { sectionIds } from '../src/sections/registry.js';
+import { APP_CONFIG } from '../src/app-config.js';
 import { ROLES } from '../src/services/section-access.js';
 import { isVoidReasonKey, VOID_REASONS } from '../src/lib/void-reasons.js';
 import { ACTION_CENTRE_REASONS } from '../src/services/action-centre-model.js';
@@ -664,7 +664,10 @@ function ignoredSiblingKeys(cond) {
  * @returns {Failure[]}
  */
 function checkSections(slug, file, config) {
-  const known = new Set(sectionIds());
+  // Read off the composition root rather than the Section engine: the engine
+  // is empty until boot configures it, and the question here is a question
+  // about what this application composes, not about a running one.
+  const known = new Set(APP_CONFIG.sectionPlugins.map((plugin) => plugin.id));
   const knownRoles = new Set(ROLES);
   /** @param {string} message @returns {Failure} */
   const fail = (message) => ({

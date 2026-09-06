@@ -15,6 +15,7 @@ import {
 } from '../src/pages/cora-case-review/completion-actions.js';
 import { openAppealOf } from '../src/evaluators/appeal-state.js';
 import { getSectionPlugin } from '../src/sections/registry.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 import { postConversationMessage } from '../src/pages/cora-case-review/conversation-view.js';
 import { createAppealEffects } from '../src/pages/cora-case-review/appeal-effects.js';
 import {
@@ -27,6 +28,9 @@ import {
 } from '../src/pages/cora-case-review/answer-actions.js';
 import { allApplicableAnswered } from '../src/evaluators/applicability-evaluator.js';
 import { loadCaseTypeConfig } from '../case-types/manifest.js';
+
+// This harness stands in for the running application, so it composes one.
+configureAppSections();
 
 /**
  * @typedef {{

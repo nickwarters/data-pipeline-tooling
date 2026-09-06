@@ -11,7 +11,9 @@ import {
 } from '../src/pages/cora-case-review/void-actions.js';
 import { VOID_REASONS } from '../src/lib/void-reasons.js';
 import { makeCaseRow, makePermissions } from './helpers/fixtures.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
+configureAppSections();
 installDom();
 
 // Capability: the Reviewer's Void control and the patch behind it.

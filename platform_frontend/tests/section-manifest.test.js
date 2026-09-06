@@ -10,16 +10,17 @@ import {
   getSectionPlugin,
   showInSummaryDefaultOf,
   registerSectionPlugin,
-  resetSectionRegistry,
 } from '../src/sections/registry.js';
 import { defaultSectionLabels } from '../src/lib/section-labels.js';
 import { CASE_TYPE_IMPORTERS } from '../case-types/manifest.js';
+import { configureAppSections } from './helpers/configure-sections.js';
 
+configureAppSections();
 // Capability: data-driven Section registry single-source contracts.
 
 // --- Registry basics ---
 
-test('the manifest is the canonical Section order, and is stable', () => {
+test('the configured list is the Section list, and repeated reads agree', () => {
   assert.deepEqual(sectionIds(), [
     'details',
     'questions',
@@ -176,18 +177,18 @@ test('a registered Section flows into every derived structure', () => {
       'its own labels are the defaults — nothing restates them'
     );
   } finally {
-    resetSectionRegistry();
+    configureAppSections();
   }
   assert.ok(
     !sectionIds().includes('fixtureSection'),
-    'reset restores the built-ins'
+    'composing again puts back what this application is made of'
   );
 });
 
 // --- Contract: the Section id union is stated in exactly one place ---
 
 test('the Section id union is stated in exactly one place', () => {
-  // `Section` is projected from `getSectionPlugins()` in `section-registry.js`.
+  // `Section` is projected from the composition root in `src/app-config.js`.
   // Nowhere in `src/` should an independent union of Section ids appear.
   // We check for a pattern of quoted section names separated by pipes in
   // JSDoc typedef comments outside `section-registry.js`.
