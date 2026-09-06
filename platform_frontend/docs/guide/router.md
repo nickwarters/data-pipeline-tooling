@@ -1,29 +1,33 @@
 # Router integration
 
-A route is one entry in the route table in `src/setup/register-routes.js`: the
-hash patterns it answers, and the page module behind them. The table imports its
-pages statically and hands each module to the entry's `page` key; only
-`#/question-bank` still holds a `load` thunk. Either way every page gets the same
-store, render, error and cleanup contract.
+A route is one entry in `APP_CONFIG.pagePlugins` in `src/app-config.js` — the
+composition root: the hash patterns it answers, and the page module behind them.
+The config imports its pages statically and hands each module to the entry's
+`page` key; only `#/question-bank` still holds a `load` thunk. Either way every
+page gets the same store, render, error and cleanup contract.
+
+`src/setup/register-routes.js` is the engine, not the list. `routeTable(context)`
+binds each entry to the context boot built — a `guard(context)` becomes a
+closure the router can call with no arguments, and `loadOverride(context)`
+resolves the host's substitute loader — and `registerRoutes()` registers the
+result. Neither names a page module.
 
 ## Quick reference
 
 ```js
-// src/setup/register-routes.js, at the top
-import * as myPage from '../pages/my-page.js';
+// src/app-config.js, at the top
+import * as myPage from './pages/my-page.js';
 
-// inside routeTable(context)
-'my-page': {
-  paths: ['#/my-page/:id'],
-  page: myPage,
-},
+// inside APP_CONFIG.pagePlugins
+{ id: 'my-page', paths: ['#/my-page/:id'], page: myPage },
 ```
 
 `registerStoreRoute(router, { paths, page, context, guard })` creates the
 `createStoreRoute()` adapter once and registers it on every pattern in `paths`
 — that is how `#/case/:caseType/:id` and `#/case/:id` share one handler. It
 takes `page` or `load`, exactly one; passing neither or both is a `TypeError`.
-The optional `guard: () => boolean` runs on each mount, before anything else;
+The optional `guard: (context) => boolean` on a page entry becomes a
+`guard: () => boolean` here, and runs on each mount before anything else;
 returning `false` skips the mount, which is how `#/journey-cases` bounces an
 ineligible user. The guard buys the short-circuit, not the download — no slice,
 store or effect runs for an ineligible user, but the module is already in memory.
@@ -107,8 +111,8 @@ prevent sibling routes or persistent navigation from working.
 
 1. Add `src/pages/my-page.js` with `createRouteSlice(params, context)`. Follow
    [Add a store-driven page](add-a-page.md).
-2. Import it at the top of `src/setup/register-routes.js` and add an entry to
-   `routeTable()` using the quick-reference pattern above.
+2. Import it at the top of `src/app-config.js` and add an entry to
+   `APP_CONFIG.pagePlugins` using the quick-reference pattern above.
 3. Add a navigation link only if the page belongs in persistent navigation.
 4. Test the page's public view/reducer behaviour. Registration, parameter
    forwarding and the mount failure boundary belong to `registerStoreRoute`
@@ -116,8 +120,8 @@ prevent sibling routes or persistent navigation from working.
    `tests/store-route.test.js` and `tests/router.test.js` — not per page. See
    [Testing](testing.md).
 
-Removing a page is the reverse: remove its page file, its table entry, and its
-navigation link.
+Removing a page is the reverse: remove its page file, its `pagePlugins` entry,
+and its navigation link.
 
 ## Mount and unmount ownership
 

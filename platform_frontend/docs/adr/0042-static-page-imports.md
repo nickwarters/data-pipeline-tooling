@@ -12,6 +12,14 @@ reaffirmed that claim as "deliberately preserved, unchanged". Route-level page
 independence _at runtime_ survives both amendments intact; the lazy `import()`
 that used to implement it does not.
 
+Itself amended by
+[ADR-0054](./0054-application-config-is-the-composition-root.md) in its
+_reasoning_ only: pages are still static imports and `#/question-bank` still
+keeps its thunk, for the three reasons below. What moved is the file that holds
+them — `APP_CONFIG.pagePlugins` in `src/app-config.js` rather than the route
+table in `setup/register-routes.js` — and with it the layering contract's
+single-file privilege. Read "the route table" below as "the composed page list".
+
 ## Context
 
 Every route in `setup/register-routes.js` held its page behind a thunk:
@@ -122,10 +130,12 @@ lines that must be kept in step with the route table by eye.
   measured today, by anything, and this ADR claims no win — only that the
   previous shape was not measured either.
 - The layering contract inverts: `tests/component-layering-contract.test.js` now
-  asserts that only `setup/register-routes.js` names a page module at all, static
-  or dynamic, and that its one dynamic page specifier is the Question Bank editor.
+  asserts that only one named file names a page module at all, static or dynamic,
+  and that its one dynamic page specifier is the Question Bank editor. That file
+  was `setup/register-routes.js` and is now `src/app-config.js` (ADR-0054); the
+  privilege moved rather than widened.
 - **The page-removal recipe still has three steps** — delete the page file, its
-  table entry, its nav link — but the failure mode of forgetting the second one
+  entry in the composed page list, its nav link — but the failure mode of forgetting the second one
   inverts. It used to cost one route quietly at runtime; it now fails `tsc`,
   `npm run verify` and boot, loudly, before anything is deployed.
 - The guard no longer saves an ineligible user the page-module download, because

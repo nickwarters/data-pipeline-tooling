@@ -131,25 +131,23 @@ other edge resource. Persistence belongs in an action module and goes through
 
 ## 5. Register the route
 
-Import the page at the top of the route table and add one entry for it.
+Import the page at the top of the composition root and add one entry for it.
 
 ```js
-// src/setup/register-routes.js, at the top
-import * as greeting from '../pages/greeting.js';
+// src/app-config.js, at the top
+import * as greeting from './pages/greeting.js';
 
-// inside routeTable(context)
-greeting: {
-  paths: ['#/greeting'],
-  page: greeting,
-},
+// inside APP_CONFIG.pagePlugins
+{ id: 'greeting', paths: ['#/greeting'], page: greeting },
 ```
 
 `registerRoutes()` builds the `createStoreRoute()` adapter for each entry and
-registers it on every path in `paths`; add a `guard: () => boolean` if the route
-needs an eligibility check before mounting.
+registers it on every path in `paths`; add a `guard: (context) => boolean` if
+the route needs an eligibility check before mounting.
 
-The route table is the one place that may name a page module — nothing outside
-`src/pages/` may reach a page any other way, and the contract test enforces it.
+`src/app-config.js` is the one place that may name a page module — nothing
+outside `src/pages/` may reach a page any other way, and the contract test
+enforces it.
 `#/question-bank` is the single entry that still fetches its page on demand with
 a `load` thunk; ADR-0042 records why, and a new page does not need one.
 
