@@ -3,18 +3,15 @@
 import { notesView } from '../../pages/cora-case-review/notes-view.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
 
-/** @type {import('../registry.js').SectionPlugin} */
-export const NotesPlugin = {
+/** @satisfies {import('../contract.js').SectionPlugin} */
+export const NotesPlugin = /** @type {const} */ ({
   id: 'notes',
   tab: true,
   tabOrder: 6,
   summaryBlock: true,
   summaryOrder: 5,
   showInSummaryDefault: false,
-  defaultLabels: {
-    tab: 'Notes',
-    heading: 'Case Notes & Justification',
-  },
+  defaultLabels: { tab: 'Notes', heading: 'Notes' },
 
   evaluateAccess({ caseRow, roles }) {
     if (roles.includes('assignedReviewer')) {
@@ -41,4 +38,4 @@ export const NotesPlugin = {
         actions?.save?.fieldEdited?.(field, value),
     });
   },
-};
+});

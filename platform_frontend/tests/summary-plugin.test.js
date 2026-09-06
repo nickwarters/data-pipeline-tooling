@@ -23,7 +23,7 @@ test('SummaryPlugin has correct contract properties and is registered', () => {
   assert.equal(SummaryPlugin.showInSummaryDefault, true);
   assert.deepEqual(SummaryPlugin.defaultLabels, {
     tab: 'Summary',
-    heading: 'Case Summary',
+    heading: 'Summary',
   });
 });
 

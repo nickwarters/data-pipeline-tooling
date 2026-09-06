@@ -15,6 +15,7 @@ import { anyRemediationRequired } from '../evaluators/remediation-status.js';
 import {
   getSectionPlugins,
   getSectionPlugin,
+  sectionConfigFor,
   registerSectionPlugin,
 } from '../sections/registry.js';
 import {
@@ -1108,7 +1109,7 @@ export function createRouteSlice(params, context) {
         visible && typeof plugin.view === 'function'
           ? plugin.view({
               ...panelContext,
-              sectionConfig: config?.sections?.[plugin.id],
+              sectionConfig: sectionConfigFor(config, plugin.id),
             })
           : null
       );

@@ -23,7 +23,7 @@ test('NotesPlugin has correct contract properties and is registered', () => {
   assert.equal(NotesPlugin.showInSummaryDefault, false);
   assert.deepEqual(NotesPlugin.defaultLabels, {
     tab: 'Notes',
-    heading: 'Case Notes & Justification',
+    heading: 'Notes',
   });
 });
 

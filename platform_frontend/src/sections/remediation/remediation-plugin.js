@@ -5,21 +5,18 @@ import { RemediationTracking } from '../../pages/cora-case-review/remediation-tr
 import {
   remediationAudience,
   remediationTabIsLive,
-} from '../../services/section-access.js';
+} from '../../evaluators/case-lifecycle.js';
 import { remediationResolved } from '../../pages/cora-case-review/answer-actions.js';
 
-/** @type {import('../registry.js').SectionPlugin} */
-export const RemediationPlugin = {
+/** @satisfies {import('../contract.js').SectionPlugin} */
+export const RemediationPlugin = /** @type {const} */ ({
   id: 'remediation',
   tab: true,
   tabOrder: 5,
   summaryBlock: true,
   summaryOrder: 4,
   showInSummaryDefault: true,
-  defaultLabels: {
-    tab: 'Remediation',
-    heading: 'Remediation Actions',
-  },
+  defaultLabels: { tab: 'Remediation', heading: 'Remediation' },
 
   evaluateAccess({ caseRow, roles, catalogue }) {
     const cat = catalogue ?? [];
@@ -73,4 +70,4 @@ export const RemediationPlugin = {
       },
     });
   },
-};
+});

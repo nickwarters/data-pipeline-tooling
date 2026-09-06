@@ -2,30 +2,32 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  DEFAULT_SECTION_LABELS,
+  defaultSectionLabels,
   resolveSectionLabels,
 } from '../src/lib/section-labels.js';
-import { SECTION_REGISTRY } from '../src/lib/section-registry.js';
+import { getSectionPlugins } from '../src/sections/registry.js';
 
 test('every registered Section has a non-empty default label pair', () => {
   assert.deepEqual(
-    Object.keys(DEFAULT_SECTION_LABELS).sort(),
-    SECTION_REGISTRY.map(({ id }) => id).sort(),
+    Object.keys(defaultSectionLabels()).sort(),
+    getSectionPlugins()
+      .map(({ id }) => id)
+      .sort(),
     'a Section without labels renders an unnamed tab'
   );
-  for (const [id, { tab, heading }] of Object.entries(DEFAULT_SECTION_LABELS)) {
+  for (const [id, { tab, heading }] of Object.entries(defaultSectionLabels())) {
     assert.ok(tab.trim(), `${id} has a tab label`);
     assert.ok(heading.trim(), `${id} has a heading`);
   }
 });
 
 test('resolveSectionLabels: returns the defaults unchanged when sectionLabels is absent', () => {
-  assert.deepEqual(resolveSectionLabels({}), DEFAULT_SECTION_LABELS);
+  assert.deepEqual(resolveSectionLabels({}), defaultSectionLabels());
 });
 
 test('resolveSectionLabels: returns the defaults unchanged when config is null/undefined', () => {
-  assert.deepEqual(resolveSectionLabels(null), DEFAULT_SECTION_LABELS);
-  assert.deepEqual(resolveSectionLabels(undefined), DEFAULT_SECTION_LABELS);
+  assert.deepEqual(resolveSectionLabels(null), defaultSectionLabels());
+  assert.deepEqual(resolveSectionLabels(undefined), defaultSectionLabels());
 });
 
 test('resolveSectionLabels: a string override renames both the tab and the heading', () => {
@@ -37,8 +39,8 @@ test('resolveSectionLabels: a string override renames both the tab and the headi
     tab: 'Assessment',
     heading: 'Assessment',
   });
-  assert.deepEqual(resolved.details, DEFAULT_SECTION_LABELS.details);
-  assert.deepEqual(resolved.summary, DEFAULT_SECTION_LABELS.summary);
+  assert.deepEqual(resolved.details, defaultSectionLabels().details);
+  assert.deepEqual(resolved.summary, defaultSectionLabels().summary);
 });
 
 test('resolveSectionLabels: an object override patches only the axes it names', () => {

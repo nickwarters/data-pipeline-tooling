@@ -8,16 +8,16 @@ import {
   openAppeal,
   assertGrid,
   assertMatrixGrid,
-  SECTIONS,
+  sectionIds,
 } from './helpers/section-access.js';
 
 // Capability: the complete role-by-section access matrix.
 
 // --- The Section set ---
 
-test('SECTIONS is the amended ten-Section set (appeal split into request/review + amendOutcome)', () => {
+test('sectionIds() is the amended ten-Section set (appeal split into request/review + amendOutcome)', () => {
   assert.deepEqual(
-    [...SECTIONS],
+    [...sectionIds()],
     [
       'details',
       'questions',
@@ -32,7 +32,7 @@ test('SECTIONS is the amended ten-Section set (appeal split into request/review 
     ]
   );
   // The pre-amend keys are gone.
-  const asStrings = /** @type {string[]} */ (SECTIONS);
+  const asStrings = /** @type {string[]} */ (sectionIds());
   assert.ok(!asStrings.includes('appeal'));
   assert.ok(!asStrings.includes('outcome'));
 });

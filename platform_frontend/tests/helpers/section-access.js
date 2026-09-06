@@ -16,12 +16,15 @@ import {
   showInSummary,
   summarySectionsFor,
   ROLES,
-  SECTIONS,
-  SUMMARY_SECTIONS,
+  sectionIds,
+  summaryBlockIds,
 } from '../../src/services/section-access.js';
 
 import { makeCaseRow, makePermissions } from './fixtures.js';
-import { getSectionPlugin } from '../../src/sections/registry.js';
+import {
+  getSectionPlugin,
+  sectionConfigFor,
+} from '../../src/sections/registry.js';
 
 /**
  * Fixture: Question catalogue with one Yes/No failure.
@@ -116,7 +119,7 @@ export function caps(overrides = {}) {
 /**
  * Assert `evaluateAccess` for every (section, role) pair in an expected grid.
  *
- * @param {Partial<Record<Section, Partial<Record<Role, Mode>>>>} grid
+ * @param {Record<string, Partial<Record<Role, Mode>>>} grid
  * @param {CaseRow} caseRow
  * @param {CaseTypeConfig} config
  */
@@ -151,7 +154,7 @@ export function assertGrid(grid, caseRow, config) {
  * at `evaluateAccess`. When the switch goes, these callers can move back to
  * `assertGrid`/`evaluateAccess` unchanged in expectation.
  *
- * @param {Section} section
+ * @param {string} section
  * @param {Role | Role[]} role
  * @param {CaseRow} caseRow
  * @param {CaseTypeConfig} config
@@ -167,7 +170,7 @@ export function matrixMode(section, role, caseRow, config) {
     config,
     sectionConfig: {
       appealsEnabled: true,
-      ...(config?.sections?.[section] ?? {}),
+      ...(sectionConfigFor(config, section) ?? {}),
     },
     catalogue: CATALOGUE,
   });
@@ -176,7 +179,7 @@ export function matrixMode(section, role, caseRow, config) {
 /**
  * `assertGrid`, but reading the plugin policies directly — see `matrixMode`.
  *
- * @param {Partial<Record<Section, Partial<Record<Role, Mode>>>>} grid
+ * @param {Record<string, Partial<Record<Role, Mode>>>} grid
  * @param {CaseRow} caseRow
  * @param {CaseTypeConfig} config
  */
@@ -198,7 +201,7 @@ export function assertMatrixGrid(grid, caseRow, config) {
  * Call `evaluateAccess` with `CATALOGUE` supplied so Remediation cells can
  * evaluate properly.
  *
- * @param {Section} section
+ * @param {string} section
  * @param {Role[]} roles
  * @param {CaseRow} caseRow
  * @param {CaseTypeConfig} config
@@ -226,6 +229,6 @@ export {
   showInSummary,
   summarySectionsFor,
   ROLES,
-  SECTIONS,
-  SUMMARY_SECTIONS,
+  sectionIds,
+  summaryBlockIds,
 };

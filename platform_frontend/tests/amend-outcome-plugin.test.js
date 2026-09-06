@@ -24,7 +24,7 @@ test('AmendOutcomePlugin has correct contract properties and is registered', () 
   assert.equal(AmendOutcomePlugin.showInSummaryDefault, false);
   assert.deepEqual(AmendOutcomePlugin.defaultLabels, {
     tab: 'Amend Outcome',
-    heading: 'Amend Case Outcome',
+    heading: 'Amend Outcome',
   });
 });
 

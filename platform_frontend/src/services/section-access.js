@@ -8,17 +8,33 @@
  * section resolution, and dispatches access evaluation across section plugins.
  */
 
-import { CASE_STATUS } from '../lib/case-statuses.js';
-import { hasTrackableRemediation } from '../evaluators/remediation-status.js';
 import {
-  sectionIds,
-  sectionById,
-  summaryBlockIds,
-} from '../lib/section-registry.js';
-import { APPEALS_ENABLED } from '../config/features.js';
-import { getSectionPlugin } from '../sections/registry.js';
+  conversationSideOf,
+  isFrozen,
+  isReportable,
+  reachedReportable,
+  remediationAudience,
+  remediationTabIsLive,
+} from '../evaluators/case-lifecycle.js';
 
-/** @typedef {import('../lib/section-registry.js').Section} Section */
+export {
+  conversationSideOf,
+  isFrozen,
+  isReportable,
+  reachedReportable,
+  remediationAudience,
+  remediationTabIsLive,
+};
+import { APPEALS_ENABLED } from '../config/features.js';
+import {
+  getSectionPlugin,
+  sectionIds,
+  summaryBlockIds,
+  showInSummaryDefaultOf,
+  sectionConfigFor,
+} from '../sections/registry.js';
+
+/** @typedef {import('../sections/registry.js').Section} Section */
 
 /**
  * Access modes a section can resolve to for a viewer.
@@ -65,52 +81,17 @@ export const ROLES = Object.freeze([
 ]);
 
 /**
- * The Section ids in canonical order.
- * @type {Section[]}
- */
-export const SECTIONS = sectionIds();
-
-/**
- * The Section ids that can contribute a Summary block.
- * @type {Section[]}
- */
-export const SUMMARY_SECTIONS = summaryBlockIds();
-
-/**
- * Whether the Case has reached a reportable milestone.
+ * The Sections that exist on the Case Review page, in canonical order.
  *
- * @param {string} status
- * @returns {boolean}
- */
-export function isReportable(status) {
-  return (
-    status === CASE_STATUS.ACTIONS_IN_PROGRESS ||
-    status === CASE_STATUS.COMPLETED
-  );
-}
-
-/**
- * Whether the Case has reached a state where the record is frozen.
+ * A function rather than a module-scope constant: the list is derived from the
+ * plugin manifest, and a constant would have to be computed while the modules
+ * that make up that manifest were still being evaluated.
  *
- * @param {string} status
- * @returns {boolean}
+ * @returns {string[]}
  */
-export function isFrozen(status) {
-  return isReportable(status) || status === CASE_STATUS.VOID;
-}
+export { sectionIds };
 
-/**
- * Whether the Case ever passed the reportable milestone, including one it was
- * later voided from.
- *
- * @param {import('../sharepoint-client.js').CaseRow} caseRow
- * @returns {boolean}
- */
-export function reachedReportable(caseRow) {
-  if (isReportable(caseRow.status)) return true;
-  if (caseRow.status === CASE_STATUS.VOID && caseRow.reportableAt) return true;
-  return false;
-}
+export { summaryBlockIds };
 
 /**
  * Given a viewer's permissions context, compute the list of roles they hold on
@@ -163,7 +144,7 @@ export const READ_THROUGH_SUMMARY = Object.freeze(
 /**
  * Whether a Section should be rendered in the Summary view for the given viewer.
  *
- * @param {Section} section
+ * @param {string} section
  * @param {import('../sharepoint-client.js').CaseTypeConfig} [caseTypeConfig]
  * @param {Role[]} [roles]
  * @returns {boolean}
@@ -171,10 +152,10 @@ export const READ_THROUGH_SUMMARY = Object.freeze(
 export function showInSummary(section, caseTypeConfig, roles = []) {
   const sections = caseTypeConfig?.sections;
   if (sections && !(section in sections)) return false;
-  const explicit = sections?.[section]?.showInSummary;
+  const explicit = sectionConfigFor(caseTypeConfig, section)?.showInSummary;
   if (Array.isArray(explicit)) return roles.some((r) => explicit.includes(r));
   if (explicit !== undefined) return explicit;
-  return sectionById(section)?.showInSummaryDefault ?? true;
+  return showInSummaryDefaultOf(section);
 }
 
 /**
@@ -183,10 +164,10 @@ export function showInSummary(section, caseTypeConfig, roles = []) {
  * @param {Record<string, Mode>} access
  * @param {import('../sharepoint-client.js').CaseTypeConfig} caseTypeConfig
  * @param {Role[]} [roles]
- * @returns {Section[]}
+ * @returns {string[]}
  */
 export function summarySectionsFor(access, caseTypeConfig, roles = []) {
-  return SUMMARY_SECTIONS.filter((section) => {
+  return summaryBlockIds().filter((section) => {
     const gate = READ_THROUGH_SUMMARY.includes(/** @type {any} */ (section))
       ? 'summary'
       : section;
@@ -194,63 +175,6 @@ export function summarySectionsFor(access, caseTypeConfig, roles = []) {
       access[gate] !== 'hidden' && showInSummary(section, caseTypeConfig, roles)
     );
   });
-}
-
-/**
- * Which of the Remediation Section's two renderings a viewer gets.
- *
- * @param {Role[]} roles
- * @returns {'reviewer' | 'responsibleParty'}
- */
-export function remediationAudience(roles) {
-  /** @type {Role[]} */
-  const reviewerSide = [
-    'assignedReviewer',
-    'otherReviewer',
-    'reviewerManager',
-    'caseTypeOwner',
-    'controls',
-  ];
-  return roles.some((role) => reviewerSide.includes(role))
-    ? 'reviewer'
-    : 'responsibleParty';
-}
-
-/**
- * Whether the Remediation Section has content to show.
- *
- * @param {import('../sharepoint-client.js').CaseRow} caseRow
- * @param {import('../sharepoint-client.js').QuestionDefinition[]} catalogue
- * @returns {boolean}
- */
-export function remediationTabIsLive(caseRow, catalogue) {
-  return (
-    reachedReportable(caseRow) &&
-    hasTrackableRemediation(catalogue, caseRow.answers)
-  );
-}
-
-/**
- * Determine which "side" of a conversation the viewer represents.
- *
- * @param {Role[]} roles
- * @returns {'reviewer' | 'responsibleParty' | null}
- */
-export function conversationSideOf(roles) {
-  if (
-    roles.includes('assignedReviewer') ||
-    roles.includes('otherReviewer') ||
-    roles.includes('reviewerManager')
-  ) {
-    return 'reviewer';
-  }
-  if (
-    roles.includes('responsibleParty') ||
-    roles.includes('responsiblePartyManager')
-  ) {
-    return 'responsibleParty';
-  }
-  return null;
 }
 
 /**
@@ -296,7 +220,7 @@ export function evaluateAccess(
       caseRow,
       roles,
       capabilities,
-      sectionConfig: caseTypeConfig?.sections?.[section],
+      sectionConfig: sectionConfigFor(caseTypeConfig, section),
       catalogue,
       config: caseTypeConfig,
     });

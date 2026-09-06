@@ -3,20 +3,21 @@
 import { h } from '../../lib/html.js';
 import { AmendOutcomeSection } from '../../pages/cora-case-review/amend-outcome-view.js';
 import { amendmentReasonsFor } from '../../lib/amendment-reasons.js';
-import { isReportable } from '../../services/section-access.js';
+import { isReportable } from '../../evaluators/case-lifecycle.js';
 
-/** @type {import('../registry.js').SectionPlugin} */
-export const AmendOutcomePlugin = {
+/** A Section names its own default copy; hoisted so the plugin object does
+ * not reference itself while its own type is being inferred. */
+const AMEND_OUTCOME_LABELS = { tab: 'Amend Outcome', heading: 'Amend Outcome' };
+
+/** @satisfies {import('../contract.js').SectionPlugin} */
+export const AmendOutcomePlugin = /** @type {const} */ ({
   id: 'amendOutcome',
   tab: true,
   tabOrder: 9,
   summaryBlock: false,
   summaryOrder: 0,
   showInSummaryDefault: false,
-  defaultLabels: {
-    tab: 'Amend Outcome',
-    heading: 'Amend Case Outcome',
-  },
+  defaultLabels: AMEND_OUTCOME_LABELS,
 
   evaluateAccess({ caseRow, roles }) {
     if (!roles.includes('controls')) return 'hidden';
@@ -31,7 +32,7 @@ export const AmendOutcomePlugin = {
       outcomeOptions: config?.outcomeOptions ?? [],
       heading:
         snapshot?.sectionLabels?.amendOutcome?.heading ??
-        AmendOutcomePlugin.defaultLabels.heading,
+        AMEND_OUTCOME_LABELS.heading,
       reasons: amendmentReasonsFor(config ?? {}),
       onAmend: (input) => {
         if (actions?.appeals?.amend) {
@@ -52,4 +53,4 @@ export const AmendOutcomePlugin = {
       ...(Array.isArray(children) ? children : [children])
     );
   },
-};
+});

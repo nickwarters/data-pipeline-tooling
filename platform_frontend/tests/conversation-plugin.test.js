@@ -23,7 +23,7 @@ test('ConversationPlugin has correct contract properties and is registered', () 
   assert.equal(ConversationPlugin.showInSummaryDefault, false);
   assert.deepEqual(ConversationPlugin.defaultLabels, {
     tab: 'Conversation',
-    heading: 'Case Conversation',
+    heading: 'Conversation',
   });
 });
 

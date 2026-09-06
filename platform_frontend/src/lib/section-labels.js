@@ -1,4 +1,5 @@
 // @ts-check
+import { defaultSectionLabels as pluginDefaultLabels } from '../sections/registry.js';
 // Single source of truth for Case Review tab labels and section headings.
 // A Case Type may override any entry via `CaseTypeConfig.sectionLabels`
 // (src/sharepoint-client.js); DEFAULT_SECTION_LABELS supplies the rest.
@@ -7,36 +8,15 @@
 /** @typedef {import('../sharepoint-client.js').ResolvedSectionLabels} ResolvedSectionLabels */
 
 /**
- * The default display copy for every Section, keyed by Section id. Each entry
- * carries both spellings a Section can need: `tab` is the caption on the Case
- * Review tab strip, `heading` is the `<h2>`/`<h3>` copy inside the panel (and
- * the block title in the Summary Section).
+ * The default display copy for every Section, as each plugin declares it.
+ * Derived rather than restated: a Section's tab caption and panel heading are
+ * part of what the Section is, so they live with its code.
  *
- * Most Sections say the same thing in both places, so both strings are written
- * out identically rather than derived — the pair is the unit, and a reader
- * should be able to see a Section's whole vocabulary on one line. Two Sections
- * genuinely differ: the `questions` tab has always read "Review" while its
- * panel reads "Questions", and the `details` tab reads "Details" while its
- * panel reads "Case Details". Both splits predate this map and are preserved.
- *
- * The `issues` panel heading is the one string that changes here: it read
- * "Failures" under a tab captioned "Issues", where an Issue is this Section's
- * own name for a failed Answer. Both spellings now say Issues.
- *
- * @type {Readonly<ResolvedSectionLabels>}
+ * @returns {Readonly<ResolvedSectionLabels>}
  */
-export const DEFAULT_SECTION_LABELS = {
-  details: { tab: 'Details', heading: 'Case Details' },
-  questions: { tab: 'Review', heading: 'Questions' },
-  issues: { tab: 'Issues', heading: 'Issues' },
-  remediation: { tab: 'Remediation', heading: 'Remediation' },
-  summary: { tab: 'Summary', heading: 'Summary' },
-  notes: { tab: 'Notes', heading: 'Notes' },
-  appealRequest: { tab: 'Appeal', heading: 'Appeal' },
-  appealReview: { tab: 'Appeal Review', heading: 'Appeal Review' },
-  amendOutcome: { tab: 'Amend Outcome', heading: 'Amend Outcome' },
-  conversation: { tab: 'Conversation', heading: 'Conversation' },
-};
+export function defaultSectionLabels() {
+  return /** @type {Readonly<ResolvedSectionLabels>} */ (pluginDefaultLabels());
+}
 
 /**
  * Resolve a Case Type's effective section display copy: `DEFAULT_SECTION_LABELS`
@@ -57,7 +37,7 @@ export const DEFAULT_SECTION_LABELS = {
 export function resolveSectionLabels(config) {
   const overrides = config?.sectionLabels ?? {};
   const resolved = /** @type {ResolvedSectionLabels} */ ({});
-  for (const [id, fallback] of Object.entries(DEFAULT_SECTION_LABELS)) {
+  for (const [id, fallback] of Object.entries(defaultSectionLabels())) {
     const override = overrides[/** @type {keyof SectionLabels} */ (id)];
     resolved[/** @type {keyof ResolvedSectionLabels} */ (id)] =
       typeof override === 'string'

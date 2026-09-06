@@ -12,7 +12,7 @@ import {
   evaluateAccess,
   matrixMode,
   ROLES,
-  SECTIONS,
+  sectionIds,
 } from './helpers/section-access.js';
 
 /** @typedef {import('../src/services/section-access.js').Role} Role */
@@ -378,7 +378,7 @@ test('remediation: hidden for every viewer until actions are sent', () => {
 test('acceptance: the Adviser (Responsible Party) sees only Summary + Conversation', () => {
   const cfg = makeConfig();
   const c = makeCase({ status: 'Actions In Progress' });
-  const visible = SECTIONS.filter(
+  const visible = sectionIds().filter(
     (s) => evaluateAccess(s, ['responsibleParty'], c, cfg) !== 'hidden'
   );
   assert.deepEqual(visible.sort(), ['conversation', 'summary']);

@@ -42,14 +42,23 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   `listRoadmapItems()` takes none, so wrapping it would read as covered while
   cancelling nothing. The contract test names that exemption and fails if it
   stops being true.
-- **Case Review Sections are SectionPlugin objects (ADR-0053).** `lib/section-registry.js`
-  declares the built-in layout ordering metadata (`SECTION_REGISTRY`), while each section's
-  runtime behavior, RBAC access evaluation, default labels, and view rendering are encapsulated
-  in its `SectionPlugin` under `src/sections/` (ADR-0053). The render loop in `cora-case-review.js`
-  queries `getSectionPlugins()` dynamically. **Adding a Section recipe:** author a `SectionPlugin`
-  in `src/sections/<name>/<name>-plugin.js` declaring metadata, `defaultLabels`, `evaluateAccess`,
-  and `view`; add an entry to `SECTION_REGISTRY` in `src/lib/section-registry.js`; and register
-  the plugin in `src/sections/registry.js`.
+- **Case Review Sections declare themselves (ADR-0053).** A Section is one module
+  under `src/sections/<name>/<name>-plugin.js` carrying everything about it: its
+  id, tab and Summary placement, default copy, per-Case-Type access rule and
+  view. `src/sections/registry.js` holds the manifest — the ordered list of those
+  modules — and every derived structure (`sectionIds`, `summaryBlockIds`, the
+  default labels, and the `Section` id union) is projected from it. Nothing
+  restates a Section's facts anywhere else. Each plugin uses `@satisfies` rather
+  than `@type` so its literal `id` survives inference; that is what lets the type
+  union come from the plugins instead of a second table.
+  **Adding a Section recipe:** author the plugin module, then add one import and
+  one entry to the manifest in `src/sections/registry.js`. A build step is banned
+  (ADR-0041), so nothing can discover modules at runtime — naming it once in the
+  manifest is irreducible, the same way `setup/register-routes.js` is the one
+  place a page is named. Enabling it for a Case Type is that Case Type's
+  `sections` entry, since the descriptor is an allow-list, and
+  `scripts/scaffold_case_type.py` carries the template new Case Types are
+  scaffolded from.
 - **One authoring model.** Views are synchronous and side-effect free. They do
   not import clients or persistence services. Start with
   [`docs/guide/add-a-page.md`](./docs/guide/add-a-page.md); use
@@ -337,7 +346,6 @@ src/
     route-error-panel.js        # shared route-failure panel, used by router.js and core/store-route.js (#437)
     router.js                   # hash-based SPA router
     section-labels.js           # DEFAULT_SECTION_LABELS + per-Case-Type sectionLabels overrides
-    section-registry.js         # ADR-0032 single source of truth for which Sections exist and their order
     showwhen-tree.js            # generic showWhen tree parse/serialise/mutate (was question-bank/)
     void-reasons.js             # VOID_REASONS: the framework-owned Void Reason vocabulary a
                                 #   Case Type may narrow but not extend
@@ -455,10 +463,9 @@ src/
       question-bank-source.js
       simulate-panel.js         # pure golden-tested impact-simulation view
 
-  sections/                     # pluggable case review sections
-    registry.js                 # plugin registry and adapter shims
-    admin-details/
-      admin-details-plugin.js   # Admin details override section plugin
+  sections/                     # self-declaring Case Review Sections
+    contract.js                 # the SectionPlugin contract (names no plugin, so the union can project)
+    registry.js                 # the manifest, the Section id union, and every derivation from it
     details/
       details-plugin.js         # Case Details section plugin
     questions/
@@ -513,6 +520,7 @@ src/
     team-cases-fetcher.js
 
   evaluators/                   # pure logic: applicability, failure, and outcome
+    case-lifecycle.js           # pure Case lifecycle predicates, imported downward by services and Sections
     amended-outcome.js
     answer-remediation.js        # leaf: what remediation an Answer carries — no applicability/failure deps (#499)
     appeal-state.js              # openAppealOf(): THE definition of "the Appeal still awaiting a

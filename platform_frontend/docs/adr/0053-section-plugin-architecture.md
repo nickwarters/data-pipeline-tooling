@@ -14,7 +14,7 @@ Builds upon the store-driven view model in [ADR-0034](./0034-store-driven-views-
 
 Historically, Case Review sections were managed across three disparate, statically coupled structures:
 
-1. **Layout & Ordering:** `src/lib/section-registry.js` declared a static `SECTION_REGISTRY` array defining tab ordering, summary block configuration, and IDs.
+1. **Layout & Ordering:** `src/lib/section-registry.js` declared a static `SECTION_REGISTRY` array defining tab ordering, summary block configuration, and IDs. (Removed by the amendment below.)
 2. **Access Control:** `src/services/section-access.js` maintained a monolithic `MATRIX` constant mapping every section against every role (`Section × Role → Mode`), with scattered edge-case evaluators.
 3. **Panel Rendering:** `src/pages/cora-case-review/section-panels.js` maintained a fixed `SECTION_PANELS` dictionary mapping section IDs to render functions.
 
@@ -108,5 +108,74 @@ The Section Plugin Architecture satisfies this constraint:
 ### Negative / Trade-offs
 
 - Tests verifying section access must now either call `evaluateAccess` or `getSectionPlugin(id).evaluateAccess(...)` instead of inspecting matrix cell functions directly.
-- Layout metadata is stated twice: `SECTION_REGISTRY` in `src/lib/section-registry.js` still declares `tab`, `tabOrder`, `summaryBlock`, `summaryOrder` and `showInSummaryDefault`, and each plugin restates the same five. The registry remains the authority for the `Section` id union, `SECTIONS` and `SUMMARY_SECTIONS`; the plugin's `tab`/`tabOrder` are what the render loop sorts by. Tests hold the two in step rather than one deriving from the other, so a Section added to only one of them fails loudly but the duplication is real. Consolidating on one of the two is deferred, not decided.
-- A plugin whose id is absent from `SECTION_REGISTRY` — `adminDetails` today — is outside the `Section` union, which is why a Case Type's `sections` map and the render snapshot's `access` are typed `Record<string, …>` rather than keyed by that union. The compile-time check on a mistyped `sections` key is recovered at runtime by `verify-config.js` and a registry contract test.
+
+## Amendment: the plugins declare themselves
+
+The first cut of this architecture left a Section's facts in three places —
+`SECTION_REGISTRY` for layout, `DEFAULT_SECTION_LABELS` for copy, and the plugin
+for everything else — with tests holding them in step by hand. That is the
+coordination cost the epic set out to remove, and keeping it had a cost beyond
+tidiness: `adminDetails` was declared as a plugin and not in the registry, so it
+fell out of every registry-derived structure, and `case-loader`'s "this viewer
+can see nothing" guard denied access to the one Role the Section existed for.
+
+The blocker was believed to be the type system: the `Section` id union needs a
+`const` literal, and a runtime `Map` of plugins cannot produce one. It does not.
+A plugin annotated `@satisfies` rather than `@type` keeps its literal `id`, so
+the union projects from the plugins that satisfy the contract:
+
+```js
+/** @satisfies {import('../contract.js').SectionPlugin} */
+export const DetailsPlugin = /** @type {const} */ ({ id: 'details', ... });
+```
+
+```js
+/** @typedef {ReturnType<typeof builtInSectionPlugins>[number]['id']} Section */
+```
+
+`@type` was what erased the literals and forced the second table to exist.
+
+### What changed
+
+- `src/lib/section-registry.js` is deleted. `src/sections/registry.js` holds the
+  manifest, and `sectionIds`, `summaryBlockIds`, `showInSummaryDefaultOf` and
+  `defaultSectionLabels` are all projected from it.
+- `DEFAULT_SECTION_LABELS` is deleted. A Section's tab caption and panel heading
+  are part of what it is, so they live on the plugin. They had already drifted:
+  the map said the Questions tab read `Review` and the plugin said `Questions`,
+  and the map silently won for all ten Sections.
+- The contract moved to `src/sections/contract.js`, which names no plugin. With
+  it in `registry.js` the union referenced itself through the plugins.
+- The lifecycle predicates moved to `src/evaluators/case-lifecycle.js`. Plugins
+  imported them upward from `services/section-access.js`, which reaches the
+  plugins back through the registry; with the manifest evaluated during module
+  loading that cycle is a temporal dead zone rather than a tolerable knot.
+- The manifest is a **function**, not a module-scope array, for the same reason:
+  a plugin's `view` imports the page components it renders, and those reach back
+  here. A function body is not evaluated until it is called.
+- `sectionIds()` and friends read the **live registry**, not the built-in
+  manifest, so a plugin registered at boot appears in them. Reading the manifest
+  instead would reintroduce exactly the membership gap described above.
+
+### The irreducible part
+
+Adding a Section is: author `src/sections/<name>/<name>-plugin.js`, then add one
+import and one manifest entry in `src/sections/registry.js`. That second step
+cannot be removed — ADR-0041 bans a build step, so nothing can discover modules
+at runtime, and a module must be named somewhere to be loaded. It is the same
+shape as `setup/register-routes.js` being the one place a page is named.
+
+Two things remain per-Section and are not duplication: a Case Type opts a
+Section in through its `sections` descriptor, which is an allow-list by design;
+and `scripts/scaffold_case_type.py` carries the descriptor template that new
+Case Types are scaffolded from, so a Section that should be standard belongs in
+that template too.
+
+### Types
+
+`Section` is the compile-time set of built-in ids, and is what a Case Type's
+`sections` descriptor is keyed by — config is authored against the built-ins.
+The runtime structures (`sectionIds()`, the resolved `access` map, the Summary
+block list) are keyed by `string`, because a plugin registered at boot is in
+them and cannot be in a union projected from the manifest. That split is
+deliberate; collapsing it either way loses something real.

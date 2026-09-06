@@ -1,22 +1,22 @@
 // src/sections/issues/issues-plugin.js
 // @ts-check
 import { RemediationSection } from '../../pages/cora-case-review/remediation-view.js';
-import { isFrozen } from '../../services/section-access.js';
+import { isFrozen } from '../../evaluators/case-lifecycle.js';
 import {
   remediationActionToggled,
   remediationFreeFormEdited,
   remediationRequiredSet,
 } from '../../pages/cora-case-review/answer-actions.js';
 
-/** @type {import('../registry.js').SectionPlugin} */
-export const IssuesPlugin = {
+/** @satisfies {import('../contract.js').SectionPlugin} */
+export const IssuesPlugin = /** @type {const} */ ({
   id: 'issues',
   tab: true,
   tabOrder: 3,
   summaryBlock: true,
   summaryOrder: 3,
   showInSummaryDefault: true,
-  defaultLabels: { tab: 'Issues', heading: 'Issues & Remediation Required' },
+  defaultLabels: { tab: 'Issues', heading: 'Issues' },
 
   evaluateAccess({ caseRow, roles }) {
     if (roles.includes('assignedReviewer')) {
@@ -100,4 +100,4 @@ export const IssuesPlugin = {
         ),
     });
   },
-};
+});

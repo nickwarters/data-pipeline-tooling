@@ -20,7 +20,7 @@ import {
 import {
   reachedReportable,
   summarySectionsFor,
-  SECTIONS,
+  sectionIds,
 } from '../services/section-access.js';
 import { CaseMachine } from './case-machine.js';
 import { resolveSectionLabels } from './section-labels.js';
@@ -136,9 +136,9 @@ export class CaseLoader {
 
     /** @type {CaseMachine | null} */
     this.machine = null;
-    /** @type {Record<import('../services/section-access.js').Section, import('../services/section-access.js').Mode>} */
+    /** @type {Record<string, import('../services/section-access.js').Mode>} */
     this.access = /** @type {any} */ ({});
-    /** @type {import('../services/section-access.js').Section[]} */
+    /** @type {string[]} */
     this.summarySections = [];
   }
 
@@ -325,7 +325,7 @@ export class CaseLoader {
     this.access = this.machine.access;
     const roles = this.machine.roles;
 
-    if (SECTIONS.every((s) => this.access[s] === 'hidden')) {
+    if (sectionIds().every((s) => this.access[s] === 'hidden')) {
       this.accessDenied = true;
       this.loaded = true;
       return;

@@ -25,7 +25,7 @@ test('AppealRequestPlugin has correct contract properties and is registered', ()
   assert.equal(AppealRequestPlugin.showInSummaryDefault, false);
   assert.deepEqual(AppealRequestPlugin.defaultLabels, {
     tab: 'Appeal',
-    heading: 'Request Appeal',
+    heading: 'Appeal',
   });
 });
 

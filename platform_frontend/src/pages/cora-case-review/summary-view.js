@@ -11,7 +11,6 @@ import {
 import { reachedReportable } from '../../services/section-access.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
 import { currentOutcome } from '../../evaluators/amended-outcome.js';
-import { DEFAULT_SECTION_LABELS } from '../../lib/section-labels.js';
 import { CaptureGroups } from '../../components/sections/cora-capture-groups.js';
 import { generalAnswerKey } from '../../evaluators/general-questions.js';
 import { GENERAL_QUESTIONS_TITLE } from './general-questions-view.js';
@@ -118,8 +117,25 @@ export function summaryView(props) {
  * @returns {import('../../sharepoint-client.js').ResolvedSectionLabels}
  */
 function labelsOf(props) {
-  return props.sectionLabels ?? DEFAULT_SECTION_LABELS;
+  return props.sectionLabels ?? STANDALONE_LABELS;
 }
+
+/**
+ * The copy this component falls back on when it is rendered standalone, with no
+ * page to thread the resolved map through. Held here rather than imported from
+ * the Section layer: a view is handed its copy, and reaching back for it put the
+ * page tree inside the plugin manifest's own import cycle.
+ *
+ * @type {import('../../sharepoint-client.js').ResolvedSectionLabels}
+ */
+const STANDALONE_LABELS = {
+  details: { tab: 'Details', heading: 'Case Details' },
+  questions: { tab: 'Review', heading: 'Questions' },
+  issues: { tab: 'Issues', heading: 'Issues' },
+  remediation: { tab: 'Remediation', heading: 'Remediation' },
+  summary: { tab: 'Summary', heading: 'Summary' },
+  notes: { tab: 'Notes', heading: 'Notes' },
+};
 
 /**
  * @param {SummaryProps} props
