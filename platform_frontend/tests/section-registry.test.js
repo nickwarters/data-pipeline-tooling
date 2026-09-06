@@ -80,7 +80,6 @@ test('registered plugins derive tab order and ids', () => {
       'appealRequest',
       'appealReview',
       'amendOutcome',
-      'adminDetails',
     ]
   );
   // Conversation is never a tab.

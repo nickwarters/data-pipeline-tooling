@@ -32,7 +32,6 @@
  */
 
 import { DetailsPlugin } from './details/details-plugin.js';
-import { AdminDetailsPlugin } from './admin-details/admin-details-plugin.js';
 import { NotesPlugin } from './notes/notes-plugin.js';
 import { ConversationPlugin } from './conversation/conversation-plugin.js';
 import { AmendOutcomePlugin } from './amend-outcome/amend-outcome-plugin.js';
@@ -68,7 +67,6 @@ export function resetSectionRegistry() {
     AppealRequestPlugin,
     AppealReviewPlugin,
     AmendOutcomePlugin,
-    AdminDetailsPlugin,
   ];
   for (const plugin of builtIns) {
     registry.set(plugin.id, plugin);
