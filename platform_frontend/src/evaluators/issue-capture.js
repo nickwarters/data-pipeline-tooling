@@ -1,11 +1,7 @@
 // @ts-check
 import { evalCondition, evaluate } from './applicability-evaluator.js';
 import { isFailure } from './failure-evaluator.js';
-import {
-  captureDisplayText,
-  isEmptyCaptureValue,
-  isPerson,
-} from './capture-values.js';
+import { captureDisplayText, isEmptyCaptureValue } from './capture-values.js';
 import { getCaptureFieldType } from '../capture-fields/registry.js';
 
 // Re-exported from their leaf home so this module stays the one import a
@@ -67,10 +63,12 @@ export function findCaptureField(groups, key) {
 
 /**
  * Rejects a write the field cannot hold, naming the field. Each field type says
- * what it may hold; this asks the type rather than branching on it.
+ * what it may hold, so this asks the type rather than branching on it.
  *
- * `person` has not moved to a type module yet, so its rule is still written out
- * below. When it does, this becomes the lookup and nothing else.
+ * A field declaring a type this framework does not know is held to the text
+ * rule, which is what every field was held to before any type had a module of
+ * its own. `verify-config.js` refuses a Case Type declaring an unknown type, so
+ * the only way here is a field that declares none at all.
  *
  * @param {CaptureField} field
  * @param {CaptureValue} value
@@ -81,18 +79,6 @@ function validateCaptureWrite(field, value) {
     type.validate(field, value);
     return;
   }
-  if (field.type === 'person') {
-    if (!isPerson(value)) {
-      throw new Error(
-        `Invalid value for person Issue Capture Field "${field.key}" — expected an account and a display name.`
-      );
-    }
-    return;
-  }
-  // A type this framework does not know is held to the text rule, which is
-  // what it was held to before any of them had a module: `verify-config.js`
-  // refuses a Case Type declaring one, so the only way here is a field that
-  // declares no type at all.
   if (typeof value !== 'string') {
     throw new Error(
       `Invalid value for ${field.type} Issue Capture Field "${field.key}" — expected text.`

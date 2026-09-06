@@ -17,11 +17,17 @@
  */
 
 import { PRIMITIVE_CAPTURE_FIELD_TYPES } from './primitive-types.js';
+import { PERSON_CAPTURE_FIELD_TYPE } from './person-type.js';
 
 /** @type {Map<string, CaptureFieldType>} */
 const registry = new Map();
 
-for (const type of PRIMITIVE_CAPTURE_FIELD_TYPES) registry.set(type.type, type);
+for (const type of [
+  ...PRIMITIVE_CAPTURE_FIELD_TYPES,
+  PERSON_CAPTURE_FIELD_TYPE,
+]) {
+  registry.set(type.type, type);
+}
 
 /**
  * Register a capture field type, replacing one of the same name.

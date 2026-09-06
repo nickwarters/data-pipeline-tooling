@@ -1,10 +1,8 @@
 // @ts-check
 import { h } from '../../lib/html.js';
-import { PeoplePicker } from '../base/cora-people-picker.js';
 import { getCaptureFieldType } from '../../capture-fields/registry.js';
 import {
   captureDisplayText,
-  isEmptyCaptureValue,
   visibleCaptureFields,
 } from '../../evaluators/issue-capture.js';
 
@@ -37,10 +35,11 @@ function isCollapsed(collapsed, group) {
  * In editable mode (`canCapture`) each group is a collapsible section — its
  * default collapse comes from `group.collapsed`, and the Reviewer can toggle it
  * via `onToggle`; the override is ephemeral (never persisted). Each
- * field renders its typed control, named by its caption, and reports edits
- * through `onCapture`. A `person` field renders a
- * people picker fed by `peopleSearch` and `onPersonQuery`, which the caller
- * owns: this view holds no state and runs no search of its own.
+ * field renders the control its own type builds, named the way that type says a
+ * caption should name it, and reports edits through `onCapture`. A `person`
+ * field renders a people picker fed by `peopleSearch` and `onPersonQuery`,
+ * which the caller owns: this view holds no state and runs no search of its
+ * own, and no longer knows which type does.
  *
  * In read-only mode (`!canCapture`) only populated fields are shown, as static
  * `label: value` text, every group expanded — this is what the Summary renders.
@@ -109,20 +108,14 @@ function editableGroup(group, props) {
  * @returns {HTMLElement}
  */
 function editableField(field, props) {
-  const type = getCaptureFieldType(field.type);
-
-  // A person is picked, not typed, and has not moved to a field type module
-  // yet, so it is still built here. The picker names its own input, and the
-  // chosen-person form is text plus a button — neither is a control a caption
-  // may wrap, so the caption is a plain span beside them.
-  if (!type) {
-    return h(
-      'div',
-      { className: 'cora-capture-field' },
-      h('span', { className: 'cora-capture-label' }, field.label),
-      personControl(field, props)
+  // A field declaring a type nothing renders falls back to a text box, which is
+  // what every field got before any type had a module of its own. The verify
+  // gate refuses an unknown type, so the only way here is a field declaring
+  // none at all.
+  const type =
+    /** @type {import('../../capture-fields/contract.js').CaptureFieldType} */ (
+      getCaptureFieldType(field.type) ?? getCaptureFieldType('text')
     );
-  }
 
   const control = type.editControl({
     field,
@@ -160,58 +153,6 @@ function editableField(field, props) {
     h('span', { className: 'cora-capture-label' }, field.label),
     control
   );
-}
-
-/**
- * The `person` control: a people picker until someone is chosen, then their
- * name plus a clear button.
- *
- * The picker alone offers no way back to nobody — its input holds a query, not
- * the chosen person — so without the collapsed form a Reviewer could attribute
- * a failure and never un-attribute it.
- *
- * @param {CaptureField} field
- * @param {CaptureGroupsProps} props
- * @returns {HTMLElement}
- */
-function personControl(field, props) {
-  const value = props.capture[field.key];
-  if (!isEmptyCaptureValue(value)) {
-    return h(
-      'div',
-      { className: 'cora-capture-person-selected' },
-      h(
-        'span',
-        { className: 'cora-capture-person-current' },
-        captureDisplayText(value)
-      ),
-      h(
-        'button',
-        {
-          className: 'cora-capture-person-clear',
-          type: 'button',
-          'aria-label': `Clear ${field.label}`,
-          onclick: () => props.onCapture(field.key, null),
-        },
-        '✕'
-      )
-    );
-  }
-
-  const search = props.peopleSearch[field.key] ?? {
-    query: '',
-    people: [],
-    status: 'idle',
-  };
-  return PeoplePicker({
-    placeholder: 'Search people…',
-    people: search.people,
-    status: search.status,
-    inputValue: search.query,
-    ariaLabel: `Search people for ${field.label}`,
-    onQueryInput: (query) => props.onPersonQuery(field.key, query),
-    onSelect: (person) => props.onCapture(field.key, person),
-  });
 }
 
 /**

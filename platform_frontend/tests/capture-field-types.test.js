@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { installDom } from './_dom-stub.js';
+import { findByClass, installDom } from './_dom-stub.js';
 import {
   captureFieldTypeNames,
   getCaptureFieldType,
@@ -26,8 +26,9 @@ function field(overrides = {}) {
 
 // --- The four primitives ---
 
-test('the built-in types are the four that hold text', () => {
+test('the built-in types are the four that hold text, plus the one that holds a person', () => {
   assert.deepEqual(captureFieldTypeNames().sort(), [
+    'person',
     'radio',
     'select',
     'text',
@@ -154,4 +155,85 @@ test('an unknown type is undefined rather than a throw', () => {
   // sees it; a reader that meets one at runtime shows what is stored rather
   // than taking the page down.
   assert.equal(getCaptureFieldType('nosuchtype'), undefined);
+});
+
+// --- The person type ---
+
+test('a person field takes a whole person and nothing else', () => {
+  const person = /** @type {any} */ (getCaptureFieldType('person'));
+  const declared = field({ key: 'attributedTo', type: 'person' });
+
+  assert.doesNotThrow(() =>
+    person.validate(declared, {
+      loginName: 'corp\\jsmith',
+      displayName: 'Jane Smith',
+    })
+  );
+  for (const half of [
+    { loginName: 'corp\\jsmith' },
+    { displayName: 'Jane Smith' },
+    { loginName: '', displayName: 'Jane Smith' },
+    'Jane Smith',
+  ]) {
+    // A half-filled person would render as a blank chip, so it is refused
+    // rather than stored — and refusing is not the same as clearing, which the
+    // write path handles before it ever asks a type.
+    assert.throws(
+      () => person.validate(declared, /** @type {any} */ (half)),
+      /Invalid value for person Issue Capture Field "attributedTo"/,
+      JSON.stringify(half)
+    );
+  }
+});
+
+test('a person field offers a picker until someone is chosen, then a way back to nobody', () => {
+  const person = /** @type {any} */ (getCaptureFieldType('person'));
+  const declared = field({
+    key: 'attributedTo',
+    label: 'Attributed to',
+    type: 'person',
+  });
+  /** @type {any[]} */
+  const captured = [];
+  /** @type {any[]} */
+  const queries = [];
+  /** @param {any} value */
+  const control = (value) =>
+    person.editControl({
+      field: declared,
+      value,
+      namePrefix: 'row-1-',
+      onCapture: (/** @type {any} */ ...args) => captured.push(args),
+      peopleSearch: {},
+      onPersonQuery: (/** @type {any} */ ...args) => queries.push(args),
+    });
+
+  const picking = control(undefined);
+  assert.equal(
+    picking.querySelectorAll('input')[0].getAttribute('aria-label'),
+    'Search people for Attributed to'
+  );
+
+  const chosen = control({
+    loginName: 'corp\\jsmith',
+    displayName: 'Jane Smith',
+  });
+  assert.equal(chosen.className, 'cora-capture-person-selected');
+  assert.equal(
+    findByClass(chosen, 'cora-capture-person-current').textContent,
+    'Jane Smith'
+  );
+
+  // The picker's input holds a query, not the chosen person, so without this
+  // a Reviewer could attribute a failure and never un-attribute it.
+  const clear = findByClass(chosen, 'cora-capture-person-clear');
+  assert.equal(clear.getAttribute('aria-label'), 'Clear Attributed to');
+  clear._listeners.click[0]({});
+  assert.deepEqual(captured, [['attributedTo', null]]);
+});
+
+test('a person field is captioned beside its control, not wrapped by it', () => {
+  // The picker names its own input and the chosen form is text plus a button;
+  // neither is something a caption may wrap.
+  assert.equal(getCaptureFieldType('person')?.caption, 'beside');
 });

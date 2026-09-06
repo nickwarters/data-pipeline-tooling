@@ -524,6 +524,9 @@ src/
     primitive-types.js          # text/textarea/select/radio — one adapter, because they differ only
                                 #   in whether the value comes from the declared options and how the
                                 #   caption is attached
+    person-type.js              # the `person` type: an object rather than a string, picked from the
+                                #   directory rather than typed, and two controls — a picker until
+                                #   someone is chosen, then their name plus a way back to nobody
     registry.js                 # the type lookup. A FRAMEWORK vocabulary a Case Type selects from,
                                 #   like Void Reasons — not an application composition, so it names
                                 #   its own built-ins rather than being handed a list by app-config
