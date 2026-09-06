@@ -93,7 +93,7 @@ test('NotesPlugin view triggers save on field edit when access is edit', () => {
       placeholders: { notes: 'Type notes' },
     },
     actions: {
-      save: {
+      notes: {
         fieldEdited: (/** @type {string} */ f, /** @type {string} */ v) => {
           edits.push([f, v]);
         },
@@ -130,4 +130,77 @@ test('NotesPlugin view renders read-only textareas when access is read-only', ()
   const textareas = node.querySelectorAll('textarea');
   assert.equal(textareas[0].readOnly, true);
   assert.equal(textareas[1].readOnly, true);
+});
+
+// --- Notes owns its own write ---
+
+test('NotesPlugin declares exactly the two columns it edits', () => {
+  // Data on the plugin, never a Case Type descriptor. The whole of what this
+  // Section may persist, and the framework refuses the rest whatever is here.
+  assert.deepEqual(NotesPlugin.writes, {
+    fields: ['notes', 'caseJustification'],
+  });
+  assert.deepEqual(
+    Object.keys(NotesPlugin.writes),
+    ['fields'],
+    'Notes merges no blob'
+  );
+  for (const field of ['status', 'assignedReviewer', 'responsibleParty']) {
+    assert.ok(
+      !NotesPlugin.writes.fields.includes(field),
+      `${field} is not the Notes Section's to edit`
+    );
+  }
+});
+
+test('NotesPlugin actions are the persist seam, with nothing in between', () => {
+  /** @type {any[]} */
+  const persisted = [];
+  const actions = NotesPlugin.createActions(
+    /** @type {any} */ ({
+      dispatch: () => {},
+      sectionId: 'notes',
+      persist: (/** @type {any} */ ...args) => persisted.push(args),
+      persistBlob: () => {},
+    })
+  );
+
+  actions.fieldEdited('caseJustification', 'Because.');
+  assert.deepEqual(persisted, [['caseJustification', 'Because.']]);
+});
+
+test('NotesPlugin: the Reviewer freeze is at Completed and Void, not at reportable', () => {
+  // Deliberately NOT `isFrozen`: the Assigned Reviewer keeps editing Notes
+  // through Actions In Progress, which is the rule most likely to be lost in a
+  // move like this one.
+  const editable = [
+    'To-allocate',
+    'Allocated',
+    'In-progress',
+    'Actions In Progress',
+  ];
+  for (const status of editable) {
+    assert.equal(
+      NotesPlugin.evaluateAccess(
+        /** @type {any} */ ({
+          caseRow: { status },
+          roles: ['assignedReviewer'],
+        })
+      ),
+      'edit',
+      status
+    );
+  }
+  for (const status of ['Completed', 'Void']) {
+    assert.equal(
+      NotesPlugin.evaluateAccess(
+        /** @type {any} */ ({
+          caseRow: { status },
+          roles: ['assignedReviewer'],
+        })
+      ),
+      'read-only',
+      status
+    );
+  }
 });

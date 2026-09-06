@@ -115,7 +115,6 @@ test('plugins own completion on Summary and Void on Case Details', () => {
     requestCaptureSearch: () => {},
     selectResponsibleParty: () => {},
     requestResponsiblePartySearch: () => {},
-    save: { fieldEdited: () => {} },
     appeals: /** @type {any} */ ({}),
     onComplete: () => {},
     onVoid: () => {},
