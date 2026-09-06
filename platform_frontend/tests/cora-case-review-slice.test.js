@@ -5637,3 +5637,114 @@ test("section reducer: the page's own branches still win", async () => {
     assert.deepEqual(route.sections, {});
   });
 });
+
+// --- A Section's own actions ---
+
+/**
+ * A Section that reports how often its action factory ran and what its view
+ * was handed.
+ *
+ * @param {string} id
+ * @param {{ builds: number, seen: any[] }} log
+ * @returns {any}
+ */
+function actionSection(id, log) {
+  return {
+    id,
+    tab: true,
+    tabOrder: 90,
+    summaryBlock: false,
+    summaryOrder: 0,
+    showInSummaryDefault: false,
+    defaultLabels: { tab: id, heading: id },
+    evaluateAccess: () => 'read-only',
+    createActions: (/** @type {any} */ { dispatch, sectionId }) => {
+      log.builds += 1;
+      return {
+        edited: (/** @type {string} */ value) =>
+          dispatch({ type: 'fixture/edited', section: sectionId, value }),
+      };
+    },
+    view: (/** @type {any} */ ctx) => {
+      log.seen.push(ctx.actions);
+      return null;
+    },
+  };
+}
+
+test('section actions: built once per mount, and stable across renders', async () => {
+  const { registerSectionPlugin } = await import('../src/sections/registry.js');
+  const alpha = { builds: 0, seen: /** @type {any[]} */ ([]) };
+  const beta = { builds: 0, seen: /** @type {any[]} */ ([]) };
+  registerSectionPlugin(actionSection('alphaSection', alpha));
+  registerSectionPlugin(actionSection('betaSection', beta));
+
+  try {
+    const loaded = caseReviewReducer(createInitialCaseReviewState(chrome), {
+      type: 'case/load-finished',
+      snapshot: {
+        ...snapshot(),
+        access: {
+          ...snapshot().access,
+          alphaSection: 'read-only',
+          betaSection: 'read-only',
+        },
+      },
+    });
+    const view = renderShippedState(loaded);
+    view.dispatch({ type: 'case/save-status-changed', status: 'saving' });
+
+    // Two renders, one build. A factory re-run per render hands out a new
+    // function every time, and a memoised card keeps calling the old one.
+    assert.equal(alpha.seen.length >= 2, true, 'rendered more than once');
+    assert.equal(alpha.builds, 1);
+    assert.equal(beta.builds, 1);
+    assert.equal(
+      alpha.seen[0].alphaSection.edited,
+      alpha.seen.at(-1).alphaSection.edited,
+      'the same callback survives a re-render'
+    );
+
+    // Namespaced, so two Sections cannot collide — and each reaches its own
+    // through its own id.
+    const actions = alpha.seen.at(-1);
+    assert.notEqual(actions.alphaSection, actions.betaSection);
+    actions.alphaSection.edited('typed');
+    assert.deepEqual(view.actions.at(-1), {
+      type: 'fixture/edited',
+      section: 'alphaSection',
+      value: 'typed',
+    });
+  } finally {
+    configureAppSections();
+  }
+});
+
+test("section actions: a Section cannot shadow one of the page's own", async () => {
+  const { registerSectionPlugin } = await import('../src/sections/registry.js');
+  const shadow = { builds: 0, seen: /** @type {any[]} */ ([]) };
+  // An id chosen to collide with a PanelActions member. The page's members go
+  // in last, so they win; nothing has to throw and no id is reserved.
+  registerSectionPlugin(actionSection('save', shadow));
+
+  try {
+    const loaded = caseReviewReducer(createInitialCaseReviewState(chrome), {
+      type: 'case/load-finished',
+      snapshot: {
+        ...snapshot(),
+        access: { ...snapshot().access, save: 'read-only' },
+      },
+    });
+    renderShippedState(loaded);
+
+    const actions = shadow.seen.at(-1);
+    assert.equal(
+      typeof actions.save.fieldEdited,
+      'function',
+      "the page's own save bridge is intact"
+    );
+    assert.equal(actions.save.edited, undefined);
+  } finally {
+    configureAppSections();
+  }
+});

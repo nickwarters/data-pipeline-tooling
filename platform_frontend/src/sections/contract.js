@@ -30,6 +30,19 @@
  *   config?: CaseTypeConfig,
  * }) => Mode} evaluateAccess
  * @property {(panelContext: PanelContext) => Node | Node[] | null} view
+ * @property {(tools: { dispatch: (action: any) => unknown, sectionId: string }) => Record<string, Function>} [createActions]
+ *   Optional. This Section's own callbacks, reached by its view as
+ *   `actions[sectionId].whatever(...)` — one namespace rather than a new
+ *   top-level `PanelActions` member per Section.
+ *
+ *   Called **once per mount**, not per render. A callback captured by a
+ *   memoised child has to stay valid across renders, which is the same reason
+ *   the page's `currentAnswers` is a getter rather than a value; a factory
+ *   re-run per render would hand out a new function every time and a memoised
+ *   card would keep calling the old one.
+ *
+ *   The page's own members win a name clash, so a Section cannot shadow one by
+ *   choosing its id.
  * @property {(sectionState: any, action: any) => any} [reduce]
  *   Optional. This Section's own state transitions, over its own slice of
  *   `route.sections` and nothing else — it is handed that slice and what it

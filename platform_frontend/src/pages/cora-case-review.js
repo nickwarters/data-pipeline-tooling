@@ -839,6 +839,35 @@ export function createRouteSlice(params, context) {
     return shell;
   }
 
+  /**
+   * Every Section's own callbacks, built once for this mount.
+   *
+   * Once, not per render: a callback captured by a memoised child has to stay
+   * valid across renders, the same reason `currentAnswers` is a getter. `tools`
+   * is created once per mount by the route adapter, so `dispatch` is the same
+   * function every render and one build is enough.
+   *
+   * @type {Record<string, Record<string, Function>> | null}
+   */
+  let sectionActions = null;
+
+  /**
+   * @param {(action: any) => unknown} dispatch
+   * @returns {Record<string, Record<string, Function>>}
+   */
+  function sectionActionsFor(dispatch) {
+    if (sectionActions) return sectionActions;
+    sectionActions = {};
+    for (const plugin of getSectionPlugins()) {
+      if (!plugin.createActions) continue;
+      sectionActions[plugin.id] = plugin.createActions({
+        dispatch,
+        sectionId: plugin.id,
+      });
+    }
+    return sectionActions;
+  }
+
   /** @param {CaseReviewState} state @param {any} tools @param {Element} container */
   function renderRoute(state, tools, container) {
     const parts = ensureShell(container);
@@ -1041,8 +1070,12 @@ export function createRouteSlice(params, context) {
     // `onAnswer` and `captureEdited` close over this render's snapshot;
     // `currentAnswers` stays a getter so a memoised card's surviving callback
     // still reads the last Answers *written*, not the last ones drawn.
+    //
+    // The Section namespaces go in first so the page's own members win a name
+    // clash: a Section cannot shadow `save` or `appeals` by choosing its id.
     /** @type {import('./cora-case-review/section-panels.js').PanelActions} */
     const panelActions = {
+      ...sectionActionsFor(tools.dispatch),
       questionsView,
       currentAnswers: () => currentAnswers,
       editAnswers: editAnswersForRoute,
