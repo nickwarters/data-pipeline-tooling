@@ -39,6 +39,7 @@ const replacedUrls = [];
 const {
   routeTable,
   registerRoutes,
+  navItemsFor,
   resolveDefaultLandingPath,
   FALLBACK_LANDING_PATH,
 } = await import('../src/setup/register-routes.js');
@@ -303,6 +304,7 @@ test('route table: only the eligibility-gated routes guard their mount', () => {
     'my-stats',
     'team-stats',
     'journey-cases',
+    'my-team',
     'search',
   ]);
 });
@@ -624,3 +626,27 @@ for (const [id, capability] of [
     assert.deepEqual(allowed.mounted, [id], 'and their page mounts');
   });
 }
+
+test("my-team: the link and the route are both a Reviewer Manager's", () => {
+  // Deliberately not "…so allocation is secure". Client-side gating is UX
+  // only here; the boundary that stops a non-manager allocating a Case is the
+  // SharePoint list ACL, and hiding a link makes nothing safe.
+  const manager = makePermissions({
+    isReviewer: false,
+    isReviewerManager: true,
+  });
+  const other = makePermissions({ isReviewer: true });
+
+  const entry = APP_CONFIG.pagePlugins.find(
+    (plugin) => plugin.id === 'my-team'
+  );
+  assert.ok(entry?.guard, 'the route is guarded, not just the link');
+  assert.equal(entry.guard(manager), true);
+  assert.equal(entry.guard(other), false);
+
+  assert.deepEqual(
+    navItemsFor(manager).map((item) => item.href),
+    ['#/dashboard', '#/roadmap', '#/team-stats', '#/my-team']
+  );
+  assert.ok(!navItemsFor(other).some((item) => item.href === '#/my-team'));
+});
