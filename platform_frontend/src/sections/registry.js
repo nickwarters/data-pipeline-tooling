@@ -23,10 +23,15 @@ import { RemediationPlugin } from './remediation/remediation-plugin.js';
 import { SummaryPlugin } from './summary/summary-plugin.js';
 
 /**
- * The built-in Sections, in canonical order. This is the manifest: a Section
- * exists because its module is imported and listed here, and nothing else names
- * it. Declaration order is the canonical order; tab and Summary order are
- * carried by each plugin so they can differ from it.
+ * The built-in Sections. This is the manifest: a Section exists because its
+ * module is imported and listed here, and nothing else names it.
+ *
+ * The order of this array carries no meaning. The two orders that do are each
+ * plugin's own `tabOrder` and `summaryOrder`, which the tab strip and the
+ * Summary sort by; both accept fractional values, so a Section slots between
+ * two others without renumbering them. `sectionIds()`'s only caller asks
+ * whether every Section is hidden, which no order affects — so do not read a
+ * canonical order into this list, and do not add one without a reader.
  *
  * A function rather than a module-scope array, and that is load-bearing. A
  * plugin's `view` imports the page components it renders, and those reach back
@@ -151,7 +156,8 @@ export function evaluateSectionsAccess({
 }
 
 /**
- * The Section ids in canonical order, as currently registered.
+ * The Section ids as currently registered, in manifest-then-registration
+ * order — which is not a meaningful order; see the manifest above.
  *
  * `string[]` rather than `Section[]` on purpose: a plugin registered at boot is
  * in this list and cannot be in a union projected from the built-in manifest.
@@ -165,8 +171,8 @@ export function sectionIds() {
 }
 
 /**
- * The Section ids that can contribute a block to the Summary Section, in render
- * order.
+ * The Section ids that can contribute a block to the Summary Section, in the
+ * render order their own `summaryOrder` gives.
  *
  * @returns {string[]}
  */
