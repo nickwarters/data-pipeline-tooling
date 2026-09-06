@@ -2,6 +2,7 @@
 // @ts-check
 import { notesView } from '../../pages/cora-case-review/notes-view.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
+import { notesSummaryView } from '../../pages/cora-case-review/notes-summary-view.js';
 
 /** @satisfies {import('../contract.js').SectionPlugin} */
 export const NotesPlugin = /** @type {const} */ ({
@@ -26,6 +27,8 @@ export const NotesPlugin = /** @type {const} */ ({
     }
     return 'hidden';
   },
+
+  summaryView: notesSummaryView,
 
   view({ caseRow, config, snapshot, actions }) {
     return notesView({

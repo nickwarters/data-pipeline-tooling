@@ -423,6 +423,12 @@ src/
       details-summary-view.js  # the Case Details Summary block, drawn by DetailsPlugin.summaryView
       questions-summary-view.js # the Questions pass/fail counts Summary block, drawn by
                                #   QuestionsPlugin.summaryView
+      issues-summary-view.js   # the Issues Summary block — failed Answers, their Remediation Actions
+                               #   and captured Issue detail — drawn by IssuesPlugin.summaryView
+      remediation-summary-view.js # the Remediation tracking Summary block, drawn by
+                               #   RemediationPlugin.summaryView. The resolution details follow the
+                               #   audience, exactly as the Remediation tab does
+      notes-summary-view.js    # the Notes Summary block, drawn by NotesPlugin.summaryView
       outcome-view.js          # CASE-4 configured Outcome view
       completion-actions.js    # CASE-4 CaseMachine-guarded completion state + pure Summary control; completeCase is
                                #   the shared "persist the transition and leave" write, called by

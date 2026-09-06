@@ -7,6 +7,7 @@ import {
   remediationTabIsLive,
 } from '../../evaluators/case-lifecycle.js';
 import { remediationResolved } from '../../pages/cora-case-review/answer-actions.js';
+import { remediationSummaryView } from '../../pages/cora-case-review/remediation-summary-view.js';
 
 /** @satisfies {import('../contract.js').SectionPlugin} */
 export const RemediationPlugin = /** @type {const} */ ({
@@ -41,6 +42,8 @@ export const RemediationPlugin = /** @type {const} */ ({
     }
     return 'hidden';
   },
+
+  summaryView: remediationSummaryView,
 
   view({ snapshot, caseRow, config, route, dispatch, actions }) {
     return RemediationTracking({
