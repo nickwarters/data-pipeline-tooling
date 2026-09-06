@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { installDom } from './_dom-stub.js';
+import { findByClass, installDom } from './_dom-stub.js';
 import { SummaryPlugin } from '../src/sections/summary/summary-plugin.js';
 import { getSectionPlugin } from '../src/sections/registry.js';
 import { CASE_STATUS } from '../src/lib/case-statuses.js';
@@ -204,6 +204,16 @@ test('SummaryPlugin view renders summaryView and completion control', () => {
   const rendered = SummaryPlugin.view(panelContext);
   assert.ok(Array.isArray(rendered));
   assert.ok(rendered.length >= 1);
+
+  // The Summary resolves its own heading and hands it to the view, the way
+  // every other Section's block heading is resolved for it. The view names no
+  // Section, so nothing else can do this.
+  const root = document.createElement('div');
+  root.append(...rendered);
+  assert.equal(
+    findByClass(root, 'cora-summary').childNodes[0].textContent,
+    'Case Summary'
+  );
 });
 
 test('SummaryPlugin view renders summary without completion control when not applicable', () => {

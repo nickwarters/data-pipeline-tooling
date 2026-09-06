@@ -54,6 +54,11 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   literal `id` survives inference; that is what lets the type union come from
   the plugins instead of a second table, and a widening `@type` on
   `APP_CONFIG.sectionPlugins` silently turns it into `string`.
+  A Section also draws its own **Summary block**: a plugin declaring
+  `summaryBlock: true` supplies a `summaryView`, and `summary-view.js` names no
+  Section — it delegates and resolves each block's heading. There is no
+  id-to-renderer switch left; ADR-0053 records why one survived its own
+  decommissioning for a month.
   `src/sections/registry.js` is the **engine**: it imports no plugin and no
   config, and boot hands it the list with `configureSections()` before anything
   mounts. A read before that **throws** — there is nothing to fall back to, and

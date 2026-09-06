@@ -1,6 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { findAllByClass, findByClass, installDom } from './_dom-stub.js';
 import { makeCaseRow } from './helpers/fixtures.js';
 import {
@@ -213,6 +214,11 @@ test('summaryView follows the configured showInSummary sections and headings', (
         'q-open': { value: 'No' },
         'q-needs': { value: 'Yes' },
       },
+      // The Summary's own heading is resolved by SummaryPlugin, the way every
+      // other Section's block heading is resolved by the delegation — so this
+      // direct call is handed it, and `summary-plugin.test.js` holds the
+      // plugin to reading the Case Type's override.
+      heading: 'Wrap-up',
       sectionLabels: resolveSectionLabels({
         sectionLabels: {
           details: 'Overview',
@@ -894,8 +900,40 @@ test('a Section that declares a summaryView draws its own Summary block', async 
       'the plugin drew its own block'
     );
     assert.ok(getByRole(root, 'heading', { name: 'Fixture block' }));
+
+    // …and nowhere else. `tab: false` keeps it out of the strip the tabs are
+    // sorted from, which is the case the whole sequence existed for: a Section
+    // that is a Summary block and nothing else.
+    const { getSectionPlugins, summaryBlockIds } =
+      await import('../src/sections/registry.js');
+    assert.ok(summaryBlockIds().includes('fixtureBlock'));
+    assert.ok(
+      !getSectionPlugins()
+        .filter((plugin) => plugin.tab)
+        .some((plugin) => plugin.id === 'fixtureBlock'),
+      'a Summary-only Section is in no tab strip'
+    );
   } finally {
     configureAppSections();
+  }
+});
+
+test('the Summary view names no Section', () => {
+  // The ratchet on what this sequence removed. renderSectionBlock was an
+  // if-chain over five ids that returned null for anything else, so a Section
+  // declaring a Summary block drew a blank; every block is now drawn by the
+  // Section that owns it, and this file cannot name one.
+  const source = readFileSync(
+    new URL('../src/pages/cora-case-review/summary-view.js', import.meta.url),
+    'utf8'
+  );
+
+  for (const id of ['details', 'questions', 'issues', 'remediation', 'notes']) {
+    assert.doesNotMatch(
+      source,
+      new RegExp(`['".]${id}\\b`),
+      `summary-view.js must not name the ${id} Section`
+    );
   }
 });
 
