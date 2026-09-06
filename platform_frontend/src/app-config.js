@@ -56,6 +56,27 @@ import * as caseSearchPage from './pages/cora-case-search.js';
 
 /** @typedef {import('./setup/register-routes.js').AppContext} AppContext */
 /** @typedef {import('./setup/register-routes.js').PagePlugin} PagePlugin */
+/** @typedef {import('./services/permissions.js').Capabilities} Capabilities */
+
+/**
+ * Whether this user holds any working role at all.
+ *
+ * The audience for the two links that are not about one job in particular —
+ * the Dashboard and the Roadmap. Controls are in it: without them a
+ * Controls-only account reached no nav item at all, not even the Dashboard.
+ *
+ * @param {Capabilities} caps
+ * @returns {boolean}
+ */
+function hasAnyRole(caps) {
+  return (
+    caps.isReviewer ||
+    caps.isAdviser ||
+    caps.isReviewerManager ||
+    caps.ownedCaseTypes.length > 0 ||
+    caps.isControls
+  );
+}
 
 export const APP_CONFIG = {
   /**
@@ -101,24 +122,40 @@ export const APP_CONFIG = {
    */
   pagePlugins: [
     { id: 'root', paths: ['#/'], page: homePage },
-    { id: 'dashboard', paths: ['#/dashboard'], page: dashboardPage },
+    {
+      id: 'dashboard',
+      paths: ['#/dashboard'],
+      page: dashboardPage,
+      // An open route with a narrowed nav item: the link is for people with a
+      // job here, but nothing stops anyone opening the URL.
+      nav: { label: 'Dashboard', order: 10, isVisible: hasAnyRole },
+    },
     {
       id: 'my-stats',
       paths: ['#/my-stats'],
       page: myStatsPage,
       guard: (caps) => caps.isReviewer,
+      // isVisible omitted: the audience for the link is the audience for the
+      // route, and saying it twice is two declarations of one fact.
+      nav: { label: 'My Stats', order: 30 },
     },
     {
       id: 'team-stats',
       paths: ['#/team-stats'],
       page: teamStatsPage,
       guard: (caps) => caps.isReviewerManager,
+      nav: { label: 'Team Stats', order: 40 },
     },
     {
       id: 'question-bank',
       paths: ['#/question-bank'],
       load: () => import('./pages/question-bank/cora-bank-editor.js'),
       loadOverride: (context) => context.loadQuestionBankEditor,
+      nav: {
+        label: 'Question Bank',
+        order: 50,
+        isVisible: (caps) => caps.ownedCaseTypes.length > 0,
+      },
     },
     {
       id: 'case',
@@ -139,8 +176,22 @@ export const APP_CONFIG = {
       // list beside that banner reads better than a bounce with no reason.
       guard: (caps) => caps.ownedJourneyCaseTypes.length > 0,
     },
-    { id: 'roadmap', paths: ['#/roadmap'], page: roadmapPage },
-    { id: 'my-team', paths: ['#/my-team'], page: myTeamPage },
+    {
+      id: 'roadmap',
+      paths: ['#/roadmap'],
+      page: roadmapPage,
+      nav: { label: 'Roadmap', order: 20, isVisible: hasAnyRole },
+    },
+    {
+      id: 'my-team',
+      paths: ['#/my-team'],
+      page: myTeamPage,
+      nav: {
+        label: 'My Team',
+        order: 60,
+        isVisible: (caps) => caps.isReviewerManager,
+      },
+    },
     {
       id: 'search',
       paths: ['#/search'],
@@ -148,6 +199,7 @@ export const APP_CONFIG = {
       // Cross-Case-Type lookup is a capability, not a page: the mapping from
       // groups to it lives in one place, so widening it never touches a route.
       guard: (caps) => caps.canSearchCases,
+      nav: { label: 'Search', order: 70 },
     },
   ],
 };

@@ -1,6 +1,7 @@
 // @ts-check
 import * as appNavModule from '../components/sections/cora-app-nav.js';
 import { createBootErrorPanel } from '../lib/boot-error-panel.js';
+import { navItemsFor, resolveDefaultLandingPath } from './register-routes.js';
 
 /**
  * Boot-time chrome mounting: the app nav, guarded so a broken nav module
@@ -49,8 +50,13 @@ export async function mountAppChrome(
     return false;
   }
 
+  // Resolving belongs here rather than inside the nav: the nav is a view, and
+  // which links this user gets is a question about what the application is
+  // composed of. The brand link goes to wherever this user lands, so a viewer
+  // no landing rule recognises is not sent to a dashboard they cannot open.
   const { node: nav, navItems } = navModule.AppNav({
-    capabilities,
+    items: navItemsFor(capabilities),
+    brandHref: resolveDefaultLandingPath(capabilities),
     hash: readHash(),
   });
   appEl.appendChild(nav);
