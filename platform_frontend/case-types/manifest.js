@@ -4,7 +4,7 @@
  * @typedef {() => Promise<{ default: import('../src/pages/question-bank/question-bank-source.js').QuestionBank }>} QuestionBankImporter
  */
 
-import { loadBank } from './load-bank.js';
+import { CASE_TYPE_ENTRIES } from './entries.js';
 import {
   OutcomeConfigurationError,
   validateConfiguredOutcomeConfig,
@@ -29,20 +29,26 @@ import {
  * }} CaseTypeEntry
  */
 
-/** @type {CaseTypeEntry[]} */
-const registry = [
-  Object.freeze({
-    slug: 'complaints',
-    displayName: 'Complaints',
-    importer: () => import('./complaints.js'),
-    bank: () => loadQuestionBank('./banks/complaints.txt'),
-  }),
-];
+/**
+ * The live registry: what the application composes, plus anything registered
+ * after module evaluation. A copy of the composed list rather than the list
+ * itself, because `registerCaseType()` appends to this one and the declaration
+ * is frozen.
+ *
+ * @type {CaseTypeEntry[]}
+ */
+const registry = [...CASE_TYPE_ENTRIES];
 
 /**
- * THE Case Type registry. Adding a Case Type is one entry here, plus its config
- * module under `case-types/` and (optionally) its bank artifact under
- * `case-types/banks/`. `displayName` is load-bearing and lives ONLY here:
+ * THE Case Type registry, as the application currently has it. Adding a Case
+ * Type is one entry in `case-types/entries.js` — which is what
+ * `APP_CONFIG.caseTypes` names — plus its config module under `case-types/` and
+ * (optionally) its bank artifact under `case-types/banks/`. This module derives
+ * from that declaration rather than owning it, and adds what only a live
+ * registry can: registration after evaluation, the duplicate check, the
+ * validation and the derived importer maps.
+ *
+ * `displayName` is load-bearing and has ONE copy, in that declaration:
  * it composes the three provisioned SharePoint group names — see
  * `caseTypeGroupNames()` in `src/services/permissions.js` — and both the
  * capability side (`permissions.caseTypes`) and the Case-source eligibility side
@@ -148,14 +154,6 @@ export function displayNameFor(slug) {
     );
   }
   return entry.displayName;
-}
-
-/**
- * @param {string} path
- * @returns {Promise<{ default: import('../src/pages/question-bank/question-bank-source.js').QuestionBank }>}
- */
-async function loadQuestionBank(path) {
-  return { default: await loadBank(path) };
 }
 
 export class UnknownCaseTypeError extends Error {

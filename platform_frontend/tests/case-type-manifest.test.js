@@ -127,19 +127,39 @@ test('case type manifest: importing the manifest evaluates no Case Type module (
     if (entry.bank) assert.equal(typeof entry.bank, 'function');
   }
 
-  // The thunks are the only path to a Case Type module: no static import of a
-  // config or bank artifact may appear in the manifest source.
-  const source = readFileSync(
-    new URL('../case-types/manifest.js', import.meta.url),
-    'utf8'
-  );
-  const staticSpecifiers = [
-    ...source.matchAll(/(?:^|\n)import\s[\s\S]*?from\s+['"]([^'"]+)['"]/g),
-  ].map(([, specifier]) => specifier);
+  // The thunks are the only path to a Case Type module, and the file that has
+  // to be held to that is the one that DECLARES them — which is now
+  // `case-types/entries.js`, what `APP_CONFIG.caseTypes` names. The manifest
+  // derives from it and no longer names a Case Type at all.
+  /** @param {string} rel @returns {string[]} */
+  const staticSpecifiersOf = (rel) =>
+    [
+      ...readFileSync(new URL(rel, import.meta.url), 'utf8').matchAll(
+        /(?:^|\n)import\s[\s\S]*?from\s+['"]([^'"]+)['"]/g
+      ),
+    ]
+      .map(([, specifier]) => specifier)
+      .sort();
+
   assert.deepEqual(
-    staticSpecifiers.sort(),
-    ['../src/evaluators/configured-outcome.js', './load-bank.js'],
-    'the manifest may statically import only its loader and the outcome validator — every Case Type module is reached through a thunk'
+    staticSpecifiersOf('../case-types/entries.js'),
+    ['./load-bank.js'],
+    'the Case Type declaration may statically import only its bank loader — every Case Type module is reached through a thunk'
+  );
+  assert.deepEqual(
+    staticSpecifiersOf('../case-types/manifest.js'),
+    ['../src/evaluators/configured-outcome.js', './entries.js'],
+    'the manifest may statically import only the declaration it derives from and the outcome validator — every Case Type module is reached through a thunk'
+  );
+
+  // And the composition root, which names that declaration, must not reach a
+  // Case Type module either: importing the config evaluates none of them.
+  assert.deepEqual(
+    staticSpecifiersOf('../src/app-config.js').filter((specifier) =>
+      specifier.includes('case-types/')
+    ),
+    ['../case-types/entries.js'],
+    'src/app-config.js may name the Case Type declaration and no Case Type config or bank artifact'
   );
 });
 
