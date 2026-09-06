@@ -190,11 +190,13 @@ export const APP_CONFIG = {
       id: 'my-team',
       paths: ['#/my-team'],
       page: myTeamPage,
-      nav: {
-        label: 'My Team',
-        order: 60,
-        isVisible: (caps) => caps.isReviewerManager,
-      },
+      // The route is guarded as well as the link. It was not before, so a
+      // non-manager with the URL could open a page the bar never offered them
+      // — a nav item narrower than its route. That is a UX inconsistency
+      // rather than a hole: what actually protects allocation is the
+      // SharePoint list ACLs, and hiding a link makes nothing safe.
+      guard: (caps) => caps.isReviewerManager,
+      nav: { label: 'My Team', order: 60 },
     },
     {
       id: 'search',
