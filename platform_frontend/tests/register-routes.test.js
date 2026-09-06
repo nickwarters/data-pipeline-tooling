@@ -23,6 +23,7 @@ import assert from 'node:assert/strict';
 import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 import { makePermissions } from './helpers/fixtures.js';
 import { resolveCapabilities } from '../src/services/permissions.js';
+import { APP_CONFIG } from '../src/app-config.js';
 
 isolateBrowserGlobals();
 
@@ -35,8 +36,12 @@ const replacedUrls = [];
   replace: (/** @type {string} */ url) => replacedUrls.push(url),
 };
 
-const { routeTable, registerRoutes } =
-  await import('../src/setup/register-routes.js');
+const {
+  routeTable,
+  registerRoutes,
+  resolveDefaultLandingPath,
+  FALLBACK_LANDING_PATH,
+} = await import('../src/setup/register-routes.js');
 
 /**
  * @param {string[]} journeyCaseSources
@@ -262,7 +267,11 @@ test('route table: the host substitute is the page that actually mounts', async 
 
 test('journey cases guard: admits a user who owns a Journey Case Type', () => {
   replacedUrls.length = 0;
-  const { guard } = routeTable(makeContext(['complaints']))['journey-cases'];
+  // The capability, not the resolved sources: the two differ only when an
+  // owned Case Type's module failed to evaluate, and the banner names that.
+  const { guard } = routeTable(
+    makeContext([], { ownedJourneyCaseTypes: ['complaints'] })
+  )['journey-cases'];
 
   assert.equal(guard?.(), true);
   assert.deepEqual(replacedUrls, [], 'an eligible user is not bounced');
@@ -270,7 +279,9 @@ test('journey cases guard: admits a user who owns a Journey Case Type', () => {
 
 test('journey cases guard: bounces a non-Journey-Owner without mounting the page', () => {
   replacedUrls.length = 0;
-  const { guard } = routeTable(makeContext([]))['journey-cases'];
+  const { guard } = routeTable(makeContext([], { ownedJourneyCaseTypes: [] }))[
+    'journey-cases'
+  ];
 
   assert.equal(
     guard?.(),
@@ -390,4 +401,129 @@ test('search guard: bounces a user without the capability, without mounting the 
   // does: Back must not return the user to the route that just bounced them.
   assert.deepEqual(replacedUrls, ['/SitePages/app.aspx#/']);
   assert.equal(location.hash, '', 'does not push a history entry');
+});
+
+// --- Where an unmatched user lands ---
+
+/**
+ * A page list standing in for the composition, so these tests state the rule
+ * rather than today's three landing pages.
+ *
+ * @param {any[]} plugins
+ * @param {() => unknown} run
+ */
+function withPagePlugins(plugins, run) {
+  const config = /** @type {any} */ (APP_CONFIG);
+  const original = config.pagePlugins;
+  config.pagePlugins = plugins;
+  try {
+    return run();
+  } finally {
+    config.pagePlugins = original;
+  }
+}
+
+test('landing: the matching rule wins, and its first path is where the user goes', () => {
+  withPagePlugins(
+    [
+      {
+        id: 'a',
+        paths: ['#/a'],
+        page: {},
+        defaultFor: () => false,
+        defaultForOrder: 10,
+      },
+      {
+        id: 'b',
+        paths: ['#/b', '#/b/:id'],
+        page: {},
+        defaultFor: () => true,
+        defaultForOrder: 20,
+      },
+    ],
+    () => {
+      assert.equal(resolveDefaultLandingPath(/** @type {any} */ ({})), '#/b');
+    }
+  );
+});
+
+test('landing: rank settles a user two rules both match, not list order', () => {
+  const later = {
+    id: 'later',
+    paths: ['#/later'],
+    page: {},
+    defaultFor: () => true,
+    defaultForOrder: 10,
+  };
+  const earlier = {
+    id: 'earlier',
+    paths: ['#/earlier'],
+    page: {},
+    defaultFor: () => true,
+    defaultForOrder: 5,
+  };
+
+  // Declared in both orders: the answer is the rank, so it does not move.
+  for (const plugins of [
+    [later, earlier],
+    [earlier, later],
+  ]) {
+    withPagePlugins(plugins, () => {
+      assert.equal(
+        resolveDefaultLandingPath(/** @type {any} */ ({})),
+        '#/earlier'
+      );
+    });
+  }
+});
+
+test('landing: no rule matching falls to #/, which is the page written for that viewer', () => {
+  withPagePlugins(
+    [
+      {
+        id: 'a',
+        paths: ['#/a'],
+        page: {},
+        defaultFor: () => false,
+        defaultForOrder: 10,
+      },
+    ],
+    () => {
+      assert.equal(
+        resolveDefaultLandingPath(/** @type {any} */ ({})),
+        FALLBACK_LANDING_PATH
+      );
+      assert.equal(FALLBACK_LANDING_PATH, '#/');
+    }
+  );
+});
+
+test('landing: two rules at the same rank throw, naming both', () => {
+  withPagePlugins(
+    [
+      {
+        id: 'reviewer',
+        paths: ['#/reviewer'],
+        page: {},
+        defaultFor: () => true,
+        defaultForOrder: 10,
+      },
+      {
+        id: 'controls',
+        paths: ['#/controls'],
+        page: {},
+        defaultFor: () => true,
+        defaultForOrder: 10,
+      },
+    ],
+    () => {
+      // A tie is a mistake in the list. Picking one hides precedence inside
+      // whichever predicate happens to be earlier, which is how first-match
+      // resolution shipped access bugs before.
+      assert.throws(
+        () => resolveDefaultLandingPath(/** @type {any} */ ({})),
+        /ambiguous landing: reviewer, controls/
+      );
+    }
+  );
 });

@@ -42,8 +42,6 @@ import { AppealReviewPlugin } from './sections/appeals/appeal-review-plugin.js';
 import { AmendOutcomePlugin } from './sections/amend-outcome/amend-outcome-plugin.js';
 import { SecondReviewPlugin } from './sections/second-review/second-review-plugin.js';
 
-import { redirectTo } from './lib/navigate.js';
-
 import * as homePage from './pages/home.js';
 import * as dashboardPage from './pages/cora-dashboard.js';
 import * as myStatsPage from './pages/cora-my-stats.js';
@@ -58,19 +56,6 @@ import * as caseSearchPage from './pages/cora-case-search.js';
 
 /** @typedef {import('./setup/register-routes.js').AppContext} AppContext */
 /** @typedef {import('./setup/register-routes.js').PagePlugin} PagePlugin */
-
-/**
- * Bounce a user this route is not for, and say the mount must not happen.
- *
- * Replaces the history entry rather than pushing one, so Back does not return
- * the user to the route that just bounced them.
- *
- * @returns {false}
- */
-function bounceHome() {
-  redirectTo('#/');
-  return false;
-}
 
 export const APP_CONFIG = {
   /**
@@ -105,8 +90,12 @@ export const APP_CONFIG = {
    * route engine hand-writing an entry for one page.
    *
    * Array order is the registration order, and the only order here that means
-   * anything. A route's eligibility is its own `guard`, a function of the boot
-   * context rather than a closure over it, so this stays a list of facts.
+   * anything: the nav sorts by each entry's own `nav.order` and the landing
+   * rules by `defaultForOrder`.
+   *
+   * Every predicate here is a pure function of `Capabilities`. A guard that
+   * redirected could not also answer "draw this nav item?", and the engine owns
+   * the bounce for exactly that reason — so a page states its audience once.
    *
    * @type {readonly PagePlugin[]}
    */
@@ -117,14 +106,13 @@ export const APP_CONFIG = {
       id: 'my-stats',
       paths: ['#/my-stats'],
       page: myStatsPage,
-      guard: (context) => context.chrome.permissions.isReviewer || bounceHome(),
+      guard: (caps) => caps.isReviewer,
     },
     {
       id: 'team-stats',
       paths: ['#/team-stats'],
       page: teamStatsPage,
-      guard: (context) =>
-        context.chrome.permissions.isReviewerManager || bounceHome(),
+      guard: (caps) => caps.isReviewerManager,
     },
     {
       id: 'question-bank',
@@ -144,8 +132,12 @@ export const APP_CONFIG = {
       paths: ['#/journey-cases'],
       page: journeyCasesPage,
       // List-scope Journey Owner capability: only a user who owns at least one
-      // Case Type as a Journey Owner may see this view.
-      guard: (context) => context.journeyCaseSources.length > 0 || bounceHome(),
+      // Case Type as a Journey Owner may see this view. Read off the
+      // capability rather than off the RESOLVED sources, which differ only
+      // when an owned Case Type's module failed to evaluate — a state the
+      // unavailable-Case-Type banner already names, and one where an empty
+      // list beside that banner reads better than a bounce with no reason.
+      guard: (caps) => caps.ownedJourneyCaseTypes.length > 0,
     },
     { id: 'roadmap', paths: ['#/roadmap'], page: roadmapPage },
     { id: 'my-team', paths: ['#/my-team'], page: myTeamPage },
@@ -155,8 +147,7 @@ export const APP_CONFIG = {
       page: caseSearchPage,
       // Cross-Case-Type lookup is a capability, not a page: the mapping from
       // groups to it lives in one place, so widening it never touches a route.
-      guard: (context) =>
-        context.chrome.permissions.canSearchCases || bounceHome(),
+      guard: (caps) => caps.canSearchCases,
     },
   ],
 };

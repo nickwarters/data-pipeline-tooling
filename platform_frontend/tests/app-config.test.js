@@ -71,3 +71,41 @@ test('the Section union rejects an id this application does not compose', () => 
   // @ts-expect-error 'nope' is not a Section this application composes
   assert.equal(takesSection('nope'), 'nope');
 });
+
+// --- The page half of the composition ---
+
+test('every page entry carries exactly one of `page` and `load`', () => {
+  // The contract cannot say "exactly one of", and the router adapter throws on
+  // anything else — a mis-shaped entry is a route that cannot mount, which is
+  // worth one named line here rather than a console error the first time
+  // somebody navigates there.
+  for (const plugin of APP_CONFIG.pagePlugins) {
+    assert.equal(
+      Boolean(plugin.page) !== Boolean(plugin.load),
+      true,
+      `page "${plugin.id}" must declare a page or a load thunk, never both and never neither`
+    );
+  }
+});
+
+test('every page entry declares at least one path, and a nav item ranks itself', () => {
+  for (const plugin of APP_CONFIG.pagePlugins) {
+    assert.ok(plugin.paths.length > 0, `page "${plugin.id}" declares no paths`);
+    if (plugin.nav) {
+      assert.equal(
+        typeof plugin.nav.order,
+        'number',
+        `page "${plugin.id}" has a nav item with no order`
+      );
+    }
+    // `defaultForOrder` is what settles a user two rules both match, so a rule
+    // without one would rank as 0 and tie with anything else that forgot.
+    if (plugin.defaultFor) {
+      assert.equal(
+        typeof plugin.defaultForOrder,
+        'number',
+        `page "${plugin.id}" is a landing rule with no defaultForOrder`
+      );
+    }
+  }
+});
