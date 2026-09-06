@@ -21,6 +21,11 @@
  * @property {(action: any) => unknown} dispatch
  * @property {PanelActions} actions
  * @property {import('../../sharepoint-client.js').SectionConfig} [sectionConfig]
+ * @property {any} [sectionState]
+ *   This Section's own slice of `route.sections`, and only this Section's. The
+ *   whole map is deliberately not passed: a Section reading another's state
+ *   would be a coupling nothing declares and nothing could see. `undefined`
+ *   until this Section has written anything.
  */
 
 /**

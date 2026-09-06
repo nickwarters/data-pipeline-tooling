@@ -259,6 +259,7 @@ test('state: route state owns loading, save status, and selected tab under route
     captureSearch: {},
     responsiblePartySearch: { query: '', people: [], status: 'idle' },
     saveStatus: 'saved',
+    sections: {},
     snapshot: null,
   });
 
@@ -5470,4 +5471,40 @@ test('a Case Type that renames every Section renames every tab and every heading
       `expected a Summary block titled "${expected}", got ${JSON.stringify(blockTitles)}`
     );
   }
+});
+
+// --- A Section's own state ---
+
+test("section state: a Section's slice survives a re-render and starts empty on the next mount", () => {
+  // The store is what survives a re-render; a callback holding this instead
+  // would lose it the moment the view was rebuilt, which is how an edit was
+  // dropped before.
+  const seeded = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: snapshot(),
+  });
+  seeded.routes.caseReview.sections.someSection = { draft: 'half typed' };
+
+  // Any unrelated action: the page rebuilds its view from every one of these,
+  // and none of them may take a Section's state with it.
+  let state = seeded;
+  for (const action of [
+    { type: 'case/tab-selected', id: 'notes' },
+    { type: 'case/save-status-changed', status: 'saving' },
+    { type: 'case/conversation-toggled' },
+  ]) {
+    state = caseReviewReducer(state, action);
+    assert.deepEqual(
+      state.routes.caseReview.sections.someSection,
+      { draft: 'half typed' },
+      `survives ${action.type}`
+    );
+  }
+
+  // Teardown is the store being disposed with the mount, so the next mount
+  // begins from here: no Section carries anything over from the last Case.
+  assert.deepEqual(
+    createInitialCaseReviewState(chrome).routes.caseReview.sections,
+    {}
+  );
 });

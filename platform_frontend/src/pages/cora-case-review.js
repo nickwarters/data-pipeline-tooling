@@ -93,6 +93,17 @@ import { voidReasonText } from '../lib/void-reasons.js';
  * @property {PeopleSearchState} responsiblePartySearch
  *   One search, not one per Question: the Responsible Party is a Case-level
  *   field, so there is only ever one of these boxes open.
+ * @property {Record<string, any>} sections
+ *   Per-Section view state, keyed by Section id. A Section that holds state of
+ *   its own owns one entry here and is handed only that entry, so two Sections
+ *   cannot collide and neither can read the other — the page has no business
+ *   knowing what is inside one, and a Section has no business knowing another
+ *   exists.
+ *
+ *   Empty until a Section writes to it. It lives on the route slice rather than
+ *   in a closure because the store is what survives a re-render; a callback
+ *   that held state instead would lose it the moment the view was rebuilt,
+ *   which is how an Admin Details edit was dropped.
  * @property {CaseReviewSnapshot | null} snapshot
  */
 
@@ -122,6 +133,7 @@ export function createInitialCaseReviewState(chrome) {
         captureCollapsed: {},
         captureSearch: {},
         responsiblePartySearch: { query: '', people: [], status: 'idle' },
+        sections: {},
         snapshot: null,
       },
     },
@@ -1110,6 +1122,7 @@ export function createRouteSlice(params, context) {
           ? plugin.view({
               ...panelContext,
               sectionConfig: sectionConfigFor(config, plugin.id),
+              sectionState: route.sections[plugin.id],
             })
           : null
       );
@@ -1125,6 +1138,7 @@ export function createRouteSlice(params, context) {
         : conversationPlugin && typeof conversationPlugin.view === 'function'
           ? conversationPlugin.view({
               ...panelContext,
+              sectionState: route.sections[conversationPlugin.id],
               actions: {
                 ...panelActions,
                 onClose: () => {

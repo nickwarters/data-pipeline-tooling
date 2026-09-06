@@ -93,6 +93,7 @@ test('plugins own completion on Summary and Void on Case Details', () => {
   const route = {
     activeTab: 'summary',
     saveStatus: 'saved',
+    sections: {},
     conversationHidden: true,
     voidPanelOpen: false,
     voidPending: false,
