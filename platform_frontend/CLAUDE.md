@@ -517,6 +517,17 @@ src/
       question-bank-source.js
       simulate-panel.js         # pure golden-tested impact-simulation view
 
+  capture-fields/               # one module per Issue Capture Field TYPE
+    contract.js                 # what a type knows about itself: what a write may hold, the control
+                                #   the Reviewer edits it with, and how a caption names that control.
+                                #   Reading a stored value is deliberately NOT here
+    primitive-types.js          # text/textarea/select/radio — one adapter, because they differ only
+                                #   in whether the value comes from the declared options and how the
+                                #   caption is attached
+    registry.js                 # the type lookup. A FRAMEWORK vocabulary a Case Type selects from,
+                                #   like Void Reasons — not an application composition, so it names
+                                #   its own built-ins rather than being handed a list by app-config
+
   sections/                     # self-declaring Case Review Sections
     contract.js                 # the SectionPlugin contract (names no plugin, so the union can project)
     registry.js                 # THE Section engine: holds Sections and derives from them, and
@@ -596,6 +607,10 @@ src/
     applicability-evaluator.js
     configured-outcome.js
     failure-evaluator.js
+    capture-values.js            # leaf: what a stored Issue Capture value IS, read off the VALUE —
+                                 #   emptiness and display text, never routed through the field's
+                                 #   declared type, because a Case saved before a type existed holds
+                                 #   the old shape under that key and a reader shows what is there
     issue-capture.js
     kpi-strip-model.js
     overdue-evaluator.js

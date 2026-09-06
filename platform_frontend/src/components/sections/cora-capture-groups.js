@@ -1,7 +1,7 @@
 // @ts-check
 import { h } from '../../lib/html.js';
-import { buildCaptureControl } from '../../lib/capture-engine.js';
 import { PeoplePicker } from '../base/cora-people-picker.js';
+import { getCaptureFieldType } from '../../capture-fields/registry.js';
 import {
   captureDisplayText,
   isEmptyCaptureValue,
@@ -109,15 +109,13 @@ function editableGroup(group, props) {
  * @returns {HTMLElement}
  */
 function editableField(field, props) {
-  const { capture, namePrefix, onCapture } = props;
+  const type = getCaptureFieldType(field.type);
 
-  // A person is picked, not typed, so it is built here rather than in the
-  // shared capture engine: that engine is a domain-free string control builder
-  // used by Sections that carry no search state to feed a picker with. The
-  // picker names its own input, and the chosen-person form is text plus a
-  // button — neither is a control a caption may wrap, so the caption is a plain
-  // span beside them.
-  if (field.type === 'person') {
+  // A person is picked, not typed, and has not moved to a field type module
+  // yet, so it is still built here. The picker names its own input, and the
+  // chosen-person form is text plus a button — neither is a control a caption
+  // may wrap, so the caption is a plain span beside them.
+  if (!type) {
     return h(
       'div',
       { className: 'cora-capture-field' },
@@ -126,23 +124,32 @@ function editableField(field, props) {
     );
   }
 
-  const control = buildCaptureControl(
+  const control = type.editControl({
     field,
-    captureDisplayText(capture[field.key]),
-    (value) => onCapture(field.key, value),
-    'cora-capture-input',
-    namePrefix
-  );
+    value: props.capture[field.key],
+    namePrefix: props.namePrefix,
+    onCapture: props.onCapture,
+    peopleSearch: props.peopleSearch,
+    onPersonQuery: props.onPersonQuery,
+  });
 
-  // A `radio` field is several inputs, each already inside its own `<label>`,
-  // so the caption names the set with a `<legend>` rather than trying to label
-  // one control. Every other type is a single control the caption wraps, which
-  // associates the two without needing an id to keep unique across rows.
-  if (field.type === 'radio') {
+  // How the caption names the control is the type's own fact: several inputs
+  // each already inside a `<label>` need a `<legend>` naming the set, while one
+  // control is wrapped, which associates the two without an id that would have
+  // to stay unique across rows.
+  if (type.caption === 'legend') {
     return h(
       'fieldset',
       { className: 'cora-capture-field' },
       h('legend', { className: 'cora-capture-label' }, field.label),
+      control
+    );
+  }
+  if (type.caption === 'beside') {
+    return h(
+      'div',
+      { className: 'cora-capture-field' },
+      h('span', { className: 'cora-capture-label' }, field.label),
       control
     );
   }

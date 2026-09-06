@@ -1,6 +1,17 @@
 // @ts-check
 import { evalCondition, evaluate } from './applicability-evaluator.js';
 import { isFailure } from './failure-evaluator.js';
+import {
+  captureDisplayText,
+  isEmptyCaptureValue,
+  isPerson,
+} from './capture-values.js';
+import { getCaptureFieldType } from '../capture-fields/registry.js';
+
+// Re-exported from their leaf home so this module stays the one import a
+// caller needs for capture, while the field types can read them without
+// importing back into here.
+export { captureDisplayText, isEmptyCaptureValue } from './capture-values.js';
 
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
@@ -55,70 +66,21 @@ export function findCaptureField(groups, key) {
  */
 
 /**
- * Whether a value is a person: an object carrying both an account and a name.
- * Both must be present and non-empty — a half-filled person would render as a
- * blank chip.
+ * Rejects a write the field cannot hold, naming the field. Each field type says
+ * what it may hold; this asks the type rather than branching on it.
  *
- * @param {unknown} value
- * @returns {value is { loginName: string, displayName: string }}
- */
-function isPerson(value) {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-    return false;
-  }
-  const { loginName, displayName } = /** @type {Record<string, unknown>} */ (
-    value
-  );
-  return (
-    typeof loginName === 'string' &&
-    loginName !== '' &&
-    typeof displayName === 'string' &&
-    displayName !== ''
-  );
-}
-
-/**
- * Whether a capture value counts as "nothing recorded" — the one definition the
- * write path (which deletes the key rather than storing emptiness) and the
- * completion gate (which asks whether a required field is filled) both read.
- *
- * Only an absent value or empty text is nothing. Anything else is something,
- * which is what keeps a malformed write a rejection rather than a silent
- * delete: emptiness clears a field, it does not excuse a value the field
- * cannot hold.
- *
- * @param {unknown} value
- * @returns {boolean}
- */
-export function isEmptyCaptureValue(value) {
-  return value === null || value === undefined || value === '';
-}
-
-/**
- * How one stored capture value reads as text, whatever it holds.
- *
- * Total on purpose, and deliberately not given the field's declared type: a
- * Case saved before `person` fields were built holds a plain string under a
- * person key, because the control fell through to a text box then. Only the
- * write path judges what a field may hold; a reader shows what is there.
- *
- * @param {unknown} value
- * @returns {string}
- */
-export function captureDisplayText(value) {
-  if (typeof value === 'string') return value;
-  return isPerson(value) ? value.displayName : '';
-}
-
-/**
- * Rejects a write the field cannot hold, naming the field. Choice values are
- * checked against the declared options; a person must be a whole person; every
- * other type takes a string and nothing else.
+ * `person` has not moved to a type module yet, so its rule is still written out
+ * below. When it does, this becomes the lookup and nothing else.
  *
  * @param {CaptureField} field
  * @param {CaptureValue} value
  */
 function validateCaptureWrite(field, value) {
+  const type = getCaptureFieldType(field.type);
+  if (type) {
+    type.validate(field, value);
+    return;
+  }
   if (field.type === 'person') {
     if (!isPerson(value)) {
       throw new Error(
@@ -127,17 +89,13 @@ function validateCaptureWrite(field, value) {
     }
     return;
   }
+  // A type this framework does not know is held to the text rule, which is
+  // what it was held to before any of them had a module: `verify-config.js`
+  // refuses a Case Type declaring one, so the only way here is a field that
+  // declares no type at all.
   if (typeof value !== 'string') {
     throw new Error(
       `Invalid value for ${field.type} Issue Capture Field "${field.key}" — expected text.`
-    );
-  }
-  if (
-    (field.type === 'select' || field.type === 'radio') &&
-    !(field.options ?? []).includes(value)
-  ) {
-    throw new Error(
-      `Invalid value "${value}" for ${field.type} Issue Capture Field "${field.key}".`
     );
   }
 }
