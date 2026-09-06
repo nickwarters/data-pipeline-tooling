@@ -71,20 +71,62 @@ function builtInSectionPlugins() {
 /** @type {Map<string, SectionPlugin>} */
 const registry = new Map();
 
-let initialized = false;
+/**
+ * Whether the composition root has told this engine what the application is
+ * made of. Starts false, and `configureSections` is the only thing that sets
+ * it: it is the fact the lazy fallback below is scheduled to be replaced by,
+ * so nothing else may claim it.
+ */
+let configured = false;
 
+/** Whether the lazy fallback has already seeded the built-ins. */
+let seeded = false;
+
+/**
+ * The lazy fallback: a read that arrives before anything configured the engine
+ * seeds it with the built-ins so it answers something rather than nothing.
+ *
+ * Scheduled for removal. Once boot configures the engine, a read before that
+ * has to throw instead — with no built-ins there is nothing to fall back to,
+ * and an empty registry answers "every Section is hidden", which reads as a
+ * Case nobody may open rather than as a mistake. Do not build on this.
+ */
 function ensureInitialized() {
-  if (!initialized) {
-    resetSectionRegistry();
-  }
+  if (configured || seeded) return;
+  resetSectionRegistry();
 }
 
 export function resetSectionRegistry() {
   registry.clear();
-  initialized = true;
+  seeded = true;
   for (const plugin of builtInSectionPlugins()) {
     registry.set(plugin.id, plugin);
   }
+}
+
+/**
+ * Configure the engine with the Sections this application is composed of.
+ * Called once during boot, before any route mounts.
+ *
+ * A duplicate id throws rather than replacing the earlier entry.
+ * `registerSectionPlugin` replaces on purpose — a test standing one Section in
+ * for another — but a Section listed twice in the composition root is a mistake
+ * in the list, and the two cases deserve different answers.
+ *
+ * @param {readonly SectionPlugin[]} plugins
+ */
+export function configureSections(plugins) {
+  registry.clear();
+  for (const plugin of plugins) {
+    if (!plugin?.id) {
+      throw new Error('configureSections: every Section needs an id');
+    }
+    if (registry.has(plugin.id)) {
+      throw new Error(`configureSections: duplicate Section id "${plugin.id}"`);
+    }
+    registry.set(plugin.id, plugin);
+  }
+  configured = true;
 }
 
 /**
