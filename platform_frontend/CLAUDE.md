@@ -502,6 +502,10 @@ src/
     appeals/
       appeal-request-plugin.js  # Appeal Request section plugin
       appeal-review-plugin.js   # Appeal Review section plugin
+    second-review/
+      second-review-plugin.js   # Second Review section plugin: stubbed access and view on purpose.
+                                #   It is the worked proof that a Section can be added by the
+                                #   composition root alone — the engine gained no line for it
 
   views/                        # generic store-driven pure renderers
     case-columns.js             # shared Case-table column descriptors (#515): the Case-aware consumer of

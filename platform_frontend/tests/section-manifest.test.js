@@ -21,17 +21,18 @@ configureAppSections();
 // --- Registry basics ---
 
 test('the configured list is the Section list, and repeated reads agree', () => {
-  assert.deepEqual(sectionIds(), [
-    'details',
-    'questions',
-    'issues',
-    'summary',
-    'remediation',
-    'notes',
-    'conversation',
+  assert.deepEqual([...sectionIds()].sort(), [
+    'amendOutcome',
     'appealRequest',
     'appealReview',
-    'amendOutcome',
+    'conversation',
+    'details',
+    'issues',
+    'notes',
+    'questions',
+    'remediation',
+    'secondReview',
+    'summary',
   ]);
   assert.deepEqual(sectionIds(), sectionIds(), 'repeated reads agree');
 });
@@ -87,6 +88,7 @@ test('registered plugins derive tab order and ids', () => {
     [
       'details',
       'questions',
+      'secondReview',
       'issues',
       'summary',
       'remediation',
@@ -104,7 +106,7 @@ test('registered plugins derive tab order and ids', () => {
 
 test('every registered SectionPlugin conforms to the contract', () => {
   const plugins = getSectionPlugins();
-  assert.ok(plugins.length >= 10);
+  assert.ok(plugins.length >= 11);
   for (const plugin of plugins) {
     assert.equal(typeof plugin.id, 'string');
     assert.equal(typeof plugin.tab, 'boolean');

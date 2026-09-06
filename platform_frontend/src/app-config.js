@@ -34,6 +34,7 @@ import { ConversationPlugin } from './sections/conversation/conversation-plugin.
 import { AppealRequestPlugin } from './sections/appeals/appeal-request-plugin.js';
 import { AppealReviewPlugin } from './sections/appeals/appeal-review-plugin.js';
 import { AmendOutcomePlugin } from './sections/amend-outcome/amend-outcome-plugin.js';
+import { SecondReviewPlugin } from './sections/second-review/second-review-plugin.js';
 
 export const APP_CONFIG = /** @type {const} */ ({
   sectionPlugins: [
@@ -47,6 +48,7 @@ export const APP_CONFIG = /** @type {const} */ ({
     AppealRequestPlugin,
     AppealReviewPlugin,
     AmendOutcomePlugin,
+    SecondReviewPlugin,
   ],
 });
 
