@@ -66,12 +66,13 @@ test('the Case Review page has exactly one Answer owner', () => {
 });
 
 /**
- * The two modules allowed to hold a Case Row on an object: the loader, which
- * hands it to the store in `toStoreSnapshot()`, and `CaseMachine`, which
- * captures it at construction. Adding a third means a new copy that can drift
- * from `snapshot.caseRow` — argue for it in review, do not just extend this.
+ * The one module allowed to hold a Case Row on an object: the loader, which
+ * hands it to the store in `toStoreSnapshot()`. It used to be two — the
+ * lifecycle model captured one at construction, and it no longer exists to.
+ * Adding a second means a new copy that can drift from `snapshot.caseRow` —
+ * argue for it in review, do not just extend this.
  */
-const CASE_ROW_HOLDERS = new Set(['lib/case-loader.js', 'lib/case-machine.js']);
+const CASE_ROW_HOLDERS = new Set(['lib/case-loader.js']);
 
 test('the Case Review page has exactly one Case Row owner', () => {
   // The store owns the Case Row. The loader keeps a copy only long enough to

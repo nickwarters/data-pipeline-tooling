@@ -8,6 +8,11 @@ import {
   remediationComplete,
   remediationDecided,
 } from '../../evaluators/remediation-status.js';
+import {
+  buildActionsInProgressTransition,
+  buildCompletedTransition,
+  buildFinalCompleteTransition,
+} from '../../evaluators/case-transitions.js';
 import { navigateTo } from '../../lib/navigate.js';
 import { h } from '../../lib/html.js';
 
@@ -191,13 +196,14 @@ export function completionControlView({ control, pending, onComplete }) {
 }
 
 /**
- * Ask CaseMachine for the only valid patch from the current state. There is
- * deliberately no fallback transition: an absent transition means the UI
- * cannot mutate the lifecycle.
+ * The only valid patch from the current state, or `null`. There is deliberately
+ * no fallback transition: nothing to build means the UI cannot move the
+ * lifecycle.
  *
  * @param {{
  *   machine: import('../../evaluators/case-lifecycle.js').CaseLifecycleView | null,
  *   caseRow: import('../../sharepoint-client.js').CaseRow,
+ *   config?: import('../../sharepoint-client.js').CaseTypeConfig,
  *   catalogue: QuestionDefinition[],
  *   answers: Record<string, Answer>,
  *   allAnswered: boolean,
@@ -212,9 +218,7 @@ export function completionPatch(input) {
   const machine = input.machine;
   if (!machine) return null;
   if (machine.mayResolveRemediation) {
-    return readyToClose(input)
-      ? (machine.transitionToFinalComplete?.() ?? null)
-      : null;
+    return readyToClose(input) ? buildFinalCompleteTransition() : null;
   }
   if (
     !input.allAnswered ||
@@ -226,23 +230,20 @@ export function completionPatch(input) {
   ) {
     return null;
   }
-  // Read the machine's catalogue, not the caller's. `CaseMachine` stamps
-  // `hadRemediation` from `this.catalogue`, so choosing the transition from any
-  // other copy would be the same fact read twice — the exact split this change
-  // exists to close. Today both are the one `CaseLoader` catalogue and
-  // the two readings cannot differ; sourcing them from one object is what keeps
-  // that true rather than incidental.
-  const transition = hasTrackableRemediation(machine.catalogue, input.answers)
-    ? machine.transitionToActionsInProgress
-    : machine.transitionToCompleted;
-  const transitionFields =
-    transition?.call(
-      machine,
-      input.computeOutcome,
-      input.answers,
-      input.bankVersion
-    ) ?? null;
-  if (!transitionFields) return null;
+  // One catalogue, read twice for one decision: it chooses the transition here
+  // and stamps `hadRemediation` inside it. They used to come from two objects —
+  // the caller's copy and the machine's — which could not differ in practice
+  // and had to be argued about anyway. Now there is nothing to argue.
+  const build = hasTrackableRemediation(input.catalogue, input.answers)
+    ? buildActionsInProgressTransition
+    : buildCompletedTransition;
+  const transitionFields = build({
+    config: input.config,
+    catalogue: input.catalogue,
+    answers: input.answers,
+    computeOutcome: input.computeOutcome,
+    questionBankVersion: input.bankVersion,
+  });
   return input.caseRow.onHold === true
     ? { ...transitionFields, onHold: false, placedOnHoldAt: null }
     : transitionFields;

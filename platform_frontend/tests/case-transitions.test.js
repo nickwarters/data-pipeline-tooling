@@ -1,27 +1,24 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CaseMachine } from '../src/lib/case-machine.js';
-import { isReportable } from '../src/evaluators/case-lifecycle.js';
+import {
+  buildActionsInProgressTransition,
+  buildCompletedTransition,
+  buildFinalCompleteTransition,
+  buildVoidTransition,
+} from '../src/evaluators/case-transitions.js';
 import { CASE_STATUS } from '../src/lib/case-statuses.js';
 import { addWorkingDays } from '../src/lib/add-working-days.js';
 import {
   ENGLAND_WALES_HOLIDAYS,
   REMEDIATION_SLA_WORKING_DAYS,
 } from '../src/config/working-days.js';
-import { makeCaseRow } from './helpers/fixtures.js';
-import { configureAppSections } from './helpers/configure-sections.js';
 
-configureAppSections();
-
-const BASE_ROW = makeCaseRow({
-  id: 'c1',
-  caseType: 'example-review',
-  title: 'Test Case',
-  assignedReviewer: 'u1',
-  responsibleParty: 'u2',
-  etag: 'e1',
-});
+// Capability: the PATCH fields each lifecycle transition writes.
+//
+// Pure functions of what they are handed — there is no machine to construct and
+// no Case Type registry to configure, which is what letting Sections declare
+// their own access finally bought this file.
 
 /** @type {import('../src/sharepoint-client.js').CaseTypeConfig} */
 const EMPTY_CONFIG = {
@@ -54,67 +51,62 @@ const CATALOGUE = ['q-a', 'q-needs', 'q-welcome'].map((id) => ({
 }));
 
 /**
- * @param {import('../src/lib/case-statuses.js').CaseStatus} status
+ * The arguments the two reportable-milestone builders take. A helper rather
+ * than a machine, because there is nothing to construct any more: a transition
+ * is a function of what it is handed.
+ *
  * @param {import('../src/sharepoint-client.js').CaseTypeConfig} [config]
- * @param {Partial<import('../src/sharepoint-client.js').CaseRow>} [overrides]
  * @param {import('../src/sharepoint-client.js').QuestionDefinition[]} [catalogue]
  */
-function machineFor(
-  status,
-  config = EMPTY_CONFIG,
-  overrides = {},
-  catalogue = CATALOGUE
-) {
-  return new CaseMachine(
-    { ...BASE_ROW, status, ...overrides },
-    { id: 'u1' },
-    config,
-    { catalogue }
-  );
+function transitionArgs(config = EMPTY_CONFIG, catalogue = CATALOGUE) {
+  return { config, catalogue };
 }
 
-test('CaseMachine reports whether the Case has passed the reportable milestone', () => {
-  assert.equal(machineFor('In-progress').reportable, false);
-  assert.equal(machineFor('Actions In Progress').reportable, true);
-  assert.equal(machineFor('Completed').reportable, true);
-  // Void freezes the Case without ever making it reportable, so the freeze is
-  // its own question rather than something read off this.
-  assert.equal(machineFor('Void').reportable, false);
-  assert.equal(isReportable('In-progress'), false);
-});
+/**
+ * What a reportable-milestone transition stamps from: the three arguments the
+ * class method took positionally, named.
+ *
+ * @param {any} computeOutcome
+ * @param {any} [answers]
+ * @param {string | null} [questionBankVersion]
+ */
+function reportableArgs(computeOutcome, answers, questionBankVersion) {
+  return { computeOutcome, answers, questionBankVersion };
+}
 
-test('CaseMachine stamps questionBankVersion only when supplied', () => {
-  const machine = machineFor('In-progress');
+test('Case transitions: stamps questionBankVersion only when supplied', () => {
   assert.equal(
-    machine.transitionToCompleted(null, undefined, 'sha256:aabbccdd')
-      .questionBankVersion,
+    buildCompletedTransition({
+      ...transitionArgs(),
+      questionBankVersion: 'sha256:aabbccdd',
+    }).questionBankVersion,
     'sha256:aabbccdd'
   );
   assert.equal(
     Object.hasOwn(
-      machine.transitionToCompleted(null, undefined, null),
+      buildCompletedTransition({
+        ...transitionArgs(),
+        questionBankVersion: null,
+      }),
       'questionBankVersion'
     ),
     false
   );
   assert.equal(
     Object.hasOwn(
-      machine.transitionToCompleted(null, undefined),
+      buildCompletedTransition(transitionArgs()),
       'questionBankVersion'
     ),
     false
   );
 });
 
-test('CaseMachine void stamps the terminal fields and no Outcome', () => {
-  const machine = new CaseMachine(
-    { ...BASE_ROW, status: 'In-progress', onHold: true },
-    { id: 'u1' },
-    EMPTY_CONFIG,
-    { catalogue: CATALOGUE, now: () => new Date('2026-03-04T09:00:00Z') }
-  );
-
-  const fields = machine.transitionToVoid('duplicate');
+test('Case transitions: void stamps the terminal fields and no Outcome', () => {
+  const fields = buildVoidTransition({
+    currentUserId: 'u1',
+    reasonKey: 'duplicate',
+    now: () => new Date('2026-03-04T09:00:00Z'),
+  });
 
   assert.deepEqual(fields, {
     status: 'Void',
@@ -140,36 +132,31 @@ test('CaseMachine void stamps the terminal fields and no Outcome', () => {
   }
 });
 
-test('CaseMachine void records the words written under a reason that has no meaning alone', () => {
-  const machine = new CaseMachine(
-    { ...BASE_ROW, status: 'In-progress' },
-    { id: 'u1' },
-    EMPTY_CONFIG,
-    { catalogue: CATALOGUE, now: () => new Date('2026-03-04T09:00:00Z') }
-  );
+test('Case transitions: void records the words written under a reason that has no meaning alone', () => {
+  const voidWith = (/** @type {string} */ note) =>
+    buildVoidTransition({ currentUserId: 'u1', reasonKey: 'other', note });
 
   assert.equal(
-    machine.transitionToVoid('other', '  the file was destroyed  ')
-      .voidReasonNote,
-    'the file was destroyed'
+    voidWith('  the file was destroyed  ').voidReasonNote,
+    'the file was destroyed',
+    'stored trimmed'
   );
-  // Whitespace is not a written reason; the control gates on the same rule, so
-  // this is the second half of one guard rather than a second guard.
-  assert.equal(machine.transitionToVoid('other', '   ').voidReasonNote, null);
+  assert.equal(voidWith('   ').voidReasonNote, null);
 });
 
-test('CaseMachine Send Actions stamps the reportable snapshot without completedAt', () => {
+test('Case transitions: Send Actions stamps the reportable snapshot without completedAt', () => {
   const answers = {
     'q-needs': {
       value: 'No',
       remediationActions: [{ id: 'ra-0', text: 'Retrain.' }],
     },
   };
-  const fields = machineFor('In-progress').transitionToActionsInProgress(
-    () => ({ outcome: 'fail' }),
-    answers,
-    'sha256:v1'
-  );
+  const fields = buildActionsInProgressTransition({
+    ...transitionArgs(),
+    computeOutcome: () => ({ outcome: 'fail' }),
+    answers: answers,
+    questionBankVersion: 'sha256:v1',
+  });
 
   assert.equal(fields.status, CASE_STATUS.ACTIONS_IN_PROGRESS);
   assert.equal(typeof fields.reportableAt, 'string');
@@ -192,21 +179,20 @@ test('CaseMachine Send Actions stamps the reportable snapshot without completedA
   assert.equal(fields.questionBankVersion, 'sha256:v1');
 });
 
-test('CaseMachine Send Actions honours the Case Type remediation SLA in working days', () => {
-  const machine = machineFor('In-progress', {
-    ...EMPTY_CONFIG,
-    remediationSlaWorkingDays: 5,
-  });
-  const fields = machine.transitionToActionsInProgress(
-    () => ({ outcome: 'fail' }),
-    {
-      'q-needs': {
-        value: 'No',
-        remediationActions: [{ id: 'ra-0', text: 'x' }],
+test('Case transitions: Send Actions honours the Case Type remediation SLA in working days', () => {
+  const fields = buildActionsInProgressTransition({
+    ...transitionArgs({ ...EMPTY_CONFIG, remediationSlaWorkingDays: 5 }),
+    ...reportableArgs(
+      () => ({ outcome: 'fail' }),
+      {
+        'q-needs': {
+          value: 'No',
+          remediationActions: [{ id: 'ra-0', text: 'x' }],
+        },
       },
-    },
-    null
-  );
+      null
+    ),
+  });
 
   assert.equal(
     fields.remediationDueDate,
@@ -223,12 +209,13 @@ test('CaseMachine Send Actions honours the Case Type remediation SLA in working 
   );
 });
 
-test('CaseMachine no-actions completion stamps reportable and completed together', () => {
-  const fields = machineFor('In-progress').transitionToCompleted(
-    () => ({ outcome: 'pass' }),
-    { 'q-welcome': { value: 'Yes' } },
-    null
-  );
+test('Case transitions: no-actions completion stamps reportable and completed together', () => {
+  const fields = buildCompletedTransition({
+    ...transitionArgs(),
+    computeOutcome: () => ({ outcome: 'pass' }),
+    answers: { 'q-welcome': { value: 'Yes' } },
+    questionBankVersion: null,
+  });
 
   assert.equal(fields.status, 'Completed');
   assert.equal(typeof fields.reportableAt, 'string');
@@ -238,17 +225,20 @@ test('CaseMachine no-actions completion stamps reportable and completed together
   assert.equal(Object.hasOwn(fields, 'remediationDueDate'), false);
 });
 
-test('CaseMachine snapshots hadRemediation from free-form remediation too', () => {
-  const fields = machineFor('In-progress').transitionToActionsInProgress(
-    () => ({ outcome: 'fail' }),
-    { 'q-welcome': { value: 'No', freeFormRemediation: 'Call back' } },
-    null
-  );
+test('Case transitions: snapshots hadRemediation from free-form remediation too', () => {
+  const fields = buildActionsInProgressTransition({
+    ...transitionArgs(),
+    computeOutcome: () => ({ outcome: 'fail' }),
+    answers: {
+      'q-welcome': { value: 'No', freeFormRemediation: 'Call back' },
+    },
+    questionBankVersion: null,
+  });
   assert.equal(fields.hadRemediation, true);
   assert.equal(fields.effectiveHadRemediation, true);
 });
 
-test('CaseMachine does not stamp hadRemediation for a Question that has left the catalogue', () => {
+test('Case transitions: does not stamp hadRemediation for a Question that has left the catalogue', () => {
   // A Maintainer deprecated the Question after the Reviewer typed the
   // remediation — the operation CLAUDE.md mandates instead of deletion. The
   // Answer keeps the text, but the Remediation tab has no row for it, so the
@@ -260,13 +250,10 @@ test('CaseMachine does not stamp hadRemediation for a Question that has left the
   const deprecated = CATALOGUE.map((q) =>
     q.id === 'q-welcome' ? { ...q, deprecated: true } : q
   );
-  const machine = machineFor('In-progress', EMPTY_CONFIG, {}, deprecated);
-
-  const fields = machine.transitionToActionsInProgress(
-    () => ({ outcome: 'fail' }),
-    orphaned,
-    null
-  );
+  const fields = buildActionsInProgressTransition({
+    ...transitionArgs(EMPTY_CONFIG, deprecated),
+    ...reportableArgs(() => ({ outcome: 'fail' }), orphaned, null),
+  });
   assert.equal(fields.hadRemediation, false);
   assert.equal(fields.effectiveHadRemediation, false);
 
@@ -274,46 +261,48 @@ test('CaseMachine does not stamp hadRemediation for a Question that has left the
   // offered either — is an access question, and lives with the permissions.
 });
 
-test('CaseMachine stamps every lifecycle timestamp from the injected clock', () => {
+test('Case transitions: stamps every lifecycle timestamp from the injected clock', () => {
   const now = () => new Date('2026-07-23T09:30:00.000Z');
   /** @param {'In-progress'|'Actions In Progress'} status */
-  const machine = (status) =>
-    new CaseMachine({ ...BASE_ROW, status }, { id: 'u1' }, EMPTY_CONFIG, {
-      now,
-    });
+  const clock = { now };
 
-  const sendActions = machine('In-progress').transitionToActionsInProgress(
-    null,
-    undefined,
-    null
-  );
+  const sendActions = buildActionsInProgressTransition({
+    ...transitionArgs(EMPTY_CONFIG, []),
+    ...clock,
+    ...reportableArgs(null, undefined, null),
+  });
   assert.equal(sendActions.reportableAt, '2026-07-23T09:30:00.000Z');
   // The SLA start moves with the clock; the working-day arithmetic behind it
   // does not (the holiday list stays frozen).
   assert.equal(sendActions.remediationDueDate, '2026-08-06');
   assert.equal(sendActions.awaitingSince, '2026-07-23T09:30:00.000Z');
 
-  const completed = machine('In-progress').transitionToCompleted(
-    null,
-    undefined,
-    null
-  );
+  const completed = buildCompletedTransition({
+    ...transitionArgs(EMPTY_CONFIG, []),
+    ...clock,
+    ...reportableArgs(null, undefined, null),
+  });
   assert.equal(completed.reportableAt, '2026-07-23T09:30:00.000Z');
   assert.equal(completed.completedAt, '2026-07-23T09:30:00.000Z');
 
   assert.equal(
-    machine('Actions In Progress').transitionToFinalComplete().completedAt,
+    buildFinalCompleteTransition(clock).completedAt,
     '2026-07-23T09:30:00.000Z'
   );
 });
 
-test('CaseMachine closing a Case stops it awaiting the frontline', () => {
+test('Case transitions: closing a Case stops it awaiting the frontline', () => {
   // Both routes to Completed clear the pair: a Reviewer's last unanswered
   // question would otherwise keep a closed Case ageing in their Awaiting
   // Frontline group, with no transition left to clear it.
   for (const fields of [
-    machineFor('In-progress').transitionToCompleted(null, undefined, null),
-    machineFor('Actions In Progress').transitionToFinalComplete(),
+    buildCompletedTransition({
+      ...transitionArgs(),
+      computeOutcome: null,
+      answers: undefined,
+      questionBankVersion: null,
+    }),
+    buildFinalCompleteTransition(),
   ]) {
     assert.equal(fields.status, 'Completed');
     assert.equal(fields.awaitingResponsibleParty, false);
@@ -321,8 +310,8 @@ test('CaseMachine closing a Case stops it awaiting the frontline', () => {
   }
 });
 
-test('CaseMachine final close does not re-snapshot the reportable outcome', () => {
-  const fields = machineFor('Actions In Progress').transitionToFinalComplete();
+test('Case transitions: final close does not re-snapshot the reportable outcome', () => {
+  const fields = buildFinalCompleteTransition();
 
   assert.equal(fields.status, 'Completed');
   assert.equal(typeof fields.completedAt, 'string');

@@ -2,8 +2,9 @@
 
 import { voidReasonsFor, voidReasonNeedsNote } from '../../lib/void-reasons.js';
 import { h } from '../../lib/html.js';
+import { buildVoidTransition } from '../../evaluators/case-transitions.js';
 
-/** @typedef {import('../../evaluators/case-lifecycle.js').CaseLifecycleView} CaseMachine */
+/** @typedef {import('../../evaluators/case-lifecycle.js').CaseLifecycleView} CaseLifecycleView */
 /** @typedef {import('../../sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
 /** @typedef {import('../../lib/void-reasons.js').VoidReason} VoidReason */
 
@@ -22,7 +23,7 @@ import { h } from '../../lib/html.js';
  * alone.
  *
  * @param {{
- *   machine: CaseMachine | null,
+ *   machine: CaseLifecycleView | null,
  *   config: CaseTypeConfig,
  *   reasonKey?: string,
  *   note?: string,
@@ -142,15 +143,16 @@ export function voidControlView({
 }
 
 /**
- * Ask CaseMachine for the void transition, or `null` when this Reviewer, this
- * Case or this reason cannot produce one. The reason is checked against what
+ * The void transition, or `null` when this Reviewer, this Case or this reason
+ * cannot produce one. The reason is checked against what
  * the Case Type offers rather than against the whole vocabulary, so the patch
  * can only ever carry a reason the Reviewer was actually shown — and a reason
  * that needs a note produces no patch at all until one is written.
  *
  * @param {{
- *   machine: CaseMachine | null,
+ *   machine: CaseLifecycleView | null,
  *   config: CaseTypeConfig,
+ *   currentUserId: string,
  *   reasonKey?: string,
  *   note?: string,
  * }} input
@@ -161,5 +163,9 @@ export function voidPatch(input) {
   if (!machine?.canVoid) return null;
   const control = voidControl(input);
   if (control.disabled) return null;
-  return machine.transitionToVoid(control.reason, control.note);
+  return buildVoidTransition({
+    currentUserId: input.currentUserId,
+    reasonKey: control.reason,
+    note: control.note,
+  });
 }

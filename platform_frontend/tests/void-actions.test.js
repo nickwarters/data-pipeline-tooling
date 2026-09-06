@@ -179,6 +179,7 @@ test('voidControl: disabled until a reason is chosen', () => {
 test('voidPatch: null when the viewer cannot void the Case', () => {
   assert.equal(
     voidPatch({
+      currentUserId: 'u1',
       machine: machineFor('In-progress', 'u9'),
       config: CONFIG,
       reasonKey: 'duplicate',
@@ -186,7 +187,12 @@ test('voidPatch: null when the viewer cannot void the Case', () => {
     null
   );
   assert.equal(
-    voidPatch({ machine: null, config: CONFIG, reasonKey: 'duplicate' }),
+    voidPatch({
+      machine: null,
+      currentUserId: 'u1',
+      config: CONFIG,
+      reasonKey: 'duplicate',
+    }),
     null
   );
 });
@@ -194,6 +200,7 @@ test('voidPatch: null when the viewer cannot void the Case', () => {
 test('voidPatch: null for a reason the Case Type does not offer', () => {
   assert.equal(
     voidPatch({
+      currentUserId: 'u1',
       machine: machineFor('In-progress'),
       config: { ...CONFIG, voidReasons: ['withdrawn'] },
       reasonKey: 'duplicate',
@@ -205,6 +212,7 @@ test('voidPatch: null for a reason the Case Type does not offer', () => {
 test('voidPatch: null for a key outside the vocabulary, and for no key at all', () => {
   assert.equal(
     voidPatch({
+      currentUserId: 'u1',
       machine: machineFor('In-progress'),
       config: CONFIG,
       reasonKey: 'not-a-reason',
@@ -212,13 +220,18 @@ test('voidPatch: null for a key outside the vocabulary, and for no key at all', 
     null
   );
   assert.equal(
-    voidPatch({ machine: machineFor('In-progress'), config: CONFIG }),
+    voidPatch({
+      machine: machineFor('In-progress'),
+      currentUserId: 'u1',
+      config: CONFIG,
+    }),
     null
   );
 });
 
-test('voidPatch: an offered reason returns the CaseMachine transition', () => {
+test('voidPatch: an offered reason returns the void transition', () => {
   const fields = voidPatch({
+    currentUserId: 'u1',
     machine: machineFor('Actions In Progress'),
     config: CONFIG,
     reasonKey: 'superseded',
@@ -331,6 +344,7 @@ test('voidControl: a Case Type that does not offer "Other" never asks for a note
 test('voidPatch: null under "Other" until the Reviewer writes the reason', () => {
   assert.equal(
     voidPatch({
+      currentUserId: 'u1',
       machine: machineFor('In-progress'),
       config: CONFIG,
       reasonKey: 'other',
@@ -339,6 +353,7 @@ test('voidPatch: null under "Other" until the Reviewer writes the reason', () =>
   );
   assert.equal(
     voidPatch({
+      currentUserId: 'u1',
       machine: machineFor('In-progress'),
       config: CONFIG,
       reasonKey: 'other',
@@ -350,6 +365,7 @@ test('voidPatch: null under "Other" until the Reviewer writes the reason', () =>
 
 test('voidPatch: a written "Other" carries the note onto the row, and a keyed reason clears it', () => {
   const written = voidPatch({
+    currentUserId: 'u1',
     machine: machineFor('In-progress'),
     config: CONFIG,
     reasonKey: 'other',
@@ -359,6 +375,7 @@ test('voidPatch: a written "Other" carries the note onto the row, and a keyed re
   assert.equal(written?.voidReasonNote, 'the file was destroyed');
 
   const keyed = voidPatch({
+    currentUserId: 'u1',
     machine: machineFor('In-progress'),
     config: CONFIG,
     reasonKey: 'duplicate',
