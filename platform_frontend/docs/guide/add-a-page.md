@@ -142,8 +142,13 @@ import * as greeting from './pages/greeting.js';
 ```
 
 `registerRoutes()` builds the `createStoreRoute()` adapter for each entry and
-registers it on every path in `paths`; add a `guard: (context) => boolean` if
-the route needs an eligibility check before mounting.
+registers it on every path in `paths`. Add a `guard: (capabilities) => boolean`
+if the route needs an eligibility check before mounting — a pure predicate; the
+engine owns the bounce that follows a `false`. Add a
+`nav: { label, order }` if the page belongs in the navigation bar, and its
+audience defaults to that same guard, so most pages say who they are for once.
+Add `defaultFor` with a `defaultForOrder` only if this page is where some user
+should land when they have asked for nothing in particular.
 
 `src/app-config.js` is the one place that may name a page module — nothing
 outside `src/pages/` may reach a page any other way, and the contract test
@@ -154,7 +159,8 @@ whole of the cost.
 `#/question-bank` is the single entry that still fetches its page on demand with
 a `load` thunk; ADR-0042 records why, and a new page does not need one.
 
-Add navigation only when the page is meant to be discoverable there.
+Nav and landing both come from that one entry, so there is no second file to
+edit and no hand-written link to keep in step.
 
 ## 6. Prove the public behaviour
 

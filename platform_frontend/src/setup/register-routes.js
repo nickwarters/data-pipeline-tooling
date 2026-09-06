@@ -1,4 +1,23 @@
 // @ts-check
+
+/**
+ * The page engine: it registers what the composition root declares, and
+ * answers the two other questions that composition asks.
+ *
+ * It holds no list. `APP_CONFIG.pagePlugins` in `src/app-config.js` says which
+ * pages exist, and this module turns that into the three things the running
+ * application needs — the routes the router registers, the items the nav bar
+ * draws, and the path a user lands on when they have asked for nothing in
+ * particular. Deriving those here rather than beside the list is the same split
+ * the Section engine keeps: the config declares, the engine derives, and
+ * neither names what the other owns.
+ *
+ * Failure is contained differently on the two paths, deliberately. A route that
+ * fails to register costs its own route and is logged; a nav entry that throws
+ * is fatal and visible, because a link that quietly vanished is
+ * indistinguishable from "you do not have permission to see that".
+ */
+
 import { registerStoreRoute } from '../core/store-route.js';
 import { redirectTo } from '../lib/navigate.js';
 import { APP_CONFIG } from '../app-config.js';
