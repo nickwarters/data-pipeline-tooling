@@ -658,6 +658,43 @@ function ignoredSiblingKeys(cond) {
 }
 
 /**
+ * A Case Type trying to say which Case Row fields a Section may write.
+ *
+ * There is no such descriptor key, and the point of this check is that there
+ * never is one again. The Admin Details Section took its editable fields from
+ * Case Type configuration, so a typo PATCHed a column that did not exist and
+ * `['status']` would have written the Case status straight to the row past
+ * `CaseMachine`. What a Section writes is a fact about the Section and is
+ * declared on its plugin; which Case Types have that Section is what a
+ * descriptor is for.
+ *
+ * Named shapes rather than a general rule, because an unknown key is already
+ * rejected elsewhere — this exists to make the failure say *why*.
+ *
+ * @param {string} slug
+ * @param {Record<string, any>} sections
+ * @param {(message: string) => Failure} fail
+ * @returns {Failure[]}
+ */
+function sectionWriteDeclarations(slug, sections, fail) {
+  const WRITE_KEYS = ['editableFields', 'writes', 'writableFields', 'fields'];
+  /** @type {Failure[]} */
+  const failures = [];
+  for (const [section, sectionConfig] of Object.entries(sections ?? {})) {
+    if (!sectionConfig || typeof sectionConfig !== 'object') continue;
+    for (const key of WRITE_KEYS) {
+      if (!Object.hasOwn(sectionConfig, key)) continue;
+      failures.push(
+        fail(
+          `Case Type "${slug}": \`sections.${section}.${key}\` declares what a Section may persist, which is the Section's own fact and belongs on its plugin — a Case Type may enable a Section, not widen what it writes`
+        )
+      );
+    }
+  }
+  return failures;
+}
+
+/**
  * @param {string} slug
  * @param {string} file
  * @param {any} config
@@ -677,12 +714,14 @@ function checkSections(slug, file, config) {
   });
   const sections = config?.sections;
   if (sections === undefined) return [];
+  const writeDeclarations = sectionWriteDeclarations(slug, sections, fail);
   if (
     sections === null ||
     typeof sections !== 'object' ||
     Array.isArray(sections)
   ) {
     return [
+      ...writeDeclarations,
       fail(
         `Case Type "${slug}": explicit \`sections\` must be an object containing a \`summary\` Section`
       ),
@@ -690,53 +729,56 @@ function checkSections(slug, file, config) {
   }
   if (!Object.hasOwn(sections, 'summary')) {
     return [
+      ...writeDeclarations,
       fail(
         `Case Type "${slug}": explicit \`sections\` must include the \`summary\` Section`
       ),
     ];
   }
-  return Object.entries(/** @type {Record<string, any>} */ (sections)).flatMap(
-    ([key, value]) => {
-      if (!known.has(/** @type {any} */ (key))) {
-        return [
-          fail(
-            `Case Type "${slug}": unknown \`sections\` key "${key}" — no such Case Review Section`
-          ),
-        ];
-      }
-      // The role vocabulary is closed and code-owned, so a typo in a Summary role
-      // list would otherwise be silent: the block would simply be composed for
-      // nobody holding that name, which is exactly what an unnamed role looks like.
-      const showIn = value?.showInSummary;
-      const failures = Array.isArray(showIn)
-        ? showIn
-            .filter((r) => !knownRoles.has(r))
-            .map((r) =>
-              fail(
-                `Case Type "${slug}": unknown role "${r}" in \`sections.${key}.showInSummary\``
+  return writeDeclarations.concat(
+    Object.entries(/** @type {Record<string, any>} */ (sections)).flatMap(
+      ([key, value]) => {
+        if (!known.has(/** @type {any} */ (key))) {
+          return [
+            fail(
+              `Case Type "${slug}": unknown \`sections\` key "${key}" — no such Case Review Section`
+            ),
+          ];
+        }
+        // The role vocabulary is closed and code-owned, so a typo in a Summary role
+        // list would otherwise be silent: the block would simply be composed for
+        // nobody holding that name, which is exactly what an unnamed role looks like.
+        const showIn = value?.showInSummary;
+        const failures = Array.isArray(showIn)
+          ? showIn
+              .filter((r) => !knownRoles.has(r))
+              .map((r) =>
+                fail(
+                  `Case Type "${slug}": unknown role "${r}" in \`sections.${key}.showInSummary\``
+                )
               )
+          : [];
+        const initiatedBy = value?.initiatedBy;
+        if (initiatedBy !== undefined && key !== 'conversation') {
+          failures.push(
+            fail(
+              `Case Type "${slug}": \`initiatedBy\` is only valid on the Conversation Section, not \`sections.${key}\``
             )
-        : [];
-      const initiatedBy = value?.initiatedBy;
-      if (initiatedBy !== undefined && key !== 'conversation') {
-        failures.push(
-          fail(
-            `Case Type "${slug}": \`initiatedBy\` is only valid on the Conversation Section, not \`sections.${key}\``
-          )
-        );
-      } else if (
-        key === 'conversation' &&
-        initiatedBy !== undefined &&
-        !['reviewer', 'responsibleParty'].includes(initiatedBy)
-      ) {
-        failures.push(
-          fail(
-            `Case Type "${slug}": \`sections.conversation.initiatedBy\` must be "reviewer" or "responsibleParty"`
-          )
-        );
+          );
+        } else if (
+          key === 'conversation' &&
+          initiatedBy !== undefined &&
+          !['reviewer', 'responsibleParty'].includes(initiatedBy)
+        ) {
+          failures.push(
+            fail(
+              `Case Type "${slug}": \`sections.conversation.initiatedBy\` must be "reviewer" or "responsibleParty"`
+            )
+          );
+        }
+        return failures;
       }
-      return failures;
-    }
+    )
   );
 }
 

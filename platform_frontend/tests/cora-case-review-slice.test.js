@@ -218,6 +218,11 @@ function renderShippedState(
       actions.push(action);
       state = slice.reducer(state, action);
       slice.render(container, state, tools);
+      // The real `tools.dispatch` is `(action) => store.dispatch(action)`, and
+      // the store returns the state it just produced. A caller that reads a
+      // merged value back off it — the Section blob write seam does — needs
+      // this stand-in to keep that half of the contract.
+      return state;
     },
     isActive: () => active,
   };
@@ -5744,6 +5749,181 @@ test("section actions: a Section cannot shadow one of the page's own", async () 
       "the page's own save bridge is intact"
     );
     assert.equal(actions.save.edited, undefined);
+  } finally {
+    configureAppSections();
+  }
+});
+
+// --- A Section's write seam ---
+
+/**
+ * A Section that declares what it may persist and persists it.
+ *
+ * @param {string} id
+ * @param {any} writes
+ * @param {{ seen: any[] }} log
+ * @returns {any}
+ */
+function writingSection(id, writes, log) {
+  return {
+    id,
+    tab: true,
+    tabOrder: 91,
+    summaryBlock: false,
+    summaryOrder: 0,
+    showInSummaryDefault: false,
+    defaultLabels: { tab: id, heading: id },
+    evaluateAccess: () => 'edit',
+    writes,
+    createActions: (/** @type {any} */ { persist, persistBlob }) => ({
+      persist,
+      persistBlob,
+    }),
+    view: (/** @type {any} */ ctx) => {
+      log.seen.push(ctx.actions);
+      return null;
+    },
+  };
+}
+
+/**
+ * @param {any} writes
+ * @param {any} [saveQueue]
+ */
+async function mountWritingSection(writes, saveQueue = {}) {
+  const { registerSectionPlugin } = await import('../src/sections/registry.js');
+  const log = { seen: /** @type {any[]} */ ([]) };
+  registerSectionPlugin(writingSection('writerSection', writes, log));
+
+  const loaded = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: {
+      ...snapshot(),
+      access: { ...snapshot().access, writerSection: 'edit' },
+    },
+  });
+  const view = renderShippedState(loaded, {
+    saveQueue: { subscribeStatus: () => () => {}, ...saveQueue },
+  });
+  return { view, actions: () => log.seen.at(-1).writerSection };
+}
+
+test('section writes: a Section persists a field it declared', async () => {
+  /** @type {any[]} */
+  const enqueued = [];
+  try {
+    const { view, actions } = await mountWritingSection(
+      { fields: ['notes'] },
+      { enqueue: (/** @type {any[]} */ ...args) => enqueued.push(args) }
+    );
+
+    actions().persist('notes', 'a reviewer note');
+
+    assert.equal(
+      view.state.routes.caseReview.snapshot.caseRow.notes,
+      'a reviewer note'
+    );
+    assert.deepEqual(enqueued, [['c1', 'notes', 'a reviewer note']]);
+  } finally {
+    configureAppSections();
+  }
+});
+
+test('section writes: a field the Section did not declare moves nothing', async () => {
+  /** @type {any[]} */
+  const enqueued = [];
+  try {
+    const { view, actions } = await mountWritingSection(
+      { fields: ['notes'] },
+      { enqueue: (/** @type {any[]} */ ...args) => enqueued.push(args) }
+    );
+    const before = view.state.routes.caseReview.snapshot.caseRow;
+
+    actions().persist('caseJustification', 'not declared');
+
+    assert.equal(view.state.routes.caseReview.snapshot.caseRow, before);
+    assert.deepEqual(enqueued, [], 'and nothing is enqueued either');
+  } finally {
+    configureAppSections();
+  }
+});
+
+test('section writes: a lifecycle field is refused even when declared, and even raw', async () => {
+  /** @type {any[]} */
+  const enqueued = [];
+  try {
+    // Declaring it is the mistake this refuses. `status` and
+    // `assignedReviewer` are what `snapshot.machine` and access resolution read
+    // from their own load-time copy of the row.
+    const { view, actions } = await mountWritingSection(
+      { fields: ['status', 'assignedReviewer'] },
+      { enqueue: (/** @type {any[]} */ ...args) => enqueued.push(args) }
+    );
+    const before = view.state.routes.caseReview.snapshot.caseRow;
+
+    actions().persist('status', 'Completed');
+    actions().persist('assignedReviewer', 'someone@example.com');
+    assert.equal(view.state.routes.caseReview.snapshot.caseRow, before);
+    assert.deepEqual(enqueued, []);
+
+    // And past the seam entirely: the reducer takes `any`, so a raw dispatch
+    // compiles whatever a writer's types claim.
+    view.dispatch({
+      type: 'case/section-write',
+      section: 'writerSection',
+      field: 'status',
+      value: 'Completed',
+    });
+    assert.equal(view.state.routes.caseReview.snapshot.caseRow, before);
+  } finally {
+    configureAppSections();
+  }
+});
+
+test('section writes: two edits to one blob across a re-render merge', async () => {
+  /** @type {any[]} */
+  const enqueued = [];
+  try {
+    const { view, actions } = await mountWritingSection(
+      { blobs: ['answers'] },
+      { enqueue: (/** @type {any[]} */ ...args) => enqueued.push(args) }
+    );
+
+    actions().persistBlob('answers', { q1: { value: 'Yes' } });
+    // The view is rebuilt between the two, which is where a render closure
+    // holding the pre-edit blob loses the first edit.
+    view.dispatch({ type: 'case/save-status-changed', status: 'saving' });
+    actions().persistBlob('answers', { q2: { value: 'No' } });
+
+    assert.deepEqual(view.state.routes.caseReview.snapshot.caseRow.answers, {
+      q1: { value: 'Yes' },
+      q2: { value: 'No' },
+    });
+    // What is enqueued is the merged blob the store holds, not the patch.
+    assert.deepEqual(enqueued.at(-1), [
+      'c1',
+      'answers',
+      { q1: { value: 'Yes' }, q2: { value: 'No' } },
+    ]);
+  } finally {
+    configureAppSections();
+  }
+});
+
+test('section writes: a Section declaring nothing persists nothing', async () => {
+  /** @type {any[]} */
+  const enqueued = [];
+  try {
+    const { view, actions } = await mountWritingSection(undefined, {
+      enqueue: (/** @type {any[]} */ ...args) => enqueued.push(args),
+    });
+    const before = view.state.routes.caseReview.snapshot.caseRow;
+
+    actions().persist('notes', 'nope');
+    actions().persistBlob('answers', { q1: { value: 'Yes' } });
+
+    assert.equal(view.state.routes.caseReview.snapshot.caseRow, before);
+    assert.deepEqual(enqueued, []);
   } finally {
     configureAppSections();
   }

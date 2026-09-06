@@ -30,10 +30,30 @@
  *   config?: CaseTypeConfig,
  * }) => Mode} evaluateAccess
  * @property {(panelContext: PanelContext) => Node | Node[] | null} view
- * @property {(tools: { dispatch: (action: any) => unknown, sectionId: string }) => Record<string, Function>} [createActions]
+ * @property {{ fields?: readonly string[], blobs?: readonly string[] }} [writes]
+ *   Optional. The Case Row columns this Section may persist: `fields` for
+ *   plain values, `blobs` for JSON-object columns it merges keys into. A
+ *   Section that declares nothing can persist nothing.
+ *
+ *   **Data on the plugin, never Case Type configuration.** A Case Type saying
+ *   which fields a Section may write is what made the Admin Details Section
+ *   dangerous: the list came from a descriptor, so a typo PATCHed a column that
+ *   did not exist and `['status']` would have written the Case status straight
+ *   to the row past `CaseMachine`. What a Section writes is a fact about the
+ *   Section; which Case Types have it is the descriptor's business.
+ *
+ *   Some fields no Section may declare at all, whatever it puts here — the ones
+ *   `CaseMachine` writes and the ones the access matrix froze a copy of at
+ *   load. Declaring one is refused rather than honoured.
+ * @property {(tools: { dispatch: (action: any) => unknown, sectionId: string, persist: (field: string, value: any) => void, persistBlob: (blob: string, patch: Record<string, any>) => void }) => Record<string, Function>} [createActions]
  *   Optional. This Section's own callbacks, reached by its view as
  *   `actions[sectionId].whatever(...)` — one namespace rather than a new
  *   top-level `PanelActions` member per Section.
+ *
+ *   `persist` and `persistBlob` are the Section's way to the SaveQueue, and
+ *   they honour `writes` above: a field this Section did not declare is
+ *   refused, silently and in both directions — the store does not move and
+ *   nothing is enqueued.
  *
  *   Called **once per mount**, not per render. A callback captured by a
  *   memoised child has to stay valid across renders, which is the same reason
