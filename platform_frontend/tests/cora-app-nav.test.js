@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
 import { makePermissions } from './helpers/fixtures.js';
+import { readFileSync } from 'node:fs';
 import { APP_CONFIG } from '../src/app-config.js';
 
 installDom();
@@ -336,4 +337,34 @@ test('AppNav: a nav predicate that throws is not silently a missing link', () =>
   } finally {
     config.pagePlugins = original;
   }
+});
+
+test('the nav view names no capability and no page module', () => {
+  // The ratchet on what this replaced: six capabilities read by hand, with the
+  // bar's order implied by the order of the `if`s that read them. A branch
+  // that came back would be invisible to the persona tests above, which only
+  // see the links a persona happens to have.
+  const source = readFileSync(
+    new URL('../src/components/sections/cora-app-nav.js', import.meta.url),
+    'utf8'
+  );
+
+  for (const capability of [
+    'isReviewer',
+    'isAdviser',
+    'isReviewerManager',
+    'isControls',
+    'isMaintainer',
+    'canSearchCases',
+    'ownedCaseTypes',
+    'ownedJourneyCaseTypes',
+    'capabilities',
+  ]) {
+    assert.doesNotMatch(
+      source,
+      new RegExp(capability),
+      `cora-app-nav.js must not read ${capability} — which links a user gets is a property of what the application composes`
+    );
+  }
+  assert.doesNotMatch(source, /pages\//);
 });
