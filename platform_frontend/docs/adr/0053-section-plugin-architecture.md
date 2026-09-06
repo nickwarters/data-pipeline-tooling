@@ -86,7 +86,7 @@ interface SectionPlugin {
 ### 3. Decommissioning the Legacy Matrix and Static Panel Map
 
 - **`MATRIX` Decommissioned:** The monolithic `MATRIX` constant in `src/services/section-access.js` is removed. `evaluateAccess` now resolves the section plugin and delegates directly to `plugin.evaluateAccess(ctx)`.
-- **`SECTION_PANELS` Decommissioned:** The static `SECTION_PANELS` map in `src/pages/cora-case-review/section-panels.js` is deleted. View rendering logic is inlined into each standalone section plugin. `section-panels.js` remains exclusively for shared JSDoc typedefs (`PanelContext`, `PanelActions`).
+- **`SECTION_PANELS` Decommissioned:** The static `SECTION_PANELS` map in `src/pages/cora-case-review/section-panels.js` is deleted. View rendering logic is inlined into each standalone section plugin. `section-panels.js` remains exclusively for shared JSDoc typedefs (`PanelContext`, `PanelActions`). **A second id-to-renderer switch survived this and was missed — see the correction below.**
 - **Dead Code Cleanup:** All compatibility shims and unreferenced exports (such as `tabEntries`) are retired.
 
 ### 4. Preserving the Performance Constraint (~5ms Keystroke SLA)
@@ -106,7 +106,7 @@ The Section Plugin Architecture satisfies this constraint:
 - **Cohesion:** Section access, tab metadata, labels, and rendering live together in a single plugin module per section (`src/sections/<section>/<section>-plugin.js`).
 - **Extensibility:** A Case Type can enable, disable and configure a Section through its `sections` descriptor without touching that Section's code, and a new Section is authored as one module rather than as edits spread across an access matrix, a panel map and a registry. It is not free of framework edits: `adminDetails` needed a `SectionConfig` shape, a `verify-config.js` rule and a reducer branch, because a descriptor may select behaviour but may not introduce it.
 - **Robust Testing:** Every section plugin is independently unit-tested for contract conformance, access evaluation, and view rendering.
-- **Clean Architecture:** Eliminates legacy `MATRIX` and `SECTION_PANELS` drift risks and achieves 0 dead code across the frontend.
+- **Clean Architecture:** Eliminates legacy `MATRIX` and `SECTION_PANELS` drift risks and achieves 0 dead code across the frontend. Read as amended by the correction below: one of the two switch shapes this claimed to have eliminated was still there.
 
 ### Negative / Trade-offs
 
@@ -182,3 +182,38 @@ The runtime structures (`sectionIds()`, the resolved `access` map, the Summary
 block list) are keyed by `string`, because a plugin registered at boot is in
 them and cannot be in a union projected from the manifest. That split is
 deliberate; collapsing it either way loses something real.
+
+## Correction: the id-to-renderer switch outlived this ADR by a month
+
+**What this ADR claimed.** That the static id-to-renderer map was decommissioned
+and its drift risk eliminated.
+
+**What was true.** `SECTION_PANELS` went. A second switch of exactly the same
+shape did not: `renderSectionBlock` in
+`src/pages/cora-case-review/summary-view.js` was an if-chain over five hardcoded
+Section ids returning `null` for anything else, and it decided which Sections
+could contribute a block to the Summary. It survived a decommissioning that
+named the thing it was doing because it was not called `SECTION_PANELS` — the
+sweep matched a symbol, and this was a control-flow shape with no symbol to
+match.
+
+**What it cost.** A Section could declare `summaryBlock: true`, be composed into
+the Summary by `summaryBlockIds()` and `summarySectionsFor()`, and then draw
+nothing. Not an error — a blank. Every derived structure agreed the Section had
+a block; the one thing that rendered it disagreed silently.
+
+**When it actually went.** Sep 2026, over four tickets: `summaryView` was added
+to the plugin contract with the delegation in front of the chain, the five
+renderers moved onto their plugins two and then three at a time, and the chain
+was deleted. `summary-view.js` now names no Section, and a test holds it to
+that — the sweep this ADR described had no such ratchet, which is the other half
+of why the switch survived it.
+
+**What is still true of the wider claim.** A Section id still appears in a few
+places outside its own plugin, and none of them is a renderer switch: the
+Appeals feature switch in `src/services/section-access.js` (deliberate, and
+documented in `docs/guide/feature-switches.md`), `READ_THROUGH_SUMMARY` in the
+same file, and the Conversation overlay's special-casing in
+`src/pages/cora-case-review.js`. Each is a real coupling worth its own ticket;
+recording them here is the point, since the last time this was described as
+finished it was not.

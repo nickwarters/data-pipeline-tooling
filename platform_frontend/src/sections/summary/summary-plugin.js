@@ -61,6 +61,7 @@ export const SummaryPlugin = /** @type {const} */ ({
       'div',
       { className: 'cora-summary' },
       summaryView({
+        heading: snapshot?.sectionLabels?.summary?.heading ?? 'Summary',
         computeOutcome: config?.computeOutcome,
         answers: snapshot?.answers ?? {},
         allAnswered: snapshot?.allAnswered ?? false,

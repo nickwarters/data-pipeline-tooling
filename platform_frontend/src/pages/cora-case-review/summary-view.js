@@ -25,7 +25,8 @@ import { GENERAL_QUESTIONS_TITLE } from './general-questions-view.js';
  * @property {import('../../sharepoint-client.js').CaptureGroup[]} captureGroups
  * @property {import('../../sharepoint-client.js').CaseDetailField[]} detailFields
  * @property {import('../../sharepoint-client.js').OutcomeOption[]} outcomeOptions
- * @property {import('../../sharepoint-client.js').ResolvedSectionLabels} [sectionLabels] Resolved section display copy; defaults to the standard copy so the component stays usable standalone.
+ * @property {string} [heading] This view's own heading, already resolved against the Case Type's copy by the Section that renders it. 'Summary' when absent, so the view stays usable standalone.
+ * @property {import('../../sharepoint-client.js').ResolvedSectionLabels} [sectionLabels] The Case Type's resolved display copy, read only to give each Section block its own heading. A Section absent from it falls back to that Section's own declared default.
  * @property {import('../../sharepoint-client.js').GeneralQuestionField[]} [generalQuestions] The Case Type's General Questions, rolled up read-only. Display only — they reach no evaluator here either.
  * @property {import('../../evaluators/general-questions.js').GeneralQuestionsPlacement} [generalQuestionsPlacement] Which side of the configured Summary blocks the roll-up sits on. Already resolved by the caller via `resolveGeneralQuestionsPlacement()` — this view never sees the raw config value, so it cannot disagree with the Review tab. 'after' when absent, so the view stays usable standalone.
  * @property {'reviewer' | 'responsibleParty'} [audience] Which side is reading, from `remediationAudience()` — the same value the Remediation tab gets. It selects one thing only: whether the remediation roll-up shows each resolution's details / justification. Absent means `responsibleParty`, the narrower rendering, so a caller that does not say fails closed.
@@ -36,7 +37,7 @@ import { GENERAL_QUESTIONS_TITLE } from './general-questions-view.js';
  * @returns {Node[]}
  */
 export function summaryView(props) {
-  const heading = h('h2', {}, labelsOf(props).summary.heading);
+  const heading = h('h2', {}, props.heading ?? 'Summary');
 
   // The Outcome snapshot is stamped at the reportable milestone, so
   // read the frozen value from reportable on — not only once Completed. Once
@@ -96,33 +97,6 @@ export function summaryView(props) {
 }
 
 /**
- * The effective section display copy for a render: the resolved map threaded by
- * the page, or the defaults when the component is used standalone.
- * @param {SummaryProps} props
- * @returns {import('../../sharepoint-client.js').ResolvedSectionLabels}
- */
-function labelsOf(props) {
-  return props.sectionLabels ?? STANDALONE_LABELS;
-}
-
-/**
- * The copy this component falls back on when it is rendered standalone, with no
- * page to thread the resolved map through. Held here rather than imported from
- * the Section layer: a view is handed its copy, and reaching back for it put the
- * page tree inside the plugin manifest's own import cycle.
- *
- * @type {import('../../sharepoint-client.js').ResolvedSectionLabels}
- */
-const STANDALONE_LABELS = {
-  details: { tab: 'Details', heading: 'Case Details' },
-  questions: { tab: 'Review', heading: 'Questions' },
-  issues: { tab: 'Issues', heading: 'Issues' },
-  remediation: { tab: 'Remediation', heading: 'Remediation' },
-  summary: { tab: 'Summary', heading: 'Summary' },
-  notes: { tab: 'Notes', heading: 'Notes' },
-};
-
-/**
  * What a Section's own `summaryView` is handed: everything the Summary renders
  * from, plus the heading already resolved for that Section.
  *
@@ -137,12 +111,17 @@ const STANDALONE_LABELS = {
  */
 
 /**
- * One Section's block in the Summary.
+ * One Section's block in the Summary, drawn by that Section.
  *
- * A Section that declares its own `summaryView` draws itself. The if-chain
- * below is what is left of the id-to-renderer switch the Section Plugin
- * Architecture set out to remove, and it is being emptied one Section at a
- * time; a Section that has moved across never reaches it.
+ * This file names no Section. It did, as an if-chain over five ids returning
+ * null for anything else — which is why a Section that declared a Summary block
+ * reached `summarySectionsFor()` and then drew a blank. `null` here means
+ * something different and narrower: this Section contributes no block.
+ *
+ * The heading is resolved here because looking one up means naming a Section
+ * id, and a Section drawing its own block should not have to know which one it
+ * is. A Case Type's override wins; otherwise the Section's own declared
+ * default, which is the only other place that copy exists.
  *
  * @param {SummaryProps} props
  * @param {Section} section
@@ -151,15 +130,13 @@ const STANDALONE_LABELS = {
  */
 function renderSectionBlock(props, section, caseRow) {
   const plugin = getSectionPlugin(section);
-  if (plugin?.summaryView) {
-    return plugin.summaryView({
-      ...props,
-      caseRow,
-      heading:
-        labelsOf(props)[section]?.heading ?? plugin.defaultLabels.heading,
-    });
-  }
-  return null;
+  if (!plugin?.summaryView) return null;
+  return plugin.summaryView({
+    ...props,
+    caseRow,
+    heading:
+      props.sectionLabels?.[section]?.heading ?? plugin.defaultLabels.heading,
+  });
 }
 
 /**
