@@ -527,3 +527,25 @@ test('landing: two rules at the same rank throw, naming both', () => {
     }
   );
 });
+
+// --- The landing rules this application actually declares ---
+
+test('landing: a Controls user starts on the cross-Case-Type lookup', () => {
+  assert.equal(
+    resolveDefaultLandingPath(
+      makePermissions({ isReviewer: false, isControls: true })
+    ),
+    '#/search'
+  );
+});
+
+test('landing: Controls yields to a user who also has a queue of their own', () => {
+  // Ranked, not first-match: a Controls user who is also something else gets
+  // the more specific answer, and which it is comes from defaultForOrder.
+  const controls = makePermissions({ isReviewer: false, isControls: true });
+  const ranks = APP_CONFIG.pagePlugins
+    .filter((plugin) => plugin.defaultFor?.(controls))
+    .map((plugin) => plugin.defaultForOrder);
+
+  assert.deepEqual(ranks, [30], 'Controls is the last of the landing ranks');
+});

@@ -180,6 +180,10 @@ export const APP_CONFIG = {
       id: 'roadmap',
       paths: ['#/roadmap'],
       page: roadmapPage,
+      // The other honestly-differing pair: the route is deliberately open to
+      // anyone with the URL — a roadmap is not sensitive — while the link is
+      // for people with a job here, so `isVisible` is written out rather than
+      // defaulted from a guard this page does not want.
       nav: { label: 'Roadmap', order: 20, isVisible: hasAnyRole },
     },
     {
@@ -200,6 +204,12 @@ export const APP_CONFIG = {
       // groups to it lives in one place, so widening it never touches a route.
       guard: (caps) => caps.canSearchCases,
       nav: { label: 'Search', order: 70 },
+      // Controls read across Case Types rather than working a queue of their
+      // own, so the cross-Case-Type lookup is where their day starts. Ranked
+      // last of the three: someone who is Controls *and* a Reviewer or an
+      // Adviser has a queue, and that is the more specific answer.
+      defaultFor: (caps) => caps.isControls,
+      defaultForOrder: 30,
     },
   ],
 };
