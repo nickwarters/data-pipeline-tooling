@@ -121,6 +121,10 @@ export const APP_CONFIG = {
    * @type {readonly PagePlugin[]}
    */
   pagePlugins: [
+    // Deliberately no `defaultFor`. `#/` is the fallback every unmatched
+    // viewer already reaches, and home branches on `isVisitor` to render the
+    // guidance written for exactly that person. A rule here would make the
+    // same page reachable two ways with two different precedences.
     { id: 'root', paths: ['#/'], page: homePage },
     {
       id: 'dashboard',
@@ -129,6 +133,11 @@ export const APP_CONFIG = {
       // An open route with a narrowed nav item: the link is for people with a
       // job here, but nothing stops anyone opening the URL.
       nav: { label: 'Dashboard', order: 10, isVisible: hasAnyRole },
+      // A Reviewer's day starts on the Dashboard, and takes the first rank:
+      // someone who reviews and also advises or reads across Case Types is
+      // here to review.
+      defaultFor: (caps) => caps.isReviewer,
+      defaultForOrder: 10,
     },
     {
       id: 'my-stats',
