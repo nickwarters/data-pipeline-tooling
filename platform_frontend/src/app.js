@@ -13,6 +13,8 @@
 // Covering that would take a fallback element in the host page markup that a
 // successful boot clears, which is not done here.
 
+import { APP_CONFIG } from './app-config.js';
+import { configureSections } from './sections/registry.js';
 import { resolveEnvironment } from './config/environment.js';
 import { createSharePointClient } from './services/create-sharepoint-client.js';
 import { SaveQueue } from './services/save-queue.js';
@@ -31,6 +33,13 @@ import { registerRoutes } from './setup/register-routes.js';
 
 /** @returns {Promise<void>} */
 async function boot() {
+  // What this application is made of is stated in one place, and pushed into
+  // the engines that run on it before anything can read them. First, not
+  // merely before the router mounts: a Case Type module resolved below is
+  // application code too, and configuring ahead of all of it means nothing has
+  // to reason about how far down the list a Section is first read.
+  configureSections(APP_CONFIG.sectionPlugins);
+
   const env = resolveEnvironment();
   const client = await createSharePointClient(
     new URLSearchParams(location.search),

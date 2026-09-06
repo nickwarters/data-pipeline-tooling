@@ -306,6 +306,9 @@ be identical, which is the cheapest proof the rebase did not lose anything.
 ```
 src/
   app.js                        # entry point
+  app-config.js                 # THE composition root: the one place naming what this application
+                                #   is made of (APP_CONFIG.sectionPlugins), and the source of the
+                                #   Section id union projected from it (ADR-0054)
   sharepoint-client.js          # shared typedefs (SharePointClient interface)
 
   lib/                          # framework-level primitives (no domain knowledge)
