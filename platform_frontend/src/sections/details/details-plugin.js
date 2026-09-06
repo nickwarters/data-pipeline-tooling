@@ -1,6 +1,7 @@
 // src/sections/details/details-plugin.js
 // @ts-check
 import { caseDetailsView } from '../../pages/cora-case-review/details-view.js';
+import { detailsSummaryView } from '../../pages/cora-case-review/details-summary-view.js';
 import {
   voidControl,
   voidControlView,
@@ -30,6 +31,8 @@ export const DetailsPlugin = /** @type {const} */ ({
     }
     return 'hidden';
   },
+
+  summaryView: detailsSummaryView,
 
   view({ snapshot, caseRow, config, route, dispatch, actions }) {
     const control = voidControl({

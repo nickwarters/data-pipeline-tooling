@@ -4,6 +4,7 @@ import { isFrozen } from '../../evaluators/case-lifecycle.js';
 import { withGeneralQuestions } from '../../pages/cora-case-review/general-questions-view.js';
 import { resolveGeneralQuestionsPlacement } from '../../evaluators/general-questions.js';
 import { groupOutcomeSet } from '../../pages/cora-case-review/answer-actions.js';
+import { questionsSummaryView } from '../../pages/cora-case-review/questions-summary-view.js';
 
 /**
  * @param {import('../../pages/cora-case-review.js').CaseReviewSnapshot} snapshot
@@ -61,6 +62,8 @@ export const QuestionsPlugin = /** @type {const} */ ({
     }
     return 'hidden';
   },
+
+  summaryView: questionsSummaryView,
 
   view({ snapshot, actions }) {
     if (typeof actions?.questionsView?.view !== 'function') {

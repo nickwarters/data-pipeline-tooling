@@ -417,7 +417,12 @@ src/
       general-questions-view.js # pure, non-outcome-driving General Questions section (#472)
       conversation-view.js     # CASE-3 pure conversation panel + unchanged JSON-blob PATCH effect
       notes-view.js            # CASE-3 pure Notes and Case Justification view; SaveQueue remains the writer
-      summary-view.js          # CASE-4 pure configured Summary view
+      summary-view.js          # CASE-4 pure configured Summary view: the Outcome, the key dates, the
+                               #   General Questions roll-up, and the delegation to each Section's own
+                               #   summaryView. Names no Section
+      details-summary-view.js  # the Case Details Summary block, drawn by DetailsPlugin.summaryView
+      questions-summary-view.js # the Questions pass/fail counts Summary block, drawn by
+                               #   QuestionsPlugin.summaryView
       outcome-view.js          # CASE-4 configured Outcome view
       completion-actions.js    # CASE-4 CaseMachine-guarded completion state + pure Summary control; completeCase is
                                #   the shared "persist the transition and leave" write, called by
