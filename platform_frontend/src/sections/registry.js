@@ -39,12 +39,10 @@ import { SummaryPlugin } from './summary/summary-plugin.js';
  * this module is first being imported reads a plugin binding that is still in
  * its temporal dead zone. A function body is not evaluated until it is called.
  *
- * `const`-asserted so each plugin's literal `id` survives inference, which is
- * what lets `Section` below be projected from the plugins rather than restated
- * in a second table. Deliberately carries no `@returns` annotation: a widening
- * one erases those literals and `Section` silently becomes `string`. Each
- * plugin's conformance is checked by its own `@satisfies`, so the shape is not
- * unguarded.
+ * Scheduled for removal along with the fallback that reads it: the list this
+ * engine runs on is the one the composition root hands it. Until then the two
+ * lists are held equal by a test, because nothing else would notice them
+ * drifting apart.
  */
 function builtInSectionPlugins() {
   return /** @type {const} */ ([
@@ -62,10 +60,11 @@ function builtInSectionPlugins() {
 }
 
 /**
- * The Section id union, projected from the plugins themselves — the manifest is
- * the only place the set is stated, at the type level as well as the value one.
+ * The Section id union, taken from the composition root — the one place that
+ * says what this application is made of, at the type level as well as the value
+ * one. A type-only edge, so the engine still loads nothing.
  *
- * @typedef {ReturnType<typeof builtInSectionPlugins>[number]['id']} Section
+ * @typedef {import('../app-config.js').Section} Section
  */
 
 /** @type {Map<string, SectionPlugin>} */
@@ -201,8 +200,8 @@ export function evaluateSectionsAccess({
  * The Section ids as currently registered, in manifest-then-registration
  * order — which is not a meaningful order; see the manifest above.
  *
- * `string[]` rather than `Section[]` on purpose: a plugin registered at boot is
- * in this list and cannot be in a union projected from the built-in manifest.
+ * `string[]` rather than `Section[]` on purpose: a plugin registered after boot
+ * is in this list and cannot be in a union projected from the composition root.
  * `Section` stays the compile-time set that Case Type config and the access map
  * are keyed by.
  *
