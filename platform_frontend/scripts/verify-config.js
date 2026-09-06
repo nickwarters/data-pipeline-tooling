@@ -230,12 +230,10 @@ function caseTypeFile(entry) {
 /**
  * The Issue Capture Field types the capture engine renders.
  *
- * Read off the registry rather than restated, so a type that is registered is
- * a type a Case Type may declare, with nothing to keep in step. `person` is
- * still named by hand: it has not moved to a type module yet, and until it does
- * the gate would reject a Case Type that already uses it.
+ * Read off the registry rather than restated, so a type that is registered is a
+ * type a Case Type may declare, with nothing to keep in step.
  */
-const CAPTURE_FIELD_TYPES = [...captureFieldTypeNames(), 'person'];
+const CAPTURE_FIELD_TYPES = captureFieldTypeNames();
 
 /** The types whose value is chosen from a declared list. */
 const CHOICE_CAPTURE_TYPES = ['select', 'radio'];
