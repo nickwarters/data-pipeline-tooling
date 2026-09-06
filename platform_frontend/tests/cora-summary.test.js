@@ -854,3 +854,84 @@ test('a question with no Category contributes no eyebrow to its Summary entry', 
   const issues = getByRole(root, 'heading', { name: 'Issues' }).parentNode;
   assert.equal(findAllByClass(issues, 'cora-summary-category').length, 0);
 });
+
+// --- A Section draws its own Summary block ---
+
+test('a Section that declares a summaryView draws its own Summary block', async () => {
+  // The case that renders nothing without the delegation: a Section the
+  // id-to-renderer chain has never heard of reaches summarySectionsFor() and
+  // then draws a blank.
+  const { h } = await import('../src/lib/html.js');
+  const { registerSectionPlugin } = await import('../src/sections/registry.js');
+
+  registerSectionPlugin(
+    /** @type {any} */ ({
+      id: 'fixtureBlock',
+      tab: false,
+      tabOrder: 99,
+      summaryBlock: true,
+      summaryOrder: 99,
+      showInSummaryDefault: true,
+      defaultLabels: { tab: 'Fixture', heading: 'Fixture block' },
+      evaluateAccess: () => 'read-only',
+      view: () => null,
+      summaryView: (/** @type {any} */ props) =>
+        h(
+          'section',
+          { className: 'cora-summary-fixture' },
+          h('h3', {}, props.heading)
+        ),
+    })
+  );
+
+  try {
+    const root = rootOf(
+      render({ summarySections: /** @type {any} */ (['fixtureBlock']) })
+    );
+
+    assert.ok(
+      findByClass(root, 'cora-summary-fixture'),
+      'the plugin drew its own block'
+    );
+    assert.ok(getByRole(root, 'heading', { name: 'Fixture block' }));
+  } finally {
+    configureAppSections();
+  }
+});
+
+test("a Section's Summary heading is its Case Type's override, else its own default", async () => {
+  const { h } = await import('../src/lib/html.js');
+  const { registerSectionPlugin } = await import('../src/sections/registry.js');
+
+  registerSectionPlugin(
+    /** @type {any} */ ({
+      id: 'fixtureBlock',
+      tab: false,
+      tabOrder: 99,
+      summaryBlock: true,
+      summaryOrder: 99,
+      showInSummaryDefault: true,
+      defaultLabels: { tab: 'Fixture', heading: 'Fixture block' },
+      evaluateAccess: () => 'read-only',
+      view: () => null,
+      summaryView: (/** @type {any} */ props) => h('h3', {}, props.heading),
+    })
+  );
+
+  try {
+    // Resolved by the caller, so a block never names its own id to find it.
+    const renamed = rootOf(
+      render({
+        summarySections: /** @type {any} */ (['fixtureBlock']),
+        sectionLabels: /** @type {any} */ (
+          resolveSectionLabels({
+            sectionLabels: /** @type {any} */ ({ fixtureBlock: 'Renamed' }),
+          })
+        ),
+      })
+    );
+    assert.ok(getByRole(renamed, 'heading', { name: 'Renamed' }));
+  } finally {
+    configureAppSections();
+  }
+});

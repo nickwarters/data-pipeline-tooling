@@ -1,5 +1,6 @@
 // @ts-check
 import { h } from '../../lib/html.js';
+import { getSectionPlugin } from '../../sections/registry.js';
 import { Outcome } from './outcome-view.js';
 import { caseDetailFields } from './details-view.js';
 import { buildSummaryModel } from '../../evaluators/summary-model.js';
@@ -138,12 +139,38 @@ const STANDALONE_LABELS = {
 };
 
 /**
+ * What a Section's own `summaryView` is handed: everything the Summary renders
+ * from, plus the heading already resolved for that Section.
+ *
+ * `heading` is resolved here rather than in the block because looking it up
+ * means naming a Section id, and the whole point of a Section drawing its own
+ * block is that nothing outside it needs to know which Section it is.
+ *
+ * @typedef {SummaryProps & { heading: string }} SummaryBlockProps
+ */
+
+/**
+ * One Section's block in the Summary.
+ *
+ * A Section that declares its own `summaryView` draws itself. The if-chain
+ * below is what is left of the id-to-renderer switch the Section Plugin
+ * Architecture set out to remove, and it is being emptied one Section at a
+ * time; a Section that has moved across never reaches it.
+ *
  * @param {SummaryProps} props
  * @param {Section} section
  * @param {CaseRow} caseRow
- * @returns {HTMLElement | null}
+ * @returns {Node | null}
  */
 function renderSectionBlock(props, section, caseRow) {
+  const plugin = getSectionPlugin(section);
+  if (plugin?.summaryView) {
+    return plugin.summaryView({
+      ...props,
+      heading:
+        labelsOf(props)[section]?.heading ?? plugin.defaultLabels.heading,
+    });
+  }
   if (section === 'details') {
     return renderFieldBlock(
       'cora-summary-details',
