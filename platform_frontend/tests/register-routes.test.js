@@ -708,3 +708,40 @@ test('journey-cases guards on the capability, not on the resolved sources', () =
     false
   );
 });
+
+test('landing: a Reviewer starts on the Dashboard, and outranks their other roles', () => {
+  assert.equal(
+    resolveDefaultLandingPath(makePermissions({ isReviewer: true })),
+    '#/dashboard'
+  );
+
+  // Every rule matches this user; the rank decides, not the list order.
+  const everything = makePermissions({
+    isReviewer: true,
+    isAdviser: true,
+    isControls: true,
+  });
+  assert.equal(resolveDefaultLandingPath(everything), '#/dashboard');
+  assert.deepEqual(
+    APP_CONFIG.pagePlugins
+      .filter((plugin) => plugin.defaultFor?.(everything))
+      .map((plugin) => plugin.defaultForOrder),
+    [10, 20, 30]
+  );
+});
+
+test('landing: home is the fallback and never a rule', () => {
+  // Both a rule and the fallback would make one page reachable two ways with
+  // two different precedences.
+  const root = APP_CONFIG.pagePlugins.find((plugin) => plugin.id === 'root');
+  assert.equal(root?.defaultFor, undefined);
+  assert.deepEqual(root?.paths, [FALLBACK_LANDING_PATH]);
+
+  // A user no rule recognises, derived from real group membership rather than
+  // asserted by a fixture: `isVisitor` is true iff they hold no capability at
+  // all, so this is also what an unresolved or misconfigured group produces —
+  // a degraded path rather than a persona.
+  const unmatched = resolveCapabilities([]);
+  assert.equal(unmatched.isVisitor, true);
+  assert.equal(resolveDefaultLandingPath(unmatched), FALLBACK_LANDING_PATH);
+});
