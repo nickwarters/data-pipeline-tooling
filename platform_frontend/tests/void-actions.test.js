@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom, findByClass } from './_dom-stub.js';
 import { fireEvent } from './helpers/semantic-dom.js';
-import { CaseMachine } from '../src/lib/case-machine.js';
+import { createCaseLifecycleView } from '../src/lib/case-lifecycle-view.js';
 import {
   voidControl,
   voidControlView,
@@ -42,7 +42,12 @@ function machineFor(status, viewer = 'u1') {
     responsibleParty: 'u2',
     etag: 'e1',
   });
-  return new CaseMachine(caseRow, { id: viewer }, CAPABILITIES, CONFIG);
+  return createCaseLifecycleView({
+    caseRow,
+    currentUserId: viewer,
+    capabilities: CAPABILITIES,
+    config: CONFIG,
+  }).machine;
 }
 
 test('voidControlView preserves the disclosure markup and callback props', () => {

@@ -24,7 +24,7 @@ import { h } from '../../lib/html.js';
  * immediately.
  *
  * @param {{
- *   machine: import('../../lib/case-machine.js').CaseMachine | null,
+ *   machine: import('../../evaluators/case-lifecycle.js').CaseLifecycleView | null,
  *   catalogue: QuestionDefinition[],
  *   answers: Record<string, Answer>,
  * }} input
@@ -89,7 +89,7 @@ function missingResponsibleParty(input) {
  * Reviewer's gate, not a notice board.
  *
  * @param {{
- *   machine: import('../../lib/case-machine.js').CaseMachine | null,
+ *   machine: import('../../evaluators/case-lifecycle.js').CaseLifecycleView | null,
  *   caseRow: import('../../sharepoint-client.js').CaseRow,
  *   catalogue: QuestionDefinition[],
  *   answers: Record<string, Answer>,
@@ -196,7 +196,7 @@ export function completionControlView({ control, pending, onComplete }) {
  * cannot mutate the lifecycle.
  *
  * @param {{
- *   machine: import('../../lib/case-machine.js').CaseMachine | null,
+ *   machine: import('../../evaluators/case-lifecycle.js').CaseLifecycleView | null,
  *   caseRow: import('../../sharepoint-client.js').CaseRow,
  *   catalogue: QuestionDefinition[],
  *   answers: Record<string, Answer>,

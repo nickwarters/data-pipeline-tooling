@@ -1,24 +1,16 @@
 // @ts-check
-// CaseMachine is a pure state model: given a Case row, the current user, their
-// capabilities and the Case Type config, it derives roles, the section access
-// matrix, and the lifecycle transition PATCH fields. It holds
-// no DOM and no signals — the function-component page (CaseReviewPage) reads it
-// through the loader, so it is plain domain state, not a UI orchestration
-// layer around view rendering.
+// CaseMachine is the Case's lifecycle model and nothing else: given a Case row,
+// the current user and the Case Type config, it builds the PATCH fields for
+// each transition. It holds no DOM, no signals, and — since the Sections began
+// declaring their own access — no view of who may see what.
+//
+// It knows nothing about Sections. It used to evaluate the whole access matrix
+// and answer questions like "may this viewer edit Issues?" off it, which tied a
+// domain model to how tabs render. Those predicates are pure functions in
+// `evaluators/case-lifecycle.js` now, taking the resolved access map as data,
+// and the loader that resolves that map is what calls them.
 
-import { evaluateSectionsAccess } from '../sections/registry.js';
-import {
-  evaluateAccess,
-  isFrozen,
-  isReportable,
-  resolveRoles,
-  sectionIds,
-} from '../services/section-access.js';
-
-// Re-exported from its leaf home in section-access.js (the access matrix also
-// keys its freeze/gate cells off it) so lifecycle consumers can import the
-// reportable predicate alongside CaseMachine without a circular import.
-export { isReportable } from '../services/section-access.js';
+import { isReportable } from '../evaluators/case-lifecycle.js';
 
 import { addWorkingDays } from './add-working-days.js';
 import {
@@ -39,13 +31,11 @@ import {
 /** @typedef {import('../sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
-/** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
 
 export class CaseMachine {
   /**
    * @param {CaseRow} caseRow
    * @param {CurrentUser | { id: string }} currentUser
-   * @param {Capabilities} capabilities
    * @param {CaseTypeConfig} config
    * @param {{ now?: () => Date, catalogue?: QuestionDefinition[] }} [options]
    *   `now` is an injectable clock for the lifecycle timestamps below; a caller
@@ -64,25 +54,13 @@ export class CaseMachine {
    *   it, and the one that did not built a machine for the Conversation cell
    *   alone, on the standalone Conversation page removed in #790.
    */
-  constructor(caseRow, currentUser, capabilities, config, options = {}) {
+  constructor(caseRow, currentUser, config, options = {}) {
     this.caseRow = caseRow;
     this.currentUser = currentUser;
-    this.capabilities = capabilities;
     this.config = config;
     this._now = options.now ?? (() => new Date());
     /** @type {QuestionDefinition[]} */
     this.catalogue = options.catalogue ?? [];
-
-    this.roles = resolveRoles(caseRow, currentUser.id, capabilities);
-
-    /** @type {Record<string, import('../services/section-access.js').Mode>} */
-    this.access = evaluateSectionsAccess({
-      caseRow,
-      roles: this.roles,
-      capabilities: this.capabilities,
-      config,
-      catalogue: this.catalogue,
-    });
   }
 
   /**
@@ -91,61 +69,6 @@ export class CaseMachine {
    */
   get reportable() {
     return isReportable(this.caseRow.status);
-  }
-
-  get canComplete() {
-    return (
-      this.access.questions === 'edit' &&
-      this.caseRow.assignedReviewer === this.currentUser.id &&
-      !isFrozen(this.caseRow.status)
-    );
-  }
-
-  /**
-   * Whether the viewer may edit what the Issues tab records against a failed
-   * Answer. No Case Type opt-in stands in front of this gate: a Case Type that
-   * declares nothing to capture simply renders nothing to edit.
-   */
-  get canEditIssues() {
-    return this.access.issues === 'edit' && !isFrozen(this.caseRow.status);
-  }
-
-  /**
-   * The *permission* half of the final-complete gate, and **only** that half —
-   * hence the name: this getter says the viewer *may resolve* remediation, not
-   * that the Case is ready to close. Once actions have been **sent**, only the
-   * Assigned Reviewer — the one role that can `edit` the Remediation tab — closes
-   * an `Actions In Progress` Case to `Completed`.
-   *
-   * The *content* half (every Question's remediation resolved, with its required
-   * details / justification) lives in `completionControl` / `completionPatch`,
-   * which read the store's **live** Answers rather than the load-time snapshot
-   * this machine holds — the Reviewer must be able to resolve the last row and
-   * see the button enable without a reload.
-   */
-  get mayResolveRemediation() {
-    return (
-      this.access.remediation === 'edit' &&
-      this.caseRow.assignedReviewer === this.currentUser.id &&
-      this.caseRow.status === CASE_STATUS.ACTIONS_IN_PROGRESS
-    );
-  }
-
-  /**
-   * Whether the viewer may void the Case: the Assigned Reviewer, while the
-   * review is still live. Both terminal states are excluded — a Completed Case
-   * has a result to preserve, and a voided one is already where voiding leads.
-   */
-  get canVoid() {
-    return (
-      this.caseRow.assignedReviewer === this.currentUser.id &&
-      (this.caseRow.status === CASE_STATUS.IN_PROGRESS ||
-        this.caseRow.status === CASE_STATUS.ACTIONS_IN_PROGRESS)
-    );
-  }
-
-  get canToggleConversation() {
-    return this.access.conversation !== 'hidden';
   }
 
   /**

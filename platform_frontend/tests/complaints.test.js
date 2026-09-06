@@ -24,7 +24,7 @@ import {
 import { SHARED_GENERAL_QUESTIONS } from '../case-types/general-questions.js';
 import { resolveCompiledOptions } from '../src/pages/question-bank/question-bank-compile.js';
 import { cases } from '../dev/fixtures/cases.js';
-import { isReportable } from '../src/lib/case-machine.js';
+import { isReportable } from '../src/evaluators/case-lifecycle.js';
 
 // --- catalogue shape ---
 

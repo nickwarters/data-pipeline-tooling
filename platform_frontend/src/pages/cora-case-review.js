@@ -64,7 +64,7 @@ import { voidReasonText } from '../lib/void-reasons.js';
  *   page is showing. Rendered as a page-level banner — see `versionWarningView`.
  * @property {Record<string, import('../services/section-access.js').Mode>} access
  * @property {import('../sharepoint-client.js').ResolvedSectionLabels & Record<string, { tab: string, heading: string }>} sectionLabels
- * @property {import('../lib/case-machine.js').CaseMachine | null} machine
+ * @property {import('../evaluators/case-lifecycle.js').CaseLifecycleView | null} machine
  * @property {import('../sharepoint-client.js').CaseListOptions} caseListOptions
  */
 

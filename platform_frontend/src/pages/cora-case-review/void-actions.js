@@ -3,7 +3,7 @@
 import { voidReasonsFor, voidReasonNeedsNote } from '../../lib/void-reasons.js';
 import { h } from '../../lib/html.js';
 
-/** @typedef {import('../../lib/case-machine.js').CaseMachine} CaseMachine */
+/** @typedef {import('../../evaluators/case-lifecycle.js').CaseLifecycleView} CaseMachine */
 /** @typedef {import('../../sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
 /** @typedef {import('../../lib/void-reasons.js').VoidReason} VoidReason */
 

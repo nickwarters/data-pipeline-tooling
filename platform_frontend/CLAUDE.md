@@ -359,7 +359,14 @@ src/
     boot-error-panel.js         # cora-boot-error: the "boot did not finish" panel, shared by app.js and app-chrome's fatal-nav path (#575)
     capture-engine.js
     case-loader.js              # loads a Case Review page and hands it over once via toStoreSnapshot() (was case-review-view-model.js, #555)
-    case-machine.js
+    case-machine.js             # the Case's LIFECYCLE model and nothing else: the PATCH fields each
+                                #   transition writes. Knows nothing about Sections — the permissions
+                                #   it used to answer off an access matrix are pure predicates in
+                                #   evaluators/case-lifecycle.js
+    case-lifecycle-view.js      # THE one place the two halves meet: the permissions derived from the
+                                #   resolved Section access map, and the transitions the lifecycle
+                                #   model builds. What snapshot.machine is — plain data plus
+                                #   functions, never an instance
     case-route-links.js
     case-statuses.js            # CASE_STATUS: the persisted Case lifecycle values — do not change them
     chart-tooltip.js            # delegated HTML-over-SVG tooltip controller for grouped chart marks
