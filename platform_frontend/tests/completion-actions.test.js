@@ -5,6 +5,7 @@ import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 import { installDom, findByClass } from './_dom-stub.js';
 import { fireEvent } from './helpers/semantic-dom.js';
 import { createCaseLifecycleView } from '../src/lib/case-lifecycle-view.js';
+import { buildCompletedTransition } from '../src/evaluators/case-transitions.js';
 import { CASE_STATUS } from '../src/lib/case-statuses.js';
 import {
   completeCase,
@@ -159,13 +160,12 @@ test('completionPatch freezes outcome and effective columns in the lifecycle PAT
   assert.equal('placedOnHoldAt' in (patch ?? {}), false);
 });
 
-test('completionPatch chooses the transition from the catalogue CaseMachine stamps', () => {
+test('completionPatch chooses the transition and stamps it from one catalogue', () => {
   // The fork and the `hadRemediation` stamp are the same fact read twice, so
-  // they must come from one object. Handing the machine an empty catalogue while
-  // the caller passes a populated one is not a real state — both are the one
-  // CaseLoader catalogue in production — but it is the only way to
-  // prove which copy is authoritative, and that the patch cannot say
-  // "Actions In Progress" while stamping `hadRemediation: false`.
+  // they must come from one catalogue. They used to come from two — the
+  // caller's copy and the machine's — which could not differ in production and
+  // had to be argued about anyway. Now there is only `input.catalogue`, so the
+  // property to hold is that the transition and the stamp always agree.
   const answers = {
     q1: {
       value: 'No',
@@ -173,28 +173,30 @@ test('completionPatch chooses the transition from the catalogue CaseMachine stam
       remediationActions: [{ id: 'a1', text: 'Fix' }],
     },
   };
-  const patch = completionPatch({
-    machine: machine([]),
-    caseRow: CASE_ROW,
-    catalogue: CATALOGUE,
-    answers,
-    allAnswered: true,
-    captureGroups: [],
-    generalQuestions: [],
-    computeOutcome: () => ({ outcome: 'fail' }),
-    bankVersion: null,
-  });
+  /** @param {any} catalogue */
+  const patchFor = (catalogue) =>
+    completionPatch({
+      machine: machine(),
+      caseRow: CASE_ROW,
+      config: CONFIG,
+      catalogue,
+      answers,
+      allAnswered: true,
+      captureGroups: [],
+      generalQuestions: [],
+      computeOutcome: () => ({ outcome: 'fail' }),
+      bankVersion: null,
+    });
 
-  assert.equal(
-    patch?.status,
-    'Completed',
-    'the machine has no Question carrying remediation, so there is no actions path'
-  );
-  assert.equal(
-    patch?.hadRemediation,
-    false,
-    'and the stamp agrees with the transition that was chosen'
-  );
+  const carrying = patchFor(CATALOGUE);
+  assert.equal(carrying?.status, 'Actions In Progress');
+  assert.equal(carrying?.hadRemediation, true);
+
+  // The same Answers against a catalogue with no Question left to carry them:
+  // no actions path, and the stamp says so too.
+  const empty = patchFor([]);
+  assert.equal(empty?.status, 'Completed');
+  assert.equal(empty?.hadRemediation, false);
 });
 
 test('completionPatch atomically clears hold fields when either transition leaves In-progress', () => {
@@ -256,26 +258,31 @@ test('completionPatch rejects incomplete or unauthorised completion and uses fin
   };
   assert.equal(completionPatch(base), null);
   assert.equal(completionPatch({ ...base, machine: null }), null);
-  assert.deepEqual(
-    completionPatch({
-      ...base,
-      machine: /** @type {any} */ ({
-        mayResolveRemediation: true,
-        transitionToFinalComplete: () => ({ status: 'Completed' }),
-      }),
-    }),
-    { status: 'Completed' }
+  // The final close: the permission is the machine's, the patch is the
+  // builder's. A machine can no longer arrive without a transition, so what is
+  // asserted is the fields the close actually writes.
+  const finalClose = completionPatch({
+    ...base,
+    machine: /** @type {any} */ ({ mayResolveRemediation: true }),
+  });
+  assert.equal(finalClose?.status, 'Completed');
+  assert.equal(typeof finalClose?.completedAt, 'string');
+  assert.equal(
+    Object.hasOwn(finalClose ?? {}, 'reportableAt'),
+    false,
+    'the Answers froze at Send Actions; the close re-snapshots nothing'
   );
 });
 
 test('completeCase flushes first and sends the frozen snapshot in the same PATCH', async () => {
   /** @type {any[]} */
   const calls = [];
-  const patchFields = machine().transitionToCompleted(
-    () => ({ outcome: 'pass' }),
-    { q1: { value: 'Yes' } },
-    'sha256:v2'
-  );
+  const patchFields = buildCompletedTransition({
+    catalogue: CATALOGUE,
+    answers: { q1: { value: 'Yes' } },
+    computeOutcome: () => ({ outcome: 'pass' }),
+    questionBankVersion: 'sha256:v2',
+  });
   const saveQueue = /** @type {any} */ ({
     async flushCase(/** @type {string} */ id) {
       calls.push(['flush', id]);
@@ -964,19 +971,23 @@ test('the close path is untouched by the pre-send decision gate', () => {
   });
   assert.equal(control.disabled, false);
   assert.equal(control.reason, null);
-  assert.deepEqual(
-    completionPatch({
-      machine: closingMachine(true),
-      caseRow: CASE_ROW,
-      catalogue: CATALOGUE,
-      answers: sent,
-      allAnswered: true,
-      captureGroups: [],
-      generalQuestions: [],
-      computeOutcome: () => ({ outcome: 'pass' }),
-      bankVersion: null,
-    }),
-    { status: 'Completed' }
+  const patch = completionPatch({
+    machine: closingMachine(true),
+    caseRow: CASE_ROW,
+    catalogue: CATALOGUE,
+    answers: sent,
+    allAnswered: true,
+    captureGroups: [],
+    generalQuestions: [],
+    computeOutcome: () => ({ outcome: 'pass' }),
+    bankVersion: null,
+  });
+  assert.equal(patch?.status, 'Completed');
+  assert.equal(typeof patch?.completedAt, 'string');
+  assert.equal(
+    Object.hasOwn(patch ?? {}, 'outcomeAtCompletion'),
+    false,
+    'the Outcome froze at Send Actions'
   );
 });
 

@@ -9,6 +9,7 @@ import {
   getByTag,
   queryAllByRole,
   queryAllByTag,
+  queryByRole,
 } from './helpers/semantic-dom.js';
 import { registerCaseType } from '../case-types/manifest.js';
 import { makeCaseRow, makeChrome } from './helpers/fixtures.js';
@@ -2571,24 +2572,10 @@ test('view: Issues renders failed Answers directly from route state', () => {
   assert.equal(panel.querySelector('cora-remediation-section'), null);
 });
 
-test('action: completion flushes saves and persists only the CaseMachine transition', async () => {
-  const transitionPatch = {
-    status: 'Completed',
-    completedAt: '2026-07-19T12:00:00Z',
-    outcomeAtCompletion: 'pass',
-    questionBankVersion: 'bank-hash',
-  };
+test('action: completion flushes saves and persists the transition, and only that', async () => {
   const machine = /** @type {any} */ ({
     canComplete: true,
     mayResolveRemediation: false,
-    transitionToCompleted: (
-      /** @type {Function} */ computeOutcome,
-      /** @type {Record<string, any>} */ answers,
-      /** @type {string} */ bankVersion
-    ) => {
-      calls.push(['transition', computeOutcome(answers).outcome, bankVersion]);
-      return transitionPatch;
-    },
   });
   const loadedSnapshot = {
     ...snapshot(),
@@ -2624,11 +2611,17 @@ test('action: completion flushes saves and persists only the CaseMachine transit
   fireEvent(button, 'click');
   await flush();
 
-  assert.deepEqual(calls, [
-    ['transition', 'pass', 'bank-hash'],
-    ['flush', 'c1'],
-    ['patch', 'c1', transitionPatch, 'e1', {}],
-  ]);
+  // Flush first, then one PATCH carrying the transition the builder produced —
+  // the machine supplies the permission and nothing else now, so the fields are
+  // the real close rather than a stub's.
+  assert.deepEqual(calls[0], ['flush', 'c1']);
+  const [, caseId, fields, etag, options] = calls[1];
+  assert.equal(calls.length, 2, 'nothing else is written');
+  assert.deepEqual([caseId, etag, options], ['c1', 'e1', {}]);
+  assert.equal(fields.status, 'Completed');
+  assert.equal(fields.questionBankVersion, 'bank-hash');
+  assert.equal(typeof fields.completedAt, 'string');
+  assert.equal(fields.completedAt, fields.reportableAt);
   assert.ok(
     view.actions.some(
       (action) => action.type === 'case/completion-pending' && action.pending
@@ -3288,11 +3281,15 @@ test('action: a void resolving after the mount is disposed dispatches nothing', 
   );
 });
 
-test('action: a missing CaseMachine transition cannot dispatch completion', async () => {
+test('action: a viewer the machine says may not complete is offered no control', async () => {
+  // There is no such thing as a missing transition any more — a transition is a
+  // pure builder, always callable — so the route's guard is the permission, and
+  // it stops at the control rather than at the write. That the write itself
+  // refuses too is `completionPatch`'s own test.
   const loadedSnapshot = {
     ...snapshot(),
     machine: /** @type {any} */ ({
-      canComplete: true,
+      canComplete: false,
       mayResolveRemediation: false,
     }),
     allAnswered: true,
@@ -3317,9 +3314,9 @@ test('action: a missing CaseMachine transition cannot dispatch completion', asyn
     },
   });
 
-  fireEvent(
-    getByRole(view.container, 'button', { name: 'Complete Case' }),
-    'click'
+  assert.equal(
+    queryByRole(view.container, 'button', { name: 'Complete Case' }),
+    null
   );
   await flush();
   assert.equal(patches, 0);

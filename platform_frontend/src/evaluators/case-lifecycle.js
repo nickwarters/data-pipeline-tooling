@@ -193,24 +193,17 @@ export function canToggleConversation({ access }) {
 
 /**
  * What the Case Review page reads about a loaded Case: what this viewer may do
- * to it, and how each transition writes it.
+ * to it.
  *
- * Composed by `CaseLoader` from two halves that used to be one object — the
- * permissions above, derived from the resolved Section access map, and the
- * transitions the lifecycle model builds. Plain data plus functions, so no
- * consumer has to know which half a member came from, and nothing in route
- * state is an instance of anything.
+ * Plain data, derived by `CaseLoader` from the resolved Section access map. It
+ * carries no transitions and no instance of anything: what moves a Case is a
+ * pure builder in `case-transitions.js`, called where the write happens.
  *
  * @typedef {Object} CaseLifecycleView
  * @property {Role[]} roles
- * @property {QuestionDefinition[]} catalogue
  * @property {boolean} canComplete
  * @property {boolean} canEditIssues
  * @property {boolean} mayResolveRemediation
  * @property {boolean} canVoid
  * @property {boolean} canToggleConversation
- * @property {(...args: any[]) => Partial<CaseRow>} transitionToActionsInProgress
- * @property {(...args: any[]) => Partial<CaseRow>} transitionToCompleted
- * @property {() => Partial<CaseRow>} transitionToFinalComplete
- * @property {(reasonKey: string, note?: string) => Partial<CaseRow>} transitionToVoid
  */

@@ -1118,6 +1118,7 @@ export function createRouteSlice(params, context) {
       const patchFields = completionPatch({
         machine: snapshot.machine,
         caseRow,
+        config,
         catalogue: snapshot.catalogue,
         answers: snapshot.answers,
         allAnswered: snapshot.allAnswered,
@@ -1166,6 +1167,7 @@ export function createRouteSlice(params, context) {
       const patchFields = voidPatch({
         machine: snapshot.machine,
         config,
+        currentUserId: currentUser.id,
         reasonKey: route.voidReason,
         note: route.voidReasonNote,
       });

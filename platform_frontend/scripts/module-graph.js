@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
  * Static import forms, one per line of source:
  *   `import './x.js'`            side-effect import
  *   `import a, { b } from './x'` named/default import
- *   `export { a } from './x'`    re-export (real: lib/case-machine.js does this)
+ *   `export { a } from './x'`    re-export
  *   `export * from './x'`        star re-export
  *   `} from './x'`               the tail of a multi-line named import/export
  *

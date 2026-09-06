@@ -2,12 +2,10 @@
 /**
  * Compose what the Case Review page reads about a loaded Case.
  *
- * Two halves that used to be one object. The permissions come from the resolved
- * Section access map — a question about how the page renders — and the
- * transitions come from the lifecycle model, which is a domain fact about the
- * Case and now knows nothing about Sections. This is the one place they meet,
- * so nothing downstream has to know which half a member came from and the
- * loader and its tests cannot compose them differently.
+ * What a viewer may do to it, resolved from the Section access map once so the
+ * loader and its tests cannot derive it differently. The transitions that
+ * actually move a Case are pure builders in `evaluators/case-transitions.js`
+ * and are called where the write happens, not carried around on this.
  *
  * @typedef {import('../sharepoint-client.js').CaseRow} CaseRow
  * @typedef {import('../sharepoint-client.js').CaseTypeConfig} CaseTypeConfig
@@ -24,8 +22,6 @@ import {
   canVoidCase,
   mayResolveRemediation,
 } from '../evaluators/case-lifecycle.js';
-import { CaseMachine } from './case-machine.js';
-
 /**
  * @param {{
  *   caseRow: CaseRow,
@@ -56,23 +52,11 @@ export function createCaseLifecycleView({
     catalogue,
   });
 
-  // The resolved catalogue — live bank while In-progress, the stamped versioned
-  // export once reportable, `failureValues` derived either way — is what decides
-  // whether this Case carries remediation, so the lifecycle model gets the same
-  // one the tabs render from.
-  // No clock seam here on purpose: nothing composing a whole view has ever
-  // needed one, and a caller that wants to pin a transition's timestamps builds
-  // the lifecycle model directly, which is where the seam is.
-  const lifecycle = new CaseMachine(caseRow, { id: currentUserId }, config, {
-    catalogue,
-  });
-
   return {
     roles,
     access,
     machine: {
       roles,
-      catalogue,
       canComplete: canCompleteCase({ access, caseRow, currentUserId }),
       canEditIssues: canEditIssues({ access, caseRow }),
       mayResolveRemediation: mayResolveRemediation({
@@ -82,12 +66,6 @@ export function createCaseLifecycleView({
       }),
       canVoid: canVoidCase({ caseRow, currentUserId }),
       canToggleConversation: canToggleConversation({ access }),
-      transitionToActionsInProgress:
-        lifecycle.transitionToActionsInProgress.bind(lifecycle),
-      transitionToCompleted: lifecycle.transitionToCompleted.bind(lifecycle),
-      transitionToFinalComplete:
-        lifecycle.transitionToFinalComplete.bind(lifecycle),
-      transitionToVoid: lifecycle.transitionToVoid.bind(lifecycle),
     },
   };
 }
