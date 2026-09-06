@@ -68,15 +68,20 @@ test('layering: no component imports from the question-bank subsystem', () => {
 });
 
 /**
- * Page-independence layering. The route table is the one place that names a
- * page module — statically for eight of them, behind a thunk for the ninth —
- * so "what pages exist?" still has exactly one answer, and deleting a page is
- * still deleting its file, its table entry and its nav link.
+ * Page-independence layering. The composition root is the one place that names
+ * a page module — statically for twelve of them, behind a thunk for the
+ * thirteenth — so "what pages exist?" still has exactly one answer, and
+ * deleting a page is still deleting its file, its entry there and its nav link.
+ *
+ * The privilege MOVED from `setup/register-routes.js` when the page list
+ * became part of the application configuration; it did not widen. One file,
+ * named, is the property worth keeping — a directory exemption would let any
+ * new file under it reach a page unnoticed.
  *
  * No file outside `src/pages/` may reach a page any other way, static or
  * dynamic. `tests/*` is outside this scan by construction.
  */
-test('layering: only the route table names a page module', () => {
+test('layering: only the composition root names a page module', () => {
   const isPageSpecifier = /\bpages\//;
 
   /**
@@ -100,33 +105,42 @@ test('layering: only the route table names a page module', () => {
     return out;
   };
 
+  const COMPOSITION_ROOT = 'src/app-config.js';
   const isAllowed = (/** @type {string} */ rel) =>
-    rel === 'src/setup/register-routes.js' || rel.startsWith('src/sections/');
+    rel === COMPOSITION_ROOT || rel.startsWith('src/sections/');
 
   assert.deepEqual(
     pageEdges('static', isAllowed),
     [],
-    'only the route table in setup/register-routes.js (and section plugins under src/sections/) may import a page module — add an entry there instead'
+    'only the composition root in src/app-config.js (and section plugins under src/sections/) may import a page module — add an entry there instead'
   );
 
-  // Dynamic page import() belongs to the route table (page loading) or a page
-  // composing its own subsystem — never to generic src/ modules, services, or
-  // components.
+  // Dynamic page import() belongs to the composition root (page loading) or a
+  // page composing its own subsystem — never to generic src/ modules,
+  // services, or components.
   assert.deepEqual(
     pageEdges('dynamic', isAllowed),
     [],
-    'only the route table in setup/register-routes.js may dynamically import a page module'
+    'only the composition root in src/app-config.js may dynamically import a page module'
   );
 
-  const tableDynamic = importSpecifiers('src/setup/register-routes.js', ROOT)
+  assert.deepEqual(
+    importSpecifiers('src/setup/register-routes.js', ROOT)
+      .filter((edge) => isPageSpecifier.test(edge.specifier))
+      .map((edge) => edge.specifier),
+    [],
+    'the route engine registers what it is handed and names no page module'
+  );
+
+  const configDynamic = importSpecifiers(COMPOSITION_ROOT, ROOT)
     .filter(
       (edge) => edge.kind === 'dynamic' && isPageSpecifier.test(edge.specifier)
     )
     .map((edge) => edge.specifier);
 
   assert.deepEqual(
-    tableDynamic,
-    ['../pages/question-bank/cora-bank-editor.js'],
+    configDynamic,
+    ['./pages/question-bank/cora-bank-editor.js'],
     'the Question Bank editor is the one page still fetched on demand: it is the largest subsystem, only a Maintainer ever opens it, and the dev harness swaps its loader through AppContext'
   );
 });

@@ -55,10 +55,7 @@ test('anatomy explainer: documents the store-driven route boundary', () => {
   const samples = codeSamples(html).join('\n');
   assert.match(html, /createRouteSlice/);
   assert.match(html, /createStoreRoute/);
-  assert.match(
-    samples,
-    /import \* as greeting from '\.\.\/pages\/greeting\.js'/
-  );
+  assert.match(samples, /import \* as greeting from '\.\/pages\/greeting\.js'/);
   assert.match(samples, /page: greeting/);
   assert.match(html, /route-local object/i);
 });
@@ -82,7 +79,7 @@ test('anatomy explainer: documents view and dispatch boundaries', () => {
 
 test('anatomy explainer: documents the route checklist', () => {
   const html = read(DOC);
-  assert.match(html, /Page import lives in the route table/);
+  assert.match(html, /Page import lives in the composition root/);
   assert.match(html, /State is under/);
   assert.match(html, /View is pure and synchronous/);
   assert.match(html, /I\/O lives in an effect/);

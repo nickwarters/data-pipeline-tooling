@@ -1095,11 +1095,13 @@ props.memo(
         <div class="scene-label">Scene 04</div>
         <div class="scene-title">Mount, Navigation, Teardown</div>
         <p class="scene-intro">
-          <code>routeTable(context)</code> in
-          <code>src/setup/register-routes.js</code> is the only place naming a
-          page module, held as static imports on <code>page</code> (ADR-0042),
-          with <code>#/question-bank</code> the single remaining
-          <code>load</code> thunk.
+          <code>APP_CONFIG.pagePlugins</code> in
+          <code>src/app-config.js</code> is the only place naming a page module,
+          held as static imports on <code>page</code> (ADR-0042, ADR-0054), with
+          <code>#/question-bank</code> the single remaining
+          <code>load</code> thunk; <code>routeTable(context)</code> in
+          <code>src/setup/register-routes.js</code> binds each entry to the boot
+          context and names none of them.
           <code
             >registerStoreRoute(router, { paths, page, load, context, guard
             })</code

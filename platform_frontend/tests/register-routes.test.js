@@ -217,6 +217,49 @@ test('route table: the question bank page loader is overridable by the host', as
   assert.equal(await load(), swapped);
 });
 
+test('route table: the host substitute is the page that actually mounts', async () => {
+  // Resolving the substitute is not the same fact as mounting it. The dev/mock
+  // harness swaps this page through AppContext, and the swap is only worth
+  // anything if the module the router reaches is the substitute's.
+  /** @type {unknown[]} */
+  const mounted = [];
+  const substitute = {
+    createRouteSlice: (/** @type {any} */ params) => {
+      mounted.push(params);
+      return {
+        initialState: {},
+        reducer: (/** @type {any} */ s) => s,
+        render() {},
+      };
+    },
+  };
+
+  /** @type {Record<string, any>} */
+  const handlers = {};
+  registerRoutes(
+    /** @type {any} */ ({
+      register: (/** @type {string} */ pattern, /** @type {any} */ handler) => {
+        handlers[pattern] = handler;
+      },
+    }),
+    /** @type {any} */ ({
+      ...makeContext(),
+      loadQuestionBankEditor: async () => substitute,
+    })
+  );
+
+  await handlers['#/question-bank'].mount(
+    /** @type {any} */ ({ replaceChildren() {} }),
+    { id: 'q1' }
+  );
+
+  assert.deepEqual(
+    mounted,
+    [{ id: 'q1' }],
+    'the substitute page is the one the router mounted'
+  );
+});
+
 test('journey cases guard: admits a user who owns a Journey Case Type', () => {
   replacedUrls.length = 0;
   const { guard } = routeTable(makeContext(['complaints']))['journey-cases'];
