@@ -319,6 +319,26 @@ test('checkCaseTypes fails an unknown key in sections', async () => {
   assert.match(failures[0].message, /sections/);
 });
 
+test('checkCaseTypes refuses a Case Type declaring what a Section may write', async () => {
+  // There is no such descriptor key, and the point is that there never is one
+  // again: the Admin Details Section took its editable fields from Case Type
+  // configuration, so a typo PATCHed a column that did not exist and
+  // `['status']` would have written the Case status past CaseMachine.
+  for (const key of ['editableFields', 'writes', 'writableFields', 'fields']) {
+    const failures = await checkCaseTypes({
+      caseTypes: [
+        demoEntry(
+          demoConfig({ sections: { summary: {}, notes: { [key]: ['notes'] } } })
+        ),
+      ],
+    });
+
+    assert.equal(failures.length, 1, key);
+    assert.match(failures[0].message, new RegExp(`sections\\.notes\\.${key}`));
+    assert.match(failures[0].message, /belongs on its plugin/);
+  }
+});
+
 test('checkCaseTypes accepts omitted sections but requires summary when explicit', async () => {
   assert.deepEqual(
     await checkCaseTypes({ caseTypes: [demoEntry(demoConfig())] }),

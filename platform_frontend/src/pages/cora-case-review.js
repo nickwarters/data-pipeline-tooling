@@ -501,7 +501,106 @@ export function caseReviewReducer(state, action) {
     if (action.status === route.saveStatus) return state;
     return patchRoute(state, 'caseReview', { saveStatus: action.status });
   }
+  if (
+    action.type === 'case/section-write' ||
+    action.type === 'case/section-blob-write'
+  ) {
+    return reduceSectionWrite(state, action);
+  }
   return reduceSection(state, action);
+}
+
+/**
+ * The Case Row columns no Section may write, whatever it declares.
+ *
+ * Two kinds, one reason each. `status`, `assignedReviewer` and
+ * `responsibleParty` are read by `snapshot.machine` and by access resolution
+ * from the copy of the row they were built with at load, so moving them in the
+ * store shows a new value beside `can*` answers and a Role grant that both
+ * still answer from the old one. The rest are `CaseMachine`'s transitions,
+ * persisted by `completeCase` and folded back in through
+ * `case/case-row-patched` — a second writer would race the first.
+ *
+ * A deny list on top of an allow list, because the allow list is a Section's
+ * own declaration and this is the answer to "may a Section ever declare a
+ * field the framework owns?". It is no, and it is enforced rather than trusted.
+ */
+const FRAMEWORK_OWNED_CASE_FIELDS = Object.freeze([
+  'id',
+  'caseType',
+  'etag',
+  'status',
+  'assignedReviewer',
+  'responsibleParty',
+  'outcomeAtCompletion',
+  'amendedOutcome',
+  'completedAt',
+  'reportableAt',
+  'questionBankVersion',
+  'voidedAt',
+  'voidedBy',
+  'voidReason',
+  'voidReasonNote',
+  'onHold',
+  'placedOnHoldAt',
+]);
+
+/**
+ * Whether a Section may persist this Case Row column.
+ *
+ * The one place the rule is stated. The reducer asks it, and so does the
+ * `persist` seam a Section's actions are built with — the reducer because it
+ * takes `any` and a raw `tools.dispatch` compiles whatever a writer's types
+ * claim, the seam so a refused write is never enqueued either.
+ *
+ * @param {any} plugin
+ * @param {'fields' | 'blobs'} kind
+ * @param {string} field
+ * @returns {boolean}
+ */
+function sectionMayWrite(plugin, kind, field) {
+  if (FRAMEWORK_OWNED_CASE_FIELDS.includes(field)) return false;
+  return Boolean(plugin?.writes?.[kind]?.includes(field));
+}
+
+/**
+ * A Section persisting one of the columns it declared.
+ *
+ * A blob merges against the row the store holds **now**, never against one a
+ * render closure captured: two edits between renders both have to survive, and
+ * a closure holding the pre-edit blob is exactly how an Admin Details edit was
+ * dropped.
+ *
+ * A write a Section did not declare leaves state untouched. Silently: this is
+ * the render path, the declaration is the Section author's own, and a throw
+ * here would take the route down for a mistake a test catches.
+ *
+ * @param {CaseReviewState} state
+ * @param {any} action
+ * @returns {CaseReviewState}
+ */
+function reduceSectionWrite(state, action) {
+  const route = state.routes.caseReview;
+  const caseRow = route.snapshot?.caseRow;
+  if (!caseRow) return state;
+  const plugin = getSectionPlugin(action.section);
+
+  if (action.type === 'case/section-write') {
+    if (!sectionMayWrite(plugin, 'fields', action.field)) return state;
+    return patchSnapshot(state, {
+      caseRow: { ...caseRow, [action.field]: action.value },
+    });
+  }
+  if (!sectionMayWrite(plugin, 'blobs', action.blob)) return state;
+  return patchSnapshot(state, {
+    caseRow: {
+      ...caseRow,
+      [action.blob]: {
+        .../** @type {any} */ (caseRow)[action.blob],
+        ...action.patch,
+      },
+    },
+  });
 }
 
 /**
@@ -622,7 +721,12 @@ const RESPONSIBLE_PARTY_SEARCH_KEY = 'responsible-party';
  */
 export function createRouteSlice(params, context) {
   const panelMode = conversationPanelMode();
-  let dispatch = (/** @type {any} */ _action) => {};
+  /**
+   * Returns the state the reducer produced, which the blob write seam reads
+   * the merged value back off — so what is enqueued is what the store holds
+   * rather than something recomputed beside it.
+   */
+  let dispatch = (/** @type {any} */ _action) => /** @type {any} */ (undefined);
   // The adapter's mount lifetime, captured in start().
   let isSliceActive = () => false;
   /**
@@ -863,6 +967,48 @@ export function createRouteSlice(params, context) {
       sectionActions[plugin.id] = plugin.createActions({
         dispatch,
         sectionId: plugin.id,
+        /**
+         * The Section's way to the SaveQueue for a plain column. Checked
+         * against the same rule the reducer checks, so a field this Section
+         * did not declare moves nothing and enqueues nothing — the reducer
+         * alone would leave the store right and still have persisted it.
+         *
+         * @param {string} field @param {any} value
+         */
+        persist: (field, value) => {
+          if (!sectionMayWrite(plugin, 'fields', field)) return;
+          dispatch({
+            type: 'case/section-write',
+            section: plugin.id,
+            field,
+            value,
+          });
+          context.saveQueue.enqueue(caseId(), field, value);
+        },
+        /**
+         * The same, for a JSON-object column this Section merges keys into.
+         * The merged value is read back off the store rather than recomputed
+         * here, because the store is what two edits between renders both
+         * reached.
+         *
+         * @param {string} blob @param {Record<string, any>} patch
+         */
+        persistBlob: (blob, patch) => {
+          if (!sectionMayWrite(plugin, 'blobs', blob)) return;
+          const next = /** @type {any} */ (
+            dispatch({
+              type: 'case/section-blob-write',
+              section: plugin.id,
+              blob,
+              patch,
+            })
+          );
+          context.saveQueue.enqueue(
+            caseId(),
+            blob,
+            next?.routes?.caseReview?.snapshot?.caseRow?.[blob]
+          );
+        },
       });
     }
     return sectionActions;

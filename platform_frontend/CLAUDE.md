@@ -54,6 +54,18 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   literal `id` survives inference; that is what lets the type union come from
   the plugins instead of a second table, and a widening `@type` on
   `APP_CONFIG.sectionPlugins` silently turns it into `string`.
+  A Section owns its own **state and writes** too: `route.sections[<id>]` is
+  its slice and it is handed only that one, `reduce` is its transition,
+  `createActions` is its callbacks (built once per mount), and `writes` is the
+  short list of Case Row columns it may persist through the `persist` /
+  `persistBlob` seam. **Whether a Section may declare a field the framework
+  owns: no.** `status`, `assignedReviewer`, `responsibleParty` and the
+  lifecycle stamps are refused whatever a plugin declares — the first three
+  because `snapshot.machine` and access resolution answer from a copy of the
+  row frozen at load, the rest because `CaseMachine` is their writer. The
+  declaration is data on the plugin and never Case Type configuration, and
+  `verify-config` refuses a descriptor that tries: a Case Type may enable a
+  Section, not widen what it writes.
   A Section also draws its own **Summary block**: a plugin declaring
   `summaryBlock: true` supplies a `summaryView`, and `summary-view.js` names no
   Section — it delegates and resolves each block's heading. There is no
