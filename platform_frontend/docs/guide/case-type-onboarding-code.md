@@ -372,7 +372,8 @@ two spellings — a `tab` caption and a panel `heading` — so an override is ei
 a bare string, renaming both (`{ questions: 'Assessment' }`), or an object
 naming either axis (`{ questions: { tab: 'Assess', heading: 'Assessment' } }`,
 or `{ details: { heading: 'About this Case' } }`). Omitted keys and omitted axes
-keep `DEFAULT_SECTION_LABELS`; `allowBulkOutcome: true` opts every Question
+keep the copy that Section itself declares in its `defaultLabels`, which is the
+only place that copy exists; `allowBulkOutcome: true` opts every Question
 Group into the bulk-outcome control, and `questionGroups` overrides that per
 group in either direction (`{ Build: { allowBulkOutcome: false } }`), so a type
 states the rule once and names only the exceptions; `captureGroups` extends

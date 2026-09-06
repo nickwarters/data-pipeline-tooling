@@ -164,6 +164,34 @@ test('boot: src/app.js is a static graph that renders a panel when boot fails', 
 });
 
 /**
+ * Boot configures the engines before anything reads them. Ordering, so it is
+ * checked in the source rather than by importing `app.js` — which would run
+ * `boot()`.
+ *
+ * The Section engine holds no list of its own and throws when read before it is
+ * configured, so this is the line between a working application and one that
+ * fails at the first Case. Nothing else asserts the order.
+ */
+test('boot: the composition root configures the Section engine before the router mounts', () => {
+  const code = readCode('src/app.js', ROOT);
+  const configured = code.indexOf(
+    'configureSections(APP_CONFIG.sectionPlugins)'
+  );
+  const routes = code.indexOf('registerRoutes(');
+
+  assert.notEqual(
+    configured,
+    -1,
+    'src/app.js must configure the Section engine from APP_CONFIG'
+  );
+  assert.notEqual(routes, -1, 'src/app.js must register the routes');
+  assert.ok(
+    configured < routes,
+    'configureSections must run before registerRoutes, or a route can read a Section the engine has not been given'
+  );
+});
+
+/**
  * Rule (c): the only accepted cross-import between top-level page modules is
  * `cora-dashboard.js` → `cora-responsible-party-dashboard.js` (the dashboard
  * embeds the responsible-party panel, which is itself routed by my-cases). All

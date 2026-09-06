@@ -7,7 +7,11 @@ Date: 2026-09-05
 Accepted as amended by
 [ADR-0054](./0054-application-config-is-the-composition-root.md): a Section
 still declares itself, but the list of them is named by the application's
-composition root rather than by `src/sections/registry.js`.
+composition root rather than by `src/sections/registry.js`. Two sections below
+are stale as a result — **Registry & Lifecycle**, **The irreducible part** and
+**Types** — and each carries a pointer to the amendment that supersedes it.
+A separate **Correction** at the end records a claim this ADR made that was not
+true when it was written.
 
 Supersedes the monolithic access matrix in [ADR-0011](./0011-section-level-role-based-access.md)
 and the static panel map in [ADR-0032](./0032-data-driven-section-registry.md).
@@ -66,6 +70,10 @@ interface SectionPlugin {
 ```
 
 ### 2. Registry & Lifecycle
+
+> **Stale.** The registry seeds itself with nothing now, `AdminDetailsPlugin`
+> was removed with its Section, and `resetSectionRegistry()` is gone. See
+> _Amendment: the application composes the Sections_ below.
 
 - `src/sections/registry.js` maintains an in-memory registry (`Map<string, SectionPlugin>`) seeded with all built-in plugins:
   - `DetailsPlugin` (`details`)
@@ -162,6 +170,10 @@ export const DetailsPlugin = /** @type {const} */ ({ id: 'details', ... });
 
 ### The irreducible part
 
+> **Stale in one respect:** the second step is still irreducible, and for the
+> reason given here, but the file it lands in is `src/app-config.js`. See
+> _Amendment: the application composes the Sections_ below.
+
 Adding a Section is: author `src/sections/<name>/<name>-plugin.js`, then add one
 import and one manifest entry in `src/sections/registry.js`. That second step
 cannot be removed — ADR-0041 bans a build step, so nothing can discover modules
@@ -176,12 +188,99 @@ that template too.
 
 ### Types
 
+> **Stale in one respect:** the compile-time / runtime split below stands
+> exactly as described, but the union is no longer projected from a framework
+> manifest. See _Amendment: the application composes the Sections_ below.
+
 `Section` is the compile-time set of built-in ids, and is what a Case Type's
 `sections` descriptor is keyed by — config is authored against the built-ins.
 The runtime structures (`sectionIds()`, the resolved `access` map, the Summary
 block list) are keyed by `string`, because a plugin registered at boot is in
 them and cannot be in a union projected from the manifest. That split is
 deliberate; collapsing it either way loses something real.
+
+## Amendment: the application composes the Sections
+
+This ADR made a Section declare itself and then had the framework name all of
+them, in `src/sections/registry.js`. The consequence was structural rather than
+stylistic: there was no way for the application to add a Section without editing
+a framework file, which made "plugin" a word the architecture had not earned.
+[ADR-0054](./0054-application-config-is-the-composition-root.md) settles it, and
+this section records what that changed here.
+
+### What changed
+
+- **The list moved.** `APP_CONFIG.sectionPlugins` in `src/app-config.js` — the
+  composition root — is the one place that says which Sections this application
+  is made of. `src/sections/registry.js` is the **engine**: it imports no plugin
+  and no config, and boot hands it the list with `configureSections()` before
+  any route mounts.
+- **A read before configuration throws.** With no built-ins there is nothing to
+  fall back on, and an empty registry is not a visibly empty one: `case-loader`
+  asks whether every Section is hidden, which is vacuously true over no
+  Sections, so an unconfigured engine would deny access to every Case and render
+  a blank application with nothing in the console.
+- **`resetSectionRegistry()` is gone.** `configureSections` replaces wholesale,
+  so composing again is already the whole of putting back what was composed. Its
+  only remaining callers were tests, which the verify gate reports as dead code.
+- **The cycle is gone by construction.** The knot that forced the manifest to be
+  a function rather than a module-scope array — `services/section-access.js` →
+  `registry.js` → plugins → page views → services — no longer has an edge out of
+  the engine.
+- **`Section` is projected from the composition root.** The compile-time /
+  runtime split described under _Types_ above is unchanged and still deliberate;
+  what changed is where the union comes from. `CaseTypeConfig.sections` stays
+  `Partial<Record<Section, SectionConfig>>`, so a mistyped Section key is still
+  a `tsc` error rather than a runtime one.
+
+### There is no core-vs-plugin tier, and there never was one to build
+
+The tiering this ADR implied — built-in Sections in a framework list, added ones
+somewhere else — never materialised, and the composition root is why it does not
+need to. A built-in Section is one the config happens to list; an application
+Section is one it also lists. Omitting a built-in disables it. A separate
+`enabledCoreSections` key would restate what `sectionPlugins` already says,
+which is the duplication this ADR set out to remove in the first place.
+
+### What is irreducible, and why
+
+Adding a Section is: author `src/sections/<name>/<name>-plugin.js`, then add one
+import and one entry to `src/app-config.js`. **That second step cannot be
+removed.** [ADR-0041](./0041-deployed-bytes-are-source-bytes.md) bans a build
+step, so nothing can discover modules at runtime, and a module must be named
+somewhere to be loaded. It is the same file, and the same reason, that names a
+page ([ADR-0042](./0042-static-page-imports.md) as amended by ADR-0054).
+
+This is worth stating plainly because the config entry reads like leftover
+coupling to anyone who has not hit the constraint, and the last two attempts to
+remove that shape are what produced this ADR and ADR-0054 in turn.
+
+### Checked rather than claimed
+
+A Section the library never names was added end to end as the proof, and the
+properties are asserted rather than argued:
+
+- `src/sections/registry.js` is untouched by the diff that adds it, and a test
+  holds the engine to importing no plugin module;
+- its id is in the `Section` union — `sections: { secondReview: {} }` compiles
+  and a typo is a `tsc` error, verified in both directions;
+- `verify-config.js` rejects the same typo, so it is caught at build time too;
+- a fractional `tabOrder` slots it between two Sections without renumbering
+  either;
+- access still gates it, and a Section hidden for everyone does not trip
+  `case-loader`'s access-denied guard.
+
+### What this ADR's own claims are worth now
+
+- **"0 dead code" still holds.** `npm run verify` reports it on every run, with
+  an exemption list that is empty and a staleness check on the entries there are
+  none of.
+- **The extensibility claim reads correctly as already amended.** Adding a
+  Section is an edit to an application file, not a framework one, and the proof
+  above is what that now rests on. It is still not free of framework edits when
+  a Section needs behaviour the contract does not carry — the `adminDetails`
+  case in the _Positive_ consequences remains the honest example, and that
+  Section has since been removed.
 
 ## Correction: the id-to-renderer switch outlived this ADR by a month
 

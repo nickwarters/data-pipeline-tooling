@@ -147,7 +147,10 @@ the route needs an eligibility check before mounting.
 
 `src/app-config.js` is the one place that may name a page module — nothing
 outside `src/pages/` may reach a page any other way, and the contract test
-enforces it.
+enforces it. That entry is irreducible, not leftover coupling: ADR-0041 bans a
+build step, so nothing can discover modules at runtime, and a module must be
+named somewhere to be loaded. Naming it once in the composition root is the
+whole of the cost.
 `#/question-bank` is the single entry that still fetches its page on demand with
 a `load` thunk; ADR-0042 records why, and a new page does not need one.
 
