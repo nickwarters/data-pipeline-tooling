@@ -65,6 +65,7 @@ const config = {
     },
     remediation: { showInSummary: true },
     summary: {},
+    secondReview: {},
     appealRequest: {},
     appealReview: {},
     amendOutcome: {},

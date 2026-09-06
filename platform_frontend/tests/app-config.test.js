@@ -25,10 +25,11 @@ const COMPOSED_SECTION_IDS = [
   'notes',
   'questions',
   'remediation',
+  'secondReview',
   'summary',
 ];
 
-test('APP_CONFIG composes the ten Sections this application has', () => {
+test('APP_CONFIG composes the Sections this application has', () => {
   assert.deepEqual(
     APP_CONFIG.sectionPlugins.map((plugin) => plugin.id).sort(),
     COMPOSED_SECTION_IDS

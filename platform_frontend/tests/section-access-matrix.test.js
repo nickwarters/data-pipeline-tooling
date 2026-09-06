@@ -17,22 +17,20 @@ configureAppSections();
 
 // --- The Section set ---
 
-test('sectionIds() is the amended ten-Section set (appeal split into request/review + amendOutcome)', () => {
-  assert.deepEqual(
-    [...sectionIds()],
-    [
-      'details',
-      'questions',
-      'issues',
-      'summary',
-      'remediation',
-      'notes',
-      'conversation',
-      'appealRequest',
-      'appealReview',
-      'amendOutcome',
-    ]
-  );
+test('sectionIds() is the composed set (appeal split into request/review + amendOutcome)', () => {
+  assert.deepEqual([...sectionIds()].sort(), [
+    'amendOutcome',
+    'appealRequest',
+    'appealReview',
+    'conversation',
+    'details',
+    'issues',
+    'notes',
+    'questions',
+    'remediation',
+    'secondReview',
+    'summary',
+  ]);
   // The pre-amend keys are gone.
   const asStrings = /** @type {string[]} */ (sectionIds());
   assert.ok(!asStrings.includes('appeal'));

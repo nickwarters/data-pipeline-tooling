@@ -5365,6 +5365,11 @@ function everySectionVisibleCase() {
       .map((role) => matrixMode(section, role, row, config))
       .find((mode) => mode !== 'hidden');
   }
+  // Second Review has no access policy yet: it answers `hidden` to everyone by
+  // design, so it cannot be part of a fixture whose point is that every Section
+  // is visible. Dropped by name rather than by filtering the hidden ones out,
+  // which would let a Section that HAS a policy go quiet here.
+  delete access.secondReview;
   return { row, config, catalogue, access };
 }
 
