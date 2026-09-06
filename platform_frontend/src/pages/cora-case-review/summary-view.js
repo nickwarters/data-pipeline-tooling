@@ -2,7 +2,6 @@
 import { h } from '../../lib/html.js';
 import { getSectionPlugin } from '../../sections/registry.js';
 import { Outcome } from './outcome-view.js';
-import { caseDetailFields } from './details-view.js';
 import { buildSummaryModel } from '../../evaluators/summary-model.js';
 import {
   REMEDIATION_DETAIL_LABELS,
@@ -16,13 +15,6 @@ import { CaptureGroups } from '../../components/sections/cora-capture-groups.js'
 import { generalAnswerKey } from '../../evaluators/general-questions.js';
 import { GENERAL_QUESTIONS_TITLE } from './general-questions-view.js';
 import { COPY as REMEDIATION_COPY } from './remediation-tracking-view.js';
-
-/**
- * What a counted Question Group is filed under when its Questions declare no
- * **Category** but others in the same Case Type do. The Review tab's fallback
- * for the same position, so the two tabs name it identically.
- */
-const UNCATEGORISED = 'General';
 
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../../sharepoint-client.js').OutcomeResult} OutcomeResult */
@@ -146,7 +138,10 @@ const STANDALONE_LABELS = {
  * means naming a Section id, and the whole point of a Section drawing its own
  * block is that nothing outside it needs to know which Section it is.
  *
- * @typedef {SummaryProps & { heading: string }} SummaryBlockProps
+ * `caseRow` is narrowed to non-null here: the Summary only renders blocks for a
+ * Case it has, so a block never has to answer what it would draw without one.
+ *
+ * @typedef {SummaryProps & { heading: string, caseRow: CaseRow }} SummaryBlockProps
  */
 
 /**
@@ -167,22 +162,10 @@ function renderSectionBlock(props, section, caseRow) {
   if (plugin?.summaryView) {
     return plugin.summaryView({
       ...props,
+      caseRow,
       heading:
         labelsOf(props)[section]?.heading ?? plugin.defaultLabels.heading,
     });
-  }
-  if (section === 'details') {
-    return renderFieldBlock(
-      'cora-summary-details',
-      labelsOf(props).details.heading,
-      caseDetailFields(caseRow, props.detailFields).map((f) => ({
-        label: f.label,
-        display: f.display,
-      }))
-    );
-  }
-  if (section === 'questions') {
-    return renderCounts(props);
   }
   if (section === 'issues') {
     return renderIssues(props);
@@ -359,54 +342,6 @@ function renderCapture(props, questionId) {
 }
 
 /**
- * @param {SummaryProps} props
- * @returns {HTMLElement}
- */
-function renderCounts(props) {
-  const { groupCounts } = buildSummaryModel(props.catalogue, props.answers);
-  return h(
-    'section',
-    { className: 'cora-summary-counts' },
-    h('h3', {}, labelsOf(props).questions.heading),
-    ...countChildren(groupCounts)
-  );
-}
-
-/**
- * The Questions block's body: one `<li>` per Question Group, either flat or
- * nested under its **Category** heading.
- *
- * The Category level is rendered only when some counted Question declares one —
- * the same rule the Review tab applies, so a Case Type that never names a
- * Category sees exactly the flat list it saw before, and one that does sees the
- * Summary grouped the way its Reviewers read the questions.
- *
- * @param {import('../../evaluators/summary-model.js').GroupCount[]} groupCounts
- * @returns {Node[]}
- */
-function countChildren(groupCounts) {
-  const countLine = (
-    /** @type {import('../../evaluators/summary-model.js').GroupCount} */ c
-  ) => h('li', {}, `${c.group}: ${c.pass} pass, ${c.fail} fail`);
-
-  if (!groupCounts.some((count) => count.category))
-    return [h('ul', {}, ...groupCounts.map(countLine))];
-
-  /** @type {Map<string, import('../../evaluators/summary-model.js').GroupCount[]>} */
-  const byCategory = new Map();
-  for (const count of groupCounts) {
-    const name = count.category || UNCATEGORISED;
-    const rows = byCategory.get(name);
-    if (rows) rows.push(count);
-    else byCategory.set(name, [count]);
-  }
-  return [...byCategory].flatMap(([name, rows]) => [
-    h('h4', { className: 'cora-summary-category-heading' }, name),
-    h('ul', {}, ...rows.map(countLine)),
-  ]);
-}
-
-/**
  * A question entry's **Category** as the small label above it, at the head of
  * the same run of lines the Issues tab sets a card's question out in — one
  * level above the `cora-remediation-group` line directly beneath it.
@@ -483,12 +418,15 @@ function renderKeyDates(caseRow) {
 }
 
 /**
+ * A labelled block of definition rows — the shape the Summary's field blocks
+ * share. Exported for the Section blocks that draw one of their own.
+ *
  * @param {string} className
  * @param {string} title
  * @param {Array<{ label: string, display: string }>} rows
  * @returns {HTMLElement}
  */
-function renderFieldBlock(className, title, rows) {
+export function renderFieldBlock(className, title, rows) {
   return h(
     'section',
     { className },
