@@ -123,10 +123,19 @@ Three consequences worth stating plainly:
   because the watermark is not advanced, the next run fails at the same place.
   `sharepoint_cases` shipped that way: its baseline declared `case_version` and
   none of the seven Detail Tables beside it.
-- **A missing *column* still reads poorly.** A missing table names itself; a
-  column the migration forgot surfaces as SQLite's raw `no such column`. That is
-  decision 4 of the epic — fail fast, and do not pay for a pre-write column check
-  on every run — not an oversight.
+- **A missing *column* is reported after the fact, not before it.** Decision 4
+  of the epic stands — no Writer reads the target's column set on the happy path,
+  because that would cost a `PRAGMA` on every run to catch something that only
+  happens right after a schema change. What has changed is what an operator
+  *reads*: SQLite's raw complaint (or, through pandas, the bare `Execution
+  failed` that hides it) is translated on the way out of the write into a
+  `MissingColumnError` — an expected failure, categorised `config`, naming the
+  table, the database, the columns the table does hold, and the command that
+  would declare the one it does not. Every other SQLite write failure — a locked
+  database, a path that will not open — becomes a `SqliteWriteError` categorised
+  `operational`, so a failed write reaches the operator through
+  `format_failure` like every other expected failure instead of as a traceback
+  ([resolving-a-failed-run.md](resolving-a-failed-run.md)).
 
 One piece of Python-side DDL deliberately survives this ticket: the additive
 `ALTER TABLE … ADD COLUMN` that widens a pre-provenance-column table so an

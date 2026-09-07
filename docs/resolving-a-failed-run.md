@@ -61,6 +61,8 @@ The expected failures are self-describing. Map the message to a cause:
 | `column '…' violates pattern …` / `outside {…}` / `has duplicate value(s)` | a **value rule** failed on real data | the offending rows (the message samples up to five) |
 | `column '…' contains null value(s)` | a `NonNull()` field arrived empty | the source / upstream join |
 | `upstream ingest is stale: …` | a declared upstream hasn't run recently enough | run the upstream, or relax the window |
+| `write to table '…' in … failed: … has no column named …` | the frame carries a column the target table was never declared with | the migration for that table ([migrations.md](migrations.md)) |
+| `write to table '…' in … failed: database is locked` | something else held the file for longer than the busy timeout | the other writer / the schedule |
 
 Each expected failure also carries a **triage category** (`framework.core.ErrorCategory`)
 that tells you *whose problem it is* before you read the message:
@@ -68,15 +70,26 @@ that tells you *whose problem it is* before you read the message:
 | Category | Means | Failures | The fix is in… |
 |----------|-------|----------|----------------|
 | `data` | the feed broke a declared data expectation | `ValidationError`, `CoercionError` | the **data** (source/upstream) |
-| `operational` | data and code are fine; the run conditions aren't | `FreshnessError`, `ForEachPipelineError` | the **run/environment** |
-| `config` | the pipeline is mis-addressed or mis-wired | `UnknownPipelineError` | the **wiring** |
+| `operational` | data and code are fine; the run conditions aren't | `FreshnessError`, `ForEachPipelineError`, `SqliteWriteError` | the **run/environment** |
+| `config` | the pipeline is mis-addressed, mis-wired, or writing to a shape nothing declares | `UnknownPipelineError`, `MissingTableError`, `MissingColumnError` | the **wiring** (or `migrations/`) |
 
 A genuine bug (not a `PipelineError`) keeps its traceback **and has no category**
 (`error_category` is null in the log) — that's a code defect to fix, not an
 operator-resolvable data problem. The deliberate non-categories: a source that
-won't open, a failed write, and a transform bug all stay raw tracebacks rather
-than being dressed up as expected failures — that is the expected-failure-vs-bug
-line.
+won't open and a transform bug stay raw tracebacks rather than being dressed up
+as expected failures — that is the expected-failure-vs-bug line.
+
+A failed **write** used to sit on that side of the line and no longer does. Not
+because it became more expected, but because SQLite's own complaint names
+neither the table nor the database, and pandas re-raises it with the message
+flattened to `Execution failed` — so the traceback an operator was left with
+said less than the message underneath it. A table-backed Writer now translates
+the failure as it leaves: `MissingColumnError` (`config`) when the target lacks a
+column the write named, `SqliteWriteError` (`operational`) for anything else.
+Both keep the original exception as `__cause__`, so nothing is lost for anyone
+reading a traceback deliberately. Neither is a *check* — no Writer reads the
+target's column set before writing ([migrations.md](migrations.md)); the failure
+is still SQLite's, only legible.
 
 ## 3. Resolve — four legitimate moves
 

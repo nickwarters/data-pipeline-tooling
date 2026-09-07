@@ -99,7 +99,8 @@ naming the table and the command that would declare it.
 A *pending* migration instead surfaces SQLite's raw `no such column`. That fails
 fast but reads poorly, and it is accepted rather than paid for with a
 column-level check on every run. `python -m cli migrate --check` exists for CI,
-which is where the question is worth asking.
+which is where the question is worth asking. *(The "reads poorly" half is
+addressed by the amendment below; the "no check on every run" half stands.)*
 
 ### 5. Raw is migrated per feed, and its baseline is the raw read columns
 
@@ -183,3 +184,40 @@ none. Copying `sqlite_master` needs neither and covers all of them (decision 5).
 See [migrations.md](../migrations.md) for the mechanics, and
 [operator-cli.md](../operator-cli.md#migrate--apply-the-sql-migrations-that-own-the-databases-shape)
 for the command.
+
+## Amendment (2026-09-07): a failed write is translated, not checked for
+
+Decision 4 traded a pre-write column check for a failure that reads poorly. The
+trade was right and is kept — no Writer reads the target's column set on the
+happy path — but the second half turned out to be avoidable, because the cost
+of a *better message* is only paid when the write has already failed.
+
+A table-backed Writer now translates a failed write on its way out of the
+connection block it already owned:
+
+- `MissingColumnError` (category `config`) when SQLite says the target has no
+  such column. The message names the table, the database, the columns the table
+  *does* hold — read on the failure path, where the run is over — and, for a
+  database under migration control, the command that would declare the missing
+  one.
+- `SqliteWriteError` (category `operational`) for every other SQLite write
+  failure: a locked database, a path that will not open, a constraint the target
+  declares.
+
+Both subclass `PipelineError`, so a failed write reaches an operator through
+`format_failure` — kind, category, message, no traceback — like every other
+expected failure, and is recorded with a triage category rather than a null one.
+Both keep the original exception as `__cause__`.
+
+This was worth doing beyond tidiness: under pandas 3 the write error an operator
+actually saw was `pandas.errors.DatabaseError: Execution failed`, with SQLite's
+own words reachable only through `__cause__`. The traceback said less than the
+message underneath it.
+
+It moves where a failed write sits against the expected-failure-vs-bug line of
+[ADR-0005](0005-fail-fast-atomic-runs-and-observability.md) — a write was
+previously listed beside "a source that won't open" as a deliberate
+non-category, in `framework/core/errors.py` and
+[resolving-a-failed-run.md](../resolving-a-failed-run.md), both now updated. It
+moves only **SQLite** writes: a file Writer's `PermissionError` is still a raw
+traceback, because it already says what went wrong and where.

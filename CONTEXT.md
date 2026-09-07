@@ -305,7 +305,8 @@ boundary** (one-row-per-Case enforced).
 A *deliberate, fail-fast abort* of a pipeline run — the data or environment broke
 a declared expectation, so the run stops on purpose. The distinction we reason
 with: an **expected failure** is something an operator should read and act on (a
-**Schema Breach**, a stale upstream, an uncoercible value, an unknown pipeline),
+**Schema Breach**, a stale upstream, an uncoercible value, an unknown pipeline,
+a write to a table or column no migration declares),
 versus a **bug** — a defect in our own code that should never have shipped.
 _Here_: every expected failure subclasses `PipelineError`, so a run boundary
 (the operator CLI, a scaffolded `main()`) catches the whole family with one
