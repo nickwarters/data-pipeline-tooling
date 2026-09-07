@@ -433,6 +433,16 @@ did, which is what lets subjects convert one at a time
 ([migrations.md](migrations.md),
 [ADR-0025](adr/0025-sql-migrations-own-the-physical-table-shape.md)).
 
+A missing *column* is the level below and is caught the other way round — after
+the write fails, not before it runs. No Writer reads the target's column set on
+the happy path, so SQLite is what notices; what it says is translated on the way
+out into a `MissingColumnError` (`config` — the fix is a migration) or, for any
+other SQLite write failure such as a locked database, a `SqliteWriteError`
+(`operational`). Both are `PipelineError`s, so a failed write reaches an operator
+through `format_failure` rather than as a bare `OperationalError` naming neither
+the table nor the database
+([resolving-a-failed-run.md](resolving-a-failed-run.md)).
+
 `StoreRegistry(root, backend=..., busy_timeout_ms=5000)` owns shared
 configuration and plays **two roles**. As a *namespace factory* it mints stores
 with `registry.store(namespace)`; the default `DirectoryStoreBackend` maps a

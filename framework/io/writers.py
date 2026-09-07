@@ -12,7 +12,10 @@ supply a serialise/deserialise pair, and the SQLite Writers share the
 connection lifetime (``_writing_connection``), the staging/commit/cleanup shape
 of a merge (``_staged_merge``), and the delete-then-append that makes a
 re-driven logical run idempotent (``_replace_logical_run``). The transaction
-boundary is therefore stated once rather than re-derived per Writer.
+boundary is therefore stated once rather than re-derived per Writer — and with
+it the translation of a failed write into the expected-failure family
+(``MissingColumnError`` / ``SqliteWriteError``), so no Writer reaches an
+operator as a bare ``OperationalError`` that names neither table nor database.
 
 A Writer reports the target it touched in ``data_locations`` for the run record,
 set at the top of ``write`` because every Writer owns its target before it writes.
@@ -57,6 +60,8 @@ __all__ = [
     "SqliteAppendOnlyWriter",
     "AppendOnlyConflictError",
     "MissingTableError",
+    "MissingColumnError",
+    "SqliteWriteError",
 ]
 
 
@@ -84,6 +89,126 @@ class MissingTableError(PipelineError):
     """
 
     category = ErrorCategory.CONFIG
+
+
+class MissingColumnError(PipelineError):
+    """A write named a column its target table does not have.
+
+    The counterpart of :class:`MissingTableError` one level down: the table is
+    there, but the frame carries a column the table was never declared with — a
+    gold rebuild that gained a field, a silver schema widened without the
+    migration beside it. Categorised as **config** for the same reason: the rows
+    are fine and the run conditions are fine, what is missing is a column, and
+    the fix is in ``migrations/`` (or in the wiring, for a database that owns no
+    migrations).
+
+    Raised by translating SQLite's own complaint rather than by checking the
+    column set before every write: the check would cost a ``PRAGMA`` on every
+    run to catch something that only ever happens once, right after a schema
+    change (``docs/migrations.md``, decision 4). The
+    table's declared columns are read on the failure path only, where the run is
+    already over.
+    """
+
+    category = ErrorCategory.CONFIG
+
+
+class SqliteWriteError(PipelineError):
+    """A write against SQLite failed for a reason that is not the data's fault.
+
+    The catch-all of the pair: a locked database, a path that cannot be opened,
+    a constraint the target declares. Categorised as **operational** — the code
+    and the rows are fine and the same run would likely succeed once the
+    condition clears — which is also why it carries no advice beyond SQLite's
+    own message.
+
+    It exists so that a failed write reaches an operator through
+    :func:`~framework.core.errors.format_failure` like every other expected
+    failure, rather than as a raw traceback whose most visible line is pandas'
+    ``Execution failed`` with the real reason buried in ``__cause__``. The
+    original exception is kept as this one's ``__cause__``, so nothing is lost
+    for anyone reading a traceback deliberately.
+    """
+
+    category = ErrorCategory.OPERATIONAL
+
+
+# What a failed write can arrive as. pandas re-raises SQLite's error as its own
+# ``DatabaseError`` (and, since pandas 3, with the message flattened to
+# "Execution failed"), so both are caught and the chain is walked for the
+# sqlite3 error that actually says what went wrong.
+_WRITE_FAILURES = (sqlite3.Error, pd.errors.DatabaseError)
+
+# SQLite's two ways of saying "that column is not here": the first from an
+# INSERT naming a column the target lacks, the second from a statement
+# referencing one. Matching on the message is what makes the translation
+# free on the happy path.
+_MISSING_COLUMN_SIGNS = ("has no column named", "no such column")
+
+
+def _sqlite_message(failure: BaseException) -> str:
+    """What SQLite said, dug out from however the failure was re-raised."""
+    seen: set[int] = set()
+    error: BaseException | None = failure
+    while error is not None and id(error) not in seen:
+        if isinstance(error, sqlite3.Error):
+            return str(error)
+        seen.add(id(error))
+        error = error.__cause__
+    return str(failure) or type(failure).__name__
+
+
+def _column_advice(con: sqlite3.Connection | None, table: str) -> str:
+    """Name the columns the target does have, and where the fix belongs.
+
+    Read from the connection the write failed on, so it reports the target as it
+    actually is. Anything that goes wrong asking — the connection is unusable
+    after whatever failed, the table has since gone — costs the operator only
+    the extra sentence, never a second error on top of the first, so it is
+    caught and dropped.
+    """
+    if con is None:
+        return ""
+    try:
+        declared = [
+            row[1]
+            for row in con.execute(f"PRAGMA table_info({quote_identifier(table)})")
+        ]
+        migrated = under_migration_control(con)
+    except sqlite3.Error:
+        return ""
+    held = f" It holds ({', '.join(declared)})." if declared else ""
+    if migrated:
+        return (
+            f"{held} That database is under migration control, so its shape is "
+            "declared by SQL rather than by the frame: add the column in a new "
+            "numbered migration under migrations/<subject>/<database>/ and "
+            "apply it with 'python -m cli migrate'."
+        )
+    return (
+        f"{held} That database declares no migrations, so the table carries "
+        "whatever columns the write that created it carried; the feed has "
+        "widened since."
+    )
+
+
+def _write_failure(
+    failure: BaseException,
+    con: sqlite3.Connection | None,
+    db_path: Path,
+    table: str,
+) -> PipelineError:
+    """Translate a raw SQLite write failure into the expected-failure family.
+
+    One place, so every table-backed Writer reports a failed write the same way
+    and names the same two things a raw ``OperationalError`` never does: which
+    table, in which database.
+    """
+    message = _sqlite_message(failure)
+    where = f"write to table {table!r} in {db_path} failed: {message}"
+    if any(sign in message for sign in _MISSING_COLUMN_SIGNS):
+        return MissingColumnError(f"{where}.{_column_advice(con, table)}")
+    return SqliteWriteError(where)
 
 
 def _frame_for_strategy(
@@ -174,7 +299,7 @@ _LEGACY_STAGING_PREFIXES = ("_upsert_stage_", "_insert_or_ignore_stage_")
 
 @contextmanager
 def _writing_connection(
-    db_path: Path, busy_timeout_ms: int
+    db_path: Path, table: str, busy_timeout_ms: int
 ) -> Iterator[sqlite3.Connection]:
     """Own one write's connection lifetime: mkdir, connect, commit, close.
 
@@ -182,14 +307,25 @@ def _writing_connection(
     them, and the commit happens only when the body returns normally: a raising
     body leaves the transaction uncommitted and the close discards it, so a
     failed write never lands half of itself.
+
+    It is also where a failed write becomes an expected failure. Every
+    table-backed Writer's statements run inside this block — the staged merges
+    included — so translating here means one ``except`` rather than one per
+    Writer, and no Writer can be added that forgets to. The rollback is
+    unchanged: the wrapped error still leaves the block, so the close still
+    discards the transaction.
     """
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    con = connect(db_path, busy_timeout_ms)
+    con: sqlite3.Connection | None = None
     try:
+        con = connect(db_path, busy_timeout_ms)
         yield con
         con.commit()
+    except _WRITE_FAILURES as failure:
+        raise _write_failure(failure, con, db_path, table) from failure
     finally:
-        con.close()
+        if con is not None:
+            con.close()
 
 
 @dataclass(frozen=True)
@@ -225,7 +361,7 @@ def _staged_merge(
     table behind rather than running further statements against a connection
     whose transaction is being discarded; the next write replaces it wholesale.
     """
-    with _writing_connection(db_path, busy_timeout_ms) as con:
+    with _writing_connection(db_path, table, busy_timeout_ms) as con:
         staging = _STAGING_PREFIX + table
 
         # Land the incoming rows in the scratch table. This is pandas' own
@@ -515,7 +651,9 @@ class SqliteTruncateReloadWriter:
     def write(self, dataset: Dataset) -> None:
         self.data_locations = [table_location(self._db_path, self._table)]
         frame = _stamp_run_provenance(dataset.to_pandas(), _current_run_id())
-        with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
+        with _writing_connection(
+            self._db_path, self._table, self._busy_timeout_ms
+        ) as con:
             if not self._guard.under_control(con):
                 frame.to_sql(self._table, con, if_exists="replace", index=False)
                 return
@@ -572,7 +710,9 @@ class QuarantineWriter:
         Takes an already-stamped frame.
         """
         self.data_locations = [table_location(self._db_path, self._table)]
-        with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
+        with _writing_connection(
+            self._db_path, self._table, self._busy_timeout_ms
+        ) as con:
             self._guard.require_target(con)
             if RUN_PROVENANCE_COLUMN in frame.columns:
                 _ensure_provenance_column(con, self._table)
@@ -767,7 +907,9 @@ class SqliteInsertIfAbsentWriter:
                 f"InsertIfAbsent key column(s) not found in dataset: {missing}"
             )
 
-        with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
+        with _writing_connection(
+            self._db_path, self._table, self._busy_timeout_ms
+        ) as con:
             self._guard.require_target(con)
             # Read the existing key→surrogate mapping. A table that is not there
             # yet (the first run for this reference set) means no mapping;
@@ -972,8 +1114,8 @@ class SqliteAppendOnlyWriter:
         silent, so the narrowing itself is refused instead.
 
         The opposite drift — a batch carrying a column the target lacks — is
-        already loud: the comparison below names that column on both sides and
-        SQLite refuses the statement.
+        already loud: the comparison below names that column on both sides, and
+        SQLite's refusal surfaces as :class:`MissingColumnError` naming it.
 
         The reserved provenance column is exempt. It is this Writer's own stamp
         rather than anything the batch declared, and a write outside a run
@@ -1092,7 +1234,9 @@ class AccumulateByRunWriter:
     def write(self, dataset: Dataset) -> None:
         self.data_locations = [table_location(self._db_path, self._table)]
         frame = self._stamp(dataset.to_pandas())
-        with _writing_connection(self._db_path, self._busy_timeout_ms) as con:
+        with _writing_connection(
+            self._db_path, self._table, self._busy_timeout_ms
+        ) as con:
             self._guard.require_target(con)
             if RUN_PROVENANCE_COLUMN in frame.columns:
                 _ensure_provenance_column(con, self._table)

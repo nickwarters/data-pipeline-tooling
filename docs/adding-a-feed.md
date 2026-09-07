@@ -83,7 +83,8 @@ node = p.transform(SelectColumns(SELECT_RAW_COLUMNS), node, name="select")
 So raw lands everything the source gave and silver keeps only the columns this
 feed declares — which is exactly the shape silver's, gold's and quarantine's
 baselines describe. Without it a 45-column source would reach silver carrying
-columns its table does not have, and the write would fail on `no such column`.
+columns its table does not have, and the write would fail with a
+`MissingColumnError` naming them.
 
 Seeded from a feed file, the list is the source's own column names: `RENAME`'s
 keys plus the ones that needed no renaming. (`RENAME`'s keys alone would be

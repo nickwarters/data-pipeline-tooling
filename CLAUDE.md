@@ -148,7 +148,10 @@ toolchain, a domain language, or a release. Two rules follow:
   `schema_migrations` ledger no table-backed Writer creates a missing table —
   it raises `MissingTableError` — and `Refresh` deletes-then-appends rather than
   dropping the table its migration declared, while a database without the ledger
-  is unaffected), `Store` (namespace → file
+  is unaffected; a *column* the target lacks is not checked for but translated on
+  the way out of the failed write into `MissingColumnError`, as every other
+  SQLite write failure becomes `SqliteWriteError`, so no write reaches an
+  operator as a bare `OperationalError`), `Store` (namespace → file
   factory minting `writer(table, strategy)` — a one-line delegation to
   `strategy.writer_for(...)` — / `reader(table)` over one logical database; **lives in the sibling
   `tools.store`, not `framework.io`** — where a feed lands is application

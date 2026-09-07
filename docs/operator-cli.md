@@ -721,9 +721,10 @@ without an outcome, because nothing was attempted.
 **It is deliberately not wired into `run` or `orchestrate`.** A pipeline can be
 invoked directly as `python -m pipelines.<name>`, which would bypass such a
 check anyway; and a run against an unmigrated database already fails at the
-write, naming the missing table. A *pending* migration instead surfaces SQLite's
-raw `no such column`, which fails fast but reads poorly — accepted rather than
-paid for with a check on every run.
+write, naming the missing table. A *pending* migration is caught the other way
+round: the write fails on the column SQLite does not have, reported as a
+`MissingColumnError` naming the table, the columns it does hold and this command
+— after the fact rather than paid for with a column check on every run.
 
 `--migrations-root` points the command at a different tree; it defaults to the
 `migrations/` directory of the checkout the `tools` package was imported from.

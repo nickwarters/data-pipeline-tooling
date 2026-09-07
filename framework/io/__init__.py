@@ -43,6 +43,7 @@ from framework.io.writers import (
     CsvWriter,
     ExcelWriter,
     JsonWriter,
+    MissingColumnError,
     MissingTableError,
     QuarantineWriter,
     SqliteAppendOnlyWriter,
@@ -50,6 +51,7 @@ from framework.io.writers import (
     SqliteInsertOrIgnoreWriter,
     SqliteTruncateReloadWriter,
     SqliteUpsertWriter,
+    SqliteWriteError,
     StdoutWriter,
     Writer,
 )
@@ -85,4 +87,6 @@ __all__ = [
     "SqliteAppendOnlyWriter",
     "AppendOnlyConflictError",
     "MissingTableError",
+    "MissingColumnError",
+    "SqliteWriteError",
 ]

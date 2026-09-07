@@ -22,6 +22,7 @@ from framework.io.writers import (
     SqliteInsertOrIgnoreWriter,
     SqliteTruncateReloadWriter,
     SqliteUpsertWriter,
+    SqliteWriteError,
     StdoutWriter,
 )
 from framework.run.builder import Pipeline
@@ -285,7 +286,7 @@ def test_accumulate_by_run_writer_fails_when_its_delete_is_locked_out(
     writer.write(dataset)
 
     monkeypatch.setattr(writers_module, "connect", _connect_refusing_delete)
-    with pytest.raises(sqlite3.OperationalError):
+    with pytest.raises(SqliteWriteError, match="database is locked"):
         writer.write(dataset)
 
     assert len(SqliteReader(db, "selection_pool").read()) == 2
@@ -299,7 +300,7 @@ def test_quarantine_writer_fails_when_its_delete_is_locked_out(tmp_path, monkeyp
     writer.write(Dataset.from_pandas(frame))
 
     monkeypatch.setattr(writers_module, "connect", _connect_refusing_delete)
-    with pytest.raises(sqlite3.OperationalError):
+    with pytest.raises(SqliteWriteError, match="database is locked"):
         writer.write(Dataset.from_pandas(frame))
 
     assert len(SqliteReader(db, "rejects").read()) == 1
@@ -317,7 +318,7 @@ def test_accumulate_by_run_writer_surfaces_a_locked_database(tmp_path):
     blocker = connect(db, 50)
     try:
         blocker.execute("BEGIN EXCLUSIVE")
-        with pytest.raises(sqlite3.OperationalError):
+        with pytest.raises(SqliteWriteError, match="database is locked"):
             writer.write(dataset)
     finally:
         blocker.rollback()
@@ -337,7 +338,7 @@ def test_insert_if_absent_writer_surfaces_a_locked_database(tmp_path):
     blocker = connect(db, 50)
     try:
         blocker.execute("BEGIN EXCLUSIVE")
-        with pytest.raises(sqlite3.OperationalError):
+        with pytest.raises(SqliteWriteError, match="database is locked"):
             writer.write(Dataset.from_pandas(pd.DataFrame({"value": ["C"]})))
     finally:
         blocker.rollback()
