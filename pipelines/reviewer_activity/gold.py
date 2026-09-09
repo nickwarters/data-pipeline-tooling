@@ -6,7 +6,9 @@ import pandas as pd
 
 from framework.core import ColumnValidator, Dataset, Reader, SchemaValidator, Writer
 from framework.run import Pipeline, RunLog
-from tools.observability.timestamps import local_date
+from framework.transform import count_by, shaped
+from shared.reporting import UNKNOWN_BRAND
+from tools.observability.timestamps import local_dates
 
 from .schema import ReviewerActivityDaily
 
@@ -28,8 +30,8 @@ SOURCE_COLUMNS = (
     "as_of_utc",
 )
 
-# Same fill, same reason as pipelines.sharepoint_cases.gold.UNKNOWN_BRAND.
-UNKNOWN_BRAND = "(unknown)"
+# ``UNKNOWN_BRAND`` is the shared reporting fill, imported above for the same
+# reason the Sync aggregates carry it.
 
 
 def normalize_reviewer_account(value: object) -> str | None:
@@ -55,20 +57,6 @@ def normalize_reviewer_account(value: object) -> str | None:
     return account or None
 
 
-def _empty_result() -> pd.DataFrame:
-    """Return the declared shape for a source with no reportable work."""
-    return pd.DataFrame(
-        {
-            "reviewer_account": pd.Series([], dtype="string"),
-            "reportable_date": pd.Series([], dtype="datetime64[ns]"),
-            "case_type": pd.Series([], dtype="string"),
-            "brand": pd.Series([], dtype="string"),
-            "count": pd.Series([], dtype="int64"),
-            "as_of_utc": pd.Series([], dtype="string"),
-        }
-    )
-
-
 def aggregate_reviewer_activity(dataset: Dataset) -> Dataset:
     """Count non-void current Cases by reviewer, local date, Case Type, and
     brand."""
@@ -78,9 +66,8 @@ def aggregate_reviewer_activity(dataset: Dataset) -> Dataset:
     eligible["reviewer_account"] = eligible["assigned_reviewer_name"].map(
         normalize_reviewer_account
     )
-    reportable = pd.to_datetime(eligible["reportable_at"], utc=True, errors="coerce")
-    eligible["reportable_date"] = reportable.map(
-        lambda value: pd.NaT if pd.isna(value) else pd.Timestamp(local_date(value))
+    eligible["reportable_date"] = local_dates(eligible["reportable_at"]).map(
+        lambda day: pd.NaT if day is None else pd.Timestamp(day)
     )
     case_types = eligible["case_type"].astype("string")
     eligible = eligible.loc[
@@ -91,37 +78,20 @@ def aggregate_reviewer_activity(dataset: Dataset) -> Dataset:
     ]
 
     if eligible.empty:
-        return Dataset.from_pandas(_empty_result())
+        # The declared shape, for a source with no reportable work.
+        return shaped([], ReviewerActivityDaily)
 
     eligible["brand"] = UNKNOWN_BRAND
-    grouped = (
-        eligible.groupby(
-            ["reviewer_account", "reportable_date", "case_type", "brand"],
-            sort=True,
-            dropna=False,
-        )
-        .size()
-        .reset_index(name="count")
+    grouped = count_by(
+        eligible,
+        ("reviewer_account", "reportable_date", "case_type", "brand"),
+        measure="count",
     )
-    grouped["count"] = grouped["count"].astype("int64")
     # Sync's Refresh-built current table stamps one literal as_of_utc on every
     # row. Carry that contract through the reduction, stamping after the
     # group-by like the sibling gold aggregates do.
     as_of = eligible["as_of_utc"].iloc[0]
-    grouped["as_of_utc"] = pd.Series(
-        [as_of] * len(grouped), index=grouped.index, dtype="string"
-    )
-    result = grouped[
-        [
-            "reviewer_account",
-            "reportable_date",
-            "case_type",
-            "brand",
-            "count",
-            "as_of_utc",
-        ]
-    ]
-    return Dataset.from_pandas(result.reset_index(drop=True))
+    return shaped(grouped, ReviewerActivityDaily, stamp={"as_of_utc": as_of})
 
 
 def _serialize_reportable_date(dataset: Dataset) -> Dataset:
