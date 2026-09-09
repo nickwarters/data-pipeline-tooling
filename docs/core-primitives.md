@@ -673,6 +673,18 @@ post-validate (schema) → write**.
   dependency once, logs it as `dependency:<name>`, and joins or anti-joins in
   Python.
 
+**Aggregate helpers.** Beside the processors, `framework.transform` exports
+the plain functions a gold reduction calls *around* its group-by — `summarise`
+(a column's mean, percentiles and maximum, `None` where there was nothing to
+take), `statistic`, `ratio` / `ratios` / `total` (guarded division, a
+null-preserving sum), `fill_dimensions` / `count_by` (fill a NULL dimension
+before grouping; count by grain) and `shaped` (land the rows in exactly the
+shape the schema dataclass declares, so an empty result still passes its
+`SchemaValidator`). The reduction and its grain stay the feed's own; only the
+plumbing is shared. The instant arithmetic it buckets by (`instants`,
+`local_dates`, `local_months`, `elapsed`) lives beside the local-date rule in
+`tools.observability.timestamps`.
+
 Full walkthrough + worked example: [processors.md](processors.md).
 
 ### `RunLog` — structured JSONL run observability

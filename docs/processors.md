@@ -780,6 +780,55 @@ the blob in place and the column is not dropped from under it, exactly as
 *another* existing column overwrites it, which is how a flatten refreshes a
 column it has landed before.
 
+## Aggregate helpers — around a gold reduction's group-by
+
+An Aggregate table is one row per combination of the dimensions it declares plus
+its measures. What each table *reduces* is that table's own code, beside it in
+its `metrics.py` / `gold.py`. What every reduction does *around* its group-by is
+the same, and `framework.transform` spells it once. They are plain functions a
+reduction calls on one line, in the order it reads, so a breakpoint on the line
+shows the rows; they are engine-confined, taking the backing frame's own types
+once the reduction has crossed `to_pandas()`.
+
+```python
+from framework.transform import count_by, fill_dimensions, ratio, shaped, summarise
+from tools.observability.timestamps import elapsed, instants, local_months
+
+frame = fill_dimensions(cases.to_pandas(), {"void_reason": UNSTATED})
+frame["_age"] = elapsed(instants(frame["created"]), instants(frame["voided_at"]))
+frame["void_month"] = local_months(frame["voided_at"])
+rows = [
+    {
+        "void_month": month,
+        "case_type": case_type,
+        "case_count": len(group),
+        "no_reason_share": ratio((group["void_reason"] == UNSTATED).sum(), len(group)),
+        **summarise(group["_age"], "age_at_void_days"),   # _mean, _p50, _p90, _max
+    }
+    for (month, case_type), group in frame.groupby(["void_month", "case_type"])
+]
+return shaped(rows, CaseVoidMonthly, stamp={"as_of_utc": as_of}, sort_by=("void_month", "case_type"))
+```
+
+| Helper | What |
+|--------|------|
+| `statistic(value, places=3)` | A statistic as it is published: rounded, or `None` where there was nothing to take (pandas hands back `NaN` for the mean of nothing, and NULL says so where a zero would lie). |
+| `summarise(values, prefix, quantiles=(0.5, 0.9), places=3)` | The mean, each quantile and the maximum of a column, keyed `<prefix>_mean`, `<prefix>_p50`, `<prefix>_p90`, `<prefix>_max`. Ask for `quantiles=(0.5, 0.95)` for a `_p95`, or `quantiles=()` for mean and max only. Nulls are dropped first; every statistic is `None` when nothing is left. |
+| `ratio(numerator, denominator, places=4)` / `ratios(numerator, denominator, places=4)` | A share or rate that is `None` (NULL, over two columns) rather than a division error where the denominator is zero or missing. |
+| `total(values)` | A sum that stays `None` when no row reported a value, so "nothing was measured" does not become `0`. |
+| `fill_dimensions(frame, {column: literal})` | Replace a dimension's NULLs with the literal that stands in for them *before* the group-by, so the grain has no hole a reader would silently drop. The literals every subject shares live in `shared.reporting`. |
+| `count_by(frame, dimensions, measure=..., fills=...)` | One row per combination of the dimensions, counted as `measure`, sorted by the dimensions; over no rows it keeps every column, so the table's shape does not depend on whether anything was counted. |
+| `shaped(rows, schema, stamp=..., sort_by=...)` | Land rows (a list of dicts or a frame) as the table the schema dataclass declares: its columns, in its order, as its types — `string` dimensions, `int64` counts, `float64` statistics, nullable `boolean` flags, `datetime64` dates. `stamp` sets constant columns (the run's as-of instant) on an empty result too. An empty result therefore passes the same `SchemaValidator` a populated one does; a declared column the rows lack is an error, not a silent NULL. |
+
+The instant arithmetic a reduction buckets by is not here but beside the rule it
+applies, in `tools.observability.timestamps`: `instants` parses a whole column
+of stored ISO text (`NaT` where a value does not parse — a reporting reduction
+summarises what it can read, where the silver boundary's `SchemaCoercion` fails
+loudly on the same input, deliberately), `local_dates` / `local_date_texts` /
+`local_months` take each instant's **local** calendar date through the
+`local_timezone` seam, and `elapsed(start, end, unit="days")` is a non-negative
+duration over two instants or two columns.
+
 ## Not yet (follow-on tickets)
 
 - **Typed `Case` objects** at the domain edge: the CasePool returns the bulk-tier

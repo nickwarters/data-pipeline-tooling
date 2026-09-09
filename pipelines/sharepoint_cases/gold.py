@@ -48,9 +48,19 @@ from framework.transform import (
     FlattenJsonObject,
     JoinWith,
     Stamp,
+    count_by,
+    fill_dimensions,
+)
+from shared.reporting import (
+    UNASSIGNED,
+    UNDECIDED,
+    UNKNOWN_BRAND,
+    UNRESOLVED,
+    UNSTAMPED,
+    UNSTATED,
 )
 from tools.medallion import Medallion
-from tools.observability.timestamps import local_date
+from tools.observability.timestamps import instants, local_date, local_date_texts
 
 from .schema import FEED_NAME, NATURAL_KEY
 
@@ -142,21 +152,14 @@ WINNER_COLUMNS = (CASE_ID_COLUMN, "source_observation_id")
 # state, so it is a business event rather than an artefact of when we polled.
 TERMINAL_STATUSES = {"Completed": "completed_at", "Void": "voided_at"}
 
-# Reporting fills, not source values. Both are literal keys rather than NULL so
-# the grain of an aggregate has no hole in it: a NULL group key is a hole a
-# reader may silently drop, losing rows from a total.
-UNASSIGNED = "(unassigned)"
-UNSTAMPED = "(unstamped)"
-# The tri-state's real third state (see AnswerRow), not a fill for missing data.
-UNDECIDED = "(undecided)"
-UNRESOLVED = "(unresolved)"
-UNSTATED = "(unstated)"
-
+# The reporting fills -- ``UNASSIGNED``, ``UNSTAMPED``, ``UNDECIDED``,
+# ``UNRESOLVED``, ``UNSTATED`` and ``UNKNOWN_BRAND`` -- are declared once in
+# ``shared.reporting`` and imported above: literal keys rather than NULL so the
+# grain of an aggregate has no hole in it, spelled the same by every subject.
 # No source reachable from this feed carries brand yet -- there is no join path
-# to pipelines.ref_lookup, where it exists today. Every Case-counting aggregate
-# still carries the column, filled with this literal, so the grain's shape does
-# not change the day a brand source lands; only this fill does.
-UNKNOWN_BRAND = "(unknown)"
+# to pipelines.ref_lookup, where it exists today -- so every Case-counting
+# aggregate fills it with ``UNKNOWN_BRAND``; only the fill changes the day a
+# brand source lands, never the shape.
 
 # The floor grain every Case-counting aggregate carries, so any report rolls up
 # from a common base; a table's extra dimensions beyond these are per-metric
@@ -351,16 +354,14 @@ def age_buckets(
     """
     frame = dataset.to_pandas()
     as_of_day = local_date(as_of)
-    stamp = pd.to_datetime(frame[age_from], utc=True, format="ISO8601", errors="coerce")
+    stamp = instants(frame[age_from])
     buckets = [_age_bucket(_age_in_days(value, as_of_day)) for value in stamp]
     # See UNASSIGNED above: without this fill, groupby would drop unassigned
     # Cases from the total.
     counted = (
-        frame.assign(
+        fill_dimensions(frame, {"assigned_reviewer_name": UNASSIGNED})
+        .assign(
             brand=UNKNOWN_BRAND,
-            assigned_reviewer_name=frame["assigned_reviewer_name"].where(
-                frame["assigned_reviewer_name"].notna(), UNASSIGNED
-            ),
             age_bucket=pd.Series(
                 [label for label, _ in buckets], index=frame.index, dtype="object"
             ),
@@ -381,42 +382,17 @@ def throughput(dataset: Dataset) -> Dataset:
     stamp falls on."""
     frame = dataset.to_pandas()
     terminal = frame[frame["status"].isin(TERMINAL_STATUSES.keys())]
-    if terminal.empty:
-        # Declared rather than derived, so a poll with nothing terminal in it
-        # still refreshes the table in the shape a populated one has -- built
-        # from THROUGHPUT_DIMENSIONS so it cannot desync from the populated path.
-        return Dataset.from_pandas(
-            pd.DataFrame(
-                {
-                    **{
-                        column: pd.Series(dtype="object")
-                        for column in THROUGHPUT_DIMENSIONS
-                    },
-                    "case_count": pd.Series(dtype="int64"),
-                }
-            )
-        )
     # One parse per terminal stamp column, not one per row: each row then takes
     # the stamp column its own status names.
     stamps = pd.Series(pd.NaT, index=terminal.index, dtype="datetime64[ns, UTC]")
     for status, column in TERMINAL_STATUSES.items():
         of_status = terminal["status"] == status
-        stamps[of_status] = pd.to_datetime(
-            terminal.loc[of_status, column],
-            utc=True,
-            format="ISO8601",
-            errors="coerce",
-        )
-    # The instant -> local calendar date step stays per value: which zone is
-    # local is the ``tools.observability.timestamps`` seam and it resolves per
-    # instant, which no vectorised ``tz_convert`` expresses.
-    dates = [
-        UNSTAMPED if pd.isna(stamp) else local_date(stamp).isoformat()
-        for stamp in stamps
-    ]
+        stamps[of_status] = instants(terminal.loc[of_status, column])
+    # A poll with nothing terminal in it still refreshes the table in the shape
+    # a populated one has: ``count_by`` over no rows keeps every column.
     return _counted(
         terminal.assign(
-            terminal_date=pd.Series(dates, index=terminal.index, dtype="object"),
+            terminal_date=local_date_texts(stamps).fillna(UNSTAMPED).astype("object"),
             terminal_status=terminal["status"],
             brand=UNKNOWN_BRAND,
         ),
@@ -433,23 +409,12 @@ def _counted(
     fills: dict[str, str],
     measure: str,
 ) -> Dataset:
-    """Group ``frame`` by ``dimensions`` into one row per combination, counted.
-
-    ``.where``, not ``fillna``, so an all-null float64 ``fills`` column lands as
-    ``object`` rather than staying float64 with the literal coerced to NaN.
-    """
-    filled = {
-        column: frame[column].where(frame[column].notna(), literal)
-        for column, literal in fills.items()
-    }
-    counted = (
-        frame.assign(**filled)
-        .groupby(list(dimensions))
-        .size()
-        .reset_index(name=measure)
-        .sort_values(list(dimensions), kind="stable")
+    """Group ``frame`` by ``dimensions`` into one row per combination, counted,
+    with the NULLs in each ``fills`` dimension filled first so no row falls out
+    of the total."""
+    return Dataset.from_pandas(
+        count_by(frame, dimensions, measure=measure, fills=fills)
     )
-    return Dataset.from_pandas(counted.reset_index(drop=True))
 
 
 def answer_remediation(dataset: Dataset) -> Dataset:

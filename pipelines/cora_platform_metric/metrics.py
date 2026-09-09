@@ -7,24 +7,34 @@ between two polls was never observed. Every table is stamped with Sync's own
 ``as_of_utc`` and open intervals are measured to it, so a re-run over the same
 snapshot gives the same numbers.
 
-Each reduction hands its rows to ``_finish`` with the dataclass in ``schema``
-that declares the table: that dataclass is the one statement of a table's
-columns, their order and their types, so an empty result still lands the shape
-the table's ``SchemaValidator`` gates.
+Each reduction hands its rows to ``framework.transform.shaped`` with the
+dataclass in ``schema`` that declares the table: that dataclass is the one
+statement of a table's columns, their order and their types, so an empty result
+still lands the shape the table's ``SchemaValidator`` gates. The statistics,
+fills and instant arithmetic around each group-by are the shared aggregate
+helpers; only the reduction itself is this module's.
 """
 
 from __future__ import annotations
 
 import datetime as dt
 import json
-from typing import get_type_hints
 
 import pandas as pd
 
 from framework.core import Dataset
+from framework.transform import (
+    count_by,
+    fill_dimensions,
+    ratio,
+    shaped,
+    statistic,
+    summarise,
+)
+from shared.reporting import UNASSIGNED, UNDECIDED, UNKNOWN_BRAND, UNRESOLVED, UNSTATED
 from tools.calendar import WorkingDayCalendar
 from tools.observability import timestamps
-from tools.observability.timestamps import local_date
+from tools.observability.timestamps import elapsed, instants, local_date, local_months
 
 from .schema import (
     REMEDIATION_SLA,
@@ -49,14 +59,9 @@ CASE_ID_COLUMN = "case_id"
 # read below the layer that derives ``case_id``, so the natural key stands in.
 HISTORY_KEY = ("case_type", "source_item_id")
 
-# Reporting fills, not source values -- literal keys rather than NULL so an
-# aggregate's grain has no hole a reader may silently drop. The same spellings
-# the Sync subject's own aggregates use.
-UNKNOWN_BRAND = "(unknown)"
-UNASSIGNED = "(unassigned)"
-UNDECIDED = "(undecided)"
-UNRESOLVED = "(unresolved)"
-UNSTATED = "(unstated)"
+# The reporting fills (``UNKNOWN_BRAND`` & co.) come from ``shared.reporting``:
+# literal keys rather than NULL so an aggregate's grain has no hole a reader may
+# silently drop, spelled once for every subject that reports over them.
 
 # The Case lifecycle's terminal states: a Case observed in one has stopped
 # dwelling, so its last interval is neither open nor closed -- it is over.
@@ -81,9 +86,6 @@ WEEKDAY_NAMES = (
     "Saturday",
     "Sunday",
 )
-
-SECONDS_PER_DAY = 86_400.0
-SECONDS_PER_HOUR = 3_600.0
 
 # The columns each reduction needs from what it is handed; the pipeline gates
 # each source on the union for its consumers, and the failure message lands
@@ -157,81 +159,6 @@ def snapshot_as_of(current: Dataset) -> str:
     return str(frame[AS_OF_COLUMN].iloc[0])
 
 
-def _instants(values):
-    """ISO text (or datetimes) as UTC instants -- a whole column or one value.
-
-    Anything that does not parse becomes ``NaT``, and the measure it feeds
-    drops that row rather than the run failing on one bad stamp.
-    """
-    return pd.to_datetime(values, utc=True, errors="coerce", format="ISO8601")
-
-
-def _filled(frame: pd.DataFrame, fills: dict[str, str]) -> pd.DataFrame:
-    """Replace a dimension's NULLs with the literal that stands in for them.
-
-    Through ``object``: an all-null column arrives as ``float64``, and filling
-    it in place would coerce the literal back to a number.
-    """
-    return frame.assign(
-        **{
-            column: frame[column].astype("object").fillna(literal)
-            for column, literal in fills.items()
-        }
-    )
-
-
-def _days(started: pd.Timestamp, ended: pd.Timestamp) -> float:
-    """Days from one instant to another, never negative."""
-    return max((ended - started).total_seconds() / SECONDS_PER_DAY, 0.0)
-
-
-def _rounded(value: object) -> float | None:
-    """A statistic as it is published; None where there was nothing to take."""
-    return None if pd.isna(value) else round(float(value), 3)
-
-
-def _mean(values: pd.Series) -> float | None:
-    return _rounded(values.dropna().mean())
-
-
-def _quantile(values: pd.Series, quantile: float) -> float | None:
-    return _rounded(values.dropna().quantile(quantile))
-
-
-def _maximum(values: pd.Series) -> float | None:
-    return _rounded(values.dropna().max())
-
-
-# What each declared type is held as while the table is being built.
-PANDAS_DTYPES = {str: "string", int: "int64", float: "float64", bool: "bool"}
-
-
-def _finish(
-    rows: list[dict[str, object]],
-    table: type,
-    *,
-    as_of: str,
-    sort_by: tuple[str, ...],
-) -> Dataset:
-    """Rows -> a stamped, sorted frame shaped as ``table`` declares.
-
-    The columns, their order and their types are read off the schema dataclass
-    rather than restated here, so an empty result still carries the declared
-    shape: string dimensions, ``int64`` counts and ``float64`` statistics (NaN
-    where a group had nothing to summarise).
-    """
-    columns = {
-        name: PANDAS_DTYPES[declared]
-        for name, declared in get_type_hints(table).items()
-    }
-    frame = pd.DataFrame(rows, columns=list(columns))
-    frame[AS_OF_COLUMN] = as_of
-    for column, dtype in columns.items():
-        frame[column] = frame[column].astype(dtype)
-    ordered = frame.sort_values(list(sort_by), kind="stable").reset_index(drop=True)
-    return Dataset.from_pandas(ordered)
-
-
 def _ordered_history(dataset: Dataset) -> pd.DataFrame:
     """The observation history in the order things happened, per Case.
 
@@ -241,7 +168,7 @@ def _ordered_history(dataset: Dataset) -> pd.DataFrame:
     which of two sub-second observations is credited, not any measure here.
     """
     frame = dataset.to_pandas().copy()
-    frame["_modified"] = _instants(frame["source_modified_at"])
+    frame["_modified"] = instants(frame["source_modified_at"])
     return frame.sort_values(
         [*HISTORY_KEY, "_modified", "source_observation_id"], kind="stable"
     )
@@ -252,7 +179,7 @@ def _entry_instant(first: pd.Series) -> pd.Timestamp:
     stamp_column = FIRST_OBSERVATION_ENTRY_STAMPS.get(first["status"])
     if stamp_column is None:
         return first["_modified"]
-    stamped = _instants(first.get(stamp_column))
+    stamped = instants(first.get(stamp_column))
     if pd.notna(stamped) and stamped <= first["_modified"]:
         return stamped
     return first["_modified"]
@@ -284,7 +211,7 @@ def case_stage_dwell(history: Dataset, *, as_of: str) -> Dataset:
             if observation["status"] == status:
                 continue
             stays.append(
-                (case_type, status, _days(entered, observation["_modified"]), False)
+                (case_type, status, elapsed(entered, observation["_modified"]), False)
             )
             status = observation["status"]
             entered = observation["_modified"]
@@ -303,14 +230,14 @@ def case_stage_dwell(history: Dataset, *, as_of: str) -> Dataset:
                 "status": status,
                 "interval_count": len(closed),
                 "open_interval_count": len(group) - len(closed),
-                "dwell_days_mean": _mean(closed),
-                "dwell_days_p50": _quantile(closed, 0.5),
-                "dwell_days_p90": _quantile(closed, 0.9),
-                "dwell_days_max": _maximum(closed),
+                **summarise(closed, "dwell_days"),
             }
         )
-    return _finish(
-        rows, CaseStageDwell, as_of=as_of, sort_by=("brand", "case_type", "status")
+    return shaped(
+        rows,
+        CaseStageDwell,
+        stamp={AS_OF_COLUMN: as_of},
+        sort_by=("brand", "case_type", "status"),
     )
 
 
@@ -337,17 +264,17 @@ def case_hold(history: Dataset, *, as_of: str) -> Dataset:
         for _, observation in observations.iterrows():
             on_hold = pd.notna(observation["on_hold"]) and bool(observation["on_hold"])
             if on_hold and pd.isna(started):
-                stamped = _instants(observation["placed_on_hold_at"])
+                stamped = instants(observation["placed_on_hold_at"])
                 started = stamped if pd.notna(stamped) else observation["_modified"]
             elif not on_hold and pd.notna(started):
                 released = observation["_modified"]
                 holds.append(
-                    (case_type, item, reviewer, _days(started, released), False)
+                    (case_type, item, reviewer, elapsed(started, released), False)
                 )
                 started = pd.NaT
         if pd.notna(started):
             holds.append(
-                (case_type, item, reviewer, _days(started, as_of_instant), True)
+                (case_type, item, reviewer, elapsed(started, as_of_instant), True)
             )
 
     held = pd.DataFrame(
@@ -368,29 +295,22 @@ def case_hold(history: Dataset, *, as_of: str) -> Dataset:
             "case_count": group["source_item_id"].nunique(),
             "hold_count": len(group),
             "open_hold_count": int(group["open"].sum()),
-            "held_days_total": round(float(group["days"].sum()), 3),
-            "held_days_mean": round(float(group["days"].mean()), 3),
+            "held_days_total": statistic(group["days"].sum()),
+            "held_days_mean": statistic(group["days"].mean()),
         }
         for (case_type, reviewer), group in held.groupby(
             ["case_type", "assigned_reviewer_name"], sort=True
         )
     ]
-    return _finish(
+    return shaped(
         rows,
         CaseHold,
-        as_of=as_of,
+        stamp={AS_OF_COLUMN: as_of},
         sort_by=("brand", "case_type", "assigned_reviewer_name"),
     )
 
 
 # --- current metrics --------------------------------------------------------
-
-
-def _month(instants: pd.Series) -> pd.Series:
-    """``YYYY-MM`` of each instant's local date; None where there is no instant."""
-    return instants.map(
-        lambda v: None if pd.isna(v) else local_date(v).strftime("%Y-%m")
-    )
 
 
 def working_days_late(
@@ -428,16 +348,18 @@ def sla_attainment(
     calendar = calendar or WorkingDayCalendar()
     frame = current.to_pandas()
     completed = frame.loc[frame["status"].eq("Completed")].copy()
-    completed["_completed"] = _instants(completed["completed_at"])
+    completed["_completed"] = instants(completed["completed_at"])
     completed = completed.loc[completed["_completed"].notna()]
-    completed["completed_month"] = _month(completed["_completed"])
-    completed = _filled(completed, {"assigned_reviewer_manager_name": UNASSIGNED})
+    completed["completed_month"] = local_months(completed["_completed"])
+    completed = fill_dimensions(
+        completed, {"assigned_reviewer_manager_name": UNASSIGNED}
+    )
 
     dims = ["completed_month", "case_type", "assigned_reviewer_manager_name"]
     rows = []
     for sla_kind, due_column in SLA_DUE_DATES:
         judged = completed.copy()
-        judged["_due"] = _instants(judged[due_column])
+        judged["_due"] = instants(judged[due_column])
         if sla_kind == REMEDIATION_SLA:
             judged = judged.loc[judged["_due"].notna()]
         judged["_late"] = [
@@ -460,14 +382,13 @@ def sla_attainment(
                     "on_time_count": int((late == 0).sum()),
                     "late_count": len(overdue),
                     "no_due_date_count": int(late.isna().sum()),
-                    "late_working_days_mean": _mean(overdue),
-                    "late_working_days_max": _maximum(overdue),
+                    **summarise(overdue, "late_working_days", quantiles=()),
                 }
             )
-    return _finish(
+    return shaped(
         rows,
         CaseSlaAttainmentMonthly,
-        as_of=as_of,
+        stamp={AS_OF_COLUMN: as_of},
         sort_by=(
             "sla_kind",
             "completed_month",
@@ -484,13 +405,13 @@ def void_monthly(current: Dataset, *, as_of: str) -> Dataset:
     from ``created``."""
     frame = current.to_pandas()
     voided = frame.loc[frame["status"].eq("Void")].copy()
-    voided["_voided"] = _instants(voided["voided_at"])
+    voided["_voided"] = instants(voided["voided_at"])
     voided = voided.loc[voided["_voided"].notna()]
-    voided["void_month"] = _month(voided["_voided"])
-    voided["_age"] = (
-        voided["_voided"] - _instants(voided["created"])
-    ).dt.total_seconds() / SECONDS_PER_DAY
-    voided = _filled(voided, {"void_reason": UNSTATED, "voided_by_name": UNASSIGNED})
+    voided["void_month"] = local_months(voided["_voided"])
+    voided["_age"] = elapsed(instants(voided["created"]), voided["_voided"])
+    voided = fill_dimensions(
+        voided, {"void_reason": UNSTATED, "voided_by_name": UNASSIGNED}
+    )
 
     dims = ["void_month", "case_type", "void_reason", "voided_by_name"]
     rows = [
@@ -501,15 +422,14 @@ def void_monthly(current: Dataset, *, as_of: str) -> Dataset:
             "void_reason": reason,
             "voided_by_name": by,
             "case_count": len(group),
-            "age_at_void_days_mean": _mean(group["_age"]),
-            "age_at_void_days_max": _maximum(group["_age"]),
+            **summarise(group["_age"], "age_at_void_days", quantiles=()),
         }
         for (month, case_type, reason, by), group in voided.groupby(dims, sort=True)
     ]
-    return _finish(
+    return shaped(
         rows,
         CaseVoidMonthly,
-        as_of=as_of,
+        stamp={AS_OF_COLUMN: as_of},
         sort_by=("void_month", "brand", "case_type", "void_reason", "voided_by_name"),
     )
 
@@ -523,11 +443,10 @@ def answer_action_load(actions: Dataset, current: Dataset, *, as_of: str) -> Dat
     """
     live = _live_cases(current)
     live_counts = live.groupby("case_type").size()
-    per_case = (
-        actions.to_pandas()
-        .groupby(["case_type", "question_id", CASE_ID_COLUMN], sort=True)
-        .size()
-        .reset_index(name="actions")
+    per_case = count_by(
+        actions.to_pandas(),
+        ("case_type", "question_id", CASE_ID_COLUMN),
+        measure="actions",
     )
     rows = []
     for (case_type, question_id), group in per_case.groupby(
@@ -540,15 +459,16 @@ def answer_action_load(actions: Dataset, current: Dataset, *, as_of: str) -> Dat
                 "question_id": question_id,
                 "case_count": len(group),
                 "action_count": int(group["actions"].sum()),
-                "actions_per_case_mean": round(float(group["actions"].mean()), 3),
+                "actions_per_case_mean": statistic(group["actions"].mean()),
                 "actions_per_case_max": int(group["actions"].max()),
-                "share_of_cases": round(len(group) / live_count, 4)
-                if live_count
-                else None,
+                "share_of_cases": ratio(len(group), live_count),
             }
         )
-    return _finish(
-        rows, AnswerActionLoad, as_of=as_of, sort_by=("case_type", "question_id")
+    return shaped(
+        rows,
+        AnswerActionLoad,
+        stamp={AS_OF_COLUMN: as_of},
+        sort_by=("case_type", "question_id"),
     )
 
 
@@ -565,7 +485,7 @@ def answer_remediation_by_manager(
     """
     cases = current.to_pandas()[[CASE_ID_COLUMN, "responsible_party_manager_name"]]
     frame = answers.to_pandas().merge(cases, on=CASE_ID_COLUMN, how="inner")
-    frame = _filled(
+    frame = fill_dimensions(
         frame,
         {
             "responsible_party_manager_name": UNASSIGNED,
@@ -592,7 +512,12 @@ def answer_remediation_by_manager(
             dims, sort=True
         )
     ]
-    return _finish(rows, AnswerRemediationByManager, as_of=as_of, sort_by=tuple(dims))
+    return shaped(
+        rows,
+        AnswerRemediationByManager,
+        stamp={AS_OF_COLUMN: as_of},
+        sort_by=tuple(dims),
+    )
 
 
 def appeal_cycle_time(appeals: Dataset, *, as_of: str) -> Dataset:
@@ -600,10 +525,12 @@ def appeal_cycle_time(appeals: Dataset, *, as_of: str) -> Dataset:
     resolution_verdict.** Cycle days run from ``raised_at`` to
     ``resolution_at``, over the Appeals carrying both."""
     frame = appeals.to_pandas().copy()
-    frame["_cycle"] = (
-        _instants(frame["resolution_at"]) - _instants(frame["raised_at"])
-    ).dt.total_seconds() / SECONDS_PER_DAY
-    frame = _filled(frame, {"state": UNSTATED, "resolution_verdict": UNRESOLVED})
+    frame["_cycle"] = elapsed(
+        instants(frame["raised_at"]), instants(frame["resolution_at"])
+    )
+    frame = fill_dimensions(
+        frame, {"state": UNSTATED, "resolution_verdict": UNRESOLVED}
+    )
 
     dims = ["case_type", "state", "resolution_verdict"]
     rows = [
@@ -613,14 +540,13 @@ def appeal_cycle_time(appeals: Dataset, *, as_of: str) -> Dataset:
             "resolution_verdict": verdict,
             "appeal_count": len(group),
             "resolved_count": int(group["_cycle"].notna().sum()),
-            "cycle_days_mean": _mean(group["_cycle"]),
-            "cycle_days_p50": _quantile(group["_cycle"], 0.5),
-            "cycle_days_p90": _quantile(group["_cycle"], 0.9),
-            "cycle_days_max": _maximum(group["_cycle"]),
+            **summarise(group["_cycle"], "cycle_days"),
         }
         for (case_type, state, verdict), group in frame.groupby(dims, sort=True)
     ]
-    return _finish(rows, AppealCycleTime, as_of=as_of, sort_by=tuple(dims))
+    return shaped(
+        rows, AppealCycleTime, stamp={AS_OF_COLUMN: as_of}, sort_by=tuple(dims)
+    )
 
 
 def _cited_questions(value: object) -> list[str]:
@@ -656,8 +582,11 @@ def appeal_question_citations(appeals: Dataset, *, as_of: str) -> Dataset:
             ["case_type", "question_id"], sort=True
         )
     ]
-    return _finish(
-        rows, AppealQuestionCitation, as_of=as_of, sort_by=("case_type", "question_id")
+    return shaped(
+        rows,
+        AppealQuestionCitation,
+        stamp={AS_OF_COLUMN: as_of},
+        sort_by=("case_type", "question_id"),
     )
 
 
@@ -673,7 +602,7 @@ def conversation_response_time(messages: Dataset, *, as_of: str) -> Dataset:
     ``awaiting_since`` already says who is being waited on right now.
     """
     frame = messages.to_pandas().copy()
-    frame["_posted"] = _instants(frame["posted_at"])
+    frame["_posted"] = instants(frame["posted_at"])
     frame = frame.sort_values([CASE_ID_COLUMN, "seq"], kind="stable")
 
     threads = frame.groupby(CASE_ID_COLUMN, sort=False)
@@ -685,9 +614,9 @@ def conversation_response_time(messages: Dataset, *, as_of: str) -> Dataset:
         & frame["_posted"].notna()
         & previous_posted.notna()
     ].copy()
-    replies["hours"] = (
-        (replies["_posted"] - previous_posted).dt.total_seconds() / SECONDS_PER_HOUR
-    ).clip(lower=0.0)
+    replies["hours"] = elapsed(
+        previous_posted.loc[replies.index], replies["_posted"], unit="hours"
+    )
 
     rows = [
         {
@@ -695,15 +624,15 @@ def conversation_response_time(messages: Dataset, *, as_of: str) -> Dataset:
             "case_type": case_type,
             "thread_count": group[CASE_ID_COLUMN].nunique(),
             "reply_count": len(group),
-            "reply_hours_mean": _mean(group["hours"]),
-            "reply_hours_p50": _quantile(group["hours"], 0.5),
-            "reply_hours_p90": _quantile(group["hours"], 0.9),
-            "reply_hours_max": _maximum(group["hours"]),
+            **summarise(group["hours"], "reply_hours"),
         }
         for case_type, group in replies.groupby("case_type", sort=True)
     ]
-    return _finish(
-        rows, ConversationResponseTime, as_of=as_of, sort_by=("brand", "case_type")
+    return shaped(
+        rows,
+        ConversationResponseTime,
+        stamp={AS_OF_COLUMN: as_of},
+        sort_by=("brand", "case_type"),
     )
 
 
@@ -739,16 +668,16 @@ def conversation_volume(messages: Dataset, current: Dataset, *, as_of: str) -> D
                 "case_count": len(group),
                 "thread_count": len(lengths),
                 "no_conversation_count": without,
-                "no_conversation_share": round(without / len(group), 4),
+                "no_conversation_share": ratio(without, len(group)),
                 "message_count": int(lengths.sum()),
-                "messages_per_thread_mean": _mean(lengths),
-                "messages_per_thread_p50": _quantile(lengths, 0.5),
-                "messages_per_thread_p90": _quantile(lengths, 0.9),
-                "messages_per_thread_max": _maximum(lengths),
+                **summarise(lengths, "messages_per_thread"),
             }
         )
-    return _finish(
-        rows, ConversationVolume, as_of=as_of, sort_by=("brand", "case_type")
+    return shaped(
+        rows,
+        ConversationVolume,
+        stamp={AS_OF_COLUMN: as_of},
+        sort_by=("brand", "case_type"),
     )
 
 
@@ -773,7 +702,7 @@ def conversation_posting_pattern(
     counted.
     """
     posted = _live_messages(messages, _live_cases(current)).copy()
-    posted["_posted"] = _instants(posted["posted_at"])
+    posted["_posted"] = instants(posted["posted_at"])
     posted = posted.loc[posted["_posted"].notna()]
 
     local = posted["_posted"].dt.tz_convert(timestamps.local_timezone())
@@ -794,9 +723,9 @@ def conversation_posting_pattern(
         for order in range(1, len(WEEKDAY_NAMES) + 1)
         for hour in range(24)
     ]
-    return _finish(
+    return shaped(
         rows,
         ConversationPostingPattern,
-        as_of=as_of,
+        stamp={AS_OF_COLUMN: as_of},
         sort_by=("brand", "case_type", "weekday_order", "hour_of_day"),
     )

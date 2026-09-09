@@ -45,7 +45,8 @@ toolchain, a domain language, or a release. Two rules follow:
   profile over it — is application infrastructure in the sibling `tools` package
   (`tools.store`, `tools.medallion`), not framework vocabulary), `framework/io`
   (just the `Reader` / `Writer` ports and load strategies now), `framework/transform` (reshaping,
-  incl. `SchemaCoercion`), and `framework/run` (composing/executing/observing a
+  incl. `SchemaCoercion`, plus the aggregate helpers `summarise` / `ratio` /
+  `count_by` / `shaped` a gold reduction calls around its group-by), and `framework/run` (composing/executing/observing a
   run; its `freshness` module holds the **one** upstream-freshness rule, which
   the runner's `FreshnessGuard` wraps and `tools.orchestration`'s plan preview
   reads); plus the private
@@ -59,7 +60,8 @@ toolchain, a domain language, or a release. Two rules follow:
   observability utilities in the top-level `tools/` package — both siblings of
   `framework/`,
   not facades. `shared/` contains application-wide declarations such as
-  environment roots, kept separate from the resolver in `tools/` so other
+  environment roots and the reporting fill literals (`shared/reporting.py`:
+  `UNKNOWN_BRAND`, `UNASSIGNED`, …), kept separate from the resolver in `tools/` so other
   application code can reuse the constants without importing operational
   behaviour. The run-record schema is declared **once, as data**, in
   `tools/observability/record_schema.py` (`RUN_RECORD_FIELDS`): the JSONL record,
@@ -71,7 +73,9 @@ toolchain, a domain language, or a release. Two rules follow:
   `tools/observability/run_store.py` — the counterpart of `tools.store`'s
   `StoreRegistry`, which owns where the *data* lands — and the UTC-instant /
   local-calendar-date rule every freshness check reads is settled once in
-  `tools/observability/timestamps.py`. That run metadata self-migrates from
+  `tools/observability/timestamps.py`, which also carries the column-wide
+  `instants` / `local_dates` / `local_months` / `elapsed` helpers a gold
+  reduction buckets by. That run metadata self-migrates from
   `RUN_RECORD_FIELDS` and stays that way; the physical shape of a *data*
   database is instead declared by the numbered SQL files under
   `migrations/<subject>/<database>/` and applied by `tools/migrations.py`, which
