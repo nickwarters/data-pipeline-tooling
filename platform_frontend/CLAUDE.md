@@ -693,6 +693,10 @@ scripts/
   run_in_memory_flow.js
   uat_acl_smoke.js              # UAT list-ACL smoke check (npm run test:security:uat)
   uat-acl-smoke.example.json    # sample config for the ACL smoke check
+  loadtest_sharepoint.py        # concurrent-writer load test against a real non-prod Cases list:
+                                #   ramps virtual users doing the app's GET-then-PATCH and reports the
+                                #   concurrency at the first throttle and the first error. Refuses an
+                                #   unprefixed list, writes only free text, restores what it touched
 
 dev/                            # local dev loop; not deployed
   index.html                    # dev host page for the mock-first loop (?mock=1)
