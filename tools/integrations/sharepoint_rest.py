@@ -48,7 +48,10 @@ reconciliation is a separate mechanism), and any knowledge of raw/silver/gold.
 from __future__ import annotations
 
 import datetime as dt
-from typing import Callable, Protocol, Sequence, runtime_checkable
+from dataclasses import dataclass
+from typing import Callable, ClassVar, Protocol, Sequence, runtime_checkable
+from urllib.parse import urlsplit
+from uuid import UUID
 
 import pandas as pd
 
@@ -67,6 +70,7 @@ __all__ = [
     "SharePointFeedError",
     "SharePointListClient",
     "SharePointModifiedReader",
+    "SharePointSource",
     "StubbedSharePointListClient",
 ]
 
@@ -127,6 +131,45 @@ def modified_filters(window: ModifiedWindow) -> list[str]:
 
 def _odata(moment: dt.datetime) -> str:
     return moment.astimezone(dt.timezone.utc).strftime(_ODATA_INSTANT)
+
+
+@dataclass(frozen=True)
+class SharePointSource:
+    """One pollable SharePoint list, as the checkpoint store identifies it.
+
+    Keyed on the list's stable **GUID**, never its title: a title is a mutable
+    display name, and keying a position on it would fork the checkpoint the
+    moment somebody renames the list, with the new key looking like a first load
+    of the whole list. The site part of the key is credential-free and
+    normalised, so one list addressed two ways is one source. Satisfies
+    ``tools.source_checkpoint.SourceIdentity``.
+    """
+
+    kind: ClassVar[str] = "sharepoint-list"
+
+    site: str
+    list_id: UUID
+
+    @property
+    def key(self) -> str:
+        """The identity the position is stored under."""
+        return f"{_keyed_site(self.site)}|{self.list_id}"
+
+
+def _keyed_site(site: str) -> str:
+    """The site as it is keyed: no trailing ``/``, no userinfo.
+
+    Rebuilding the netloc from ``hostname`` drops both the ``user:pass@`` and the
+    bare ``user@`` form, so a site addressed with and without one is a single
+    source — persisted control state is never where a credential survives. The
+    host folds to lower case with it, which DNS agrees with; the path does not,
+    because a site path's case is the tenant's business and two spellings may
+    be two addresses.
+    """
+    parts = urlsplit(site.rstrip("/"))
+    host = parts.hostname or ""
+    netloc = f"{host}:{parts.port}" if parts.port else host
+    return parts._replace(netloc=netloc).geturl()
 
 
 @runtime_checkable

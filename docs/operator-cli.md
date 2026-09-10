@@ -33,12 +33,12 @@ The medallion row is followed by the three run-metadata paths:
 | `<base>/_registry/runs.db` | the queryable run registry those logs are ingested into |
 | `<base>/_orchestration/runs.db` | the scheduled-work decision log |
 | `<base>/deliverables/<destination>/…` | the local deliverable outbox, owned by `tools.deliverables` |
-| `<base>/_checkpoints/sharepoint.db` | source control state, owned by `tools.integrations.sharepoint_checkpoint` |
+| `<base>/_checkpoints/sources.db` | source control state, one position per polled source, owned by `tools.source_checkpoint` |
 
 The three run-metadata rows are owned by `RunStore`; the deliverable row is
 owned by `tools.deliverables`; and the source **control state** row is owned by
-`SharePointCheckpointStore`
-([adding-a-feed.md](adding-a-feed.md#sharepointcheckpointstorebase_dir--where-the-polling-got-to)).
+`SourceCheckpointStore`
+([adding-a-feed.md](adding-a-feed.md#sourcecheckpointstorebase_dir--where-the-polling-got-to)).
 
 `status` / `runs` / `log` read from there. `orchestrate`
 also writes `<base>/_orchestration/runs.db`, a separate SQLite decision log for

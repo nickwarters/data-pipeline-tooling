@@ -180,7 +180,7 @@ class InstantWindow:
 
 
 def instant_window(
-    committed: dt.datetime | None,
+    committed: Position | None,
     *,
     source_now: dt.datetime,
     overlap: dt.timedelta,
@@ -194,8 +194,10 @@ def instant_window(
     advanced past ``committed`` — a run repeated too soon, which is ordinary
     operation rather than a failure.
 
-    ``committed`` is where the last successful run got to, from the checkpoint
-    store. ``source_now`` is the **source's** clock, read this run, never this
+    ``committed`` is where the last successful run got to, exactly as
+    :meth:`SourceCheckpointStore.position` hands it back — an :class:`Instant`,
+    or ``None``. A position of another kind is refused: this rule is over
+    source *time*. ``source_now`` is the **source's** clock, read this run, never this
     box's: the span bounds a predicate the *source* evaluates, so a skewed local
     clock would silently widen or narrow it. The **overlap** re-reads a little of
     what the previous span already covered, which is safe when the landing is
@@ -212,10 +214,14 @@ def instant_window(
     end = source_now - safety_lag
     if committed is None:
         return InstantWindow(start=None, end=end)
-    committed = _require_utc_instant(committed, "committed")
-    if end <= committed:
+    if not isinstance(committed, Instant):
+        raise TypeError(
+            "instant_window is a rule over source time and needs an Instant "
+            f"position; got {type(committed).__name__}"
+        )
+    if end <= committed.at:
         return None
-    return InstantWindow(start=committed - overlap, end=end)
+    return InstantWindow(start=committed.at - overlap, end=end)
 
 
 # --- the store --------------------------------------------------------------------

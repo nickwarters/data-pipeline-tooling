@@ -216,7 +216,9 @@ Two places hold system-of-record state and must be backed up **together**:
   `{raw,silver,gold}.db`: `quarantine.db` holds rejected observations that are
   equally un-re-fetchable. None of it can be recovered from the list, because a
   `Modified` window only returns what the list holds now.
-- `<base>/_checkpoints/sharepoint.db` — the feed's place in the source.
+- `<base>/_checkpoints/sources.db` — the feed's place in the source (and, on a
+  base directory upgraded in place, the `sharepoint.db` it was carried over
+  from, until you are sure nothing needs it).
 
 Restoring one without the other forks the feed. Get this in place before the
 feed has accumulated anything you would miss.

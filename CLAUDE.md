@@ -54,7 +54,8 @@ toolchain, a domain language, or a release. Two rules follow:
   helpers with no public name)). The `python -m cli` entry point (`scaffold`
   plus the operator commands; see below) lives in the top-level `cli/` package,
   and the cross-cutting `retry` / `calendar` / `medallion` /
-  `deliverables` /
+  `deliverables` / `source_checkpoint` (where every polled source got to, and
+  the pure window rule over it — ADR-0030) /
   `environments` / migrations / orchestration /
   observability utilities in the top-level `tools/` package — both siblings of
   `framework/`,

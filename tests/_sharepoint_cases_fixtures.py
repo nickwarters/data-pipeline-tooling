@@ -55,8 +55,11 @@ from tests.framework_testing import (
     given_rows,
     rows_of,
 )
-from tools.integrations.sharepoint_checkpoint import SharePointSource
-from tools.integrations.sharepoint_rest import ModifiedWindow, SharePointModifiedReader
+from tools.integrations.sharepoint_rest import (
+    ModifiedWindow,
+    SharePointModifiedReader,
+    SharePointSource,
+)
 
 # --- the lists and the clock -------------------------------------------------
 

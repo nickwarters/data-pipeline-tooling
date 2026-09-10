@@ -44,9 +44,9 @@ from tests._sharepoint_cases_fixtures import (
     run,
 )
 from tests.framework_testing import read_rows, read_run_log
-from tools.integrations.sharepoint_checkpoint import SharePointCheckpointStore
 from tools.integrations.sharepoint_rest import SharePointFeedError
 from tools.medallion import medallion
+from tools.source_checkpoint import Instant, SourceCheckpointStore
 from tools.store import StoreRegistry
 
 # Every pipeline one poll of one list runs, in the run log's vocabulary.
@@ -250,10 +250,10 @@ def test_a_quiet_window_still_runs_and_records_every_step(base_dir):
 
 
 def test_nothing_safe_to_poll_returns_nothing_and_writes_nothing(base_dir):
-    SharePointCheckpointStore(base_dir).commit(
+    SourceCheckpointStore(base_dir).commit(
         SOURCE,
-        window_end=SERVER_NOW,
-        ingestion_batch_id="earlier",
+        Instant(SERVER_NOW),
+        batch_id="earlier",
         pipeline_run_id="earlier-run",
     )
 
@@ -309,7 +309,7 @@ def test_a_dry_run_on_a_fresh_base_dir_writes_no_gold_and_commits_nothing(base_d
 
     assert not report.failed
     assert nothing_landed(base_dir)
-    assert not SharePointCheckpointStore(base_dir).path.exists()
+    assert not SourceCheckpointStore(base_dir).path.exists()
 
 
 def test_a_dry_run_previews_every_write_and_commits_none_of_them(base_dir):
@@ -342,6 +342,6 @@ def test_a_dry_run_previews_every_write_and_commits_none_of_them(base_dir):
     assert previewed[SILVER_PREFIX] == previewed[f"gold:{CURRENT_TABLE}"] == 1
     assert read_rows(med.gold, "case_current") == before
     # The real run's watermark stands; the preview did not move it on.
-    assert SharePointCheckpointStore(base_dir).committed_watermark(SOURCE) == (
+    assert SourceCheckpointStore(base_dir).position(SOURCE) == Instant(
         SERVER_NOW - SAFETY_LAG
     )

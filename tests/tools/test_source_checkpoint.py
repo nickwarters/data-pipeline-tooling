@@ -45,7 +45,7 @@ def test_a_committed_position_resumes_one_overlap_early():
     # last boundary is re-observed rather than missed.
     committed = dt.datetime(2026, 8, 5, 8, 30, tzinfo=UTC)
 
-    assert window(committed) == InstantWindow(
+    assert window(Instant(committed)) == InstantWindow(
         start=committed - OVERLAP, end=SOURCE_NOW - SAFETY_LAG
     )
 
@@ -54,7 +54,7 @@ def test_a_window_that_has_not_advanced_yet_is_none_rather_than_an_error():
     # Running again before the safe upper bound has moved past the committed
     # position is ordinary operation, not a failure: there is nothing left to
     # poll yet, so None comes back rather than a window of covered ground.
-    committed = SOURCE_NOW - SAFETY_LAG
+    committed = Instant(SOURCE_NOW - SAFETY_LAG)
 
     assert window(committed) is None
     later = SOURCE_NOW + dt.timedelta(seconds=1)
@@ -71,16 +71,21 @@ def test_the_rule_reads_the_source_clock_in_utc():
     )
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [{"source_now": NAIVE}, {"committed": NAIVE}],
-    ids=["source_now", "committed"],
-)
-def test_a_naive_instant_is_refused(kwargs):
+def test_a_naive_source_clock_is_refused():
     # A naive datetime has no single UTC meaning; reading it as the local zone
     # would shift the window by whatever offset the running box is in.
     with pytest.raises(ValueError, match="timezone-aware"):
-        window(**kwargs)
+        window(source_now=NAIVE)
+
+
+def test_a_position_that_is_not_an_instant_is_refused():
+    # The rule is over source time; handing it a position measured in anything
+    # else is a wiring mistake, not a first load.
+    class Sequence:
+        kind = "sequence"
+
+    with pytest.raises(TypeError, match="needs an Instant"):
+        window(Sequence())
 
 
 @pytest.mark.parametrize(
