@@ -32,6 +32,7 @@ from uuid import UUID
 from framework._internal.connection import connect
 from tools.integrations.sharepoint_rest import ModifiedWindow
 from tools.observability.timestamps import utc_now_iso
+from tools.source_checkpoint import _require_utc_instant, instant_window
 
 __all__ = ["SharePointCheckpointStore", "SharePointSource"]
 
@@ -129,25 +130,16 @@ class SharePointCheckpointStore:
     ) -> ModifiedWindow | None:
         """The next window to poll ``source`` for, or ``None`` if there is none.
 
-        ``end`` is ``server_now`` held back by ``safety_lag``; ``start`` is the
-        committed watermark pulled back by ``overlap``, or ``None`` on a first
-        run. ``None`` is returned when the safe upper bound has not yet advanced
-        past the watermark — the run-again-too-soon case, which is routine.
-
-        ``server_now`` is SharePoint's clock, not this box's: the window bounds a
-        predicate the *list* evaluates, so a skewed local clock would silently
-        widen or narrow it.
+        The rule is :func:`tools.source_checkpoint.instant_window`, handed the
+        committed watermark; ``server_now`` is SharePoint's clock, not this
+        box's.
         """
-        server_now = _require_utc_instant(server_now, "server_now")
-        overlap = _require_non_negative(overlap, "overlap")
-        safety_lag = _require_non_negative(safety_lag, "safety_lag")
-        end = server_now - safety_lag
-        committed = self.committed_watermark(source)
-        if committed is not None:
-            if end <= committed:
-                return None
-            return ModifiedWindow(start=committed - overlap, end=end)
-        return ModifiedWindow(start=None, end=end)
+        return instant_window(
+            self.committed_watermark(source),
+            source_now=server_now,
+            overlap=overlap,
+            safety_lag=safety_lag,
+        )
 
     def commit(
         self,
@@ -223,29 +215,3 @@ def _keyed_site(site: str) -> str:
     host = parts.hostname or ""
     netloc = f"{host}:{parts.port}" if parts.port else host
     return parts._replace(netloc=netloc).geturl()
-
-
-def _require_utc_instant(value: dt.datetime, name: str) -> dt.datetime:
-    """One instant, converted to UTC once; a naive one is refused.
-
-    Strict rather than lenient on purpose: a naive datetime has no single UTC
-    meaning, and reading it as the local zone would move a persisted watermark
-    by whatever offset the running box happens to be in.
-    """
-    if value.tzinfo is None:
-        raise ValueError(
-            f"{name} must be timezone-aware; got a naive datetime ({value.isoformat()})"
-        )
-    return value.astimezone(dt.timezone.utc)
-
-
-def _require_non_negative(value: dt.timedelta, name: str) -> dt.timedelta:
-    """A window offset that points the way it is meant to.
-
-    A negative ``safety_lag`` would read past SharePoint's own clock; a negative
-    ``overlap`` would leave a permanent gap between consecutive windows that no
-    later run ever covers.
-    """
-    if value < dt.timedelta(0):
-        raise ValueError(f"{name} must not be negative; got {value}")
-    return value
