@@ -95,7 +95,7 @@ The convergence is already proven; see the failure and retry tests in
 
 The window rule itself — `window is None`, first load, overlap, safety lag,
 commit-is-last, and where the checkpoint file lives — is at
-[adding-a-feed.md](adding-a-feed.md#sharepointcheckpointstorebase_dir--where-the-polling-got-to).
+[adding-a-feed.md](adding-a-feed.md#sourcecheckpointstorebase_dir--where-the-polling-got-to).
 
 ## 5. What REST polling cannot tell you
 
@@ -114,7 +114,7 @@ commit-is-last, and where the checkpoint file lives — is at
 - Two places hold system-of-record state, and they must be backed up and restored
   **together**: the whole `<base>/<feed>/` directory (`quarantine.db` alongside
   `{raw,silver,gold}.db` — rejected observations cannot be re-fetched either) and
-  `<base>/_checkpoints/sharepoint.db`, which holds **one row per declared list**. Restoring data without the checkpoint, or
+  `<base>/_checkpoints/sources.db`, which holds **one row per declared list** (one per polled source of any kind). Restoring data without the checkpoint, or
   the checkpoint without the data, forks the feed.
 - One local process, one operator at a time. There is no distributed lock; a
   second concurrent pass races the same watermark.

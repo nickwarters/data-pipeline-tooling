@@ -27,9 +27,9 @@ from tests._sharepoint_cases_fixtures import (
     run,
 )
 from tests.framework_testing import RecordingRunLog, read_rows
-from tools.integrations.sharepoint_checkpoint import SharePointCheckpointStore
 from tools.integrations.sharepoint_rest import SharePointFeedError
 from tools.medallion import medallion
+from tools.source_checkpoint import Instant, SourceCheckpointStore
 from tools.store import StoreRegistry
 
 
@@ -109,20 +109,20 @@ def test_gold_counts_across_every_list(polled):
 
 
 def test_each_list_keeps_its_own_watermark(polled):
-    checkpoints = SharePointCheckpointStore(polled)
+    checkpoints = SourceCheckpointStore(polled)
 
-    assert checkpoints.committed_watermark(SOURCE) == SERVER_NOW - SAFETY_LAG
-    assert checkpoints.committed_watermark(OTHER_SOURCE) == SERVER_NOW - SAFETY_LAG
+    assert checkpoints.position(SOURCE) == Instant(SERVER_NOW - SAFETY_LAG)
+    assert checkpoints.position(OTHER_SOURCE) == Instant(SERVER_NOW - SAFETY_LAG)
 
 
 def test_a_list_with_nothing_safe_to_poll_is_skipped_and_the_others_still_run(base_dir):
     # One list polled again inside the safety lag is ordinary operation, not a
     # failure: it is skipped and its watermark stands.
     run_log = RecordingRunLog()
-    SharePointCheckpointStore(base_dir).commit(
+    SourceCheckpointStore(base_dir).commit(
         SOURCE,
-        window_end=SERVER_NOW,
-        ingestion_batch_id="earlier",
+        Instant(SERVER_NOW),
+        batch_id="earlier",
         pipeline_run_id="earlier-run",
     )
 
@@ -138,9 +138,9 @@ def test_a_list_with_nothing_safe_to_poll_is_skipped_and_the_others_still_run(ba
         OTHER.case_type
     }
     assert published_gold(run_log) == set(GOLD_TABLES)
-    checkpoints = SharePointCheckpointStore(base_dir)
-    assert checkpoints.committed_watermark(SOURCE) == SERVER_NOW
-    assert checkpoints.committed_watermark(OTHER_SOURCE) == SERVER_NOW - SAFETY_LAG
+    checkpoints = SourceCheckpointStore(base_dir)
+    assert checkpoints.position(SOURCE) == Instant(SERVER_NOW)
+    assert checkpoints.position(OTHER_SOURCE) == Instant(SERVER_NOW - SAFETY_LAG)
 
 
 def test_a_failure_polling_the_second_list_leaves_no_gold_and_no_watermark(base_dir):
@@ -156,13 +156,13 @@ def test_a_failure_polling_the_second_list_leaves_no_gold_and_no_watermark(base_
         )
 
     med = medallion(StoreRegistry(base_dir), FEED_NAME)
-    checkpoints = SharePointCheckpointStore(base_dir)
+    checkpoints = SourceCheckpointStore(base_dir)
     assert {row["case_type"] for row in read_rows(med.silver, "case_version")} == {
         COMPLAINTS.case_type
     }
     assert published_gold(run_log) == set()
-    assert checkpoints.committed_watermark(SOURCE) is None
-    assert checkpoints.committed_watermark(OTHER_SOURCE) is None
+    assert checkpoints.position(SOURCE) is None
+    assert checkpoints.position(OTHER_SOURCE) is None
 
 
 def test_a_retry_after_a_partial_failure_converges_and_advances_both_lists(base_dir):
@@ -173,12 +173,12 @@ def test_a_retry_after_a_partial_failure_converges_and_advances_both_lists(base_
     run(context, client=two_list_client(), case_lists=TWO_LISTS)
 
     med = medallion(StoreRegistry(base_dir), FEED_NAME)
-    checkpoints = SharePointCheckpointStore(base_dir)
+    checkpoints = SourceCheckpointStore(base_dir)
     # The first list's re-read is a no-op against append-only silver: one
     # version per list, and one current Case per list.
     for layer, table in ((med.silver, "case_version"), (med.gold, "case_current")):
         assert sorted(row["case_type"] for row in read_rows(layer, table)) == sorted(
             case_list.case_type for case_list in TWO_LISTS
         ), table
-    assert checkpoints.committed_watermark(SOURCE) == SERVER_NOW - SAFETY_LAG
-    assert checkpoints.committed_watermark(OTHER_SOURCE) == SERVER_NOW - SAFETY_LAG
+    assert checkpoints.position(SOURCE) == Instant(SERVER_NOW - SAFETY_LAG)
+    assert checkpoints.position(OTHER_SOURCE) == Instant(SERVER_NOW - SAFETY_LAG)

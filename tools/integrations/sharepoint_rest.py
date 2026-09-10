@@ -49,7 +49,9 @@ from __future__ import annotations
 
 import datetime as dt
 from dataclasses import dataclass
-from typing import Callable, Protocol, Sequence, runtime_checkable
+from typing import Callable, ClassVar, Protocol, Sequence, runtime_checkable
+from urllib.parse import urlsplit
+from uuid import UUID
 
 import pandas as pd
 
@@ -59,13 +61,16 @@ from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError
 from tools.integrations.locations import sharepoint_location
 from tools.observability.timestamps import utc_now_iso
+from tools.source_checkpoint import InstantWindow
 
 __all__ = [
     "METADATA_COLUMNS",
     "ModifiedWindow",
+    "modified_filters",
     "SharePointFeedError",
     "SharePointListClient",
     "SharePointModifiedReader",
+    "SharePointSource",
     "StubbedSharePointListClient",
 ]
 
@@ -104,44 +109,67 @@ class SharePointFeedError(PipelineError):
     category = ErrorCategory.DATA
 
 
-@dataclass(frozen=True)
-class ModifiedWindow:
-    """The half-open ``[start, end)`` ``Modified`` window to retrieve.
+# SharePoint's name for the span its ``Modified`` predicate evaluates. The type
+# itself is the generic one every polled source shares; only the rendering of
+# it into OData below is this module's.
+ModifiedWindow = InstantWindow
 
-    ``start=None`` is the first-load shape: every current item strictly before
-    ``end``, with no lower bound. Both bounds must be timezone-aware — a naive
-    datetime has no single UTC meaning, and silently reading it as the local zone
-    would shift the window by whatever offset the reading machine happens to be
-    in.
+
+def modified_filters(window: ModifiedWindow) -> list[str]:
+    """The ``Modified`` predicates for ``window``, UTC-encoded once.
+
+    Half-open — ``Modified ge start and Modified lt end`` — so consecutive
+    windows tile without dropping or double-counting an item whose ``Modified``
+    lands exactly on a boundary.
     """
-
-    start: dt.datetime | None
-    end: dt.datetime
-
-    def __post_init__(self) -> None:
-        for name, bound in (("start", self.start), ("end", self.end)):
-            if bound is not None and bound.tzinfo is None:
-                raise ValueError(
-                    f"ModifiedWindow.{name} must be timezone-aware; "
-                    f"got a naive datetime ({bound.isoformat()})"
-                )
-        if self.start is not None and self.start >= self.end:
-            raise ValueError(
-                f"ModifiedWindow.start ({self.start.isoformat()}) must be before "
-                f"end ({self.end.isoformat()})"
-            )
-
-    def filters(self) -> list[str]:
-        """The ``Modified`` predicates for this window, UTC-encoded once."""
-        predicates = []
-        if self.start is not None:
-            predicates.append(f"{_MODIFIED} ge datetime'{_odata(self.start)}'")
-        predicates.append(f"{_MODIFIED} lt datetime'{_odata(self.end)}'")
-        return predicates
+    predicates = []
+    if window.start is not None:
+        predicates.append(f"{_MODIFIED} ge datetime'{_odata(window.start)}'")
+    predicates.append(f"{_MODIFIED} lt datetime'{_odata(window.end)}'")
+    return predicates
 
 
 def _odata(moment: dt.datetime) -> str:
     return moment.astimezone(dt.timezone.utc).strftime(_ODATA_INSTANT)
+
+
+@dataclass(frozen=True)
+class SharePointSource:
+    """One pollable SharePoint list, as the checkpoint store identifies it.
+
+    Keyed on the list's stable **GUID**, never its title: a title is a mutable
+    display name, and keying a position on it would fork the checkpoint the
+    moment somebody renames the list, with the new key looking like a first load
+    of the whole list. The site part of the key is credential-free and
+    normalised, so one list addressed two ways is one source. Satisfies
+    ``tools.source_checkpoint.SourceIdentity``.
+    """
+
+    kind: ClassVar[str] = "sharepoint-list"
+
+    site: str
+    list_id: UUID
+
+    @property
+    def key(self) -> str:
+        """The identity the position is stored under."""
+        return f"{_keyed_site(self.site)}|{self.list_id}"
+
+
+def _keyed_site(site: str) -> str:
+    """The site as it is keyed: no trailing ``/``, no userinfo.
+
+    Rebuilding the netloc from ``hostname`` drops both the ``user:pass@`` and the
+    bare ``user@`` form, so a site addressed with and without one is a single
+    source — persisted control state is never where a credential survives. The
+    host folds to lower case with it, which DNS agrees with; the path does not,
+    because a site path's case is the tenant's business and two spellings may
+    be two addresses.
+    """
+    parts = urlsplit(site.rstrip("/"))
+    host = parts.hostname or ""
+    netloc = f"{host}:{parts.port}" if parts.port else host
+    return parts._replace(netloc=netloc).geturl()
 
 
 @runtime_checkable
@@ -226,7 +254,7 @@ class SharePointModifiedReader:
             self._list_name,
             list(self._expand_fields),
             list(self._select_fields),
-            self._window.filters(),
+            modified_filters(self._window),
         )
         if frame.empty:
             # A window with no changes is not a failure, so it returns the

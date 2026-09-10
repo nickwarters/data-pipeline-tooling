@@ -448,12 +448,22 @@ banned for **Pipeline**, and this is emphatically not one), courier, mover
 
 **Source checkpoint (watermark)**:
 Durable **control state** recording how far a source has been polled, so the next
-run resumes rather than re-reads everything. _Here_: `SharePointCheckpointStore`
-(`tools/integrations/sharepoint_checkpoint.py`) keeps one `Modified` watermark per
-SharePoint list under `<base_dir>/_checkpoints/sharepoint.db`, and computes the
-next window from it — `end = server_now - safety_lag`, `start = watermark -
-overlap` (`None` on a first load, meaning the full current list). The commit is
-the **last act of a successful run**; nothing else advances it. **Do not confuse
+run resumes rather than re-reads everything. _Here_: `SourceCheckpointStore`
+(`tools/source_checkpoint.py`) keeps one **position** per polled source — keyed
+by the source's `kind` and stable `key`, so a SharePoint list is its GUID and
+a table its qualified name, never a display name — under
+`<base_dir>/_checkpoints/sources.db`, and is the one store for every such source
+([ADR-0030](docs/adr/0030-source-checkpoints-are-one-generic-store.md)). A
+position is what the source is measured in; today only `Instant`, a UTC moment,
+which is what a `Modified` or `created_at` window commits. The rule turning a
+position into the next span to fetch is the pure `instant_window` beside it —
+`end = source_now - safety_lag`, `start = committed - overlap` (`None` on a first
+load, meaning everything the source holds), and no window at all when `end` has
+not passed `committed` — handed the position rather than reading it, because
+overlaps and lags belong to the source being polled. The commit is
+the **last act of a successful run**; nothing else advances it, and **a run's
+time is never a source's position** — the run registry's "last success" is a
+fact about this box's clock, and under a failed run the two diverge. **Do not confuse
 the two senses of "checkpoint"**: elsewhere in this glossary and in
 `framework/run`, a *checkpoint* is a mid-graph `.write()` node landing an
 intermediate dataset for lineage — a thing inside one run's graph. A *source

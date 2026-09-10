@@ -872,9 +872,9 @@ metadata is stored under `<base_dir>/_runs/<label-stem>.log` and
 `tools.store`'s `StoreRegistry` — so the runner, the orchestrator and the
 operator CLI all read the paths from one place rather than each restating them.
 Those two are not the whole of a base directory: a third category, source
-**control state**, sits under `<base_dir>/_checkpoints/` — today the SharePoint
-`Modified` watermarks owned by `SharePointCheckpointStore`
-([adding-a-feed.md](adding-a-feed.md#sharepointcheckpointstorebase_dir--where-the-polling-got-to)).
+**control state**, sits under `<base_dir>/_checkpoints/` — one position per
+polled source, owned by `SourceCheckpointStore`
+([adding-a-feed.md](adding-a-feed.md#sourcecheckpointstorebase_dir--where-the-polling-got-to)).
 The fourth category is the deliverable outbox at
 `<base_dir>/deliverables/<destination>/…`, whose path owner is
 `tools.deliverables`.
