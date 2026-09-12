@@ -1,0 +1,1045 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halving the framework — a reduction plan for framework/, tools/ and cli/</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light;
+    --page:        #f9f9f7;
+    --surface:     #fcfcfb;
+    --ink:         #0b0b0b;
+    --ink-2:       #52514e;
+    --muted:       #898781;
+    --grid:        #e1e0d9;
+    --baseline:    #c3c2b7;
+    --ring:        rgba(11,11,11,0.10);
+
+    /* disposition palette — validated with dataviz/scripts/validate_palette.js
+       light surface #fcfcfb, categorical, order delete → relax → density:
+       lightness band PASS · chroma floor PASS · CVD sep PASS (worst ΔE 8.5 deutan)
+       normal-vision floor PASS (worst ΔE 15.5) · contrast PASS (all ≥ 3:1) */
+    --d-delete:   #d03b3b;
+    --d-relax:    #c47f08;
+    --d-density:  #2a78d6;
+    --d-keep:     #c3c2b7;
+
+    --delete-text:  #a02222;
+    --relax-text:   #7a5200;
+    --density-text: #1c5aa3;
+    --keep-text:    #52514e;
+    --accent:       #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page:      #0d0d0d;
+      --surface:   #1a1a19;
+      --ink:       #ffffff;
+      --ink-2:     #c3c2b7;
+      --muted:     #898781;
+      --grid:      #2c2c2a;
+      --baseline:  #383835;
+      --ring:      rgba(255,255,255,0.10);
+      /* dark surface #1a1a19 — re-stepped, not flipped. All six checks PASS
+         (worst adjacent ΔE 8.2 deutan / 18.1 normal). */
+      --d-delete:  #e35070;
+      --d-relax:   #bf8a25;
+      --d-density: #3987e5;
+      --d-keep:    #6b6a63;
+      --delete-text:  #e88095;
+      --relax-text:   #d3a63f;
+      --density-text: #6ba8ee;
+      --keep-text:    #c3c2b7;
+      --accent:       #e35070;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page:      #0d0d0d;
+    --surface:   #1a1a19;
+    --ink:       #ffffff;
+    --ink-2:     #c3c2b7;
+    --muted:     #898781;
+    --grid:      #2c2c2a;
+    --baseline:  #383835;
+    --ring:      rgba(255,255,255,0.10);
+    --d-delete:  #e35070;
+    --d-relax:   #bf8a25;
+    --d-density: #3987e5;
+    --d-keep:    #6b6a63;
+    --delete-text:  #e88095;
+    --relax-text:   #d3a63f;
+    --density-text: #6ba8ee;
+    --keep-text:    #c3c2b7;
+    --accent:       #e35070;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 16px; line-height: 1.65; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 0 28px 120px; }
+
+  header.masthead { padding: 64px 0 36px; border-bottom: 3px solid var(--ink); position: relative; }
+  .kicker {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 14px;
+  }
+  h1 {
+    font-family: "Fraunces", Georgia, serif; font-weight: 600;
+    font-size: clamp(38px, 6vw, 58px); line-height: 1.04;
+    letter-spacing: -0.015em; margin: 0 0 18px;
+  }
+  h1 em { font-style: italic; font-weight: 300; }
+  .standfirst { font-size: 19px; color: var(--ink-2); max-width: 46em; margin: 0; }
+  .meta-row {
+    display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 26px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px; color: var(--muted);
+  }
+  .theme-toggle {
+    position: absolute; top: 26px; right: 0;
+    font: 500 12px "IBM Plex Mono", monospace;
+    background: none; border: 1px solid var(--baseline); color: var(--ink-2);
+    border-radius: 999px; padding: 6px 14px; cursor: pointer;
+  }
+  .theme-toggle:hover { border-color: var(--ink); color: var(--ink); }
+
+  section { margin-top: 72px; }
+  .secnum {
+    font-family: "Fraunces", Georgia, serif; font-style: italic; font-weight: 300;
+    font-size: 15px; color: var(--accent); letter-spacing: .04em;
+  }
+  h2 {
+    font-family: "Fraunces", Georgia, serif; font-weight: 600;
+    font-size: 31px; line-height: 1.15; letter-spacing: -0.01em; margin: 4px 0 18px;
+  }
+  h3 { font-size: 17px; font-weight: 600; margin: 34px 0 10px; }
+  h4 { font-size: 15px; font-weight: 600; margin: 26px 0 8px; }
+  p  { max-width: 46em; }
+  p.lede { font-size: 17.5px; }
+  ul, ol { max-width: 46em; padding-left: 1.25em; }
+  li { margin: 7px 0; }
+  a { color: inherit; }
+  code, .file {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .86em;
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+    border-radius: 4px; padding: 1px 5px; white-space: nowrap;
+  }
+  .file { white-space: normal; }
+  strong { font-weight: 600; }
+  hr.rule { border: 0; border-top: 1px solid var(--grid); margin: 40px 0; }
+
+  .verdict {
+    background: var(--surface); border: 1px solid var(--ring);
+    border-left: 5px solid var(--accent); border-radius: 10px;
+    padding: 26px 30px; margin-top: 40px;
+  }
+  .verdict h2 { font-size: 24px; margin-top: 0; }
+  .verdict p:last-child { margin-bottom: 0; }
+
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 34px 0 6px; }
+  @media (max-width: 720px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+  .tile { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 18px 20px 15px; }
+  .tile .num {
+    font-family: "Fraunces", Georgia, serif; font-weight: 600;
+    font-size: 34px; line-height: 1.05; letter-spacing: -0.01em;
+  }
+  .tile .num small { font-size: 19px; font-weight: 500; color: var(--ink-2); }
+  .tile .lbl { font-size: 13px; color: var(--ink-2); margin-top: 6px; line-height: 1.4; }
+  .tile.hot .num { color: var(--delete-text); }
+
+  figure.viz {
+    margin: 30px 0; background: var(--surface); border: 1px solid var(--ring);
+    border-radius: 12px; padding: 24px 26px 18px;
+  }
+  figure.viz .viz-title { font-weight: 600; font-size: 15.5px; margin: 0 0 2px; }
+  figure.viz .viz-sub   { font-size: 13px; color: var(--muted); margin: 0 0 16px; }
+  figure.viz svg { display: block; width: 100%; height: auto; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  figcaption.note { font-size: 13px; color: var(--ink-2); margin-top: 14px; line-height: 1.55; max-width: 56em; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 0 0 14px; font-size: 13px; color: var(--ink-2); }
+  .legend .key { display: inline-flex; align-items: center; gap: 7px; }
+  .legend .swatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+  svg text { fill: var(--ink-2); font-size: 12.5px; }
+  svg .lbl-strong { fill: var(--ink); font-weight: 600; }
+  svg .lbl-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; }
+  svg .lbl-val { fill: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  svg .lbl-sm { font-size: 11px; }
+  svg .axisline { stroke: var(--baseline); stroke-width: 1; }
+  svg .gridline { stroke: var(--grid); stroke-width: 1; }
+  svg .conn { stroke: var(--baseline); stroke-width: 1; stroke-dasharray: 3 3; }
+  svg [data-tip] { cursor: default; }
+  svg [data-tip]:hover { filter: brightness(1.1); }
+
+  #tooltip {
+    position: fixed; z-index: 50; pointer-events: none;
+    background: var(--ink); color: var(--page);
+    font: 500 12.5px/1.45 "IBM Plex Sans", system-ui, sans-serif;
+    border-radius: 7px; padding: 8px 11px; max-width: 320px;
+    opacity: 0; transform: translateY(4px); transition: opacity .12s ease;
+    box-shadow: 0 4px 18px rgba(0,0,0,.25);
+  }
+  #tooltip.show { opacity: 1; }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font: 600 11.5px "IBM Plex Sans", system-ui, sans-serif;
+    border-radius: 999px; padding: 2px 10px; white-space: nowrap;
+  }
+  .chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; }
+  .chip.keep    { color: var(--keep-text);    background: color-mix(in srgb, var(--baseline) 30%, transparent); }
+  .chip.keep::before    { background: var(--baseline); }
+  .chip.delete  { color: var(--delete-text);  background: color-mix(in srgb, var(--d-delete) 13%, transparent); }
+  .chip.delete::before  { background: var(--d-delete); }
+  .chip.relax   { color: var(--relax-text);   background: color-mix(in srgb, var(--d-relax) 16%, transparent); }
+  .chip.relax::before   { background: var(--d-relax); }
+  .chip.density { color: var(--density-text); background: color-mix(in srgb, var(--d-density) 14%, transparent); }
+  .chip.density::before { background: var(--d-density); }
+
+  table { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 14px; }
+  th {
+    text-align: left; font-size: 11.5px; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; padding: 0 14px 10px 0;
+    border-bottom: 2px solid var(--ink);
+  }
+  td { padding: 10px 14px 10px 0; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; padding-right: 0; padding-left: 22px; white-space: nowrap; }
+  td.num + td:not(.num), th.num + th:not(.num) { padding-left: 22px; }
+  td.mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px; }
+  tr:hover td { background: color-mix(in srgb, var(--ink) 2.5%, transparent); }
+  tfoot td { font-weight: 600; border-bottom: none; border-top: 2px solid var(--ink); }
+  td.cut { color: var(--delete-text); font-weight: 600; }
+
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 26px 0; }
+  @media (max-width: 720px) { .cards { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 10px;
+    border-top: 3px solid var(--baseline); padding: 16px 19px;
+  }
+  .card.warn { border-top-color: var(--d-relax); }
+  .card h4 { margin: 0 0 6px; font-size: 14.5px; }
+  .card p { font-size: 13.5px; color: var(--ink-2); margin: 0; }
+
+  .pull {
+    font-family: "Fraunces", Georgia, serif; font-style: italic; font-weight: 300;
+    font-size: 24px; line-height: 1.4; color: var(--ink);
+    border-left: 3px solid var(--accent); padding: 4px 0 4px 26px;
+    margin: 44px 0; max-width: 34em;
+  }
+
+  footer { margin-top: 90px; padding-top: 24px; border-top: 1px solid var(--grid); font-size: 13px; color: var(--muted); }
+  footer p { max-width: 56em; }
+</style>
+</head>
+<body>
+<div id="tooltip" role="status" aria-hidden="true"></div>
+<div class="wrap">
+
+<header class="masthead">
+  <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">◐ theme</button>
+  <p class="kicker">Engineering audit · data-pipeline-tooling</p>
+  <h1>Halving the framework<br><em>where 4,656 lines can go</em></h1>
+  <p class="standfirst">A line-by-line reduction plan for <code>framework/</code>, <code>tools/</code> and
+  <code>cli/</code> on the assumption that the eager authoring model stays and the deferred graph does not.
+  What is genuinely load-bearing, what is capability nobody has ever called, and what is simply verbose.</p>
+  <div class="meta-row">
+    <span>2026-08-25</span>
+    <span>9,517 SLOC · 63 modules · 126 exported names</span>
+    <span>branch t3code/simplify-eager-pipeline-framework</span>
+    <span>AST-measured, not estimated</span>
+  </div>
+</header>
+
+<!-- ══════════════════════════ VERDICT ══════════════════════════ -->
+<div class="verdict">
+  <h2>The verdict in four sentences</h2>
+  <p><strong>50% is reachable, and roughly a third of it is free.</strong> Of the 126 names the four facades export,
+  <strong>49 are reachable from production pipelines</strong>; 12 more are reached only by demo pipelines, 56 only by
+  tests, and 9 by nothing at all. <strong>1,577 SLOC is dead capability</strong> — real, documented, tested API with no
+  caller anywhere outside <code>tests/</code> — and deleting it loses nothing that is in use today.</p>
+  <p>The next <strong>1,928 SLOC</strong> is genuine capability that has to be <em>retired by decision</em>: the graph
+  builder, the deadline-ordering half of the orchestrator, the row trace, and the SharePoint client that belongs in
+  the one pipeline that uses it. The last <strong>1,151 SLOC</strong> is pure density — 1,311 of the 9,517 lines are a
+  lone closing bracket or a single argument being passed through, and the run-record stack spends 684 lines on a
+  20-field append-only log. Together: <strong>4,656 SLOC, 48.9%</strong>. Anything beyond that starts cutting the
+  schema contract, which is the part of this framework actually worth having.</p>
+</div>
+
+<div class="tiles">
+  <div class="tile"><div class="num">9,517</div><div class="lbl">SLOC in <code>framework/</code> + <code>tools/</code> + <code>cli/</code>, docstrings and comments excluded (17,000 raw)</div></div>
+  <div class="tile"><div class="num">4,656</div><div class="lbl">identified as removable — <strong>48.9%</strong>, leaving 4,861</div></div>
+  <div class="tile hot"><div class="num">18</div><div class="lbl">exported names with <em>zero</em> references outside their own module and the test suite</div></div>
+  <div class="tile hot"><div class="num">0</div><div class="lbl">application callers of <code>read_chunks</code> — the entire streaming subsystem, plus a second independent implementation in <code>stream.py</code></div></div>
+  <div class="tile"><div class="num">49<small> / 126</small></div><div class="lbl">exported names a production pipeline can actually reach</div></div>
+  <div class="tile hot"><div class="num">33</div><div class="lbl">commits in 12 months to <code>builder.py</code> — the most-churned file in the tree, and the largest single deletion</div></div>
+</div>
+
+<!-- ══════════════════════════ §1 ══════════════════════════ -->
+<section id="method">
+  <span class="secnum">§ 1</span>
+  <h2>What was measured, and how</h2>
+  <p class="lede">Every number here is parsed from the tree at <code>66c3dd52</code>, not read off. SLOC means
+  executable lines: module/class/function docstrings, comment-only lines and blanks are removed by walking the AST
+  and the token stream, so a 40-line docstring on a 6-line class counts as 6.</p>
+
+  <table>
+    <thead><tr><th>Package</th><th class="num">Raw lines</th><th class="num">SLOC</th><th class="num">Docs &amp; blanks</th><th>What it is</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">framework/</td><td class="num">9,282</td><td class="num">5,017</td><td class="num">46%</td><td>The four facades plus <code>_internal/</code></td></tr>
+      <tr><td class="mono">tools/</td><td class="num">5,701</td><td class="num">3,280</td><td class="num">42%</td><td>Cross-cutting utilities — orchestration, observability, store, migrations, integrations</td></tr>
+      <tr><td class="mono">cli/</td><td class="num">2,017</td><td class="num">1,220</td><td class="num">40%</td><td><code>scaffold</code> + the operator commands + two scaffold templates</td></tr>
+    </tbody>
+    <tfoot><tr><td>Total</td><td class="num">17,000</td><td class="num">9,517</td><td class="num">44%</td><td>Target ≈ 4,750</td></tr></tfoot>
+  </table>
+
+  <p>Out of scope, and worth stating: <code>pipelines/</code> (4,385 SLOC), <code>case_review/</code> (62),
+  <code>readers/</code> (131), <code>shared/</code> (13) and <code>tests/</code> (21,996). The demo pipelines matter to
+  the argument — several exist only to exercise features on this cut list — but they are not counted in the target.</p>
+
+  <h3>The three dispositions</h3>
+  <p>Every line on the cut list falls into one of three buckets, and the distinction is the whole point of this
+  report. They carry very different risk:</p>
+
+  <div class="cards">
+    <div class="card" style="border-top-color: var(--d-delete)">
+      <h4><span class="chip delete">Tier A — dead</span></h4>
+      <p>No reference from <code>pipelines/</code>, <code>case_review/</code>, <code>readers/</code>,
+      <code>shared/</code>, <code>cli/</code>, or from any other module in <code>framework/</code> or
+      <code>tools/</code>. Only its own definition, its facade export, and tests. Deleting it costs nothing in use
+      today. <strong>1,577 SLOC.</strong></p>
+    </div>
+    <div class="card warn">
+      <h4><span class="chip relax">Tier B — relaxation</span></h4>
+      <p>Real capability with real callers. Removing it retires a decision and, in four cases, an ADR. Each item here
+      is a question for you, not an action for me. <strong>1,928 SLOC.</strong></p>
+    </div>
+    <div class="card" style="border-top-color: var(--d-density)">
+      <h4><span class="chip density">Tier C — density</span></h4>
+      <p>Same behaviour, fewer lines. Signature flattening, one run-record store instead of two, one scaffold template
+      instead of two. No capability changes hands. <strong>1,151 SLOC.</strong></p>
+    </div>
+    <div class="card">
+      <h4><span class="chip keep">Keep</span></h4>
+      <p>The kernel — the schema contract, the eager steps, the three readers and four writers in use, migrations,
+      the run log. <strong>4,861 SLOC.</strong></p>
+    </div>
+  </div>
+
+  <figure class="viz">
+    <p class="viz-title">Where the 9,517 lines sit, and what happens to each</p>
+    <p class="viz-sub">SLOC by package · segments drawn left to right in confidence order</p>
+    <div class="legend">
+      <span class="key"><span class="swatch" style="background:var(--d-delete)"></span>Tier A — dead, safe to delete</span>
+      <span class="key"><span class="swatch" style="background:var(--d-relax)"></span>Tier B — relaxation, needs a decision</span>
+      <span class="key"><span class="swatch" style="background:var(--d-density)"></span>Tier C — density, same behaviour</span>
+      <span class="key"><span class="swatch" style="background:var(--d-keep)"></span>Keep</span>
+    </div>
+    <svg viewBox="0 0 720 176" role="img" aria-label="Stacked horizontal bars showing dead, relaxation, density and retained lines for framework, tools and cli">
+      <line class="gridline" x1="274.2" y1="6" x2="274.2" y2="132"/>
+      <line class="gridline" x1="370.3" y1="6" x2="370.3" y2="132"/>
+      <line class="gridline" x1="466.5" y1="6" x2="466.5" y2="132"/>
+      <line class="gridline" x1="562.6" y1="6" x2="562.6" y2="132"/>
+      <line class="gridline" x1="658.8" y1="6" x2="658.8" y2="132"/>
+
+      <!-- framework 5017 -->
+      <text x="170" y="22" text-anchor="end" class="lbl-strong">framework/</text>
+      <text x="170" y="37" text-anchor="end" class="lbl-sm">5,017 SLOC</text>
+      <rect data-tip="framework — Tier A dead: 922 SLOC (unused readers 221, unused writers/strategies 246, processors 164, streaming 302 spread across io + core, validators 78)" x="178" y="12" width="88.7" height="26" rx="0" fill="var(--d-delete)"/>
+      <rect data-tip="framework — Tier B relaxation: 791 SLOC (graph builder + execution 624, row trace 127, PipelineRunner 40)" x="268.7" y="12" width="76.1" height="26" fill="var(--d-relax)"/>
+      <rect data-tip="framework — Tier C density: 571 SLOC (describe() protocol 129, facade __init__ files 102, json_shaping 60, RunAddress 60, signature flattening 220)" x="346.8" y="12" width="54.9" height="26" fill="var(--d-density)"/>
+      <rect data-tip="framework — retained: 2,733 SLOC. The schema contract, the eager steps, the readers and writers in use." x="403.7" y="12" width="262.8" height="26" fill="var(--d-keep)"/>
+      <text x="672" y="30" class="lbl-val lbl-sm">−45%</text>
+
+      <!-- tools 3280 -->
+      <text x="170" y="68" text-anchor="end" class="lbl-strong">tools/</text>
+      <text x="170" y="83" text-anchor="end" class="lbl-sm">3,280 SLOC</text>
+      <rect data-tip="tools — Tier A dead: 655 SLOC (profile.py 223, remote.py 140, retry.py 114, discovery.py 60, stream.py 60, registry queries 55, locations 3)" x="178" y="58" width="63.0" height="26" fill="var(--d-delete)"/>
+      <rect data-tip="tools — Tier B relaxation: 819 SLOC (orchestration reduced to schedule + dependency 464, SharePoint client relocated into its pipeline 355)" x="243.0" y="58" width="78.8" height="26" fill="var(--d-relax)"/>
+      <rect data-tip="tools — Tier C density: 380 SLOC (one run-record store instead of JSONL + SQLite 250, signature flattening 130)" x="323.8" y="58" width="36.5" height="26" fill="var(--d-density)"/>
+      <rect data-tip="tools — retained: 1,426 SLOC. Store, medallion, migrations, calendar, run log, environments." x="362.3" y="58" width="137.1" height="26" fill="var(--d-keep)"/>
+      <text x="506" y="76" class="lbl-val lbl-sm">−57%</text>
+
+      <!-- cli 1220 -->
+      <text x="170" y="114" text-anchor="end" class="lbl-strong">cli/</text>
+      <text x="170" y="129" text-anchor="end" class="lbl-sm">1,220 SLOC</text>
+      <rect data-tip="cli — Tier B relaxation: 318 SLOC (scaffold --from-feed-file inference 198, fold runs/log/status into one command 120)" x="178" y="104" width="30.6" height="26" fill="var(--d-relax)"/>
+      <rect data-tip="cli — Tier C density: 200 SLOC (merge the feed and case_type scaffold templates 150, signature flattening 50)" x="210.6" y="104" width="19.2" height="26" fill="var(--d-density)"/>
+      <rect data-tip="cli — retained: 702 SLOC. run / orchestrate / migrate, and one scaffold template." x="231.8" y="104" width="67.5" height="26" fill="var(--d-keep)"/>
+      <text x="306" y="122" class="lbl-val lbl-sm">−42%</text>
+
+      <line class="axisline" x1="178" y1="140" x2="678" y2="140"/>
+      <text x="274.2" y="158" text-anchor="middle" class="lbl-sm">1k</text>
+      <text x="370.3" y="158" text-anchor="middle" class="lbl-sm">2k</text>
+      <text x="466.5" y="158" text-anchor="middle" class="lbl-sm">3k</text>
+      <text x="562.6" y="158" text-anchor="middle" class="lbl-sm">4k</text>
+      <text x="658.8" y="158" text-anchor="middle" class="lbl-sm">5k</text>
+    </svg>
+    <figcaption class="note"><code>tools/</code> takes the deepest cut (−57%) because it holds three whole modules with
+    no caller and one — the SharePoint client — that belongs to a single pipeline rather than to the framework.
+    <code>cli/</code> takes the shallowest (−42%): the operator commands are the framework's actual user interface and
+    mostly earn their lines.</figcaption>
+  </figure>
+</section>
+
+<!-- ══════════════════════════ §2 ══════════════════════════ -->
+<section id="reach">
+  <span class="secnum">§ 2</span>
+  <h2>The vocabulary nobody speaks</h2>
+  <p class="lede">The four facades — <code>framework.core</code>, <code>.io</code>, <code>.transform</code>,
+  <code>.run</code> — export 126 names as the stable public contract. Classifying each by the furthest tier of code
+  that can reach it gives the sharpest single picture in this report.</p>
+
+  <figure class="viz">
+    <p class="viz-title">126 exported names, by how far they actually reach</p>
+    <p class="viz-sub">Production = the three scheduled pipelines plus <code>case_review/</code>, <code>readers/</code>, <code>shared/</code> · counts of names</p>
+    <div class="legend">
+      <span class="key"><span class="swatch" style="background:var(--d-keep)"></span>reached by a production pipeline — 49</span>
+      <span class="key"><span class="swatch" style="background:var(--d-density)"></span>demo pipelines only — 12</span>
+      <span class="key"><span class="swatch" style="background:var(--d-relax)"></span>tests only — 56</span>
+      <span class="key"><span class="swatch" style="background:var(--d-delete)"></span>nothing at all — 9</span>
+    </div>
+    <svg viewBox="0 0 720 200" role="img" aria-label="Stacked horizontal bars showing how far each facade's exported names reach">
+      <line class="gridline" x1="292.3" y1="6" x2="292.3" y2="162"/>
+      <line class="gridline" x1="406.6" y1="6" x2="406.6" y2="162"/>
+      <line class="gridline" x1="520.9" y1="6" x2="520.9" y2="162"/>
+      <line class="gridline" x1="635.1" y1="6" x2="635.1" y2="162"/>
+
+      <text x="170" y="22" text-anchor="end" class="lbl-strong">framework.core</text>
+      <text x="170" y="36" text-anchor="end" class="lbl-sm">28 names</text>
+      <rect data-tip="core — production: 13 (Dataset, SchemaValidator, PipelineError, NonNull, OneOf, Range, Length, Nullable, ColumnValidator, UniqueValidator, ValidationError, ErrorCategory, format_failure)" x="178" y="12" width="148.6" height="24" fill="var(--d-keep)"/>
+      <rect data-tip="core — tests only: 10 (Pattern, Unique, ValueRule, RowCheck, row_checks, Validator, Severity, DatasetProfiler, RunHistory, PriorColumns)" x="328.6" y="12" width="114.3" height="24" fill="var(--d-relax)"/>
+      <rect data-tip="core — nothing at all: 5 (SchemaDriftValidator, RowCountValidator, VolumeAnomalyValidator, StreamingUniqueValidator, needs_whole_dataset)" x="444.9" y="12" width="57.1" height="24" fill="var(--d-delete)"/>
+      <text x="510" y="28" class="lbl-val lbl-sm">28</text>
+
+      <text x="170" y="64" text-anchor="end" class="lbl-strong">framework.io</text>
+      <text x="170" y="78" text-anchor="end" class="lbl-sm">40 names</text>
+      <rect data-tip="io — production: 8 (Reader, Writer, CsvReader, DatasetReader, SqliteReader, Refresh, AccumulateByRun, AppendOnly)" x="178" y="54" width="91.4" height="24" fill="var(--d-keep)"/>
+      <rect data-tip="io — demo pipelines only: 2 (JsonWriter, StdoutWriter)" x="271.4" y="54" width="22.9" height="24" fill="var(--d-density)"/>
+      <rect data-tip="io — tests only: 27. Every concrete Sqlite*Writer, every chunked/filtering reader, the Excel and SAS and glob and strict-CSV readers, and three of the six load strategies." x="296.3" y="54" width="308.6" height="24" fill="var(--d-relax)"/>
+      <rect data-tip="io — nothing at all: 3 (StrictCsvReader, SasFileReader, ChunkedCsvReader — plus ChunkFilter, CsvWriter, ExcelWriter, MissingTableError, StrictCsvParseError in the wider dead list)" x="606.9" y="54" width="34.3" height="24" fill="var(--d-delete)"/>
+      <text x="649" y="70" class="lbl-val lbl-sm">40</text>
+
+      <text x="170" y="106" text-anchor="end" class="lbl-strong">framework.transform</text>
+      <text x="170" y="120" text-anchor="end" class="lbl-sm">29 names</text>
+      <rect data-tip="transform — production: 15. The healthiest facade in the tree: Filter, SchemaCoercion, Rename, SelectColumns, LatestPerKey, ExplodeJsonMap and friends all have real callers." x="178" y="96" width="171.4" height="24" fill="var(--d-keep)"/>
+      <rect data-tip="transform — demo pipelines only: 8 (Score, Sort, Unpivot, DropColumns, JoinWith, AntiJoinWith, Sample, Parse)" x="351.4" y="96" width="91.4" height="24" fill="var(--d-density)"/>
+      <rect data-tip="transform — tests only: 6 (TopNPerGroup, SamplePerGroup, VectorizedFilter, JoinColumns, CoercionError, IdentityError)" x="444.8" y="96" width="68.6" height="24" fill="var(--d-relax)"/>
+      <text x="521" y="112" class="lbl-val lbl-sm">29</text>
+
+      <text x="170" y="148" text-anchor="end" class="lbl-strong">framework.run</text>
+      <text x="170" y="162" text-anchor="end" class="lbl-sm">29 names</text>
+      <rect data-tip="run — production: 13 (read, transform, validate, write, coerce, enforce, quarantine, step, RunContext, RunLog, run_pipeline, FreshnessRequirement, Pipeline)" x="178" y="138" width="148.6" height="24" fill="var(--d-keep)"/>
+      <rect data-tip="run — demo pipelines only: 2 (explain, PipelineRunner)" x="328.6" y="138" width="22.9" height="24" fill="var(--d-density)"/>
+      <rect data-tip="run — tests only: 13. Mostly internal machinery that need not be exported at all: RunAddress, RunRegistry, load_pipeline, active_context, DryRunReport, Requirement, FreshnessError, UnknownPipelineError." x="353.5" y="138" width="148.6" height="24" fill="var(--d-relax)"/>
+      <rect data-tip="run — nothing at all: 1 (write_trace) — plus LoadedPipeline, PipelineGraphError, RunAddressError, StepError in the wider dead list" x="504.1" y="138" width="11.4" height="24" fill="var(--d-delete)"/>
+      <text x="523" y="154" class="lbl-val lbl-sm">29</text>
+
+      <line class="axisline" x1="178" y1="170" x2="658" y2="170"/>
+      <text x="292.3" y="188" text-anchor="middle" class="lbl-sm">10</text>
+      <text x="406.6" y="188" text-anchor="middle" class="lbl-sm">20</text>
+      <text x="520.9" y="188" text-anchor="middle" class="lbl-sm">30</text>
+      <text x="635.1" y="188" text-anchor="middle" class="lbl-sm">40</text>
+    </svg>
+    <figcaption class="note"><strong>Read <code>framework.io</code> against <code>framework.transform</code>.</strong>
+    The transform facade is in good health — 15 of 29 names have production callers and most of the rest are one demo
+    away. The io facade has 8 of 40. It is carrying six load strategies where production declares three, five concrete
+    Sqlite writer classes that nothing names directly (the strategy mints them), and seven readers for file formats no
+    feed uses.</figcaption>
+  </figure>
+
+  <h3>An important distinction: exported ≠ alive</h3>
+  <p>"Tests only" is not the same as dead. A name like <code>RunAddress</code> (27 internal references) or
+  <code>RunRegistry</code> (27) is load-bearing machinery that simply <em>shouldn't be on the facade</em> — trimming
+  the export costs one line, not the module. Separating those out leaves a much smaller list of names with
+  <strong>zero references anywhere outside their own defining module and <code>tests/</code></strong>:</p>
+
+  <table>
+    <thead><tr><th>Facade</th><th>Name</th><th>Home</th><th class="num">SLOC</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">io</td><td class="mono">StrictCsvReader</td><td class="mono">io/readers.py</td><td class="num">56 <span class="lbl-sm">(+68 parser)</span></td></tr>
+      <tr><td class="mono">io</td><td class="mono">SasFileReader</td><td class="mono">io/readers.py</td><td class="num">38 <span class="lbl-sm">(+12 sniffer)</span></td></tr>
+      <tr><td class="mono">io</td><td class="mono">ChunkedCsvReader</td><td class="mono">io/readers.py</td><td class="num">37</td></tr>
+      <tr><td class="mono">io</td><td class="mono">ChunkFilter</td><td class="mono">io/readers.py</td><td class="num">—</td></tr>
+      <tr><td class="mono">io</td><td class="mono">StrictCsvParseError</td><td class="mono">io/readers.py</td><td class="num">1</td></tr>
+      <tr><td class="mono">io</td><td class="mono">CsvWriter</td><td class="mono">io/writers.py</td><td class="num">4</td></tr>
+      <tr><td class="mono">io</td><td class="mono">ExcelWriter</td><td class="mono">io/writers.py</td><td class="num">16</td></tr>
+      <tr><td class="mono">io</td><td class="mono">MissingTableError</td><td class="mono">io/writers.py</td><td class="num">1</td></tr>
+      <tr><td class="mono">core</td><td class="mono">SchemaDriftValidator</td><td class="mono">core/validators.py</td><td class="num">21</td></tr>
+      <tr><td class="mono">transform</td><td class="mono">TopNPerGroup</td><td class="mono">transform/processors.py</td><td class="num">32</td></tr>
+      <tr><td class="mono">transform</td><td class="mono">SamplePerGroup</td><td class="mono">transform/processors.py</td><td class="num">25</td></tr>
+      <tr><td class="mono">transform</td><td class="mono">VectorizedFilter</td><td class="mono">transform/processors.py</td><td class="num">12</td></tr>
+      <tr><td class="mono">transform</td><td class="mono">IdentityError</td><td class="mono">transform/processors.py</td><td class="num">1</td></tr>
+      <tr><td class="mono">run</td><td class="mono">write_trace</td><td class="mono">run/steps.py</td><td class="num">34</td></tr>
+      <tr><td class="mono">run</td><td class="mono">PipelineGraphError</td><td class="mono">run/builder.py</td><td class="num">1</td></tr>
+      <tr><td class="mono">run</td><td class="mono">LoadedPipeline</td><td class="mono">run/runner.py</td><td class="num">6</td></tr>
+      <tr><td class="mono">run</td><td class="mono">RunAddressError</td><td class="mono">run/address.py</td><td class="num">2</td></tr>
+      <tr><td class="mono">run</td><td class="mono">StepError</td><td class="mono">run/steps.py</td><td class="num">3</td></tr>
+    </tbody>
+  </table>
+
+  <p>All eighteen are documented in <code>docs/public-api.md</code> and most in <code>docs/core-primitives.md</code>.
+  That is the shape of the problem: <strong>every one of these is a supported, documented, tested contract that has
+  never once been used.</strong> The documentation is what makes it expensive — it is 12,614 lines across 30 root
+  docs, and it has to be true.</p>
+</section>
+
+<!-- ══════════════════════════ §3 ══════════════════════════ -->
+<section id="findings">
+  <span class="secnum">§ 3</span>
+  <h2>Four findings that carry the cut</h2>
+
+  <h3>1. Streaming has no callers — and there are two of it</h3>
+  <p><code>Pipeline.read_chunks</code> is described in <code>CLAUDE.md</code> as a first-class primitive and costs the
+  builder its four wiring-time refusals. <strong>No pipeline calls it.</strong> Neither does anything call
+  <code>stream_step</code> in <code>tools/observability/stream.py</code> — a <em>second</em>, independent streaming
+  drive written because the graph builder is single-shot and a <code>ChunkReader</code> could not be wired into it.
+  Two implementations of one unused feature.</p>
+  <p>The cost is not mainly lines. It is that streaming is the sole reason <code>UniqueValidator</code> vs
+  <code>StreamingUniqueValidator</code> is a choice an author must make, the sole reason a Writer needs a
+  <code>writing_chunks()</code> session, and the sole reason four pairings are refused at wiring time. Under the eager
+  model, streaming is a <code>for</code> loop over <code>reader.chunks(n)</code> — about 40 lines when a feed is
+  genuinely too big, not a subsystem carried in advance.</p>
+
+  <h3>2. Production speaks 41 words; the demos speak the rest</h3>
+  <p>The three pipelines named in <code>case_review/schedules.py</code> — <code>sharepoint_cases</code>,
+  <code>reviewer_activity</code>, <code>complaint_selection</code> — plus <code>case_review/</code> and
+  <code>readers/</code>, between them import <strong>41 distinct names</strong> from <code>framework.*</code> and
+  <code>tools.*</code>. Everything else is exercised by demos, and several demos exist specifically to exercise it.
+  <code>pipelines/ordering_demo</code> and the seven <code>demo_*</code> feeds exist to demonstrate the orchestrator's
+  deadline-priority ordering; that ordering has no production declaration. That is circular justification, and it is
+  worth naming.</p>
+
+  <h3>3. The most-churned file is the largest deletion</h3>
+  <figure class="viz">
+    <p class="viz-title">Commits touching each module, last 12 months</p>
+    <p class="viz-sub">Top 13 by churn · every one of them is on the cut list</p>
+    <div class="legend">
+      <span class="key"><span class="swatch" style="background:var(--d-delete)"></span>deleted outright</span>
+      <span class="key"><span class="swatch" style="background:var(--d-density)"></span>trimmed, merged or consolidated</span>
+    </div>
+    <svg viewBox="0 0 720 350" role="img" aria-label="Horizontal bar chart of commit counts per module over twelve months">
+      <line class="gridline" x1="408.6" y1="4" x2="408.6" y2="318"/>
+      <line class="gridline" x1="517.1" y1="4" x2="517.1" y2="318"/>
+      <line class="gridline" x1="625.7" y1="4" x2="625.7" y2="318"/>
+
+      <text x="292" y="21" text-anchor="end" class="lbl-mono lbl-strong">framework/run/builder.py</text>
+      <rect data-tip="builder.py — 33 commits. Deleted outright: 726 SLOC." x="300" y="9" width="358.3" height="17" rx="0" fill="var(--d-delete)"/>
+      <text x="666" y="22" class="lbl-val lbl-sm">33</text>
+
+      <text x="292" y="46" text-anchor="end" class="lbl-mono">framework/io/writers.py</text>
+      <rect data-tip="io/writers.py — 31 commits. Trimmed 671 → 400 SLOC." x="300" y="34" width="336.6" height="17" fill="var(--d-density)"/>
+      <text x="644" y="47" class="lbl-val lbl-sm">31</text>
+
+      <text x="292" y="71" text-anchor="end" class="lbl-mono">framework/transform/processors.py</text>
+      <rect data-tip="transform/processors.py — 23 commits. Trimmed 504 → 244 SLOC." x="300" y="59" width="249.7" height="17" fill="var(--d-density)"/>
+      <text x="557" y="72" class="lbl-val lbl-sm">23</text>
+
+      <text x="292" y="96" text-anchor="end" class="lbl-mono">framework/transform/__init__.py</text>
+      <rect data-tip="transform/__init__.py — 22 commits. A facade file churning almost as often as the module behind it: every export added or renamed touches it." x="300" y="84" width="238.9" height="17" fill="var(--d-density)"/>
+      <text x="546" y="97" class="lbl-val lbl-sm">22</text>
+
+      <text x="292" y="121" text-anchor="end" class="lbl-mono">framework/run/runner.py</text>
+      <rect data-tip="run/runner.py — 20 commits. Trimmed 262 → 200 SLOC (PipelineRunner goes)." x="300" y="109" width="217.1" height="17" fill="var(--d-density)"/>
+      <text x="525" y="122" class="lbl-val lbl-sm">20</text>
+
+      <text x="292" y="146" text-anchor="end" class="lbl-mono">framework/run/__init__.py</text>
+      <rect data-tip="run/__init__.py — 20 commits." x="300" y="134" width="217.1" height="17" fill="var(--d-density)"/>
+      <text x="525" y="147" class="lbl-val lbl-sm">20</text>
+
+      <text x="292" y="171" text-anchor="end" class="lbl-mono">cli/…/case_type/pipeline.py</text>
+      <rect data-tip="case_type scaffold template — 20 commits. Merged with the feed template." x="300" y="159" width="217.1" height="17" fill="var(--d-density)"/>
+      <text x="525" y="172" class="lbl-val lbl-sm">20</text>
+
+      <text x="292" y="196" text-anchor="end" class="lbl-mono">cli/…/feed/pipeline.py</text>
+      <rect data-tip="feed scaffold template — 19 commits. The two templates change in lockstep." x="300" y="184" width="206.3" height="17" fill="var(--d-density)"/>
+      <text x="514" y="197" class="lbl-val lbl-sm">19</text>
+
+      <text x="292" y="221" text-anchor="end" class="lbl-mono">cli/operator.py</text>
+      <rect data-tip="cli/operator.py — 19 commits. Trimmed 474 → 354 SLOC." x="300" y="209" width="206.3" height="17" fill="var(--d-density)"/>
+      <text x="514" y="222" class="lbl-val lbl-sm">19</text>
+
+      <text x="292" y="246" text-anchor="end" class="lbl-mono">framework/io/__init__.py</text>
+      <rect data-tip="io/__init__.py — 18 commits. 88 SLOC of export list for a facade where 8 of 40 names have production callers." x="300" y="234" width="195.4" height="17" fill="var(--d-density)"/>
+      <text x="503" y="247" class="lbl-val lbl-sm">18</text>
+
+      <text x="292" y="271" text-anchor="end" class="lbl-mono">framework/io/readers.py</text>
+      <rect data-tip="io/readers.py — 16 commits. Trimmed 451 → 110 SLOC, the deepest proportional cut in the tree." x="300" y="259" width="173.7" height="17" fill="var(--d-density)"/>
+      <text x="481" y="272" class="lbl-val lbl-sm">16</text>
+
+      <text x="292" y="296" text-anchor="end" class="lbl-mono">tools/orchestration.py</text>
+      <rect data-tip="tools/orchestration.py — 15 commits. Trimmed 1,086 → 622 SLOC." x="300" y="284" width="162.9" height="17" fill="var(--d-density)"/>
+      <text x="470" y="297" class="lbl-val lbl-sm">15</text>
+
+      <text x="292" y="321" text-anchor="end" class="lbl-mono">tools/…/run_registry.py</text>
+      <rect data-tip="run_registry.py — 15 commits. Trimmed 359 → 250 SLOC." x="300" y="309" width="162.9" height="17" fill="var(--d-density)"/>
+      <text x="470" y="322" class="lbl-val lbl-sm">15</text>
+
+      <line class="axisline" x1="300" y1="326" x2="680" y2="326"/>
+      <text x="408.6" y="343" text-anchor="middle" class="lbl-sm">10</text>
+      <text x="517.1" y="343" text-anchor="middle" class="lbl-sm">20</text>
+      <text x="625.7" y="343" text-anchor="middle" class="lbl-sm">30</text>
+    </svg>
+    <figcaption class="note">The repository is 3½ months old (first commit 7 May 2026, 1,232 commits). Every one of the
+    thirteen most-churned modules is trimmed, merged or deleted by this plan — and the single most-churned file,
+    <code>builder.py</code>, goes entirely. Two facade <code>__init__.py</code> files churning 18–22 times in twelve
+    weeks is its own signal: the export list is a maintenance surface, not just documentation.</figcaption>
+  </figure>
+
+  <h3>4. A tenth of the code is line-wrapping</h3>
+  <p>Of 9,517 executable lines, <strong>515 are nothing but a closing bracket</strong> and <strong>796 are a single
+  identifier or <code>key=value</code> being passed through</strong> — 13.8% between them. This is not a formatting
+  complaint; it is a signature complaint. The clearest specimen is
+  <code>Orchestrator._decide_item</code>: 117 SLOC, of which nine call sites repeat the same eight positional
+  arguments to <code>_decision(...)</code>. Binding them once collapses it to roughly 45 with no behaviour change at
+  all.</p>
+</section>
+
+<!-- ══════════════════════════ §4 ══════════════════════════ -->
+<section id="kernel">
+  <span class="secnum">§ 4</span>
+  <h2>What is genuinely required</h2>
+  <p class="lede">Built bottom-up rather than by subtraction: what would a pipeline in this repository stop being able
+  to do if this were removed? The answer lands at roughly 4,300–4,900 SLOC, which is the useful cross-check on the
+  50% target — the kernel and the target are the same number.</p>
+
+  <table>
+    <thead><tr><th>Concern</th><th class="num">SLOC</th><th>Why it survives</th></tr></thead>
+    <tbody>
+      <tr><td><code>Dataset</code>, protocols, errors</td><td class="num">75</td><td>The engine seam. Every signature in the tree names it.</td></tr>
+      <tr><td>The declared-schema contract<br><span class="lbl-sm"><code>_internal/schema</code> · <code>core/schema</code> · <code>value_rules</code> · <code>coercion</code></span></td><td class="num">412</td><td><strong>This is the product.</strong> <code>enforce</code> = coerce → quarantine → validate is what every feed in the repository does, and it is the thing a hand-written script would get wrong.</td></tr>
+      <tr><td><code>ColumnValidator</code>, <code>UniqueValidator</code>, <code>ValidationError</code></td><td class="num">35</td><td>The only two structural validators with a caller.</td></tr>
+      <tr><td>Readers: <code>DatasetReader</code>, <code>CsvReader</code>, <code>SqliteReader</code></td><td class="num">55</td><td>The only three with a caller. Adding a fourth later is 15–40 lines.</td></tr>
+      <tr><td>Writers: file writers, <code>Refresh</code>, <code>AccumulateByRun</code>, <code>AppendOnly</code>, quarantine, <code>_MigrationGuard</code>, <code>_staged_merge</code></td><td class="num">300</td><td>The strategies production declares, plus the migration-ledger refusal that stops a nightly refresh dropping a migration's DDL.</td></tr>
+      <tr><td>Processors with callers (15 of 25)</td><td class="num">200</td><td><code>Filter</code>, <code>SchemaCoercion</code>, <code>Rename</code>, <code>SelectColumns</code>, <code>LatestPerKey</code>, <code>DeriveKey</code>, the JSON exploders and the rest of the 15 the transform census marks production-reachable.</td></tr>
+      <tr><td><code>json_shaping</code></td><td class="num">200</td><td>The SharePoint JSON blobs are real and the exploders are not trivial.</td></tr>
+      <tr><td>Eager steps, <code>RunContext</code>, <code>runner</code>, <code>freshness</code></td><td class="num">700</td><td>The authoring model you are keeping, plus the one upstream-freshness rule.</td></tr>
+      <tr><td>Run log + registry + record schema</td><td class="num">450</td><td>Fail-fast observability (ADR-0005). Some headroom — see Tier C.</td></tr>
+      <tr><td><code>Store</code> / <code>StoreRegistry</code> / <code>medallion</code> / <code>environments</code></td><td class="num">200</td><td>Where a feed lands, kept out of framework vocabulary deliberately.</td></tr>
+      <tr><td><code>tools/migrations.py</code></td><td class="num">186</td><td>ADR-0025. Deployed tables have a shape that a dataclass does not own.</td></tr>
+      <tr><td>Orchestration — schedule + dependency only</td><td class="num">350</td><td><code>case_review/schedules.py</code> declares <code>Schedule.daily()</code> and one <code>depends_on</code>. That is the whole production requirement.</td></tr>
+      <tr><td><code>cli/</code> — <code>run</code>, <code>orchestrate</code>, <code>migrate</code>, one <code>scaffold</code></td><td class="num">700</td><td>The operator interface and the authoring on-ramp.</td></tr>
+      <tr><td><code>calendar</code>, <code>deliverables</code>, <code>timestamps</code>, <code>_internal/</code></td><td class="num">400</td><td>Working-day rules, report-feed destinations, the UTC-instant / local-date settlement.</td></tr>
+    </tbody>
+    <tfoot><tr><td>Kernel</td><td class="num">≈ 4,300</td><td>Against a plan that lands at 4,861 — the difference is honest slack.</td></tr></tfoot>
+  </table>
+</section>
+
+<!-- ══════════════════════════ §5 ══════════════════════════ -->
+<section id="budget">
+  <span class="secnum">§ 5</span>
+  <h2>The budget, itemised</h2>
+
+  <figure class="viz">
+    <p class="viz-title">9,517 → 4,861</p>
+    <p class="viz-sub">Three tiers of decreasing confidence · SLOC</p>
+    <svg viewBox="0 0 720 300" role="img" aria-label="Waterfall chart showing 9,517 SLOC reduced by three tiers to 4,861">
+      <line class="gridline" x1="50" y1="250" x2="690" y2="250"/>
+      <line class="gridline" x1="50" y1="145.1" x2="690" y2="145.1"/>
+      <text x="44" y="254" text-anchor="end" class="lbl-sm">0</text>
+      <text x="44" y="149" text-anchor="end" class="lbl-sm">5k</text>
+
+      <rect data-tip="Baseline: 9,517 SLOC across framework/, tools/ and cli/" x="70" y="50" width="92" height="200" fill="var(--d-keep)"/>
+      <text x="116" y="42" text-anchor="middle" class="lbl-val">9,517</text>
+      <text x="116" y="272" text-anchor="middle" class="lbl-sm lbl-strong">today</text>
+
+      <line class="conn" x1="162" y1="50" x2="200" y2="50"/>
+      <rect data-tip="Tier A — 1,577 SLOC of dead capability: unused readers, writers, strategies, processors, validators, profiling, retry, discovery, remote, and the whole streaming subsystem." x="200" y="50" width="92" height="33.1" fill="var(--d-delete)"/>
+      <text x="246" y="42" text-anchor="middle" class="lbl-val" style="fill:var(--delete-text)">−1,577</text>
+      <text x="246" y="272" text-anchor="middle" class="lbl-sm lbl-strong">Tier A</text>
+      <text x="246" y="286" text-anchor="middle" class="lbl-sm">dead</text>
+
+      <line class="conn" x1="292" y1="83.1" x2="330" y2="83.1"/>
+      <rect data-tip="Tier B — 1,928 SLOC of relaxation: the graph builder, orchestration ordering, the SharePoint client relocated, scaffold inference, the row trace, CLI consolidation, PipelineRunner." x="330" y="83.1" width="92" height="40.5" fill="var(--d-relax)"/>
+      <text x="376" y="75" text-anchor="middle" class="lbl-val" style="fill:var(--relax-text)">−1,928</text>
+      <text x="376" y="272" text-anchor="middle" class="lbl-sm lbl-strong">Tier B</text>
+      <text x="376" y="286" text-anchor="middle" class="lbl-sm">relaxation</text>
+
+      <line class="conn" x1="422" y1="123.6" x2="460" y2="123.6"/>
+      <rect data-tip="Tier C — 1,151 SLOC of density: signature flattening, one run-record store, one scaffold template, the describe() protocol, facade shrinkage." x="460" y="123.6" width="92" height="24.2" fill="var(--d-density)"/>
+      <text x="506" y="115" text-anchor="middle" class="lbl-val" style="fill:var(--density-text)">−1,151</text>
+      <text x="506" y="272" text-anchor="middle" class="lbl-sm lbl-strong">Tier C</text>
+      <text x="506" y="286" text-anchor="middle" class="lbl-sm">density</text>
+
+      <line class="conn" x1="552" y1="147.8" x2="590" y2="147.8"/>
+      <rect data-tip="Result: 4,861 SLOC — 48.9% smaller. The kernel estimate built bottom-up is ≈4,300." x="590" y="147.8" width="92" height="102.2" fill="var(--d-keep)"/>
+      <text x="636" y="140" text-anchor="middle" class="lbl-val">4,861</text>
+      <text x="636" y="272" text-anchor="middle" class="lbl-sm lbl-strong">after</text>
+      <text x="636" y="286" text-anchor="middle" class="lbl-sm">−48.9%</text>
+    </svg>
+  </figure>
+
+  <h3><span class="chip delete">Tier A</span> Dead capability — 1,577 SLOC</h3>
+  <p>No caller outside <code>tests/</code>. Nothing in production, in a demo, or elsewhere in the framework reaches
+  any of it.</p>
+  <table>
+    <thead><tr><th>Item</th><th>Where</th><th class="num">SLOC</th></tr></thead>
+    <tbody>
+      <tr><td>The streaming subsystem outside the builder<br><span class="lbl-sm"><code>ChunkedCsvReader</code> 37 · <code>KeyFilterChunkReader</code> 37 · <code>PredicateChunkReader</code> 25 · key normalisers 21 · chunk-writer sessions 44 · <code>stream.py</code> 60 · <code>RetryingChunkReader</code> 29 · <code>StreamingUniqueValidator</code> 40 · protocols 9</span></td><td class="mono">io, tools, core</td><td class="num cut">302</td></tr>
+      <tr><td>Writers &amp; strategies with no caller<br><span class="lbl-sm"><code>InsertIfAbsent</code> + its writer 112 · <code>UpsertStrategy</code> + its writer 73 · <code>InsertOrIgnore</code> + its writer 45 · <code>ExcelWriter</code> 16</span></td><td class="mono">io/strategy.py, io/writers.py</td><td class="num cut">246</td></tr>
+      <tr><td>Readers with no caller<br><span class="lbl-sm"><code>StrictCsvReader</code> + parser 124 · <code>SasFileReader</code> + sniffer 50 · <code>GlobCsvReader</code> 32 · <code>ExcelReader</code> 15</span></td><td class="mono">io/readers.py</td><td class="num cut">221</td></tr>
+      <tr><td>Dataset profiling — <code>DataProfiler</code>, <code>ProfileDriftCheck</code>, <code>profile_dataset</code></td><td class="mono">tools/observability/profile.py</td><td class="num cut">223</td></tr>
+      <tr><td>Processors with no caller<br><span class="lbl-sm"><code>Sample</code> 41 · <code>TopNPerGroup</code> 37 · <code>JoinColumns</code> 31 · <code>SamplePerGroup</code> 25 · <code>Parse</code> 18 · <code>VectorizedFilter</code> 12</span></td><td class="mono">transform/processors.py</td><td class="num cut">164</td></tr>
+      <tr><td>SharePoint/SAS remote-execution readers</td><td class="mono">tools/integrations/remote.py</td><td class="num cut">140</td></tr>
+      <tr><td>Retry policy and retrying edges<br><span class="lbl-sm">114 SLOC total, less the 29 of <code>RetryingChunkReader</code> already counted in the streaming row above</span></td><td class="mono">tools/retry.py</td><td class="num cut">85</td></tr>
+      <tr><td>Validators with no caller<br><span class="lbl-sm"><code>VolumeAnomalyValidator</code> 43 · <code>SchemaDriftValidator</code> 24 · <code>RowCountValidator</code> 11</span></td><td class="mono">core/validators.py</td><td class="num cut">78</td></tr>
+      <tr><td>Dated-file source discovery</td><td class="mono">tools/discovery.py</td><td class="num cut">60</td></tr>
+      <tr><td>Six <code>RunRegistry</code> query methods with no caller<br><span class="lbl-sm"><code>records_for_run</code> · <code>records_for_logical_run</code> · <code>records_for_address</code> · <code>has_successful_address</code> · <code>succeeded_logical_run_ids</code> · <code>runs_that_warned</code></span></td><td class="mono">tools/observability/run_registry.py</td><td class="num cut">55</td></tr>
+      <tr><td><code>tools/integrations/locations.py</code></td><td class="mono">tools/integrations</td><td class="num cut">3</td></tr>
+    </tbody>
+    <tfoot><tr><td>Tier A</td><td></td><td class="num">1,577</td></tr></tfoot>
+  </table>
+
+  <h3><span class="chip relax">Tier B</span> Relaxations — 1,928 SLOC</h3>
+  <p>Each of these removes something that works. They are listed with what you give up, because that is the part worth
+  arguing about.</p>
+  <table>
+    <thead><tr><th>Item</th><th class="num">SLOC</th><th>What you give up</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>The graph builder</strong><br><span class="lbl-sm"><code>builder.py</code> less its chunk parts (569) + <code>execution.py</code> (110), net of ~55 moved into <code>steps.py</code></span></td>
+        <td class="num cut">624</td>
+        <td>Fan-in composition. 161 of 169 wirings in the tree are single-input; the eight real fan-ins are in <code>notifications</code> and the <code>retail_analytics</code> demo, and the review already converted <code>notifications</code>. Two production files still use it (<code>reviewer_activity/gold.py</code>, <code>report_feed.py</code>); argument order was kept identical so conversion is mechanical.</td>
+      </tr>
+      <tr>
+        <td><strong>Orchestration reduced to schedule + dependency</strong><br><span class="lbl-sm">ForEach 88 · deadline/priority ordering 110 · overrides 53 · YAML config path 40 · four <code>Schedule</code> subclasses 78 · <code>_decide_item</code> collapse 70 · store lineage 25</span></td>
+        <td class="num cut">464</td>
+        <td>Deadline-derived run order (ADR-0017), per-item overrides, YAML-configured schedules, monthly/nth-working-day schedules, and <code>ForEach</code>. Production declares <code>Schedule.daily()</code> and one <code>depends_on</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>SharePoint client relocated</strong><br><span class="lbl-sm"><code>sharepoint_rest.py</code> 214 · <code>sharepoint_checkpoint.py</code> 141</span></td>
+        <td class="num cut">355</td>
+        <td>Nothing — it moves into <code>pipelines/sharepoint_cases/</code>, its only consumer. This reduces the framework, not the repository. Listed separately for that reason.</td>
+      </tr>
+      <tr>
+        <td><strong><code>scaffold --from-feed-file</code> inference</strong><br><span class="lbl-sm">type inference, identifier canonicalisation, literal rendering, migration planning</span></td>
+        <td class="num cut">198</td>
+        <td>Seeding a new feed from a real CSV header. An authoring nicety, not framework runtime — and the review's own backlog item #1 wants to replace it with a <code>source()</code> column mapping anyway.</td>
+      </tr>
+      <tr>
+        <td><strong>The row trace</strong><br><span class="lbl-sm"><code>trace.py</code> 84 · <code>explain</code>/<code>write_trace</code> 35 · facade 8</span></td>
+        <td class="num cut">127</td>
+        <td>Per-row selection explainability (ADR-0008). #769 removed the trace from <code>complaint_selection</code>, so the eager pair already has no pipeline consumer — only one demo and framework tests.</td>
+      </tr>
+      <tr>
+        <td><strong>Operator CLI consolidation</strong><br><span class="lbl-sm">fold <code>runs</code> / <code>log</code> / <code>status</code> into one command</span></td>
+        <td class="num cut">120</td>
+        <td>Three specialised run-history views become one with flags. Formatting code, mostly.</td>
+      </tr>
+      <tr>
+        <td><strong><code>PipelineRunner</code></strong></td>
+        <td class="num cut">40</td>
+        <td>Nothing. Both the CLI and the orchestrator go <code>load_pipeline</code> → <code>run_pipeline</code>; this is the review's backlog item #5.</td>
+      </tr>
+    </tbody>
+    <tfoot><tr><td>Tier B</td><td class="num">1,928</td><td></td></tr></tfoot>
+  </table>
+
+  <h3><span class="chip density">Tier C</span> Density — 1,151 SLOC</h3>
+  <p>No capability changes hands. This is the tier I would hold most loosely as an estimate — it is diffuse, and the
+  last third of it is spread thinly across files this table marks as unchanged.</p>
+  <table>
+    <thead><tr><th>Item</th><th class="num">SLOC</th><th>The change</th></tr></thead>
+    <tbody>
+      <tr><td>Signature flattening</td><td class="num cut">400</td><td>1,311 lines are a lone closing bracket (515) or a single pass-through argument (796). Roughly 30% is recoverable by shortening parameter lists and reading state from the ambient <code>RunContext</code> rather than threading it. <code>Orchestrator._decide_item</code> alone: 117 → ~45.</td></tr>
+      <tr><td>One run-record store</td><td class="num cut">250</td><td>684 SLOC today across <code>record_schema</code> (147), <code>run_log</code> (145), <code>run_registry</code> (359) and <code>run_store</code> (33) for a 20-field append-only log written as JSONL then ingested into SQLite. Writing straight to SQLite removes the <code>ingest</code> method and the JSONL writer. Note the constraint: <code>RUN_RECORD_FIELDS</code> order is a live on-disk format.</td></tr>
+      <tr><td>Merge the two scaffold templates</td><td class="num cut">150</td><td>The <code>feed</code> and <code>case_type</code> templates are 324 SLOC that churn in lockstep (20 and 19 commits). One parameterised template.</td></tr>
+      <tr><td>The <code>describe()</code> protocol</td><td class="num cut">129</td><td>58 hand-written <code>describe()</code> methods plus <code>render</code>/<code>component_summary</code>, whose only consumer was the graph's plan preview. Goes with the builder.</td></tr>
+      <tr><td>Facade <code>__init__</code> files</td><td class="num cut">102</td><td>287 SLOC across four files today, and they shrink in proportion to their exports.</td></tr>
+      <tr><td><code>json_shaping</code> — one walk</td><td class="num cut">60</td><td><code>ExplodeJsonMap</code>, <code>ExplodeJsonList</code> and <code>FlattenJsonObject</code> each re-derive the same validation and lift.</td></tr>
+      <tr><td><code>RunAddress</code> → plain strings</td><td class="num cut">60</td><td>83 SLOC of parsing and validation for <code>subject/pipeline:step</code>. Worth keeping if the address is ever addressed programmatically; it is not today.</td></tr>
+    </tbody>
+    <tfoot><tr><td>Tier C</td><td class="num">1,151</td><td></td></tr></tfoot>
+  </table>
+</section>
+
+<!-- ══════════════════════════ §6 ══════════════════════════ -->
+<section id="files">
+  <span class="secnum">§ 6</span>
+  <h2>File by file</h2>
+  <p class="lede">The structural half of the plan, allocated to modules. Rows sum to −4,354; the remaining ~300 is the
+  diffuse signature flattening, which is not attributed here because it lands a few lines at a time across everything
+  that survives.</p>
+
+  <table>
+    <thead><tr><th>Module</th><th class="num">Now</th><th class="num">After</th><th class="num">Δ</th><th>Disposition</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">framework/run/builder.py</td><td class="num">726</td><td class="num">0</td><td class="num cut">−726</td><td><span class="chip relax">graph retired</span></td></tr>
+      <tr><td class="mono">tools/orchestration.py</td><td class="num">1,086</td><td class="num">622</td><td class="num cut">−464</td><td><span class="chip relax">ordering + overrides + ForEach</span></td></tr>
+      <tr><td class="mono">framework/io/readers.py</td><td class="num">451</td><td class="num">110</td><td class="num cut">−341</td><td><span class="chip delete">7 of 10 readers</span></td></tr>
+      <tr><td class="mono">framework/io/writers.py</td><td class="num">671</td><td class="num">400</td><td class="num cut">−271</td><td><span class="chip delete">3 strategy writers, chunk sessions</span></td></tr>
+      <tr><td class="mono">framework/transform/processors.py</td><td class="num">504</td><td class="num">244</td><td class="num cut">−260</td><td><span class="chip delete">6 unused + merge pairs</span></td></tr>
+      <tr><td class="mono">tools/observability/profile.py</td><td class="num">223</td><td class="num">0</td><td class="num cut">−223</td><td><span class="chip delete">no caller</span></td></tr>
+      <tr><td class="mono">tools/integrations/sharepoint_rest.py</td><td class="num">214</td><td class="num">0</td><td class="num cut">−214</td><td><span class="chip relax">moves to its pipeline</span></td></tr>
+      <tr><td class="mono">cli/scaffold.py</td><td class="num">388</td><td class="num">190</td><td class="num cut">−198</td><td><span class="chip relax">--from-feed-file</span></td></tr>
+      <tr><td class="mono">cli/scaffold_templates/ (4 files)</td><td class="num">324</td><td class="num">174</td><td class="num cut">−150</td><td><span class="chip density">merge into one</span></td></tr>
+      <tr><td class="mono">tools/integrations/sharepoint_checkpoint.py</td><td class="num">141</td><td class="num">0</td><td class="num cut">−141</td><td><span class="chip relax">moves to its pipeline</span></td></tr>
+      <tr><td class="mono">tools/integrations/remote.py</td><td class="num">140</td><td class="num">0</td><td class="num cut">−140</td><td><span class="chip delete">no caller</span></td></tr>
+      <tr><td class="mono">cli/operator.py</td><td class="num">474</td><td class="num">354</td><td class="num cut">−120</td><td><span class="chip relax">fold runs/log/status</span></td></tr>
+      <tr><td class="mono">tools/retry.py</td><td class="num">114</td><td class="num">0</td><td class="num cut">−114</td><td><span class="chip delete">no caller</span></td></tr>
+      <tr><td class="mono">framework/run/execution.py</td><td class="num">110</td><td class="num">0</td><td class="num cut">−110</td><td><span class="chip relax">graph-only</span></td></tr>
+      <tr><td class="mono">tools/observability/run_registry.py</td><td class="num">359</td><td class="num">250</td><td class="num cut">−109</td><td><span class="chip delete">6 unused queries</span> <span class="chip density">one store</span></td></tr>
+      <tr><td class="mono">framework/io/strategy.py</td><td class="num">210</td><td class="num">126</td><td class="num cut">−84</td><td><span class="chip delete">3 of 6 strategies</span></td></tr>
+      <tr><td class="mono">framework/run/trace.py</td><td class="num">84</td><td class="num">0</td><td class="num cut">−84</td><td><span class="chip relax">row trace</span></td></tr>
+      <tr><td class="mono">framework/core/validators.py</td><td class="num">173</td><td class="num">95</td><td class="num cut">−78</td><td><span class="chip delete">3 unused validators</span></td></tr>
+      <tr><td class="mono">framework/run/runner.py</td><td class="num">262</td><td class="num">200</td><td class="num cut">−62</td><td><span class="chip relax">PipelineRunner</span></td></tr>
+      <tr><td class="mono">framework/run/address.py</td><td class="num">83</td><td class="num">23</td><td class="num cut">−60</td><td><span class="chip density">plain strings</span></td></tr>
+      <tr><td class="mono">framework/transform/json_shaping.py</td><td class="num">260</td><td class="num">200</td><td class="num cut">−60</td><td><span class="chip density">shared walk</span></td></tr>
+      <tr><td class="mono">tools/discovery.py</td><td class="num">60</td><td class="num">0</td><td class="num cut">−60</td><td><span class="chip delete">no caller</span></td></tr>
+      <tr><td class="mono">tools/observability/stream.py</td><td class="num">60</td><td class="num">0</td><td class="num cut">−60</td><td><span class="chip delete">second streaming impl</span></td></tr>
+      <tr><td class="mono">tools/observability/run_log.py</td><td class="num">145</td><td class="num">90</td><td class="num cut">−55</td><td><span class="chip density">one store</span></td></tr>
+      <tr><td class="mono">framework/io/__init__.py</td><td class="num">88</td><td class="num">42</td><td class="num cut">−46</td><td><span class="chip density">follows exports</span></td></tr>
+      <tr><td class="mono">tools/observability/record_schema.py</td><td class="num">147</td><td class="num">120</td><td class="num cut">−27</td><td><span class="chip density">one store</span></td></tr>
+      <tr><td class="mono">framework/core/__init__.py</td><td class="num">74</td><td class="num">52</td><td class="num cut">−22</td><td><span class="chip density">follows exports</span></td></tr>
+      <tr><td class="mono">framework/transform/__init__.py</td><td class="num">64</td><td class="num">46</td><td class="num cut">−18</td><td><span class="chip density">follows exports</span></td></tr>
+      <tr><td class="mono">tools/store.py</td><td class="num">137</td><td class="num">120</td><td class="num cut">−17</td><td><span class="chip density"><code>TableColumns</code></span></td></tr>
+      <tr><td class="mono">framework/run/__init__.py</td><td class="num">61</td><td class="num">45</td><td class="num cut">−16</td><td><span class="chip density">follows exports</span></td></tr>
+      <tr><td class="mono">framework/_internal/describe.py</td><td class="num">14</td><td class="num">0</td><td class="num cut">−14</td><td><span class="chip density">plan preview only</span></td></tr>
+      <tr><td class="mono">framework/core/protocols.py</td><td class="num">34</td><td class="num">22</td><td class="num cut">−12</td><td><span class="chip delete">chunk protocols</span></td></tr>
+      <tr><td class="mono">framework/run/run_context.py</td><td class="num">90</td><td class="num">80</td><td class="num cut">−10</td><td><span class="chip density">flattening</span></td></tr>
+      <tr><td class="mono">tools/observability/run_store.py</td><td class="num">33</td><td class="num">25</td><td class="num cut">−8</td><td><span class="chip density">one store</span></td></tr>
+      <tr><td class="mono">framework/run/steps.py</td><td class="num">310</td><td class="num">330</td><td class="num">+20</td><td><span class="chip keep">absorbs the profile step + node metrics</span></td></tr>
+      <tr><td class="mono">framework/_internal/schema.py</td><td class="num">128</td><td class="num">128</td><td class="num">—</td><td><span class="chip keep">the contract</span></td></tr>
+      <tr><td class="mono">framework/run/freshness.py</td><td class="num">122</td><td class="num">122</td><td class="num">—</td><td><span class="chip keep">one freshness rule</span></td></tr>
+      <tr><td class="mono">tools/migrations.py</td><td class="num">186</td><td class="num">186</td><td class="num">—</td><td><span class="chip keep">ADR-0025</span></td></tr>
+      <tr><td class="mono">framework/core/schema.py · value_rules.py · transform/coercion.py</td><td class="num">284</td><td class="num">284</td><td class="num">—</td><td><span class="chip keep">the contract</span></td></tr>
+      <tr><td class="mono">tools/calendar.py · environments.py · deliverables.py · medallion.py · timestamps.py</td><td class="num">232</td><td class="num">232</td><td class="num">—</td><td><span class="chip keep">unchanged</span></td></tr>
+      <tr><td class="mono">framework/run/dry_run.py</td><td class="num">73</td><td class="num">73</td><td class="num">—</td><td><span class="chip keep"><code>--dry-run</code> is an operator feature</span></td></tr>
+      <tr><td class="mono">framework/core/dataset.py · errors.py · _internal/*</td><td class="num">230</td><td class="num">230</td><td class="num">—</td><td><span class="chip keep">the seam</span></td></tr>
+    </tbody>
+    <tfoot><tr><td>Structural total</td><td class="num">9,517</td><td class="num">5,163</td><td class="num">−4,354</td><td>+ ~300 diffuse flattening → <strong>4,861</strong></td></tr></tfoot>
+  </table>
+</section>
+
+<!-- ══════════════════════════ §7 ══════════════════════════ -->
+<section id="cost">
+  <span class="secnum">§ 7</span>
+  <h2>What it costs</h2>
+  <p class="lede">The lines are the cheap part. Four ADRs are retired, five docs shrink or go, and a large slice of the
+  test suite moves or disappears. None of that is a reason not to do it — but a plan that only counts source lines is
+  understating the work by roughly half.</p>
+
+  <h3>ADRs the plan retires or supersedes</h3>
+  <table>
+    <thead><tr><th>ADR</th><th>Status after</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><strong>0003</strong> Deferred DAG composition model</td><td><span class="chip relax">superseded by 0027</span></td><td>The graph goes. ADR-0027 already names the eager steps as the default; this makes it the only model.</td></tr>
+      <tr><td><strong>0008</strong> Per-Case Selection explainability via a row trace</td><td><span class="chip relax">retired</span></td><td>#769 already removed the trace from <code>complaint_selection</code>; nothing but a demo and tests use it.</td></tr>
+      <tr><td><strong>0010</strong> Reproducible sampling: a pure function with a fixed seed</td><td><span class="chip relax">retired</span></td><td>Goes with <code>Sample</code> / <code>SamplePerGroup</code>. Worth re-reading first — the seed argument is subtle and would need re-deriving if sampling returns.</td></tr>
+      <tr><td><strong>0012</strong> SAS sources via remote execution, read locally</td><td><span class="chip relax">retired</span></td><td>Goes with <code>SasFileReader</code> and <code>remote.py</code>. <strong>Check this one against reality</strong> — a SAS feed may be planned rather than absent.</td></tr>
+      <tr><td><strong>0017</strong> Run order is derived per pass from deadlines</td><td><span class="chip relax">retired</span></td><td>Goes with the ordering machinery. Dependency ordering survives; time-of-day priority does not.</td></tr>
+      <tr><td><strong>0004</strong> Per-feed load strategy owned by the Writer</td><td><span class="chip keep">narrowed</span></td><td>Survives intact as a principle; the strategy set narrows from six to three.</td></tr>
+      <tr><td><strong>0005</strong> Fail-fast atomic runs and observability</td><td><span class="chip keep">unchanged</span></td><td>The run-record consolidation is an implementation change, not a contract change — but <code>RUN_RECORD_FIELDS</code> order is a live on-disk format, so append, never reorder.</td></tr>
+      <tr><td><strong>0025</strong> SQL migrations own the physical table shape</td><td><span class="chip keep">unchanged</span></td><td>The <code>_MigrationGuard</code> and the ledger check stay exactly as they are.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Documentation</h3>
+  <p>30 root docs, 12,614 lines. Under this plan:</p>
+  <ul>
+    <li><code>docs/streaming-large-sources.md</code> (339 lines) and <code>docs/retry.md</code> — deleted.</li>
+    <li><code>docs/core-primitives.md</code> (1,657) — the largest rewrite; it is the reference for most of what goes.</li>
+    <li><code>docs/processors.md</code> (787) — loses 6 of 25 entries.</li>
+    <li><code>docs/public-api.md</code> (342) — regenerated against the trimmed facades.</li>
+    <li><code>docs/operator-cli.md</code> (776) — <code>runs</code>/<code>log</code>/<code>status</code> become one command.</li>
+    <li><code>docs/adding-a-feed.md</code> (1,093) — loses the <code>--from-feed-file</code> section; the review's backlog item #8 wants it split anyway.</li>
+    <li><code>CLAUDE.md</code> and <code>CONTEXT.md</code> — both describe the graph builder and streaming as current primitives.</li>
+  </ul>
+
+  <h3>Tests</h3>
+  <p>154 files, 32,859 raw lines, 21,996 SLOC. Two distinct effects:</p>
+  <div class="cards">
+    <div class="card" style="border-top-color: var(--d-delete)">
+      <h4>Deleted outright — ~4,300 raw lines</h4>
+      <p>Test files whose subject leaves: chunking (1,259), orchestration ordering (1,035), retry (459), SAS (314),
+      profiling (300), strict CSV (254), streaming (224), insert-if-absent (172), upsert (107), glob (87), Excel (61).</p>
+    </div>
+    <div class="card warn">
+      <h4>Converted, not deleted — ~13,100 raw lines</h4>
+      <p><strong>41 test files reference <code>Pipeline(</code>.</strong> Most assert on behaviour the eager steps
+      keep, so they are rewritten rather than removed. This is the largest single piece of work in the plan and it is
+      not reflected in the 4,656 figure at all.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ §8 ══════════════════════════ -->
+<section id="order">
+  <span class="secnum">§ 8</span>
+  <h2>The order to do it in</h2>
+  <p class="lede">Sequencing matters because several cuts unlock others, and because the early steps are the ones that
+  can be verified by the suite still passing.</p>
+
+  <ol>
+    <li><strong>Tier A, in one pass — 1,577 SLOC.</strong> Delete the unused readers, writers, strategies, processors,
+    validators, <code>profile.py</code>, <code>retry.py</code>, <code>discovery.py</code>, <code>remote.py</code>,
+    <code>stream.py</code> and the six registry queries, with their tests and doc sections. Nothing else depends on
+    the order; every deletion is independently verifiable by the suite. <em>This is the whole of the safe third and
+    it should be a separate PR.</em></li>
+
+    <li><strong>Relocate the SharePoint client — 355 SLOC.</strong> Pure move into
+    <code>pipelines/sharepoint_cases/</code>. Do it before the builder work so the largest remaining
+    <code>tools/</code> module is out of the way.</li>
+
+    <li><strong>Convert the two remaining production graph pipelines.</strong>
+    <code>reviewer_activity/gold.py</code> and <code>report_feed.py</code> to eager steps. Then the demos. Argument
+    order is already identical.</li>
+
+    <li><strong>Delete the builder — 624 SLOC + 129 of <code>describe()</code>.</strong> Only after (3). This is the
+    step that touches 41 test files; budget for it accordingly.</li>
+
+    <li><strong>Orchestration — 464 SLOC.</strong> Independent of everything above. Start with the mechanical
+    <code>_decide_item</code> collapse (117 → ~45, no behaviour change) to make the rest readable, then remove
+    ordering, overrides and the unused schedules.</li>
+
+    <li><strong>CLI and scaffold — 518 SLOC.</strong> Last, because the scaffold templates should be written against
+    the framework you end up with, not the one you started from.</li>
+
+    <li><strong>The density pass — 1,151 SLOC.</strong> Genuinely last, and honestly the most likely to be
+    descoped. The run-record consolidation is the one piece here with real value beyond line count.</li>
+  </ol>
+
+  <p class="pull">Steps 1 and 2 alone are 1,932 lines — 20% — and neither needs a decision from anyone.</p>
+</section>
+
+<!-- ══════════════════════════ §9 ══════════════════════════ -->
+<section id="protect">
+  <span class="secnum">§ 9</span>
+  <h2>What I would not cut, and why</h2>
+  <div class="cards">
+    <div class="card">
+      <h4>The declared-schema contract</h4>
+      <p>412 SLOC across <code>_internal/schema</code>, <code>core/schema</code>, <code>value_rules</code> and
+      <code>coercion</code>. This is the framework's actual value: coerce → quarantine → validate, declared once on a
+      dataclass. Everything else here is plumbing around it.</p>
+    </div>
+    <div class="card">
+      <h4>The migration guard</h4>
+      <p><code>_MigrationGuard</code> and the <code>schema_migrations</code> ledger check. It is what stops a nightly
+      <code>Refresh</code> silently dropping a migration's primary key and indexes. Small, load-bearing, and its
+      failure mode is invisible.</p>
+    </div>
+    <div class="card">
+      <h4><code>AppendOnly</code>'s conflict detection</h4>
+      <p>90 of that writer's 117 SLOC are <code>_collapsed</code>, <code>_refuse_narrowed_batch</code> and
+      <code>_refuse_changed_rows</code>. It looks like a lot for one strategy. It is the only thing standing between
+      an overlapping poll and a silently corrupted immutable table — worth confirming you want, not worth cutting
+      unasked.</p>
+    </div>
+    <div class="card">
+      <h4><code>--dry-run</code></h4>
+      <p>73 SLOC. Tempting because <code>DryRunReport</code> is on the tests-only list, but it is reachable from the
+      operator CLI, which is how it is meant to be used. Cutting it because no <em>Python</em> calls it would be
+      reading the census wrong.</p>
+    </div>
+    <div class="card">
+      <h4>The <code>Dataset</code> seam</h4>
+      <p>39 SLOC to keep pandas out of every signature in the tree (ADR-0002). The cheapest architectural boundary
+      here by a wide margin.</p>
+    </div>
+    <div class="card">
+      <h4>One run identity</h4>
+      <p>Whatever happens to the run-record stack, the fix recorded in the simplification review — every
+      <code>main()</code> routing through the same <code>run_pipeline</code> — must survive it. Two run identities for
+      one feed broke freshness and turned re-drives into duplicate accumulation, and nothing looked wrong.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ §10 ══════════════════════════ -->
+<section id="caveats">
+  <span class="secnum">§ 10</span>
+  <h2>Caveats, and where this could be wrong</h2>
+  <ul>
+    <li><strong>Tier C is an estimate, not an inventory.</strong> Tiers A and B are itemised down to named symbols and
+    I would defend those numbers. Tier C's 400-line flattening figure is 30% of a measured 1,311 — a judgement about
+    recoverability, not a count. If it comes in at half, the plan lands at 45% rather than 49%.</li>
+
+    <li><strong>"No caller" means no caller <em>today</em>.</strong> The census is static and covers this repository.
+    A SAS feed, an Excel source or a monthly upsert that is planned but not yet written would make several Tier A
+    items wrong. The SAS entry (ADR-0012) is the one I would check with a person before deleting.</li>
+
+    <li><strong>The 41-file test conversion is not in the 4,656.</strong> It is the largest piece of work in the plan
+    and it produces no line reduction in the measured scope.</li>
+
+    <li><strong>Relocating the SharePoint client reduces the framework, not the repository.</strong> 355 of the 4,656
+    move rather than disappear. If your target is repository-wide rather than framework-wide, subtract them and the
+    figure is 45.2%.</li>
+
+    <li><strong>This corroborates rather than discovers.</strong> <code>docs/framework-simplification-review.md</code>
+    reached the same conclusions about the graph and streaming by different measurements, and left a nine-item
+    backlog of which none is implemented. What is new here is the line budget, the three-tier confidence split, and
+    the finding that <code>stream.py</code> is a second unused streaming implementation.</li>
+
+    <li><strong>The test the review recommended still stands, and beats this document.</strong> Have the engineer who
+    will maintain the monthly three-file feed write it against this branch. What they reach for and cannot find is a
+    better cut list than anything derived by parsing.</li>
+  </ul>
+</section>
+
+<footer>
+  <p><strong>Method.</strong> SLOC counted by AST walk (module/class/function docstrings removed) plus token-stream
+  comment stripping and blank-line removal, over <code>framework/</code>, <code>tools/</code> and <code>cli/</code> at
+  branch <code>t3code/simplify-eager-pipeline-framework</code>, commit <code>66c3dd52</code>, 25 Aug 2026.
+  Reachability computed per exported name by regex word-match across four consumer tiers, then re-checked against
+  intra-framework references to separate dead code from over-exported machinery. Churn from
+  <code>git log --since='12 months ago' --name-only</code>. Chart palette validated with
+  <code>dataviz/scripts/validate_palette.js</code> in both light and dark modes — all six checks pass; worst adjacent
+  CVD separation ΔE 8.5 (deutan) with direct labels and 2px segment gaps as secondary encoding.</p>
+  <p style="margin-top:14px">Cross-references: <a href="../docs/framework-simplification-review.md">docs/framework-simplification-review.md</a>
+  · <a href="../docs/adr/0027-eager-steps-are-the-default-authoring-model.md">ADR-0027</a>
+  · <a href="../docs/public-api.md">docs/public-api.md</a></p>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var btn = document.getElementById('themeToggle');
+  btn.addEventListener('click', function () {
+    var current = root.getAttribute('data-theme');
+    if (!current) {
+      current = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    root.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+  });
+
+  var tip = document.getElementById('tooltip');
+  function show(e) {
+    var text = e.currentTarget.getAttribute('data-tip');
+    if (!text) return;
+    tip.textContent = text;
+    tip.classList.add('show');
+    move(e);
+  }
+  function move(e) {
+    var pad = 14;
+    var x = e.clientX + pad;
+    var y = e.clientY + pad;
+    var rect = tip.getBoundingClientRect();
+    if (x + rect.width > window.innerWidth - 8) x = e.clientX - rect.width - pad;
+    if (y + rect.height > window.innerHeight - 8) y = e.clientY - rect.height - pad;
+    tip.style.left = x + 'px';
+    tip.style.top = y + 'px';
+  }
+  function hide() { tip.classList.remove('show'); }
+  document.querySelectorAll('[data-tip]').forEach(function (el) {
+    el.addEventListener('mouseenter', show);
+    el.addEventListener('mousemove', move);
+    el.addEventListener('mouseleave', hide);
+    el.addEventListener('focus', show);
+    el.addEventListener('blur', hide);
+  });
+})();
+</script>
+</body>
+</html>
