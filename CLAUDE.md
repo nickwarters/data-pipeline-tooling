@@ -82,8 +82,8 @@ toolchain, a domain language, or a release. Two rules follow:
   framework reaching down into it) before refusing to create a table
   ([`docs/migrations.md`](docs/migrations.md)). Then `case_review/` (the
   case-review *application* — domain types
-  Case Type declarations, `CasePool`, and its gold helpers, which live outside
-  the framework),
+  Case Type declarations, `CasePool`, its gold helpers, and the named reporting
+  **Pass Rules** in `pass_rules.py` — which live outside the framework),
   `pipelines/` (scripts, plus the application's orchestration schedules in
   `pipelines/schedules.py`, which `orchestrate --app` names — a schedule
   addresses a `pipelines/<name>` path and names nothing in `case_review/`, so it

@@ -241,3 +241,32 @@ class ConversationPostingPattern:
     hour_of_day: Annotated[int, NonNull(), Range(minimum=0, maximum=23)]
     message_count: Annotated[int, NonNull(), Range(minimum=0)]
     as_of_utc: Annotated[str, NonNull()]
+
+
+@dataclass
+class AnswerPassRate:
+    """``answer_pass_rate_current`` -- pass rate per question, under each
+    declared ``PassRule``.
+
+    Grain: ``pass_rule`` x ``brand`` x ``case_type`` x ``question_id``, over
+    the Answers on the current non-void Cases, judged against the *current*
+    Question Bank. The four counts partition ``answer_count``; ``pass_rate``
+    is over the passes and fails only, NULL where there are neither.
+    ``can_fail`` is per rule: whether any option of the question maps to an
+    outcome this rule calls a fail.
+    """
+
+    pass_rule: Annotated[str, NonNull()]
+    brand: Annotated[str, NonNull()]
+    case_type: Annotated[str, NonNull()]
+    question_id: Annotated[str, NonNull()]
+    question_group: Annotated[str, NonNull()]
+    deprecated: Annotated[bool, NonNull()]
+    can_fail: Annotated[bool, NonNull()]
+    answer_count: Annotated[int, NonNull(), Range(minimum=1)]
+    unanswered_count: Annotated[int, NonNull(), Range(minimum=0)]
+    na_count: Annotated[int, NonNull(), Range(minimum=0)]
+    pass_count: Annotated[int, NonNull(), Range(minimum=0)]
+    fail_count: Annotated[int, NonNull(), Range(minimum=0)]
+    pass_rate: float
+    as_of_utc: Annotated[str, NonNull()]

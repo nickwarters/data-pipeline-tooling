@@ -138,13 +138,15 @@ review platform, Review Outcomes flow *back* for reporting.
   Case before the request for their access to it has landed.
 - **Platform metrics** (platform-wide) — `pipelines/cora_platform_metric` —
   reads Sync's **gold current state** and its **observation history** through
-  the Shared Readers and refreshes eleven gold **Aggregate tables** on how the
+  the Shared Readers and refreshes twelve gold **Aggregate tables** on how the
   platform is operating: stage dwell and holds (from the history — a floor, since
   a change reversed between two polls was never seen), SLA attainment in working
   days and voids by month, remediation Action load and remediation by
   Responsible Party Manager, Appeal cycle time and cited questions, and
   Conversation reply time, volume per Case and posting pattern by local
-  weekday and hour
+  weekday and hour, and pass rate per question under each declared **Pass
+  Rule** (`case_review/pass_rules.py`), judged against the current Question
+  Bank read through `readers.question_banks`
   ([`data-dictionary-cora-platform-metric.md`](data-dictionary-cora-platform-metric.md)).
 - **Reporting** (platform-wide) joins Review Outcomes to the selected Cases and
   emits **Deliverables**.
@@ -717,7 +719,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`data-dictionary-template.md`](data-dictionary-template.md) | The Confluence-ready template for documenting what every table/Feed and each of its fields means — the prose companion to `schema.py`. |
 | [`data-dictionary-sharepoint-cases.md`](data-dictionary-sharepoint-cases.md) | The template filled in for the `sharepoint_cases` feed: the raw observation, the Case version, the `answer`/`answer_capture`/`answer_action`/`general_answer`/`conversation_message`/`appeal`/`case_detail` silver Detail Tables, and the fourteen gold tables with their declared grains — including the two aggregates reduced from a Detail Table rather than `case_current` — all shared across every declared Case list and discriminated by `case_type`; why raw and silver do not store when we saw the row; why silver settles `case_type` to the polled list's declared value; the two provisioning prerequisites (an index on `Modified`, and the site/GUID placeholders) that stand between it and a tenant; and which further aggregates were deliberately refused, and why. |
 | [`data-dictionary-reviewer-activity.md`](data-dictionary-reviewer-activity.md) | The working-day, freshness-guarded `reviewer_activity_daily` aggregate and its sparse per-Reviewer `my-stats/{account}.txt` Report Feed, reduced from Sync's `case_current`. |
-| [`data-dictionary-cora-platform-metric.md`](data-dictionary-cora-platform-metric.md) | The eleven `cora_platform_metric` gold aggregates — stage dwell and holds reduced from the Sync observation history, SLA attainment and voids by month, remediation Action load and remediation by manager, Appeal cycle time and cited questions, Conversation reply time, volume and local-clock posting pattern — their grains, why the two history tables measure what the polls saw rather than what happened, and what was deliberately left out. |
+| [`data-dictionary-cora-platform-metric.md`](data-dictionary-cora-platform-metric.md) | The twelve `cora_platform_metric` gold aggregates — stage dwell and holds reduced from the Sync observation history, SLA attainment and voids by month, remediation Action load and remediation by manager, Appeal cycle time and cited questions, Conversation reply time, volume and local-clock posting pattern, and pass rate per question under each named Pass Rule against the current Question Bank — their grains, why the two history tables measure what the polls saw rather than what happened, and what was deliberately left out. |
 | [`data-dictionary-pipeline-run-metric.md`](data-dictionary-pipeline-run-metric.md) | The three `pipeline_run_metric` gold aggregates over the run registry — `pipeline_run_summary`, `step_duration_trend_daily`, `step_row_flow` — their grains, why the registry's run id lands as `run_id` rather than the reserved provenance column, and why the reporting run never sees itself. |
 | [`data-dictionary-notifications.md`](data-dictionary-notifications.md) | The notification outbox file and the three keys that are its consumer's contract; the user-group privileges file beside it and the two keys that are *its* consumer's contract; the `notified` ledger and why its row is exactly its key; the `users` reference feed the recipients and the Responsible Party Manager are resolved through; and the placeholder link template, unmapped Case Type names and example addresses standing between it and a tenant. |
 | [`sharepoint-rest-ingest.md`](sharepoint-rest-ingest.md) | The operator runbook for that feed: scheduling it, re-driving it, and what REST polling cannot tell you. |

@@ -1,11 +1,12 @@
 # Data dictionary — `cora_platform_metric`
 
-Eleven gold **Aggregate tables** measuring how the Case Review Platform is
+Twelve gold **Aggregate tables** measuring how the Case Review Platform is
 operating, reduced from the Sync subject's published current state and its
-observation history. They belong to the `cora_platform_metric` Reporting
-subject and are rebuilt whole (`Refresh()`) on every run, so a re-run over the
-same Sync snapshot produces the same numbers. Every table carries the Sync
-snapshot's `as_of_utc`; no table carries a Case.
+observation history — and, for one of them, the current Question Bank. They
+belong to the `cora_platform_metric` Reporting subject and are rebuilt whole
+(`Refresh()`) on every run, so a re-run over the same Sync snapshot produces the
+same numbers. Every table carries the Sync snapshot's `as_of_utc`; no table
+carries a Case.
 
 The Python contracts are
 [`pipelines/cora_platform_metric/schema.py`](../pipelines/cora_platform_metric/schema.py);
@@ -14,7 +15,7 @@ the reductions are
 the wiring is
 [`pipelines/cora_platform_metric/pipeline.py`](../pipelines/cora_platform_metric/pipeline.py).
 
-## Three things to know before reading a number
+## Four things to know before reading a number
 
 **1. Two of the tables measure what the polls saw, not what happened.**
 `case_stage_dwell_current` and `case_hold_current` are reduced from the Sync
@@ -39,6 +40,18 @@ are resolved. The paired count column (`interval_count`, `resolved_count`,
 `late_count`) says how many measurements the statistic stands on. Days and
 hours are decimal (a three-hour hold is `0.125` days), rounded to three places.
 
+**4. Pass rate is judged against the current bank, under a named rule.**
+`answer_pass_rate_current` reads each Case Type's *current* Question Bank and
+applies a **Pass Rule** declared in
+[`case_review/pass_rules.py`](../case_review/pass_rules.py) — a reporting
+judgement about which of the bank's outcomes pass, distinct from the frontend's
+`is_failure`, which calls every non-default outcome a fail. The table carries
+the rule's name in its grain, so two reports that draw the line differently
+read different rows of one table rather than arguing over one number. A rule
+must classify every outcome the bank declares, and is checked against the bank
+on every run: a bank that grows an outcome fails the run rather than landing a
+silent pass or fail.
+
 ## Part A — Subject overview
 
 | Attribute | Value |
@@ -46,22 +59,22 @@ hours are decimal (a three-hour hold is `0.125` days), rounded to three places.
 | **Subject** | `cora_platform_metric` Reporting subject |
 | **Medallion layer** | gold only |
 | **Is this a Case Type?** | No — Reporting aggregates |
-| **Source system** | Sync gold `case_current`, `answer`, `answer_action`, `appeal`, `conversation_message`; Sync silver `case_version` (the observation history) |
-| **Readers** | `readers.sharepoint_cases.CurrentCasesReader`, `AnswersReader`, `AnswerActionsReader`, `AppealsReader`, `ConversationMessagesReader`, `CaseObservationHistoryReader` — the Shared Readers over the Sync subject ([ADR-0026](adr/0026-shared-readers-declare-cross-subject-reads.md)). This pipeline names no layer and no table for data it does not own; the physical sources above are facts about the data, not couplings in the code |
+| **Source system** | Sync gold `case_current`, `answer`, `answer_action`, `appeal`, `conversation_message`; Sync silver `case_version` (the observation history); the current Question Bank heads the review platform publishes (`{slug}.txt`, one per Case Type) |
+| **Readers** | `readers.sharepoint_cases.CurrentCasesReader`, `AnswersReader`, `AnswerActionsReader`, `AppealsReader`, `ConversationMessagesReader`, `CaseObservationHistoryReader` — the Shared Readers over the Sync subject ([ADR-0026](adr/0026-shared-readers-declare-cross-subject-reads.md)) — and `readers.question_banks.QuestionBankStore(base_dir).qb_reader()`, every Case Type's current bank. This pipeline names no layer and no table for data it does not own; the physical sources above are facts about the data, not couplings in the code |
 | **Load strategy** | `Refresh()`, every table |
-| **Upstream dependencies** | `sharepoint_cases` Sync pipeline (`UPSTREAMS`) |
+| **Upstream dependencies** | `sharepoint_cases` Sync pipeline (`UPSTREAMS`). The Question Bank is deliberately **not** a freshness upstream: it is published on demand rather than daily, and a freshness gate on it would block the daily metric run. `answer_pass_rate_current` reads whatever the current heads are |
 | **Schedule / freshness** | Daily, in the `case_management` set after `reviewer_activity`, with the Sync freshness check |
 | **Run parameters** | `calendar` — path to a YAML working-day calendar (`holidays` + `weekend`, the same file `orchestrate --calendar` takes) for `case_sla_attainment_monthly`; omitted, weekends-only |
 | **Migrations** | `migrations/cora_platform_metric/gold/` |
 | **Owner / data steward** | *<team>* |
-| **Last reviewed** | 2026-08-28 |
+| **Last reviewed** | 2026-09-02 |
 
 The Sync snapshot instant, `as_of_utc`, is read off `case_current` — one
 literal on every row — once at the top of the run, and is what an open hold is
 measured to and what every table is stamped with. Each reduction is handed that
-instant, so the eleven tables cannot disagree about which snapshot they
+instant, so the twelve tables cannot disagree about which snapshot they
 describe. An empty `case_current` has no snapshot to report against and fails
-the run rather than publishing eleven empty tables.
+the run rather than publishing twelve empty tables.
 
 ## Part B — The tables
 
@@ -294,6 +307,72 @@ not parse is not counted.
 | `hour_of_day` | `int` | No | `0`–`23`, local clock. |
 | `message_count` | `int` | No | Messages posted in that cell; `0` where none. |
 
+### `answer_pass_rate_current` — pass rate per question under each Pass Rule
+
+Reduced from the `answer` Detail Table over the **current non-void Cases**
+(the same population `conversation_volume_current` uses), joined to the
+**current Question Bank** — each Case Type's head, `{slug}.txt`, read through
+`readers.question_banks`. Grain: `pass_rule` × `brand` × `case_type` ×
+`question_id` — one row family per declared **Pass Rule**, and within it one
+row per question answered on a live Case.
+
+**What counts as a pass is a reporting judgement, declared in code.**
+[`case_review/pass_rules.py`](../case_review/pass_rules.py) declares, per rule
+and per Case Type, which of the bank's outcome ids pass and which fail. This is
+deliberately *not* the frontend's `is_failure`
+(`platform_frontend/docs/reporting-data-contract.md`), which treats every
+non-default outcome as a fail and so would count "Good with process
+enhancement" as a failure. Under the `standard` rule it is a pass; under
+`strict` it is not; a report picks its rule by the `pass_rule` column. The
+frontend keeps its own rule for its own UI, and nothing under
+`platform_frontend/` — the bank exports, their `defaultOutcomeId`, the failure
+evaluator — is consulted for this line or changed by it.
+
+Each Answer's `value_json` — the lossless copy, not the `|`-joined
+`value_text`, which would make `Process|Training` look like one option — is
+read for the option(s) selected; each option is looked up in the question's
+`optionOutcomes` map for its outcome id; and the rule turns that outcome id
+into a verdict. Every Answer lands in exactly one of four classes, so the four
+counts sum to `answer_count`:
+
+| Class | Meaning |
+|-------|---------|
+| `unanswered_count` | `value_json` is empty — `""`, `[]` or NULL. Never a pass or a fail (contract caveat 5). |
+| `na_count` | The value is `NA`, or every selected element of a multi-choice is `NA`. Neither pass nor fail. |
+| `fail_count` | Answered, not NA, and *failing under the rule*: an option's outcome id is in the rule's `failing` set for that Case Type. A multi-choice fails if **any** selected element other than `NA` does — `["Process", "Training"]` with `Training` failing is one fail, not two, and not a pass. |
+| `pass_count` | Answered, not NA, not failing. An option the bank maps to no outcome (any option of an informational question) has no verdict and fails nothing, so it contributes a pass unless something selected beside it fails. |
+
+An **informational question** — no `optionOutcomes` — has nothing that can
+fail: `can_fail` is false, `fail_count` is `0`, and `pass_rate` is `1.0`
+wherever anything was answered. Its rows are kept — they *are* the
+informational questions — with `can_fail` on the row so a report can drop
+them. `can_fail` is **per rule**: "does any option of this question map to an
+outcome this rule calls a fail", computed from the rule rather than from the
+bank's default outcome.
+
+**Current bank only.** The join is on `(case_type, question_id)` against each
+Case Type's head, never on a Case's `questionBankVersion`: a question is
+deprecated, never removed, and `deprecated` is carried so a report can label
+or segregate those rows (contract caveat 4). A question answered on a Case but
+absent from the current bank is a contract break and fails the run — see Part
+D, which also lists the two other run failures this table introduces.
+
+| Field | Type | Nullable | Description |
+|-------|------|----------|-------------|
+| `pass_rule` | `str` | No | The `PassRule.name` the row is judged under; `standard` or `strict` today. |
+| `brand` | `str` | No | `(unknown)`. |
+| `case_type` | `str` | No | Case Type slug; the bank the question belongs to. |
+| `question_id` | `str` | No | The question, as the bank names it. |
+| `question_group` | `str` | No | The bank's `questionGroup`; `(unstated)` where the question has none. |
+| `deprecated` | `bool` | No | The bank's `deprecated` flag; false where absent. |
+| `can_fail` | `bool` | No | Whether any option of the question maps to an outcome *this rule* calls a fail. |
+| `answer_count` | `int` | No | Answers to the question on current non-void Cases. |
+| `unanswered_count` | `int` | No | Of those, empty. |
+| `na_count` | `int` | No | Of those, `NA`. |
+| `pass_count` | `int` | No | Of those, passing under the rule. |
+| `fail_count` | `int` | No | Of those, failing under the rule. |
+| `pass_rate` | `float` | Yes | `pass_count / (pass_count + fail_count)`, to four places; NULL when that denominator is 0. |
+
 ## Part C — Row checks
 
 None. Each group-by produces its declared grain, so no uniqueness gate is
@@ -318,6 +397,21 @@ gated by its `SchemaValidator` (columns, types, nullability, `OneOf` on
 - A negative interval (a `placed_on_hold_at` after the observation that first
   showed the hold; a reply posted before the Message it follows) is clamped to
   zero rather than subtracting from a total.
+- `answer_pass_rate_current` fails the run, before writing a row, on three
+  things that would otherwise land a hole indistinguishable from a decision —
+  the same posture as the `ColumnValidator` gates:
+  - A **Pass Rule that disagrees with the current bank** — one that leaves an
+    outcome the bank declares unclassified, names an outcome the bank lacks,
+    or lists one as both pass and fail — names the rule, the Case Type and the
+    ids. Every declared rule is checked against every Case Type it covers on
+    every run, answers or not, so a bank that grows an outcome is a run
+    failure here rather than a silent pass or fail. `NA` is not an outcome to
+    classify, whatever outcome id a bank maps it to.
+  - An **Answer on a Case Type no rule covers** names the Case Type. Silence
+    would drop the Case Type from the table, and "not declared" would look
+    exactly like "considered and declined".
+  - An **Answer on a question the current bank does not carry** names the
+    `(case_type, question_id)` pairs. A contract break, not a NULL.
 
 ## What is deliberately not here
 
