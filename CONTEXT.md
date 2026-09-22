@@ -30,6 +30,17 @@ _Avoid_: log (it is queryable state, not free text); audit log (reserve for the 
 A named, deterministic business rule used by Selection to narrow or rank the CasePool. Predicates back `Filter` gates, scorers back `Score` columns, and joins can also act as named gates when unmatched Cases are excluded. Rules should be pure functions of the Case row plus explicit configuration so they are independently testable and their effects are traceable in the **Selection trace**.
 _Avoid_: hidden side-effect rule, ad hoc lambda (for governed business criteria)
 
+**Selection quota group**:
+A fixed attribute boundary within a configurable quota selection: an absolute
+Case target divided into explicit attribute-combination targets. Unmet targets
+borrow surplus from listed combinations, then progressively drop the rightmost
+configured dimension, without crossing the boundary. A boolean balance is aimed
+at across the Cases selected within that boundary. This algorithm-level group
+is distinct from the application's cross-Case-Type **Selection group**.
+Implemented as `SelectionGroup` in `tools.selection`; see
+[`docs/quota-selection.md`](docs/quota-selection.md). Existing Selection policies
+are unchanged unless a pipeline explicitly adopts this utility.
+
 **Check**:
 One review of one Case, counted toward an **Adviser**'s **Check target**. A check counts from the moment its Case reaches **Reportable**, and falls in the calendar month it became Reportable — so a **voided** Case simply never becomes a check and needs no subtracting anywhere. Distinct from a *selection*: choosing a Case gives the Adviser an **outstanding** check, not a counted one, and the two are separated by however long the review takes. Counting at Reportable rather than at selection is what makes the arithmetic self-consistent — the same milestone drives both the count and the **Check cadence**.
 _Avoid_: review (reserved for the act, and for the **Review Outcome** that returns through Sync), case (that is the thing checked), audit
