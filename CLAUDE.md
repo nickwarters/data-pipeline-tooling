@@ -56,7 +56,7 @@ toolchain, a domain language, or a release. Two rules follow:
   and the cross-cutting `retry` / `calendar` / `medallion` /
   `deliverables` /
   `environments` / migrations / orchestration /
-  observability utilities in the top-level `tools/` package — both siblings of
+  observability / `targeted_selection` utilities in the top-level `tools/` package — both siblings of
   `framework/`,
   not facades. `shared/` contains application-wide declarations such as
   environment roots, kept separate from the resolver in `tools/` so other
@@ -128,7 +128,8 @@ toolchain, a domain language, or a release. Two rules follow:
   behind them (those are internal layout); the cross-cutting `tools.*` helpers
   (`tools.retry` / `tools.calendar` / `tools.orchestration` /
   `tools.observability` / `tools.environments` /
-  `tools.migrations` / `tools.deliverables`) are a sibling
+  `tools.migrations` / `tools.deliverables` /
+  `tools.targeted_selection`) are a sibling
   utility package, not a facade.
   The facades are the stable contract;
   [`docs/public-api.md`](docs/public-api.md) lists the surface, the internal
