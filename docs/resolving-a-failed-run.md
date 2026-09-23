@@ -62,6 +62,7 @@ The expected failures are self-describing. Map the message to a cause:
 | `column '…' contains null value(s)` | a `NonNull()` field arrived empty | the source / upstream join |
 | `upstream ingest is stale: …` | a declared upstream hasn't run recently enough | run the upstream, or relax the window |
 | `write to table '…' in … failed: … has no column named …` | the frame carries a column the target table was never declared with | the migration for that table ([migrations.md](migrations.md)) |
+| `source file … does not exist` / `No files match '…' in directory …` | a CSV reader's source file has not landed (or landed under another name) | the landing directory / the upstream export |
 | `write to table '…' in … failed: database is locked` | something else held the file for longer than the busy timeout | the other writer / the schedule |
 
 Each expected failure also carries a **triage category** (`framework.core.ErrorCategory`)
@@ -70,7 +71,7 @@ that tells you *whose problem it is* before you read the message:
 | Category | Means | Failures | The fix is in… |
 |----------|-------|----------|----------------|
 | `data` | the feed broke a declared data expectation | `ValidationError`, `CoercionError` | the **data** (source/upstream) |
-| `operational` | data and code are fine; the run conditions aren't | `FreshnessError`, `ForEachPipelineError`, `SqliteWriteError` | the **run/environment** |
+| `operational` | data and code are fine; the run conditions aren't | `FreshnessError`, `ForEachPipelineError`, `SqliteWriteError`, `MissingSourceFileError` | the **run/environment** |
 | `config` | the pipeline is mis-addressed, mis-wired, or writing to a shape nothing declares | `UnknownPipelineError`, `MissingTableError`, `MissingColumnError` | the **wiring** (or `migrations/`) |
 
 A genuine bug (not a `PipelineError`) keeps its traceback **and has no category**
@@ -90,6 +91,15 @@ Both keep the original exception as `__cause__`, so nothing is lost for anyone
 reading a traceback deliberately. Neither is a *check* — no Writer reads the
 target's column set before writing ([migrations.md](migrations.md)); the failure
 is still SQLite's, only legible.
+
+A **missing CSV source file** has crossed the same line, for a plainer reason:
+it is the commonest way a feed fails, and it is almost never a bug — the export
+has not landed yet. `CsvReader`, `StrictCsvReader` and `GlobCsvReader` raise
+`MissingSourceFileError` (`operational`) naming the path (or, for a glob, the
+directory and pattern), with pandas' own `FileNotFoundError` kept as
+`__cause__`. It is still a `FileNotFoundError` too, so code that caught that
+keeps working. Any *other* source that won't open — a permissions error, an
+Excel workbook or SQLite database that is not there — is unchanged.
 
 ## 3. Resolve — four legitimate moves
 

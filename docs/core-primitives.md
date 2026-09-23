@@ -118,7 +118,11 @@ empty, where the pandas readers land a gap. `GlobCsvReader(directory, pattern)`
 reads many local CSV files that together form one logical Feed snapshot: it
 matches files with `pathlib.Path.glob`, reads them in sorted deterministic
 order, concatenates them behind the `Dataset` seam, and raises
-`FileNotFoundError` naming the directory and pattern when nothing matches.
+`MissingSourceFileError` naming the directory and pattern when nothing matches.
+All three CSV readers raise it for a source file that is not there: a
+`PipelineError` (category `operational`) that is also a `FileNotFoundError`, so
+a file that has not landed reaches an operator through `format_failure` rather
+than as a traceback ([resolving-a-failed-run.md](resolving-a-failed-run.md)).
 `ExcelReader(path, sheet=0)` reads one worksheet of an `.xlsx` workbook (sheet
 selectable by name or zero-based index; pandas + **openpyxl** behind the seam);
 `SqliteReader(db_path, table)` is the read-side dual of the Sqlite Writers — it

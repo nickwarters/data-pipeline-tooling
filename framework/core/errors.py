@@ -29,21 +29,25 @@ class ErrorCategory:
     - ``DATA`` — the feed broke a declared data expectation (a schema/value-rule
       breach, an uncastable value). The fix is in the **data**.
     - ``OPERATIONAL`` — the data and the code are fine but the run conditions are
-      not (a stale upstream, a per-item failure in a batch, a locked database).
-      The fix is in the **run/environment**.
+      not (a stale upstream, a per-item failure in a batch, a locked database, a
+      CSV source file that has not landed). The fix is in the
+      **run/environment**.
     - ``CONFIG`` — the pipeline is mis-addressed or mis-wired (an unknown
       pipeline, a table or column no migration declares). The fix is in the
       **wiring**.
 
-    Note the deliberate gaps: a source that won't open and a bug in a transform
-    are **not** categorised here — they stay raw exceptions with a full traceback
-    (the "expected failure vs. genuine bug" line), so they surface as the
-    programming faults they are rather than as operator-actionable failures. A
-    failed *write* used to sit in that gap and no longer does: SQLite's own
-    complaint names neither the table nor the database, and pandas re-raises it
-    with the message flattened to ``Execution failed``, so a Writer translates it
-    into ``MissingColumnError`` (config) or ``SqliteWriteError`` (operational)
-    rather than leaving an operator to read a traceback for it.
+    Note the deliberate gaps: a source that won't open (other than a missing CSV
+    file, below) and a bug in a transform are **not** categorised here — they
+    stay raw exceptions with a full traceback (the "expected failure vs. genuine
+    bug" line), so they surface as the programming faults they are rather than
+    as operator-actionable failures. A failed *write* used to sit in that gap and
+    no longer does: SQLite's own complaint names neither the table nor the
+    database, and pandas re-raises it with the message flattened to ``Execution
+    failed``, so a Writer translates it into ``MissingColumnError`` (config) or
+    ``SqliteWriteError`` (operational) rather than leaving an operator to read a
+    traceback for it. A CSV reader's *missing source file* has left it too: it
+    is the commonest way a feed fails — the export has not landed — so the CSV
+    readers raise ``MissingSourceFileError`` (operational) for it.
     """
 
     DATA = "data"

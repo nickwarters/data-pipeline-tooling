@@ -1,8 +1,10 @@
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
-from framework.io.readers import CsvReader
+from framework.core import ErrorCategory, PipelineError, format_failure
+from framework.io.readers import CsvReader, MissingSourceFileError
 
 FIXTURE = Path(__file__).parent.parent.parent.parent / "fixtures" / "cases.csv"
 
@@ -83,3 +85,26 @@ def test_projection_still_lands_text(tmp_path):
 
     assert frame.columns.tolist() == ["case_ref", "amount"]
     assert frame.to_dict(orient="records") == [{"case_ref": "00123", "amount": "7"}]
+
+
+def test_a_missing_source_file_is_an_expected_failure_naming_the_path(tmp_path):
+    # Left alone, pandas raised a bare FileNotFoundError: a traceback for what
+    # is usually just an export that has not landed yet.
+    missing = tmp_path / "not_landed.csv"
+
+    with pytest.raises(MissingSourceFileError) as exc:
+        CsvReader(missing).read()
+
+    assert isinstance(exc.value, PipelineError)
+    assert exc.value.category == ErrorCategory.OPERATIONAL
+    assert str(missing) in str(exc.value)
+    assert isinstance(exc.value.__cause__, FileNotFoundError)
+    assert format_failure(exc.value).startswith(
+        "Pipeline run failed [MissingSourceFileError, operational]"
+    )
+
+
+def test_a_missing_source_file_is_still_a_file_not_found_error(tmp_path):
+    # Callers that already caught FileNotFoundError keep working.
+    with pytest.raises(FileNotFoundError):
+        CsvReader(tmp_path / "not_landed.csv").read()

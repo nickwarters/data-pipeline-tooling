@@ -5,6 +5,7 @@ import pytest
 
 from framework.io.readers import (
     CsvReader,
+    MissingSourceFileError,
     StrictCsvParseError,
     StrictCsvReader,
 )
@@ -251,3 +252,13 @@ def test_strict_csv_reader_reports_the_file_it_read():
     reader.read()
 
     assert reader.data_locations == [{"namespace": "file", "name": str(FIXTURE)}]
+
+
+def test_a_missing_source_file_is_an_expected_failure_naming_the_path(tmp_path):
+    missing = tmp_path / "not_landed.csv"
+
+    with pytest.raises(MissingSourceFileError) as exc:
+        StrictCsvReader(missing).read()
+
+    assert str(missing) in str(exc.value)
+    assert isinstance(exc.value.__cause__, FileNotFoundError)
