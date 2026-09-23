@@ -13,6 +13,7 @@ import json
 import pandas as pd
 import pytest
 
+from framework.run import TransformError
 from pipelines.sharepoint_cases.gold import (
     AMENDED_OUTCOME_FIELDS,
     DETAIL_BLOB_COLUMNS,
@@ -116,11 +117,14 @@ def test_an_unparseable_modified_stamp_stops_the_reduction():
     # Silver declares source_modified_at non-null and typed, so this cannot
     # honestly arrive — and coercing it to NaT would sort the bad row *last* and
     # hand it the Case, which is exactly the trap the version parse avoids.
-    with pytest.raises(ValueError):
+    with pytest.raises(TransformError) as raised:
         current(
             version(),
             version(source_version='"4"', source_modified_at="not a timestamp"),
         )
+    assert isinstance(raised.value.__cause__, ValueError)
+    # The author's line is named, not the pandas internals the parse failed in.
+    assert "raised at pipelines" in str(raised.value)
 
 
 def test_every_current_row_carries_the_candidate_window_end():

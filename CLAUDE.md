@@ -49,8 +49,8 @@ toolchain, a domain language, or a release. Two rules follow:
   run; its `freshness` module holds the **one** upstream-freshness rule, which
   the runner's `FreshnessGuard` wraps and `tools.orchestration`'s plan preview
   reads); plus the private
-  `framework/_internal` (`connection`, `describe`, `identity`, `locations`, `schema`,
-  `schema_control`: cross-cutting
+  `framework/_internal` (`connection`, `describe`, `identity`, `locations`,
+  `row_locator`, `schema`, `schema_control`: cross-cutting
   helpers with no public name)). The `python -m cli` entry point (`scaffold`
   plus the operator commands; see below) lives in the top-level `cli/` package,
   and the cross-cutting `retry` / `calendar` / `medallion` /

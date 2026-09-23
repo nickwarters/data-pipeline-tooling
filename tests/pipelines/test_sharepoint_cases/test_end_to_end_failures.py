@@ -12,7 +12,7 @@ import json
 
 import pytest
 
-from framework.run import RunContext
+from framework.run import RunContext, TransformError
 from framework.transform import JsonShapeError
 from pipelines.sharepoint_cases import gold
 from pipelines.sharepoint_cases.gold import GOLD_TABLES
@@ -108,7 +108,8 @@ def test_a_failure_in_the_last_aggregate_leaves_the_earlier_gold_and_no_checkpoi
     assert failed_table == "appeal_outcomes_current", "the reduce patched below"
     monkeypatch.setattr(gold, "appeal_outcomes", explode)
 
-    with pytest.raises(RuntimeError, match="boom"):
+    # A crash in a transform step arrives wrapped, with the original chained.
+    with pytest.raises(TransformError, match="RuntimeError: boom"):
         run(
             RunContext(base_dir=base_dir, pipeline=FEED_NAME, run_log=run_log),
             client=FakeListClient(),
@@ -130,7 +131,8 @@ def test_a_retry_after_a_partial_failure_converges_and_advances_once(
     checkpoints = SharePointCheckpointStore(base_dir)
     monkeypatch.setattr(gold, "throughput", explode)
 
-    with pytest.raises(RuntimeError, match="boom"):
+    # A crash in a transform step arrives wrapped, with the original chained.
+    with pytest.raises(TransformError, match="RuntimeError: boom"):
         run(context, client=client)
     assert checkpoints.committed_watermark(SOURCE) is None
 

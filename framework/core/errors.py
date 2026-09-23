@@ -35,12 +35,21 @@ class ErrorCategory:
     - ``CONFIG`` — the pipeline is mis-addressed or mis-wired (an unknown
       pipeline, a table or column no migration declares). The fix is in the
       **wiring**.
+    - ``CODE`` — a transform step's transformer crashed (a ``KeyError`` in a
+      lambda, a pandas error in a helper). The fix is in the **transform code**,
+      or in data it did not anticipate. Raised as
+      :class:`~framework.run.transform_failure.TransformError`, which names the
+      step, the transformer and the author's line that raised, and chains the
+      original exception so its traceback is still there for a debugger.
 
-    Note the deliberate gaps: a source that won't open (other than a missing CSV
-    file, below) and a bug in a transform are **not** categorised here — they
-    stay raw exceptions with a full traceback (the "expected failure vs. genuine
-    bug" line), so they surface as the programming faults they are rather than
-    as operator-actionable failures. A failed *write* used to sit in that gap and
+    Note the deliberate gap: a source that won't open (other than a missing CSV
+    file, below) is **not** categorised here — it stays a raw exception with a
+    full traceback (the "expected failure vs. genuine bug" line), and so does a
+    bug anywhere *outside* a transform step's transformer — a reader, a writer, a
+    validator, the framework itself. A crash inside a transformer used to sit in
+    that gap too; it left because a transformer is the author's own code, often
+    an unnamed lambda, and its raw traceback named neither the step nor the
+    lambda. A failed *write* used to sit in that gap and
     no longer does: SQLite's own complaint names neither the table nor the
     database, and pandas re-raises it with the message flattened to ``Execution
     failed``, so a Writer translates it into ``MissingColumnError`` (config) or
@@ -53,6 +62,7 @@ class ErrorCategory:
     DATA = "data"
     OPERATIONAL = "operational"
     CONFIG = "config"
+    CODE = "code"
 
 
 class PipelineError(Exception):

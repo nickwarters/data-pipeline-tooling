@@ -15,6 +15,7 @@ import pytest
 
 from framework.core.dataset import Dataset
 from framework.core.validators import ColumnValidator, ValidationError
+from framework.run import TransformError
 from framework.run.builder import Pipeline
 from tools.observability.run_log import RunLog
 
@@ -156,9 +157,32 @@ def test_failed_validation_records_its_triage_category(tmp_path):
 
 
 def test_a_raw_bug_records_a_null_category(tmp_path):
-    # A non-PipelineError (a genuine bug in a processor) is recorded with a null
-    # category — the absence is the signal that this was a bug, not an expected
-    # data/operational/config failure.
+    # A non-PipelineError outside a transformer (here, a bug in a Writer) is
+    # recorded with a null category — the absence is the signal that this was a
+    # bug, not an expected data/operational/config failure.
+    log_path = tmp_path / "cases.log"
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
+
+    class BrokenWriter:
+        def write(self, dataset: Dataset) -> None:
+            raise KeyError("missing key")
+
+    p = Pipeline("cases", run_log=RunLog(log_path))
+    r = p.read(reader, name="read")
+    p.write(BrokenWriter(), r, name="write")
+
+    with pytest.raises(KeyError):
+        p.run()
+
+    steps = _by_step(_read_records(log_path))
+    assert steps["write"]["status"] == "error"
+    assert steps["write"]["error_category"] is None
+    assert steps["run"]["error_category"] is None
+
+
+def test_a_crash_in_a_transformer_records_the_code_category(tmp_path):
+    # A transformer is the author's own code: its crash arrives as a
+    # TransformError, categorised ``code`` so the log routes it to the author.
     log_path = tmp_path / "cases.log"
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
 
@@ -170,13 +194,13 @@ def test_a_raw_bug_records_a_null_category(tmp_path):
     t = p.transform(boom, r, name="boom")
     p.write(CapturingWriter(), t, name="write")
 
-    with pytest.raises(KeyError):
+    with pytest.raises(TransformError):
         p.run()
 
     steps = _by_step(_read_records(log_path))
     assert steps["boom"]["status"] == "error"
-    assert steps["boom"]["error_category"] is None
-    assert steps["run"]["error_category"] is None
+    assert steps["boom"]["error_category"] == "code"
+    assert steps["run"]["error_category"] == "code"
 
 
 def test_warn_validator_is_recorded_as_a_warn_hit_and_the_run_continues(tmp_path):

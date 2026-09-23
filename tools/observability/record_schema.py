@@ -198,8 +198,8 @@ RUN_RECORD_FIELDS: tuple[Field, ...] = (
         decode=_json_list_from_sql,
         console=_joined("errors"),
     ),
-    # The triage category of the failure (data/operational/config), or None for a
-    # non-PipelineError bug. See framework.core.ErrorCategory.
+    # The triage category of the failure (data/operational/config/code), or None
+    # for a non-PipelineError bug. See framework.core.ErrorCategory.
     Field("error_category", "TEXT", console=_when_set("category")),
     Field(
         "warn_hits",

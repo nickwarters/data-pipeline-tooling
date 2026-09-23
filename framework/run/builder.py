@@ -26,6 +26,7 @@ from framework.core.validators import ValidationError
 from framework.run.address import RunAddress
 from framework.run.execution import PipelineExecution
 from framework.run.run_context import RunContext, active_context, current_context
+from framework.run.transform_failure import transform_failure
 from tools.observability.run_log import NULL_RUN_LOG, RunLog
 
 log = logging.getLogger(__name__)
@@ -210,7 +211,8 @@ class TransformNode(Node):
         if processor is not None:
             session.materialize_dependencies([processor])
 
-        after = self.func(*datasets)
+        with transform_failure(self.name, self.func):
+            after = self.func(*datasets)
         if session.trace is not None and before is not None:
             # Preserve optional processor trace metadata.
             role = getattr(processor, "trace_role", None)
