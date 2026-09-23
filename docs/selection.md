@@ -202,6 +202,65 @@ SelectionPool write. A first run with no upstream history is allowed, but a
 > **both** branches, deliberately, rather than one instead of the other — see
 > its own section below.
 
+## Targeted selection — per-cell targets, made up from the level above
+
+`TargetedSelection` (in `case_review.targeted_selection`) is a Selection
+processor that reduces the pool to a declared count per **cell** — one
+combination of values across a list of grouping columns — under an overall
+total. Like every processor it takes a `Dataset` and returns one, so it is a
+single `transform` step:
+
+```python
+from case_review.targeted_selection import TargetedSelection, TargetedSelectionConfig
+
+LEVELS = ("brand", "case_type", "product", "attribute")  # coarsest first
+
+config = TargetedSelectionConfig(
+    levels=LEVELS,
+    targets={cell: 20 for cell in CELLS},  # CELLS: 16 (brand, case type, product, attribute) tuples
+    total=320,
+    make_up_to=("brand", "case_type"),
+    balance_column="vulnerable",
+    balance_by=("brand", "case_type", "product"),
+    order="case_id",
+    seed=0,
+)
+pool = transform(TargetedSelection(config), pool, name="targeted selection")
+```
+
+What it does, in order:
+
+1. **Rank.** Sort by `order`, then shuffle with a seeded draw, so the same pool
+   and seed always give the same selection whatever order the rows arrived in
+   ([ADR-0010](adr/0010-reproducible-sampling.md)). `seed=None` skips the
+   shuffle and takes Cases in `order` order (e.g. oldest first).
+2. **Fill each cell from its own Cases**, in the order `targets` declares them,
+   until the cell reaches its target or `total` is reached.
+3. **Make up short cells, one level at a time.** Drop the finest level and fill
+   each still-short cell from its wider group (same brand/case type/product,
+   any attribute), then drop the next, stopping at `make_up_to`. Step 2 runs for
+   every cell before any make-up, so a short cell never takes Cases that a
+   sibling cell was targeted at. `make_up_to=LEVELS` turns make-up off, and
+   `make_up_to=()` lets it reach the whole pool.
+4. **Balance, as a preference.** With a `balance_column`, each pick takes the
+   next Case on the side (True/False) that its `balance_by` group has fewer of,
+   so each group moves towards 50% of each. When that side has no Cases left the
+   pick takes the other side, so the balance never leaves a target unmet. The
+   balance is counted over the whole group, so if one attribute has only True
+   Cases, its sibling cells lean False to even the group out. A null value
+   counts towards neither side.
+
+`total` is a ceiling. When the targets add up to more than `total`, the cells
+declared last come up short. When a cell cannot be filled even from its
+make-up group, it stays short. Either way the step returns fewer Cases, not an
+error. `levels`, `make_up_to` and `balance_by` are checked when the config is
+built: the last two must each be a leading prefix of `levels`. A missing
+column is named when the step runs.
+
+This is the simplest form. Cells not named in `targets` get no Cases of their
+own and are used only to make up other cells. Nothing records which level a
+Case was made up from; that would need a stamped column or a trace rung.
+
 ## Explainability — why each Case was (or wasn't) selected
 
 Selecting *which advisers' Cases get reviewed* is itself a governed act that will
