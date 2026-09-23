@@ -3,10 +3,10 @@ from collections import Counter
 import pandas as pd
 import pytest
 
-from case_review.targeted_selection import TargetedSelection, TargetedSelectionConfig
 from framework.core import Dataset
 from framework.io import DatasetReader
 from framework.run import read, transform
+from tools.targeted_selection import TargetedSelection, TargetedSelectionConfig
 
 _LEVELS = ("brand", "case_type", "product", "attribute")
 

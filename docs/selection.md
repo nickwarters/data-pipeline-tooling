@@ -204,14 +204,14 @@ SelectionPool write. A first run with no upstream history is allowed, but a
 
 ## Targeted selection — per-cell targets, made up from the level above
 
-`TargetedSelection` (in `case_review.targeted_selection`) is a Selection
+`TargetedSelection` (in `tools.targeted_selection`) is a Selection
 processor that reduces the pool to a declared count per **cell** — one
 combination of values across a list of grouping columns — under an overall
 total. Like every processor it takes a `Dataset` and returns one, so it is a
 single `transform` step:
 
 ```python
-from case_review.targeted_selection import TargetedSelection, TargetedSelectionConfig
+from tools.targeted_selection import TargetedSelection, TargetedSelectionConfig
 
 LEVELS = ("brand", "case_type", "product", "attribute")  # coarsest first
 
