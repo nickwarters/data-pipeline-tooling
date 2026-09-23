@@ -8,7 +8,7 @@ from framework.core import (
     ValidationError,
     format_failure,
 )
-from framework.io import MissingColumnError, SqliteWriteError
+from framework.io import MissingColumnError, MissingSourceFileError, SqliteWriteError
 from framework.run import (
     FreshnessError,
     PipelineGraphError,
@@ -50,6 +50,7 @@ def test_a_programming_error_is_not_a_pipeline_error():
         (FreshnessError, ErrorCategory.OPERATIONAL),
         (ForEachPipelineError, ErrorCategory.OPERATIONAL),
         (SqliteWriteError, ErrorCategory.OPERATIONAL),
+        (MissingSourceFileError, ErrorCategory.OPERATIONAL),
         (UnknownPipelineError, ErrorCategory.CONFIG),
         (MissingColumnError, ErrorCategory.CONFIG),
         (RunAddressError, ErrorCategory.CONFIG),

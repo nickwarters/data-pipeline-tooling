@@ -1,6 +1,6 @@
 import pytest
 
-from framework.io.readers import GlobCsvReader
+from framework.io.readers import GlobCsvReader, MissingSourceFileError
 
 
 def test_glob_csv_reader_concatenates_matching_files_as_one_dataset(tmp_path):
@@ -20,7 +20,7 @@ def test_glob_csv_reader_raises_clear_error_when_no_files_match(tmp_path):
     landing = tmp_path / "landing"
     landing.mkdir()
 
-    with pytest.raises(FileNotFoundError) as exc:
+    with pytest.raises(MissingSourceFileError) as exc:
         GlobCsvReader(landing, "part_*.csv").read()
 
     message = str(exc.value)

@@ -15,6 +15,7 @@ from framework._internal.connection import connect
 from framework._internal.describe import render
 from framework._internal.locations import file_location, table_location
 from framework.core.dataset import Dataset
+from framework.core.errors import ErrorCategory, PipelineError
 from framework.core.protocols import Reader
 from framework.io.sql import quote_identifier
 
@@ -25,6 +26,7 @@ __all__ = [
     "CsvReader",
     "StrictCsvReader",
     "StrictCsvParseError",
+    "MissingSourceFileError",
     "GlobCsvReader",
     "ExcelReader",
     "SqliteReader",
@@ -33,6 +35,25 @@ __all__ = [
 
 class StrictCsvParseError(ValueError):
     """A CSV file violated the strict RFC 4180 grammar (located message)."""
+
+
+class MissingSourceFileError(PipelineError, FileNotFoundError):
+    """A CSV reader's source file is not there to read.
+
+    The commonest way a feed fails before any of its data is looked at: the
+    export did not land, landed under a different name, or the path was typed
+    wrong. Left alone it surfaced as a bare ``FileNotFoundError`` traceback out of
+    pandas; as a :class:`~framework.core.errors.PipelineError` it reaches an
+    operator through ``format_failure`` with a triage category instead.
+
+    Categorised as **operational**: the code and the (absent) data are not at
+    fault — the file has not arrived, and the same run succeeds once it has. It
+    is *also* a ``FileNotFoundError``, so code that already caught that keeps
+    working, and the original exception (where there was one) is kept as
+    ``__cause__``.
+    """
+
+    category = ErrorCategory.OPERATIONAL
 
 
 class DatasetReader:
@@ -80,7 +101,7 @@ class CsvReader:
         kwargs: dict = {}
         if self._columns is not None:
             kwargs["usecols"] = self._columns
-        return Dataset.from_pandas(pd.read_csv(self._path, dtype=str, **kwargs))
+        return Dataset.from_pandas(_read_csv_file(self._path, **kwargs))
 
     def describe(self) -> str:
         return render(self, path=str(self._path), columns=self._columns)
@@ -155,8 +176,11 @@ class StrictCsvReader:
         # newline="" so Python performs no universal-newline translation; the
         # parser is the sole authority on what ends a record, which is what lets
         # an embedded CRLF survive inside a quoted field.
-        with self._path.open(encoding=self._encoding, newline="") as handle:
-            text = handle.read()
+        try:
+            with self._path.open(encoding=self._encoding, newline="") as handle:
+                text = handle.read()
+        except FileNotFoundError as exc:
+            raise _missing_source(self._path) from exc
         records = _parse_strict_csv(
             text, self._delimiter, self._quotechar, self._escapechar
         )
@@ -192,6 +216,18 @@ class StrictCsvReader:
             escapechar=self._escapechar,
             encoding=self._encoding,
         )
+
+
+def _missing_source(path: Path) -> MissingSourceFileError:
+    return MissingSourceFileError(f"source file {path} does not exist")
+
+
+def _read_csv_file(path: Path, **kwargs) -> pd.DataFrame:
+    """``pd.read_csv`` with every column as text and a missing file translated."""
+    try:
+        return pd.read_csv(path, dtype=str, **kwargs)
+    except FileNotFoundError as exc:
+        raise _missing_source(path) from exc
 
 
 def _parse_strict_csv(
@@ -302,7 +338,7 @@ class GlobCsvReader:
     def read(self) -> Dataset:
         paths = sorted(self._directory.glob(self._pattern))
         if not paths:
-            raise FileNotFoundError(
+            raise MissingSourceFileError(
                 f"No files match {self._pattern!r} in directory {self._directory}"
             )
         self.data_locations = [file_location(path) for path in paths]
@@ -310,7 +346,7 @@ class GlobCsvReader:
         if self._columns is not None:
             kwargs["usecols"] = self._columns
         frame = pd.concat(
-            [pd.read_csv(path, dtype=str, **kwargs) for path in paths],
+            [_read_csv_file(path, **kwargs) for path in paths],
             ignore_index=True,
         )
         return Dataset.from_pandas(frame)

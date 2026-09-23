@@ -70,7 +70,8 @@ no in the same place, and is ADR-0028's record.
   older than the export's cadence allows. `pipelines/complaint_selection` does
   exactly this over the three complaints ingests, with slack for a weekly
   export. A file that did not arrive at all fails the ingest's read — `CsvReader`
-  raises `FileNotFoundError` rather than landing an empty dataset — and the
+  raises `MissingSourceFileError` (a `FileNotFoundError`) rather than landing an
+  empty dataset — and the
   missing run record is what the guard then sees.
 - **`GlobCsvReader` stays.** `SasReader` was its only non-test consumer, but it
   is the natural reader for a multi-part landed export (`part_*.csv`), which is

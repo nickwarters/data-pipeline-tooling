@@ -489,7 +489,8 @@ the source does not, and the failure is a `TypeError` at the first comparison.
 deterministic order, concatenates them behind the `Dataset` seam, and returns
 one `Dataset`. Use it when a source export is split across files but should be
 validated, processed, written, and failed as one logical Feed snapshot. If no
-files match, it raises `FileNotFoundError` naming the directory and pattern;
+files match, it raises `MissingSourceFileError` (an operational `PipelineError`,
+and still a `FileNotFoundError`) naming the directory and pattern;
 `columns=[...]` projects columns with the same pandas `usecols` behavior as
 `CsvReader`.
 
