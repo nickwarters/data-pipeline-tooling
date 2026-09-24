@@ -727,6 +727,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`gold-accumulation.md`](gold-accumulation.md) | Gold's accumulate-by-run semantics, idempotent re-run, reading "current" — and the two shapes of current-only reduce (`LatestPerKey` by `load_date`, vs a Polling Feed's source-version ordering). |
 | [`processors.md`](processors.md) | The Selection transforms (`JoinWith`, per-group sampling), the Ingest / fan-out transforms (`SelectColumns`, `Unpivot`, `DeriveKey`, `LatestPerKey`), and the JSON blob reshapers (`ExplodeJsonMap`, `ExplodeJsonList`, `FlattenJsonObject`). |
 | [`selection.md`](selection.md) | The full Case Type declarations / Variation → CasePool → SelectionPool flow + explainability. |
+| [`quota-selection.md`](quota-selection.md) | Opt-in `tools.selection`: absolute attribute quotas, surplus redistribution, hierarchical fallback, boolean balancing and selection reports. |
 | [`person-targeted-selection.md`](person-targeted-selection.md) | The other **Selection mode** — every rule of the per-**Adviser** framework as a named pure function, with inputs, outputs and behaviour. Decision and reasoning in [ADR-0022](adr/0022-person-targeted-selection-plans-per-adviser.md). Not built yet. |
 | [`working-day-calendar.md`](working-day-calendar.md) | Availability arithmetic, and the YAML calendar file that seeds its holidays and weekend rule (`WorkingDayCalendar.from_yaml`, `orchestrate --calendar`). |
 | [`run-log-format.md`](run-log-format.md) | The JSONL record schema and the run registry. |

@@ -1,5 +1,10 @@
 # The Selection flow — Case Type declarations, CasePool, SelectionPool
 
+For configurable absolute attribute quotas, hierarchical fallback and boolean
+balancing, see [`quota-selection.md`](quota-selection.md). The opt-in
+`tools.selection` utility operates on an already eligible Dataset and returns
+its own selection trace and reports; existing pipeline policies are unchanged.
+
 The domain capstone ties the primitives the earlier slices built into the
 full per-Case-Type path the framework exists to make routine: a source feed is
 **ingested** into a Case Type's medallion, surfaced as a **CasePool**, then
