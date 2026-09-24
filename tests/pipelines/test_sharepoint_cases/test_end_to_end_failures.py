@@ -31,7 +31,7 @@ from tests._sharepoint_cases_fixtures import (
 )
 from tests.framework_testing import RecordingRunLog, read_rows
 from tools.medallion import medallion
-from tools.source_checkpoint import Instant, SourceCheckpointStore
+from tools.source_checkpoint import SourceCheckpointStore
 from tools.store import StoreRegistry
 
 
@@ -53,7 +53,7 @@ def test_a_malformed_answers_blob_raises_and_case_version_still_lands(base_dir):
     med = medallion(StoreRegistry(base_dir), FEED_NAME)
     assert len(read_rows(med.silver, "case_version")) == 1
     assert published_gold(run_log) == set()
-    assert SourceCheckpointStore(base_dir).position(SOURCE) is None
+    assert SourceCheckpointStore(base_dir).watermark(SOURCE.key) is None
 
 
 def test_a_malformed_details_blob_raises_and_case_version_details_still_holds_it(
@@ -68,7 +68,7 @@ def test_a_malformed_details_blob_raises_and_case_version_details_still_holds_it
 
     med = medallion(StoreRegistry(base_dir), FEED_NAME)
     assert published_gold(run_log) == set()
-    assert SourceCheckpointStore(base_dir).position(SOURCE) is None
+    assert SourceCheckpointStore(base_dir).watermark(SOURCE.key) is None
     # The frontend's Details parse fallback is undefined, so absent and
     # unparseable are indistinguishable downstream -- silver is the only place
     # the raw text survives.
@@ -93,7 +93,7 @@ def test_a_failure_in_current_gold_leaves_no_gold_and_no_checkpoint(
 
     checkpoints = SourceCheckpointStore(base_dir)
     assert published_gold(run_log) == set()
-    assert checkpoints.position(SOURCE) is None
+    assert checkpoints.watermark(SOURCE.key) is None
     assert not checkpoints.path.exists()
 
 
@@ -117,7 +117,7 @@ def test_a_failure_in_the_last_aggregate_leaves_the_earlier_gold_and_no_checkpoi
     checkpoints = SourceCheckpointStore(base_dir)
     # Everything before the failure was published; the failed table was not.
     assert published_gold(run_log) == set(GOLD_TABLES) - {failed_table}
-    assert checkpoints.position(SOURCE) is None
+    assert checkpoints.watermark(SOURCE.key) is None
     assert not checkpoints.path.exists()
 
 
@@ -132,7 +132,7 @@ def test_a_retry_after_a_partial_failure_converges_and_advances_once(
 
     with pytest.raises(RuntimeError, match="boom"):
         run(context, client=client)
-    assert checkpoints.position(SOURCE) is None
+    assert checkpoints.watermark(SOURCE.key) is None
 
     monkeypatch.undo()
     run(context, client=client)
@@ -142,7 +142,7 @@ def test_a_retry_after_a_partial_failure_converges_and_advances_once(
     assert len(read_rows(med.gold, "case_current")) == 1
     # The first attempt left the watermark alone, so exactly one advance has
     # happened: to the *retry's* candidate end.
-    assert checkpoints.position(SOURCE) == Instant(SERVER_NOW + NEXT_POLL - SAFETY_LAG)
+    assert checkpoints.watermark(SOURCE.key) == SERVER_NOW + NEXT_POLL - SAFETY_LAG
 
 
 # --- a value rule breached in a Detail Table ---------------------------------

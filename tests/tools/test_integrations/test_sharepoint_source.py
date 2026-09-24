@@ -5,24 +5,14 @@ from uuid import UUID
 import pytest
 
 from tools.integrations.sharepoint_rest import SharePointSource
-from tools.source_checkpoint import _LEGACY_KIND, SourceIdentity
 
 SITE = "https://contoso.sharepoint.com/sites/case-review"
 LIST_ID = UUID("1b6f2a3c-0000-4a1f-9c7e-5f2d8a4b1e01")
 SOURCE = SharePointSource(SITE, LIST_ID)
 
 
-def test_a_list_is_keyed_on_its_site_and_guid_and_satisfies_the_store_identity():
+def test_a_list_is_keyed_on_its_site_and_guid():
     assert SOURCE.key == f"{SITE}|{LIST_ID}"
-    assert SOURCE.kind == "sharepoint-list"
-    assert isinstance(SOURCE, SourceIdentity)
-
-
-def test_the_kind_is_the_one_the_carry_over_reads_the_old_file_under():
-    # The generic store reads a pre-generic sharepoint.db row back under this
-    # kind, so the two spellings must agree or an upgraded base directory reads
-    # every list as unseen.
-    assert SharePointSource.kind == _LEGACY_KIND
 
 
 @pytest.mark.parametrize(

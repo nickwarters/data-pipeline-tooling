@@ -29,7 +29,7 @@ from tests._sharepoint_cases_fixtures import (
 from tests.framework_testing import RecordingRunLog, read_rows
 from tools.integrations.sharepoint_rest import SharePointFeedError
 from tools.medallion import medallion
-from tools.source_checkpoint import Instant, SourceCheckpointStore
+from tools.source_checkpoint import SourceCheckpointStore
 from tools.store import StoreRegistry
 
 
@@ -111,8 +111,8 @@ def test_gold_counts_across_every_list(polled):
 def test_each_list_keeps_its_own_watermark(polled):
     checkpoints = SourceCheckpointStore(polled)
 
-    assert checkpoints.position(SOURCE) == Instant(SERVER_NOW - SAFETY_LAG)
-    assert checkpoints.position(OTHER_SOURCE) == Instant(SERVER_NOW - SAFETY_LAG)
+    assert checkpoints.watermark(SOURCE.key) == SERVER_NOW - SAFETY_LAG
+    assert checkpoints.watermark(OTHER_SOURCE.key) == SERVER_NOW - SAFETY_LAG
 
 
 def test_a_list_with_nothing_safe_to_poll_is_skipped_and_the_others_still_run(base_dir):
@@ -120,8 +120,8 @@ def test_a_list_with_nothing_safe_to_poll_is_skipped_and_the_others_still_run(ba
     # failure: it is skipped and its watermark stands.
     run_log = RecordingRunLog()
     SourceCheckpointStore(base_dir).commit(
-        SOURCE,
-        Instant(SERVER_NOW),
+        SOURCE.key,
+        SERVER_NOW,
         batch_id="earlier",
         pipeline_run_id="earlier-run",
     )
@@ -139,8 +139,8 @@ def test_a_list_with_nothing_safe_to_poll_is_skipped_and_the_others_still_run(ba
     }
     assert published_gold(run_log) == set(GOLD_TABLES)
     checkpoints = SourceCheckpointStore(base_dir)
-    assert checkpoints.position(SOURCE) == Instant(SERVER_NOW)
-    assert checkpoints.position(OTHER_SOURCE) == Instant(SERVER_NOW - SAFETY_LAG)
+    assert checkpoints.watermark(SOURCE.key) == SERVER_NOW
+    assert checkpoints.watermark(OTHER_SOURCE.key) == SERVER_NOW - SAFETY_LAG
 
 
 def test_a_failure_polling_the_second_list_leaves_no_gold_and_no_watermark(base_dir):
@@ -161,8 +161,8 @@ def test_a_failure_polling_the_second_list_leaves_no_gold_and_no_watermark(base_
         COMPLAINTS.case_type
     }
     assert published_gold(run_log) == set()
-    assert checkpoints.position(SOURCE) is None
-    assert checkpoints.position(OTHER_SOURCE) is None
+    assert checkpoints.watermark(SOURCE.key) is None
+    assert checkpoints.watermark(OTHER_SOURCE.key) is None
 
 
 def test_a_retry_after_a_partial_failure_converges_and_advances_both_lists(base_dir):
@@ -180,5 +180,5 @@ def test_a_retry_after_a_partial_failure_converges_and_advances_both_lists(base_
         assert sorted(row["case_type"] for row in read_rows(layer, table)) == sorted(
             case_list.case_type for case_list in TWO_LISTS
         ), table
-    assert checkpoints.position(SOURCE) == Instant(SERVER_NOW - SAFETY_LAG)
-    assert checkpoints.position(OTHER_SOURCE) == Instant(SERVER_NOW - SAFETY_LAG)
+    assert checkpoints.watermark(SOURCE.key) == SERVER_NOW - SAFETY_LAG
+    assert checkpoints.watermark(OTHER_SOURCE.key) == SERVER_NOW - SAFETY_LAG

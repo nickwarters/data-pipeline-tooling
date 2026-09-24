@@ -8,10 +8,10 @@ needs and what a snapshot cannot express.
 Three lines are drawn deliberately:
 
 *The window is the caller's.* The Reader is handed an explicit
-:class:`ModifiedWindow` and never computes one. Where the previous window ended,
-how much overlap to re-read, and where that is persisted are a checkpoint's
-concerns; keeping them out means this class has no state and one read is
-reproducible from its constructor arguments alone.
+:class:`~tools.source_checkpoint.InstantWindow` and never computes one. Where
+the previous window ended, how much overlap to re-read, and where that is
+persisted are a checkpoint's concerns; keeping them out means this class has no
+state and one read is reproducible from its constructor arguments alone.
 
 *Fetching is somebody else's.* The organisational SharePoint client already
 handles authentication, transport and server paging, so it stays behind the
@@ -49,7 +49,7 @@ from __future__ import annotations
 
 import datetime as dt
 from dataclasses import dataclass
-from typing import Callable, ClassVar, Protocol, Sequence, runtime_checkable
+from typing import Callable, Protocol, Sequence, runtime_checkable
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -65,7 +65,6 @@ from tools.source_checkpoint import InstantWindow
 
 __all__ = [
     "METADATA_COLUMNS",
-    "ModifiedWindow",
     "modified_filters",
     "SharePointFeedError",
     "SharePointListClient",
@@ -109,13 +108,7 @@ class SharePointFeedError(PipelineError):
     category = ErrorCategory.DATA
 
 
-# SharePoint's name for the span its ``Modified`` predicate evaluates. The type
-# itself is the generic one every polled source shares; only the rendering of
-# it into OData below is this module's.
-ModifiedWindow = InstantWindow
-
-
-def modified_filters(window: ModifiedWindow) -> list[str]:
+def modified_filters(window: InstantWindow) -> list[str]:
     """The ``Modified`` predicates for ``window``, UTC-encoded once.
 
     Half-open — ``Modified ge start and Modified lt end`` — so consecutive
@@ -138,21 +131,18 @@ class SharePointSource:
     """One pollable SharePoint list, as the checkpoint store identifies it.
 
     Keyed on the list's stable **GUID**, never its title: a title is a mutable
-    display name, and keying a position on it would fork the checkpoint the
+    display name, and keying a watermark on it would fork the checkpoint the
     moment somebody renames the list, with the new key looking like a first load
     of the whole list. The site part of the key is credential-free and
-    normalised, so one list addressed two ways is one source. Satisfies
-    ``tools.source_checkpoint.SourceIdentity``.
+    normalised, so one list addressed two ways is one source.
     """
-
-    kind: ClassVar[str] = "sharepoint-list"
 
     site: str
     list_id: UUID
 
     @property
     def key(self) -> str:
-        """The identity the position is stored under."""
+        """The identity the watermark is stored under."""
         return f"{_keyed_site(self.site)}|{self.list_id}"
 
 
@@ -221,7 +211,7 @@ class SharePointModifiedReader:
         site: str,
         list_name: str,
         columns: Sequence[str],
-        window: ModifiedWindow,
+        window: InstantWindow,
         *,
         expand_fields: Sequence[str] = (),
         client: SharePointListClient | None = None,

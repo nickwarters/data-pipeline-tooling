@@ -33,7 +33,7 @@ The medallion row is followed by the three run-metadata paths:
 | `<base>/_registry/runs.db` | the queryable run registry those logs are ingested into |
 | `<base>/_orchestration/runs.db` | the scheduled-work decision log |
 | `<base>/deliverables/<destination>/…` | the local deliverable outbox, owned by `tools.deliverables` |
-| `<base>/_checkpoints/sources.db` | source control state, one position per polled source, owned by `tools.source_checkpoint` |
+| `<base>/_checkpoints/sources.db` | source control state, one watermark per polled source, owned by `tools.source_checkpoint` |
 
 The three run-metadata rows are owned by `RunStore`; the deliverable row is
 owned by `tools.deliverables`; and the source **control state** row is owned by

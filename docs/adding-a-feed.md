@@ -622,7 +622,7 @@ the whole list", this one answers "give me the items whose `Modified` falls in
 *this* window" — the shape an incremental feed needs and the one a snapshot
 cannot express.
 
-The window is the **caller's**, always: `ModifiedWindow(start, end)` is passed
+The window is the **caller's**, always: `InstantWindow(start, end)` is passed
 in and never computed here. Where the previous window ended, how much overlap to
 re-read, and where that is persisted are a
 [*checkpoint's*](#sourcecheckpointstorebase_dir--where-the-polling-got-to)
@@ -701,13 +701,14 @@ columns rather than to whatever a populated read happened to carry.
 ```python
 import datetime as dt
 
-from tools.integrations.sharepoint_rest import ModifiedWindow, SharePointModifiedReader
+from tools.integrations.sharepoint_rest import SharePointModifiedReader
+from tools.source_checkpoint import InstantWindow
 
 reader = SharePointModifiedReader(
     "https://sharepoint/sites/case-review",
     "Cases",
     ("CaseRef", "Status", "Owner"),
-    ModifiedWindow(
+    InstantWindow(
         start=dt.datetime(2026, 8, 5, 8, tzinfo=dt.timezone.utc),
         end=dt.datetime(2026, 8, 5, 9, tzinfo=dt.timezone.utc),
     ),
@@ -736,26 +737,17 @@ is handed a window; this is what remembers where the last one ended, and
 mid-graph `.write()` node landing an intermediate dataset for lineage. This one
 is **source control state**: how far a source has been polled.
 
-**A source is a `kind` and a stable `key`.** `Source("sql-table",
-"claims.dbo.Complaint")` for a plain one; a source with hygiene of its own
-declares its own class with the same two attributes, which is what
-`SharePointSource(site, list_id)` in `tools.integrations.sharepoint_rest` is
-(keyed on the list's GUID — [see below](#finding-a-lists-guid)). The key is
-never a display name: keying on something that can be renamed forks the
-checkpoint the moment somebody renames it, with the new key looking like a
-first load.
+**A source is named by a stable string key.** A source with hygiene of its own
+builds its own — `SharePointSource(site, list_id).key`, keyed on the list's
+GUID ([see below](#finding-a-lists-guid)) — and one without simply passes a
+plain string, such as `"claims.dbo.Complaint"` for a table. The key is never a
+display name: keying on something that can be renamed forks the checkpoint the
+moment somebody renames it, with the new key looking like a first load.
 
-**A position is what the source is measured in.** Today only `Instant`, a UTC
-moment, which is what a `Modified` or `created_at` window commits. A kind of
-position realises its own encoding and its own "may I advance to this" check,
-the way a load strategy realises its own Writer, so the store branches on
-nothing; another kind is one class plus one entry in `POSITION_KINDS`, added the
-day a source needs it.
-
-`position(source)` is where the last successful run got to, or `None` if no run
-has ever committed. **A read never writes**: an unseen source brings no file
-into existence, and an absent file, an absent table and an absent row all mean
-the same thing.
+`watermark(source_key)` is where the last successful run got to, or `None` if
+no run has ever committed. **A read never writes**: an unseen source brings no
+file into existence, and an absent file, an absent table and an absent row all
+mean the same thing.
 
 The window rule, in three lines:
 
@@ -766,9 +758,9 @@ window = InstantWindow(start, end)       # None when end <= committed
 ```
 
 `instant_window(committed, *, source_now=…, overlap=…, safety_lag=…)` is pure
-and is handed the position exactly as `position()` returned it, so it can be
+and is handed the watermark exactly as `watermark()` returned it, so it can be
 called in a debugger with made-up instants to see which span a given state
-would produce. `start=None` is the **first load**: no position has been
+would produce. `start=None` is the **first load**: no watermark has been
 committed, so the run fetches everything the source holds up to `end`.
 
 The **overlap** re-reads a little of what the previous window already covered,
@@ -785,26 +777,26 @@ without the lag those rows are lost for good. Both are the caller's numbers;
 predicate the source evaluates.
 
 An **empty window is routine**: when `source_now - safety_lag` has not yet passed
-the committed position, `instant_window(...)` returns `None`. That is a run
+the committed watermark, `instant_window(...)` returns `None`. That is a run
 repeated too soon after the last commit — ordinary operation, so it is not an
 error and there is simply nothing to poll.
 
 **The commit is the last act of a successful run**, and nothing else advances a
-position: `commit(source, Instant(window.end), batch_id=…,
+watermark: `commit(source_key, window.end, batch_id=…,
 pipeline_run_id=…)` is called once the run's writes have landed — after gold,
-not after raw, because advancing the position is what vouches for the window
+not after raw, because advancing the watermark is what vouches for the window
 having been *published*. A run that fails part-way therefore re-polls the same
-window next time, and a dry run commits nothing. An *equal* position is accepted
-(not advancing is not going backwards) and refreshes the provenance columns, so
-repeating an identical commit is a no-op in effect; an *earlier* one raises,
-because a position that moved backwards would quietly re-poll covered ground and
-hide that a run had lost its place. The `batch_id` is opaque provenance handed
-in by the caller, not derived here.
+window next time, and a dry run commits nothing. An *equal* watermark is
+accepted (not advancing is not going backwards) and refreshes the provenance
+columns, so repeating an identical commit is a no-op in effect; an *earlier* one
+raises, because a watermark that moved backwards would quietly re-poll covered
+ground and hide that a run had lost its place. The `batch_id` is opaque
+provenance handed in by the caller, not derived here.
 
-**A run's time is never a source's position.** The run registry knows when this
-pipeline last succeeded, and `FreshnessRequirement` makes that easy to reach
-for; it is a fact about this box's clock, and under a failed run it and the
-position diverge. The position is the one that is right.
+**A run's time is never a source's watermark.** The run registry knows when
+this pipeline last succeeded, and `FreshnessRequirement` makes that easy to
+reach for; it is a fact about this box's clock, and under a failed run it and
+the watermark diverge. The watermark is the one that is right.
 
 The state lives at **`<base>/_checkpoints/sources.db`**, one row per source —
 beside `_runs/`, not inside it. A base directory holds four kinds of thing: the
@@ -814,12 +806,6 @@ medallion **rows** (`tools.store`), the **run metadata**
 **source control state**. They are separate because their lifecycles are:
 pruning run logs must not lose a feed's place, and re-landing silver must not
 either.
-
-A base directory that predates this store still carries
-`_checkpoints/sharepoint.db`, the SharePoint-only file it replaced. It is
-**carried over**, not abandoned: until the carry-over is recorded, a SharePoint
-list the new file lacks is read from the old one, and the first commit copies
-every old row in and records that it did. The old file is never deleted.
 
 #### Finding a list's GUID
 
@@ -843,7 +829,7 @@ import datetime as dt
 from uuid import UUID
 
 from tools.integrations.sharepoint_rest import SharePointModifiedReader, SharePointSource
-from tools.source_checkpoint import Instant, SourceCheckpointStore, instant_window
+from tools.source_checkpoint import SourceCheckpointStore, instant_window
 
 checkpoints = SourceCheckpointStore(base_dir)
 source = SharePointSource(
@@ -851,8 +837,9 @@ source = SharePointSource(
     UUID("1b6f2a3c-0000-4a1f-9c7e-5f2d8a4b1e01"),
 )
 
+committed = checkpoints.watermark(source.key)  # None: never committed
 window = instant_window(
-    checkpoints.position(source),  # None: nothing has ever been committed
+    committed,
     source_now=sharepoint_client.server_time(),
     overlap=dt.timedelta(minutes=5),
     safety_lag=dt.timedelta(minutes=2),
@@ -861,14 +848,14 @@ if window is not None:  # None: nothing new is safe to poll
     reader = SharePointModifiedReader(source.site, "Cases", COLUMNS, window)
     ...  # land the rows, publish gold, then — and only then:
     checkpoints.commit(
-        source,
-        Instant(window.end),
+        source.key,
+        window.end,
         batch_id=batch_id,
         pipeline_run_id=context.pipeline_run_id,
     )
 ```
 
-Committing is not automatic: no Reader, node, or runner advances the position
+Committing is not automatic: no Reader, node, or runner advances the watermark
 for you. Deliberately — the store cannot know whether the rows it would be
 vouching for actually landed.
 

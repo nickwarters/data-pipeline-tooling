@@ -56,10 +56,10 @@ from tests.framework_testing import (
     rows_of,
 )
 from tools.integrations.sharepoint_rest import (
-    ModifiedWindow,
     SharePointModifiedReader,
     SharePointSource,
 )
+from tools.source_checkpoint import InstantWindow
 
 # --- the lists and the clock -------------------------------------------------
 
@@ -73,12 +73,13 @@ SOURCE = SharePointSource(COMPLAINTS.site, COMPLAINTS.list_id)
 OTHER_SOURCE = SharePointSource(OTHER.site, OTHER.list_id)
 
 SERVER_NOW = dt.datetime(2026, 8, 5, 9, tzinfo=dt.timezone.utc)
-WINDOW = ModifiedWindow(start=None, end=SERVER_NOW - SAFETY_LAG)
+WINDOW = InstantWindow(start=None, end=SERVER_NOW - SAFETY_LAG)
 
 # How far a multi-run client's clock moves between polls. A successful run now
-# commits the watermark, and `window()` answers `None` when the safe upper bound
-# has not advanced past it — so a second `run()` against a *frozen* clock returns
-# before it reaches the list, and a test meaning to poll twice must let time pass.
+# commits the watermark, and `instant_window` answers `None` when the safe upper
+# bound has not advanced past it — so a second `run()` against a *frozen* clock
+# returns before it reaches the list, and a test meaning to poll twice must let
+# time pass.
 NEXT_POLL = dt.timedelta(minutes=10)
 
 # The instant gold is published as of: the candidate window end of a first poll.

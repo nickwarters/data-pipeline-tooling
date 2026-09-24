@@ -10,16 +10,16 @@ from framework.io.writers import SqliteTruncateReloadWriter
 from framework.run.builder import Pipeline
 from tools.integrations.sharepoint_rest import (
     METADATA_COLUMNS,
-    ModifiedWindow,
     SharePointFeedError,
     SharePointModifiedReader,
     StubbedSharePointListClient,
 )
 from tools.retry import RetryingReader, RetryPolicy
+from tools.source_checkpoint import InstantWindow
 
 SITE = "https://contoso.sharepoint.com/sites/case-review"
 LIST_NAME = "Cases"
-WINDOW = ModifiedWindow(
+WINDOW = InstantWindow(
     start=dt.datetime(2026, 8, 5, 8, tzinfo=dt.timezone.utc),
     end=dt.datetime(2026, 8, 5, 9, tzinfo=dt.timezone.utc),
 )
@@ -91,7 +91,7 @@ def test_first_load_omits_only_the_lower_predicate():
     # end, with the upper bound still in force.
     client = FakeListClient()
 
-    reader(client, window=ModifiedWindow(None, WINDOW.end)).read()
+    reader(client, window=InstantWindow(None, WINDOW.end)).read()
 
     assert client.calls[0]["filters"] == ["Modified lt datetime'2026-08-05T09:00:00Z'"]
 
@@ -104,7 +104,7 @@ def test_window_bounds_are_converted_to_utc_once():
 
     reader(
         client,
-        window=ModifiedWindow(
+        window=InstantWindow(
             dt.datetime(2026, 8, 5, 9, tzinfo=local),
             dt.datetime(2026, 8, 5, 10, tzinfo=local),
         ),
@@ -120,7 +120,7 @@ def test_a_naive_window_bound_is_refused():
     # A bound with no offset has no single UTC meaning; guessing one silently
     # shifts the window by the reading machine's zone.
     with pytest.raises(ValueError, match="timezone-aware"):
-        ModifiedWindow(None, dt.datetime(2026, 8, 5, 9))
+        InstantWindow(None, dt.datetime(2026, 8, 5, 9))
 
 
 def test_expand_fields_reach_the_client():

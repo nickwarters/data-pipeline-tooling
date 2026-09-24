@@ -32,7 +32,7 @@ from tests._sharepoint_cases_fixtures import (
 )
 from tests.framework_testing import RecordingRunLog, read_rows
 from tools.medallion import medallion
-from tools.source_checkpoint import Instant, SourceCheckpointStore
+from tools.source_checkpoint import SourceCheckpointStore
 from tools.store import StoreRegistry
 
 
@@ -73,8 +73,8 @@ def test_a_poll_publishes_every_gold_table_and_then_commits_the_watermark(base_d
         source["Status"],
     )
     assert case["as_of_utc"] == (SERVER_NOW - SAFETY_LAG).isoformat()
-    assert SourceCheckpointStore(base_dir).position(SOURCE) == Instant(
-        SERVER_NOW - SAFETY_LAG
+    assert (
+        SourceCheckpointStore(base_dir).watermark(SOURCE.key) == SERVER_NOW - SAFETY_LAG
     )
 
 
@@ -90,8 +90,8 @@ def test_a_quiet_first_window_commits_and_publishes_every_gold_table_empty(base_
     med = medallion(StoreRegistry(base_dir), FEED_NAME)
     assert published_gold(run_log) == set(GOLD_TABLES)
     assert all(read_rows(med.gold, table) == [] for table in GOLD_TABLES)
-    assert SourceCheckpointStore(base_dir).position(SOURCE) == Instant(
-        SERVER_NOW - SAFETY_LAG
+    assert (
+        SourceCheckpointStore(base_dir).watermark(SOURCE.key) == SERVER_NOW - SAFETY_LAG
     )
 
 

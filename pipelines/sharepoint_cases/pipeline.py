@@ -85,14 +85,17 @@ from framework.transform import (
 )
 from tools.environments import known_environments, resolve_base_dir
 from tools.integrations.sharepoint_rest import (
-    ModifiedWindow,
     SharePointFeedError,
     SharePointListClient,
     SharePointModifiedReader,
     SharePointSource,
 )
 from tools.medallion import medallion
-from tools.source_checkpoint import Instant, SourceCheckpointStore, instant_window
+from tools.source_checkpoint import (
+    InstantWindow,
+    SourceCheckpointStore,
+    instant_window,
+)
 from tools.store import StoreRegistry
 
 from .gold import publish_gold
@@ -252,7 +255,7 @@ class ListPoll:
     """
 
     case_list: CaseList
-    window: ModifiedWindow
+    window: InstantWindow
     ingestion_batch_id: str
     raw_rows: int
     silver_rows: int
@@ -850,7 +853,7 @@ def run(
     polls = []
     for case_list in case_lists:
         source = SharePointSource(case_list.site, case_list.list_id)
-        committed = checkpoints.position(source)
+        committed = checkpoints.watermark(source.key)
         window = instant_window(
             committed,
             source_now=server_now,
@@ -862,7 +865,8 @@ def run(
         # Identifies the source window resumed from, not the run: a re-drive of
         # a failed window fetches the same batch and mints the same id.
         batch_id = (
-            f"{case_list.list_id}:{committed.encode() if committed else 'first-load'}"
+            f"{case_list.list_id}:"
+            f"{committed.isoformat() if committed else 'first-load'}"
         )
 
         batch = to_raw(
@@ -914,7 +918,7 @@ def run(
 
     # Gold is rebuilt from the whole accumulated history of every list, not from
     # the batches: a Case whose latest version arrived three polls ago is still
-    # current. Every window shares an end -- ``window()`` derives it as
+    # current. Every window shares an end -- ``instant_window`` derives it as
     # ``server_now - safety_lag``, independently of the source -- so any poll's
     # end is the instant this run publishes as of.
     publish_gold(med, as_of=polls[0].window.end)
@@ -925,8 +929,8 @@ def run(
     if not context.dry_run:
         for poll in polls:
             checkpoints.commit(
-                SharePointSource(poll.case_list.site, poll.case_list.list_id),
-                Instant(poll.window.end),
+                SharePointSource(poll.case_list.site, poll.case_list.list_id).key,
+                poll.window.end,
                 batch_id=poll.ingestion_batch_id,
                 pipeline_run_id=context.pipeline_run_id,
             )
