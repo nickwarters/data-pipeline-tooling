@@ -841,6 +841,7 @@ Pipeline run failed [ValidationError]
 | Situation | Message |
 |-----------|---------|
 | Unknown pipeline path (`run`) | `no pipeline at 'pipelines/nope': cannot import 'pipelines.nope.pipeline' …` |
+| Pipeline there, but its import fails (a missing dependency, a syntax error, a top-level statement that raises) | `pipeline 'pipelines/x' exists but could not be loaded: importing 'pipelines.x.pipeline' raised ModuleNotFoundError: No module named 'openpyxl'`, then `raised at pipelines/x/pipeline.py:6, in <module>` and the source line |
 | Module without a `run` callable | `pipeline 'pipelines/x' (pipelines.x.pipeline) defines no run(context) callable` |
 | Stale upstream | `upstream ingest is stale: latest successful run was …` |
 | Validation failure | the `ValidationError` message from the failing check |

@@ -61,6 +61,8 @@ The expected failures are self-describing. Map the message to a cause:
 | `column '…' violates pattern …` / `outside {…}` / `has duplicate value(s)` | a **value rule** failed on real data | the offending rows (the message samples up to five values, then names up to five rows) |
 | `column '…' contains null value(s) in 2 rows: case_ref='C-2', …` | a `NonNull()` field arrived empty | the named rows in the source / upstream join |
 | `transform step '…' failed: KeyError: …` | a transformer crashed | the `raised at` line it names — the transform code, or the data it didn't expect |
+| `pipeline '…' exists but could not be loaded: …` | the pipeline module raised while being imported — a dependency not installed in this environment, a syntax error, a failing top-level statement | the `raised at` line it names; for `No module named …`, whether that package is installed where the run happens |
+| `no pipeline at '…'` | there is no `pipeline.py` at that path | the path you passed — typo, or not run from the repo root |
 | `upstream ingest is stale: …` | a declared upstream hasn't run recently enough | run the upstream, or relax the window |
 | `write to table '…' in … failed: … has no column named …` | the frame carries a column the target table was never declared with | the migration for that table ([migrations.md](migrations.md)) |
 | `source file … does not exist` / `No files match '…' in directory …` | a CSV reader's source file has not landed (or landed under another name) | the landing directory / the upstream export |
@@ -74,7 +76,7 @@ that tells you *whose problem it is* before you read the message:
 | `data` | the feed broke a declared data expectation | `ValidationError`, `CoercionError` | the **data** (source/upstream) |
 | `operational` | data and code are fine; the run conditions aren't | `FreshnessError`, `ForEachPipelineError`, `SqliteWriteError`, `MissingSourceFileError` | the **run/environment** |
 | `config` | the pipeline is mis-addressed, mis-wired, or writing to a shape nothing declares | `UnknownPipelineError`, `MissingTableError`, `MissingColumnError` | the **wiring** (or `migrations/`) |
-| `code` | a transform step's transformer crashed | `TransformError` | the **transform code** (or data it did not anticipate) |
+| `code` | a transform step's transformer crashed, or a pipeline module failed while being imported | `TransformError`, `PipelineLoadError` | the **pipeline code** (or data it did not anticipate, or a dependency missing from the environment) |
 
 **Which rows?** A row-level breach — a null in a `NonNull()` column, a value-rule
 offender, a row check, a value `SchemaCoercion` cannot cast — names the rows

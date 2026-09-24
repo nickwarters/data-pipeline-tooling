@@ -40,7 +40,10 @@ class ErrorCategory:
       or in data it did not anticipate. Raised as
       :class:`~framework.run.transform_failure.TransformError`, which names the
       step, the transformer and the author's line that raised, and chains the
-      original exception so its traceback is still there for a debugger.
+      original exception so its traceback is still there for a debugger. A
+      pipeline module that raises while being imported by path is the same
+      kind of fault, raised as
+      :class:`~framework.run.runner.PipelineLoadError`.
 
     Note the deliberate gap: a source that won't open (other than a missing CSV
     file, below) is **not** categorised here — it stays a raw exception with a

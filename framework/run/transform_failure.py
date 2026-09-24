@@ -29,19 +29,13 @@ from __future__ import annotations
 
 import functools
 import inspect
-import linecache
-import os
-import sysconfig
 import types
 from contextlib import contextmanager
 from typing import Iterator
 
 from framework._internal.describe import component_summary
+from framework._internal.source_location import clip, display_path, raised_at
 from framework.core.errors import ErrorCategory, PipelineError
-
-# Source shown for a transformer is capped; a lambda is one line, but a function
-# named here only needs its header.
-_MAX_SOURCE_CHARS = 160
 
 
 class TransformError(PipelineError):
@@ -80,9 +74,9 @@ def _wrap(step: str, transformer: object, exc: Exception) -> TransformError:
     lines.append(f"transformer: {described}")
     if source:
         lines.append(f"  {source}")
-    raised_at = _raised_at(exc)
-    if raised_at is not None:
-        where, code = raised_at
+    location = raised_at(exc)
+    if location is not None:
+        where, code = location
         lines.append(f"raised at {where}")
         if code and code != source:
             lines.append(f"  {code}")
@@ -116,7 +110,7 @@ def _describe(transformer: object) -> tuple[str, str | None]:
         return f"{owner_name}.{transformer.__func__.__name__}", None
     if isinstance(transformer, types.FunctionType):
         code = transformer.__code__
-        where = f"{_display_path(code.co_filename)}:{code.co_firstlineno}"
+        where = f"{display_path(code.co_filename)}:{code.co_firstlineno}"
         if transformer.__name__ == "<lambda>":
             return f"<lambda> at {where}", _source_line(transformer)
         return f"{transformer.__qualname__} at {where}", None
@@ -136,70 +130,4 @@ def _source_line(function: types.FunctionType) -> str | None:
     except (OSError, TypeError):
         return None
     text = " ".join(line.strip() for line in lines if line.strip())
-    return _clip(text) if text else None
-
-
-def _raised_at(exc: BaseException) -> tuple[str, str | None] | None:
-    """Where the author's code raised ``exc``: ``("path:line, in name", code)``.
-
-    The innermost frame is usually deep inside pandas, which says nothing an
-    author can act on, so this walks back out to the innermost frame outside the
-    standard library and installed packages -- the transformer's own line, or
-    the helper it called. When every frame is library code, the innermost is
-    used rather than nothing.
-    """
-    frames = []
-    tb = exc.__traceback__
-    while tb is not None:
-        frames.append(tb)
-        tb = tb.tb_next
-    if not frames:
-        return None
-    chosen = next((f for f in reversed(frames) if _is_author_code(f)), frames[-1])
-    code = chosen.tb_frame.f_code
-    filename = code.co_filename
-    lineno = chosen.tb_lineno
-    line = linecache.getline(filename, lineno).strip() or None
-    where = f"{_display_path(filename)}:{lineno}, in {code.co_name}"
-    return where, _clip(line) if line else None
-
-
-@functools.lru_cache(maxsize=1)
-def _library_roots() -> tuple[str, ...]:
-    """The standard library and installed-package directories, normalised."""
-    paths = sysconfig.get_paths()
-    roots = {paths.get(k) for k in ("stdlib", "platstdlib", "purelib", "platlib")}
-    return tuple(os.path.normcase(os.path.abspath(r)) for r in roots if r)
-
-
-def _is_author_code(tb: types.TracebackType) -> bool:
-    filename = tb.tb_frame.f_code.co_filename
-    # A compiled extension reports the path of the source it was built from
-    # (``pandas/_libs/tslibs/strptime.pyx``), which is not a file here.
-    if filename.startswith("<") or not os.path.isfile(filename):
-        return False
-    normalised = os.path.normcase(os.path.abspath(filename))
-    if normalised == os.path.normcase(os.path.abspath(__file__)):
-        return False
-    return not any(normalised.startswith(root + os.sep) for root in _library_roots())
-
-
-def _display_path(filename: str) -> str:
-    """``filename`` relative to the working directory when it sits beneath it.
-
-    ``os.path.relpath`` raises on Windows across drives, and a path climbing out
-    with ``..`` reads worse than the absolute one, so both keep the original.
-    """
-    if filename.startswith("<"):
-        return filename
-    try:
-        relative = os.path.relpath(filename)
-    except ValueError:
-        return filename
-    return filename if relative.startswith(os.pardir) else relative
-
-
-def _clip(text: str) -> str:
-    if len(text) <= _MAX_SOURCE_CHARS:
-        return text
-    return text[: _MAX_SOURCE_CHARS - 3] + "..."
+    return clip(text) if text else None

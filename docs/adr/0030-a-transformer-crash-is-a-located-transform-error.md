@@ -62,5 +62,14 @@ Pipeline run failed [TransformError, code]
 - `dry_run_pipeline` records a `PipelineError` on its report rather than raising
   it, so a dry run that reaches a crashing transformer now shows the preview up
   to the failure instead of a traceback.
+- The same treatment reaches the one other place an author's code crashes
+  before any step runs: importing a pipeline by path. `load_pipeline` used to
+  report *any* `ImportError` as `UnknownPipelineError` ("no pipeline at …"),
+  sending an operator hunting for a typo when the module was there and one of
+  *its* imports was missing. It now raises `UnknownPipelineError` only when the
+  missing module is the pipeline's own path, and `PipelineLoadError` (`code`) —
+  error plus `raised at` line — for everything else that fails at import,
+  syntax errors included. Both share the frame-locating rule in
+  `framework/_internal/source_location.py`.
 - Tests asserting a raw exception out of a transform step now assert
   `TransformError` and, where it matters, its `__cause__`.

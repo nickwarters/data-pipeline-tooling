@@ -327,6 +327,10 @@ an unnamed lambda — arrives as a `TransformError` (`code`) naming the step, th
 transformer (a lambda by its file, line and source) and the author's line that
 raised, with the original chained as `__cause__`
 ([ADR-0030](docs/adr/0030-a-transformer-crash-is-a-located-transform-error.md)).
+Likewise a pipeline module that raises while `run`/`orchestrate` import it is a
+`PipelineLoadError` (`code`) — "the pipeline is there but won't load", named with
+the error and its line — never an `UnknownPipelineError`, which means only that
+no pipeline exists at the path.
 A **Schema Breach** or uncastable value on individual rows names those rows — by
 the declared key when `enforce`/`SchemaValidator`/`SchemaCoercion` are given one
 (`case_ref='C-2'`), else by 0-based position in the dataset.

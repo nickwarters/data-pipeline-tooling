@@ -336,6 +336,32 @@ def test_run_unknown_pipeline_reports_clear_error(tmp_path):
     assert "Traceback" not in result.stderr
 
 
+def test_run_reports_a_pipeline_whose_import_fails_as_unloadable_not_unknown(
+    tmp_path,
+):
+    result = _cli("run", "clipipelines/_broken_import", "--base-dir", str(tmp_path))
+
+    assert result.returncode != 0
+    assert "no pipeline at" not in result.stderr
+    assert "[PipelineLoadError, code]" in result.stderr
+    assert "'clipipelines/_broken_import' exists but could not be loaded" in (
+        result.stderr
+    )
+    assert "No module named 'no_such_dependency_for_cli_tests'" in result.stderr
+    assert "_broken_import" in result.stderr and "pipeline.py:6" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_run_names_the_line_of_a_pipeline_whose_top_level_raises(tmp_path):
+    result = _cli("run", "clipipelines/_raises_on_import", "--base-dir", str(tmp_path))
+
+    assert result.returncode != 0
+    assert "KeyError: 'source_dir'" in result.stderr
+    assert "pipeline.py:4, in <module>" in result.stderr
+    assert 'SOURCE_DIR = SETTINGS["source_dir"]' in result.stderr
+    assert "Traceback" not in result.stderr
+
+
 def test_runs_lists_recent_runs_from_the_registry(tmp_path):
     assert (
         _cli(

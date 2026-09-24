@@ -481,7 +481,7 @@ A `Validator` states an expectation about a feed's data and **raises**
 `ValidationError` when the data breaks it. `ValidationError` is one member of the
 **`PipelineError`** family (`framework.core`) — the expected, fail-fast failures
 a run raises, alongside `CoercionError`, `FreshnessError`, `UnknownPipelineError`,
-and `ForEachPipelineError`. A run boundary catches the family with one `except`
+`PipelineLoadError`, `TransformError` and `ForEachPipelineError`. A run boundary catches the family with one `except`
 and presents it via `format_failure(exc)` — failure kind + message, no traceback;
 a genuine bug is *not* a `PipelineError` and keeps its trace. Severity stays a
 *builder* decision: an `error` attachment turns the raised `ValidationError` into

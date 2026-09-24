@@ -185,8 +185,8 @@ def _format_run(record: dict) -> str:
 def _run(args: argparse.Namespace) -> int:
     try:
         loaded = load_pipeline(args.pipeline)
-    except UnknownPipelineError as exc:
-        print(str(exc), file=sys.stderr)
+    except PipelineError as exc:
+        print(format_failure(exc), file=sys.stderr)
         return 1
     base_dir = _base_dir_or_report(args)
     if base_dir is None:
