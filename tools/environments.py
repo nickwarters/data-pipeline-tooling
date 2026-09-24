@@ -14,17 +14,12 @@ variable, when set, supplies a machine-specific path with ``~`` expanded — a U
 share on Windows or a local directory on macOS. Only relative configured defaults
 are resolved from the current working directory.
 
-The production default is intentionally visible: when ``prod`` uses its
-configured fallback, a one-line warning is written to stderr so an operator can
-distinguish it from an explicitly configured production root.
-
 To add an environment, add a row to :data:`_ENVIRONMENTS` (and document it).
 """
 
 from __future__ import annotations
 
 import os
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -80,13 +75,4 @@ def resolve_base_dir(env: str | None = None) -> Path:
     configured = os.environ.get(spec.path_var)
     if configured:
         return Path(configured).expanduser()
-    fallback = (
-        spec.fallback if spec.fallback.is_absolute() else Path.cwd() / spec.fallback
-    )
-    if name == "prod":
-        print(
-            f"warning: {spec.path_var} is unset; using configured production root "
-            f"{fallback}; set {spec.path_var} to override it",
-            file=sys.stderr,
-        )
-    return fallback
+    return spec.fallback if spec.fallback.is_absolute() else Path.cwd() / spec.fallback

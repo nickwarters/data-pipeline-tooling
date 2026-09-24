@@ -81,9 +81,9 @@ python -m cli run pipelines/ingest --base-dir /explicit/path  # an explicit path
 ```
 
 `--env` defaults to the `PIPELINE_ENV` OS variable, then to `dev`. An explicit
-`--base-dir` always wins. If `prod` uses the committed `~/pipelines_prod`
-fallback, the resolver writes a one-line warning to stderr; configure
-`PIPELINE_DATA_DIR_PROD` for a machine-specific production root. An unknown
+`--base-dir` always wins. `prod` uses the committed `~/pipelines_prod`
+fallback unless `PIPELINE_DATA_DIR_PROD` names a machine-specific production
+root. An unknown
 environment exits non-zero with an actionable message rather than a traceback.
 The same `--base-dir` / `--env` choice applies to every command (`run`,
 `orchestrate`, `runs`, `status`, `log`).
