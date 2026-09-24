@@ -126,7 +126,7 @@ appears in the log; `params` is logged but has no column.
 | `rows_excluded` | int \| null     | Cases a gate excluded on an `explain` step (Selection explainability); `null` elsewhere. |
 | `duration`  | float \| null       | Wall-clock seconds for the step/run. |
 | `errors`    | string[]            | Error messages when `status` is `error`; `[]` otherwise. |
-| `error_category` | string \| null | The triage category of an expected failure (`data` / `operational` / `config`) so an operator can route it without reading every message. `null` for a bug (a non-`PipelineError`) — the absence is the signal. |
+| `error_category` | string \| null | The triage category of an expected failure (`data` / `operational` / `config` / `code`) so an operator can route it without reading every message. `code` is a transformer crash re-raised as `TransformError`. `null` for any other bug (a non-`PipelineError`) — the absence is the signal. |
 | `warn_hits` | string[]            | Warn-severity validator messages tolerated at this step; `[]` otherwise. |
 | `committed` | bool                | `true` on a step that durably wrote an artifact (`write`, `quarantine` with rejects, `explain`, `checkpoint`) — independently committed evidence that **survives a later step's failure**. Set only on the success record; `false` everywhere else. |
 | `params`    | object              | The run's parameters, recorded only after caller-side redaction; `{}` when none. Logged for traceability but **not** stored by the registry — it has no column for them. |

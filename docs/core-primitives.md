@@ -481,7 +481,7 @@ A `Validator` states an expectation about a feed's data and **raises**
 `ValidationError` when the data breaks it. `ValidationError` is one member of the
 **`PipelineError`** family (`framework.core`) — the expected, fail-fast failures
 a run raises, alongside `CoercionError`, `FreshnessError`, `UnknownPipelineError`,
-and `ForEachPipelineError`. A run boundary catches the family with one `except`
+`PipelineLoadError`, `TransformError` and `ForEachPipelineError`. A run boundary catches the family with one `except`
 and presents it via `format_failure(exc)` — failure kind + message, no traceback;
 a genuine bug is *not* a `PipelineError` and keeps its trace. Severity stays a
 *builder* decision: an `error` attachment turns the raised `ValidationError` into
@@ -1286,9 +1286,17 @@ the component's name, repeats suffixed `-2`) and `name=` overrides. With **no**
 ambient context the steps do their work and record nothing, so `read(...)` can be
 called in a scratch file with no ceremony.
 
-`enforce(schema, data, reject_writer=...)` is the coerce → quarantine → validate
-sequence in the order that makes it correct, each part still recording its own
-step. `transform` and `validate` remain primitives: a validation need not follow
+`enforce(schema, data, reject_writer=..., key=...)` is the coerce → quarantine →
+validate sequence in the order that makes it correct, each part still recording
+its own step. `key=` names the rows behind a coercion or validation breach
+([schema-enforcement.md](schema-enforcement.md#naming-the-rows-behind-a-breach)).
+
+A transformer that crashes — in `transform(...)` or the builder's
+`.transform(...)` — with anything other than a `PipelineError` is re-raised as a
+`TransformError` (category `code`): the step, the transformer (a lambda by its
+file, line and source), and the author's line that raised, with the original
+chained as `__cause__`
+([ADR-0030](adr/0030-a-transformer-crash-is-a-located-transform-error.md)). `transform` and `validate` remain primitives: a validation need not follow
 a coercion.
 
 **`transform` takes as many datasets as the builder's node took input nodes**,

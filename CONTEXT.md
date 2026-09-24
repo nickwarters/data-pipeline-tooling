@@ -318,9 +318,28 @@ _Here_: every expected failure subclasses `PipelineError`, so a run boundary
 `except` and presents it via `format_failure` — kind + message, no stack trace;
 a bug is *not* a `PipelineError`, so it keeps its traceback and gets noticed.
 Each expected failure also carries a **triage category** (`ErrorCategory`:
-`data` / `operational` / `config`) recorded on the run log (`error_category`),
-so an operator can route a failure — fix the data, the run, or the wiring —
-without reading every message; a bug has no category (the absence is the signal).
+`data` / `operational` / `config` / `code`) recorded on the run log
+(`error_category`), so an operator can route a failure — fix the data, the run,
+the wiring, or the transform code — without reading every message; a bug has no
+category (the absence is the signal). The one kind of bug that *is* dressed up:
+a crash inside a transform step's **transformer** — the author's own code, often
+an unnamed lambda — arrives as a `TransformError` (`code`) naming the step, the
+transformer (a lambda by its file, line and source) and the author's line that
+raised, with the original chained as `__cause__`
+([ADR-0030](docs/adr/0030-a-transformer-crash-is-a-located-transform-error.md)).
+Likewise a pipeline module that raises while `run`/`orchestrate` import it is a
+`PipelineLoadError` (`code`) — "the pipeline is there but won't load", named with
+the error and its line — never an `UnknownPipelineError`, which means only that
+no pipeline exists at the path.
+A run that finds the shared run registry locked by another run is an
+**unrecorded run** when it had already finished: its data and run log are
+complete, only the registry is behind. It still fails, as a
+`RunRegistryLockedError` (`operational`) naming the `python -m cli ingest-log`
+command that records it once the lock clears. It is never re-run: the work is
+done, and re-running it would do the work twice.
+A **Schema Breach** or uncastable value on individual rows names those rows — by
+the declared key when `enforce`/`SchemaValidator`/`SchemaCoercion` are given one
+(`case_ref='C-2'`), else by 0-based position in the dataset.
 
 **Port / Adapter**:
 A **port** is the abstract contract a collaborator must satisfy (in Python, a

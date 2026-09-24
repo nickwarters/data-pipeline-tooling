@@ -530,3 +530,52 @@ def test_coerces_every_declared_type_off_a_real_csv_read(tmp_path):
         "updated": pd.Timestamp("2026-05-28 09:30:00"),
     }
     assert frame.iloc[1].isna().all()
+
+
+# --- naming the rows behind an uncastable value ------------------------------
+
+
+def _scored(scores: list) -> Dataset:
+    return Dataset.from_pandas(
+        pd.DataFrame({"case_ref": ["C-1", "C-2", "C-3"], "score": scores})
+    )
+
+
+def test_an_unparseable_number_names_its_rows_by_position_without_a_key():
+    with pytest.raises(CoercionError) as raised:
+        SchemaCoercion(ScoredCase)(_scored(["1", "two", "three"]))
+
+    assert str(raised.value).endswith("in 2 rows: positions 1, 2")
+
+
+def test_an_unparseable_number_names_its_rows_by_the_declared_key():
+    with pytest.raises(CoercionError) as raised:
+        SchemaCoercion(ScoredCase, key="case_ref")(_scored(["1", "two", "3"]))
+
+    message = str(raised.value)
+    assert "'two'" in message
+    assert message.endswith("in 1 row: case_ref='C-2'")
+
+
+def test_an_unparseable_date_names_every_offending_row_not_only_the_first():
+    frame = pd.DataFrame(
+        {
+            "case_ref": ["C-1", "C-2", "C-3"],
+            "opened": ["2026-01-01", "soon", "later"],
+            "active": ["true", "true", "true"],
+        }
+    )
+    with pytest.raises(CoercionError) as raised:
+        SchemaCoercion(DatedCase, key="case_ref")(Dataset.from_pandas(frame))
+
+    message = str(raised.value)
+    assert "'later', 'soon'" in message
+    assert message.endswith("in 2 rows: case_ref='C-2', case_ref='C-3'")
+
+
+def test_an_unrecognised_boolean_names_its_row():
+    frame = pd.DataFrame({"case_ref": ["C-1", "C-2"], "active": ["Y", "maybe"]})
+    with pytest.raises(CoercionError) as raised:
+        SchemaCoercion(FlaggedCase, key="case_ref")(Dataset.from_pandas(frame))
+
+    assert str(raised.value).endswith("in 1 row: case_ref='C-2'")

@@ -104,3 +104,14 @@ def test_format_failure_indents_a_multi_line_message():
 
     assert "  line one" in rendered
     assert "  line two" in rendered
+
+
+def test_format_failure_shows_notes_after_the_message():
+    error = PipelineError("the run failed")
+    error.add_note("record it with:\n  python -m cli ingest-log cases")
+
+    assert format_failure(error).splitlines()[1:] == [
+        "  the run failed",
+        "  record it with:",
+        "    python -m cli ingest-log cases",
+    ]

@@ -478,3 +478,50 @@ class ConflictingNullabilityCase:
 def test_schema_validator_rejects_conflicting_nullability_markers_early():
     with pytest.raises(ValueError, match="conflicting nullability.*case_ref"):
         SchemaValidator(ConflictingNullabilityCase)
+
+
+# --- naming the rows behind a breach -----------------------------------------
+
+
+@dataclass
+class KeyedCase:
+    case_ref: Annotated[str, NonNull()]
+    amount: Annotated[int, NonNull(), Range(minimum=0)]
+
+
+def _keyed_frame() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "case_ref": pd.Series(["C-1", "C-2", "C-3", "C-4"], dtype="string"),
+            "amount": pd.Series([5, pd.NA, -1, pd.NA], dtype="Int64"),
+        }
+    )
+
+
+def test_a_null_breach_names_its_rows_by_position_when_no_key_is_given():
+    with pytest.raises(ValidationError) as raised:
+        SchemaValidator(KeyedCase).validate(Dataset.from_pandas(_keyed_frame()))
+
+    assert "column 'amount' contains null value(s) in 2 rows: positions 1, 3" in str(
+        raised.value
+    )
+
+
+def test_a_null_breach_names_its_rows_by_the_declared_key():
+    validator = SchemaValidator(KeyedCase, key="case_ref")
+    with pytest.raises(ValidationError) as raised:
+        validator.validate(Dataset.from_pandas(_keyed_frame()))
+
+    assert (
+        "column 'amount' contains null value(s) in 2 rows: "
+        "case_ref='C-2', case_ref='C-4'"
+    ) in str(raised.value)
+
+
+def test_a_value_rule_breach_names_its_rows_alongside_the_sampled_values():
+    validator = SchemaValidator(KeyedCase, key=["case_ref"])
+    with pytest.raises(ValidationError) as raised:
+        validator.validate(Dataset.from_pandas(_keyed_frame()))
+
+    message = str(raised.value)
+    assert re.search(r"column 'amount' .*-1.* in 1 row: case_ref='C-3'", message)

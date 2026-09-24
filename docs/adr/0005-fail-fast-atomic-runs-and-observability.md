@@ -86,7 +86,10 @@ stated once rather than re-derived per Writer.
   double-recorded runs already in a `_registry/runs.db` — nothing is migrated.
 - Each expected failure carries a triage category (`data` / `operational` /
   `config`) on the run log so an operator can route a failure without reading
-  every message; a bug carries none, and keeps its traceback.
+  every message; a bug carries none, and keeps its traceback. (Amended by
+  [ADR-0030](0030-a-transformer-crash-is-a-located-transform-error.md): a crash
+  inside a transform step's transformer is re-raised as a located
+  `TransformError`, category `code`, with the original chained.)
 - Re-driving stays idempotent per artifact: each writer owns its own load strategy
   and idempotency key, so there is nothing to "unpublish" before a
   re-drive.

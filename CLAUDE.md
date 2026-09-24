@@ -49,8 +49,8 @@ toolchain, a domain language, or a release. Two rules follow:
   run; its `freshness` module holds the **one** upstream-freshness rule, which
   the runner's `FreshnessGuard` wraps and `tools.orchestration`'s plan preview
   reads); plus the private
-  `framework/_internal` (`connection`, `describe`, `identity`, `locations`, `schema`,
-  `schema_control`: cross-cutting
+  `framework/_internal` (`connection`, `describe`, `identity`, `locations`,
+  `row_locator`, `schema`, `schema_control`, `source_location`: cross-cutting
   helpers with no public name)). The `python -m cli` entry point (`scaffold`
   plus the operator commands; see below) lives in the top-level `cli/` package,
   and the cross-cutting `retry` / `calendar` / `medallion` /
@@ -185,7 +185,7 @@ python3 -m venv .venv
 .venv/bin/python -m cli scaffold orders            # scaffold a feed -> pipelines/orders/ + tests/pipelines/test_orders.py
 .venv/bin/python -m cli scaffold orders --from-feed-file sample.csv  # seed schema/sample/test from a real CSV header
 .venv/bin/python -m cli scaffold --case-type claims # scaffold a Case Type ingest feed (source->raw->silver, identity declared)
-.venv/bin/python -m cli run pipelines/ingest --base-dir /tmp/demo  # operator CLI: run/orchestrate/migrate/status/runs/log (see docs/operator-cli.md)
+.venv/bin/python -m cli run pipelines/ingest --base-dir /tmp/demo  # operator CLI: run/orchestrate/migrate/status/runs/log/ingest-log (see docs/operator-cli.md)
 .venv/bin/python -m cli migrate --base-dir /tmp/demo --check       # report databases behind their migrations (exit 1 if any)
 .venv/bin/pre-commit run --all-files             # lint + format the whole tree on demand
 
@@ -236,7 +236,10 @@ Run pipelines as **modules from the repo root** (`python -m pipelines.<name>`)
 so the import-only `framework` package resolves on `sys.path`. The framework
 itself is also runnable — `python -m cli <command>` (entry point in the
 top-level `cli/`) is the single surface for authoring (`scaffold`) and operating
-(`run`/`orchestrate`/`migrate`/`status`/`runs`/`log`) pipelines. `run` addresses a pipeline
+(`run`/`orchestrate`/`migrate`/`status`/`runs`/`log`/`ingest-log`) pipelines. A
+run that finds the shared run registry locked by another run still fails, but
+with `RunRegistryLockedError` naming the `ingest-log` command that records it
+once the lock clears (the run log is already complete). `run` addresses a pipeline
 by **its location on disk** — `python -m cli run pipelines/<name>` imports
 `pipelines.<name>.pipeline` and executes its `run(context)` callable (reading an
 optional `UPSTREAMS` freshness tuple), so the dependency stays one-way and the
