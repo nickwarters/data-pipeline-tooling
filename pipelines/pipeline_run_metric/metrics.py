@@ -18,12 +18,13 @@ the same registry contents produces the same tables.
 from __future__ import annotations
 
 import json
-from typing import get_type_hints
+from dataclasses import fields
 
 import pandas as pd
 
 from framework.core import Dataset
-from tools.observability.timestamps import local_date
+from framework.transform import ratios, shaped, summarise, total
+from tools.observability.timestamps import instants, local_date_texts
 
 from .schema import PipelineRunSummary, StepDurationTrendDaily, StepRowFlow
 
@@ -81,7 +82,7 @@ def _prepared(records: Dataset) -> pd.DataFrame:
     address for every row (derived from pipeline + step where the record
     predates the column, as the registry's own backfill does)."""
     frame = records.to_pandas().copy()
-    frame["_at"] = pd.to_datetime(frame["timestamp"], utc=True, format="ISO8601")
+    frame["_at"] = instants(frame["timestamp"])
     frame["_is_summary"] = frame["step"].eq(RUN_SUMMARY_STEP)
 
     pipeline = frame["pipeline"].astype("string")
@@ -91,38 +92,8 @@ def _prepared(records: Dataset) -> pd.DataFrame:
     frame["step_address"] = address.mask(address.isna() | address.eq(""), derived)
 
     run_start = frame.groupby("pipeline_run_id")["_at"].transform("min")
-    frame["run_date"] = run_start.map(lambda at: local_date(at).isoformat())
+    frame["run_date"] = local_date_texts(run_start)
     return frame
-
-
-# What each declared type is held as while the table is being built.
-PANDAS_DTYPES = {str: "string", int: "int64", float: "float64", bool: "bool"}
-
-
-def _columns(table: type) -> dict[str, str]:
-    """The columns ``table`` declares, in order, as the dtypes they land as.
-
-    The dataclass in ``schema`` is the one statement of a table's shape; these
-    reductions read it off there rather than restating it beside each one.
-    """
-    return {
-        name: PANDAS_DTYPES[declared]
-        for name, declared in get_type_hints(table).items()
-    }
-
-
-def _typed(frame: pd.DataFrame, table: type, *, as_of: str) -> Dataset:
-    """Stamp the frame and land it as the columns and types ``table`` declares.
-
-    Typing every column explicitly is what makes an empty result still carry
-    the shape the table's ``SchemaValidator`` gates.
-    """
-    columns = _columns(table)
-    frame = frame.copy()
-    frame[AS_OF_COLUMN] = as_of
-    for column, dtype in columns.items():
-        frame[column] = frame[column].astype(dtype)
-    return Dataset.from_pandas(frame[list(columns)].reset_index(drop=True))
 
 
 def _warn_count(value: object) -> int:
@@ -191,14 +162,14 @@ def run_summary(records: Dataset, *, as_of: str) -> Dataset:
         )
 
     summarised = pd.DataFrame(
-        rows, columns=list(_columns(PipelineRunSummary))
+        rows, columns=[field.name for field in fields(PipelineRunSummary)]
     ).sort_values(["started_at", RUN_ID_COLUMN], kind="stable")
     # A run with no logical run id is its own attempt series. The rows are in
     # start order, so a key's last row is its latest attempt.
     attempt_key = summarised["logical_run_id"].fillna(summarised[RUN_ID_COLUMN])
     summarised["attempt_number"] = attempt_key.groupby(attempt_key).cumcount() + 1
     summarised["is_latest_attempt"] = ~attempt_key.duplicated(keep="last")
-    return _typed(summarised, PipelineRunSummary, as_of=as_of)
+    return shaped(summarised, PipelineRunSummary, stamp={AS_OF_COLUMN: as_of})
 
 
 # The trend's measures, rounded to the same place before they are published.
@@ -227,15 +198,31 @@ def step_duration_trend(
     steps = frame.loc[~frame["_is_summary"] & frame["duration"].notna()].copy()
     steps["duration"] = pd.to_numeric(steps["duration"])
 
-    daily = (
-        steps.groupby(["pipeline", "step_address", "run_date"], sort=True)["duration"]
-        .agg(
-            execution_count="size",
-            duration_p50=lambda durations: durations.quantile(0.5),
-            duration_p95=lambda durations: durations.quantile(0.95),
-            duration_max="max",
-        )
-        .reset_index()
+    # One row per step-day: its execution count and its duration statistics.
+    # ``summarise`` also yields a ``duration_mean`` the table does not declare;
+    # the ``columns`` list keeps only the three it does.
+    daily = pd.DataFrame(
+        [
+            {
+                "pipeline": pipeline,
+                "step_address": step_address,
+                "run_date": run_date,
+                "execution_count": len(durations),
+                **summarise(durations, "duration", quantiles=(0.5, 0.95), places=6),
+            }
+            for (pipeline, step_address, run_date), durations in steps.groupby(
+                ["pipeline", "step_address", "run_date"], sort=True
+            )["duration"]
+        ],
+        columns=[
+            "pipeline",
+            "step_address",
+            "run_date",
+            "execution_count",
+            "duration_p50",
+            "duration_p95",
+            "duration_max",
+        ],
     )
     per_step = daily.groupby(["pipeline", "step_address"], sort=False)["duration_p50"]
     daily["trailing_p50_median"] = per_step.transform(
@@ -243,19 +230,14 @@ def step_duration_trend(
     )
     baseline = daily["trailing_p50_median"]
     daily["delta_seconds"] = daily["duration_p50"] - baseline
-    daily["delta_ratio"] = daily["delta_seconds"] / baseline.where(baseline > 0)
+    daily["delta_ratio"] = ratios(daily["delta_seconds"], baseline, places=6)
     for column in TREND_MEASURES:
         daily[column] = daily[column].round(6)
 
-    return _typed(daily, StepDurationTrendDaily, as_of=as_of)
+    return shaped(daily, StepDurationTrendDaily, stamp={AS_OF_COLUMN: as_of})
 
 
 COUNT_COLUMNS = ("rows_in", "rows_out", "rows_quarantined", "rows_excluded")
-
-
-def _sum(counts: pd.Series) -> float:
-    """Sum that stays NULL when no execution reported the count at all."""
-    return counts.sum(min_count=1)
 
 
 def step_row_flow(records: Dataset, *, as_of: str) -> Dataset:
@@ -274,16 +256,17 @@ def step_row_flow(records: Dataset, *, as_of: str) -> Dataset:
         )
         .agg(
             execution_count=("step", "size"),
-            rows_in=("rows_in", _sum),
-            rows_out=("rows_out", _sum),
-            rows_quarantined=("rows_quarantined", _sum),
-            rows_excluded=("rows_excluded", _sum),
+            rows_in=("rows_in", total),
+            rows_out=("rows_out", total),
+            rows_quarantined=("rows_quarantined", total),
+            rows_excluded=("rows_excluded", total),
         )
         .reset_index()
         .rename(columns={"pipeline_run_id": RUN_ID_COLUMN})
     )
-    rows_in = flow["rows_in"].where(flow["rows_in"] > 0)
-    flow["out_ratio"] = (flow["rows_out"] / rows_in).round(6)
-    flow["quarantine_ratio"] = (flow["rows_quarantined"] / rows_in).round(6)
+    flow["out_ratio"] = ratios(flow["rows_out"], flow["rows_in"], places=6)
+    flow["quarantine_ratio"] = ratios(
+        flow["rows_quarantined"], flow["rows_in"], places=6
+    )
 
-    return _typed(flow, StepRowFlow, as_of=as_of)
+    return shaped(flow, StepRowFlow, stamp={AS_OF_COLUMN: as_of})

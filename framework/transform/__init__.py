@@ -14,7 +14,12 @@ and the bounded-subset
 and ``SchemaCoercion`` — the *coerce* half of the schema adapter, which casts
 each declared column the validator's dtype check would not already accept
 (a reshape, not a check) — plus ``SchemaValueRulePartitioner`` for quarantine
-routing.
+routing, and the aggregate helpers a gold reduction calls around its
+group-by: ``summarise`` / ``statistic`` (a mean, percentiles and maximum,
+NULL where there was nothing to take), ``ratio`` / ``ratios`` / ``total``
+(guarded division and a null-preserving sum), ``fill_dimensions`` /
+``count_by`` (fill a NULL dimension before grouping; count by grain), and
+``shaped`` (land the rows in exactly the shape the schema dataclass declares).
 
 The schema *check* (``SchemaValidator``) and the declared-schema value rules
 (``ValueRule`` / ``Nullable`` / ``Pattern`` / ...) live on
@@ -31,6 +36,16 @@ public contract, the submodule paths are not.
 """
 
 from framework.core.protocols import Processor
+from framework.transform.aggregate import (
+    count_by,
+    fill_dimensions,
+    ratio,
+    ratios,
+    shaped,
+    statistic,
+    summarise,
+    total,
+)
 from framework.transform.coercion import SchemaCoercion
 from framework.transform.json_shaping import (
     ExplodeJsonList,
@@ -94,4 +109,12 @@ __all__ = [
     "JsonShapeError",
     "SchemaCoercion",
     "SchemaValueRulePartitioner",
+    "statistic",
+    "summarise",
+    "ratio",
+    "ratios",
+    "total",
+    "fill_dimensions",
+    "count_by",
+    "shaped",
 ]

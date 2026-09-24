@@ -31,9 +31,17 @@ pinned without touching the machine's clock.
 from __future__ import annotations
 
 import datetime as dt
+from typing import Literal
+
+import pandas as pd
 
 __all__ = [
+    "elapsed",
+    "instants",
     "local_date",
+    "local_date_texts",
+    "local_dates",
+    "local_months",
     "local_now",
     "local_timezone",
     "parse_timestamp",
@@ -102,3 +110,75 @@ def start_of_local_day(day: dt.date) -> str:
         else naive_midnight.astimezone()
     )
     return local_midnight.astimezone(dt.timezone.utc).isoformat()
+
+
+# --- whole columns of instants ----------------------------------------------
+#
+# A gold reduction works over a column of stored instants, not one value, and
+# every one of them buckets those instants by *local* calendar date or month.
+# The rule is the one stated at the top of this module; these apply it to a
+# ``pandas`` Series so no reduction spells its own conversion.
+
+SECONDS_PER = {"seconds": 1.0, "hours": 3_600.0, "days": 86_400.0}
+
+Unit = Literal["seconds", "hours", "days"]
+
+
+def instants(values) -> pd.Series:
+    """Stored ISO-8601 text (or datetimes) as UTC instants, a whole column at once.
+
+    ``format="ISO8601"`` rather than inference, so a batch mixing two spellings
+    of the same instant (``...Z`` beside ``...+00:00``) parses whole. A value
+    that does not parse at all becomes ``NaT``: the measure it feeds drops that
+    row rather than the run failing on one bad stamp -- a reporting reduction
+    summarises what it can read, whereas the silver boundary's
+    ``SchemaCoercion`` fails loudly on the same input, deliberately.
+    """
+    return pd.to_datetime(values, utc=True, errors="coerce", format="ISO8601")
+
+
+def local_dates(values) -> pd.Series:
+    """The local calendar date of each instant; ``None`` where there is none.
+
+    Per instant rather than one vectorised ``tz_convert``: which zone is local
+    is the :func:`local_timezone` seam and it resolves per instant, which is
+    what lets a column spanning a summer-time change file each row under the
+    day it actually happened on.
+    """
+    parsed = instants(values)
+    return _objects([None if pd.isna(v) else local_date(v) for v in parsed], parsed)
+
+
+def local_date_texts(values) -> pd.Series:
+    """The local calendar date of each instant as ``YYYY-MM-DD`` text."""
+    days = local_dates(values)
+    return _objects([None if d is None else d.isoformat() for d in days], days)
+
+
+def local_months(values) -> pd.Series:
+    """The local calendar month of each instant as ``YYYY-MM`` text."""
+    days = local_dates(values)
+    return _objects([None if d is None else d.strftime("%Y-%m") for d in days], days)
+
+
+def _objects(items: list, like: pd.Series) -> pd.Series:
+    """``items`` as an ``object`` column on ``like``'s index, so a ``None`` stays
+    ``None`` rather than being inferred into ``NaN`` or ``NaT``."""
+    return pd.Series(items, index=like.index, dtype="object")
+
+
+def elapsed(start, end, *, unit: Unit = "days"):
+    """Time from ``start`` to ``end`` in ``unit``, never negative.
+
+    Works on two instants or two whole columns of them. Missing on either side
+    is missing out (``NaN``), so a measure over the result simply has one
+    fewer value. Clamped at zero: an end before its start is a stamp written
+    out of order, and a negative duration pulling a mean down is a worse lie
+    than a zero.
+    """
+    delta = end - start
+    if isinstance(delta, pd.Series):
+        return (delta.dt.total_seconds() / SECONDS_PER[unit]).clip(lower=0.0)
+    if pd.isna(delta):
+        return float("nan")
+    return max(delta.total_seconds() / SECONDS_PER[unit], 0.0)

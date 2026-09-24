@@ -13,11 +13,17 @@ and macOS.
 
 import datetime as dt
 
+import pandas as pd
 import pytest
 
 from tools.observability import timestamps
 from tools.observability.timestamps import (
+    elapsed,
+    instants,
     local_date,
+    local_date_texts,
+    local_dates,
+    local_months,
     local_now,
     parse_timestamp,
     start_of_local_day,
@@ -85,3 +91,58 @@ def test_a_bound_sorts_below_any_stamp_within_that_local_day(uk_summer):
     next_bound = start_of_local_day(dt.date(2026, 7, 29))
     just_after_midnight = "2026-07-27T23:00:00.000001+00:00"
     assert bound <= just_after_midnight < next_bound
+
+
+# --- whole columns of instants ----------------------------------------------
+
+
+def test_instants_parse_a_column_whole_and_null_what_does_not_parse():
+    parsed = instants(
+        pd.Series(
+            ["2026-08-09T23:30:00+00:00", "2026-08-09T23:30:00Z", "not a stamp", None]
+        )
+    )
+    assert str(parsed.dt.tz) == "UTC"
+    assert parsed.iloc[0] == parsed.iloc[1]
+    assert parsed.iloc[2:].isna().all()
+
+
+def test_instants_parse_one_value_too():
+    assert instants("2026-08-09T23:30:00Z") == pd.Timestamp(
+        "2026-08-09T23:30:00", tz="UTC"
+    )
+    assert pd.isna(instants(None))
+
+
+def test_local_dates_file_a_late_evening_utc_stamp_under_the_next_local_day(uk_summer):
+    days = local_dates(
+        pd.Series(["2026-08-09T23:30:00+00:00", "2026-08-09T12:00:00+00:00", None])
+    )
+    assert days.tolist() == [dt.date(2026, 8, 10), dt.date(2026, 8, 9), None]
+
+
+def test_local_date_texts_and_months_are_iso_text_or_none(uk_summer):
+    stamps = pd.Series(["2026-08-31T23:30:00+00:00", None])
+    assert local_date_texts(stamps).tolist() == ["2026-09-01", None]
+    assert local_months(stamps).tolist() == ["2026-09", None]
+
+
+def test_elapsed_over_two_columns_is_in_the_unit_asked_for_and_never_negative():
+    start = instants(pd.Series(["2026-08-09T00:00:00Z", "2026-08-09T12:00:00Z", None]))
+    end = instants(
+        pd.Series(
+            ["2026-08-10T12:00:00Z", "2026-08-09T00:00:00Z", "2026-08-09T00:00:00Z"]
+        )
+    )
+    assert elapsed(start, end).tolist()[:2] == [1.5, 0.0]
+    assert pd.isna(elapsed(start, end).iloc[2])
+    assert elapsed(start, end, unit="hours").iloc[0] == 36.0
+    assert elapsed(start, end, unit="seconds").iloc[0] == 36.0 * 3600
+
+
+def test_elapsed_between_two_instants_matches_the_column_form():
+    start = pd.Timestamp("2026-08-09T00:00:00Z")
+    end = pd.Timestamp("2026-08-10T12:00:00Z")
+    assert elapsed(start, end) == 1.5
+    assert elapsed(end, start) == 0.0
+    assert pd.isna(elapsed(pd.NaT, end))
