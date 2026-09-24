@@ -1,0 +1,699 @@
+```python
+"""Scaffold a new feed from a template.
+
+Renders the runnable template under ``cli/scaffold_templates/feed/``
+into a new feed: the feed *code* (schema, an ingest pipeline that refines source
+-> raw -> silver -> gold via the public facades, and a sample fixture) as a
+subpackage ``pipelines/<feed>/``, and its *test* (given source rows -> expected
+landed rows) under ``tests/pipelines/`` so it sits with the rest of the suite,
+mirroring the source layout. The template is the source of truth; this module
+only substitutes the feed name (and its PascalCase class form) into a fresh copy.
+
+Pass ``--from-feed-file PATH`` to seed the scaffold from a real sample CSV: the
+header becomes the schema's fields (names canonicalised to identifiers, dtypes
+inferred from the first rows), the file's contents replace the bundled sample,
+and the test's sample rows are taken from it. When any header name isn't already
+a clean identifier (spaces, punctuation, capitals), the *source* column names are
+emitted as a ``RAW_FEED_COLUMNS`` constant and ``to_raw``'s ColumnValidator gates
+on those raw names rather than the schema's canonical fields; ``to_silver``'s
+``RENAME`` map is populated from each source name to its canonical field -- raw
+stays faithful to the source, silver renames to the schema's canonical shape.
+
+Run from the repository root so the import-only ``framework`` package resolves::
+
+    python -m cli scaffold orders
+    python -m cli scaffold orders --force    # overwrite if it exists
+    python -m cli scaffold orders --from-feed-file sample.csv
+
+The generated feed runs as a module from the repo root::
+
+    python -m pipelines.orders.pipeline /data
+    python -m pytest tests/pipelines/test_orders.py
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import keyword
+import re
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+from framework.core.protocols import RUN_PROVENANCE_COLUMN
+from framework.io.sql import quote_identifier
+
+# The placeholder tokens in the template: substituted in file contents and paths.
+_SLUG_TOKEN = "myfeed"
+_CLASS_TOKEN = "Myfeed"
+
+# A scaffold seeded from a feed file declares one schema field per source column.
+# Past this many the generated schema stops being a useful starting point, so the
+# extra columns are dropped (with a loud warning and a note in schema.py) rather
+# than rendering an unwieldy dataclass.
+_MAX_FEED_COLUMNS = 40
+
+# How many data rows to read from a feed file: enough to infer dtypes, of which
+# the first couple seed the generated test's sample rows.
+_FEED_SAMPLE_ROWS = 50
+_TEST_SAMPLE_ROWS = 2
+
+# The sentinel column the feed template's structural-rejection tests feed to trip
+# the validators. When seeding from a feed file these blocks are reseeded with the
+# real sample rows minus one required column -- still structurally invalid, so the
+# negative tests keep raising, but shaped like the actual feed. Kept in sync with
+# the feed template.
+_INVALID_ROW_SENTINEL = "invalid_col"
+
+_TEMPLATE_DIR_CASE_TYPE = Path(__file__).parent / "scaffold_templates" / "case_type"
+_TEMPLATE_DIR = Path(__file__).parent / "scaffold_templates" / "feed"
+
+# scaffold.py lives at ``cli/scaffold.py``, so the repo root under
+# which the rendered ``pipelines/`` and ``tests/`` sit is two parents up.
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _pascal(feed: str) -> str:
+    """The PascalCase form of a (possibly underscore-separated) feed slug."""
+    return "".join(part.capitalize() for part in feed.split("_"))
+
+
+def _validate_feed_name(feed: str) -> None:
+    if not feed.isidentifier() or keyword.iskeyword(feed):
+        raise ValueError(
+            f"feed name {feed!r} is not a valid Python identifier; it becomes a "
+            "package name, so use letters, digits, and underscores (e.g. orders)"
+        )
+    if feed != feed.lower():
+        raise ValueError(
+            f"feed name {feed!r} must be lowercase (package names are lowercase, "
+            "e.g. orders or review_outcomes)"
+        )
+
+
+def _substitute(text: str, feed: str) -> str:
+    """Replace the template's placeholder tokens with the real feed names.
+
+    The class token is replaced first; the slug is lowercase and never a
+    substring of the PascalCase result, so the two passes are independent.
+    """
+    return text.replace(_CLASS_TOKEN, _pascal(feed)).replace(_SLUG_TOKEN, feed)
+
+
+def _is_test_file(relative: Path) -> bool:
+    """Whether a template file is the feed's test (lands under ``tests/``)."""
+    return relative.name.startswith("test_") and relative.suffix == ".py"
+
+
+def _absolutise_imports(text: str, feed: str) -> str:
+    """Rewrite the test's intra-package imports from relative to absolute.
+
+    In the template the test sits *inside* the feed package, so it imports the
+    pipeline and schema relatively (``from .pipeline import ...``). The rendered
+    test lives under ``tests/pipelines/`` instead, outside the package, so those
+    must become absolute (``from pipelines.<feed>.pipeline import ...``).
+    """
+    return re.sub(r"(?m)^from \.", f"from pipelines.{feed}.", text)
+
+
+@dataclass
+class _FeedSpec:
+    """The shape derived from a ``--from-feed-file`` sample CSV.
+
+    ``columns`` are the kept source header names verbatim; ``names``/``inferred``
+    are the canonical identifier and inferred dtype for each (positionally
+    aligned). ``needs_raw`` is set when the canonical names diverge from the
+    source names (spaces, punctuation, capitals, or de-duplicated collisions), in
+    which case the validator must gate on the raw source names, not the schema's
+    fields. ``raw_text`` is the file's contents (for the bundled sample), and
+    ``sample_cells`` are the first data rows (for the generated test).
+
+    ``every_column``/``every_inferred`` are the header and its inferred dtypes
+    **uncapped**, including the columns past ``_MAX_FEED_COLUMNS`` the schema
+    deliberately leaves out. They exist for the raw baseline and nothing else:
+    raw is always whatever came in. ``columns``/``inferred`` are the first N of
+    them, so the two cannot disagree about a column they share.
+    """
+
+    columns: list[str]
+    names: list[str]
+    inferred: list[str]
+    every_column: list[str]
+    every_inferred: list[str]
+    needs_raw: bool
+    dropped: int
+    raw_text: str
+    sample_cells: list[list[str]]
+
+
+def _is_int(value: str) -> bool:
+    try:
+        int(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _is_float(value: str) -> bool:
+    try:
+        float(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _infer_type(values: list[str]) -> str:
+    """Infer a field dtype from a column's sample values.
+
+    A blank cell means the column is nullable. pandas can't hold a nullable
+    integer as ``int64`` -- a null promotes the column to ``float64`` on
+    read-back -- so an otherwise-integer column with any blank infers ``float``
+    to match the type the storage round-trip actually yields (otherwise the
+    declared ``int`` would fail the silver dtype gate against the float column).
+    """
+    non_blank = [v for v in values if v != ""]
+    if not non_blank:
+        return "str"
+    has_blank = len(non_blank) < len(values)
+    if all(_is_int(v) for v in non_blank):
+        return "float" if has_blank else "int"
+    if all(_is_float(v) for v in non_blank):
+        return "float"
+    return "str"
+
+
+def _canonical_identifier(name: str) -> str:
+    """Canonicalise a source column name to a valid lowercase identifier."""
+    slug = re.sub(r"[^0-9a-zA-Z]+", "_", name).strip("_").lower()
+    if not slug:
+        slug = "column"
+    if slug[0].isdigit():
+        slug = f"col_{slug}"
+    if keyword.iskeyword(slug):
+        slug = f"{slug}_"
+    return slug
+
+
+def _esc(text: str) -> str:
+    """Escape a string for embedding in a double-quoted Python literal."""
+    return text.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _literal(value: str, type_name: str) -> str:
+    """Render a cell as a Python literal of the column's inferred dtype."""
+    if value != "" and type_name == "int" and _is_int(value):
+        return str(int(value))
+    if value != "" and type_name == "float" and _is_float(value):
+        return repr(float(value))
+    return f'"{_esc(value)}"'
+
+
+def _read_feed_file(path: str | Path) -> _FeedSpec:
+    """Parse a sample CSV into the spec the renderers consume.
+
+    Reads the header and the first rows (``utf-8-sig`` so a BOM is tolerated),
+    infers a dtype per column, truncates to ``_MAX_FEED_COLUMNS`` (warning
+    loudly when it does), and canonicalises each kept header to an identifier
+    (de-duplicating collisions).
+
+    The dtypes are inferred for every column before the truncation, because the
+    raw baseline declares all of them.
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"feed file {path} does not exist")
+    raw_text = path.read_text(encoding="utf-8-sig")
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.reader(handle)
+        try:
+            header = next(reader)
+        except StopIteration:
+            raise ValueError(f"feed file {path} is empty (no header row)") from None
+        data_rows = [row for _, row in zip(range(_FEED_SAMPLE_ROWS), reader)]
+
+    every_inferred = [
+        _infer_type([row[i] if i < len(row) else "" for row in data_rows])
+        for i in range(len(header))
+    ]
+
+    kept = _MAX_FEED_COLUMNS
+    dropped = max(0, len(header) - kept)
+    columns = header[:kept]
+    if dropped:
+        print(
+            f"warning: feed file has {len(header)} columns; keeping the first "
+            f"{kept} in the generated schema, validator, test and the "
+            f"silver/gold baselines. The remaining {dropped} still land in raw "
+            "-- raw is whatever came in -- and SELECT_RAW_COLUMNS drops them at "
+            "silver. To carry one of them further, add it to the schema, to "
+            "SELECT_RAW_COLUMNS, and to a migration.",
+            file=sys.stderr,
+        )
+
+    names: list[str] = []
+    seen: dict[str, int] = {}
+    for column in columns:
+        base = _canonical_identifier(column)
+        count = seen.get(base, 0)
+        names.append(base if count == 0 else f"{base}_{count + 1}")
+        seen[base] = count + 1
+
+    return _FeedSpec(
+        columns=columns,
+        names=names,
+        inferred=every_inferred[:kept],
+        every_column=header,
+        every_inferred=every_inferred,
+        needs_raw=columns != names,
+        dropped=dropped,
+        raw_text=raw_text,
+        sample_cells=data_rows[:_TEST_SAMPLE_ROWS],
+    )
+
+
+def _render_schema(text: str, feed: str, spec: _FeedSpec) -> str:
+    """Replace the template dataclass with one field per feed-file column."""
+    cls = _pascal(feed) + "Row"
+    lines = ["@dataclass", f"class {cls}:"]
+    if spec.dropped:
+        lines.append(
+            f"    # {spec.dropped} column(s) beyond the scaffold's limit of "
+            f"{_MAX_FEED_COLUMNS} were dropped from this schema."
+        )
+    lines += [
+        f"    {name}: {type_name}" for name, type_name in zip(spec.names, spec.inferred)
+    ]
+    body = "\n".join(lines) + "\n"
+    # The dataclass is the last thing in schema.py, so replace it to EOF; the
+    # module docstring and imports above it are left intact.
+    return re.sub(r"@dataclass\nclass .*", lambda _: body, text, flags=re.S)
+
+
+def _raw_columns_literal(spec: _FeedSpec) -> str:
+    lines = ["RAW_FEED_COLUMNS = ["]
+    lines += [f'    "{_esc(column)}",' for column in spec.columns]
+    lines.append("]")
+    return "\n".join(lines) + "\n"
+
+
+def _select_columns_literal(spec: _FeedSpec) -> str:
+    """Render ``SELECT_RAW_COLUMNS``: the source columns silver keeps.
+
+    ``RENAME``'s keys plus the columns that needed no renaming — i.e. every
+    source column behind a schema field. The keys alone would be wrong whenever
+    only *some* of the source names need canonicalising, which is the common
+    case: silver would keep those and drop the rest.
+    """
+    lines = ["SELECT_RAW_COLUMNS = ["]
+    lines += [f'    "{_esc(column)}",' for column in spec.columns]
+    lines.append("]")
+    return "\n".join(lines) + "\n"
+
+
+def _rename_literal(spec: _FeedSpec) -> str:
+    """Render the ``RENAME`` map: each source column whose name isn't its
+    canonical schema field, mapped to that field. silver renames raw's faithful
+    source names to this vocabulary before coercing/validating the schema."""
+    pairs = [
+        (column, name)
+        for column, name in zip(spec.columns, spec.names)
+        if column != name
+    ]
+    lines = ["RENAME: dict[str, str] = {"]
+    lines += [f'    "{_esc(column)}": "{name}",' for column, name in pairs]
+    lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
+def _render_pipeline(text: str, feed: str, spec: _FeedSpec) -> str:
+    """Gate the raw validator on the source columns when they aren't identifiers.
+
+    Only needed when ``needs_raw``: the source names can't be schema fields, so
+    emit them as ``RAW_FEED_COLUMNS`` and gate ``to_raw`` on those. The schema
+    fields stay the silver target, and ``RENAME`` maps the faithful source names
+    to them, so the schema import is kept (silver coerces/validates against it).
+    """
+    cls = _pascal(feed) + "Row"
+    anchor = f'SAMPLE_CSV = Path(__file__).parent / "sample_data" / "{feed}.csv"\n'
+    text = text.replace(anchor, anchor + "\n" + _raw_columns_literal(spec))
+    # Gate ``to_raw`` on RAW_FEED_COLUMNS instead of the schema fields. Anchored
+    # on the assignment, not the comprehension, because SELECT_RAW_COLUMNS uses
+    # the same idiom and is replaced separately below.
+    text = text.replace(
+        f"expected = [f.name for f in fields({cls})]",
+        "expected = RAW_FEED_COLUMNS",
+    )
+    text = text.replace(
+        f"SELECT_RAW_COLUMNS = [f.name for f in fields({cls})]\n",
+        _select_columns_literal(spec),
+    )
+    text = text.replace("RENAME: dict[str, str] = {}\n", _rename_literal(spec))
+    text = text.replace("from dataclasses import fields\n", "")
+    return text
+
+
+def _source_literal(spec: _FeedSpec, *, omit_last: bool = False) -> str:
+    """Render the feed's sample rows as a ``given_rows([...])`` literal.
+
+    With ``omit_last`` the last source column is dropped from every row, so the
+    rows are missing a required column -- structurally invalid, which is what the
+    negative structural-rejection tests need to trip the validators while still
+    being shaped like the real feed.
+    """
+    keep = len(spec.columns) - 1 if omit_last else len(spec.columns)
+    lines = ["    reader = given_rows(["]
+    for cells in spec.sample_cells:
+        pairs = []
+        for i in range(keep):
+            column = spec.columns[i]
+            cell = cells[i] if i < len(cells) else ""
+            pairs.append(f'"{_esc(column)}": {_literal(cell, spec.inferred[i])}')
+        lines.append("        {" + ", ".join(pairs) + "},")
+    lines.append("    ])")
+    return "\n".join(lines) + "\n"
+
+
+def _render_test(text: str, feed: str, spec: _FeedSpec) -> str:
+    """Seed the test's sample rows from the feed file; track the validator's columns.
+
+    Every ``given_rows`` block is reseeded with the real feed columns. The
+    structural-rejection tests (identified by the ``_INVALID_ROW_SENTINEL`` the
+    template feeds them) get the rows minus their last required column, so they
+    stay structurally invalid and keep tripping the validators; the rest get the
+    full rows.
+    """
+    cls = _pascal(feed) + "Row"
+
+    def seed(match: re.Match[str]) -> str:
+        invalid = _INVALID_ROW_SENTINEL in match.group(0)
+        return _source_literal(spec, omit_last=invalid)
+
+    text = re.sub(
+        r"(?ms)^    reader = given_rows\(\s*\[.*?\]\s*\)\n",
+        seed,
+        text,
+    )
+    if spec.needs_raw:
+        # ``to_raw`` validates the source names, and raw keeps them, so the
+        # *landed* (raw) assertion checks RAW_FEED_COLUMNS. The silver assertion
+        # still checks the schema fields -- silver renames to them -- so the
+        # ``fields``/schema imports stay.
+        text = text.replace(
+            f"from pipelines.{feed}.pipeline import FEED_NAME",
+            f"from pipelines.{feed}.pipeline import FEED_NAME, RAW_FEED_COLUMNS",
+        )
+        text = text.replace(
+            f"{{f.name for f in fields({cls})}}.issubset(landed[0].keys())",
+            "set(RAW_FEED_COLUMNS).issubset(landed[0].keys())",
+        )
+    return text
+
+
+# --- migrations --------------------------------------------------------------
+#
+# A scaffolded feed is born with its baselines, so that ``python -m cli migrate``
+# has something to apply and the feed is not "deployed" the moment it lands while
+# being the one subject nothing declares (which is exactly what
+# ``tests/integration/test_migration_coverage.py`` refuses).
+
+# What the template's wiring adds to every row on top of the declared schema:
+# ``AccumulateByRun`` stamps the business run and its date, and every
+# table-backed Writer stamps the run that wrote the row.
+_STAMP_COLUMNS = ("logical_run_id", "load_date")
+# The column the quarantine partitioner adds to a rejected row, naming the rule
+# it broke.
+_REJECT_REASON_COLUMN = "failed_rule"
+
+# The template's declared schema, when no feed file reshapes it. Kept in step
+# with ``cli/scaffold_templates/*/schema.py`` by a test.
+_TEMPLATE_FIELDS = (("record_id", "str"), ("label", "str"), ("amount", "int"))
+
+_DECLARED_TO_SQLITE = {"str": "TEXT", "int": "INTEGER", "float": "REAL"}
+
+
+def _schema_fields(spec: "_FeedSpec | None") -> list[tuple[str, str]]:
+    """The feed's declared (name, declared-type) pairs, seeded or from template."""
+    if spec is None:
+        return list(_TEMPLATE_FIELDS)
+    return list(zip(spec.names, spec.inferred))
+
+
+def _raw_fields(spec: "_FeedSpec | None") -> list[tuple[str, str]]:
+    """The (name, declared-type) pairs the **raw** baseline declares.
+
+    The feed file's header, verbatim and in full — raw is always whatever came
+    in, whether or not the schema wants every column of it. That is why this is
+    the one baseline the ``_MAX_FEED_COLUMNS`` cap does not apply to.
+    """
+    if spec is None:
+        return list(_TEMPLATE_FIELDS)
+    return list(zip(spec.every_column, spec.every_inferred))
+
+
+def _columns(pairs: list[tuple[str, str]], *stamps: str) -> list[str]:
+    """``"name" TYPE`` fragments for a rendered ``CREATE TABLE``.
+
+    A brand-new feed is the one case with no database to copy a ``CREATE``
+    statement out of, so its starting baseline is rendered from what it can
+    infer. Every table it makes after this one is generated the other way, from
+    `sqlite_master` — see ``scripts/generate_baseline_migrations.py``.
+    """
+    typed = [
+        (name, _DECLARED_TO_SQLITE.get(declared, "TEXT")) for name, declared in pairs
+    ]
+    typed += [(name, "TEXT") for name in stamps]
+    return [f"{quote_identifier(name)} {sqlite_type}" for name, sqlite_type in typed]
+
+
+def _render_migration(tables: dict[str, list[str]], *, header: str) -> str:
+    """A whole baseline file: the header comment, then one CREATE per table.
+
+    No ``IF NOT EXISTS``: a baseline runs once against a database that does not
+    have the table, and a migration that quietly does nothing when the table is
+    already there would hide exactly the drift the ledger exists to catch.
+    """
+    parts = ["\n".join(f"-- {line}".rstrip() for line in header.splitlines())]
+    for table, columns in tables.items():
+        body = ",\n".join(f"    {column}" for column in columns)
+        parts.append(f"CREATE TABLE {quote_identifier(table)} (\n{body}\n);")
+    return "\n\n".join(parts) + "\n"
+
+
+def _migration_plan(
+    feed: str, spec: "_FeedSpec | None", *, case_type: bool
+) -> dict[str, str]:
+    """``<database> -> baseline SQL`` for the feed this scaffold is rendering.
+
+    Every database the rendered pipeline writes gets one, including quarantine:
+    a reject table is a table like any other, and a feed whose quarantine
+    database is under migration control but whose reject table is not declared
+    would abort the first time it rejected a row — a failure that only shows up
+    on the bad-data path, which is the worst possible time to find it.
+
+    **Raw mirrors the feed file; everything below it follows the schema.** Raw
+    takes the source's own column names and *all* of them, because raw is always
+    whatever came in. Silver, gold and quarantine take the declared fields — the
+    canonical names, capped at ``_MAX_FEED_COLUMNS`` like the dataclass they
+    describe.
+
+    On a source wider than the cap, raw keeps every source column while generated
+    ``to_silver`` projects ``SELECT_RAW_COLUMNS`` before enforcement, so extra
+    columns stop at raw.
+    """
+    declared = _schema_fields(spec)
+    stamps = (*_STAMP_COLUMNS, RUN_PROVENANCE_COLUMN)
+    plan = {
+        "raw": {feed: _columns(_raw_fields(spec), *stamps)},
+        "silver": {feed: _columns(declared, *stamps)},
+        "quarantine": {
+            feed: _columns(
+                declared, *_STAMP_COLUMNS, _REJECT_REASON_COLUMN, RUN_PROVENANCE_COLUMN
+            )
+        },
+    }
+    if not case_type:
+        # The Case Type variant stops at silver: how silver is assembled into
+        # gold is per-Case-Type and an open decision, so there is no gold table
+        # to declare yet.
+        plan["gold"] = {feed: _columns(declared, *stamps)}
+
+    header = (
+        f"Baseline for {feed}/{{database}}, generated by `python -m cli scaffold`.\n"
+        "\n"
+        "Maintained by hand from here: this file's checksum is recorded when it\n"
+        "is applied, so a shape change is a new numbered migration beside it\n"
+        "rather than an edit to this one. Edit it freely until you have applied\n"
+        "it anywhere."
+    )
+    return {
+        database: _render_migration(tables, header=header.format(database=database))
+        for database, tables in plan.items()
+    }
+
+
+def render(
+    feed: str,
+    root: str | Path | None = None,
+    *,
+    force: bool = False,
+    case_type: bool = False,
+    feed_file: str | Path | None = None,
+) -> list[Path]:
+    """Render the feed under ``root`` and return the files made.
+
+    Feed code lands in ``<root>/pipelines/<feed>/``, its test in
+    ``<root>/tests/pipelines/test_<feed>.py``, and its baseline migrations in
+    ``<root>/migrations/<feed>/<database>/``. ``root`` is the repository root;
+    it defaults to this repo (``_REPO_ROOT``), and tests pass a temporary one.
+
+    ``case_type`` selects the case-review-flavoured template that declares the
+    Case Type's ``NAMESPACE`` and ``NATURAL_KEY`` beside its row schema and
+    refines source -> raw -> silver, stopping at silver. The default renders the
+    generic source -> raw feed.
+
+    ``feed_file`` seeds the scaffold from a real sample CSV (header -> schema
+    fields, contents -> bundled sample, first rows -> the test's sample rows). It
+    isn't supported with ``case_type`` (the Case Type variant also needs a
+    natural-key decision).
+
+    Raises ``ValueError`` for an invalid feed name or an unsupported flag
+    combination, ``FileNotFoundError`` for a missing feed file, and
+    ``FileExistsError`` if any target already exists (pass ``force=True`` to
+    overwrite in place).
+    """
+    _validate_feed_name(feed)
+    if feed_file is not None and case_type:
+        raise ValueError(
+            "--from-feed-file is not supported with --case-type yet (the Case "
+            "Type variant also needs a natural-key decision)"
+        )
+    spec = _read_feed_file(feed_file) if feed_file is not None else None
+    root = Path(root) if root is not None else _REPO_ROOT
+    feed_dir = root / "pipelines" / feed
+    tests_dir = root / "tests" / "pipelines"
+    migrations_dir = root / "migrations" / feed
+    template_dir = _TEMPLATE_DIR_CASE_TYPE if case_type else _TEMPLATE_DIR
+
+    # Plan every (target, contents) pair up front so an existing-file refusal
+    # leaves the tree untouched rather than half-written.
+    plan: list[tuple[Path, str]] = []
+    for source in sorted(template_dir.rglob("*")):
+        if source.is_dir() or "__pycache__" in source.parts:
+            continue
+        relative = Path(_substitute(str(source.relative_to(template_dir)), feed))
+        text = _substitute(source.read_text(encoding="utf-8"), feed)
+        if _is_test_file(relative):
+            target = tests_dir / relative.name
+            text = _absolutise_imports(text, feed)
+            if spec is not None:
+                text = _render_test(text, feed, spec)
+        else:
+            target = feed_dir / relative
+            if spec is not None:
+                if relative.name == "schema.py":
+                    text = _render_schema(text, feed, spec)
+                elif relative.name == "pipeline.py" and spec.needs_raw:
+                    text = _render_pipeline(text, feed, spec)
+                elif relative.suffix == ".csv":
+                    text = spec.raw_text
+        plan.append((target, text))
+
+    for database, sql in _migration_plan(feed, spec, case_type=case_type).items():
+        plan.append((migrations_dir / database / "0001_create_initial_tables.sql", sql))
+
+    clashing = [target for target, _ in plan if target.exists()]
+    if clashing and not force:
+        raise FileExistsError(
+            f"{feed_dir} (or its test) already exists; pass force=True "
+            "(CLI: --force) to overwrite"
+        )
+
+    created: list[Path] = []
+    for target, text in plan:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+        created.append(target)
+    return created
+
+
+def _add_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "feed", help="the feed name (a lowercase identifier, e.g. orders)"
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="overwrite the feed's files if they already exist",
+    )
+    parser.add_argument(
+        "--case-type",
+        action="store_true",
+        help=(
+            "render the Case Type ingest variant: declares NAMESPACE and "
+            "NATURAL_KEY beside its schema and refines source -> raw -> silver, "
+            "stopping at silver (gold is yours to assemble)"
+        ),
+    )
+    parser.add_argument(
+        "--from-feed-file",
+        metavar="PATH",
+        help=(
+            "seed the scaffold from a sample CSV: header -> schema fields "
+            "(dtypes inferred), contents -> bundled sample, first rows -> the "
+            "test's sample rows (not supported with --case-type)"
+        ),
+    )
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="python -m cli scaffold",
+        description=(
+            "Scaffold a new feed (code in pipelines/, test in tests/pipelines/)."
+        ),
+    )
+    _add_arguments(parser)
+    return parser
+
+
+def register(subparsers) -> None:
+    """Add the ``scaffold`` command to the unified ``python -m cli`` CLI."""
+    parser = subparsers.add_parser(
+        "scaffold",
+        help="scaffold a new feed (code in pipelines/, test in tests/pipelines/)",
+    )
+    _add_arguments(parser)
+    parser.set_defaults(func=_command)
+
+
+def _command(args: argparse.Namespace) -> int:
+    try:
+        created = render(
+            args.feed,
+            force=args.force,
+            case_type=args.case_type,
+            feed_file=args.from_feed_file,
+        )
+    except (ValueError, FileNotFoundError, FileExistsError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    for path in created:
+        print(f"created {path}")
+    print(
+        f"\nRun it from the repo root:\n"
+        f"    python -m pipelines.{args.feed}.pipeline /data\n"
+        f"    python -m pytest tests/pipelines/test_{args.feed}.py"
+    )
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Parse scaffold-only args and run it (the ``scaffold`` command standalone)."""
+    return _command(build_parser().parse_args(argv))
+
+
+if __name__ == "__main__":  # pragma: no cover - thin CLI entry
+    raise SystemExit(main())
+
+```
