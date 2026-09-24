@@ -207,8 +207,7 @@ operator CLI does (see [operator-cli.md](operator-cli.md)): an explicit
 from `tools.environments`, defaulting to `dev` → the committed `data` root.
 `shared.constants` supplies the `data` and `~/pipelines_prod` defaults;
 `PIPELINE_DATA_DIR_DEV` and `PIPELINE_DATA_DIR_PROD` override them, expanding a
-leading `~` to the current user's home directory. Resolving `prod` without its
-override emits a warning because it is using the committed fallback.
+leading `~` to the current user's home directory.
 
 `--dry-run` is the local-development inner loop: it runs the feed end to end
 against real data but **lands nothing**, printing per-step columns, dtypes, row

@@ -60,7 +60,7 @@ def test_unknown_environment_raises_with_the_known_names(monkeypatch):
 def test_prod_falls_back_to_home_pipelines_prod(monkeypatch, capsys):
     monkeypatch.delenv("PIPELINE_DATA_DIR_PROD", raising=False)
     assert resolve_base_dir("prod") == PROD_ROOT
-    assert "PIPELINE_DATA_DIR_PROD is unset" in capsys.readouterr().err
+    assert capsys.readouterr().err == ""
 
 
 def test_configured_root_expands_user_marker(monkeypatch):

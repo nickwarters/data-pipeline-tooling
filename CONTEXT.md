@@ -387,8 +387,7 @@ its own precisely because a consumer that drains a directory reads every file in
 it as one contract, so a second shape belongs in a second directory — and
 `shared.constants` declares the dev/prod roots used by the application, and
 `tools.environments` lets `PIPELINE_DATA_DIR_DEV` and `PIPELINE_DATA_DIR_PROD`
-override them; an unset production override is reported to stderr when the
-committed production root is used.
+override them.
 This names the local outbox only: external delivery remains outside the
 framework — it is the **Forwarder**'s.
 
