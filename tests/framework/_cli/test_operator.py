@@ -808,7 +808,7 @@ def test_every_usage_example_in_the_module_docstring_parses():
     import cli.operator as operator
 
     examples = re.findall(r"^    python -m cli (.+)$", operator.__doc__, re.MULTILINE)
-    assert len(examples) == 7, examples
+    assert len(examples) == 8, examples
     parser = operator.build_parser()
     for example in examples:
         args = shlex.split(example.replace("<", "_").replace(">", "_"))

@@ -13,6 +13,10 @@ from __future__ import annotations
 
 import datetime as dt
 import importlib
+import os
+import shlex
+import sqlite3
+import subprocess
 import time
 import uuid
 from collections.abc import Mapping
@@ -44,6 +48,7 @@ __all__ = [
     "FreshnessVerdict",
     "LoadedPipeline",
     "PipelineRunner",
+    "RunRegistryLockedError",
     "Requirement",
     "RunRequirement",
     "PipelineLoadError",
@@ -73,6 +78,25 @@ class PipelineLoadError(PipelineError):
     """
 
     category = ErrorCategory.CODE
+
+
+class RunRegistryLockedError(PipelineError):
+    """The run registry was locked by another process when this run needed it.
+
+    Two pipelines touching different data can still share one run registry
+    (``_registry/runs.db``), so one can find it locked by the other. The run
+    still fails -- a run the registry does not know about is invisible to
+    ``status`` and to every downstream freshness check -- but the message says
+    what state it was left in and, when the pipeline did run, the
+    ``python -m cli ingest-log`` command (``command``) that records it once the
+    lock clears. Ingest is idempotent, so running that command twice is safe.
+    """
+
+    category = ErrorCategory.OPERATIONAL
+
+    def __init__(self, message: str, *, command: str | None = None) -> None:
+        super().__init__(message)
+        self.command = command
 
 
 class FreshnessError(PipelineError):
@@ -171,7 +195,21 @@ def run_pipeline(
     if run_log is None:
         run_log = run_store.log_for(subject or name)
     run_log_path = run_log.path
-    run_registry = run_store.catch_up()
+    label = pipeline_label(subject, name)
+    try:
+        run_registry = run_store.catch_up()
+    except sqlite3.OperationalError as exc:
+        if not _is_lock(exc):
+            raise
+        raise RunRegistryLockedError(
+            f"pipeline {label!r} did not start: the run registry "
+            f"{run_store.registry_path} is locked by another process ({exc}).\n"
+            "Nothing ran and nothing was written. Run the pipeline again once "
+            "the other run has finished."
+        ) from exc
+    ingest = ingest_log_command(
+        root, run_log_path, run_store.log_path_for(subject or name)
+    )
 
     context = RunContext(
         base_dir=root,
@@ -208,7 +246,18 @@ def run_pipeline(
                 params=_diagnostic_params(context.params),
             )
             context.mark_run_summary_recorded()
-        run_registry.ingest(run_log_path)
+        try:
+            run_registry.ingest(run_log_path)
+        except sqlite3.OperationalError as lock:
+            if not _is_lock(lock):
+                raise
+            # The pipeline's own failure is the one to report; the unrecorded
+            # run is a note on it, not a replacement for it.
+            exc.add_note(
+                _unrecorded(
+                    f"pipeline {label!r} failed", run_store, run_log_path, lock, ingest
+                )
+            )
         raise
 
     rows = len(result) if isinstance(result, Dataset) else None
@@ -225,8 +274,60 @@ def run_pipeline(
             params=_diagnostic_params(context.params),
         )
         context.mark_run_summary_recorded()
-    run_registry.ingest(run_log_path)
+    try:
+        run_registry.ingest(run_log_path)
+    except sqlite3.OperationalError as exc:
+        if not _is_lock(exc):
+            raise
+        raise RunRegistryLockedError(
+            _unrecorded(
+                f"pipeline {label!r} finished", run_store, run_log_path, exc, ingest
+            ),
+            command=ingest,
+        ) from exc
     return result
+
+
+def _is_lock(exc: sqlite3.OperationalError) -> bool:
+    """Whether SQLite refused because another connection held the database."""
+    message = str(exc).lower()
+    return "locked" in message or "busy" in message
+
+
+def _unrecorded(
+    outcome: str,
+    run_store: RunStore,
+    run_log_path: Path,
+    exc: sqlite3.OperationalError,
+    command: str,
+) -> str:
+    """Say a run happened but is not in the registry yet, and how to fix that."""
+    return (
+        f"{outcome}, but the run could not be recorded: the run registry "
+        f"{run_store.registry_path} is locked by another process ({exc}).\n"
+        f"The run log {run_log_path} is complete, so nothing was lost and "
+        "nothing needs re-running. Once the other run has finished, record "
+        "this run with:\n"
+        f"  {command}"
+    )
+
+
+def ingest_log_command(base_dir: Path, log_path: Path, default_log: Path) -> str:
+    """The ``python -m cli ingest-log`` line that records ``log_path``.
+
+    A log in its default place (``_runs/<subject>.log``) is named by its
+    subject, as ``cli log`` names it; one a caller redirected elsewhere is named
+    by path. Quoted for the shell it will be pasted into.
+    """
+    args = ["python", "-m", "cli", "ingest-log"]
+    if Path(log_path) == Path(default_log):
+        args.append(Path(log_path).stem)
+    else:
+        args += ["--log-file", os.fspath(log_path)]
+    args += ["--base-dir", os.fspath(base_dir)]
+    if os.name == "nt":
+        return subprocess.list2cmdline(args)
+    return shlex.join(args)
 
 
 @dataclass(frozen=True)

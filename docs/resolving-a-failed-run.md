@@ -67,6 +67,7 @@ The expected failures are self-describing. Map the message to a cause:
 | `write to table '…' in … failed: … has no column named …` | the frame carries a column the target table was never declared with | the migration for that table ([migrations.md](migrations.md)) |
 | `source file … does not exist` / `No files match '…' in directory …` | a CSV reader's source file has not landed (or landed under another name) | the landing directory / the upstream export |
 | `write to table '…' in … failed: database is locked` | something else held the file for longer than the busy timeout | the other writer / the schedule |
+| `pipeline '…' finished, but the run could not be recorded: the run registry … is locked` | another run held `_registry/runs.db`; the data and run log are complete | run the `python -m cli ingest-log …` command the message prints ([operator-cli.md](operator-cli.md#ingest-log--record-a-run-the-registry-could-not)) — do **not** re-run the pipeline |
 
 Each expected failure also carries a **triage category** (`framework.core.ErrorCategory`)
 that tells you *whose problem it is* before you read the message:

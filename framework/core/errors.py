@@ -99,11 +99,16 @@ def format_failure(error: BaseException) -> str:
     The output is plain ASCII so it renders identically on Windows consoles and
     macOS terminals (the framework's cross-platform constraint), and it always
     contains the exception's own message verbatim so existing message text
-    remains greppable. A multi-line message keeps its line breaks.
+    remains greppable. A multi-line message keeps its line breaks. Notes added
+    with ``add_note`` -- what a run boundary learned after the failure, such as
+    the run it could not record -- follow the message, as a traceback shows them.
     """
     kind = type(error).__name__
     category = getattr(error, "category", None)
     label = f"{kind}, {category}" if category else kind
     message = str(error) or kind
+    notes = [n for n in getattr(error, "__notes__", ()) if isinstance(n, str)]
+    if notes:
+        message = "\n".join([message, *notes])
     body = "\n".join(f"  {line}" for line in message.splitlines() or [""])
     return f"Pipeline run failed [{label}]\n{body}"

@@ -38,6 +38,7 @@ from framework.run.runner import (
     PipelineLoadError,
     PipelineRunner,
     Requirement,
+    RunRegistryLockedError,
     UnknownPipelineError,
     dry_run_pipeline,
     load_pipeline,
@@ -92,4 +93,5 @@ __all__ = [
     "FreshnessError",
     "UnknownPipelineError",
     "PipelineLoadError",
+    "RunRegistryLockedError",
 ]

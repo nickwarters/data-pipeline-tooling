@@ -15,6 +15,7 @@ Run from the repository root so the import-only ``framework`` package resolves::
     python -m cli runs --base-dir /data --table case_current
     python -m cli log cases --base-dir /data --pipeline-run-id <pipeline-run-id>
     python -m cli migrate --base-dir /data --check
+    python -m cli ingest-log cases --base-dir /data
 
 The base directory is the option ``--base-dir`` (or ``--env <name>``, which
 resolves one), never a positional argument.
@@ -48,6 +49,7 @@ import argparse
 import datetime as dt
 import importlib
 import json
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -524,6 +526,46 @@ def _log(args: argparse.Namespace) -> int:
     return 0
 
 
+def _ingest_log(args: argparse.Namespace) -> int:
+    """Record run logs in the run registry -- the fix for a run that couldn't be.
+
+    A run that found the registry locked leaves a complete run log and prints
+    this command. Ingest is incremental and idempotent, so it records exactly
+    what the registry has not seen and is safe to repeat. With no subject and no
+    ``--log-file`` every log under ``_runs/`` is caught up.
+    """
+    base_dir = _base_dir_or_report(args)
+    if base_dir is None:
+        return 1
+    store = RunStore(base_dir)
+    if args.log_file is not None:
+        paths = [Path(args.log_file)]
+    elif args.subject is not None:
+        paths = [store.log_path_for(args.subject)]
+    else:
+        paths = sorted(store.runs_dir.glob("*.log")) if store.runs_dir.exists() else []
+        if not paths:
+            print(f"no run logs under {store.runs_dir}", file=sys.stderr)
+            return 1
+    missing = [p for p in paths if not p.exists()]
+    if missing:
+        print(f"no run log at {missing[0]}", file=sys.stderr)
+        return 1
+    registry = store.registry()
+    for path in paths:
+        try:
+            added = registry.ingest(path)
+        except sqlite3.OperationalError as exc:
+            print(
+                f"could not record {path}: the run registry {store.registry_path} "
+                f"is still locked ({exc}); try again once the other run finishes",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"{path}: recorded {added} new record(s)")
+    return 0
+
+
 def _status(args: argparse.Namespace) -> int:
     base_dir = _base_dir_or_report(args)
     if base_dir is None:
@@ -700,6 +742,24 @@ def register(sub) -> None:
         help="only records whose pipeline run id starts with this",
     )
     log.set_defaults(func=_log)
+
+    ingest_log = sub.add_parser(
+        "ingest-log",
+        help="record run logs in the run registry (after a registry lock)",
+    )
+    _add_base_dir_args(ingest_log)
+    target = ingest_log.add_mutually_exclusive_group()
+    target.add_argument(
+        "subject",
+        nargs="?",
+        help="the subject whose _runs/<subject>.log to record; omit for every log",
+    )
+    target.add_argument(
+        "--log-file",
+        dest="log_file",
+        help="a run log outside _runs/ to record",
+    )
+    ingest_log.set_defaults(func=_ingest_log)
 
 
 def build_parser() -> argparse.ArgumentParser:
