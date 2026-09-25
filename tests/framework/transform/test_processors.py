@@ -8,10 +8,13 @@ not hidden inside ``process``.
 """
 
 import json
+from dataclasses import dataclass
+from datetime import date, datetime
 
 import pandas as pd
 import pytest
 
+from framework.core import SchemaValidator
 from framework.core.dataset import Dataset
 from framework.io.strategy import Refresh
 from framework.run.builder import Pipeline
@@ -19,6 +22,7 @@ from framework.transform import AntiJoinWith as PublicAntiJoinWith
 
 # Import bounded-subset processors through the pipeline author's public facade.
 from framework.transform import (
+    DeriveDate,
     IdentityError,
     Parse,
     Sample,
@@ -996,3 +1000,163 @@ def test_per_group_processors_do_not_duplicate_rows_on_a_repeated_index():
         Dataset.from_pandas(frame)
     ).to_pandas()
     assert list(kept["case_id"]) == ["c1", "c2"]
+
+
+# --- DeriveDate: a deterministic date per row, inside an inclusive window ---
+
+_AUGUST = {"start": date(2026, 8, 1), "end": date(2026, 8, 31)}
+
+
+def _dates_of(dataset, *, key="case_id", seed=0, **window):
+    window = window or _AUGUST
+    derived = DeriveDate(into="review_date", key=key, seed=seed, **window)(dataset)
+    return list(derived.to_pandas()["review_date"].dt.date)
+
+
+def _cases(*case_ids):
+    return Dataset.from_pandas(pd.DataFrame({"case_id": list(case_ids)}))
+
+
+def test_derive_date_gives_every_row_a_date_inside_the_window():
+    cases = _cases(*(f"c{i}" for i in range(50)))
+    dates = _dates_of(cases)
+    assert len(dates) == 50
+    assert all(date(2026, 8, 1) <= d <= date(2026, 8, 31) for d in dates)
+
+
+def test_derive_date_pins_the_date_each_case_is_given():
+    # These literals pin the durable encoding: a published date was drawn by
+    # it, so a change here re-dates every case already given one.
+    assert _dates_of(_cases("c1", "c2", "c3")) == [
+        date(2026, 8, 15),
+        date(2026, 8, 28),
+        date(2026, 8, 1),
+    ]
+
+
+def test_derive_date_gives_the_same_cases_the_same_dates_every_time():
+    processor = DeriveDate(into="review_date", key="case_id", **_AUGUST)
+    cases = _cases("c1", "c2", "c3")
+    first = processor(cases).to_pandas()["review_date"]
+    again = DeriveDate(into="review_date", key="case_id", **_AUGUST)(cases)
+    assert list(first) == list(processor(cases).to_pandas()["review_date"])
+    assert list(first) == list(again.to_pandas()["review_date"])
+
+
+def test_derive_date_does_not_depend_on_the_other_rows_or_their_order():
+    # A case's date is a function of the case alone, so it holds when the
+    # batch grows, shrinks, or arrives reshuffled.
+    whole = dict(
+        zip(["c1", "c2", "c3", "c4"], _dates_of(_cases("c1", "c2", "c3", "c4")))
+    )
+    reshuffled = dict(zip(["c4", "c2"], _dates_of(_cases("c4", "c2"))))
+    assert reshuffled == {"c4": whole["c4"], "c2": whole["c2"]}
+
+
+def test_derive_date_includes_both_ends_of_the_window():
+    cases = _cases(*(f"c{i}" for i in range(200)))
+    window = {"start": date(2026, 8, 1), "end": date(2026, 8, 3)}
+    assert set(_dates_of(cases, **window)) == {
+        date(2026, 8, 1),
+        date(2026, 8, 2),
+        date(2026, 8, 3),
+    }
+
+
+def test_derive_date_a_one_day_window_gives_every_row_that_day():
+    day = date(2026, 8, 31)
+    assert _dates_of(_cases("c1", "c2"), start=day, end=day) == [day, day]
+
+
+def test_derive_date_different_seeds_can_draw_different_dates():
+    cases = _cases(*(f"c{i}" for i in range(20)))
+    assert _dates_of(cases, seed=0) != _dates_of(cases, seed=1)
+
+
+def test_derive_date_draws_each_window_independently():
+    # The window is hashed in, so a case is not pinned to the same day of every
+    # month of the same length.
+    cases = _cases(*(f"c{i}" for i in range(20)))
+    july = {"start": date(2026, 7, 1), "end": date(2026, 7, 31)}
+    days_in_july = [d.day for d in _dates_of(cases, **july)]
+    days_in_august = [d.day for d in _dates_of(cases)]
+    assert days_in_july != days_in_august
+
+
+def test_derive_date_composes_every_key_column():
+    frame = pd.DataFrame(
+        {"surname": ["SMITH"] * 20, "dob": [f"2024-01-{i:02d}" for i in range(1, 21)]}
+    )
+    dataset = Dataset.from_pandas(frame)
+    by_surname = _dates_of(dataset, key="surname")
+    by_both = _dates_of(dataset, key=["surname", "dob"])
+    assert len(set(by_surname)) == 1
+    assert len(set(by_both)) > 1
+
+
+def test_derive_date_renders_a_whole_number_the_same_however_it_is_carried():
+    # pandas turns an int column into float64 the moment any value in it is
+    # null, so the same case would otherwise be re-dated across two runs.
+    as_int = Dataset.from_pandas(pd.DataFrame({"case_id": [123]}))
+    as_float = Dataset.from_pandas(pd.DataFrame({"case_id": pd.Series([123.0])}))
+    assert _dates_of(as_int) == _dates_of(as_float)
+
+
+def test_derive_date_keeps_each_date_with_its_row_under_a_repeated_index():
+    frame = pd.DataFrame({"case_id": ["c3", "c1"]}, index=[7, 7])
+    assert _dates_of(Dataset.from_pandas(frame)) == [
+        date(2026, 8, 1),
+        date(2026, 8, 15),
+    ]
+
+
+def test_derive_date_satisfies_a_declared_date_field():
+    @dataclass
+    class Review:
+        case_id: str
+        review_date: date
+
+    derived = DeriveDate(into="review_date", key="case_id", **_AUGUST)(_cases("c1"))
+    SchemaValidator(Review).validate(derived)
+
+
+def test_derive_date_writes_a_date_column_even_onto_an_empty_feed():
+    empty = Dataset.from_pandas(pd.DataFrame({"case_id": pd.Series([], dtype=str)}))
+    derived = DeriveDate(into="review_date", key="case_id", **_AUGUST)(empty)
+    column = derived.to_pandas()["review_date"]
+    assert len(column) == 0
+    assert pd.api.types.is_datetime64_any_dtype(column.dtype)
+
+
+@pytest.mark.parametrize("dtype", ["object", "Int64", "float64"])
+def test_derive_date_refuses_a_row_with_no_key(dtype):
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"case_id": pd.Series([None], dtype=dtype)})
+    )
+    with pytest.raises(IdentityError, match="row 0 has no 'case_id'"):
+        _dates_of(dataset)
+
+
+def test_derive_date_raises_when_a_key_column_is_missing():
+    with pytest.raises(ValueError, match="DeriveDate: column"):
+        _dates_of(_cases("c1"), key="case_ref")
+
+
+def test_derive_date_refuses_an_end_before_its_start():
+    with pytest.raises(ValueError, match="before start"):
+        DeriveDate(
+            into="review_date",
+            start=date(2026, 8, 31),
+            end=date(2026, 8, 1),
+            key="case_id",
+        )
+
+
+def test_derive_date_refuses_a_datetime_bound():
+    with pytest.raises(TypeError, match="datetime.date"):
+        DeriveDate(
+            into="review_date",
+            start=datetime(2026, 8, 1, 9, 0),
+            end=date(2026, 8, 31),
+            key="case_id",
+        )

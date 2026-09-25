@@ -28,6 +28,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+from datetime import date, datetime, timedelta
 from typing import (
     Any,
     Callable,
@@ -683,7 +684,9 @@ class DeriveKey:
 
     def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
-        rendered = {col: self._render(frame, col) for col in self._natural_key}
+        rendered = {
+            col: _render_key_column(frame, col, self._into) for col in self._natural_key
+        }
         frame[self._into] = [
             sha256_json(
                 {
@@ -695,20 +698,6 @@ class DeriveKey:
         ]
         return Dataset.from_pandas(frame)
 
-    def _render(self, frame: Any, column: str) -> list[str]:
-        """One key column as the text it is hashed as, refusing a null."""
-        texts = []
-        for row, value in enumerate(frame[column]):
-            text = canonical_text(value)
-            if text is None:
-                raise IdentityError(
-                    f"Cannot derive {self._into!r}: row {row} has no "
-                    f"{column!r}, and a row cannot be identified by a value it "
-                    "does not carry."
-                )
-            texts.append(text)
-        return texts
-
     def describe(self) -> str:
         return render(
             self,
@@ -716,6 +705,25 @@ class DeriveKey:
             namespace=self._namespace,
             natural_key=self._natural_key,
         )
+
+
+def _render_key_column(frame: Any, column: str, into: str) -> list[str]:
+    """One key column as the text it is hashed as, refusing a null.
+
+    Shared by :class:`DeriveKey` and :class:`DeriveDate`: both derive a value
+    from a row's identity, and both refuse a row that does not carry it.
+    """
+    texts = []
+    for row, value in enumerate(frame[column]):
+        text = canonical_text(value)
+        if text is None:
+            raise IdentityError(
+                f"Cannot derive {into!r}: row {row} has no "
+                f"{column!r}, and a row cannot be identified by a value it "
+                "does not carry."
+            )
+        texts.append(text)
+    return texts
 
 
 def _cut_per_group(frame, key, select):
@@ -946,4 +954,97 @@ class Sample:
             fraction=self._fraction,
             seed=self._seed,
             order=self._order,
+        )
+
+
+class DeriveDate:
+    """Give every row a date between ``start`` and ``end``, deterministically.
+
+    Each row's date is a **pure function** of its ``key`` values, the window and
+    ``seed``: the same case gets the same date on every run and every machine,
+    whichever other rows are in the batch and in whatever order they arrive.
+    Dates are spread across the window, ``start`` and ``end`` both included.
+
+    For each row, hashes ``{"seed": seed, "window": [start, end], "key":
+    {column: value, ...}}`` through
+    :func:`~framework._internal.identity.sha256_json` and counts that many days
+    (modulo the window's length) on from ``start``. The key columns are
+    rendered exactly as :class:`DeriveKey` renders them, so a whole number
+    carried as ``7`` or ``7.0`` lands on the same date.
+
+    The window is part of what is hashed, so each window draws independently —
+    a case is not pinned to the same day of every month. Changing either bound,
+    or ``seed``, re-draws every date; that is the only way the same key moves.
+
+    ``seed`` is a fixed, configured constant, never the run id or the clock, for
+    the reasons :class:`Sample` gives.
+
+    The column is written as ``datetime64``, the dtype a ``date`` field is
+    validated against, even on an empty feed. A **null** key value raises
+    :class:`IdentityError`, as it does for :class:`DeriveKey`: a row that does
+    not carry its identity has no stable date to give it.
+    """
+
+    def __init__(
+        self,
+        *,
+        into: str,
+        start: date,
+        end: date,
+        key: str | Sequence[str],
+        seed: int = _DEFAULT_SAMPLE_SEED,
+    ) -> None:
+        for bound in (start, end):
+            if isinstance(bound, datetime) or not isinstance(bound, date):
+                raise TypeError(
+                    f"DeriveDate: start and end must be datetime.date, got {bound!r}"
+                )
+        if end < start:
+            raise ValueError(
+                f"DeriveDate: end {end.isoformat()} is before start {start.isoformat()}"
+            )
+        self._into = into
+        self._start = start
+        self._end = end
+        self._key = [key] if isinstance(key, str) else list(key)
+        self._seed = seed
+
+    def __call__(self, dataset: Dataset) -> Dataset:
+        import pandas as pd
+
+        frame = dataset.to_pandas()
+        missing = [c for c in self._key if c not in frame.columns]
+        if missing:
+            raise ValueError(
+                f"DeriveDate: column(s) not found in dataset: {missing!r}. "
+                f"Available columns: {list(frame.columns)!r}"
+            )
+        rendered = {
+            col: _render_key_column(frame, col, self._into) for col in self._key
+        }
+        window = [self._start.isoformat(), self._end.isoformat()]
+        days = (self._end - self._start).days + 1
+        dates = []
+        for row in range(len(frame)):
+            digest = sha256_json(
+                {
+                    "seed": self._seed,
+                    "window": window,
+                    "key": {col: rendered[col][row] for col in rendered},
+                }
+            )
+            dates.append(self._start + timedelta(days=int(digest, 16) % days))
+        # A DatetimeIndex assigns by position; a Series would align on the
+        # frame's index labels and misplace dates under a non-default index.
+        frame[self._into] = pd.to_datetime(dates)
+        return Dataset.from_pandas(frame)
+
+    def describe(self) -> str:
+        return render(
+            self,
+            into=self._into,
+            start=self._start.isoformat(),
+            end=self._end.isoformat(),
+            key=self._key,
+            seed=self._seed,
         )
