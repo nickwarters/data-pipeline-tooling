@@ -1,7 +1,7 @@
 # Processors — the Selection & Ingest transforms
 
 This documents the concrete `Processor` primitives in `framework.transform.processors`.
-They fall into three workload families:
+They fall into these workload families:
 
 - **Selection narrowing** — `Filter`, `Score`,
   `VectorizedFilter`, `VectorizedDerive`, `Sort`, `Rename`, `Stamp`, `JoinWith`,
@@ -17,6 +17,8 @@ They fall into three workload families:
 - **Bounded-subset & decoding** — `TopNPerGroup`, `Sample`, `SamplePerGroup`,
   and `Parse`: reduce a population to a bounded, reproducible subset
   or decode a packed text column.
+- **Deterministic dates** — `DeriveDate`: give every row a date inside an
+  inclusive window, a pure function of the row's key and a fixed seed.
 - **JSON blob reshaping** — `ExplodeJsonMap`, `ExplodeJsonList`,
   `FlattenJsonObject` (in `framework.transform.json_shaping`): walk a JSON blob
   held in one column into rows or columns, where `Unpivot` reshapes wide
@@ -664,6 +666,61 @@ replacing it in place — a JSON text column becomes structured Python values
 ready for a downstream reshape; any parser works (`datetime.fromisoformat`, a
 custom record parser). A missing column raises `ValueError`, consistent with the
 other column processors.
+
+## Deterministic dates — `DeriveDate`
+
+```python
+from datetime import date
+
+from framework.transform import DeriveDate
+
+DeriveDate(
+    into="review_date",
+    start=date(2026, 8, 1),
+    end=date(2026, 8, 31),     # inclusive: the 31st can be drawn
+    key="case_id",             # or several columns
+    seed=0,                    # optional; a fixed constant, like Sample's
+)
+```
+
+Gives every row a date between `start` and `end`, **both included**, and writes
+it into the `into` column (new or overwrite). The date is a **pure function of
+the row's `key` values, the window and `seed`**, so the same case always gets
+the same date: on every run, on every machine, whichever other rows are in the
+batch and in whatever order they arrive. Pass the same cases in twice and you
+get the same dates back; add or remove other cases and the dates of the ones
+that stayed do not move.
+
+For each row it hashes
+
+```json
+{"key": {"case_id": "c1"}, "seed": 0, "window": ["2026-08-01", "2026-08-31"]}
+```
+
+through the same canonical encoding as `DeriveKey`, and counts that many days
+(modulo the window's length) on from `start`. The dates are spread across the
+window evenly on average, not exactly; a small batch can bunch.
+
+- **The window is part of what is hashed.** Each window draws independently, so
+  a case given the 15th of August is not therefore given the 15th of every
+  month. The flip side: changing either bound, or `seed`, re-draws *every* date.
+  Nothing else moves a case's date.
+- **The key is rendered the way `DeriveKey` renders it.** A whole number lands
+  on the same date whether pandas is carrying it as `7` or `7.0`, and a column
+  outside the key cannot change a date.
+- **The column is `datetime64`**, the dtype a declared `date` field is validated
+  against, so the output passes a `SchemaValidator` without a `SchemaCoercion`
+  step. It is written even onto an empty feed, so the output shape is stable.
+- `seed` follows the rule in
+  [reproducible sampling](adr/0010-reproducible-sampling.md): a fixed,
+  configured constant, never the run id or the clock.
+
+A **null** key value raises `IdentityError`, as it does for `DeriveKey`: a row
+that does not carry its identity has no stable date to give it. A missing key
+column raises `ValueError` naming the available columns. `start` and `end` must
+be `datetime.date` values: a `datetime` is refused with `TypeError` rather than
+having its time silently dropped. An `end` before `start` raises `ValueError`
+at construction.
 
 ## JSON blob reshaping — `ExplodeJsonMap`, `ExplodeJsonList`, `FlattenJsonObject`
 

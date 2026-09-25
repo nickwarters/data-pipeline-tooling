@@ -7,9 +7,9 @@ The stable import surface for everything that reshapes or gates a
 ``Rename`` / ``Stamp``, the column-shaping ``JoinColumns``,
 the lazy ``JoinWith`` / ``AntiJoinWith``, the Ingest / fan-out
 ``SelectColumns`` / ``DropColumns`` / ``Unpivot`` / ``DeriveKey`` /
-``LatestPerKey``, the packed-column ``Parse``, the JSON blob reshaping
-``ExplodeJsonMap`` / ``ExplodeJsonList`` / ``FlattenJsonObject``,
-and the bounded-subset
+``LatestPerKey``, the deterministic per-row ``DeriveDate``, the packed-column
+``Parse``, the JSON blob reshaping ``ExplodeJsonMap`` / ``ExplodeJsonList`` /
+``FlattenJsonObject``, and the bounded-subset
 ``TopNPerGroup`` / ``Sample`` / ``SamplePerGroup``)
 and ``SchemaCoercion`` — the *coerce* half of the schema adapter, which casts
 each declared column the validator's dtype check would not already accept
@@ -41,6 +41,7 @@ from framework.transform.json_shaping import (
 from framework.transform.processors import (
     AntiJoinWith,
     CoercionError,
+    DeriveDate,
     DeriveKey,
     DropColumns,
     Filter,
@@ -85,6 +86,7 @@ __all__ = [
     "ExplodeJsonList",
     "FlattenJsonObject",
     "DeriveKey",
+    "DeriveDate",
     "Parse",
     "TopNPerGroup",
     "Sample",
