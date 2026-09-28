@@ -8,10 +8,12 @@ path from a seeded Sync subject.
 from __future__ import annotations
 
 import datetime as dt
+import json
 
 import pandas as pd
 import pytest
 
+from case_review.pass_rules import STANDARD, STRICT, PassRule
 from framework.core import RUN_PROVENANCE_COLUMN, Dataset
 from framework.io import Refresh
 from framework.run import FreshnessRequirement
@@ -24,7 +26,8 @@ from pipelines.cora_platform_metric.metrics import (
 )
 from pipelines.cora_platform_metric.pipeline import GOLD_TABLES, UPSTREAMS, main
 from pipelines.sharepoint_cases.schema import FEED_NAME as SYNC_SUBJECT
-from tests.framework_testing import build_databases, given_rows, read_rows
+from readers.question_banks import QuestionBankStore
+from tests.framework_testing import build_databases, given_rows, read_rows, rows_of
 from tools.calendar import WorkingDayCalendar
 from tools.medallion import medallion
 from tools.observability import timestamps
@@ -140,25 +143,30 @@ CURRENT = [
     ),
 ]
 
+# Answers on questions the bundled complaints bank really carries, so the
+# end-to-end run judges them against the current bank as published.
 ANSWERS = [
     {
         "case_id": "c1",
         "case_type": "complaints",
-        "question_id": "q1",
+        "question_id": "q-cmp-0001",
+        "value_json": "Poor",
         "remediation_required": "yes",
         "remediation_status": "complete",
     },
     {
         "case_id": "c1",
         "case_type": "complaints",
-        "question_id": "q2",
+        "question_id": "q-cmp-0002",
+        "value_json": "Good",
         "remediation_required": "no",
         "remediation_status": None,
     },
     {
         "case_id": "c4",
         "case_type": "complaints",
-        "question_id": "q1",
+        "question_id": "q-cmp-0001",
+        "value_json": "Good with process enhancement",
         "remediation_required": "yes",
         "remediation_status": "partial",
     },
@@ -680,6 +688,305 @@ def test_every_metric_carries_syncs_snapshot_instant_and_refuses_an_empty_one():
     assert metrics.snapshot_as_of(_current()) == AS_OF
 
 
+# --- pass rate against the Question Bank ------------------------------------
+
+
+def _question(question_id: str, option_outcomes, **overrides) -> dict[str, object]:
+    """A bank row as ``readers.question_banks`` lands it."""
+    row: dict[str, object] = {
+        "slug": "complaints",
+        "id": question_id,
+        "question_group": "Intake",
+        "deprecated": False,
+        "option_outcomes": None
+        if option_outcomes is None
+        else json.dumps(option_outcomes),
+    }
+    row.update(overrides)
+    return row
+
+
+OUTCOME_OPTIONS = {
+    "Good": "good",
+    "Good with process enhancement": "good-with-process-enhancement",
+    "Poor": "poor",
+    "Poor with harm": "poor-with-harm",
+}
+
+BANK = [
+    _question("q-a", OUTCOME_OPTIONS),
+    # A multi-choice whose NA maps to an outcome no rule has to classify.
+    _question(
+        "q-b",
+        {"Process": "good", "Training": "poor", "NA": "not-applicable"},
+        question_group=None,
+    ),
+    # Informational: no outcomes, so nothing it is answered with can fail.
+    _question("q-c", None, deprecated=True),
+]
+
+
+def _answer(case_id: str, question_id: str, value_json) -> dict[str, object]:
+    return {
+        "case_id": case_id,
+        "case_type": "complaints",
+        "question_id": question_id,
+        "value_json": value_json,
+        "remediation_required": None,
+        "remediation_status": None,
+    }
+
+
+PASS_RATE_ANSWERS = [
+    _answer("c1", "q-a", "Good"),
+    _answer("c2", "q-a", "Good with process enhancement"),
+    _answer("c4", "q-a", "Poor"),
+    _answer("c3", "q-a", "Poor with harm"),  # void Case: not counted
+    _answer("c1", "q-b", '["Process", "Training"]'),  # one fail, not two
+    _answer("c2", "q-b", '["NA"]'),
+    _answer("c4", "q-b", ""),
+    _answer("c1", "q-c", "Whatever"),
+    _answer("c2", "q-c", "NA"),
+    _answer("c4", "q-c", "[]"),
+]
+
+
+def _answers(rows) -> Dataset:
+    """An answer dataset that keeps its columns even when it has no rows."""
+    return Dataset.from_pandas(pd.DataFrame(rows, columns=metrics.ANSWER_COLUMNS))
+
+
+def _pass_rate(answers=PASS_RATE_ANSWERS, bank=BANK, **kwargs) -> list[dict]:
+    return _rows(
+        metrics.answer_pass_rate(
+            _answers(answers),
+            given_rows(bank).read(),
+            _current(),
+            as_of=AS_OF,
+            **kwargs,
+        )
+    )
+
+
+def _pass_rate_row(**fields) -> dict[str, object]:
+    row = {"brand": UNKNOWN_BRAND, "case_type": "complaints", "as_of_utc": AS_OF}
+    row.update(fields)
+    return row
+
+
+def test_answer_pass_rate_judges_each_answer_under_each_rule():
+    result = _pass_rate()
+
+    multi = dict(
+        question_id="q-b",
+        question_group=UNSTATED,
+        deprecated=False,
+        can_fail=True,
+        answer_count=3,
+        unanswered_count=1,
+        na_count=1,
+        pass_count=0,
+        fail_count=1,
+        pass_rate=0.0,
+    )
+    informational = dict(
+        question_id="q-c",
+        question_group="Intake",
+        deprecated=True,
+        can_fail=False,
+        answer_count=3,
+        unanswered_count=1,
+        na_count=1,
+        pass_count=1,
+        fail_count=0,
+        pass_rate=1.0,
+    )
+    assert result == [
+        # standard: Good and Good with process enhancement pass; Poor fails.
+        _pass_rate_row(
+            pass_rule="standard",
+            question_id="q-a",
+            question_group="Intake",
+            deprecated=False,
+            can_fail=True,
+            answer_count=3,
+            unanswered_count=0,
+            na_count=0,
+            pass_count=2,
+            fail_count=1,
+            pass_rate=0.6667,
+        ),
+        _pass_rate_row(pass_rule="standard", **multi),
+        _pass_rate_row(pass_rule="standard", **informational),
+        # strict: only Good passes.
+        _pass_rate_row(
+            pass_rule="strict",
+            question_id="q-a",
+            question_group="Intake",
+            deprecated=False,
+            can_fail=True,
+            answer_count=3,
+            unanswered_count=0,
+            na_count=0,
+            pass_count=1,
+            fail_count=2,
+            pass_rate=0.3333,
+        ),
+        _pass_rate_row(pass_rule="strict", **multi),
+        _pass_rate_row(pass_rule="strict", **informational),
+    ]
+    for row in result:
+        assert row["answer_count"] == (
+            row["unanswered_count"]
+            + row["na_count"]
+            + row["pass_count"]
+            + row["fail_count"]
+        )
+
+
+def test_answer_pass_rate_takes_the_rules_it_is_given():
+    lenient = PassRule(
+        name="lenient",
+        passing={"complaints": tuple(OUTCOME_OPTIONS.values())},
+        failing={"complaints": ()},
+    )
+    result = _pass_rate(rules=(lenient,))
+
+    assert [r["pass_rule"] for r in result] == ["lenient"] * 3
+    assert [(r["question_id"], r["can_fail"], r["fail_count"]) for r in result] == [
+        ("q-a", False, 0),
+        ("q-b", False, 0),
+        ("q-c", False, 0),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("value_json", "expected"),
+    [
+        (None, []),
+        (float("nan"), []),
+        ("", []),
+        ("[]", []),
+        ('["", null]', []),
+        ("Good", ["Good"]),
+        ("NA", ["NA"]),
+        ('["Process", "Training"]', ["Process", "Training"]),
+        ("[not json", ["[not json"]),
+    ],
+)
+def test_selected_reads_value_json_as_the_lossless_copy(value_json, expected):
+    assert metrics._selected(value_json) == expected
+
+
+@pytest.mark.parametrize(
+    ("passing", "failing", "problem", "ids"),
+    [
+        # Leaves a bank outcome unclassified.
+        (
+            ("good", "good-with-process-enhancement"),
+            ("poor",),
+            "declared by the bank but unclassified",
+            "['poor-with-harm']",
+        ),
+        # Names an outcome the bank lacks.
+        (
+            ("good", "good-with-process-enhancement", "excellent"),
+            ("poor", "poor-with-harm"),
+            "classified but not in the bank",
+            "['excellent']",
+        ),
+        # Lists one in both sets.
+        (
+            ("good", "good-with-process-enhancement", "poor"),
+            ("poor", "poor-with-harm"),
+            "classified as both pass and fail",
+            "['poor']",
+        ),
+    ],
+)
+def test_a_rule_that_disagrees_with_the_bank_fails_the_run_naming_the_ids(
+    passing, failing, problem, ids
+):
+    rule = PassRule(
+        name="drifted", passing={"complaints": passing}, failing={"complaints": failing}
+    )
+
+    with pytest.raises(ValueError, match="pass rule 'drifted'") as error:
+        _pass_rate(rules=(rule,))
+
+    message = str(error.value)
+    assert "'complaints'" in message
+    assert problem in message
+    assert ids in message
+
+
+def test_a_rule_is_checked_against_the_bank_even_with_nothing_to_judge():
+    with pytest.raises(ValueError, match="not in the bank"):
+        _pass_rate(answers=[], bank=[_question("q-a", {"Good": "good"})])
+
+
+def test_answers_on_a_case_type_no_rule_covers_fail_the_run_naming_it():
+    stray = _answer("c1", "q-x", "Good") | {"case_type": "claims"}
+    bank = BANK + [_question("q-x", OUTCOME_OPTIONS, slug="claims")]
+
+    with pytest.raises(ValueError, match=r"no PassRule covers: \['claims'\]"):
+        _pass_rate(answers=PASS_RATE_ANSWERS + [stray], bank=bank)
+
+
+def test_an_answer_on_a_question_absent_from_the_bank_fails_the_run_naming_it():
+    stray = _answer("c1", "q-gone", "Good")
+
+    with pytest.raises(ValueError, match=r"absent from the current Question Bank"):
+        _pass_rate(answers=PASS_RATE_ANSWERS + [stray])
+
+    with pytest.raises(ValueError, match=r"\('complaints', 'q-gone'\)"):
+        _pass_rate(answers=PASS_RATE_ANSWERS + [stray])
+
+
+def test_answers_on_void_cases_are_not_judged():
+    only_void = [_answer("c3", "q-a", "Poor with harm")]
+
+    assert _pass_rate(answers=only_void) == []
+
+
+def test_answer_pass_rate_with_no_answers_lands_the_declared_shape():
+    result = metrics.answer_pass_rate(
+        _answers([]), given_rows(BANK).read(), _current(), as_of=AS_OF
+    )
+
+    assert len(result) == 0
+    assert list(result.columns) == [
+        "pass_rule",
+        "brand",
+        "case_type",
+        "question_id",
+        "question_group",
+        "deprecated",
+        "can_fail",
+        "answer_count",
+        "unanswered_count",
+        "na_count",
+        "pass_count",
+        "fail_count",
+        "pass_rate",
+        "as_of_utc",
+    ]
+
+
+def test_the_declared_rules_are_complete_against_the_bundled_complaints_bank():
+    # The real bank, as the pipeline reads it: every outcome it declares is
+    # classified by every declared rule, so a bank edit surfaces here first.
+    bank = rows_of(QuestionBankStore().qb_reader("complaints").read())
+    answers = [_answer("c1", bank[0]["id"], "Good")]
+
+    result = _pass_rate(answers=answers, bank=bank, rules=(STANDARD, STRICT))
+
+    assert [(r["pass_rule"], r["pass_count"]) for r in result] == [
+        ("standard", 1),
+        ("strict", 1),
+    ]
+
+
 # --- end to end -------------------------------------------------------------
 
 
@@ -736,6 +1043,33 @@ def test_main_reads_sync_and_refreshes_every_table_through_the_migrated_path(
         if r["assigned_reviewer_name"] == JONES
     ]
     assert hold["open_hold_count"] == 1
+
+    # Judged against the bundled complaints bank: c1 answered Poor and c4
+    # Good with process enhancement on q-cmp-0001, c1 Good on q-cmp-0002.
+    pass_rate = read_rows(gold, "answer_pass_rate_current")
+    assert [
+        (
+            r["pass_rule"],
+            r["question_id"],
+            r["pass_count"],
+            r["fail_count"],
+            r["pass_rate"],
+        )
+        for r in pass_rate
+    ] == [
+        ("standard", "q-cmp-0001", 1, 1, 0.5),
+        ("standard", "q-cmp-0002", 1, 0, 1.0),
+        ("strict", "q-cmp-0001", 0, 2, 0.0),
+        ("strict", "q-cmp-0002", 1, 0, 1.0),
+    ]
+    for row in pass_rate:
+        assert row["can_fail"] == 1 and row["deprecated"] == 0
+        assert row["answer_count"] == (
+            row["unanswered_count"]
+            + row["na_count"]
+            + row["pass_count"]
+            + row["fail_count"]
+        )
 
     # A second run over a Sync snapshot with one fewer hold replaces, rather
     # than accumulates: every table is a Refresh.
