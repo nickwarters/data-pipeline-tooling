@@ -92,6 +92,8 @@ def _case(case_id: str, status: str, **overrides: object) -> dict[str, object]:
         "effective_outcome": None,
         "effective_had_remediation": None,
         "outcome_overridden": None,
+        "on_hold": 0,
+        "responsible_party_name": None,
         "as_of_utc": AS_OF,
     }
     row.update(overrides)
@@ -988,6 +990,243 @@ def test_outcome_counts_reportable_non_void_cases_by_effective_outcome():
     }
 
 
+# --- the workload and calibration metrics -----------------------------------
+
+
+def test_due_profile_buckets_each_clocks_open_cases_by_local_calendar_days():
+    cases = [
+        # Eight days over, then seven: the edge between the two overdue buckets.
+        _case("a", "In-progress", due_date="2026-08-12T00:00:00+00:00"),
+        _case("b", "In-progress", due_date="2026-08-13T00:00:00+00:00", on_hold=1),
+        _case("c", "In-progress", due_date="2026-08-20T23:00:00+00:00"),
+        _case("d", "In-progress", due_date="2026-08-27T00:00:00+00:00"),
+        _case("e", "In-progress", due_date="2026-08-28T00:00:00+00:00"),
+        _case("f", "In-progress", assigned_reviewer_name=JONES),
+        _case(
+            "g", "Actions In Progress", remediation_due_date="2026-08-25T00:00:00+00:00"
+        ),
+        # On no clock: unclaimed, or no longer open.
+        _case("h", "To-allocate", due_date="2026-08-01T00:00:00+00:00"),
+        _case("i", "Completed", due_date="2026-08-01T00:00:00+00:00"),
+    ]
+    result = _rows(metrics.case_due_profile(_current(cases), as_of=AS_OF))
+
+    assert [
+        (
+            r["sla_kind"],
+            r["assigned_reviewer_name"],
+            r["due_bucket_order"],
+            r["due_bucket"],
+            r["case_count"],
+            r["on_hold_count"],
+        )
+        for r in result
+    ] == [
+        ("remediation", KHAN, 4, "due_1_7", 1, 0),
+        ("review", KHAN, 1, "overdue_8_plus", 1, 0),
+        ("review", KHAN, 2, "overdue_1_7", 1, 1),
+        ("review", KHAN, 3, "due_today", 1, 0),
+        ("review", KHAN, 4, "due_1_7", 1, 0),
+        ("review", KHAN, 5, "due_8_plus", 1, 0),
+        ("review", JONES, 6, "no_due_date", 1, 0),
+    ]
+
+
+def test_due_profile_judges_a_due_date_on_the_local_calendar(monkeypatch):
+    # 19 Aug 23:30 UTC is 20 Aug at UTC+1: due today there, not overdue.
+    monkeypatch.setattr(
+        timestamps, "local_timezone", lambda: dt.timezone(dt.timedelta(hours=1))
+    )
+    cases = [_case("a", "In-progress", due_date="2026-08-19T23:30:00+00:00")]
+    [row] = _rows(metrics.case_due_profile(_current(cases), as_of=AS_OF))
+
+    assert row["due_bucket"] == "due_today"
+
+
+def _answer(case_id, question_id, required, status):
+    return {
+        "case_id": case_id,
+        "case_type": "complaints",
+        "question_id": question_id,
+        "remediation_required": required,
+        "remediation_status": status,
+    }
+
+
+def _action(case_id, question_id, action_id):
+    return {
+        "case_id": case_id,
+        "case_type": "complaints",
+        "question_id": question_id,
+        "action_id": action_id,
+    }
+
+
+def test_remediation_overdue_counts_whats_outstanding_on_cases_past_their_date():
+    def past_due(case_id, due, **overrides):
+        return _case(
+            case_id, "Actions In Progress", remediation_due_date=due, **overrides
+        )
+
+    cases = [
+        past_due("r1", "2026-08-13T00:00:00+00:00", responsible_party_name="P.ONE"),
+        past_due("r2", "2026-08-12T00:00:00+00:00", responsible_party_name="P.ONE"),
+        past_due("r3", "2026-07-01T00:00:00+00:00"),
+        past_due("r4", "2026-08-20T00:00:00+00:00"),  # due today: not past it
+        past_due("r5", None),
+        # Past the date, but not on the remediation clock.
+        _case("r6", "In-progress", remediation_due_date="2026-08-01T00:00:00+00:00"),
+    ]
+    answers = [
+        _answer("r1", "q1", "yes", None),  # outstanding
+        _answer("r1", "q2", "yes", "complete"),
+        _answer("r1", "q3", "no", None),
+        _answer("r2", "q1", "yes", "partial"),
+        _answer("r3", "q1", "yes", None),
+        _answer("r4", "q1", "yes", None),
+    ]
+    actions = [
+        _action("r1", "q1", "a1"),
+        _action("r1", "q1", "a2"),
+        _action("r1", "q2", "a3"),  # on a resolved Answer
+        _action("r4", "q1", "a4"),
+    ]
+    result = _rows(
+        metrics.remediation_overdue(
+            _current(cases),
+            given_rows(answers).read(),
+            given_rows(actions).read(),
+            as_of=AS_OF,
+        )
+    )
+
+    assert [
+        (
+            r["responsible_party_name"],
+            r["days_over_bucket_order"],
+            r["days_over_bucket"],
+            r["case_count"],
+            r["outstanding_answer_count"],
+            r["outstanding_action_count"],
+            r["days_over_max"],
+        )
+        for r in result
+    ] == [
+        (UNASSIGNED, 4, "over_29_plus", 1, 1, 0, 50),
+        ("P.ONE", 1, "over_1_7", 1, 1, 2, 7),
+        # Every Answer resolved: waiting to be Completed, still past its date.
+        ("P.ONE", 2, "over_8_14", 1, 0, 0, 8),
+    ]
+    assert {r["assigned_reviewer_name"] for r in result} == {KHAN}
+
+
+def test_reviewer_workload_sets_work_in_hand_against_four_weeks_of_output():
+    cases = [
+        _case("w1", "In-progress", assigned_at="2026-08-10T15:00:00+00:00"),
+        _case("w2", "In-progress", assigned_at="2026-08-17T09:00:00+00:00", on_hold=1),
+        # Held, but not in progress: not a held in-progress Case.
+        _case(
+            "w3",
+            "Actions In Progress",
+            reportable_at="2026-08-01T09:00:00+00:00",
+            on_hold=1,
+        ),
+        # The window's first day is in, the day before is not; Void is never output.
+        _case("w4", "Completed", reportable_at="2026-07-24T09:00:00+00:00"),
+        _case("w5", "Completed", reportable_at="2026-07-23T09:00:00+00:00"),
+        _case("w6", "In-progress", assigned_reviewer_name=JONES),
+        _case("w7", "Void", reportable_at="2026-08-15T09:00:00+00:00"),
+    ]
+    result = _rows(metrics.reviewer_workload(_current(cases), as_of=AS_OF))
+
+    assert result == [
+        {
+            "brand": UNKNOWN_BRAND,
+            "case_type": "complaints",
+            "assigned_reviewer_name": KHAN,
+            "in_progress_count": 2,
+            "in_progress_on_hold_count": 1,
+            "actions_in_progress_count": 1,
+            "oldest_in_progress_days": 10.0,
+            "reportable_last_28_days_count": 2,
+            # Two in hand at half a Case a week.
+            "weeks_of_work": 4.0,
+            "as_of_utc": AS_OF,
+        },
+        {
+            "brand": UNKNOWN_BRAND,
+            "case_type": "complaints",
+            "assigned_reviewer_name": JONES,
+            "in_progress_count": 1,
+            "in_progress_on_hold_count": 0,
+            "actions_in_progress_count": 0,
+            "oldest_in_progress_days": None,
+            "reportable_last_28_days_count": 0,
+            "weeks_of_work": None,
+            "as_of_utc": AS_OF,
+        },
+    ]
+
+
+def _appeal(case_id, appeal_id, state, verdict=None):
+    return {
+        "case_id": case_id,
+        "case_type": "complaints",
+        "appeal_id": appeal_id,
+        "raised_at": "2026-08-01T09:00:00+00:00",
+        "state": state,
+        "resolution_verdict": verdict,
+        "resolution_at": None,
+        "cited_question_ids_json": "[]",
+    }
+
+
+def test_appeal_rate_counts_appeals_onto_the_cases_reportable_month():
+    cases = [
+        _case("a1", "Completed", reportable_at="2026-07-06T09:00:00+00:00"),
+        _case("a2", "Completed", reportable_at="2026-07-20T09:00:00+00:00"),
+        _case("a3", "Actions In Progress", reportable_at="2026-08-02T09:00:00+00:00"),
+        # Void: never a check, so neither it nor its Appeal is counted.
+        _case("a4", "Void", reportable_at="2026-07-10T09:00:00+00:00"),
+    ]
+    appeals = [
+        _appeal("a1", "ap1", "resolved", "agreed"),
+        _appeal("a1", "ap2", "resolved", "rejected"),
+        _appeal("a3", "ap3", "underReview"),  # open until resolved
+        _appeal("a4", "ap4", "resolved", "agreed"),
+    ]
+    result = _rows(
+        metrics.appeal_rate_by_reviewer(
+            _current(cases), given_rows(appeals).read(), as_of=AS_OF
+        )
+    )
+
+    assert [
+        (
+            r["reportable_month"],
+            r["reportable_count"],
+            r["appealed_case_count"],
+            r["appeal_count"],
+            r["open_appeal_count"],
+            r["agreed_appeal_count"],
+            r["rejected_appeal_count"],
+        )
+        for r in result
+    ] == [
+        ("2026-07", 2, 1, 2, 0, 1, 1),
+        ("2026-08", 1, 1, 1, 1, 0, 0),
+    ]
+    assert {r["assigned_reviewer_name"] for r in result} == {KHAN}
+
+
+def test_appeal_rate_with_no_appeals_still_counts_the_reportable_cases():
+    cases = [_case("a1", "Completed", reportable_at="2026-07-06T09:00:00+00:00")]
+    empty = Dataset.from_pandas(pd.DataFrame(columns=metrics.APPEAL_COLUMNS))
+    [row] = _rows(metrics.appeal_rate_by_reviewer(_current(cases), empty, as_of=AS_OF))
+
+    assert (row["reportable_count"], row["appeal_count"]) == (1, 0)
+
+
 def test_every_metric_carries_syncs_snapshot_instant_and_refuses_an_empty_one():
     with pytest.raises(ValueError, match="case_current is empty"):
         metrics.snapshot_as_of(Dataset.from_pandas(pd.DataFrame(columns=["as_of_utc"])))
@@ -1010,15 +1249,38 @@ def base_dir(tmp_path):
     )
 
 
+# A Case past its Remediation Due Date, seeded for the end-to-end test only.
+PAST_DUE_REMEDIATION = _case(
+    "c5",
+    "Actions In Progress",
+    responsible_party_name="P.ONE",
+    reportable_at="2026-07-30T09:00:00+00:00",
+    remediation_due_date="2026-08-13T00:00:00+00:00",
+)
+PAST_DUE_ANSWER = {
+    "case_id": "c5",
+    "case_type": "complaints",
+    "question_id": "q1",
+    "remediation_required": "yes",
+    "remediation_status": None,
+}
+PAST_DUE_ACTION = {
+    "case_id": "c5",
+    "case_type": "complaints",
+    "question_id": "q1",
+    "action_id": "a9",
+}
+
+
 def _seed_sync(base_dir) -> None:
     sync = medallion(StoreRegistry(base_dir), SYNC_SUBJECT)
     sync.silver.writer("case_version", Refresh()).write(
         Dataset.from_pandas(pd.DataFrame(HISTORY))
     )
     for table, rows in (
-        ("case_current", CURRENT),
-        ("answer", ANSWERS),
-        ("answer_action", ACTIONS),
+        ("case_current", [*CURRENT, PAST_DUE_REMEDIATION]),
+        ("answer", [*ANSWERS, PAST_DUE_ANSWER]),
+        ("answer_action", [*ACTIONS, PAST_DUE_ACTION]),
         ("appeal", APPEALS),
         ("conversation_message", MESSAGES),
     ):

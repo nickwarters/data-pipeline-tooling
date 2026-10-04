@@ -33,7 +33,9 @@ from .schema import (
     AnswerRemediationByManager,
     AppealCycleTime,
     AppealQuestionCitation,
+    AppealRateByReviewerMonthly,
     CaseBacklogDaily,
+    CaseDueProfile,
     CaseHold,
     CaseIntakeDaily,
     CaseLifecycleDurationMonthly,
@@ -44,6 +46,8 @@ from .schema import (
     ConversationPostingPattern,
     ConversationResponseTime,
     ConversationVolume,
+    RemediationOverdue,
+    ReviewerWorkload,
 )
 
 AS_OF_COLUMN = "as_of_utc"
@@ -96,6 +100,15 @@ LIFECYCLE_LEGS = (
     ("to_reportable", "created", "reportable_at", False),
     ("end_to_end", "created", "completed_at", False),
 )
+
+# Each SLA clock's open status and due-date column; a Case is on one at a time.
+DUE_CLOCKS = (
+    (REVIEW_SLA, "In-progress", "due_date"),
+    (REMEDIATION_SLA, "Actions In Progress", "remediation_due_date"),
+)
+
+# Output window for ``reviewer_workload_current``, in whole weeks.
+WORKLOAD_WINDOW_DAYS = 28
 
 # ISO weekday order -> name, so a posting-pattern row sorts by the number and
 # reads by the name without anyone hand-numbering the days.
@@ -159,6 +172,43 @@ OUTCOME_COLUMNS = (
     "effective_outcome",
     "effective_had_remediation",
     "outcome_overridden",
+)
+DUE_COLUMNS = (
+    "case_type",
+    "status",
+    "assigned_reviewer_name",
+    "on_hold",
+    "due_date",
+    "remediation_due_date",
+)
+REMEDIATION_OVERDUE_COLUMNS = (
+    CASE_ID_COLUMN,
+    "case_type",
+    "status",
+    "assigned_reviewer_name",
+    "responsible_party_name",
+    "remediation_due_date",
+)
+WORKLOAD_COLUMNS = (
+    "case_type",
+    "status",
+    "assigned_reviewer_name",
+    "on_hold",
+    "assigned_at",
+    "reportable_at",
+)
+APPEAL_RATE_COLUMNS = (
+    CASE_ID_COLUMN,
+    "case_type",
+    "status",
+    "assigned_reviewer_name",
+    "reportable_at",
+)
+OUTSTANDING_ANSWER_COLUMNS = (
+    CASE_ID_COLUMN,
+    "question_id",
+    "remediation_required",
+    "remediation_status",
 )
 ANSWER_COLUMNS = (
     CASE_ID_COLUMN,
@@ -716,17 +766,19 @@ def case_lifecycle_duration(current: Dataset, *, as_of: str) -> Dataset:
     )
 
 
-def case_outcome(current: Dataset, *, as_of: str) -> Dataset:
-    """Reportable non-void Cases by month and ``effective_outcome``."""
+def _reportable_cases(current: Dataset) -> pd.DataFrame:
+    """The Check population: non-void Cases with a parseable ``reportable_at``."""
     frame = current.to_pandas()
     reportable = frame.loc[frame["status"].ne("Void")].copy()
     reportable["_reportable"] = _instants(reportable["reportable_at"])
     reportable = reportable.loc[reportable["_reportable"].notna()]
     reportable["reportable_month"] = _month(reportable["_reportable"])
-    reportable = _filled(
-        reportable,
-        {"assigned_reviewer_name": UNASSIGNED, "effective_outcome": UNSTATED},
-    )
+    return _filled(reportable, {"assigned_reviewer_name": UNASSIGNED})
+
+
+def case_outcome(current: Dataset, *, as_of: str) -> Dataset:
+    """Reportable non-void Cases by month and ``effective_outcome``."""
+    reportable = _filled(_reportable_cases(current), {"effective_outcome": UNSTATED})
 
     dims = [
         "reportable_month",
@@ -762,6 +814,260 @@ def case_outcome(current: Dataset, *, as_of: str) -> Dataset:
             "assigned_reviewer_name",
             "effective_outcome",
         ),
+    )
+
+
+def _days_until(stamps: pd.Series, today: dt.date) -> list[int | None]:
+    """Local calendar days from ``today`` to each stamp; negative once passed."""
+    return [
+        None if pd.isna(stamp) else (local_date(stamp) - today).days
+        for stamp in _instants(stamps)
+    ]
+
+
+def _due_bucket(days_until: int | None) -> tuple[str, int]:
+    """A due date's bucket and the order it sorts in, soonest-breached first."""
+    if days_until is None:
+        return "no_due_date", 6
+    if days_until < -7:
+        return "overdue_8_plus", 1
+    if days_until < 0:
+        return "overdue_1_7", 2
+    if days_until == 0:
+        return "due_today", 3
+    if days_until <= 7:
+        return "due_1_7", 4
+    return "due_8_plus", 5
+
+
+def case_due_profile(current: Dataset, *, as_of: str) -> Dataset:
+    """Open Cases by how far they are from their due date, per SLA clock."""
+    today = local_date(as_of)
+    frame = _filled(current.to_pandas(), {"assigned_reviewer_name": UNASSIGNED})
+    rows = []
+    for sla_kind, status, due_column in DUE_CLOCKS:
+        on_clock = frame.loc[frame["status"].eq(status)]
+        buckets = [
+            _due_bucket(days) for days in _days_until(on_clock[due_column], today)
+        ]
+        on_clock = on_clock.assign(
+            due_bucket=[name for name, _ in buckets],
+            due_bucket_order=[order for _, order in buckets],
+        )
+        dims = ["case_type", "assigned_reviewer_name", "due_bucket_order", "due_bucket"]
+        for (case_type, reviewer, order, bucket), group in on_clock.groupby(
+            dims, sort=True
+        ):
+            rows.append(
+                {
+                    "sla_kind": sla_kind,
+                    "brand": UNKNOWN_BRAND,
+                    "case_type": case_type,
+                    "assigned_reviewer_name": reviewer,
+                    "due_bucket": bucket,
+                    "due_bucket_order": order,
+                    "case_count": len(group),
+                    "on_hold_count": int(_flagged(group["on_hold"]).sum()),
+                }
+            )
+    return _finish(
+        rows,
+        CaseDueProfile,
+        as_of=as_of,
+        sort_by=(
+            "sla_kind",
+            "brand",
+            "case_type",
+            "assigned_reviewer_name",
+            "due_bucket_order",
+        ),
+    )
+
+
+def _days_over_bucket(days_over: int) -> tuple[str, int]:
+    """How far past its Remediation Due Date a Case is, as a bucket."""
+    if days_over <= 7:
+        return "over_1_7", 1
+    if days_over <= 14:
+        return "over_8_14", 2
+    if days_over <= 28:
+        return "over_15_28", 3
+    return "over_29_plus", 4
+
+
+def remediation_overdue(
+    current: Dataset, answers: Dataset, actions: Dataset, *, as_of: str
+) -> Dataset:
+    """Outstanding remediation on Cases past their Remediation Due Date."""
+    today = local_date(as_of)
+    cases = current.to_pandas()
+    cases = cases.loc[cases["status"].eq("Actions In Progress")].copy()
+    days_until = _days_until(cases["remediation_due_date"], today)
+    cases["_days_over"] = pd.to_numeric(
+        pd.Series(days_until, index=cases.index, dtype="object")
+    ).mul(-1)
+    cases = cases.loc[cases["_days_over"].notna() & cases["_days_over"].gt(0)]
+    cases = _filled(
+        cases,
+        {"assigned_reviewer_name": UNASSIGNED, "responsible_party_name": UNASSIGNED},
+    )
+    buckets = [_days_over_bucket(int(days)) for days in cases["_days_over"]]
+    cases = cases.assign(
+        days_over_bucket=[name for name, _ in buckets],
+        days_over_bucket_order=[order for _, order in buckets],
+    )
+
+    answer_rows = answers.to_pandas()
+    outstanding = answer_rows.loc[
+        answer_rows["remediation_required"].eq("yes")
+        & answer_rows["remediation_status"].isna()
+    ]
+    per_case_answers = outstanding.groupby(CASE_ID_COLUMN).size()
+    action_rows = actions.to_pandas().merge(
+        outstanding[[CASE_ID_COLUMN, "question_id"]],
+        on=[CASE_ID_COLUMN, "question_id"],
+        how="inner",
+    )
+    per_case_actions = action_rows.groupby(CASE_ID_COLUMN).size()
+    cases = cases.assign(
+        _answers=cases[CASE_ID_COLUMN].map(per_case_answers).fillna(0),
+        _actions=cases[CASE_ID_COLUMN].map(per_case_actions).fillna(0),
+    )
+
+    dims = [
+        "case_type",
+        "assigned_reviewer_name",
+        "responsible_party_name",
+        "days_over_bucket_order",
+        "days_over_bucket",
+    ]
+    rows = [
+        {
+            "brand": UNKNOWN_BRAND,
+            "case_type": case_type,
+            "assigned_reviewer_name": reviewer,
+            "responsible_party_name": party,
+            "days_over_bucket": bucket,
+            "days_over_bucket_order": order,
+            "case_count": len(group),
+            "outstanding_answer_count": int(group["_answers"].sum()),
+            "outstanding_action_count": int(group["_actions"].sum()),
+            "days_over_max": int(group["_days_over"].max()),
+        }
+        for (case_type, reviewer, party, order, bucket), group in cases.groupby(
+            dims, sort=True
+        )
+    ]
+    return _finish(
+        rows,
+        RemediationOverdue,
+        as_of=as_of,
+        sort_by=(
+            "brand",
+            "case_type",
+            "assigned_reviewer_name",
+            "responsible_party_name",
+            "days_over_bucket_order",
+        ),
+    )
+
+
+def reviewer_workload(current: Dataset, *, as_of: str) -> Dataset:
+    """What each Reviewer holds, against their last 28 days' output."""
+    today = local_date(as_of)
+    window_start = today - dt.timedelta(days=WORKLOAD_WINDOW_DAYS - 1)
+    frame = _filled(current.to_pandas(), {"assigned_reviewer_name": UNASSIGNED})
+    in_progress = frame["status"].eq("In-progress")
+    reportable = _instants(frame["reportable_at"])
+    recent = [
+        pd.notna(stamp) and window_start <= local_date(stamp) <= today
+        for stamp in reportable
+    ]
+    frame = frame.assign(
+        _in_progress=in_progress,
+        _held=in_progress & _flagged(frame["on_hold"]),
+        _actions=frame["status"].eq("Actions In Progress"),
+        _recent=pd.Series(recent, index=frame.index) & frame["status"].ne("Void"),
+        _age=[
+            None if days is None else -days
+            for days in _days_until(frame["assigned_at"].where(in_progress), today)
+        ],
+    )
+    frame = frame.loc[frame["_in_progress"] | frame["_actions"] | frame["_recent"]]
+
+    rows = []
+    for (case_type, reviewer), group in frame.groupby(
+        ["case_type", "assigned_reviewer_name"], sort=True
+    ):
+        held = int(group["_in_progress"].sum())
+        output = int(group["_recent"].sum())
+        weekly = output / (WORKLOAD_WINDOW_DAYS / 7)
+        rows.append(
+            {
+                "brand": UNKNOWN_BRAND,
+                "case_type": case_type,
+                "assigned_reviewer_name": reviewer,
+                "in_progress_count": held,
+                "in_progress_on_hold_count": int(group["_held"].sum()),
+                "actions_in_progress_count": int(group["_actions"].sum()),
+                "oldest_in_progress_days": _maximum(pd.to_numeric(group["_age"])),
+                "reportable_last_28_days_count": output,
+                "weeks_of_work": round(held / weekly, 3) if output else None,
+            }
+        )
+    return _finish(
+        rows,
+        ReviewerWorkload,
+        as_of=as_of,
+        sort_by=("brand", "case_type", "assigned_reviewer_name"),
+    )
+
+
+def appeal_rate_by_reviewer(
+    current: Dataset, appeals: Dataset, *, as_of: str
+) -> Dataset:
+    """Appeals counted onto their Case's Reportable month and Reviewer."""
+    cases = _reportable_cases(current)
+    frame = appeals.to_pandas()
+    per_case = (
+        frame.assign(
+            _open=frame["state"].ne("resolved"),
+            _agreed=frame["resolution_verdict"].eq("agreed"),
+            _rejected=frame["resolution_verdict"].eq("rejected"),
+        )
+        .groupby(CASE_ID_COLUMN)
+        .agg(
+            _appeals=("appeal_id", "size"),
+            _open=("_open", "sum"),
+            _agreed=("_agreed", "sum"),
+            _rejected=("_rejected", "sum"),
+        )
+    )
+    cases = cases.join(per_case, on=CASE_ID_COLUMN)
+    counts = ["_appeals", "_open", "_agreed", "_rejected"]
+    cases[counts] = cases[counts].fillna(0)
+
+    dims = ["reportable_month", "case_type", "assigned_reviewer_name"]
+    rows = [
+        {
+            "reportable_month": month,
+            "brand": UNKNOWN_BRAND,
+            "case_type": case_type,
+            "assigned_reviewer_name": reviewer,
+            "reportable_count": len(group),
+            "appealed_case_count": int(group["_appeals"].gt(0).sum()),
+            "appeal_count": int(group["_appeals"].sum()),
+            "open_appeal_count": int(group["_open"].sum()),
+            "agreed_appeal_count": int(group["_agreed"].sum()),
+            "rejected_appeal_count": int(group["_rejected"].sum()),
+        }
+        for (month, case_type, reviewer), group in cases.groupby(dims, sort=True)
+    ]
+    return _finish(
+        rows,
+        AppealRateByReviewerMonthly,
+        as_of=as_of,
+        sort_by=("reportable_month", "brand", "case_type", "assigned_reviewer_name"),
     )
 
 

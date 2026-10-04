@@ -1,6 +1,6 @@
 """Build the ``cora_platform_metric`` gold tables from the Sync subject.
 
-Fifteen Aggregate tables, each reduced from the Sync subject's published current
+Nineteen Aggregate tables, each reduced from the Sync subject's published current
 state or its observation history through the Shared Readers in
 ``readers.sharepoint_cases``, and written whole (``Refresh()``) into this
 subject's own gold on every run. Each reduction is a function in ``metrics``;
@@ -82,6 +82,10 @@ GOLD_TABLES = (
     ("case_backlog_daily", schema.CaseBacklogDaily),
     ("case_lifecycle_duration_monthly", schema.CaseLifecycleDurationMonthly),
     ("case_outcome_monthly", schema.CaseOutcomeMonthly),
+    ("case_due_profile_current", schema.CaseDueProfile),
+    ("remediation_overdue_current", schema.RemediationOverdue),
+    ("reviewer_workload_current", schema.ReviewerWorkload),
+    ("appeal_rate_by_reviewer_monthly", schema.AppealRateByReviewerMonthly),
 )
 
 # One gate per source, on the columns the reductions read from it. Stateless,
@@ -91,6 +95,11 @@ HISTORY_GATE = ColumnValidator(metrics.HISTORY_COLUMNS)
 BACKLOG_GATE = ColumnValidator(metrics.BACKLOG_COLUMNS)
 LIFECYCLE_GATE = ColumnValidator(metrics.LIFECYCLE_COLUMNS)
 OUTCOME_GATE = ColumnValidator(metrics.OUTCOME_COLUMNS)
+DUE_GATE = ColumnValidator(metrics.DUE_COLUMNS)
+REMEDIATION_OVERDUE_GATE = ColumnValidator(metrics.REMEDIATION_OVERDUE_COLUMNS)
+OUTSTANDING_ANSWER_GATE = ColumnValidator(metrics.OUTSTANDING_ANSWER_COLUMNS)
+WORKLOAD_GATE = ColumnValidator(metrics.WORKLOAD_COLUMNS)
+APPEAL_RATE_GATE = ColumnValidator(metrics.APPEAL_RATE_COLUMNS)
 ANSWER_GATE = ColumnValidator(metrics.ANSWER_COLUMNS)
 ACTION_GATE = ColumnValidator(metrics.ANSWER_ACTION_COLUMNS)
 APPEAL_GATE = ColumnValidator(metrics.APPEAL_COLUMNS)
@@ -294,6 +303,66 @@ def to_outcome(cases: Dataset, as_of: str, writer: Writer) -> Dataset:
     return write(writer, data, name="outcome:write")
 
 
+def to_due_profile(cases: Dataset, as_of: str, writer: Writer) -> Dataset:
+    validate(DUE_GATE, cases, name="due_profile:current")
+    data = transform(
+        partial(metrics.case_due_profile, as_of=as_of),
+        cases,
+        name="due_profile:reduce",
+    )
+    validate(SchemaValidator(schema.CaseDueProfile), data, name="due_profile:validate")
+    return write(writer, data, name="due_profile:write")
+
+
+def to_remediation_overdue(
+    cases: Dataset, answers: Dataset, actions: Dataset, as_of: str, writer: Writer
+) -> Dataset:
+    validate(REMEDIATION_OVERDUE_GATE, cases, name="remediation_overdue:current")
+    validate(OUTSTANDING_ANSWER_GATE, answers, name="remediation_overdue:answers")
+    validate(ACTION_GATE, actions, name="remediation_overdue:actions")
+    data = transform(
+        partial(metrics.remediation_overdue, as_of=as_of),
+        cases,
+        answers,
+        actions,
+        name="remediation_overdue:reduce",
+    )
+    validate(
+        SchemaValidator(schema.RemediationOverdue),
+        data,
+        name="remediation_overdue:validate",
+    )
+    return write(writer, data, name="remediation_overdue:write")
+
+
+def to_workload(cases: Dataset, as_of: str, writer: Writer) -> Dataset:
+    validate(WORKLOAD_GATE, cases, name="workload:current")
+    data = transform(
+        partial(metrics.reviewer_workload, as_of=as_of), cases, name="workload:reduce"
+    )
+    validate(SchemaValidator(schema.ReviewerWorkload), data, name="workload:validate")
+    return write(writer, data, name="workload:write")
+
+
+def to_appeal_rate(
+    cases: Dataset, appeals: Dataset, as_of: str, writer: Writer
+) -> Dataset:
+    validate(APPEAL_RATE_GATE, cases, name="appeal_rate:current")
+    validate(APPEAL_GATE, appeals, name="appeal_rate:appeals")
+    data = transform(
+        partial(metrics.appeal_rate_by_reviewer, as_of=as_of),
+        cases,
+        appeals,
+        name="appeal_rate:reduce",
+    )
+    validate(
+        SchemaValidator(schema.AppealRateByReviewerMonthly),
+        data,
+        name="appeal_rate:validate",
+    )
+    return write(writer, data, name="appeal_rate:write")
+
+
 def run(context: RunContext) -> Dataset:
     """Read each Sync source once, then build each table in publication order.
 
@@ -356,7 +425,19 @@ def run(context: RunContext) -> Dataset:
     to_lifecycle_duration(
         cases, as_of, gold.writer("case_lifecycle_duration_monthly", Refresh())
     )
-    return to_outcome(cases, as_of, gold.writer("case_outcome_monthly", Refresh()))
+    to_outcome(cases, as_of, gold.writer("case_outcome_monthly", Refresh()))
+    to_due_profile(cases, as_of, gold.writer("case_due_profile_current", Refresh()))
+    to_remediation_overdue(
+        cases,
+        answers,
+        actions,
+        as_of,
+        gold.writer("remediation_overdue_current", Refresh()),
+    )
+    to_workload(cases, as_of, gold.writer("reviewer_workload_current", Refresh()))
+    return to_appeal_rate(
+        cases, appeals, as_of, gold.writer("appeal_rate_by_reviewer_monthly", Refresh())
+    )
 
 
 def main(argv: list[str]) -> int:
