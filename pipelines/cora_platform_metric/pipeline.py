@@ -1,6 +1,6 @@
 """Build the ``cora_platform_metric`` gold tables from the Sync subject.
 
-Eleven Aggregate tables, each reduced from the Sync subject's published current
+Fifteen Aggregate tables, each reduced from the Sync subject's published current
 state or its observation history through the Shared Readers in
 ``readers.sharepoint_cases``, and written whole (``Refresh()``) into this
 subject's own gold on every run. Each reduction is a function in ``metrics``;
@@ -78,12 +78,19 @@ GOLD_TABLES = (
     ("conversation_response_time_current", schema.ConversationResponseTime),
     ("conversation_volume_current", schema.ConversationVolume),
     ("conversation_posting_pattern_current", schema.ConversationPostingPattern),
+    ("case_intake_daily", schema.CaseIntakeDaily),
+    ("case_backlog_daily", schema.CaseBacklogDaily),
+    ("case_lifecycle_duration_monthly", schema.CaseLifecycleDurationMonthly),
+    ("case_outcome_monthly", schema.CaseOutcomeMonthly),
 )
 
 # One gate per source, on the columns the reductions read from it. Stateless,
 # so the steps that share a source share its gate.
 CURRENT_GATE = ColumnValidator(metrics.CURRENT_COLUMNS)
 HISTORY_GATE = ColumnValidator(metrics.HISTORY_COLUMNS)
+BACKLOG_GATE = ColumnValidator(metrics.BACKLOG_COLUMNS)
+LIFECYCLE_GATE = ColumnValidator(metrics.LIFECYCLE_COLUMNS)
+OUTCOME_GATE = ColumnValidator(metrics.OUTCOME_COLUMNS)
 ANSWER_GATE = ColumnValidator(metrics.ANSWER_COLUMNS)
 ACTION_GATE = ColumnValidator(metrics.ANSWER_ACTION_COLUMNS)
 APPEAL_GATE = ColumnValidator(metrics.APPEAL_COLUMNS)
@@ -246,6 +253,47 @@ def to_posting_pattern(
     return write(writer, data, name="posting_pattern:write")
 
 
+def to_intake(cases: Dataset, as_of: str, writer: Writer) -> Dataset:
+    data = transform(
+        partial(metrics.case_intake, as_of=as_of), cases, name="intake:reduce"
+    )
+    validate(SchemaValidator(schema.CaseIntakeDaily), data, name="intake:validate")
+    return write(writer, data, name="intake:write")
+
+
+def to_backlog(observations: Dataset, as_of: str, writer: Writer) -> Dataset:
+    validate(BACKLOG_GATE, observations, name="backlog:history")
+    data = transform(
+        partial(metrics.case_backlog, as_of=as_of), observations, name="backlog:reduce"
+    )
+    validate(SchemaValidator(schema.CaseBacklogDaily), data, name="backlog:validate")
+    return write(writer, data, name="backlog:write")
+
+
+def to_lifecycle_duration(cases: Dataset, as_of: str, writer: Writer) -> Dataset:
+    validate(LIFECYCLE_GATE, cases, name="lifecycle:current")
+    data = transform(
+        partial(metrics.case_lifecycle_duration, as_of=as_of),
+        cases,
+        name="lifecycle:reduce",
+    )
+    validate(
+        SchemaValidator(schema.CaseLifecycleDurationMonthly),
+        data,
+        name="lifecycle:validate",
+    )
+    return write(writer, data, name="lifecycle:write")
+
+
+def to_outcome(cases: Dataset, as_of: str, writer: Writer) -> Dataset:
+    validate(OUTCOME_GATE, cases, name="outcome:current")
+    data = transform(
+        partial(metrics.case_outcome, as_of=as_of), cases, name="outcome:reduce"
+    )
+    validate(SchemaValidator(schema.CaseOutcomeMonthly), data, name="outcome:validate")
+    return write(writer, data, name="outcome:write")
+
+
 def run(context: RunContext) -> Dataset:
     """Read each Sync source once, then build each table in publication order.
 
@@ -297,12 +345,18 @@ def run(context: RunContext) -> Dataset:
     to_volume(
         messages, cases, as_of, gold.writer("conversation_volume_current", Refresh())
     )
-    return to_posting_pattern(
+    to_posting_pattern(
         messages,
         cases,
         as_of,
         gold.writer("conversation_posting_pattern_current", Refresh()),
     )
+    to_intake(cases, as_of, gold.writer("case_intake_daily", Refresh()))
+    to_backlog(observations, as_of, gold.writer("case_backlog_daily", Refresh()))
+    to_lifecycle_duration(
+        cases, as_of, gold.writer("case_lifecycle_duration_monthly", Refresh())
+    )
+    return to_outcome(cases, as_of, gold.writer("case_outcome_monthly", Refresh()))
 
 
 def main(argv: list[str]) -> int:

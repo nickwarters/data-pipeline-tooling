@@ -1,11 +1,11 @@
 """The reductions behind the ``cora_platform_metric`` gold tables.
 
 Each function takes the Sync datasets as read and returns one Aggregate table;
-nothing here reads or writes. ``case_stage_dwell`` and ``case_hold`` reduce the
-observation history and so measure what the polls saw -- a change reversed
-between two polls was never observed. Every table is stamped with Sync's own
-``as_of_utc`` and open intervals are measured to it, so a re-run over the same
-snapshot gives the same numbers.
+nothing here reads or writes. ``case_stage_dwell``, ``case_hold`` and
+``case_backlog`` reduce the observation history and so measure what the polls
+saw -- a change reversed between two polls was never observed. Every table is
+stamped with Sync's own ``as_of_utc`` and open intervals are measured to it, so
+a re-run over the same snapshot gives the same numbers.
 
 Each reduction hands its rows to ``_finish`` with the dataclass in ``schema``
 that declares the table: that dataclass is the one statement of a table's
@@ -33,7 +33,11 @@ from .schema import (
     AnswerRemediationByManager,
     AppealCycleTime,
     AppealQuestionCitation,
+    CaseBacklogDaily,
     CaseHold,
+    CaseIntakeDaily,
+    CaseLifecycleDurationMonthly,
+    CaseOutcomeMonthly,
     CaseSlaAttainmentMonthly,
     CaseStageDwell,
     CaseVoidMonthly,
@@ -57,6 +61,10 @@ UNASSIGNED = "(unassigned)"
 UNDECIDED = "(undecided)"
 UNRESOLVED = "(unresolved)"
 UNSTATED = "(unstated)"
+UNSTAMPED = "(unstamped)"
+# Time a Case was open before any poll saw it: it was open -- it existed and
+# was not yet terminal -- but which status it was in, nothing observed.
+UNOBSERVED = "(unobserved)"
 
 # The Case lifecycle's terminal states: a Case observed in one has stopped
 # dwelling, so its last interval is neither open nor closed -- it is over.
@@ -69,6 +77,33 @@ FIRST_OBSERVATION_ENTRY_STAMPS = {
     "To-allocate": "created",
     "In-progress": "assigned_at",
 }
+
+# The backlog's entry rule widens dwell's to every status the source stamps its
+# entry into: Actions In Progress is entered at Reportable, and a Case first
+# seen already terminal was open from ``created`` until its terminal stamp.
+BACKLOG_ENTRY_STAMPS = {
+    **FIRST_OBSERVATION_ENTRY_STAMPS,
+    "Actions In Progress": "reportable_at",
+    "Completed": "completed_at",
+    "Void": "voided_at",
+}
+
+# The open statuses every Case Type's backlog grid carries, observed or not.
+OPEN_STATUSES = ("To-allocate", "In-progress", "Actions In Progress")
+
+# Each lifecycle leg, in lifecycle order: its name, the stamps it runs between,
+# and whether only Cases that took the actions path walk it. Reportable comes
+# before Completed: a Case with Remediation Actions is Reportable when they are
+# sent and Completed when they close, while one without is both at once -- so
+# ``remediation`` is measured over the Cases stamped ``had_remediation`` only,
+# where every other Case's would be a zero diluting the ones that waited.
+LIFECYCLE_LEGS = (
+    ("allocation", "created", "assigned_at", False),
+    ("review", "assigned_at", "reportable_at", False),
+    ("remediation", "reportable_at", "completed_at", True),
+    ("to_reportable", "created", "reportable_at", False),
+    ("end_to_end", "created", "completed_at", False),
+)
 
 # ISO weekday order -> name, so a posting-pattern row sorts by the number and
 # reads by the name without anyone hand-numbering the days.
@@ -99,6 +134,7 @@ HISTORY_COLUMNS = (
     "on_hold",
     "placed_on_hold_at",
 )
+BACKLOG_COLUMNS = (*HISTORY_COLUMNS, "reportable_at", "completed_at", "voided_at")
 CURRENT_COLUMNS = (
     CASE_ID_COLUMN,
     "case_type",
@@ -113,6 +149,24 @@ CURRENT_COLUMNS = (
     "void_reason",
     "voided_by_name",
     AS_OF_COLUMN,
+)
+LIFECYCLE_COLUMNS = (
+    "case_type",
+    "assigned_reviewer_name",
+    "created",
+    "assigned_at",
+    "reportable_at",
+    "completed_at",
+    "had_remediation",
+)
+OUTCOME_COLUMNS = (
+    "case_type",
+    "status",
+    "assigned_reviewer_name",
+    "reportable_at",
+    "effective_outcome",
+    "effective_had_remediation",
+    "outcome_overridden",
 )
 ANSWER_COLUMNS = (
     CASE_ID_COLUMN,
@@ -247,9 +301,11 @@ def _ordered_history(dataset: Dataset) -> pd.DataFrame:
     )
 
 
-def _entry_instant(first: pd.Series) -> pd.Timestamp:
+def _entry_instant(
+    first: pd.Series, stamps: dict[str, str] = FIRST_OBSERVATION_ENTRY_STAMPS
+) -> pd.Timestamp:
     """When a Case entered the status its *first* observation carries."""
-    stamp_column = FIRST_OBSERVATION_ENTRY_STAMPS.get(first["status"])
+    stamp_column = stamps.get(first["status"])
     if stamp_column is None:
         return first["_modified"]
     stamped = _instants(first.get(stamp_column))
@@ -383,6 +439,97 @@ def case_hold(history: Dataset, *, as_of: str) -> Dataset:
     )
 
 
+def _open_spans(
+    observations: pd.DataFrame, as_of_day: dt.date
+) -> list[tuple[str, dt.date, dt.date]]:
+    """One Case's open time, as ``(status, first_day, end_day)`` spans.
+
+    Each span is the run of local days the Case *closed* in that status --
+    ``end_day`` exclusive -- so a Case that changed status twice in one day is
+    counted that day only under the second. The first span starts at
+    ``created``: a Case is open from the moment it exists, and where the first
+    poll to see it found it already past ``To-allocate``, the time before the
+    status it was found in is ``(unobserved)``. Terminal spans close the Case
+    and are not returned; an open last span runs through ``as_of_day``.
+    """
+    first = observations.iloc[0]
+    entered = _entry_instant(first, BACKLOG_ENTRY_STAMPS)
+    opened = _instants(first["created"])
+    changes = []  # (instant, status), in the order they happened
+    if pd.notna(opened) and opened < entered:
+        changes.append((opened, UNOBSERVED))
+    changes.append((entered, first["status"]))
+    for _, observation in observations.iloc[1:].iterrows():
+        if observation["status"] != changes[-1][1]:
+            changes.append((observation["_modified"], observation["status"]))
+
+    closing = {}  # local day -> the status the Case closed that day in
+    for instant, status in changes:
+        closing[local_date(instant)] = status
+    days = sorted(day for day in closing if day <= as_of_day)
+    ends = [*days[1:], as_of_day + dt.timedelta(days=1)]
+    return [
+        (closing[day], day, end)
+        for day, end in zip(days, ends)
+        if closing[day] not in TERMINAL_STATUSES
+    ]
+
+
+def case_backlog(history: Dataset, *, as_of: str) -> Dataset:
+    """How many Cases were open at the close of each day, and in which
+    status. **Grain: backlog_date x brand x case_type x status.**
+
+    Rebuilt from the observation history on every run rather than accumulated
+    one snapshot a day, so it has no gap for a day the pipeline did not run and
+    reaches back before the table existed. A dense grid per Case Type, from its
+    first open day to ``as_of``'s local date -- whose row is as at ``as_of``,
+    the day not being over -- across ``OPEN_STATUSES`` and any other open
+    status observed, so a quiet status is a 0 rather than a missing row.
+    """
+    as_of_day = local_date(as_of)
+    spans = []  # (case_type, status, first_day, end_day)
+    for (case_type, _), observations in _ordered_history(history).groupby(
+        list(HISTORY_KEY), sort=False
+    ):
+        spans.extend(
+            (case_type, status, start, end)
+            for status, start, end in _open_spans(observations, as_of_day)
+        )
+
+    rows = []
+    frame = pd.DataFrame(spans, columns=["case_type", "status", "start", "end"])
+    for case_type, group in frame.groupby("case_type", sort=True):
+        first_day = group["start"].min()
+        days = [
+            first_day + dt.timedelta(days=offset)
+            for offset in range((as_of_day - first_day).days + 1)
+        ]
+        for status in sorted({*OPEN_STATUSES, *group["status"]}):
+            of_status = group.loc[group["status"].eq(status)]
+            change = {}  # day -> how many Cases entered (+) or left (-) it
+            for start, end in zip(of_status["start"], of_status["end"]):
+                change[start] = change.get(start, 0) + 1
+                change[end] = change.get(end, 0) - 1
+            open_count = 0
+            for day in days:
+                open_count += change.get(day, 0)
+                rows.append(
+                    {
+                        "backlog_date": day.isoformat(),
+                        "brand": UNKNOWN_BRAND,
+                        "case_type": case_type,
+                        "status": status,
+                        "case_count": open_count,
+                    }
+                )
+    return _finish(
+        rows,
+        CaseBacklogDaily,
+        as_of=as_of,
+        sort_by=("backlog_date", "brand", "case_type", "status"),
+    )
+
+
 # --- current metrics --------------------------------------------------------
 
 
@@ -511,6 +658,163 @@ def void_monthly(current: Dataset, *, as_of: str) -> Dataset:
         CaseVoidMonthly,
         as_of=as_of,
         sort_by=("void_month", "brand", "case_type", "void_reason", "voided_by_name"),
+    )
+
+
+def _local_day(instants: pd.Series) -> list[str]:
+    """``YYYY-MM-DD`` of each instant's local date; ``(unstamped)`` where none."""
+    return [
+        UNSTAMPED if pd.isna(instant) else local_date(instant).isoformat()
+        for instant in instants
+    ]
+
+
+def _flagged(values: pd.Series) -> pd.Series:
+    """A source flag as True/False, NULL reading as not set."""
+    return values.map(lambda value: pd.notna(value) and bool(value))
+
+
+def case_intake(current: Dataset, *, as_of: str) -> Dataset:
+    """How many Cases arrive each day. **Grain: intake_date x brand x
+    case_type x status.**
+
+    Every current Case counts once, on its ``created`` local date, under the
+    status it holds now -- voided ones included, since they arrived too. No
+    Reviewer: a Case arrives ``To-allocate``, with nobody holding it, and the
+    Reviewer it has today is not who it arrived to.
+    """
+    frame = current.to_pandas()
+    frame = frame.assign(
+        intake_date=_local_day(_instants(frame["created"])), brand=UNKNOWN_BRAND
+    )
+    dims = ["intake_date", "brand", "case_type", "status"]
+    rows = [
+        dict(zip(dims, keys), case_count=len(group))
+        for keys, group in frame.groupby(dims, sort=True)
+    ]
+    return _finish(rows, CaseIntakeDaily, as_of=as_of, sort_by=tuple(dims))
+
+
+def case_lifecycle_duration(current: Dataset, *, as_of: str) -> Dataset:
+    """How long each lifecycle leg takes. **Grain: leg x ended_month x brand x
+    case_type x assigned_reviewer_name.**
+
+    Measured between the source's own stamps (see ``LIFECYCLE_LEGS``), so
+    unlike ``case_stage_dwell`` nothing between two polls is missed. A leg is
+    measured on every current Case carrying both its stamps, whatever its
+    status now, and filed under the local month it *ended* in and the Reviewer
+    the Case names now. A leg whose closing stamp is before its opening one --
+    ``assigned_at`` is the *latest* hand-over, so a Case reassigned after it
+    became Reportable has one -- is counted in ``out_of_order_count`` and kept
+    out of every statistic rather than clamped to zero inside them.
+    """
+    frame = _filled(current.to_pandas(), {"assigned_reviewer_name": UNASSIGNED})
+    rows = []
+    for order, (leg, started, ended, actions_path_only) in enumerate(
+        LIFECYCLE_LEGS, start=1
+    ):
+        legs = frame
+        if actions_path_only:
+            legs = legs.loc[_flagged(legs["had_remediation"])]
+        legs = legs.assign(
+            _started=_instants(legs[started]), _ended=_instants(legs[ended])
+        )
+        legs = legs.loc[legs["_started"].notna() & legs["_ended"].notna()]
+        legs = legs.assign(
+            ended_month=_month(legs["_ended"]),
+            _days=(legs["_ended"] - legs["_started"]).dt.total_seconds()
+            / SECONDS_PER_DAY,
+        )
+        for (month, case_type, reviewer), group in legs.groupby(
+            ["ended_month", "case_type", "assigned_reviewer_name"], sort=True
+        ):
+            days = group.loc[group["_days"].ge(0), "_days"]
+            rows.append(
+                {
+                    "leg": leg,
+                    "leg_order": order,
+                    "ended_month": month,
+                    "brand": UNKNOWN_BRAND,
+                    "case_type": case_type,
+                    "assigned_reviewer_name": reviewer,
+                    "case_count": len(days),
+                    "out_of_order_count": len(group) - len(days),
+                    "days_total": round(float(days.sum()), 3),
+                    "days_mean": _mean(days),
+                    "days_p50": _quantile(days, 0.5),
+                    "days_p90": _quantile(days, 0.9),
+                    "days_max": _maximum(days),
+                }
+            )
+    return _finish(
+        rows,
+        CaseLifecycleDurationMonthly,
+        as_of=as_of,
+        sort_by=(
+            "leg_order",
+            "ended_month",
+            "brand",
+            "case_type",
+            "assigned_reviewer_name",
+        ),
+    )
+
+
+def case_outcome(current: Dataset, *, as_of: str) -> Dataset:
+    """What Reportable Cases were found. **Grain: reportable_month x brand x
+    case_type x assigned_reviewer_name x effective_outcome.**
+
+    Over the non-void Cases with a parseable ``reportable_at`` -- the rule
+    ``reviewer_activity_daily`` counts by, so a month's ``case_count`` here
+    agrees with that table's days summed. Grouped on ``effective_outcome``, the
+    Outcome as corrected by any Amended Outcome; ``remediation_count`` reads
+    ``effective_had_remediation`` for the same reason, and ``overridden_count``
+    says how many of the group an Amended Outcome changed.
+    """
+    frame = current.to_pandas()
+    reportable = frame.loc[frame["status"].ne("Void")].copy()
+    reportable["_reportable"] = _instants(reportable["reportable_at"])
+    reportable = reportable.loc[reportable["_reportable"].notna()]
+    reportable["reportable_month"] = _month(reportable["_reportable"])
+    reportable = _filled(
+        reportable,
+        {"assigned_reviewer_name": UNASSIGNED, "effective_outcome": UNSTATED},
+    )
+
+    dims = [
+        "reportable_month",
+        "case_type",
+        "assigned_reviewer_name",
+        "effective_outcome",
+    ]
+    rows = [
+        {
+            "reportable_month": month,
+            "brand": UNKNOWN_BRAND,
+            "case_type": case_type,
+            "assigned_reviewer_name": reviewer,
+            "effective_outcome": outcome,
+            "case_count": len(group),
+            "remediation_count": int(
+                _flagged(group["effective_had_remediation"]).sum()
+            ),
+            "overridden_count": int(_flagged(group["outcome_overridden"]).sum()),
+        }
+        for (month, case_type, reviewer, outcome), group in reportable.groupby(
+            dims, sort=True
+        )
+    ]
+    return _finish(
+        rows,
+        CaseOutcomeMonthly,
+        as_of=as_of,
+        sort_by=(
+            "reportable_month",
+            "brand",
+            "case_type",
+            "assigned_reviewer_name",
+            "effective_outcome",
+        ),
     )
 
 
