@@ -241,3 +241,89 @@ class ConversationPostingPattern:
     hour_of_day: Annotated[int, NonNull(), Range(minimum=0, maximum=23)]
     message_count: Annotated[int, NonNull(), Range(minimum=0)]
     as_of_utc: Annotated[str, NonNull()]
+
+
+@dataclass
+class CaseIntakeDaily:
+    """``case_intake_daily`` -- how many Cases arrive each day.
+
+    Grain: ``intake_date`` x ``brand`` x ``case_type`` x ``status``. A Case
+    arrives on the local date of its ``created`` stamp; ``status`` is where it
+    is *now*, so one day's intake sums across it and the split says how much of
+    that day's arrivals is still open. A day with no arrivals has no row.
+    """
+
+    intake_date: Annotated[str, NonNull()]
+    brand: Annotated[str, NonNull()]
+    case_type: Annotated[str, NonNull()]
+    status: Annotated[str, NonNull()]
+    case_count: Annotated[int, NonNull(), Range(minimum=1)]
+    as_of_utc: Annotated[str, NonNull()]
+
+
+@dataclass
+class CaseBacklogDaily:
+    """``case_backlog_daily`` -- how many Cases were open at the close of each
+    day, and in which status.
+
+    Grain: ``backlog_date`` x ``brand`` x ``case_type`` x ``status``, a dense
+    grid from the Case Type's first open day to the snapshot's own date, so a
+    status nobody was in that day is a row holding 0. ``(unobserved)`` is time
+    a Case was open before any poll saw it.
+    """
+
+    backlog_date: Annotated[str, NonNull()]
+    brand: Annotated[str, NonNull()]
+    case_type: Annotated[str, NonNull()]
+    status: Annotated[str, NonNull()]
+    case_count: Annotated[int, NonNull(), Range(minimum=0)]
+    as_of_utc: Annotated[str, NonNull()]
+
+
+@dataclass
+class CaseLifecycleDurationMonthly:
+    """``case_lifecycle_duration_monthly`` -- how long each leg of a Case's
+    lifecycle takes, between the source's own stamps.
+
+    Grain: ``leg`` x ``ended_month`` x ``brand`` x ``case_type`` x
+    ``assigned_reviewer_name``. ``ended_month`` is the local month the leg's
+    closing stamp falls in. ``days_total`` / ``case_count`` roll up exactly;
+    the percentiles hold at this grain only.
+    """
+
+    leg: Annotated[str, NonNull()]
+    leg_order: Annotated[int, NonNull(), Range(minimum=1)]
+    ended_month: Annotated[str, NonNull()]
+    brand: Annotated[str, NonNull()]
+    case_type: Annotated[str, NonNull()]
+    assigned_reviewer_name: Annotated[str, NonNull()]
+    case_count: Annotated[int, NonNull(), Range(minimum=0)]
+    out_of_order_count: Annotated[int, NonNull(), Range(minimum=0)]
+    days_total: Annotated[float, NonNull(), Range(minimum=0)]
+    days_mean: float
+    days_p50: float
+    days_p90: float
+    days_max: float
+    as_of_utc: Annotated[str, NonNull()]
+
+
+@dataclass
+class CaseOutcomeMonthly:
+    """``case_outcome_monthly`` -- what Reportable Cases were found, by month.
+
+    Grain: ``reportable_month`` x ``brand`` x ``case_type`` x
+    ``assigned_reviewer_name`` x ``effective_outcome``, over the non-void Cases
+    carrying a ``reportable_at`` -- the same population a check is counted
+    over. ``remediation_count`` and ``overridden_count`` are subsets of
+    ``case_count``.
+    """
+
+    reportable_month: Annotated[str, NonNull()]
+    brand: Annotated[str, NonNull()]
+    case_type: Annotated[str, NonNull()]
+    assigned_reviewer_name: Annotated[str, NonNull()]
+    effective_outcome: Annotated[str, NonNull()]
+    case_count: Annotated[int, NonNull(), Range(minimum=1)]
+    remediation_count: Annotated[int, NonNull(), Range(minimum=0)]
+    overridden_count: Annotated[int, NonNull(), Range(minimum=0)]
+    as_of_utc: Annotated[str, NonNull()]

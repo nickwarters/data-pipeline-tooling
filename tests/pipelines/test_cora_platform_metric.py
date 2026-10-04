@@ -49,6 +49,9 @@ def _observation(
     reviewer: str | None = KHAN,
     created: str | None = "2026-07-01T09:00:00+00:00",
     assigned_at: str | None = None,
+    reportable_at: str | None = None,
+    completed_at: str | None = None,
+    voided_at: str | None = None,
 ) -> dict[str, object]:
     return {
         "case_type": "complaints",
@@ -62,6 +65,9 @@ def _observation(
         "assigned_at": assigned_at,
         "on_hold": on_hold,
         "placed_on_hold_at": placed_on_hold_at,
+        "reportable_at": reportable_at,
+        "completed_at": completed_at,
+        "voided_at": voided_at,
     }
 
 
@@ -70,6 +76,7 @@ def _case(case_id: str, status: str, **overrides: object) -> dict[str, object]:
         "case_id": case_id,
         "case_type": "complaints",
         "status": status,
+        "assigned_reviewer_name": KHAN,
         "assigned_reviewer_manager_name": "M.ONE",
         "responsible_party_manager_name": "R.ONE",
         "due_date": None,
@@ -79,6 +86,12 @@ def _case(case_id: str, status: str, **overrides: object) -> dict[str, object]:
         "voided_at": None,
         "void_reason": None,
         "voided_by_name": None,
+        "assigned_at": None,
+        "reportable_at": None,
+        "had_remediation": None,
+        "effective_outcome": None,
+        "effective_had_remediation": None,
+        "outcome_overridden": None,
         "as_of_utc": AS_OF,
     }
     row.update(overrides)
@@ -123,6 +136,12 @@ CURRENT = [
         due_date="2026-07-08T00:00:00+00:00",  # Wednesday
         completed_at="2026-07-10T09:00:00+00:00",  # Friday: 2 working days late
         remediation_due_date="2026-07-12T00:00:00+00:00",  # after completion
+        assigned_at="2026-07-04T09:00:00+00:00",
+        reportable_at="2026-07-08T09:00:00+00:00",  # Actions sent
+        had_remediation=1,
+        effective_outcome="Upheld",
+        effective_had_remediation=1,
+        outcome_overridden=0,
     ),
     _case("c2", "In-progress"),
     _case(
@@ -671,6 +690,306 @@ def test_conversation_posting_pattern_with_no_messages_has_no_grid():
         _rows(metrics.conversation_posting_pattern(empty, _current(), as_of=AS_OF))
         == []
     )
+
+
+# --- the Case-flow metrics --------------------------------------------------
+
+
+def _counts(dataset: Dataset, date_column: str) -> dict[tuple[str, str], int]:
+    """The non-zero cells of a daily count grid, keyed (day, status)."""
+    return {
+        (row[date_column], row["status"]): row["case_count"]
+        for row in _rows(dataset)
+        if row["case_count"]
+    }
+
+
+def test_intake_counts_each_case_on_its_local_created_date_by_status_now():
+    cases = [
+        _case("c1", "Completed", created="2026-07-01T09:00:00+00:00"),
+        _case("c2", "In-progress", created="2026-07-01T17:00:00+00:00"),
+        _case("c3", "Void", created="2026-07-02T09:00:00+00:00"),
+        _case("c4", "In-progress", created=None),
+    ]
+    result = _rows(metrics.case_intake(_current(cases), as_of=AS_OF))
+
+    # A voided Case arrived too; one with no ``created`` is kept, not dropped.
+    assert [(r["intake_date"], r["status"], r["case_count"]) for r in result] == [
+        ("(unstamped)", "In-progress", 1),
+        ("2026-07-01", "Completed", 1),
+        ("2026-07-01", "In-progress", 1),
+        ("2026-07-02", "Void", 1),
+    ]
+    assert {(r["brand"], r["case_type"], r["as_of_utc"]) for r in result} == {
+        (UNKNOWN_BRAND, "complaints", AS_OF)
+    }
+
+
+def test_intake_files_a_case_under_its_local_created_date(monkeypatch):
+    # 1 Jul 23:30 UTC is 2 Jul at UTC+1.
+    monkeypatch.setattr(
+        timestamps, "local_timezone", lambda: dt.timezone(dt.timedelta(hours=1))
+    )
+    cases = [_case("c1", "In-progress", created="2026-07-01T23:30:00+00:00")]
+    [row] = _rows(metrics.case_intake(_current(cases), as_of=AS_OF))
+
+    assert row["intake_date"] == "2026-07-02"
+
+
+def test_backlog_counts_the_status_each_case_closed_each_day_in():
+    as_of = "2026-07-05T06:00:00+00:00"
+    history = [
+        # Case 1: waiting on 1 Jul; claimed on 2 Jul; Completed on 3 Jul.
+        _observation(
+            "1",
+            "a1",
+            "2026-07-01T10:00:00+00:00",
+            "To-allocate",
+            created="2026-07-01T09:00:00+00:00",
+        ),
+        _observation("1", "a2", "2026-07-02T15:00:00+00:00", "In-progress"),
+        _observation("1", "a3", "2026-07-03T08:00:00+00:00", "Completed"),
+        # Case 2: created 2 Jul but first seen in progress, assigned 3 Jul --
+        # open on 2 Jul in a status no poll saw.
+        _observation(
+            "2",
+            "b1",
+            "2026-07-04T09:00:00+00:00",
+            "In-progress",
+            created="2026-07-02T09:00:00+00:00",
+            assigned_at="2026-07-03T12:00:00+00:00",
+        ),
+        # Case 3: arrives and is claimed on 3 Jul -- counted that day only
+        # under the status it closed the day in.
+        _observation(
+            "3",
+            "c1",
+            "2026-07-03T09:30:00+00:00",
+            "To-allocate",
+            created="2026-07-03T09:00:00+00:00",
+        ),
+        _observation("3", "c2", "2026-07-03T16:00:00+00:00", "In-progress"),
+    ]
+    result = metrics.case_backlog(given_rows(history).read(), as_of=as_of)
+
+    assert _counts(result, "backlog_date") == {
+        ("2026-07-01", "To-allocate"): 1,
+        ("2026-07-02", "In-progress"): 1,
+        ("2026-07-02", metrics.UNOBSERVED): 1,
+        ("2026-07-03", "In-progress"): 2,
+        ("2026-07-04", "In-progress"): 2,
+        ("2026-07-05", "In-progress"): 2,
+    }
+    # Dense: every day from the first open one to as_of's, for every open
+    # status plus the unobserved one -- a quiet status is a 0, not a hole.
+    assert len(result) == 5 * 4
+    assert {r["as_of_utc"] for r in _rows(result)} == {as_of}
+
+
+def test_backlog_dates_a_late_first_sighting_from_the_sources_own_stamp():
+    history = [
+        # First seen Completed: open, status unseen, until completed_at.
+        _observation(
+            "1",
+            "a1",
+            "2026-07-04T09:00:00+00:00",
+            "Completed",
+            created="2026-07-01T09:00:00+00:00",
+            completed_at="2026-07-03T09:00:00+00:00",
+        ),
+        # First seen with Actions out: in that status since reportable_at.
+        _observation(
+            "2",
+            "b1",
+            "2026-07-04T09:00:00+00:00",
+            "Actions In Progress",
+            created="2026-07-01T09:00:00+00:00",
+            reportable_at="2026-07-02T09:00:00+00:00",
+        ),
+    ]
+    result = metrics.case_backlog(
+        given_rows(history).read(), as_of="2026-07-04T06:00:00+00:00"
+    )
+
+    assert _counts(result, "backlog_date") == {
+        ("2026-07-01", metrics.UNOBSERVED): 2,
+        ("2026-07-02", metrics.UNOBSERVED): 1,
+        ("2026-07-02", "Actions In Progress"): 1,
+        ("2026-07-03", "Actions In Progress"): 1,
+        ("2026-07-04", "Actions In Progress"): 1,
+    }
+
+
+def test_a_history_with_nothing_open_lands_the_backlog_shape_and_no_rows():
+    history = [
+        _observation("1", "a1", "2026-07-02T09:00:00+00:00", "Completed", created=None)
+    ]
+    result = metrics.case_backlog(given_rows(history).read(), as_of=AS_OF)
+
+    assert len(result) == 0
+    assert list(result.columns) == [
+        "backlog_date",
+        "brand",
+        "case_type",
+        "status",
+        "case_count",
+        "as_of_utc",
+    ]
+
+
+LIFECYCLE_CASES = [
+    # The actions path: Reportable when Actions were sent, Completed later.
+    _case(
+        "c1",
+        "Completed",
+        created="2026-07-01T09:00:00+00:00",
+        assigned_at="2026-07-02T09:00:00+00:00",
+        reportable_at="2026-07-06T09:00:00+00:00",
+        completed_at="2026-07-10T09:00:00+00:00",
+        had_remediation=1,
+    ),
+    # No Actions: Reportable and Completed at the same instant.
+    _case(
+        "c2",
+        "Completed",
+        created="2026-07-01T09:00:00+00:00",
+        assigned_at="2026-07-03T09:00:00+00:00",
+        reportable_at="2026-07-04T21:00:00+00:00",
+        completed_at="2026-07-04T21:00:00+00:00",
+        had_remediation=0,
+    ),
+    # Handed to another Reviewer after it became Reportable: ``assigned_at``
+    # is the latest hand-over, so its review leg runs backwards.
+    _case(
+        "c3",
+        "Actions In Progress",
+        assigned_reviewer_name=JONES,
+        created="2026-07-01T09:00:00+00:00",
+        assigned_at="2026-08-02T09:00:00+00:00",
+        reportable_at="2026-07-20T09:00:00+00:00",
+        had_remediation=1,
+    ),
+]
+
+
+def test_lifecycle_duration_measures_each_leg_between_the_sources_stamps():
+    result = _rows(
+        metrics.case_lifecycle_duration(_current(LIFECYCLE_CASES), as_of=AS_OF)
+    )
+    measured = {
+        (r["leg_order"], r["leg"], r["ended_month"], r["assigned_reviewer_name"]): (
+            r["case_count"],
+            r["out_of_order_count"],
+            r["days_total"],
+            r["days_mean"],
+            r["days_p50"],
+            r["days_p90"],
+            r["days_max"],
+        )
+        for r in result
+    }
+
+    assert measured == {
+        (1, "allocation", "2026-07", KHAN): (2, 0, 3.0, 1.5, 1.5, 1.9, 2.0),
+        (1, "allocation", "2026-08", JONES): (1, 0, 32.0, 32.0, 32.0, 32.0, 32.0),
+        (2, "review", "2026-07", KHAN): (2, 0, 5.5, 2.75, 2.75, 3.75, 4.0),
+        # Out of order: visible, and kept out of every statistic.
+        (2, "review", "2026-07", JONES): (0, 1, 0.0, None, None, None, None),
+        # c1 only: c2 took no actions path, and c3 is not Completed yet.
+        (3, "remediation", "2026-07", KHAN): (1, 0, 4.0, 4.0, 4.0, 4.0, 4.0),
+        (4, "to_reportable", "2026-07", KHAN): (2, 0, 8.5, 4.25, 4.25, 4.85, 5.0),
+        (4, "to_reportable", "2026-07", JONES): (1, 0, 19.0, 19.0, 19.0, 19.0, 19.0),
+        (5, "end_to_end", "2026-07", KHAN): (2, 0, 12.5, 6.25, 6.25, 8.45, 9.0),
+    }
+    # Sorted into lifecycle order, not by leg name.
+    assert [r["leg"] for r in result][:2] == ["allocation", "allocation"]
+    assert {r["brand"] for r in result} == {UNKNOWN_BRAND}
+
+
+def test_lifecycle_duration_files_a_leg_under_the_month_it_ended_in(monkeypatch):
+    # 31 Jul 23:30 UTC is 1 Aug at UTC+1.
+    monkeypatch.setattr(
+        timestamps, "local_timezone", lambda: dt.timezone(dt.timedelta(hours=1))
+    )
+    cases = [
+        _case(
+            "c1",
+            "In-progress",
+            assigned_reviewer_name=None,
+            created="2026-07-30T23:30:00+00:00",
+            assigned_at="2026-07-31T23:30:00+00:00",
+        )
+    ]
+    [row] = _rows(metrics.case_lifecycle_duration(_current(cases), as_of=AS_OF))
+
+    assert (row["leg"], row["ended_month"]) == ("allocation", "2026-08")
+    assert row["assigned_reviewer_name"] == UNASSIGNED
+    assert row["days_total"] == 1.0
+
+
+def test_outcome_counts_reportable_non_void_cases_by_effective_outcome():
+    cases = [
+        _case(
+            "c1",
+            "Completed",
+            reportable_at="2026-07-06T09:00:00+00:00",
+            effective_outcome="Upheld",
+            effective_had_remediation=1,
+            outcome_overridden=0,
+        ),
+        _case(
+            "c2",
+            "Actions In Progress",
+            reportable_at="2026-07-20T09:00:00+00:00",
+            effective_outcome="Upheld",
+            effective_had_remediation=1,
+            outcome_overridden=1,
+        ),
+        # Voided after it became Reportable: never a check, so not counted.
+        _case(
+            "c3",
+            "Void",
+            reportable_at="2026-07-10T09:00:00+00:00",
+            effective_outcome="Upheld",
+        ),
+        # Not Reportable yet.
+        _case("c4", "In-progress", effective_outcome="Upheld"),
+        _case(
+            "c5",
+            "Completed",
+            assigned_reviewer_name=JONES,
+            reportable_at="2026-07-31T09:00:00+00:00",
+        ),
+        _case(
+            "c6",
+            "Completed",
+            assigned_reviewer_name=None,
+            reportable_at="2026-08-01T09:00:00+00:00",
+            effective_outcome="Not upheld",
+            effective_had_remediation=0,
+            outcome_overridden=0,
+        ),
+    ]
+    result = _rows(metrics.case_outcome(_current(cases), as_of=AS_OF))
+
+    assert [
+        (
+            r["reportable_month"],
+            r["assigned_reviewer_name"],
+            r["effective_outcome"],
+            r["case_count"],
+            r["remediation_count"],
+            r["overridden_count"],
+        )
+        for r in result
+    ] == [
+        ("2026-07", KHAN, "Upheld", 2, 2, 1),
+        ("2026-07", JONES, UNSTATED, 1, 0, 0),
+        ("2026-08", UNASSIGNED, "Not upheld", 1, 0, 0),
+    ]
+    assert {(r["brand"], r["case_type"]) for r in result} == {
+        (UNKNOWN_BRAND, "complaints")
+    }
 
 
 def test_every_metric_carries_syncs_snapshot_instant_and_refuses_an_empty_one():

@@ -1,6 +1,6 @@
 # Data dictionary — `cora_platform_metric`
 
-Eleven gold **Aggregate tables** measuring how the Case Review Platform is
+Fifteen gold **Aggregate tables** measuring how the Case Review Platform is
 operating, reduced from the Sync subject's published current state and its
 observation history. They belong to the `cora_platform_metric` Reporting
 subject and are rebuilt whole (`Refresh()`) on every run, so a re-run over the
@@ -16,14 +16,16 @@ the wiring is
 
 ## Three things to know before reading a number
 
-**1. Two of the tables measure what the polls saw, not what happened.**
-`case_stage_dwell_current` and `case_hold_current` are reduced from the Sync
+**1. Three of the tables measure what the polls saw, not what happened.**
+`case_stage_dwell_current`, `case_hold_current` and `case_backlog_daily` are
+reduced from the Sync
 subject's *observation history* — one row each time a poll saw a Case. A state a
 Case entered and left between two polls (put on hold in the morning, released
 before the next poll; claimed and completed inside one interval) was never
 observed and is not counted. This is a known, accepted limit of polling rather
-than a defect: the hold count is a floor, and the dwell intervals are those
-whose boundaries a poll witnessed. Sync polls hourly
+than a defect: the hold count is a floor, the dwell intervals are those
+whose boundaries a poll witnessed, and a backlog day's status split is what the
+polls had seen by its close. Sync polls hourly
 ([ADR-0023](adr/0023-sync-polls-hourly-publishes-gold-daily.md)), which bounds
 what can be missed to changes reversed within an hour.
 
@@ -54,14 +56,14 @@ hours are decimal (a three-hour hold is `0.125` days), rounded to three places.
 | **Run parameters** | `calendar` — path to a YAML working-day calendar (`holidays` + `weekend`, the same file `orchestrate --calendar` takes) for `case_sla_attainment_monthly`; omitted, weekends-only |
 | **Migrations** | `migrations/cora_platform_metric/gold/` |
 | **Owner / data steward** | *<team>* |
-| **Last reviewed** | 2026-08-28 |
+| **Last reviewed** | 2026-10-04 |
 
 The Sync snapshot instant, `as_of_utc`, is read off `case_current` — one
 literal on every row — once at the top of the run, and is what an open hold is
 measured to and what every table is stamped with. Each reduction is handed that
-instant, so the eleven tables cannot disagree about which snapshot they
+instant, so the fifteen tables cannot disagree about which snapshot they
 describe. An empty `case_current` has no snapshot to report against and fails
-the run rather than publishing eleven empty tables.
+the run rather than publishing fifteen empty tables.
 
 ## Part B — The tables
 
@@ -294,6 +296,147 @@ not parse is not counted.
 | `hour_of_day` | `int` | No | `0`–`23`, local clock. |
 | `message_count` | `int` | No | Messages posted in that cell; `0` where none. |
 
+### `case_intake_daily` — how many Cases arrive each day
+
+Reduced from `case_current`. Grain: `intake_date` × `brand` × `case_type` ×
+`status`.
+
+Every current Case counts once, on the **local** date of its `created` stamp,
+under the status it holds **now**. So a day's intake is the sum across
+`status`, and the split says how much of that day's arrivals is still open, done
+or voided. Voided Cases are included: they arrived too. Pair it with the Sync
+subject's `case_throughput_daily` (the outflow) for net flow. A day with no
+arrivals has **no row** — read a missing day as zero, and average over calendar
+days rather than over rows.
+
+There is no Reviewer: a Case arrives `To-allocate` with nobody holding it, and
+the Reviewer it names today is not who it arrived to. This is the one
+Case-counting table on this subject that leaves `assigned_reviewer_name` out of
+its floor for that reason, rather than by omission.
+
+| Field | Type | Nullable | Description |
+|-------|------|----------|-------------|
+| `intake_date` | `str` | No | `YYYY-MM-DD` of `created`'s local date; `(unstamped)` where `created` is missing or unparseable. |
+| `brand` | `str` | No | `(unknown)`. |
+| `case_type` | `str` | No | Case Type slug. |
+| `status` | `str` | No | The Case's status at `as_of_utc`, as the source spells it. |
+| `case_count` | `int` | No | Cases created that day now in that status. |
+
+### `case_backlog_daily` — how many Cases were open at the close of each day
+
+Reduced from the observation history. Grain: `backlog_date` × `brand` ×
+`case_type` × `status`.
+
+For each day, the Cases that were **open** (not `Completed` or `Void`) at the
+close of that local day, by the status they closed it in. A Case that changed
+status twice in one day is counted that day only under the second. It is
+**rebuilt from the history on every run** rather than accumulated one snapshot
+per day, so it has no gap for a day the pipeline did not run, it reaches back
+before the table existed, and it stays a `Refresh()` like every other table
+here. The grid is **dense**: every day from the Case Type's first open day to
+`as_of_utc`'s local date, for each of `To-allocate`, `In-progress` and
+`Actions In Progress` (and any other open status observed), so a status nobody
+was in that day is a `0`, not a missing row. The last day is as at
+`as_of_utc`, since that day is not over.
+
+A Case is open from its `created` stamp. Where the first poll to see a Case
+found it already past `To-allocate`, the time between `created` and the moment
+it entered the status it was found in is counted as **`(unobserved)`**. That
+moment comes from the source's own stamp where it has one (`assigned_at` for
+`In-progress`, `reportable_at` for `Actions In Progress`, `completed_at` /
+`voided_at` for a Case first seen terminal),
+and otherwise from the poll. So the *total* open count is right even for Cases
+that predate Sync, and the status split says only what was seen. Expect
+`(unobserved)` to dominate the days before Sync went live and to all but vanish
+after, since an hourly poll sees a new Case `To-allocate` within the hour.
+
+Like the other two history tables, it measures what the polls saw: a status
+change observed by the first poll after local midnight lands on the next day.
+Polling hourly bounds that to the last hour of a day. There is no Reviewer
+dimension: this table answers whether the backlog is growing per Case Type, and
+who holds the open Cases right now is already `case_counts_current` on the
+Sync subject.
+
+| Field | Type | Nullable | Description |
+|-------|------|----------|-------------|
+| `backlog_date` | `str` | No | `YYYY-MM-DD`, local. |
+| `brand` | `str` | No | `(unknown)`. |
+| `case_type` | `str` | No | Case Type slug. |
+| `status` | `str` | No | An open status as the source spells it, or `(unobserved)`. |
+| `case_count` | `int` | No | Cases open at the close of that day in that status; `0` where none. |
+
+### `case_lifecycle_duration_monthly` — how long each leg of the lifecycle takes
+
+Reduced from `case_current`. Grain: `leg` × `ended_month` × `brand` ×
+`case_type` × `assigned_reviewer_name`.
+
+Each leg runs between two stamps **the source writes itself**, so unlike
+`case_stage_dwell_current` nothing between two polls is missed. **Reportable
+comes before Completed.** A Case with Remediation Actions becomes Reportable
+when the Actions are sent (`Actions In Progress`) and Completed when they close.
+A Case without Actions is Reportable and Completed at the same instant.
+
+| `leg_order` | `leg` | From | To | Over |
+|---|---|---|---|---|
+| 1 | `allocation` | `created` | `assigned_at` | every Case carrying both |
+| 2 | `review` | `assigned_at` | `reportable_at` | every Case carrying both |
+| 3 | `remediation` | `reportable_at` | `completed_at` | Cases stamped `had_remediation` only — every other Case's would be a zero diluting the ones that waited |
+| 4 | `to_reportable` | `created` | `reportable_at` | every Case carrying both |
+| 5 | `end_to_end` | `created` | `completed_at` | every Case carrying both |
+
+A leg is filed under the local month its **closing** stamp falls in, and under
+the Reviewer the Case names **now**. `assigned_at` is the *latest* hand-over, so
+`allocation` measures the wait to the last assignment, not the first. A Case
+reassigned after it became Reportable has a `review` leg that runs backwards.
+Such a leg is counted in `out_of_order_count` and kept out of every statistic,
+rather than clamped to zero inside them. Days are calendar days, decimal, to
+three places.
+
+**Rolling up.** `case_count`, `out_of_order_count` and `days_total` sum, and
+`days_max` takes a max, so a Case-Type or monthly mean is
+`sum(days_total) / sum(case_count)` over the rows being combined. The
+percentiles do **not** roll up: a median of medians is not a median. Read
+`days_p50` / `days_p90` at this grain only.
+
+| Field | Type | Nullable | Description |
+|-------|------|----------|-------------|
+| `leg` | `str` | No | One of the five legs above. |
+| `leg_order` | `int` | No | `1`–`5`, lifecycle order; sort on this. |
+| `ended_month` | `str` | No | `YYYY-MM` of the closing stamp's local date. |
+| `brand` | `str` | No | `(unknown)`. |
+| `case_type` | `str` | No | Case Type slug. |
+| `assigned_reviewer_name` | `str` | No | The Reviewer's claims login as the source holds it; `(unassigned)` where absent. |
+| `case_count` | `int` | No | Legs measured — `0` where every leg in the group was out of order. |
+| `out_of_order_count` | `int` | No | Legs whose closing stamp is before their opening one. |
+| `days_total` | `float` | No | Sum of the measured legs, in decimal days. |
+| `days_mean` / `_p50` / `_p90` / `_max` | `float` | Yes | Over the measured legs; NULL when `case_count` is 0. |
+
+### `case_outcome_monthly` — what Reportable Cases were found
+
+Reduced from `case_current`. Grain: `reportable_month` × `brand` × `case_type`
+× `assigned_reviewer_name` × `effective_outcome`.
+
+Over the **non-void** Cases with a parseable `reportable_at`, the population a
+**Check** is counted over and the same rule `reviewer_activity_daily` counts
+by. A month's `case_count` here therefore agrees with that table's days summed,
+except that this table keeps an `(unassigned)` Reviewer that one drops. Grouped
+on `effective_outcome`, the Outcome as corrected by any Amended Outcome, rather
+than the frozen `outcome_at_completion`. `remediation_count` reads
+`effective_had_remediation` for the same reason, and `overridden_count` says how
+many of the group an Amended Outcome changed. All counts are additive across
+every dimension.
+
+| Field | Type | Nullable | Description |
+|-------|------|----------|-------------|
+| `reportable_month` | `str` | No | `YYYY-MM` of `reportable_at`'s local date. |
+| `brand` | `str` | No | `(unknown)`. |
+| `case_type` | `str` | No | Case Type slug. |
+| `assigned_reviewer_name` | `str` | No | The Reviewer's claims login; `(unassigned)` where absent. |
+| `effective_outcome` | `str` | No | As the source holds it, in the Case Type's own vocabulary; `(unstated)` where absent. |
+| `case_count` | `int` | No | Reportable Cases in the group. |
+| `remediation_count` | `int` | No | Of those, carrying `effective_had_remediation`. |
+| `overridden_count` | `int` | No | Of those, carrying `outcome_overridden`. |
+
 ## Part C — Row checks
 
 None. Each group-by produces its declared grain, so no uniqueness gate is
@@ -317,7 +460,10 @@ gated by its `SchemaValidator` (columns, types, nullability, `OneOf` on
   `appeal_count` but not `resolved_count`.
 - A negative interval (a `placed_on_hold_at` after the observation that first
   showed the hold; a reply posted before the Message it follows) is clamped to
-  zero rather than subtracting from a total.
+  zero rather than subtracting from a total. `case_lifecycle_duration_monthly`
+  is the exception: a leg that runs backwards is a real thing to see (a Case
+  reassigned after it became Reportable), so it is counted in
+  `out_of_order_count` and excluded from the statistics instead.
 
 ## What is deliberately not here
 
@@ -326,7 +472,16 @@ gated by its `SchemaValidator` (columns, types, nullability, `OneOf` on
   per-Case table is the honest home for that, not a ratio of two aggregates.
 - **Conversation latency by side.** See `conversation_response_time_current`
   above.
-- **A per-Case status-transition log.** The two history tables are reduced
+- **A Reviewer on intake and backlog.** Both stop at Case Type: a Case arrives
+  with nobody holding it, and who holds the open Cases today is
+  `case_counts_current` on the Sync subject. A per-Reviewer backlog *history*
+  is computable from the same observations, but it would be a new table with
+  its own question, not a widened grain on this one.
+- **Roll-up-able duration percentiles.** `case_lifecycle_duration_monthly`'s
+  medians and p90s hold at its own grain only. Publishing a duration histogram
+  (counts per day-band) would make an approximate percentile available at any
+  roll-up, if a consumer asks for one.
+- **A per-Case status-transition log.** The history tables are reduced
   from one in memory, and publishing it would be the first non-aggregate table
   on a Reporting subject; if a second consumer wants transitions at Case grain
   that is the point to publish it, from the Sync subject rather than from here.
