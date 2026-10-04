@@ -1,6 +1,6 @@
 # Data dictionary — `cora_platform_metric`
 
-Fifteen gold **Aggregate tables** measuring how the Case Review Platform is
+Nineteen gold **Aggregate tables** measuring how the Case Review Platform is
 operating, reduced from the Sync subject's published current state and its
 observation history. They belong to the `cora_platform_metric` Reporting
 subject and are rebuilt whole (`Refresh()`) on every run, so a re-run over the
@@ -61,9 +61,9 @@ hours are decimal (a three-hour hold is `0.125` days), rounded to three places.
 The Sync snapshot instant, `as_of_utc`, is read off `case_current` — one
 literal on every row — once at the top of the run, and is what an open hold is
 measured to and what every table is stamped with. Each reduction is handed that
-instant, so the fifteen tables cannot disagree about which snapshot they
+instant, so the nineteen tables cannot disagree about which snapshot they
 describe. An empty `case_current` has no snapshot to report against and fails
-the run rather than publishing fifteen empty tables.
+the run rather than publishing nineteen empty tables.
 
 ## Part B — The tables
 
@@ -436,6 +436,160 @@ every dimension.
 | `case_count` | `int` | No | Reportable Cases in the group. |
 | `remediation_count` | `int` | No | Of those, carrying `effective_had_remediation`. |
 | `overridden_count` | `int` | No | Of those, carrying `outcome_overridden`. |
+
+### `case_due_profile_current` — open Cases by how far they are from their due date
+
+Reduced from `case_current`. Grain: `sla_kind` × `brand` × `case_type` ×
+`assigned_reviewer_name` × `due_bucket`.
+
+The forward-looking twin of `case_sla_attainment_monthly`, which only judges
+Cases once they are Completed. A Case is on exactly one clock at a time. The
+`review` clock runs over `In-progress` Cases against `due_date`; it stops at
+Reportable. The `remediation` clock then starts and runs over
+`Actions In Progress` Cases against `remediation_due_date`. A `To-allocate` Case
+is on no clock, because its due date is stamped by the claim, so it is not here.
+
+Days are whole **local calendar** days from `as_of_utc`'s date to the due date's
+date, the way the platform's Action Centre counts them: "due today" holds until
+local midnight, and "1 day over" begins as it passes. That keeps these figures
+in line with what a Reviewer sees. (The SLA attainment table counts *working*
+days late, because it measures against the SLA policy rather than the worklist.)
+A held Case stays in its bucket, and `on_hold_count` says how many of the bucket
+are held.
+
+| `due_bucket_order` | `due_bucket` | Days to the due date |
+|---|---|---|
+| 1 | `overdue_8_plus` | −8 or fewer |
+| 2 | `overdue_1_7` | −7 to −1 |
+| 3 | `due_today` | 0 |
+| 4 | `due_1_7` | 1 to 7 |
+| 5 | `due_8_plus` | 8 or more |
+| 6 | `no_due_date` | no parseable due date |
+
+| Field | Type | Nullable | Description |
+|-------|------|----------|-------------|
+| `sla_kind` | `str` | No | `review` or `remediation`. |
+| `brand` | `str` | No | `(unknown)`. |
+| `case_type` | `str` | No | Case Type slug. |
+| `assigned_reviewer_name` | `str` | No | The Reviewer's claims login; `(unassigned)` where absent. |
+| `due_bucket` | `str` | No | One of the six above. |
+| `due_bucket_order` | `int` | No | `1`–`6`, most urgent first; sort on this. |
+| `case_count` | `int` | No | Cases on that clock in that bucket. |
+| `on_hold_count` | `int` | No | Of those, carrying `on_hold`. |
+
+### `remediation_overdue_current` — remediation outstanding past its Remediation Due Date
+
+Reduced from `case_current` with the `answer` and `answer_action` Detail Tables.
+Grain: `brand` × `case_type` × `assigned_reviewer_name` ×
+`responsible_party_name` × `days_over_bucket`.
+
+Over the `Actions In Progress` Cases whose `remediation_due_date` falls on an
+earlier local date than `as_of_utc`'s. Days over are counted the same way as in
+`case_due_profile_current`. An **outstanding Answer** is one with
+`remediation_required = yes` and no `remediation_status` yet (`complete`,
+`partial` and `cancelled` all resolve it). The **outstanding Actions** are that
+Answer's Actions. A Case past its date whose Answers are all resolved still
+counts in `case_count`: it is waiting to be Completed, not waiting on
+remediation.
+
+`responsible_party_name` appears here **as itself**, the person the
+remediation is owed by, which is exactly the Responsible Party's role. It is
+not a stand-in for the Adviser (see *Adviser* in `CONTEXT.md`). There is no
+Responsible Party *Manager*: `responsible_party_manager_name` is a column
+nothing writes, and resolving the manager from the directory would add a `users`
+reference-feed dependency this subject does not yet have.
+
+On naming: the platform's own glossary keeps "Overdue" for the review clock and
+says "past its Remediation Due Date" for this one. The table keeps the name it
+was asked for, and the clock is stated here.
+
+| `days_over_bucket_order` | `days_over_bucket` | Days past the Remediation Due Date |
+|---|---|---|
+| 1 | `over_1_7` | 1 to 7 |
+| 2 | `over_8_14` | 8 to 14 |
+| 3 | `over_15_28` | 15 to 28 |
+| 4 | `over_29_plus` | 29 or more |
+
+| Field | Type | Nullable | Description |
+|-------|------|----------|-------------|
+| `brand` | `str` | No | `(unknown)`. |
+| `case_type` | `str` | No | Case Type slug. |
+| `assigned_reviewer_name` | `str` | No | The Reviewer's claims login; `(unassigned)` where absent. |
+| `responsible_party_name` | `str` | No | The Responsible Party's claims login as the source holds it; `(unassigned)` where absent. |
+| `days_over_bucket` | `str` | No | One of the four above. |
+| `days_over_bucket_order` | `int` | No | `1`–`4`; sort on this. |
+| `case_count` | `int` | No | Cases past their date in the group. |
+| `outstanding_answer_count` | `int` | No | Outstanding Answers on those Cases. |
+| `outstanding_action_count` | `int` | No | Actions on those Answers. |
+| `days_over_max` | `int` | No | The furthest past its date any Case in the group is; rolls up as a max. |
+
+### `reviewer_workload_current` — what each Reviewer holds, and how fast they clear it
+
+Reduced from `case_current`. Grain: `brand` × `case_type` ×
+`assigned_reviewer_name`.
+
+- `in_progress_count` is the review work in hand. Less
+  `in_progress_on_hold_count`, it is what the platform's **Allocation
+  Capacity** counts: at most three non-held `In-progress` Cases per Reviewer
+  *across every Case Type*. So sum a Reviewer's rows before comparing against
+  three.
+- `reportable_last_28_days_count` is their output: Cases from the Check
+  population (non-void, with a `reportable_at`) whose `reportable_at` falls in
+  the 28 local days ending on `as_of_utc`'s date.
+- `weeks_of_work` is `in_progress_count` divided by the weekly rate
+  (`reportable_last_28_days_count / 4`). It is NULL where there was no output to
+  divide by. It is the only ratio here: to roll it up, recompute it from the
+  summed counts rather than averaging it.
+- `actions_in_progress_count` is reported alongside but kept out of
+  `weeks_of_work`, because that phase is the Responsible Party's work, not the
+  Reviewer's.
+
+A Reviewer with no work in hand and no output in the window has no row.
+
+| Field | Type | Nullable | Description |
+|-------|------|----------|-------------|
+| `brand` | `str` | No | `(unknown)`. |
+| `case_type` | `str` | No | Case Type slug. |
+| `assigned_reviewer_name` | `str` | No | The Reviewer's claims login; `(unassigned)` where absent. |
+| `in_progress_count` | `int` | No | `In-progress` Cases held. |
+| `in_progress_on_hold_count` | `int` | No | Of those, on hold. |
+| `actions_in_progress_count` | `int` | No | `Actions In Progress` Cases held. |
+| `oldest_in_progress_days` | `float` | Yes | Local calendar days since the oldest `In-progress` Case's `assigned_at`; NULL where none carries one. Rolls up as a max. |
+| `reportable_last_28_days_count` | `int` | No | Cases made Reportable in the window. |
+| `weeks_of_work` | `float` | Yes | As above; NULL with no output. |
+
+### `appeal_rate_by_reviewer_monthly` — how often each Reviewer's Cases are appealed
+
+Reduced from `case_current` and the `appeal` Detail Table. Grain:
+`reportable_month` × `brand` × `case_type` × `assigned_reviewer_name`.
+
+Over the same Reportable population as `case_outcome_monthly`, so
+`reportable_count` matches that table's `case_count` summed across Outcomes.
+Every Reviewer-month with a Reportable Case has a row, with zeros where nothing
+was appealed, so a rate is always `appealed_case_count / reportable_count`.
+
+Each Case's Appeals are counted onto the **Case's** Reportable month and
+Reviewer, not the month the Appeal was raised. A row reads "of the Cases this
+Reviewer made Reportable that month, how many were appealed". That makes each
+month a cohort which keeps filling in as late Appeals arrive, so the latest
+months' rates are lower bounds. An Appeal is open until its `state` is
+`resolved`. An `agreed` one amends the Outcome (it is the
+`amended_from_appeal_id` link on `case_current`), and a `rejected` one changes
+nothing. An Appeal on a Case outside the population (a voided Case) is not
+counted.
+
+| Field | Type | Nullable | Description |
+|-------|------|----------|-------------|
+| `reportable_month` | `str` | No | `YYYY-MM` of the Case's `reportable_at` local date. |
+| `brand` | `str` | No | `(unknown)`. |
+| `case_type` | `str` | No | Case Type slug. |
+| `assigned_reviewer_name` | `str` | No | The Reviewer's claims login; `(unassigned)` where absent. |
+| `reportable_count` | `int` | No | Reportable Cases in the group. |
+| `appealed_case_count` | `int` | No | Of those, with at least one Appeal. |
+| `appeal_count` | `int` | No | Appeals on those Cases (a Case appealed twice counts twice). |
+| `open_appeal_count` | `int` | No | Of those, not yet `resolved`. |
+| `agreed_appeal_count` | `int` | No | Resolved `agreed`. |
+| `rejected_appeal_count` | `int` | No | Resolved `rejected`. |
 
 ## Part C — Row checks
 

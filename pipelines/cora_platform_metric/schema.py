@@ -300,3 +300,68 @@ class CaseOutcomeMonthly:
     remediation_count: Annotated[int, NonNull(), Range(minimum=0)]
     overridden_count: Annotated[int, NonNull(), Range(minimum=0)]
     as_of_utc: Annotated[str, NonNull()]
+
+
+@dataclass
+class CaseDueProfile:
+    """``case_due_profile_current`` -- open Cases by distance to their due date."""
+
+    sla_kind: Annotated[str, NonNull(), OneOf(*SLA_KINDS)]
+    brand: Annotated[str, NonNull()]
+    case_type: Annotated[str, NonNull()]
+    assigned_reviewer_name: Annotated[str, NonNull()]
+    due_bucket: Annotated[str, NonNull()]
+    due_bucket_order: Annotated[int, NonNull(), Range(minimum=1)]
+    case_count: Annotated[int, NonNull(), Range(minimum=1)]
+    on_hold_count: Annotated[int, NonNull(), Range(minimum=0)]
+    as_of_utc: Annotated[str, NonNull()]
+
+
+@dataclass
+class RemediationOverdue:
+    """``remediation_overdue_current`` -- outstanding remediation past its due date."""
+
+    brand: Annotated[str, NonNull()]
+    case_type: Annotated[str, NonNull()]
+    assigned_reviewer_name: Annotated[str, NonNull()]
+    responsible_party_name: Annotated[str, NonNull()]
+    days_over_bucket: Annotated[str, NonNull()]
+    days_over_bucket_order: Annotated[int, NonNull(), Range(minimum=1)]
+    case_count: Annotated[int, NonNull(), Range(minimum=1)]
+    outstanding_answer_count: Annotated[int, NonNull(), Range(minimum=0)]
+    outstanding_action_count: Annotated[int, NonNull(), Range(minimum=0)]
+    days_over_max: Annotated[int, NonNull(), Range(minimum=1)]
+    as_of_utc: Annotated[str, NonNull()]
+
+
+@dataclass
+class ReviewerWorkload:
+    """``reviewer_workload_current`` -- what each Reviewer holds, and their output."""
+
+    brand: Annotated[str, NonNull()]
+    case_type: Annotated[str, NonNull()]
+    assigned_reviewer_name: Annotated[str, NonNull()]
+    in_progress_count: Annotated[int, NonNull(), Range(minimum=0)]
+    in_progress_on_hold_count: Annotated[int, NonNull(), Range(minimum=0)]
+    actions_in_progress_count: Annotated[int, NonNull(), Range(minimum=0)]
+    oldest_in_progress_days: float
+    reportable_last_28_days_count: Annotated[int, NonNull(), Range(minimum=0)]
+    weeks_of_work: float
+    as_of_utc: Annotated[str, NonNull()]
+
+
+@dataclass
+class AppealRateByReviewerMonthly:
+    """``appeal_rate_by_reviewer_monthly`` -- appeals per Reviewer per month."""
+
+    reportable_month: Annotated[str, NonNull()]
+    brand: Annotated[str, NonNull()]
+    case_type: Annotated[str, NonNull()]
+    assigned_reviewer_name: Annotated[str, NonNull()]
+    reportable_count: Annotated[int, NonNull(), Range(minimum=1)]
+    appealed_case_count: Annotated[int, NonNull(), Range(minimum=0)]
+    appeal_count: Annotated[int, NonNull(), Range(minimum=0)]
+    open_appeal_count: Annotated[int, NonNull(), Range(minimum=0)]
+    agreed_appeal_count: Annotated[int, NonNull(), Range(minimum=0)]
+    rejected_appeal_count: Annotated[int, NonNull(), Range(minimum=0)]
+    as_of_utc: Annotated[str, NonNull()]
