@@ -155,6 +155,12 @@ review platform, Review Outcomes flow *back* for reporting.
   the platform's append-only `CaseSupportLog` list, where every Maintainer
   action from the Case Support page is recorded, and lands it raw → silver
   ([`data-dictionary-case-support-log.md`](data-dictionary-case-support-log.md)).
+- **CORA Access Log** (platform-wide) — `pipelines/cora_access_log` — polls the
+  platform's append-only, site-wide `CoraAccessLog` list, where every role a
+  Maintainer gives or removes from the Access page is recorded, and lands it
+  raw → silver. One list covers every environment, and it holds logins and
+  free-text reasons
+  ([`data-dictionary-cora-access-log.md`](data-dictionary-cora-access-log.md)).
 - **Reporting** (platform-wide) joins Review Outcomes to the selected Cases and
   emits **Deliverables**.
 - **Pipeline run metrics** (operational) — `pipelines/pipeline_run_metric` —
@@ -732,6 +738,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`data-dictionary-pipeline-run-metric.md`](data-dictionary-pipeline-run-metric.md) | The three `pipeline_run_metric` gold aggregates over the run registry — `pipeline_run_summary`, `step_duration_trend_daily`, `step_row_flow` — their grains, why the registry's run id lands as `run_id` rather than the reserved provenance column, and why the reporting run never sees itself. |
 | [`data-dictionary-notifications.md`](data-dictionary-notifications.md) | The notification outbox file and the three keys that are its consumer's contract; the user-group privileges file beside it and the two keys that are *its* consumer's contract; the `notified` ledger and why its row is exactly its key; the `users` reference feed the recipients and the Responsible Party Manager are resolved through; and the placeholder link template, unmapped Case Type names and example addresses standing between it and a tenant. |
 | [`data-dictionary-case-support-log.md`](data-dictionary-case-support-log.md) | The `case_support_log` feed: the Support Log entry in raw and silver, why polling `Modified` is polling `Created` on an append-only list, how a failed action shows up as a second `not-applied` entry, and the site/GUID placeholders standing between it and a tenant. |
+| [`data-dictionary-cora-access-log.md`](data-dictionary-cora-access-log.md) | The `cora_access_log` feed: the Access Log entry in raw and silver, why one site-wide list covers every environment, how a change that fell short shows up as a `not-applied` or `partly-applied` follow-up entry, and the logins and free-text reasons it holds. |
 | [`sharepoint-rest-ingest.md`](sharepoint-rest-ingest.md) | The operator runbook for that feed: scheduling it, re-driving it, and what REST polling cannot tell you. |
 | [`benchmarking-gold.md`](benchmarking-gold.md) | What one gold publication costs, which phase grows, and how to measure it against the storage it will run on (`scripts/benchmark_gold.py`) — the evidence behind publishing the aggregates on the sync's schedule rather than their own. |
 | [`sharepoint-cases-going-live.md`](sharepoint-cases-going-live.md) | The one-time path from the feed as it stands to one an external scheduler drives. |

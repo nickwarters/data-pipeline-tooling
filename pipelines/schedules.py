@@ -24,6 +24,7 @@ def build_pipeline_sets():
             (
                 ScheduledPipeline("pipelines/sharepoint_cases", Schedule.daily()),
                 ScheduledPipeline("pipelines/case_support_log", Schedule.daily()),
+                ScheduledPipeline("pipelines/cora_access_log", Schedule.daily()),
                 ScheduledPipeline(
                     "pipelines/reviewer_activity",
                     Schedule.daily(),

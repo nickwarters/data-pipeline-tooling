@@ -1,0 +1,59 @@
+[
+  {
+    "Id": 7001,
+    "Modified": "2026-10-01T09:15:00Z",
+    "odata.etag": "\"1\"",
+    "Title": "i:0#.w|CONTOSO\\p.grant",
+    "TargetName": "Pat Grant",
+    "AccessAction": "grant",
+    "AccessRole": "reviewer",
+    "CaseType": "complaints",
+    "Reason": "Joined the complaints team.",
+    "Changes": "[{\"field\":\"Reviewers - Complaints\",\"before\":false,\"after\":true},{\"field\":\"Reviewers\",\"before\":false,\"after\":true}]",
+    "Outcome": "recorded",
+    "RelatesTo": "",
+    "Created": "2026-10-01T09:15:00Z",
+    "Author": {
+      "Name": "i:0#.w|CONTOSO\\r.maintainer",
+      "Title": "Robin Maintainer"
+    }
+  },
+  {
+    "Id": 7002,
+    "Modified": "2026-10-02T14:30:00Z",
+    "odata.etag": "\"1\"",
+    "Title": "i:0#.w|CONTOSO\\p.grant",
+    "TargetName": "Pat Grant",
+    "AccessAction": "grant",
+    "AccessRole": "controls",
+    "CaseType": "",
+    "Reason": "Covering Controls during the audit.",
+    "Changes": "[{\"field\":\"Controls\",\"before\":false,\"after\":true}]",
+    "Outcome": "recorded",
+    "RelatesTo": "",
+    "Created": "2026-10-02T14:30:00Z",
+    "Author": {
+      "Name": "i:0#.w|CONTOSO\\r.maintainer",
+      "Title": "Robin Maintainer"
+    }
+  },
+  {
+    "Id": 7003,
+    "Modified": "2026-10-02T14:30:02Z",
+    "odata.etag": "\"1\"",
+    "Title": "i:0#.w|CONTOSO\\p.grant",
+    "TargetName": "Pat Grant",
+    "AccessAction": "grant",
+    "AccessRole": "controls",
+    "CaseType": "",
+    "Reason": "Could not change Controls (status 403), so nothing was changed.",
+    "Changes": "[]",
+    "Outcome": "not-applied",
+    "RelatesTo": "7002",
+    "Created": "2026-10-02T14:30:02Z",
+    "Author": {
+      "Name": "i:0#.w|CONTOSO\\r.maintainer",
+      "Title": "Robin Maintainer"
+    }
+  }
+]
