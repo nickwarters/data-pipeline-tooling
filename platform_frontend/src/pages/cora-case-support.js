@@ -6,7 +6,11 @@ import { withAbortSignal } from '../services/abortable-client.js';
 import { navigateTo } from '../lib/navigate.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
 import { EmptyState, LoadingState } from '../lib/empty-state.js';
-import { formatDate, NO_VALUE } from '../lib/format-datetime.js';
+import {
+  formatDate,
+  formatTimestamp,
+  NO_VALUE,
+} from '../lib/format-datetime.js';
 import {
   SEARCH_PAGE_SIZE,
   searchCases as searchCasesService,
@@ -18,14 +22,12 @@ import {
 import { dataTableView } from '../views/data-table.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
+/** @typedef {import('../sharepoint-client.js').SupportLogEntry} SupportLogEntry */
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../setup/resolve-eligible-case-types.js').CaseSource} CaseSource */
 
 /**
- * A corrective action a Maintainer will be able to take on a Case from this
- * page. Each one is listed before it is built so the page says what support
- * will be able to do, and so building one is replacing its card rather than
- * finding somewhere to put it.
+ * A corrective action a Maintainer will be able to take on a Case from this page.
  *
  * @typedef {{ id: string, title: string, description: string }} SupportAction
  */
@@ -71,14 +73,15 @@ export const SUPPORT_ACTIONS = [
 ];
 
 /**
- * The Case being supported, from the route. `row` is `undefined` while it is
- * being read, the row once read, and `null` with an `error` when it cannot be.
+ * The Case being supported; `undefined` while read, `null` with an error when it cannot be.
  *
  * @typedef {{
  *   caseType: string,
  *   id: string,
  *   row: CaseRow | null | undefined,
  *   error: string | null,
+ *   log: SupportLogEntry[] | undefined,
+ *   logError: string | null,
  * }} SelectedCase
  */
 
@@ -141,8 +144,7 @@ function searchBarView(route, tools) {
     {
       className: 'cora-case-support-search',
       role: 'search',
-      // Not a <form>: the host page wraps the app in one, and a nested form
-      // posts the outer one back. Enter is wired by hand instead.
+      // Not a <form>: the host page already wraps the app in one.
       onkeydown: (/** @type {any} */ ev) => {
         if (ev.key !== 'Enter' || ev.defaultPrevented) return;
         ev.preventDefault();
@@ -320,8 +322,89 @@ function actionsView() {
   );
 }
 
-/** @returns {HTMLElement} */
-function supportLogView() {
+/**
+ * A changed value as the log shows it: text as is, anything else as JSON.
+ *
+ * @param {unknown} value
+ * @returns {string}
+ */
+function changeValueText(value) {
+  if (value === null || value === undefined || value === '') return NO_VALUE;
+  return typeof value === 'string' ? value : JSON.stringify(value);
+}
+
+/**
+ * @param {SupportLogEntry} entry
+ * @returns {HTMLElement}
+ */
+function logEntryView(entry) {
+  const title =
+    SUPPORT_ACTIONS.find((action) => action.id === entry.action)?.title ??
+    entry.action;
+  const notApplied = entry.outcome === 'not-applied';
+  return h(
+    'li',
+    {
+      className: notApplied
+        ? 'cora-case-support-log-entry cora-case-support-log-entry--not-applied'
+        : 'cora-case-support-log-entry',
+    },
+    h(
+      'p',
+      { className: 'cora-case-support-log-heading' },
+      h('strong', {}, title),
+      notApplied &&
+        h('span', { className: 'cora-case-support-log-badge' }, 'Not applied'),
+      h(
+        'span',
+        { className: 'cora-case-support-log-meta' },
+        `${entry.createdBy || 'Unknown'}, ${formatTimestamp(entry.createdAt)}`
+      )
+    ),
+    h('p', { className: 'cora-case-support-log-reason' }, entry.reason),
+    entry.changes.length > 0 &&
+      h(
+        'ul',
+        { className: 'cora-case-support-log-changes' },
+        ...entry.changes.map((change) =>
+          h(
+            'li',
+            {},
+            `${change.field}: ${changeValueText(change.before)} → ${changeValueText(change.after)}`
+          )
+        )
+      )
+  );
+}
+
+/**
+ * @param {SelectedCase} selected
+ * @returns {HTMLElement}
+ */
+function supportLogBodyView(selected) {
+  if (selected.logError) {
+    return h(
+      'p',
+      { className: 'cora-case-support-error', role: 'alert' },
+      selected.logError
+    );
+  }
+  if (!selected.log) return LoadingState('Loading the support log');
+  if (selected.log.length === 0) {
+    return EmptyState('No support actions have been recorded on this Case.');
+  }
+  return h(
+    'ol',
+    { className: 'cora-case-support-log-list' },
+    ...selected.log.map(logEntryView)
+  );
+}
+
+/**
+ * @param {SelectedCase} selected
+ * @returns {HTMLElement}
+ */
+function supportLogView(selected) {
   return h(
     'section',
     {
@@ -329,9 +412,7 @@ function supportLogView() {
       'aria-labelledby': 'cora-case-support-log-title',
     },
     h('h2', { id: 'cora-case-support-log-title' }, 'Support log'),
-    EmptyState(
-      'The support log is not available yet. It will list every support action taken on this Case: who, when and why.'
-    )
+    supportLogBodyView(selected)
   );
 }
 
@@ -354,7 +435,7 @@ function selectedView(route, selected) {
     { className: 'cora-case-support-selected' },
     caseHeaderView(route, selected.row),
     actionsView(),
-    supportLogView()
+    supportLogView(selected)
   );
 }
 
@@ -423,6 +504,8 @@ export function createRouteSlice(
           id: params.id,
           row: undefined,
           error: null,
+          log: undefined,
+          logError: null,
         }
       : null;
 
@@ -476,6 +559,16 @@ export function createRouteSlice(
           selected: { ...route.selected, row: null, error: action.message },
         });
       }
+      if (route.selected && action.type === 'case-support/log-loaded') {
+        return patchRoute(state, 'caseSupport', {
+          selected: { ...route.selected, log: action.entries, logError: null },
+        });
+      }
+      if (route.selected && action.type === 'case-support/log-failed') {
+        return patchRoute(state, 'caseSupport', {
+          selected: { ...route.selected, logError: action.message },
+        });
+      }
       return state;
     },
     view: (state, tools) =>
@@ -517,6 +610,32 @@ export function createRouteSlice(
               'The Case could not be loaded.'
             )
         );
+        // An unknown Case Type is reported above, so its log is not asked for.
+        if (
+          sources.some(
+            (/** @type {CaseSource} */ source) =>
+              source.slug === selected.caseType
+          )
+        ) {
+          void readClient
+            .listSupportLog({
+              caseType: selected.caseType,
+              caseId: selected.id,
+            })
+            .then(
+              (entries) => {
+                if (tools.isActive()) {
+                  tools.dispatch({ type: 'case-support/log-loaded', entries });
+                }
+              },
+              (error) =>
+                fail(
+                  error,
+                  'case-support/log-failed',
+                  'The support log could not be loaded.'
+                )
+            );
+        }
         return;
       }
 

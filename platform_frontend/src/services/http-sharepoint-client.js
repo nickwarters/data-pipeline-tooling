@@ -23,6 +23,8 @@ import { declaredBankVersion } from '../lib/bank-version.js';
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../sharepoint-client.js').Message} Message */
 /** @typedef {import('../sharepoint-client.js').RoadmapItem} RoadmapItem */
+/** @typedef {import('../sharepoint-client.js').SupportLogEntry} SupportLogEntry */
+/** @typedef {import('../sharepoint-client.js').NewSupportLogEntry} NewSupportLogEntry */
 
 /**
  * @typedef {(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>} FetchImpl
@@ -43,6 +45,12 @@ const CONTENT_TYPE_JSON = 'application/json;odata=nometadata;charset=utf-8';
 const DEFAULT_THROTTLE_MS = 1000;
 const ROADMAP_LIST_NAME = 'Roadmap';
 const ROADMAP_STATUSES = new Set(['LIVE', 'IN PROGRESS', 'UPCOMING']);
+const SUPPORT_LOG_LIST_NAME = 'CaseSupportLog';
+
+// Author is expanded so the log shows a name rather than a site-local user id.
+const SUPPORT_LOG_SELECT =
+  '$select=Id,Title,CaseType,CaseId,SupportAction,Reason,Changes,Outcome,' +
+  'RelatesTo,Created,Author/Title,Author/Name&$expand=Author';
 
 // Page size for `countCases`' Id-only read. 5,000 is SharePoint's List View
 // Threshold and the largest page it will serve; anything beyond it comes back
@@ -363,6 +371,58 @@ export class HttpSharePointClient {
         /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (item))
       )
     );
+  }
+
+  /**
+   * Every Support Log entry for one Case, newest first, filtered on the two indexed columns.
+   *
+   * @param {{ caseType: string, caseId: string }} subject
+   * @param {{ signal?: AbortSignal }} [opts]
+   * @returns {Promise<SupportLogEntry[]>}
+   */
+  async listSupportLog({ caseType, caseId }, opts = {}) {
+    const filter =
+      `CaseType eq '${escapeOData(caseType)}' and ` +
+      `CaseId eq '${escapeOData(caseId)}'`;
+    const url =
+      this._listItemsUrl(SUPPORT_LOG_LIST_NAME) +
+      `?$filter=${encodeURIComponent(filter)}&${SUPPORT_LOG_SELECT}` +
+      '&$orderby=Created desc,Id desc';
+    const items = await this._getAllPages(url, opts.signal);
+    return items.map((item) =>
+      supportLogEntryFromItem(
+        /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (item))
+      )
+    );
+  }
+
+  /**
+   * Append one Support Log entry and return its id; SharePoint stamps who and when.
+   *
+   * @param {NewSupportLogEntry} entry
+   * @returns {Promise<string>}
+   */
+  async addSupportLogEntry(entry) {
+    const body = await this._write(
+      this._listItemsUrl(SUPPORT_LOG_LIST_NAME),
+      'POST',
+      {},
+      JSON.stringify({
+        Title: entry.caseReference,
+        CaseType: entry.caseType,
+        CaseId: entry.caseId,
+        SupportAction: entry.action,
+        Reason: entry.reason,
+        Changes: JSON.stringify(entry.changes),
+        Outcome: entry.outcome,
+        RelatesTo: entry.relatesTo ?? '',
+      })
+    );
+    const id = body?.Id ?? /** @type {any} */ (body?.d)?.Id;
+    if (id === undefined || id === null || id === '') {
+      throw new Error('The Support Log did not return an id for the new entry');
+    }
+    return String(id);
   }
 
   /** @returns {Promise<string[]>} */
@@ -1328,6 +1388,46 @@ function roadmapItemFromItem(item) {
     status: /** @type {import('../sharepoint-client.js').RoadmapStatus} */ (
       status
     ),
+  };
+}
+
+/**
+ * One Support Log list item as a `SupportLogEntry`; unreadable `Changes` read as none.
+ *
+ * @param {Record<string, unknown>} item
+ * @returns {SupportLogEntry}
+ */
+function supportLogEntryFromItem(item) {
+  const id = String(item?.Id ?? '');
+  /** @type {import('../sharepoint-client.js').SupportLogChange[]} */
+  let changes = [];
+  try {
+    const parsed = JSON.parse(String(item?.Changes ?? '[]'));
+    if (Array.isArray(parsed)) changes = parsed;
+    else throw new Error('not a list');
+  } catch {
+    console.warn(
+      `Support Log entry "${id}" has unreadable Changes and is shown without them.`
+    );
+  }
+  const outcome = String(item?.Outcome ?? '');
+  const author = /** @type {Record<string, unknown> | null} */ (
+    item?.Author && typeof item.Author === 'object' ? item.Author : null
+  );
+  const relatesTo = String(item?.RelatesTo ?? '');
+  return {
+    id,
+    caseType: String(item?.CaseType ?? ''),
+    caseId: String(item?.CaseId ?? ''),
+    caseReference: String(item?.Title ?? ''),
+    action: String(item?.SupportAction ?? ''),
+    reason: String(item?.Reason ?? ''),
+    changes,
+    // An entry exists only because an action was taken, so anything else is recorded.
+    outcome: outcome === 'not-applied' ? 'not-applied' : 'recorded',
+    relatesTo: relatesTo === '' ? null : relatesTo,
+    createdAt: String(item?.Created ?? ''),
+    createdBy: String(author?.Title ?? author?.Name ?? ''),
   };
 }
 

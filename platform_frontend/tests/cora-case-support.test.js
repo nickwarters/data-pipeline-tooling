@@ -35,13 +35,18 @@ const SOURCES = [
   },
 ];
 
-/** @param {Record<string, unknown>} [overrides] */
+/**
+ * A Maintainer's route context whose client has an empty Support Log unless it brings one.
+ *
+ * @param {Record<string, any>} [overrides]
+ */
 function context(overrides = {}) {
+  const { client = {}, ...rest } = overrides;
   return /** @type {any} */ ({
-    client: {},
+    client: client && { listSupportLog: async () => [], ...client },
     chrome: makeChrome({ permissions: { isMaintainer: true } }),
     caseSources: SOURCES,
-    ...overrides,
+    ...rest,
   });
 }
 
@@ -483,7 +488,10 @@ test('case support: an aborted read is navigation, not a failure', async () => {
   const actions = [];
   slice.start(startTools(ctx, actions));
   await flush();
-  assert.deepEqual(actions, []);
+  assert.deepEqual(
+    actions.filter((action) => action.type.endsWith('-failed')),
+    []
+  );
 });
 
 test('case support: without a client the page still renders and reads nothing', () => {
@@ -497,6 +505,8 @@ test('case support: a Case-load result for no selected Case is ignored', () => {
   for (const action of [
     { type: 'case-support/case-loaded', row: makeCaseRow() },
     { type: 'case-support/case-failed', message: 'x' },
+    { type: 'case-support/log-loaded', entries: [] },
+    { type: 'case-support/log-failed', message: 'x' },
     { type: 'unrelated/event' },
   ]) {
     assert.equal(slice.reducer(slice.initialState, action), slice.initialState);
@@ -508,4 +518,180 @@ test('case support: the route for a Case encodes its parts', () => {
     caseSupportRouteFor({ caseType: 'a b', id: '1/2' }),
     '#/case-support/a%20b/1%2F2'
   );
+});
+
+/** @param {Partial<import('../src/sharepoint-client.js').SupportLogEntry>} [overrides] */
+function logEntry(overrides = {}) {
+  return {
+    id: '1',
+    caseType: 'complaints',
+    caseId: '1',
+    caseReference: 'CR-1',
+    action: 'reassign',
+    reason: 'Reviewer on leave.',
+    changes: [],
+    outcome: /** @type {const} */ ('recorded'),
+    relatesTo: null,
+    createdAt: '2026-10-01T09:15:00Z',
+    createdBy: 'Robin Maintainer',
+    ...overrides,
+  };
+}
+
+/** @param {any[]} entries */
+function loadedLogView(entries) {
+  const slice = createRouteSlice(
+    { caseType: 'complaints', id: '1', queryString: '' },
+    context()
+  );
+  const state = replay(slice, [
+    { type: 'case-support/case-loaded', row: makeCaseRow({ id: '1' }) },
+    { type: 'case-support/log-loaded', entries },
+  ]);
+  const log = viewOf(slice, state).querySelector('.cora-case-support-log');
+  assert.ok(log);
+  return log;
+}
+
+test("case support log: the selected Case's own log is read", async () => {
+  /** @type {any[]} */
+  const asked = [];
+  const entries = [logEntry()];
+  const ctx = context({
+    client: {
+      getCase: async () => makeCaseRow({ id: '42' }),
+      listSupportLog: async (/** @type {any} */ subject) => {
+        asked.push(subject);
+        return entries;
+      },
+    },
+  });
+  const slice = createRouteSlice(
+    { caseType: 'example-review', id: '42', queryString: '' },
+    ctx
+  );
+  /** @type {any[]} */
+  const actions = [];
+  slice.start(startTools(ctx, actions));
+  await flush();
+
+  assert.deepEqual(asked, [{ caseType: 'example-review', caseId: '42' }]);
+  assert.ok(
+    actions.some(
+      (action) =>
+        action.type === 'case-support/log-loaded' && action.entries === entries
+    )
+  );
+});
+
+test('case support log: each entry says what was done, by whom, when, why and to what', () => {
+  const log = loadedLogView([
+    logEntry({
+      changes: [
+        { field: 'assignedReviewer', before: 'user-a', after: 'user-b' },
+        { field: 'awaitingSince', before: '2026-09-20', after: null },
+        { field: 'awaitingResponsibleParty', before: true, after: false },
+      ],
+    }),
+  ]);
+
+  const text = log.textContent;
+  assert.match(text, /Reassign/, 'the action is named by its title');
+  assert.match(text, /Robin Maintainer, 1 Oct 2026/);
+  assert.match(text, /Reviewer on leave\./);
+  assert.match(text, /assignedReviewer: user-a → user-b/);
+  assert.match(text, /awaitingSince: 2026-09-20 → —/);
+  assert.match(text, /awaitingResponsibleParty: true → false/);
+  assert.doesNotMatch(text, /Not applied/);
+});
+
+test('case support log: an action whose Case write failed is marked not applied', () => {
+  const log = loadedLogView([
+    logEntry({ id: '2', outcome: 'not-applied', relatesTo: '1' }),
+    logEntry({ id: '1' }),
+  ]);
+  const items = log.querySelectorAll('li.cora-case-support-log-entry');
+  assert.equal(items.length, 2);
+  assert.match(items[0].textContent, /Not applied/);
+  assert.doesNotMatch(items[1].textContent, /Not applied/);
+});
+
+test('case support log: an action the page does not know is shown by its stored name', () => {
+  const log = loadedLogView([
+    logEntry({ action: 'retired-action', createdBy: '' }),
+  ]);
+  assert.match(log.textContent, /retired-action/);
+  assert.match(log.textContent, /Unknown, /);
+});
+
+test('case support log: a Case with no support history says so', () => {
+  assert.match(
+    loadedLogView([]).textContent,
+    /No support actions have been recorded on this Case/
+  );
+});
+
+test('case support log: a log that cannot be read is reported in its own panel', async () => {
+  const ctx = context({
+    client: {
+      getCase: async () => makeCaseRow({ id: '1', title: 'CR-1' }),
+      listSupportLog: async () => {
+        throw new Error('list missing');
+      },
+    },
+  });
+  const slice = createRouteSlice(
+    { caseType: 'complaints', id: '1', queryString: '' },
+    ctx
+  );
+  /** @type {any[]} */
+  const actions = [];
+  slice.start(startTools(ctx, actions));
+  await flush();
+
+  const view = viewOf(slice, replay(slice, actions));
+  assert.ok(
+    getByRole(view, 'heading', { name: 'CR-1' }),
+    'the Case is still shown'
+  );
+  const log = /** @type {any} */ (view.querySelector('.cora-case-support-log'));
+  assert.match(
+    getByRole(log, 'alert').textContent,
+    /support log could not be loaded.*list missing/
+  );
+});
+
+test('case support log: shows a loading placeholder until it is read', () => {
+  const slice = createRouteSlice(
+    { caseType: 'complaints', id: '1', queryString: '' },
+    context()
+  );
+  const state = slice.reducer(slice.initialState, {
+    type: 'case-support/case-loaded',
+    row: makeCaseRow({ id: '1' }),
+  });
+  const log = /** @type {any} */ (
+    viewOf(slice, state).querySelector('.cora-case-support-log')
+  );
+  assert.ok(log.querySelector('.cora-loading'));
+});
+
+test('case support log: an unknown Case Type asks for no log', async () => {
+  let asked = false;
+  const ctx = context({
+    client: {
+      getCase: async () => null,
+      listSupportLog: async () => {
+        asked = true;
+        return [];
+      },
+    },
+  });
+  const slice = createRouteSlice(
+    { caseType: 'nope', id: '1', queryString: '' },
+    ctx
+  );
+  slice.start(startTools(ctx, []));
+  await flush();
+  assert.equal(asked, false);
 });
