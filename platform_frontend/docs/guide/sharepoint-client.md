@@ -91,6 +91,59 @@ cached, so writing them into a Person column afterwards needs no `ensureuser`
 call. In mock mode a directory person in `dev/fixtures/people.js` is a member of
 the groups listed in their private `groups` field.
 
+### `listUserGroups(account)` and `getGroupEditability(groupNames)`
+
+The two reads behind the **Access** page. `listUserGroups` returns the titles of
+every site group one person belongs to, through
+`siteusers/getbyloginname(@v)/groups`, and answers `[]` for a person SharePoint
+does not know (a 404) rather than failing, since someone who has never opened
+the site simply holds nothing. `getGroupEditability` asks, once per distinct
+name, whether the current user may change a group's membership
+(`CanCurrentUserEditMembership`) and answers `editable`, `read-only` or
+`missing` (a 404). Access change checks it before it writes anything, so a
+group the Maintainer cannot change refuses the change with nothing logged.
+Both are bound to the page's abort signal like any other read.
+
+### `addGroupMember(group, account)` and `removeGroupMember(group, account)`
+
+The two membership writes, each returning `{ ok: true }` or
+`{ ok: false, status }` and never throwing for an HTTP error. Add posts the
+login to `sitegroups/getbyname(...)/users`; remove posts to
+`.../users/removebyloginname(@v)`. Both go through the shared write path, so
+they carry the form digest and retry once on a 403.
+
+**The two are not symmetric, and the difference is the tenant's, not ours.**
+Adding someone to a group they are already in succeeds (200), so a repeated add
+is harmless. Removing someone from a group they are **not** in is an API
+error. Three rules follow:
+
+- A revoke only removes the groups the person's **freshly re-read** group list
+  contains. `runAccessChange` re-reads `listUserGroups` immediately before it
+  plans, so a page that went stale cannot trigger a remove of a non-member, and
+  a plan never includes a group the person lacks.
+- A failed remove is a failure. There is no "404 or 400 means already gone"
+  shortcut: the change is reported as `not-applied` or `partly-applied` like
+  any other failed write, with the status in the message.
+- The mock mirrors this: `addGroupMember` is idempotent, and
+  `removeGroupMember` of a non-member answers `{ ok: false, status: 400 }`.
+
+A success may come back with an empty body (200 or 204); only the status is
+read.
+
+### `listAccessLog(subject)` and `addAccessLogEntry(entry)`
+
+The **Access Log** is a single site-wide `CoraAccessLog` list. Unlike every
+other list the client reads, it is **not** environment-prefixed (there is no
+`uat_CoraAccessLog`), because the groups it records changes to are shared by
+every environment; the one exemption is a named constant in the HTTP client and
+everything else is still prefixed. `listAccessLog` reads one person's entries
+newest first, filtering on the indexed `Title` column (the person's login) so
+the read stays inside the List View Threshold. `addAccessLogEntry` appends an
+entry and returns its id; as with the Support Log there is no update or delete.
+Each entry's `Changes` cell is JSON and is read the same forgiving way, and any
+`Outcome` other than `not-applied` or `partly-applied` reads as `recorded`. The
+mock keeps the log in memory, seeded from `dev/fixtures/access-log.js`.
+
 ---
 
 ## Running in mock mode

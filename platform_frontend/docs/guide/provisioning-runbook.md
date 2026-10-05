@@ -126,7 +126,38 @@ permission level with **Add Items** and **View Items** but not **Edit Items** or
 **Delete Items**, so an entry once written stays as written. Grant nobody else
 access through the app; the data pipeline's service account needs read.
 
-## 4. Question Bank artifacts
+## 4. CORA Access Log list — `CoraAccessLog`
+
+Provision one site-wide `CoraAccessLog` list for the **Access Log** behind the
+Access page. Unlike every other list here it has **no** `<name>_` copy in a
+non-production environment: the CORA groups it records changes to are shared by
+every environment, so there is one log, and the Access page in every environment
+writes to it (see ADR-0057). One entry is appended per change; no entry is ever
+edited.
+
+| Internal name  | SharePoint type            | Indexed | Notes                                                                                |
+| -------------- | -------------------------- | ------- | ------------------------------------------------------------------------------------ |
+| `Title`        | Single line of text        | Yes     | The login name of the person whose access changed.                                   |
+| `TargetName`   | Single line of text        |         | Their display name when the change was made.                                         |
+| `AccessAction` | Single line of text        |         | Exactly `grant` or `revoke`.                                                         |
+| `AccessRole`   | Single line of text        |         | The role's id, e.g. `reviewer` or `case-type-owner`.                                 |
+| `CaseType`     | Single line of text        |         | The Case Type slug for a per-Case-Type role; empty for a site-wide one.              |
+| `Reason`       | Multiple lines, plain text |         | The Maintainer's reason. Required by the app.                                        |
+| `Changes`      | Multiple lines, plain text |         | JSON list of `{ field, before, after }`, one per group, naming the SharePoint group. |
+| `Outcome`      | Single line of text        |         | Exactly `recorded`, `not-applied` or `partly-applied`.                               |
+| `RelatesTo`    | Single line of text        |         | On a `not-applied` or `partly-applied` entry, the id of the entry it follows.        |
+
+`Created` and `Author` are SharePoint's own and are what the page shows as when
+and who. Create the `Title` index **while the list is empty**: every read filters
+on it, and an unindexed filter fails once the list passes the List View
+Threshold.
+
+Break permission inheritance and grant `CORA Owner Delegates` a custom
+permission level with **Add Items** and **View Items** but not **Edit Items** or
+**Delete Items**, so an entry once written stays as written. Grant nobody else
+access through the app; the data pipeline's service account needs read.
+
+## 5. Question Bank artifacts
 
 Do **not** provision a `QuestionDefinitions` list. Each Case Type owns a
 `case-types/banks/{slug}.txt` file containing JSON text. `deploy_to_sharepoint.py`
@@ -146,7 +177,7 @@ as-reviewed question catalogue.
 
 ---
 
-## 5. Groups per Case Type
+## 6. Groups per Case Type
 
 SharePoint groups fall on two orthogonal axes. For a Case Type whose
 display name is `X` (e.g. `Complaints`, **not** the slug `complaints`), provision:
@@ -218,7 +249,7 @@ serve the Case itself, including from a notification's deep link.
 
 ---
 
-## 6. Recurring maintenance — the working-day holiday list
+## 7. Recurring maintenance — the working-day holiday list
 
 The remediation SLA is **10 working days** after Send Actions, which excludes
 weekends **and** public holidays. The holiday source is an **in-code array**,
