@@ -675,6 +675,10 @@ scripts/
                                 #   immutable version named by its own identity. Idempotent and
                                 #   append-only; run it after editing a bank, or a Case completed
                                 #   against it stamps a version no file answers to
+  import_bank_from_excel.py     # builds case-types/banks/{slug}.txt from one Excel sheet over the
+                                #   existing bank (unlisted questions kept as deprecated), then
+                                #   publishes it through publish-bank.js so the version and history
+                                #   advance by the one rule. Needs openpyxl from the root venv
   scaffold_case_type.py         # scaffolds a new Case Type module + bank artifact (ADR-0028)
   deploy_to_sharepoint.py       # the diff sync, plus its pre-flight verify gate, graph-derived
                                 #   leaf-first upload order and post-upload hash verification
