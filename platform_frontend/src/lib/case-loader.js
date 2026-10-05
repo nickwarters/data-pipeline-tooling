@@ -58,6 +58,53 @@ function caseTypeLoadErrorMessage(error, caseType, isRouteCaseType) {
 }
 
 /**
+ * The questions a Case Type's `selectQuestions` keeps for this Case, in bank
+ * order. Filtering the bank by the returned ids, rather than taking the
+ * returned list as it is, is what keeps the selection a narrowing: it cannot
+ * add a question, reorder the bank or hand back an altered copy of one.
+ *
+ * @param {CaseTypeConfig} config
+ * @param {QuestionDefinition[]} questions
+ * @param {Record<string, string> | undefined} details
+ * @returns {QuestionDefinition[]}
+ */
+function selectForCase(config, questions, details) {
+  if (!config.selectQuestions) return questions;
+  const kept = new Set(
+    config.selectQuestions(questions, details ?? {}).map((q) => q.id)
+  );
+  return questions.filter((q) => kept.has(q.id));
+}
+
+/**
+ * The Case's Answers less any to a question its attributes no longer select.
+ *
+ * `computeOutcome` reads the Case Type's whole bank, so an Answer left over
+ * from before an attribute changed would still score the Outcome; and a
+ * selected question whose `showWhen` names a deselected one would stay
+ * applicable off an Answer nobody can see. Dropping them here is the same
+ * rule an Answer write applies to a question that stops being applicable, and
+ * it reaches the stored Case on the next write in the same way. Keys outside
+ * the bank — General Questions, retired questions — are not the selection's
+ * to judge and pass through.
+ *
+ * @param {Record<string, Answer>} answers
+ * @param {QuestionDefinition[]} bankQuestions
+ * @param {QuestionDefinition[]} selected
+ * @returns {Record<string, Answer>}
+ */
+function withoutDeselectedAnswers(answers, bankQuestions, selected) {
+  if (selected.length === bankQuestions.length) return { ...answers };
+  const keep = new Set(selected.map((q) => q.id));
+  const deselected = new Set(
+    bankQuestions.filter((q) => !keep.has(q.id)).map((q) => q.id)
+  );
+  return Object.fromEntries(
+    Object.entries(answers).filter(([id]) => !deselected.has(id))
+  );
+}
+
+/**
  * @typedef {Object} CaseLoaderOptions
  * @property {SharePointClient} client
  * @property {SaveQueue} saveQueue
@@ -295,6 +342,14 @@ export class CaseLoader {
       this.catalogue = config.questions.filter((q) => !q.deprecated);
     }
 
+    // Narrowed before anything is derived from it, so every evaluator on the
+    // page — applicability, progress, the Summary, completion — sees only the
+    // questions this Case's attributes select, and none of them needs to know
+    // attributes exist. A frozen catalogue is narrowed too: otherwise the
+    // questions the Reviewer never saw would reappear on it, unanswered.
+    const bankQuestions = this.catalogue;
+    this.catalogue = selectForCase(config, bankQuestions, caseRow.details);
+
     // Failure is derived, not authored: annotate the catalogue with each
     // question's failing response values (every option mapped to a non-default
     // Outcome). A frozen Case derives against its snapshot's default so the
@@ -310,7 +365,11 @@ export class CaseLoader {
     // the catalogue while no Question Definition id can be mistaken for one.
     validateAnswerKeyNamespace(this.catalogue);
 
-    this.answers = { ...caseRow.answers };
+    this.answers = withoutDeselectedAnswers(
+      caseRow.answers,
+      bankQuestions,
+      this.catalogue
+    );
 
     const actualUserId = this.currentUserId || currentUser.id;
 

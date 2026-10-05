@@ -400,6 +400,28 @@ What each field does, and how to choose its value:
   vocabulary, delegate to `computeConfiguredOutcome` as above. It is a plain
   exported function precisely so a future type can implement bespoke logic —
   applicability is data (`showWhen`), outcome is code.
+- **`selectQuestions`** _(optional)_ — narrows the bank for one Case by that
+  Case's own attributes, where `showWhen` can only look at other Answers. It is
+  handed the bank's active questions and the Case's `details`, and returns the
+  ones to keep:
+
+  ```js
+  selectQuestions(questions, details) {
+    return details.product === 'Mortgage'
+      ? questions
+      : questions.filter((q) => q.questionGroup !== 'Mortgage checks');
+  },
+  ```
+
+  - **Where it runs.** The Case Review loader applies it every time a Case is
+    opened, live or frozen.
+  - **What a dropped question does.** It is hidden and does not hold
+    completion open, and Answers to it are dropped.
+  - **Narrowing only.** The function can only narrow: anything it returns that
+    is not in the bank is ignored, and the bank's order stands.
+  - **Which keys it reads.** Read only the `details` keys you need. Selection
+    is opaque to the bank editor's impact simulator for now. See
+    [ADR-0056](../adr/0056-case-types-select-questions-by-case-attributes-in-code.md).
 
 Optional fields to know about (all in the `CaseTypeConfig` typedef):
 `sectionLabels` renames a Section's display copy per type. Each Section carries

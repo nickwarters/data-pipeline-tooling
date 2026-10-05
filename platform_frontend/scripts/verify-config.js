@@ -190,6 +190,14 @@ export async function checkCaseTypes(options = {}) {
         'must export a `computeOutcome` function — the Outcome is code, not a descriptor'
       );
     }
+    if (
+      config?.selectQuestions !== undefined &&
+      typeof config.selectQuestions !== 'function'
+    ) {
+      fail(
+        'declares a `selectQuestions` that is not a function — choosing questions by Case attributes is code, not a descriptor'
+      );
+    }
     if (!isNonEmptyString(config?.listName)) {
       fail(
         'declares no `listName`; every Case Type must name the SharePoint list its Cases live on'
