@@ -56,6 +56,7 @@ import * as roadmapPage from './pages/roadmap.js';
 import * as myTeamPage from './pages/cora-my-team.js';
 import * as caseSearchPage from './pages/cora-case-search.js';
 import * as caseSupportPage from './pages/cora-case-support.js';
+import * as accessPage from './pages/cora-access.js';
 
 /** @typedef {import('./setup/register-routes.js').AppContext} AppContext */
 /** @typedef {import('./setup/register-routes.js').PagePlugin} PagePlugin */
@@ -265,6 +266,14 @@ export const APP_CONFIG = {
       // Maintainers only, on the route as well as the link: these actions change Cases.
       guard: (caps) => caps.isMaintainer,
       nav: { label: 'Case Support', order: 80 },
+    },
+    {
+      id: 'access',
+      paths: ['#/access', '#/access/:account'],
+      page: accessPage,
+      // Maintainers only, on the route as well as the link: these changes decide who may open what.
+      guard: (caps) => caps.isMaintainer,
+      nav: { label: 'Access', order: 90 },
     },
   ],
 };

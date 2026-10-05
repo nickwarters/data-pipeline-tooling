@@ -48,6 +48,14 @@ const ROADMAP_STATUSES = new Set(['LIVE', 'IN PROGRESS', 'UPCOMING']);
 // SharePoint's PrincipalType for a user, as opposed to a group.
 const USER_PRINCIPAL = 1;
 const SUPPORT_LOG_LIST_NAME = 'CaseSupportLog';
+const ACCESS_LOG_LIST_NAME = 'CoraAccessLog';
+
+// Lists that are one list for every environment, because the records are about shared groups.
+const UNPREFIXED_LISTS = new Set([ACCESS_LOG_LIST_NAME]);
+
+const ACCESS_LOG_SELECT =
+  '$select=Id,Title,TargetName,AccessAction,AccessRole,CaseType,Reason,' +
+  'Changes,Outcome,RelatesTo,Created,Author/Title,Author/Name&$expand=Author';
 
 // Author is expanded so the log shows a name rather than a site-local user id.
 const SUPPORT_LOG_SELECT =
@@ -155,6 +163,7 @@ export class HttpSharePointClient {
     // Environment scoping: the prefix is applied centrally in
     // _listItemUrl/_listItemsUrl so every list access — including per-Case-Type
     // `opts.listName` overrides — lands in the environment's lists. Empty for prod.
+    // The one exemption is a list named in UNPREFIXED_LISTS, shared by every environment.
     this._listPrefix = opts.listPrefix ?? '';
     /** @type {FetchImpl} */
     this._fetch =
@@ -528,6 +537,159 @@ export class HttpSharePointClient {
         ? [{ loginName, displayName, email: rec.Email }]
         : [{ loginName, displayName }];
     });
+  }
+
+  /**
+   * The SharePoint groups a person belongs to directly, by title; a person the site has never seen holds none.
+   *
+   * @param {string} account
+   * @param {{ signal?: AbortSignal }} [opts]
+   * @returns {Promise<string[]>}
+   */
+  async listUserGroups(account, opts = {}) {
+    const url = this._absolute(
+      `/_api/web/siteusers/getbyloginname(@v)/groups?@v='${encodeURIComponent(escapeOData(toClaimsLogin(account)))}'&$select=Id,Title`
+    );
+    try {
+      const items = await this._getAllPages(url, opts.signal);
+      return items.map((item) =>
+        String(/** @type {Record<string, unknown>} */ (item).Title ?? '')
+      );
+    } catch (err) {
+      if (/** @type {any} */ (err).status === 404) return [];
+      throw err;
+    }
+  }
+
+  /**
+   * Whether the signed-in user may change each named group's membership; a group that is not there is `missing`.
+   *
+   * @param {string[]} groupNames
+   * @param {{ signal?: AbortSignal }} [opts]
+   * @returns {Promise<Record<string, import('../sharepoint-client.js').GroupEditability>>}
+   */
+  async getGroupEditability(groupNames, opts = {}) {
+    const entries = await Promise.all(
+      [...new Set(groupNames)].map(async (name) => {
+        const url = this._absolute(
+          `/_api/web/sitegroups/getbyname('${encodeURIComponent(escapeOData(name))}')` +
+            '?$select=Id,CanCurrentUserEditMembership'
+        );
+        try {
+          const body = await this._read(url, opts.signal);
+          return /** @type {const} */ ([
+            name,
+            body?.CanCurrentUserEditMembership === true
+              ? 'editable'
+              : 'read-only',
+          ]);
+        } catch (err) {
+          if (/** @type {any} */ (err).status === 404) {
+            return /** @type {const} */ ([name, 'missing']);
+          }
+          throw err;
+        }
+      })
+    );
+    return Object.fromEntries(entries);
+  }
+
+  /**
+   * Add a person to a group as the signed-in user; the failure comes back as a status, never a throw.
+   *
+   * @param {string} groupName
+   * @param {string} account
+   * @returns {Promise<import('../sharepoint-client.js').GroupMemberWrite>}
+   */
+  async addGroupMember(groupName, account) {
+    try {
+      await this._write(
+        this._absolute(
+          `/_api/web/sitegroups/getbyname('${encodeURIComponent(escapeOData(groupName))}')/users`
+        ),
+        'POST',
+        {},
+        JSON.stringify({ LoginName: toClaimsLogin(account) })
+      );
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, status: /** @type {any} */ (err).status || 500 };
+    }
+  }
+
+  /**
+   * Take a person out of a group as the signed-in user; the failure comes back as a status, never a throw.
+   *
+   * @param {string} groupName
+   * @param {string} account
+   * @returns {Promise<import('../sharepoint-client.js').GroupMemberWrite>}
+   */
+  async removeGroupMember(groupName, account) {
+    try {
+      await this._write(
+        this._absolute(
+          `/_api/web/sitegroups/getbyname('${encodeURIComponent(escapeOData(groupName))}')/users/removebyloginname(@v)` +
+            `?@v='${encodeURIComponent(escapeOData(toClaimsLogin(account)))}'`
+        ),
+        'POST',
+        {},
+        null
+      );
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, status: /** @type {any} */ (err).status || 500 };
+    }
+  }
+
+  /**
+   * Every Access Log entry about one person, newest first, filtered on the indexed Title column.
+   *
+   * @param {{ account: string }} subject
+   * @param {{ signal?: AbortSignal }} [opts]
+   * @returns {Promise<import('../sharepoint-client.js').AccessLogEntry[]>}
+   */
+  async listAccessLog({ account }, opts = {}) {
+    const filter = `Title eq '${escapeOData(account)}'`;
+    const url =
+      this._listItemsUrl(ACCESS_LOG_LIST_NAME) +
+      `?$filter=${encodeURIComponent(filter)}&${ACCESS_LOG_SELECT}` +
+      '&$orderby=Created desc,Id desc';
+    const items = await this._getAllPages(url, opts.signal);
+    return items.map((item) =>
+      accessLogEntryFromItem(
+        /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (item))
+      )
+    );
+  }
+
+  /**
+   * Append one Access Log entry and return its id; SharePoint stamps who and when.
+   *
+   * @param {import('../sharepoint-client.js').NewAccessLogEntry} entry
+   * @returns {Promise<string>}
+   */
+  async addAccessLogEntry(entry) {
+    const body = await this._write(
+      this._listItemsUrl(ACCESS_LOG_LIST_NAME),
+      'POST',
+      {},
+      JSON.stringify({
+        Title: entry.account,
+        TargetName: entry.targetName,
+        AccessAction: entry.action,
+        AccessRole: entry.role,
+        CaseType: entry.caseType,
+        Reason: entry.reason,
+        Changes: JSON.stringify(entry.changes),
+        Outcome: entry.outcome,
+        RelatesTo: entry.relatesTo ?? '',
+      })
+    );
+    const id = body?.Id ?? /** @type {any} */ (body?.d)?.Id;
+    if (id === undefined || id === null || id === '') {
+      throw new Error('The Access Log did not return an id for the new entry');
+    }
+    return String(id);
   }
 
   /**
@@ -956,17 +1118,29 @@ export class HttpSharePointClient {
     }
   }
 
+  /**
+   * The list's title in this environment: prefixed, unless it is one list for every environment.
+   *
+   * @param {string} listName
+   * @returns {string}
+   */
+  _listTitle(listName) {
+    return UNPREFIXED_LISTS.has(listName)
+      ? listName
+      : this._listPrefix + listName;
+  }
+
   /** @param {string} listName @param {string} id */
   _listItemUrl(listName, id) {
     return this._absolute(
-      `/_api/web/lists/getbytitle('${encodeURIComponent(this._listPrefix + listName)}')/items('${encodeURIComponent(id)}')`
+      `/_api/web/lists/getbytitle('${encodeURIComponent(this._listTitle(listName))}')/items('${encodeURIComponent(id)}')`
     );
   }
 
   /** @param {string} listName */
   _listItemsUrl(listName) {
     return this._absolute(
-      `/_api/web/lists/getbytitle('${encodeURIComponent(this._listPrefix + listName)}')/items`
+      `/_api/web/lists/getbytitle('${encodeURIComponent(this._listTitle(listName))}')/items`
     );
   }
 
@@ -1428,33 +1602,79 @@ function roadmapItemFromItem(item) {
  * @returns {SupportLogEntry}
  */
 function supportLogEntryFromItem(item) {
-  const id = String(item?.Id ?? '');
-  /** @type {import('../sharepoint-client.js').SupportLogChange[]} */
-  let changes = [];
-  try {
-    const parsed = JSON.parse(String(item?.Changes ?? '[]'));
-    if (Array.isArray(parsed)) changes = parsed;
-    else throw new Error('not a list');
-  } catch {
-    console.warn(
-      `Support Log entry "${id}" has unreadable Changes and is shown without them.`
-    );
-  }
   const outcome = String(item?.Outcome ?? '');
-  const author = /** @type {Record<string, unknown> | null} */ (
-    item?.Author && typeof item.Author === 'object' ? item.Author : null
-  );
-  const relatesTo = String(item?.RelatesTo ?? '');
   return {
-    id,
+    id: String(item?.Id ?? ''),
     caseType: String(item?.CaseType ?? ''),
     caseId: String(item?.CaseId ?? ''),
     caseReference: String(item?.Title ?? ''),
     action: String(item?.SupportAction ?? ''),
     reason: String(item?.Reason ?? ''),
-    changes,
+    changes: logChangesFromItem(item, 'Support Log'),
     // An entry exists only because an action was taken, so anything else is recorded.
     outcome: outcome === 'not-applied' ? 'not-applied' : 'recorded',
+    ...logStampFromItem(item),
+  };
+}
+
+/**
+ * One Access Log list item as an `AccessLogEntry`; an unknown outcome reads as recorded and unreadable `Changes` as none.
+ *
+ * @param {Record<string, unknown>} item
+ * @returns {import('../sharepoint-client.js').AccessLogEntry}
+ */
+function accessLogEntryFromItem(item) {
+  const outcome = String(item?.Outcome ?? '');
+  const action = String(item?.AccessAction ?? '');
+  return {
+    id: String(item?.Id ?? ''),
+    account: String(item?.Title ?? ''),
+    targetName: String(item?.TargetName ?? ''),
+    action: action === 'revoke' ? 'revoke' : 'grant',
+    role: String(item?.AccessRole ?? ''),
+    caseType: String(item?.CaseType ?? ''),
+    reason: String(item?.Reason ?? ''),
+    changes: logChangesFromItem(item, 'Access Log'),
+    outcome:
+      outcome === 'not-applied' || outcome === 'partly-applied'
+        ? outcome
+        : 'recorded',
+    ...logStampFromItem(item),
+  };
+}
+
+/**
+ * The `Changes` list of a log item; one that cannot be read as a list is none, with a warning naming the entry.
+ *
+ * @param {Record<string, unknown>} item
+ * @param {string} logName
+ * @returns {import('../sharepoint-client.js').SupportLogChange[]}
+ */
+function logChangesFromItem(item, logName) {
+  try {
+    const parsed = JSON.parse(String(item?.Changes ?? '[]'));
+    if (Array.isArray(parsed)) return parsed;
+    throw new Error('not a list');
+  } catch {
+    console.warn(
+      `${logName} entry "${String(item?.Id ?? '')}" has unreadable Changes and is shown without them.`
+    );
+    return [];
+  }
+}
+
+/**
+ * What every log item carries beyond its own columns: what it relates to, and SharePoint's own Created and Author.
+ *
+ * @param {Record<string, unknown>} item
+ * @returns {{ relatesTo: string | null, createdAt: string, createdBy: string }}
+ */
+function logStampFromItem(item) {
+  const author = /** @type {Record<string, unknown> | null} */ (
+    item?.Author && typeof item.Author === 'object' ? item.Author : null
+  );
+  const relatesTo = String(item?.RelatesTo ?? '');
+  return {
     relatesTo: relatesTo === '' ? null : relatesTo,
     createdAt: String(item?.Created ?? ''),
     createdBy: String(author?.Title ?? author?.Name ?? ''),

@@ -495,6 +495,49 @@
  */
 
 /**
+ * `recorded` is written before the groups change; a follow-up says `not-applied` or `partly-applied` if they did not all change.
+ *
+ * @typedef {'recorded' | 'not-applied' | 'partly-applied'} AccessLogOutcome
+ */
+
+/**
+ * One Access Log entry; `account` is the bare login of the person it is about and `caseType` is empty for a role with none.
+ *
+ * @typedef {{
+ * id: string,
+ * account: string,
+ * targetName: string,
+ * action: 'grant' | 'revoke',
+ * role: string,
+ * caseType: string,
+ * reason: string,
+ * changes: SupportLogChange[],
+ * outcome: AccessLogOutcome,
+ * relatesTo: string | null,
+ * createdAt: string,
+ * createdBy: string
+ * }} AccessLogEntry
+ */
+
+/**
+ * An Access Log entry as written: everything but what SharePoint stamps.
+ *
+ * @typedef {Omit<AccessLogEntry, 'id' | 'createdAt' | 'createdBy'>} NewAccessLogEntry
+ */
+
+/**
+ * Whether the signed-in user may change a group's membership, or the group is not there at all.
+ *
+ * @typedef {'editable' | 'read-only' | 'missing'} GroupEditability
+ */
+
+/**
+ * The outcome of one membership write; an HTTP failure is a value here and never a throw.
+ *
+ * @typedef {{ ok: true } | { ok: false, status: number }} GroupMemberWrite
+ */
+
+/**
  * Every REST consumer codes against this interface. Both MockSharePointClient
  * and HttpSharePointClient satisfy it identically. `resolveManagers` returns
  * canonical lower-cased bare account names; unresolved or absent managers are
@@ -512,6 +555,12 @@
  * addSupportLogEntry: (entry: NewSupportLogEntry) => Promise<string>,
  * searchPeople: (query: string) => Promise<PersonResult[]>,
  * listGroupMembers: (groupName: string, opts?: { signal?: AbortSignal }) => Promise<PersonResult[]>,
+ * listUserGroups: (account: string, opts?: { signal?: AbortSignal }) => Promise<string[]>,
+ * getGroupEditability: (groupNames: string[], opts?: { signal?: AbortSignal }) => Promise<Record<string, GroupEditability>>,
+ * addGroupMember: (groupName: string, account: string) => Promise<GroupMemberWrite>,
+ * removeGroupMember: (groupName: string, account: string) => Promise<GroupMemberWrite>,
+ * listAccessLog: (subject: { account: string }, opts?: { signal?: AbortSignal }) => Promise<AccessLogEntry[]>,
+ * addAccessLogEntry: (entry: NewAccessLogEntry) => Promise<string>,
  * resolveUsers: (accountNames: string[]) => Promise<Record<string, string | null>>,
  * resolveManagers: (accountNames: string[]) => Promise<Record<string, string | null>>,
  * getBankVersion: (slug: string) => Promise<string | null>,

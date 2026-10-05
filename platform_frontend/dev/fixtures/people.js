@@ -26,6 +26,18 @@ export const people = [
     manager: 'user-rm',
     groups: ['Reviewers - Complaints'],
   },
+  // Fully provisioned: a Reviewer and Case Type Owner for Complaints, so Access shows a role with nothing missing.
+  {
+    loginName: 'pgrant',
+    displayName: 'Pat Grant',
+    email: 'pat.grant@contoso.com',
+    manager: 'user-rm',
+    groups: [
+      'Reviewers',
+      'Reviewers - Complaints',
+      'CaseTypeOwner - Complaints',
+    ],
+  },
   {
     loginName: 'areviewer',
     displayName: 'Alex Reviewer',
