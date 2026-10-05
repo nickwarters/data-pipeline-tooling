@@ -328,6 +328,49 @@ def test_stage_dwell_credits_a_status_only_when_a_later_poll_saw_it_change():
     assert row["open_interval_count"] == 0
 
 
+def test_an_unassigned_case_dwells_in_to_allocate_again_as_its_own_interval():
+    # Claimed 2 Jul, un-assigned back to the pot 4 Jul, claimed again 5 Jul.
+    history = [
+        _observation(
+            "1", "a", "2026-07-01T09:00:00+00:00", "To-allocate", reviewer=None
+        ),
+        _observation("1", "b", "2026-07-02T09:00:00+00:00", "In-progress"),
+        _observation(
+            "1", "c", "2026-07-04T09:00:00+00:00", "To-allocate", reviewer=None
+        ),
+        _observation("1", "d", "2026-07-05T09:00:00+00:00", "In-progress"),
+    ]
+    result = _rows(metrics.case_stage_dwell(given_rows(history).read(), as_of=AS_OF))
+    by_status = {row["status"]: row for row in result}
+
+    assert by_status["To-allocate"]["interval_count"] == 2
+    assert by_status["To-allocate"]["dwell_days_max"] == 1.0
+    assert by_status["In-progress"]["interval_count"] == 1
+    assert by_status["In-progress"]["dwell_days_max"] == 2.0
+    assert by_status["In-progress"]["open_interval_count"] == 1
+
+
+def test_backlog_counts_an_unassigned_case_back_in_to_allocate():
+    as_of = "2026-07-04T18:00:00+00:00"
+    history = [
+        _observation(
+            "1", "a", "2026-07-01T09:00:00+00:00", "To-allocate", reviewer=None
+        ),
+        _observation("1", "b", "2026-07-02T09:00:00+00:00", "In-progress"),
+        _observation(
+            "1", "c", "2026-07-04T09:00:00+00:00", "To-allocate", reviewer=None
+        ),
+    ]
+    result = metrics.case_backlog(given_rows(history).read(), as_of=as_of)
+
+    assert _counts(result, "backlog_date") == {
+        ("2026-07-01", "To-allocate"): 1,
+        ("2026-07-02", "In-progress"): 1,
+        ("2026-07-03", "In-progress"): 1,
+        ("2026-07-04", "To-allocate"): 1,
+    }
+
+
 def test_hold_runs_from_the_source_stamp_or_the_observation_to_release_or_as_of():
     result = _rows(metrics.case_hold(given_rows(HISTORY).read(), as_of=AS_OF))
 

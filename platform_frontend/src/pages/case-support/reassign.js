@@ -4,6 +4,7 @@ import { CASE_STATUS } from '../../lib/case-statuses.js';
 import { EmptyState, LoadingState } from '../../lib/empty-state.js';
 import { resolveReviewerManager } from '../../services/reviewer-manager.js';
 import { runSupportAction } from '../../services/support-action.js';
+import { formFooterView, reasonFieldView } from './form-parts.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../../sharepoint-client.js').PersonResult} PersonResult */
@@ -170,47 +171,11 @@ export function reassignFormView(form, groupName, handlers) {
       'The assignment time and Reviewer Manager are restamped; the Due Date and status are unchanged.'
     ),
     candidatesView(form, groupName, handlers),
-    h(
-      'label',
-      { className: 'cora-case-support-field' },
-      h('span', {}, 'Reason'),
-      h('textarea', {
-        className: 'cora-case-support-reason',
-        value: form.reason,
-        disabled: form.saving,
-        oninput: (/** @type {any} */ ev) =>
-          handlers.onReason(ev.target?.value ?? ''),
-      })
-    ),
-    form.error &&
-      h(
-        'p',
-        { className: 'cora-case-support-error', role: 'alert' },
-        form.error
-      ),
-    h(
-      'div',
-      { className: 'cora-case-support-form-actions' },
-      h(
-        'button',
-        {
-          type: 'button',
-          className: 'cora-case-support-submit',
-          disabled: !ready || form.saving,
-          onclick: () => handlers.onSubmit(),
-        },
-        form.saving ? 'Reassigning…' : 'Reassign'
-      ),
-      h(
-        'button',
-        {
-          type: 'button',
-          className: 'cora-btn-secondary cora-case-support-cancel',
-          disabled: form.saving,
-          onclick: () => handlers.onCancel(),
-        },
-        'Cancel'
-      )
+    reasonFieldView(form, handlers.onReason),
+    ...formFooterView(
+      form,
+      { label: 'Reassign', savingLabel: 'Reassigning…', ready },
+      handlers
     )
   );
 }

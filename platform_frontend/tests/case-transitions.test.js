@@ -5,6 +5,7 @@ import {
   buildActionsInProgressTransition,
   buildCompletedTransition,
   buildFinalCompleteTransition,
+  buildUnassignTransition,
   buildVoidTransition,
 } from '../src/evaluators/case-transitions.js';
 import { CASE_STATUS } from '../src/lib/case-statuses.js';
@@ -317,4 +318,18 @@ test('Case transitions: final close does not re-snapshot the reportable outcome'
   assert.equal(typeof fields.completedAt, 'string');
   assert.equal(Object.hasOwn(fields, 'reportableAt'), false);
   assert.equal(Object.hasOwn(fields, 'outcomeAtCompletion'), false);
+});
+
+test('un-assign returns the Case to the pot with no Reviewer, clock or hold, and keeps its Answers', () => {
+  const fields = buildUnassignTransition();
+
+  assert.deepEqual(fields, {
+    status: CASE_STATUS.TO_ALLOCATE,
+    assignedReviewer: '',
+    assignedReviewerManager: null,
+    dueDate: null,
+    onHold: false,
+    placedOnHoldAt: null,
+  });
+  assert.equal('answers' in fields, false);
 });

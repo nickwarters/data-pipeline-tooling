@@ -28,19 +28,28 @@ import {
   reassignFormView,
   reviewerCandidates,
 } from './case-support/reassign.js';
+import {
+  EMPTY_UNASSIGN_FORM,
+  unassignBlockedReason,
+  unassignCase,
+  unassignFormView,
+} from './case-support/unassign.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').SupportLogEntry} SupportLogEntry */
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../setup/resolve-eligible-case-types.js').CaseSource} CaseSource */
 /** @typedef {import('./case-support/reassign.js').ReassignForm} ReassignForm */
+/** @typedef {import('./case-support/unassign.js').UnassignForm} UnassignForm */
 
 /**
  * The page's effects, which a view calls and never awaits.
  *
  * @typedef {{
  *   openReassign: (row: CaseRow) => void,
+ *   openUnassign: () => void,
  *   submitReassign: (row: CaseRow, form: ReassignForm) => void,
+ *   submitUnassign: (row: CaseRow, form: UnassignForm) => void,
  * }} SupportActions
  */
 
@@ -101,6 +110,7 @@ export const SUPPORT_ACTIONS = [
  *   log: SupportLogEntry[] | undefined,
  *   logError: string | null,
  *   reassign: ReassignForm | null,
+ *   unassign: UnassignForm | null,
  *   notice: string | null,
  * }} SelectedCase
  */
@@ -307,6 +317,11 @@ const ACTION_STARTERS = {
     blockedBy: reassignBlockedReason,
     open: (actions, row) => actions.openReassign(row),
   },
+  unassign: {
+    label: 'Un-assign',
+    blockedBy: unassignBlockedReason,
+    open: (actions) => actions.openUnassign(),
+  },
 };
 
 /**
@@ -482,6 +497,39 @@ function reassignView(route, row, form, tools) {
 }
 
 /**
+ * @param {CaseRow} row
+ * @param {UnassignForm} form
+ * @param {ViewTools} tools
+ * @returns {HTMLElement}
+ */
+function unassignView(row, form, tools) {
+  return unassignFormView(form, row.assignedReviewer || 'its Reviewer', {
+    onReason: (reason) =>
+      tools.dispatch({ type: 'case-support/unassign-reason', reason }),
+    onSubmit: () => tools.supportActions?.submitUnassign(row, form),
+    onCancel: () => tools.dispatch({ type: 'case-support/unassign-closed' }),
+  });
+}
+
+/**
+ * The open action's form in place of the action cards, or the cards when none is open.
+ *
+ * @param {CaseSupportRouteState} route
+ * @param {SelectedCase & { row: CaseRow }} selected
+ * @param {ViewTools} tools
+ * @returns {HTMLElement}
+ */
+function actionPanelView(route, selected, tools) {
+  if (selected.reassign) {
+    return reassignView(route, selected.row, selected.reassign, tools);
+  }
+  if (selected.unassign) {
+    return unassignView(selected.row, selected.unassign, tools);
+  }
+  return actionsView(selected.row, tools.supportActions);
+}
+
+/**
  * @param {CaseSupportRouteState} route
  * @param {SelectedCase} selected
  * @param {ViewTools} tools
@@ -506,9 +554,7 @@ function selectedView(route, selected, tools) {
         { className: 'cora-case-support-notice', role: 'status' },
         selected.notice
       ),
-    selected.reassign
-      ? reassignView(route, selected.row, selected.reassign, tools)
-      : actionsView(selected.row, tools.supportActions),
+    actionPanelView(route, { ...selected, row: selected.row }, tools),
     supportLogView(selected)
   );
 }
@@ -584,6 +630,26 @@ function reassignFormAfter(form, action) {
 }
 
 /**
+ * The open Un-assign form after one of its own actions; any other action leaves it as it was.
+ *
+ * @param {UnassignForm} form
+ * @param {any} action
+ * @returns {UnassignForm}
+ */
+function unassignFormAfter(form, action) {
+  switch (action.type) {
+    case 'case-support/unassign-reason':
+      return { ...form, reason: action.reason };
+    case 'case-support/unassign-saving':
+      return { ...form, saving: true, error: null };
+    case 'case-support/unassign-failed':
+      return { ...form, saving: false, error: action.message };
+    default:
+      return form;
+  }
+}
+
+/**
  * @param {Record<string, string>} params
  * @param {import('../setup/register-routes.js').AppContext} context
  * @param {{ searchCases?: typeof searchCasesService }} [dependencies]
@@ -613,6 +679,7 @@ export function createRouteSlice(
           log: undefined,
           logError: null,
           reassign: null,
+          unassign: null,
           notice: null,
         }
       : null;
@@ -694,11 +761,26 @@ export function createRouteSlice(
           selected: { ...route.selected, reassign: null },
         });
       }
-      if (route.selected && action.type === 'case-support/reassigned') {
+      if (route.selected && action.type === 'case-support/unassign-opened') {
+        return patchRoute(state, 'caseSupport', {
+          selected: {
+            ...route.selected,
+            unassign: EMPTY_UNASSIGN_FORM,
+            notice: null,
+          },
+        });
+      }
+      if (route.selected && action.type === 'case-support/unassign-closed') {
+        return patchRoute(state, 'caseSupport', {
+          selected: { ...route.selected, unassign: null },
+        });
+      }
+      if (route.selected && action.type === 'case-support/applied') {
         return patchRoute(state, 'caseSupport', {
           selected: {
             ...route.selected,
             reassign: null,
+            unassign: null,
             notice: action.notice,
           },
         });
@@ -709,6 +791,15 @@ export function createRouteSlice(
         if (next !== form) {
           return patchRoute(state, 'caseSupport', {
             selected: { ...route.selected, reassign: next },
+          });
+        }
+      }
+      const release = route.selected?.unassign;
+      if (route.selected && release) {
+        const next = unassignFormAfter(release, action);
+        if (next !== release) {
+          return patchRoute(state, 'caseSupport', {
+            selected: { ...route.selected, unassign: next },
           });
         }
       }
@@ -784,6 +875,42 @@ export function createRouteSlice(
         if (!source) return;
         void loadLog();
 
+        /**
+         * Report a support action's write: the notice and fresh reads on success, the reason otherwise.
+         *
+         * @param {Promise<import('../services/support-action.js').SupportActionResult>} write
+         * @param {string} failedType
+         * @param {string} notice
+         */
+        const settle = (write, failedType, notice) => {
+          // The raw client wrote this: a write already under way must finish, even if the page is left.
+          write.then(
+            (result) => {
+              if (!tools.isActive()) return;
+              if (!result.ok) {
+                tools.dispatch({
+                  type: failedType,
+                  message: result.conflict
+                    ? `${result.message} Reload the Case to see its latest state.`
+                    : result.message,
+                });
+                void loadLog();
+                return;
+              }
+              tools.dispatch({ type: 'case-support/applied', notice });
+              void loadCase();
+              void loadLog();
+            },
+            (error) => {
+              if (!tools.isActive()) return;
+              tools.dispatch({
+                type: failedType,
+                message: `Nothing was changed: the support log could not be written. ${error}`,
+              });
+            }
+          );
+        };
+
         supportActions = {
           openReassign(row) {
             tools.dispatch({ type: 'case-support/reassign-opened' });
@@ -812,39 +939,30 @@ export function createRouteSlice(
             const chosen = form.candidates?.find(
               (person) => person.loginName === form.reviewer
             );
-            // The raw client: a write already under way must finish, even if the page is left.
-            reassignCase(client, {
-              row,
-              listName: source.listName,
-              reviewer: form.reviewer,
-              reason: form.reason.trim(),
-            }).then(
-              (result) => {
-                if (!tools.isActive()) return;
-                if (!result.ok) {
-                  tools.dispatch({
-                    type: 'case-support/reassign-failed',
-                    message: result.conflict
-                      ? `${result.message} Reload the Case to see its latest state.`
-                      : result.message,
-                  });
-                  void loadLog();
-                  return;
-                }
-                tools.dispatch({
-                  type: 'case-support/reassigned',
-                  notice: `Reassigned to ${chosen?.displayName ?? form.reviewer}.`,
-                });
-                void loadCase();
-                void loadLog();
-              },
-              (error) => {
-                if (!tools.isActive()) return;
-                tools.dispatch({
-                  type: 'case-support/reassign-failed',
-                  message: `Nothing was changed: the support log could not be written. ${error}`,
-                });
-              }
+            settle(
+              reassignCase(client, {
+                row,
+                listName: source.listName,
+                reviewer: form.reviewer,
+                reason: form.reason.trim(),
+              }),
+              'case-support/reassign-failed',
+              `Reassigned to ${chosen?.displayName ?? form.reviewer}.`
+            );
+          },
+          openUnassign() {
+            tools.dispatch({ type: 'case-support/unassign-opened' });
+          },
+          submitUnassign(row, form) {
+            tools.dispatch({ type: 'case-support/unassign-saving' });
+            settle(
+              unassignCase(client, {
+                row,
+                listName: source.listName,
+                reason: form.reason.trim(),
+              }),
+              'case-support/unassign-failed',
+              'Un-assigned: the Case is back in To-allocate, waiting to be claimed.'
             );
           },
         };

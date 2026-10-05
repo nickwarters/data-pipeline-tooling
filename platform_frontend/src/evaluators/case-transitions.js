@@ -191,3 +191,19 @@ export function buildVoidTransition({
     ...awaitingFrontlineCleared(),
   };
 }
+
+/**
+ * Release an In-progress Case back to the pot: no Reviewer, manager, Due Date or hold; Answers are kept.
+ *
+ * @returns {Partial<CaseRow>}
+ */
+export function buildUnassignTransition() {
+  return {
+    status: CASE_STATUS.TO_ALLOCATE,
+    assignedReviewer: '',
+    assignedReviewerManager: null,
+    dueDate: null,
+    onHold: false,
+    placedOnHoldAt: null,
+  };
+}
