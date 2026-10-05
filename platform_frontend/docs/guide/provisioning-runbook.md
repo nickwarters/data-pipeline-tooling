@@ -192,14 +192,15 @@ Group **display names** use the Case Type display name; code composes them from
 `slug → displayName` (declared on the Case Type module), so a new type needs one
 name, not three hand-written strings.
 
-### Who can see a Reviewers group's members
+### Group owner: `CORA Owner Delegates`
 
-Case Support's Reassign lists the members of `Reviewers - <type>` to choose the
-new Reviewer from, so `CORA Owner Delegates` must be able to read that group's
-membership. In each `Reviewers - <type>` group's settings set **Who can view the
-membership of the group** to **Everyone**, or make `CORA Owner Delegates` the
-group owner. Add Reviewers to the group directly: members granted through a
-nested AD group are not listed.
+Make `CORA Owner Delegates` the **owner** of every CORA group, the per-type and
+site-wide groups alike, except `CORA Owner Delegates` itself. A group's owner
+can always read and change its membership, so Maintainers can manage access
+without being site collection administrators, and Case Support can read the
+groups it needs. Its Reassign lists the members of `Reviewers - <type>` to
+choose the new Reviewer from. Add Reviewers to the group directly: members
+granted through a nested AD group are not listed.
 
 ### Site-wide functional groups (provision once, not per type)
 
