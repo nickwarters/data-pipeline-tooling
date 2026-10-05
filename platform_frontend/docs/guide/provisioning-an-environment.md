@@ -70,6 +70,13 @@ For every list the app reads, create the `<name>_`-prefixed copy with the
   [provisioning runbook](provisioning-runbook.md#3-case-support-log-list--casesupportlog),
   with its add-only permission for `CORA Owner Delegates`.
 
+One list is **not** copied: `CoraAccessLog` has no `<name>_` version. The
+groups the Access page changes are shared by every environment, so there is one
+log for all of them and a new environment needs nothing for it (the list itself
+is in the
+[provisioning runbook](provisioning-runbook.md#4-cora-access-log-list--coraaccesslog),
+and the reason is ADR-0057).
+
 There is no script for this; copy the prod list as a template where your
 SharePoint edition allows it, and check the column set against the checklist
 rather than trusting the copy. Do **not** copy prod's rows into a non-prod
