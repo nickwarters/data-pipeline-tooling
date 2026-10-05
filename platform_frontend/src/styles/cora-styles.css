@@ -3428,6 +3428,55 @@
   color: var(--cora-color-text-muted);
 }
 
+.cora-case-support-log-list {
+  display: grid;
+  gap: var(--cora-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cora-case-support-log-entry {
+  display: grid;
+  gap: var(--cora-space-1);
+  padding: var(--cora-space-2) var(--cora-space-3);
+  border-left: 3px solid var(--cora-color-border-strong);
+}
+
+.cora-case-support-log-entry--not-applied {
+  border-left-color: var(--cora-color-warning);
+}
+
+.cora-case-support-log-entry p,
+.cora-case-support-log-changes {
+  margin: 0;
+}
+
+.cora-case-support-log-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--cora-space-2);
+}
+
+.cora-case-support-log-meta,
+.cora-case-support-log-changes {
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-case-support-log-badge {
+  padding: 0 var(--cora-space-2);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-warning);
+  background: var(--cora-color-warning-bg);
+  border-radius: var(--cora-radius-sm);
+}
+
+.cora-case-support-log-changes {
+  padding-left: var(--cora-space-4);
+}
+
 /* ── My Stats ───────────────────────────────────────────────────────────── */
 
 [data-cora-root] .cora-my-stats-top-row {

@@ -262,11 +262,7 @@ export const APP_CONFIG = {
       id: 'case-support',
       paths: ['#/case-support', '#/case-support/:caseType/:id'],
       page: caseSupportPage,
-      // Support corrects Cases the people working them cannot, so it belongs
-      // to the Maintainers who already own the platform's configuration. The
-      // route is guarded as well as the link: these actions change Cases that
-      // nobody else may change, and offering the page to someone who cannot
-      // use it would only invite a hand-edit of the list instead.
+      // Maintainers only, on the route as well as the link: these actions change Cases.
       guard: (caps) => caps.isMaintainer,
       nav: { label: 'Case Support', order: 80 },
     },

@@ -24,7 +24,12 @@
  * The reads that carry a per-call options bag, which is where the signal rides.
  * Every one takes `(subject, opts)`.
  */
-const SIGNALLED_READS = new Set(['getCase', 'listCases', 'countCases']);
+const SIGNALLED_READS = new Set([
+  'getCase',
+  'listCases',
+  'countCases',
+  'listSupportLog',
+]);
 
 /**
  * @param {SharePointClient} client

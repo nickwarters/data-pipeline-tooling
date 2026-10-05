@@ -459,6 +459,42 @@
  */
 
 /**
+ * `recorded` is written before the Case changes; `not-applied` follows it if the change fails.
+ *
+ * @typedef {'recorded' | 'not-applied'} SupportLogOutcome
+ */
+
+/**
+ * One field a support action changed, as it was and as it became.
+ *
+ * @typedef {{ field: string, before: unknown, after: unknown }} SupportLogChange
+ */
+
+/**
+ * One Support Log entry; `createdAt` and `createdBy` are SharePoint's own Created and Author.
+ *
+ * @typedef {{
+ * id: string,
+ * caseType: string,
+ * caseId: string,
+ * caseReference: string,
+ * action: string,
+ * reason: string,
+ * changes: SupportLogChange[],
+ * outcome: SupportLogOutcome,
+ * relatesTo: string | null,
+ * createdAt: string,
+ * createdBy: string
+ * }} SupportLogEntry
+ */
+
+/**
+ * A Support Log entry as written: everything but what SharePoint stamps.
+ *
+ * @typedef {Omit<SupportLogEntry, 'id' | 'createdAt' | 'createdBy'>} NewSupportLogEntry
+ */
+
+/**
  * Every REST consumer codes against this interface. Both MockSharePointClient
  * and HttpSharePointClient satisfy it identically. `resolveManagers` returns
  * canonical lower-cased bare account names; unresolved or absent managers are
@@ -472,6 +508,8 @@
  * getCurrentUserGroups: () => Promise<string[]>,
  * getCurrentUser: () => Promise<CurrentUser>,
  * listRoadmapItems: () => Promise<RoadmapItem[]>,
+ * listSupportLog: (subject: { caseType: string, caseId: string }, opts?: { signal?: AbortSignal }) => Promise<SupportLogEntry[]>,
+ * addSupportLogEntry: (entry: NewSupportLogEntry) => Promise<string>,
  * searchPeople: (query: string) => Promise<PersonResult[]>,
  * resolveUsers: (accountNames: string[]) => Promise<Record<string, string | null>>,
  * resolveManagers: (accountNames: string[]) => Promise<Record<string, string | null>>,

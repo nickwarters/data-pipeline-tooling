@@ -17,6 +17,8 @@ import { loadBank } from '../../case-types/load-bank.js';
 /** @typedef {import('../sharepoint-client.js').PatchResult} PatchResult */
 /** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
 /** @typedef {import('../sharepoint-client.js').RoadmapItem} RoadmapItem */
+/** @typedef {import('../sharepoint-client.js').SupportLogEntry} SupportLogEntry */
+/** @typedef {import('../sharepoint-client.js').NewSupportLogEntry} NewSupportLogEntry */
 
 /** @typedef {import('../sharepoint-client.js').VersionedExport} VersionedExport */
 /** @typedef {PersonResult & { manager?: string }} DirectoryPerson */
@@ -31,6 +33,7 @@ export class MockSharePointClient {
    * versionedExports?: Record<string, VersionedExport>,
    * lists?: Record<string, CaseRow[]>,
    * roadmapItems?: RoadmapItem[],
+   * supportLog?: SupportLogEntry[],
    * now?: () => Date
    * }} opts
    */
@@ -42,6 +45,7 @@ export class MockSharePointClient {
     versionedExports = /** @type {Record<string, VersionedExport>} */ ({}),
     lists = /** @type {Record<string, CaseRow[]>} */ ({}),
     roadmapItems = [],
+    supportLog = [],
     now = () => new Date(),
   }) {
     this._now = now;
@@ -62,6 +66,8 @@ export class MockSharePointClient {
         rows.map((c) => ({ ...c, answers: { ...c.answers } })),
       ])
     );
+    this._supportLog = supportLog.map((entry) => structuredClone(entry));
+    this._supportLogCounter = 5000;
     this._etagCounter = 1000;
     this._injectNext412 = false;
   }
@@ -313,6 +319,41 @@ export class MockSharePointClient {
       ...item,
       labels: item.labels.slice(),
     }));
+  }
+
+  /**
+   * @param {{ caseType: string, caseId: string }} subject
+   * @param {{ signal?: AbortSignal }} [opts]
+   * @returns {Promise<SupportLogEntry[]>}
+   */
+  async listSupportLog({ caseType, caseId }, opts = {}) {
+    const entries = this._supportLog
+      .filter((entry) => entry.caseType === caseType && entry.caseId === caseId)
+      // Newest first, ties broken by id, exactly as the list is read.
+      .sort(
+        (a, b) =>
+          b.createdAt.localeCompare(a.createdAt) || Number(b.id) - Number(a.id)
+      )
+      .map((entry) => structuredClone(entry));
+    return settle(opts.signal, entries);
+  }
+
+  /**
+   * Append-only, stamped with the persona and the injected clock as SharePoint would.
+   *
+   * @param {NewSupportLogEntry} entry
+   * @returns {Promise<string>}
+   */
+  async addSupportLogEntry(entry) {
+    const id = String(++this._supportLogCounter);
+    const author = await this.getCurrentUser();
+    this._supportLog.push({
+      ...structuredClone(entry),
+      id,
+      createdAt: this._now().toISOString(),
+      createdBy: author.displayName,
+    });
+    return id;
   }
 
   /** @returns {Promise<string[]>} */
