@@ -183,6 +183,39 @@ by the bank's own identity. The bank itself is the current version — there is 
 pointer file — so what publishing adds is the copy a Case completed against
 today's bank will later resolve.
 
+### Building the bank from a spreadsheet
+
+When the questions are authored in Excel, build the bank from the sheet instead
+of by hand (it needs `openpyxl`, which is in the repository root's venv):
+
+```sh
+python3 scripts/import_bank_from_excel.py --file questions.xlsx --sheet Questions \
+    --slug widget-review --label "Widget Review"
+```
+
+The first non-empty row is the header. Only a question text column (`text` or
+`Question`) is required. The others are `id`, `questionGroup`, `category`,
+`responseType` (blank means `outcome`), `options`, `optionOutcomes`
+(`Option = outcome-id`), `labels` (names or ids), `remediationActions`,
+`showWhen` (JSON) and `deprecated`. Headers ignore case and spacing, so
+`Question Group` works. A cell that holds several values takes one per line,
+or `|`-separated. An unknown column is an error, not ignored, so a misspelt
+header cannot silently drop a field.
+
+The sheet is applied **over** the existing bank, never in place of it:
+
+- The bank's label, Labels and Outcome vocabulary are kept.
+- A row with a blank `id` reuses the id of the existing question with the same
+  text. Otherwise it is minted the next id in the bank's style (`q-wr-0005`).
+- A question keeps any field the sheet has no column for, such as its
+  `showWhen`.
+- A question the sheet no longer lists is kept and marked `deprecated`.
+
+The script then runs `publish-bank.js` for the slug, so the new version is
+published and the bank's `history` advances by the same rule as above.
+Re-importing an unchanged sheet publishes nothing. Pass `--no-publish` to write
+the bank alone.
+
 Re-run it after every bank edit. Skipping it does not break anything
 immediately: a Case completed against an unpublished bank stamps a version, then
 re-opens behind an "as-reviewed version unavailable" banner because no file
