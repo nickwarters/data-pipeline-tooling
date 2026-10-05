@@ -10,12 +10,16 @@ lives in ``tests/integration/test_operator_cli_e2e.py``. Everything runs on loca
 SQLite only, with no external services.
 """
 
+import datetime as dt
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURES = ROOT / "tests" / "fixtures"
@@ -37,6 +41,176 @@ def _cli(*args):
         cwd=ROOT,
         env=env,
     )
+
+
+def _checkpoint_fixture(base_dir):
+    from tools.source_checkpoint import SourceCheckpointStore
+
+    store = SourceCheckpointStore(base_dir)
+    for source in ("site/list-z-full-key", "site/list-a-full-key"):
+        store.commit(
+            source,
+            dt.datetime(2026, 8, 5, 8, 30, tzinfo=dt.timezone.utc),
+            batch_id=f"full-batch-{source}",
+            pipeline_run_id=f"full-run-{source}",
+        )
+    return store
+
+
+def test_checkpoints_show_human_and_json_report_all_provenance(tmp_path):
+    store = _checkpoint_fixture(tmp_path / "données #100%")
+    before = store.path.read_bytes()
+    files = set(tmp_path.rglob("*"))
+
+    human = _cli("checkpoints", "show", "--base-dir", str(store.path.parent.parent))
+    machine = _cli(
+        "checkpoints", "show", "--base-dir", str(store.path.parent.parent), "--json"
+    )
+
+    assert human.returncode == machine.returncode == 0
+    expected = store.list_checkpoints()
+    assert json.loads(machine.stdout) == expected
+    for row in expected:
+        for field, value in row.items():
+            assert f"{field}: {value}" in human.stdout
+    assert human.stdout.index("source_key: site/list-a-full-key") < (
+        human.stdout.index("source_key: site/list-z-full-key")
+    )
+    assert machine.stderr == human.stderr == ""
+    assert store.path.read_bytes() == before
+    assert set(tmp_path.rglob("*")) == files
+
+
+def test_checkpoints_show_source_is_an_exact_filter(tmp_path):
+    store = _checkpoint_fixture(tmp_path)
+    source = "site/list-z-full-key"
+
+    result = _cli(
+        "checkpoints", "show", "--base-dir", str(tmp_path), "--source", source, "--json"
+    )
+    no_match = _cli(
+        "checkpoints",
+        "show",
+        "--base-dir",
+        str(tmp_path),
+        "--source",
+        "site/list",
+        "--json",
+    )
+
+    assert result.returncode == no_match.returncode == 0
+    assert json.loads(result.stdout) == store.list_checkpoints(source)
+    assert json.loads(no_match.stdout) == []
+
+
+def test_checkpoints_show_absence_is_success_and_creates_nothing(tmp_path):
+    missing = tmp_path / "missing"
+    human = _cli("checkpoints", "show", "--base-dir", str(missing))
+    machine = _cli("checkpoints", "show", "--base-dir", str(missing), "--json")
+
+    assert human.returncode == machine.returncode == 0
+    assert "no matching source checkpoints" in human.stdout
+    assert json.loads(machine.stdout) == []
+    assert human.stderr == machine.stderr == ""
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_checkpoints_show_env_resolution_and_explicit_path_precedence(
+    tmp_path, monkeypatch
+):
+    configured = _checkpoint_fixture(tmp_path / "configured")
+    explicit = tmp_path / "explicit"
+    monkeypatch.setenv("PIPELINE_DATA_DIR_DEV", str(configured.path.parent.parent))
+    monkeypatch.setenv("PIPELINE_ENV", "dev")
+
+    default = _cli("checkpoints", "show", "--json")
+    named = _cli("checkpoints", "show", "--env", "dev", "--json")
+    override = _cli(
+        "checkpoints", "show", "--env", "dev", "--base-dir", str(explicit), "--json"
+    )
+
+    assert default.returncode == named.returncode == override.returncode == 0
+    assert (
+        json.loads(default.stdout)
+        == json.loads(named.stdout)
+        == (configured.list_checkpoints())
+    )
+    assert json.loads(override.stdout) == []
+    assert not explicit.exists()
+
+
+@pytest.mark.parametrize("malformed_table", [False, True], ids=["corrupt", "schema"])
+def test_checkpoints_show_reports_database_errors_without_traceback(
+    tmp_path, malformed_table
+):
+    path = tmp_path / "_checkpoints" / "sources.db"
+    path.parent.mkdir()
+    if malformed_table:
+        con = sqlite3.connect(path)
+        try:
+            con.execute("CREATE TABLE source_checkpoints (source_key TEXT)")
+        finally:
+            con.close()
+    else:
+        path.write_bytes(b"not a SQLite database")
+    before = path.read_bytes()
+
+    result = _cli("checkpoints", "show", "--base-dir", str(tmp_path), "--json")
+
+    assert result.returncode != 0
+    assert result.stdout == ""
+    assert str(path) in result.stderr
+    assert "check the base directory" in result.stderr
+    expected_error = "no such column" if malformed_table else "not a database"
+    assert expected_error in result.stderr
+    assert "Traceback" not in result.stderr
+    assert path.read_bytes() == before
+
+
+def test_checkpoints_show_reports_access_errors(tmp_path, monkeypatch, capsys):
+    from cli import operator
+
+    def fail(self, source_key=None):
+        raise PermissionError("access denied")
+
+    monkeypatch.setattr(operator.SourceCheckpointStore, "list_checkpoints", fail)
+
+    assert operator.main(["checkpoints", "show", "--base-dir", str(tmp_path)]) == 1
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert "access denied" in output.err
+    assert str(tmp_path / "_checkpoints" / "sources.db") in output.err
+    assert "Traceback" not in output.err
+
+
+def test_checkpoints_show_reports_real_lock_with_short_timeout(
+    tmp_path, monkeypatch, capsys
+):
+    from cli import operator
+    from tools.source_checkpoint import SourceCheckpointStore
+
+    store = _checkpoint_fixture(tmp_path)
+    monkeypatch.setattr(
+        operator,
+        "SourceCheckpointStore",
+        lambda base_dir: SourceCheckpointStore(base_dir, busy_timeout_ms=50),
+    )
+    holder = sqlite3.connect(store.path)
+    try:
+        holder.execute("BEGIN EXCLUSIVE")
+        assert (
+            operator.main(
+                ["checkpoints", "show", "--base-dir", str(tmp_path), "--json"]
+            )
+            == 1
+        )
+    finally:
+        holder.close()
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert "database is locked" in output.err
+    assert "retry after the writer finishes" in output.err
+    assert "Traceback" not in output.err
 
 
 def test_run_executes_a_pipeline_by_its_path(tmp_path):
@@ -782,7 +956,7 @@ def test_every_usage_example_in_the_module_docstring_parses():
     import cli.operator as operator
 
     examples = re.findall(r"^    python -m cli (.+)$", operator.__doc__, re.MULTILINE)
-    assert len(examples) == 7, examples
+    assert len(examples) == 8, examples
     parser = operator.build_parser()
     for example in examples:
         args = shlex.split(example.replace("<", "_").replace(">", "_"))

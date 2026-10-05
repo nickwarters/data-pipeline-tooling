@@ -480,6 +480,12 @@ checkpoint" or "watermark" when that is what you mean. It is also a **third**
 category of thing in a base directory, alongside the rows the `StoreRegistry`
 lays out and the runs the **Run store** does — kept separate because the
 lifecycles differ: pruning run logs must not lose a feed's place in its source.
+`list_checkpoints(source_key=None)` exposes the persisted source key, UTC
+watermark, UTC commit time, batch ID and pipeline run ID in source-key order;
+an optional key filters by exact equality. The operator command
+`python -m cli checkpoints show` uses this read-only inspection: no state is
+created or migrated, missing state is empty, and read failures remain errors.
+It reads local control state without contacting the source or computing a window.
 
 **Run time semantics**:
 Two clocks meet in the run metadata, and the rule for reconciling them lives in

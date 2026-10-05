@@ -51,6 +51,21 @@ schedule that is the weekday name, holiday or not:
 
 ## 3. Direct re-drive
 
+Inspect the locally committed watermarks before a re-drive:
+
+```sh
+python -m cli checkpoints show --base-dir /data/case-review
+python -m cli checkpoints show --base-dir /data/case-review --source "<full-source-key>" --json
+```
+
+Use the full `source_key` shown by the listing for an exact list filter. Each
+row carries its source-time watermark, local UTC commit time, batch ID and full
+pipeline run ID; use that ID with `runs --run` or `log --pipeline-run-id` to
+investigate its committing run. This reads local state without SharePoint access
+or checkpoint changes. An absent file, table or key is an empty success; a read
+failure is an error. The watermark, rather than the run's time, determines where
+polling resumes.
+
 ```sh
 python -m cli run pipelines/sharepoint_cases --base-dir /data/case-review
 ```

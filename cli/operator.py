@@ -3,8 +3,8 @@
 A small command surface so operators do not need to write wrapper scripts to run
 pipelines or inspect their history. It sits on top of the public ``framework.run``
 execution surface (``PipelineRunner``), ``tools.orchestration.Orchestrator``, and
-the ``RunRegistry`` / ``RunLog`` observability seam. Everything stays local
-SQLite + JSONL, with no external services.
+the ``RunRegistry`` / ``RunLog`` observability seam, and the source checkpoint
+store. Everything stays local SQLite + JSONL, with no external services.
 
 Run from the repository root so the import-only ``framework`` package resolves::
 
@@ -15,6 +15,7 @@ Run from the repository root so the import-only ``framework`` package resolves::
     python -m cli runs --base-dir /data --table case_current
     python -m cli log cases --base-dir /data --pipeline-run-id <pipeline-run-id>
     python -m cli migrate --base-dir /data --check
+    python -m cli checkpoints show --base-dir /data --json
 
 The base directory is the option ``--base-dir`` (or ``--env <name>``, which
 resolves one), never a positional argument.
@@ -48,6 +49,7 @@ import argparse
 import datetime as dt
 import importlib
 import json
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -71,6 +73,7 @@ from tools.migrations import (
 )
 from tools.observability.run_store import RunStore
 from tools.orchestration import Orchestrator
+from tools.source_checkpoint import SourceCheckpointStore
 from tools.store import StoreRegistry
 
 
@@ -434,6 +437,33 @@ def _runs(args: argparse.Namespace) -> int:
     return 0
 
 
+def _checkpoints_show(args: argparse.Namespace) -> int:
+    base_dir = _base_dir_or_report(args)
+    if base_dir is None:
+        return 1
+    store = SourceCheckpointStore(base_dir)
+    try:
+        checkpoints = store.list_checkpoints(source_key=args.source)
+    except (sqlite3.Error, OSError) as exc:
+        print(
+            f"cannot read source checkpoints at {store.path}: {exc}; "
+            "check the base directory, access permissions and database health; "
+            "if locked, retry after the writer finishes",
+            file=sys.stderr,
+        )
+        return 1
+    if args.json:
+        print(json.dumps(checkpoints, indent=2))
+    elif not checkpoints:
+        print("no matching source checkpoints")
+    else:
+        for checkpoint in checkpoints:
+            for field, value in checkpoint.items():
+                print(f"{field}: {value}")
+            print()
+    return 0
+
+
 def _runs_wrote(registry: RunRegistry, pipeline_run_id: str) -> int:
     """``runs --run <id>``: what one run wrote, one line per location it landed."""
     writes = registry.writes_for_run(pipeline_run_id)
@@ -654,6 +684,22 @@ def register(sub) -> None:
         "alternate root",
     )
     migrate.set_defaults(func=_migrate)
+
+    checkpoints = sub.add_parser(
+        "checkpoints", help="inspect local source polling checkpoints"
+    )
+    checkpoint_commands = checkpoints.add_subparsers(
+        dest="checkpoint_command", required=True
+    )
+    show = checkpoint_commands.add_parser(
+        "show", help="show persisted watermarks and their committing run"
+    )
+    _add_base_dir_args(show)
+    show.add_argument(
+        "--source", metavar="SOURCE_KEY", help="exact source key to inspect"
+    )
+    show.add_argument("--json", action="store_true", help="emit a JSON array")
+    show.set_defaults(func=_checkpoints_show)
 
     runs = sub.add_parser("runs", help="list recent runs from the run registry")
     _add_base_dir_args(runs)
