@@ -20,6 +20,7 @@ just the function and the `client` it was handed.
 // resolveManagers(accountNames) → Promise<Record<string, string | null>>
 // listSupportLog({ caseType, caseId }) → Promise<SupportLogEntry[]>
 // addSupportLogEntry(entry) → Promise<string>
+// listGroupMembers(groupName) → Promise<PersonResult[]>
 
 // Switch to mock mode: ?mock=1 in the URL
 // Add a new method: typedef → HttpSharePointClient → MockSharePointClient → fixture
@@ -78,6 +79,17 @@ no changes, with a console warning, rather than failing the whole log. Any
 only because an action was taken. The mock keeps the log in memory, seeded from
 `dev/fixtures/support-log.js`, and stamps appended entries from the persona and
 its clock.
+
+### `listGroupMembers(groupName)`
+
+The user members of one SharePoint group, as `PersonResult`s with bare account
+names. Case Support's Reassign reads `Reviewers - <type>` with it to offer only
+that Case Type's Reviewers. Members that are themselves groups (an AD security
+group, say) are skipped rather than expanded, so a Case Type whose Reviewers are
+granted only through a nested group offers nobody. Each member's site user id is
+cached, so writing them into a Person column afterwards needs no `ensureuser`
+call. In mock mode a directory person in `dev/fixtures/people.js` is a member of
+the groups listed in their private `groups` field.
 
 ---
 

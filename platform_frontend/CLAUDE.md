@@ -471,8 +471,11 @@ src/
     cora-case-search.js           # store-driven #/search slice: URL-held filters, one bounded
                                   #   cross-Case-Type lookup, standard Case columns
     cora-case-support.js          # store-driven #/case-support slice, Maintainers only: find any
-                                  #   Case by reference, show its facts, and list the support
-                                  #   actions it will offer (all placeholders for now)
+                                  #   Case by reference, show its facts and Support Log, and start
+                                  #   the support actions built so far
+    case-support/
+      reassign.js                 # the Reassign action: candidates from the Case Type's reviewer
+                                  #   group, the pure form view, and the logged, If-Match guarded write
     cora-dashboard.js             # store-driven dashboard slice + descriptor-selected panels (GRID-3/4)
     cora-my-stats.js               # store-driven Reviewer Report Feed load, browser-calendar range state and controls,
                                    #   the clamped typed live-tail read, and one derivation feeding the chart,
@@ -586,6 +589,10 @@ src/
     assignment-stamp.js           # the write-path rule pairing assignedAt with assignedReviewer, so
                                   #   no caller can set a Reviewer without stamping when (#633)
     create-sharepoint-client.js
+    reviewer-manager.js           # a Reviewer's current manager for an assignment write, shared by
+                                  #   the allocation claim and Case Support's Reassign
+    support-action.js             # THE Support Log write order: log the action, change the Case,
+                                  #   then log not-applied if that change failed
     http-sharepoint-client.js
     journey-cases-fetcher.js
     live-tail-fetcher.js          # the clamped read of the days the Report Feed cannot cover yet

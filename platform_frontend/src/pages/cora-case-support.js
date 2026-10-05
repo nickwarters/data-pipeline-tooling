@@ -20,11 +20,29 @@ import {
   standardCaseColumns,
 } from '../views/case-columns.js';
 import { dataTableView } from '../views/data-table.js';
+import { caseTypeGroupNames } from '../services/permissions.js';
+import {
+  EMPTY_REASSIGN_FORM,
+  reassignBlockedReason,
+  reassignCase,
+  reassignFormView,
+  reviewerCandidates,
+} from './case-support/reassign.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').SupportLogEntry} SupportLogEntry */
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../setup/resolve-eligible-case-types.js').CaseSource} CaseSource */
+/** @typedef {import('./case-support/reassign.js').ReassignForm} ReassignForm */
+
+/**
+ * The page's effects, which a view calls and never awaits.
+ *
+ * @typedef {{
+ *   openReassign: (row: CaseRow) => void,
+ *   submitReassign: (row: CaseRow, form: ReassignForm) => void,
+ * }} SupportActions
+ */
 
 /**
  * A corrective action a Maintainer will be able to take on a Case from this page.
@@ -50,7 +68,7 @@ export const SUPPORT_ACTIONS = [
     id: 'reassign',
     title: 'Reassign',
     description:
-      'Move the Case to a different Reviewer, Responsible Party or manager.',
+      "Move the Case to another Reviewer in its Case Type's reviewer group.",
   },
   {
     id: 'unassign',
@@ -82,6 +100,8 @@ export const SUPPORT_ACTIONS = [
  *   error: string | null,
  *   log: SupportLogEntry[] | undefined,
  *   logError: string | null,
+ *   reassign: ReassignForm | null,
+ *   notice: string | null,
  * }} SelectedCase
  */
 
@@ -277,31 +297,55 @@ function caseHeaderView(route, row) {
 }
 
 /**
+ * How each built action is started from its card; an action not listed here is not built yet.
+ *
+ * @type {Record<string, { label: string, blockedBy: (row: CaseRow) => string | null, open: (actions: SupportActions, row: CaseRow) => void }>}
+ */
+const ACTION_STARTERS = {
+  reassign: {
+    label: 'Reassign',
+    blockedBy: reassignBlockedReason,
+    open: (actions, row) => actions.openReassign(row),
+  },
+};
+
+/**
  * @param {SupportAction} action
+ * @param {CaseRow} row
+ * @param {SupportActions | undefined} actions
  * @returns {HTMLElement}
  */
-function actionCardView(action) {
+function actionCardView(action, row, actions) {
   const headingId = `cora-case-support-action-${action.id}`;
+  const starter = ACTION_STARTERS[action.id];
+  const blocked = starter ? starter.blockedBy(row) : null;
   return h(
     'li',
     { className: 'cora-case-support-action' },
     h('h3', { id: headingId }, action.title),
     h('p', {}, action.description),
+    blocked &&
+      h('p', { className: 'cora-case-support-action-blocked' }, blocked),
     h(
       'button',
       {
         type: 'button',
         className: 'cora-case-support-action-button',
-        disabled: true,
+        disabled: !starter || blocked !== null || !actions,
         'aria-describedby': headingId,
+        onclick: () => actions && starter?.open(actions, row),
       },
-      'Not available yet'
+      starter ? starter.label : 'Not available yet'
     )
   );
 }
 
-/** @returns {HTMLElement} */
-function actionsView() {
+/**
+ * @param {CaseRow} row
+ * @param {SupportActions | undefined} actions
+ * @returns {HTMLElement}
+ */
+function actionsView(row, actions) {
   return h(
     'section',
     {
@@ -312,12 +356,12 @@ function actionsView() {
     h(
       'p',
       { className: 'cora-case-support-note' },
-      'Each action will ask for a reason and be recorded in the support log.'
+      'Each action asks for a reason and is recorded in the support log before the Case changes.'
     ),
     h(
       'ul',
       { className: 'cora-case-support-action-list' },
-      ...SUPPORT_ACTIONS.map(actionCardView)
+      ...SUPPORT_ACTIONS.map((action) => actionCardView(action, row, actions))
     )
   );
 }
@@ -418,10 +462,32 @@ function supportLogView(selected) {
 
 /**
  * @param {CaseSupportRouteState} route
- * @param {SelectedCase} selected
+ * @param {CaseRow} row
+ * @param {ReassignForm} form
+ * @param {ViewTools} tools
  * @returns {HTMLElement}
  */
-function selectedView(route, selected) {
+function reassignView(route, row, form, tools) {
+  const displayName =
+    route.caseTypes.find((type) => type.slug === row.caseType)?.displayName ??
+    row.caseType;
+  return reassignFormView(form, caseTypeGroupNames(displayName).listAccess, {
+    onReviewer: (reviewer) =>
+      tools.dispatch({ type: 'case-support/reassign-reviewer', reviewer }),
+    onReason: (reason) =>
+      tools.dispatch({ type: 'case-support/reassign-reason', reason }),
+    onSubmit: () => tools.supportActions?.submitReassign(row, form),
+    onCancel: () => tools.dispatch({ type: 'case-support/reassign-closed' }),
+  });
+}
+
+/**
+ * @param {CaseSupportRouteState} route
+ * @param {SelectedCase} selected
+ * @param {ViewTools} tools
+ * @returns {HTMLElement}
+ */
+function selectedView(route, selected, tools) {
   if (selected.error) {
     return h(
       'p',
@@ -434,14 +500,26 @@ function selectedView(route, selected) {
     'div',
     { className: 'cora-case-support-selected' },
     caseHeaderView(route, selected.row),
-    actionsView(),
+    selected.notice &&
+      h(
+        'p',
+        { className: 'cora-case-support-notice', role: 'status' },
+        selected.notice
+      ),
+    selected.reassign
+      ? reassignView(route, selected.row, selected.reassign, tools)
+      : actionsView(selected.row, tools.supportActions),
     supportLogView(selected)
   );
 }
 
 /**
+ * @typedef {{ dispatch: (action: any) => any, onSubmit?: () => void, supportActions?: SupportActions }} ViewTools
+ */
+
+/**
  * @param {CaseSupportState} state
- * @param {{ dispatch: (action: any) => any, onSubmit?: () => void }} tools
+ * @param {ViewTools} tools
  * @returns {HTMLElement}
  */
 export function caseSupportView(state, tools) {
@@ -451,7 +529,9 @@ export function caseSupportView(state, tools) {
     { className: 'cora-case-support' },
     h('h1', {}, 'Case Support'),
     searchBarView(route, tools),
-    route.selected ? selectedView(route, route.selected) : resultsView(route)
+    route.selected
+      ? selectedView(route, route.selected, tools)
+      : resultsView(route)
   );
 }
 
@@ -475,6 +555,32 @@ async function loadSelectedCase(client, sources, { caseType, id }) {
     };
   }
   return { row };
+}
+
+/**
+ * The open Reassign form after one of its own actions; any other action leaves it as it was.
+ *
+ * @param {ReassignForm} form
+ * @param {any} action
+ * @returns {ReassignForm}
+ */
+function reassignFormAfter(form, action) {
+  switch (action.type) {
+    case 'case-support/reassign-candidates-loaded':
+      return { ...form, candidates: action.candidates, candidatesError: null };
+    case 'case-support/reassign-candidates-failed':
+      return { ...form, candidatesError: action.message };
+    case 'case-support/reassign-reviewer':
+      return { ...form, reviewer: action.reviewer };
+    case 'case-support/reassign-reason':
+      return { ...form, reason: action.reason };
+    case 'case-support/reassign-saving':
+      return { ...form, saving: true, error: null };
+    case 'case-support/reassign-failed':
+      return { ...form, saving: false, error: action.message };
+    default:
+      return form;
+  }
 }
 
 /**
@@ -506,6 +612,8 @@ export function createRouteSlice(
           error: null,
           log: undefined,
           logError: null,
+          reassign: null,
+          notice: null,
         }
       : null;
 
@@ -527,6 +635,9 @@ export function createRouteSlice(
       },
     },
   };
+
+  /** @type {SupportActions | null} */
+  let supportActions = null;
 
   return {
     initialState,
@@ -569,11 +680,44 @@ export function createRouteSlice(
           selected: { ...route.selected, logError: action.message },
         });
       }
+      if (route.selected && action.type === 'case-support/reassign-opened') {
+        return patchRoute(state, 'caseSupport', {
+          selected: {
+            ...route.selected,
+            reassign: EMPTY_REASSIGN_FORM,
+            notice: null,
+          },
+        });
+      }
+      if (route.selected && action.type === 'case-support/reassign-closed') {
+        return patchRoute(state, 'caseSupport', {
+          selected: { ...route.selected, reassign: null },
+        });
+      }
+      if (route.selected && action.type === 'case-support/reassigned') {
+        return patchRoute(state, 'caseSupport', {
+          selected: {
+            ...route.selected,
+            reassign: null,
+            notice: action.notice,
+          },
+        });
+      }
+      const form = route.selected?.reassign;
+      if (route.selected && form) {
+        const next = reassignFormAfter(form, action);
+        if (next !== form) {
+          return patchRoute(state, 'caseSupport', {
+            selected: { ...route.selected, reassign: next },
+          });
+        }
+      }
       return state;
     },
     view: (state, tools) =>
       caseSupportView(state, {
         ...tools,
+        supportActions: supportActions ?? undefined,
         onSubmit: () =>
           navigateTo(searchHash(state.routes.caseSupport.reference)),
       }),
@@ -594,30 +738,29 @@ export function createRouteSlice(
       };
 
       if (selected) {
-        void loadSelectedCase(readClient, sources, selected).then(
-          (result) => {
-            if (!tools.isActive()) return;
-            tools.dispatch(
-              'row' in result
-                ? { type: 'case-support/case-loaded', row: result.row }
-                : { type: 'case-support/case-failed', message: result.error }
-            );
-          },
-          (error) =>
-            fail(
-              error,
-              'case-support/case-failed',
-              'The Case could not be loaded.'
-            )
+        const source = sources.find(
+          (/** @type {CaseSource} */ candidate) =>
+            candidate.slug === selected.caseType
         );
-        // An unknown Case Type is reported above, so its log is not asked for.
-        if (
-          sources.some(
-            (/** @type {CaseSource} */ source) =>
-              source.slug === selected.caseType
-          )
-        ) {
-          void readClient
+        const loadCase = () =>
+          loadSelectedCase(readClient, sources, selected).then(
+            (result) => {
+              if (!tools.isActive()) return;
+              tools.dispatch(
+                'row' in result
+                  ? { type: 'case-support/case-loaded', row: result.row }
+                  : { type: 'case-support/case-failed', message: result.error }
+              );
+            },
+            (error) =>
+              fail(
+                error,
+                'case-support/case-failed',
+                'The Case could not be loaded.'
+              )
+          );
+        const loadLog = () =>
+          readClient
             .listSupportLog({
               caseType: selected.caseType,
               caseId: selected.id,
@@ -635,7 +778,76 @@ export function createRouteSlice(
                   'The support log could not be loaded.'
                 )
             );
-        }
+
+        void loadCase();
+        // An unknown Case Type is reported above, so its log is not asked for.
+        if (!source) return;
+        void loadLog();
+
+        supportActions = {
+          openReassign(row) {
+            tools.dispatch({ type: 'case-support/reassign-opened' });
+            void readClient
+              .listGroupMembers(
+                caseTypeGroupNames(source.displayName).listAccess
+              )
+              .then(
+                (members) => {
+                  if (!tools.isActive()) return;
+                  tools.dispatch({
+                    type: 'case-support/reassign-candidates-loaded',
+                    candidates: reviewerCandidates(members, row),
+                  });
+                },
+                (error) =>
+                  fail(
+                    error,
+                    'case-support/reassign-candidates-failed',
+                    'The reviewer group could not be read.'
+                  )
+              );
+          },
+          submitReassign(row, form) {
+            tools.dispatch({ type: 'case-support/reassign-saving' });
+            const chosen = form.candidates?.find(
+              (person) => person.loginName === form.reviewer
+            );
+            // The raw client: a write already under way must finish, even if the page is left.
+            reassignCase(client, {
+              row,
+              listName: source.listName,
+              reviewer: form.reviewer,
+              reason: form.reason.trim(),
+            }).then(
+              (result) => {
+                if (!tools.isActive()) return;
+                if (!result.ok) {
+                  tools.dispatch({
+                    type: 'case-support/reassign-failed',
+                    message: result.conflict
+                      ? `${result.message} Reload the Case to see its latest state.`
+                      : result.message,
+                  });
+                  void loadLog();
+                  return;
+                }
+                tools.dispatch({
+                  type: 'case-support/reassigned',
+                  notice: `Reassigned to ${chosen?.displayName ?? form.reviewer}.`,
+                });
+                void loadCase();
+                void loadLog();
+              },
+              (error) => {
+                if (!tools.isActive()) return;
+                tools.dispatch({
+                  type: 'case-support/reassign-failed',
+                  message: `Nothing was changed: the support log could not be written. ${error}`,
+                });
+              }
+            );
+          },
+        };
         return;
       }
 

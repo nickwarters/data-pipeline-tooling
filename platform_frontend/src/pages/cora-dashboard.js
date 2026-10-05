@@ -43,6 +43,7 @@ import {
   standardCaseColumns,
 } from '../views/case-columns.js';
 import { visibleDashboardPanels } from './dashboard/panel-descriptors.js';
+import { resolveReviewerManager } from '../services/reviewer-manager.js';
 import { kpiStripView } from './dashboard/kpi-view.js';
 import {
   controlsAppealsView,
@@ -52,28 +53,6 @@ import {
 /** The two table names this page sorts by: used by both the views and the reducer. */
 const REVIEWER_TABLE = 'reviewer';
 const APPEALS_TABLE = 'appeals';
-
-/**
- * Resolve the manager used by the allocation write. A missing or unusable
- * result is the same as an unresolved manager: the caller must write an
- * explicit null rather than inherit anything from the candidate row.
- *
- * @param {import('../sharepoint-client.js').SharePointClient} client
- * @param {string} reviewerId
- * @returns {Promise<string | null>}
- */
-async function allocationManagerFor(client, reviewerId) {
-  if (typeof client.resolveManagers !== 'function') return null;
-  try {
-    const managers = await client.resolveManagers([reviewerId]);
-    const manager = managers?.[reviewerId];
-    return typeof manager === 'string' && manager.trim() !== ''
-      ? manager
-      : null;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * The ETag the claim's `If-Match` must carry, re-read from the candidate row.
@@ -500,7 +479,10 @@ export function createRouteSlice(
         }
 
         const currentUserId = tools.context.chrome.currentUser.id;
-        let managerAccount = await allocationManagerFor(client, currentUserId);
+        let managerAccount = await resolveReviewerManager(
+          client,
+          currentUserId
+        );
         // One instant for the whole click, however many candidates it has to
         // work through: the Reviewer's clock starts when they asked for a Case,
         // not when the third stale candidate finally gave way.

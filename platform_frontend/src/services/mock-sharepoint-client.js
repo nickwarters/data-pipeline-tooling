@@ -21,7 +21,7 @@ import { loadBank } from '../../case-types/load-bank.js';
 /** @typedef {import('../sharepoint-client.js').NewSupportLogEntry} NewSupportLogEntry */
 
 /** @typedef {import('../sharepoint-client.js').VersionedExport} VersionedExport */
-/** @typedef {PersonResult & { manager?: string }} DirectoryPerson */
+/** @typedef {PersonResult & { manager?: string, groups?: string[] }} DirectoryPerson */
 
 export class MockSharePointClient {
   /**
@@ -379,6 +379,24 @@ export class MockSharePointClient {
           ? { loginName, displayName }
           : { loginName, displayName, email }
       );
+  }
+
+  /**
+   * The fixture directory's members of one group.
+   *
+   * @param {string} groupName
+   * @param {{ signal?: AbortSignal }} [opts]
+   * @returns {Promise<PersonResult[]>}
+   */
+  async listGroupMembers(groupName, opts = {}) {
+    const members = this._people
+      .filter((person) => person.groups?.includes(groupName))
+      .map(({ loginName, displayName, email }) =>
+        email === undefined
+          ? { loginName, displayName }
+          : { loginName, displayName, email }
+      );
+    return settle(opts.signal, members);
   }
 
   /**

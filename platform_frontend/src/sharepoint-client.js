@@ -511,6 +511,7 @@
  * listSupportLog: (subject: { caseType: string, caseId: string }, opts?: { signal?: AbortSignal }) => Promise<SupportLogEntry[]>,
  * addSupportLogEntry: (entry: NewSupportLogEntry) => Promise<string>,
  * searchPeople: (query: string) => Promise<PersonResult[]>,
+ * listGroupMembers: (groupName: string, opts?: { signal?: AbortSignal }) => Promise<PersonResult[]>,
  * resolveUsers: (accountNames: string[]) => Promise<Record<string, string | null>>,
  * resolveManagers: (accountNames: string[]) => Promise<Record<string, string | null>>,
  * getBankVersion: (slug: string) => Promise<string | null>,
