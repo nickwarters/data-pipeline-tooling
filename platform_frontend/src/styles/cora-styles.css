@@ -3477,6 +3477,78 @@
   padding-left: var(--cora-space-4);
 }
 
+/* The Reassign form takes the actions panel's place while it is open. */
+.cora-case-support-form {
+  display: grid;
+  gap: var(--cora-space-3);
+  padding: var(--cora-space-3) var(--cora-space-4);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+}
+
+.cora-case-support-form h2,
+.cora-case-support-form .cora-case-support-note,
+.cora-case-support-form .cora-case-support-error {
+  margin: 0;
+}
+
+.cora-case-support-candidates {
+  display: grid;
+  gap: var(--cora-space-1);
+  margin: 0;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+}
+
+.cora-case-support-candidates legend {
+  padding: 0 var(--cora-space-1);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-case-support-candidate {
+  display: flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+}
+
+.cora-case-support-reason {
+  font: inherit;
+  min-height: 5rem;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  color: var(--cora-color-on-surface);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  resize: vertical;
+}
+
+.cora-case-support-reason:focus {
+  outline: none;
+  border-color: var(--cora-color-accent);
+  box-shadow: var(--cora-focus-ring);
+}
+
+.cora-case-support-form-actions {
+  display: flex;
+  gap: var(--cora-space-2);
+}
+
+.cora-case-support-notice {
+  margin: 0;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-success);
+  background: var(--cora-color-success-bg);
+  border-radius: var(--cora-radius-sm);
+}
+
+.cora-case-support-action .cora-case-support-action-blocked {
+  color: var(--cora-color-warning);
+}
+
 /* ── My Stats ───────────────────────────────────────────────────────────── */
 
 [data-cora-root] .cora-my-stats-top-row {

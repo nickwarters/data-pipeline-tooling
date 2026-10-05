@@ -20,6 +20,8 @@ installDom();
 
 const { createRouteSlice, caseSupportRouteFor, SUPPORT_ACTIONS } =
   await import('../src/pages/cora-case-support.js');
+const { MockSharePointClient } =
+  await import('../src/services/mock-sharepoint-client.js');
 const { APP_CONFIG } = await import('../src/app-config.js');
 
 const SOURCES = [
@@ -311,30 +313,25 @@ test('case support: a selected Case is read from its own Case Type list', async 
   assert.equal(open.href, '#/case/example-review/42');
 });
 
-test('case support: every support action is offered, and none can be taken yet', () => {
-  const slice = createRouteSlice(
-    { caseType: 'complaints', id: '1', queryString: '' },
-    context()
-  );
-  const state = slice.reducer(slice.initialState, {
-    type: 'case-support/case-loaded',
-    row: makeCaseRow({ id: '1', title: 'CR-1' }),
-  });
-  const view = viewOf(slice, state);
+test('case support: every support action has a card, and only a built one can be started', () => {
+  const { view } = live();
 
   for (const action of SUPPORT_ACTIONS) {
     assert.ok(
-      getByRole(view, 'heading', { name: action.title }),
+      getByRole(view(), 'heading', { name: action.title }),
       `${action.id} has a card`
     );
   }
-  const buttons = queryAllByRole(view, 'button', {
+  const unbuilt = queryAllByRole(view(), 'button', {
     name: 'Not available yet',
   });
-  assert.equal(buttons.length, SUPPORT_ACTIONS.length);
-  for (const button of buttons) assert.equal(button.disabled, true);
-
-  assert.ok(getByRole(view, 'heading', { name: 'Support log' }));
+  assert.ok(unbuilt.length < SUPPORT_ACTIONS.length);
+  for (const button of unbuilt) assert.equal(button.disabled, true);
+  assert.equal(
+    getByRole(view(), 'button', { name: 'Reassign' }).disabled,
+    false
+  );
+  assert.ok(getByRole(view(), 'heading', { name: 'Support log' }));
 });
 
 test('case support: only a voided Case shows when it was voided', () => {
@@ -694,4 +691,324 @@ test('case support log: an unknown Case Type asks for no log', async () => {
   slice.start(startTools(ctx, []));
   await flush();
   assert.equal(asked, false);
+});
+
+/**
+ * A started Case Support page over a mock tenant, with a real dispatch loop.
+ *
+ * @param {{ row?: Record<string, unknown>, people?: any[], supportLog?: any[] }} [setup]
+ */
+function live(setup = {}) {
+  const client = new MockSharePointClient({
+    personas: { maintainer: { groups: [], displayName: 'Robin Maintainer' } },
+    persona: 'maintainer',
+    lists: {
+      'Cases-Complaints': [
+        makeCaseRow({
+          id: '1',
+          title: 'CR-1',
+          assignedReviewer: 'zara',
+          assignedReviewerManager: 'old-manager',
+          ...setup.row,
+        }),
+      ],
+    },
+    people: setup.people ?? [
+      {
+        loginName: 'zara',
+        displayName: 'Zara',
+        groups: ['Reviewers - Complaints'],
+      },
+      {
+        loginName: 'bea',
+        displayName: 'Bea',
+        manager: 'i:0#.w|CONTOSO\\Mo',
+        groups: ['Reviewers - Complaints'],
+      },
+      {
+        loginName: 'amir',
+        displayName: 'Amir',
+        groups: ['Reviewers - Complaints'],
+      },
+      {
+        loginName: 'other',
+        displayName: 'Other',
+        groups: ['Reviewers - Example Review'],
+      },
+    ],
+    supportLog: setup.supportLog ?? [],
+    now: () => new Date('2026-10-05T12:00:00Z'),
+  });
+  const ctx = context({ client: null });
+  ctx.client = client;
+  const slice = createRouteSlice(
+    { caseType: 'complaints', id: '1', queryString: '' },
+    ctx
+  );
+  let state = slice.initialState;
+  const dispatch = (/** @type {any} */ action) => {
+    state = slice.reducer(state, action);
+  };
+  slice.start(startTools(ctx, [], { dispatch }));
+  dispatch({
+    type: 'case-support/case-loaded',
+    row: makeCaseRow({
+      id: '1',
+      title: 'CR-1',
+      assignedReviewer: 'zara',
+      assignedReviewerManager: 'old-manager',
+      ...setup.row,
+    }),
+  });
+  return {
+    client,
+    dispatch,
+    state: () => state,
+    view: () => slice.view(state, { dispatch }),
+  };
+}
+
+/** @param {ReturnType<typeof live>} page */
+async function openReassign(page) {
+  fireEvent(getByRole(page.view(), 'button', { name: 'Reassign' }), 'click');
+  await flush();
+}
+
+/** @param {ReturnType<typeof live>} page @param {string} name @param {string} reason */
+function fillReassign(page, name, reason) {
+  const label = [
+    ...page.view().querySelectorAll('.cora-case-support-candidate'),
+  ].find((candidate) => candidate.textContent === name);
+  assert.ok(label, `${name} is offered`);
+  fireEvent(label.querySelector('input'), 'change');
+  const textarea = page.view().querySelector('textarea');
+  fireEvent(textarea, 'input', { target: { value: reason } });
+}
+
+test('reassign: the candidates are the Case Type reviewer group, less the current Reviewer', async () => {
+  const page = live();
+  await openReassign(page);
+
+  const offered = [
+    ...page.view().querySelectorAll('.cora-case-support-candidate'),
+  ].map((label) => label.textContent);
+  assert.deepEqual(offered, ['Amir', 'Bea']);
+  assert.match(page.view().textContent, /from Reviewers - Complaints/);
+});
+
+test('reassign: it cannot be submitted without both a Reviewer and a reason', async () => {
+  const page = live();
+  await openReassign(page);
+  const submit = () =>
+    getByRole(page.view(), 'button', { name: 'Reassign' }).disabled;
+
+  assert.equal(submit(), true);
+  fillReassign(page, 'Bea', '   ');
+  assert.equal(submit(), true, 'a blank reason is no reason');
+  fillReassign(page, 'Bea', 'Zara is on leave.');
+  assert.equal(submit(), false);
+});
+
+test('reassign: the log is written first, then the Reviewer and manager change in one write', async () => {
+  const page = live();
+  /** @type {string[]} */
+  const order = [];
+  const addEntry = page.client.addSupportLogEntry.bind(page.client);
+  const patch = page.client.patchCase.bind(page.client);
+  page.client.addSupportLogEntry = async (entry) => {
+    order.push(`log:${entry.outcome}`);
+    return addEntry(entry);
+  };
+  /** @type {any[]} */
+  const writes = [];
+  page.client.patchCase = async (...args) => {
+    order.push('patch');
+    writes.push(args);
+    return patch(...args);
+  };
+  await openReassign(page);
+  fillReassign(page, 'Bea', 'Zara is on leave.');
+
+  fireEvent(getByRole(page.view(), 'button', { name: 'Reassign' }), 'click');
+  await flush(60);
+
+  assert.deepEqual(order, ['log:recorded', 'patch']);
+  const [[id, fields, etag, opts]] = writes;
+  assert.equal(id, '1');
+  assert.deepEqual(fields, {
+    assignedReviewer: 'bea',
+    assignedReviewerManager: 'mo',
+  });
+  assert.equal(etag, 'etag-1');
+  assert.equal(opts.listName, 'Cases-Complaints');
+
+  const stored = await page.client.getCase('1', {
+    listName: 'Cases-Complaints',
+  });
+  assert.equal(stored?.assignedReviewer, 'bea');
+  assert.equal(stored?.assignedAt, '2026-10-05T12:00:00.000Z');
+  const [entry] = await page.client.listSupportLog({
+    caseType: 'complaints',
+    caseId: '1',
+  });
+  assert.equal(entry.action, 'reassign');
+  assert.equal(entry.reason, 'Zara is on leave.');
+  assert.equal(entry.caseReference, 'CR-1');
+  assert.deepEqual(entry.changes, [
+    { field: 'assignedReviewer', before: 'zara', after: 'bea' },
+    { field: 'assignedReviewerManager', before: 'old-manager', after: 'mo' },
+  ]);
+
+  const view = page.view();
+  assert.equal(getByRole(view, 'status').textContent, 'Reassigned to Bea.');
+  assert.equal(definitionFor(view, 'Assigned Reviewer').textContent, 'bea');
+  assert.ok(
+    view.querySelector('.cora-case-support-log-entry'),
+    'the log is re-read'
+  );
+  assert.equal(view.querySelector('textarea'), null, 'the form has closed');
+});
+
+test('reassign: a Case changed since it was opened is not overwritten, and the log says so', async () => {
+  const page = live();
+  await openReassign(page);
+  fillReassign(page, 'Amir', 'Rebalancing.');
+  page.client.inject412();
+
+  fireEvent(getByRole(page.view(), 'button', { name: 'Reassign' }), 'click');
+  await flush(60);
+
+  const stored = await page.client.getCase('1', {
+    listName: 'Cases-Complaints',
+  });
+  assert.equal(stored?.assignedReviewer, 'zara');
+  const [failed, recorded] = await page.client.listSupportLog({
+    caseType: 'complaints',
+    caseId: '1',
+  });
+  assert.equal(recorded.outcome, 'recorded');
+  assert.equal(failed.outcome, 'not-applied');
+  assert.equal(failed.relatesTo, recorded.id);
+  assert.match(
+    getByRole(page.view(), 'alert').textContent,
+    /changed after it was opened.*Reload/
+  );
+  assert.ok(page.view().querySelector('textarea'), 'the form stays open');
+});
+
+test('reassign: a support log that cannot be written leaves the Case untouched', async () => {
+  const page = live();
+  let patched = false;
+  page.client.addSupportLogEntry = async () => {
+    throw new Error('HTTP 403');
+  };
+  page.client.patchCase = async () => {
+    patched = true;
+    return { ok: true, status: 200 };
+  };
+  await openReassign(page);
+  fillReassign(page, 'Amir', 'Rebalancing.');
+
+  fireEvent(getByRole(page.view(), 'button', { name: 'Reassign' }), 'click');
+  await flush(60);
+
+  assert.equal(patched, false);
+  assert.match(
+    getByRole(page.view(), 'alert').textContent,
+    /Nothing was changed.*HTTP 403/
+  );
+});
+
+test('reassign: an unreadable reviewer group is reported in the form', async () => {
+  const page = live();
+  page.client.listGroupMembers = async () => {
+    throw new Error('HTTP 404');
+  };
+  await openReassign(page);
+
+  assert.match(
+    getByRole(page.view(), 'alert').textContent,
+    /reviewer group could not be read.*HTTP 404/
+  );
+});
+
+test('reassign: a group with nobody else in it says so, and cancel returns to the actions', async () => {
+  const page = live({
+    people: [
+      {
+        loginName: 'zara',
+        displayName: 'Zara',
+        groups: ['Reviewers - Complaints'],
+      },
+    ],
+  });
+  await openReassign(page);
+  assert.match(
+    page.view().textContent,
+    /Nobody else is in Reviewers - Complaints/
+  );
+
+  fireEvent(getByRole(page.view(), 'button', { name: 'Cancel' }), 'click');
+  assert.ok(getByRole(page.view(), 'heading', { name: 'Support actions' }));
+});
+
+test('reassign: a Case with no Reviewer, or a Void one, cannot be reassigned', () => {
+  for (const row of [
+    { status: CASE_STATUS.TO_ALLOCATE, assignedReviewer: '' },
+    { status: CASE_STATUS.VOID },
+  ]) {
+    const page = live({ row });
+    const button = getByRole(page.view(), 'button', { name: 'Reassign' });
+    assert.equal(button.disabled, true, row.status);
+    assert.ok(
+      page.view().querySelector('.cora-case-support-action-blocked'),
+      row.status
+    );
+  }
+});
+
+test('reassign: shows a placeholder while the reviewer group is read', () => {
+  const page = live();
+  page.dispatch({ type: 'case-support/reassign-opened' });
+  assert.ok(page.view().querySelector('.cora-loading'));
+});
+
+test('reassign: while saving, the form cannot be changed or sent twice', async () => {
+  const page = live();
+  await openReassign(page);
+  fillReassign(page, 'Bea', 'On leave.');
+  page.dispatch({ type: 'case-support/reassign-saving' });
+
+  const view = page.view();
+  assert.equal(
+    getByRole(view, 'button', { name: 'Reassigning…' }).disabled,
+    true
+  );
+  assert.equal(getByRole(view, 'button', { name: 'Cancel' }).disabled, true);
+  assert.equal(view.querySelector('textarea')?.disabled, true);
+});
+
+test('reassign: a failed save that is not a conflict says why, without asking for a reload', async () => {
+  const page = live();
+  await openReassign(page);
+  fillReassign(page, 'Amir', 'Rebalancing.');
+  page.client.patchCase = async () => ({ ok: false, status: 500 });
+
+  fireEvent(getByRole(page.view(), 'button', { name: 'Reassign' }), 'click');
+  await flush(60);
+
+  const alert = getByRole(page.view(), 'alert').textContent;
+  assert.match(alert, /status 500/);
+  assert.doesNotMatch(alert, /Reload/);
+});
+
+test('reassign: an action the form does not handle leaves it as it was', async () => {
+  const page = live();
+  await openReassign(page);
+  const before = page.state();
+  page.dispatch({ type: 'case-support/unrelated' });
+  assert.strictEqual(
+    page.state().routes.caseSupport.selected?.reassign,
+    before.routes.caseSupport.selected?.reassign
+  );
 });

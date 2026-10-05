@@ -45,6 +45,8 @@ const CONTENT_TYPE_JSON = 'application/json;odata=nometadata;charset=utf-8';
 const DEFAULT_THROTTLE_MS = 1000;
 const ROADMAP_LIST_NAME = 'Roadmap';
 const ROADMAP_STATUSES = new Set(['LIVE', 'IN PROGRESS', 'UPCOMING']);
+// SharePoint's PrincipalType for a user, as opposed to a group.
+const USER_PRINCIPAL = 1;
 const SUPPORT_LOG_LIST_NAME = 'CaseSupportLog';
 
 // Author is expanded so the log shows a name rather than a site-local user id.
@@ -498,6 +500,34 @@ export class HttpSharePointClient {
 
     const json = await this._write(url, 'POST', {}, body);
     return peoplePickerEntities(json, url).map(personFromEntity);
+  }
+
+  /**
+   * The user members of one SharePoint group, by bare account; nested groups are not expanded.
+   *
+   * @param {string} groupName
+   * @param {{ signal?: AbortSignal }} [opts]
+   * @returns {Promise<PersonResult[]>}
+   */
+  async listGroupMembers(groupName, opts = {}) {
+    const url = this._absolute(
+      `/_api/web/sitegroups/getbyname('${encodeURIComponent(escapeOData(groupName))}')/users` +
+        '?$select=Id,Title,LoginName,Email,PrincipalType'
+    );
+    const items = await this._getAllPages(url, opts.signal);
+    return items.flatMap((item) => {
+      const rec = /** @type {Record<string, unknown>} */ (item);
+      if (rec.PrincipalType !== USER_PRINCIPAL) return [];
+      const loginName = toBareAccount(String(rec.LoginName ?? ''));
+      if (!loginName) return [];
+      // The member read already answers the user id a Person write needs.
+      const id = Number(rec.Id);
+      if (Number.isFinite(id) && id > 0) this._userIds.set(loginName, id);
+      const displayName = String(rec.Title ?? loginName);
+      return typeof rec.Email === 'string' && rec.Email !== ''
+        ? [{ loginName, displayName, email: rec.Email }]
+        : [{ loginName, displayName }];
+    });
   }
 
   /**

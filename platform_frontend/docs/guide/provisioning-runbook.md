@@ -192,6 +192,15 @@ Group **display names** use the Case Type display name; code composes them from
 `slug → displayName` (declared on the Case Type module), so a new type needs one
 name, not three hand-written strings.
 
+### Who can see a Reviewers group's members
+
+Case Support's Reassign lists the members of `Reviewers - <type>` to choose the
+new Reviewer from, so `CORA Owner Delegates` must be able to read that group's
+membership. In each `Reviewers - <type>` group's settings set **Who can view the
+membership of the group** to **Everyone**, or make `CORA Owner Delegates` the
+group owner. Add Reviewers to the group directly: members granted through a
+nested AD group are not listed.
+
 ### Site-wide functional groups (provision once, not per type)
 
 `Reviewers` (base reviewing), `Frontline` (base frontline — eligible Responsible
