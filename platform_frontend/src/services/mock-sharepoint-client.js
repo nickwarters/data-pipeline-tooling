@@ -19,6 +19,8 @@ import { loadBank } from '../../case-types/load-bank.js';
 /** @typedef {import('../sharepoint-client.js').RoadmapItem} RoadmapItem */
 /** @typedef {import('../sharepoint-client.js').SupportLogEntry} SupportLogEntry */
 /** @typedef {import('../sharepoint-client.js').NewSupportLogEntry} NewSupportLogEntry */
+/** @typedef {import('../sharepoint-client.js').AccessLogEntry} AccessLogEntry */
+/** @typedef {import('../sharepoint-client.js').NewAccessLogEntry} NewAccessLogEntry */
 
 /** @typedef {import('../sharepoint-client.js').VersionedExport} VersionedExport */
 /** @typedef {PersonResult & { manager?: string, groups?: string[] }} DirectoryPerson */
@@ -34,6 +36,9 @@ export class MockSharePointClient {
    * lists?: Record<string, CaseRow[]>,
    * roadmapItems?: RoadmapItem[],
    * supportLog?: SupportLogEntry[],
+   * accessLog?: AccessLogEntry[],
+   * readOnlyGroups?: string[],
+   * missingGroups?: string[],
    * now?: () => Date
    * }} opts
    */
@@ -46,12 +51,18 @@ export class MockSharePointClient {
     lists = /** @type {Record<string, CaseRow[]>} */ ({}),
     roadmapItems = [],
     supportLog = [],
+    accessLog = [],
+    readOnlyGroups = [],
+    missingGroups = [],
     now = () => new Date(),
   }) {
     this._now = now;
     this._personas = personas;
     this._persona = persona;
-    this._people = people.slice();
+    // Cloned, because a group write changes a person and the fixture is shared across clients.
+    this._people = people.map((person) => structuredClone(person));
+    this._readOnlyGroups = new Set(readOnlyGroups);
+    this._missingGroups = new Set(missingGroups);
     this._bankVersions = bankVersions;
     this._versionedExports = versionedExports;
     this._roadmapItems = roadmapItems.map((item) => ({
@@ -68,6 +79,8 @@ export class MockSharePointClient {
     );
     this._supportLog = supportLog.map((entry) => structuredClone(entry));
     this._supportLogCounter = 5000;
+    this._accessLog = accessLog.map((entry) => structuredClone(entry));
+    this._accessLogCounter = 7000;
     this._etagCounter = 1000;
     this._injectNext412 = false;
   }
@@ -397,6 +410,134 @@ export class MockSharePointClient {
           : { loginName, displayName, email }
       );
     return settle(opts.signal, members);
+  }
+
+  /**
+   * The groups the fixture directory holds a person in; a person it does not know holds none.
+   *
+   * @param {string} account
+   * @param {{ signal?: AbortSignal }} [opts]
+   * @returns {Promise<string[]>}
+   */
+  async listUserGroups(account, opts = {}) {
+    return settle(opts.signal, [...(this._person(account)?.groups ?? [])]);
+  }
+
+  /**
+   * Editable unless the client was built with the group read-only or missing.
+   *
+   * @param {string[]} groupNames
+   * @param {{ signal?: AbortSignal }} [opts]
+   * @returns {Promise<Record<string, import('../sharepoint-client.js').GroupEditability>>}
+   */
+  async getGroupEditability(groupNames, opts = {}) {
+    return settle(
+      opts.signal,
+      Object.fromEntries(
+        groupNames.map((name) => [name, this._editability(name)])
+      )
+    );
+  }
+
+  /**
+   * @param {string} groupName
+   * @param {string} account
+   * @returns {Promise<import('../sharepoint-client.js').GroupMemberWrite>}
+   */
+  async addGroupMember(groupName, account) {
+    return this._writeMembership(groupName, account, (groups) =>
+      groups.includes(groupName) ? groups : [...groups, groupName]
+    );
+  }
+
+  /**
+   * @param {string} groupName
+   * @param {string} account
+   * @returns {Promise<import('../sharepoint-client.js').GroupMemberWrite>}
+   */
+  async removeGroupMember(groupName, account) {
+    // SharePoint refuses to remove someone from a group they are not in, so the mock does too.
+    return this._writeMembership(
+      groupName,
+      account,
+      (groups) => groups.filter((group) => group !== groupName),
+      (groups) => groups.includes(groupName)
+    );
+  }
+
+  /**
+   * @param {string} groupName
+   * @param {string} account
+   * @param {(groups: string[]) => string[]} change
+   * @param {(groups: string[]) => boolean} [allowed] whether the write is accepted for the person's current groups
+   * @returns {Promise<import('../sharepoint-client.js').GroupMemberWrite>}
+   */
+  async _writeMembership(groupName, account, change, allowed = () => true) {
+    const editability = this._editability(groupName);
+    if (editability === 'missing') return { ok: false, status: 404 };
+    if (editability === 'read-only') return { ok: false, status: 403 };
+    const person = this._person(account);
+    if (!person) return { ok: false, status: 404 };
+    if (!allowed(person.groups ?? [])) return { ok: false, status: 400 };
+    person.groups = change(person.groups ?? []);
+    return { ok: true };
+  }
+
+  /**
+   * @param {string} groupName
+   * @returns {import('../sharepoint-client.js').GroupEditability}
+   */
+  _editability(groupName) {
+    if (this._missingGroups.has(groupName)) return 'missing';
+    return this._readOnlyGroups.has(groupName) ? 'read-only' : 'editable';
+  }
+
+  /**
+   * @param {string} account
+   * @returns {DirectoryPerson | undefined}
+   */
+  _person(account) {
+    const wanted = account.toLowerCase();
+    return this._people.find(
+      (person) => person.loginName.toLowerCase() === wanted
+    );
+  }
+
+  /**
+   * One person's Access Log, newest first, ties broken by id, exactly as the list is read.
+   *
+   * @param {{ account: string }} subject
+   * @param {{ signal?: AbortSignal }} [opts]
+   * @returns {Promise<AccessLogEntry[]>}
+   */
+  async listAccessLog({ account }, opts = {}) {
+    const wanted = account.toLowerCase();
+    const entries = this._accessLog
+      .filter((entry) => entry.account.toLowerCase() === wanted)
+      .sort(
+        (a, b) =>
+          b.createdAt.localeCompare(a.createdAt) || Number(b.id) - Number(a.id)
+      )
+      .map((entry) => structuredClone(entry));
+    return settle(opts.signal, entries);
+  }
+
+  /**
+   * Append-only, stamped with the persona and the injected clock as SharePoint would.
+   *
+   * @param {NewAccessLogEntry} entry
+   * @returns {Promise<string>}
+   */
+  async addAccessLogEntry(entry) {
+    const id = String(++this._accessLogCounter);
+    const author = await this.getCurrentUser();
+    this._accessLog.push({
+      ...structuredClone(entry),
+      id,
+      createdAt: this._now().toISOString(),
+      createdBy: author.displayName,
+    });
+    return id;
   }
 
   /**

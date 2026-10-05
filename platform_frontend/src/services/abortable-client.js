@@ -30,6 +30,9 @@ const SIGNALLED_READS = new Set([
   'countCases',
   'listSupportLog',
   'listGroupMembers',
+  'listUserGroups',
+  'getGroupEditability',
+  'listAccessLog',
 ]);
 
 /**

@@ -9,8 +9,8 @@ Before doing any non-trivial work in this repo, read:
 1. **[CONTEXT.md](./CONTEXT.md)** — domain language. Use these terms exactly when discussing or coding (`Case Type`, `Question Definition`, `Applicable Question`, `Answer`, `Remediation Action`, `Reviewer`, `Responsible Party`, `Case Type Owner`, `Conversation`, `Outcome`).
 2. **[docs/guide/add-a-page.md](./docs/guide/add-a-page.md)** — the one-page
    authoring path: state → `h()`/`svg()`, actions, effects, route entry, and tests.
-3. **[docs/adr/](./docs/adr/)** — 56 architecture decisions, numbered
-   (`0001`–`0056`). Read the status before relying on an older decision, and do
+3. **[docs/adr/](./docs/adr/)** — 57 architecture decisions, numbered
+   (`0001`–`0057`). Read the status before relying on an older decision, and do
    not deviate from an accepted ADR without surfacing the deviation explicitly.
 
 ## Project overview
@@ -476,6 +476,13 @@ src/
     case-support/
       reassign.js                 # the Reassign action: candidates from the Case Type's reviewer
                                   #   group, the pure form view, and the logged, If-Match guarded write
+    cora-access.js                # store-driven #/access slice, Maintainers only: find a person,
+                                  #   show the internal roles they hold, give or remove one with a
+                                  #   reason, and read who holds each role and the Access Log
+    access/
+      access-views.js             # the pure views: shared-roles warning, picker, held roles, who
+                                  #   holds each role, and the Access Log
+      change-form.js              # the give/remove form: its state, validity and pure view
     cora-dashboard.js             # store-driven dashboard slice + descriptor-selected panels (GRID-3/4)
     cora-my-stats.js               # store-driven Reviewer Report Feed load, browser-calendar range state and controls,
                                    #   the clamped typed live-tail read, and one derivation feeding the chart,
@@ -577,6 +584,11 @@ src/
 
   services/                     # non-UI modules: data, state, auth
     abortable-client.js           # binds a mount-lifetime AbortSignal to a client's Case reads; writes untouched (#545)
+    access-roles.js               # THE definition of the internal roles Access can give: which groups
+                                  #   make each one, which are shared with another role, what a grant
+                                  #   adds and a revoke removes, and the role-language copy
+    access-change.js              # THE Access Log write order: check the groups can be changed, log
+                                  #   the change, apply each group, then log how far it got if one failed
     account-name.js
     across-sources.js             # multi-list fan-out: one scoped request per Case source, merged (ADR-0022)
     case-search.js                # the bounded cross-list Case lookup: one over-fetched window per
@@ -713,7 +725,8 @@ dev/                            # local dev loop; not deployed
   styleguide.html               # rendered component/style reference
   fixtures/                     # mock data used by MockSharePointClient (?mock=1)
     cases.js
-    people.js                   # directory people backing searchPeople
+    people.js                   # directory people backing searchPeople, and the groups they hold
+    access-log.js               # Access Log entries about the fully provisioned fixture person
     personas.js                 # ?asUser= personas (default: reviewer)
     roadmap.js
 

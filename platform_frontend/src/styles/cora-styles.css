@@ -3549,6 +3549,204 @@
   color: var(--cora-color-warning);
 }
 
+/* Access — the Maintainer's roles page. It wears Case Support's look: the same
+   panels, fields and log, with the shared-roles warning on top. */
+
+.cora-access {
+  display: grid;
+  gap: var(--cora-space-4);
+}
+
+.cora-access h1,
+.cora-access h2 {
+  margin: 0;
+}
+
+.cora-access-warning {
+  padding: var(--cora-space-3) var(--cora-space-4);
+  color: var(--cora-color-warning);
+  background: var(--cora-color-warning-bg);
+  border: 1px solid var(--cora-color-warning);
+  border-radius: var(--cora-radius-md);
+}
+
+.cora-access-warning p {
+  margin: 0;
+}
+
+.cora-access-warning p + p {
+  margin-top: var(--cora-space-1);
+}
+
+.cora-access-search,
+.cora-access-person,
+.cora-access-form,
+.cora-access-log,
+.cora-access-holders {
+  display: grid;
+  gap: var(--cora-space-3);
+  padding: var(--cora-space-3) var(--cora-space-4);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+}
+
+.cora-access-person > *,
+.cora-access-log > *,
+.cora-access-holders > * {
+  margin: 0;
+}
+
+.cora-access-field {
+  display: grid;
+  gap: var(--cora-space-1);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-access-input,
+.cora-access-reason {
+  font: inherit;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  color: var(--cora-color-on-surface);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  transition: border-color var(--cora-duration-fast) var(--cora-easing-standard);
+}
+
+.cora-access-reason {
+  min-height: 5rem;
+  resize: vertical;
+}
+
+.cora-access-input:focus,
+.cora-access-reason:focus {
+  outline: none;
+  border-color: var(--cora-color-accent);
+  box-shadow: var(--cora-focus-ring);
+}
+
+.cora-access-note,
+.cora-access-blocked,
+.cora-access-error,
+.cora-access-notice {
+  margin: 0;
+  font-size: var(--cora-font-size-sm);
+}
+
+.cora-access-note {
+  color: var(--cora-color-text-muted);
+}
+
+.cora-access-blocked {
+  color: var(--cora-color-warning);
+}
+
+.cora-access-error,
+.cora-access-notice {
+  padding: var(--cora-space-2) var(--cora-space-3);
+  border-radius: var(--cora-radius-sm);
+}
+
+.cora-access-error {
+  color: var(--cora-color-danger);
+  background: var(--cora-color-danger-bg);
+}
+
+.cora-access-notice {
+  color: var(--cora-color-success);
+  background: var(--cora-color-success-bg);
+}
+
+.cora-access-role-list,
+.cora-access-log-list,
+.cora-access-holder-list {
+  display: grid;
+  gap: var(--cora-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cora-access-role {
+  display: grid;
+  gap: var(--cora-space-2);
+  justify-items: start;
+  padding: var(--cora-space-3);
+  background: var(--cora-color-surface-2);
+  /* The recessed fill alone is a few shades on the dark surface, so the border separates the card. */
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+}
+
+.cora-access-role--incomplete {
+  border-color: var(--cora-color-warning);
+}
+
+.cora-access-role p {
+  margin: 0;
+}
+
+.cora-access-role-heading,
+.cora-access-log-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--cora-space-2);
+}
+
+.cora-access-role-actions,
+.cora-access-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cora-space-2);
+}
+
+.cora-access-badge {
+  padding: 0 var(--cora-space-2);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-warning);
+  background: var(--cora-color-warning-bg);
+  border-radius: var(--cora-radius-sm);
+}
+
+.cora-access-log-entry {
+  display: grid;
+  gap: var(--cora-space-1);
+  padding: var(--cora-space-2) var(--cora-space-3);
+  border-left: 3px solid var(--cora-color-border-strong);
+}
+
+.cora-access-log-entry--failed {
+  border-left-color: var(--cora-color-warning);
+}
+
+.cora-access-log-entry p {
+  margin: 0;
+}
+
+.cora-access-log-meta {
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-access-holder {
+  padding: var(--cora-space-2) var(--cora-space-3);
+  background: var(--cora-color-surface-2);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+}
+
+.cora-access-holder summary {
+  cursor: pointer;
+}
+
+.cora-access-holder-list {
+  margin-top: var(--cora-space-2);
+  gap: var(--cora-space-1);
+}
+
 /* ── My Stats ───────────────────────────────────────────────────────────── */
 
 [data-cora-root] .cora-my-stats-top-row {

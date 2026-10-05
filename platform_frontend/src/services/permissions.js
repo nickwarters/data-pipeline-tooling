@@ -66,6 +66,16 @@ export function caseTypeGroupNames(displayName) {
   };
 }
 
+/**
+ * The frontline list-access group for a Case Type, which grants no capability and only lets the Case list be opened.
+ *
+ * @param {string} displayName
+ * @returns {string}
+ */
+export function frontlineListAccessGroupName(displayName) {
+  return `Frontline - ${displayName}`;
+}
+
 /** @type {PermissionsConfig} */
 export const permissions = {
   reviewer: 'Reviewers',
