@@ -613,7 +613,7 @@ export class HttpSharePointClient {
       );
       return { ok: true };
     } catch (err) {
-      return { ok: false, status: /** @type {any} */ (err).status || 500 };
+      return membershipWriteFailure(err);
     }
   }
 
@@ -637,7 +637,7 @@ export class HttpSharePointClient {
       );
       return { ok: true };
     } catch (err) {
-      return { ok: false, status: /** @type {any} */ (err).status || 500 };
+      return membershipWriteFailure(err);
     }
   }
 
@@ -1615,6 +1615,17 @@ function supportLogEntryFromItem(item) {
     outcome: outcome === 'not-applied' ? 'not-applied' : 'recorded',
     ...logStampFromItem(item),
   };
+}
+
+/**
+ * A membership write's failure, except a 2xx whose body was empty or not JSON, which did change the group.
+ *
+ * @param {unknown} err
+ * @returns {import('../sharepoint-client.js').GroupMemberWrite}
+ */
+function membershipWriteFailure(err) {
+  if (err instanceof SyntaxError) return { ok: true };
+  return { ok: false, status: /** @type {any} */ (err).status || 500 };
 }
 
 /**
