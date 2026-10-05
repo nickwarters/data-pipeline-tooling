@@ -3412,6 +3412,9 @@
   justify-items: start;
   padding: var(--cora-space-3);
   background: var(--cora-color-surface-2);
+  /* The recessed fill alone is a step of a few shades on the dark surface, so
+     the border is what separates one card from the panel in dark mode. */
+  border: 1px solid var(--cora-color-border);
   border-radius: var(--cora-radius-md);
 }
 
