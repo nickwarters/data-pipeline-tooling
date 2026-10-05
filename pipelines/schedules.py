@@ -23,6 +23,7 @@ def build_pipeline_sets():
             "case_management",
             (
                 ScheduledPipeline("pipelines/sharepoint_cases", Schedule.daily()),
+                ScheduledPipeline("pipelines/case_support_log", Schedule.daily()),
                 ScheduledPipeline(
                     "pipelines/reviewer_activity",
                     Schedule.daily(),

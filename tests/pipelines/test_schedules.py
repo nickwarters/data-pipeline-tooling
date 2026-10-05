@@ -39,10 +39,14 @@ def test_the_schedule_registers_case_management_then_complaint_selection_daily()
         "selection",
         "operations",
     ]
-    sharepoint, reviewer_activity, platform_metric = sets[0].pipelines
+    sharepoint, support_log, reviewer_activity, platform_metric = sets[0].pipelines
     assert sharepoint.path == "pipelines/sharepoint_cases"
     assert sharepoint.name == "sharepoint_cases"
     assert sharepoint.schedule == Schedule.daily()
+    assert support_log.path == "pipelines/case_support_log"
+    assert support_log.name == "case_support_log"
+    assert support_log.schedule == Schedule.daily()
+    assert not support_log.depends_on
     assert reviewer_activity.path == "pipelines/reviewer_activity"
     assert reviewer_activity.name == "reviewer_activity"
     assert reviewer_activity.schedule == Schedule.daily()
@@ -64,25 +68,28 @@ def test_the_schedule_registers_case_management_then_complaint_selection_daily()
     assert run_metric.schedule == Schedule.daily()
     assert not run_metric.depends_on
     assert callable(load_pipeline(sharepoint.path).run)
+    assert callable(load_pipeline(support_log.path).run)
     assert callable(load_pipeline(reviewer_activity.path).run)
     assert callable(load_pipeline(platform_metric.path).run)
     assert callable(load_pipeline(complaint_selection.path).run)
     assert callable(load_pipeline(run_metric.path).run)
 
 
-def test_a_working_day_pass_invokes_all_five_pipelines_in_declared_order(tmp_path):
+def test_a_working_day_pass_invokes_every_pipeline_in_declared_order(tmp_path):
     orchestrator, calls = _orchestrator(WorkingDayCalendar())
 
     result = orchestrator.run_due_once(tmp_path, run_date=dt.date(2026, 8, 5))
 
     assert calls == [
         "pipelines/sharepoint_cases",
+        "pipelines/case_support_log",
         "pipelines/reviewer_activity",
         "pipelines/cora_platform_metric",
         "pipelines/complaint_selection",
         "pipelines/pipeline_run_metric",
     ]
     assert [decision.status for decision in result.decisions] == [
+        "succeeded",
         "succeeded",
         "succeeded",
         "succeeded",
@@ -100,6 +107,7 @@ def test_a_weekend_or_configured_holiday_pass_skips_it(tmp_path):
 
         assert calls == []
         assert [decision.status for decision in result.decisions] == [
+            "skipped",
             "skipped",
             "skipped",
             "skipped",
@@ -124,12 +132,13 @@ def test_a_weekend_or_configured_holiday_pass_skips_it(tmp_path):
         "skipped",
         "skipped",
         "skipped",
+        "skipped",
     ]
     assert all(not decision.was_due for decision in result.decisions)
 
 
 def test_two_operator_passes_on_one_weekday_are_safe(tmp_path):
-    """A repeated due pass records all five pipelines each time."""
+    """A repeated due pass records every pipeline each time."""
     wednesday = dt.date(2026, 8, 5)
     orchestrator, calls = _orchestrator(WorkingDayCalendar())
 
@@ -138,11 +147,13 @@ def test_two_operator_passes_on_one_weekday_are_safe(tmp_path):
 
     assert calls == [
         "pipelines/sharepoint_cases",
+        "pipelines/case_support_log",
         "pipelines/reviewer_activity",
         "pipelines/cora_platform_metric",
         "pipelines/complaint_selection",
         "pipelines/pipeline_run_metric",
         "pipelines/sharepoint_cases",
+        "pipelines/case_support_log",
         "pipelines/reviewer_activity",
         "pipelines/cora_platform_metric",
         "pipelines/complaint_selection",
@@ -155,7 +166,8 @@ def test_two_operator_passes_on_one_weekday_are_safe(tmp_path):
             "succeeded",
             "succeeded",
             "succeeded",
+            "succeeded",
         ]
 
     records = OrchestrationStore(tmp_path / "_orchestration" / "runs.db").records()
-    assert len(records) == 10
+    assert len(records) == 12

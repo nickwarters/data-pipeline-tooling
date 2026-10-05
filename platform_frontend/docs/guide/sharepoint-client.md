@@ -18,6 +18,8 @@ just the function and the `client` it was handed.
 // searchPeople(query) → Promise<PersonResult[]>
 // resolveUsers(accountNames) → Promise<Record<string, string | null>>
 // resolveManagers(accountNames) → Promise<Record<string, string | null>>
+// listSupportLog({ caseType, caseId }) → Promise<SupportLogEntry[]>
+// addSupportLogEntry(entry) → Promise<string>
 
 // Switch to mock mode: ?mock=1 in the URL
 // Add a new method: typedef → HttpSharePointClient → MockSharePointClient → fixture
@@ -58,6 +60,24 @@ screen from a directory that genuinely matched nobody, which is exactly how a
 broken request went unnoticed once. Callers are expected to have a failure path:
 `createDebouncedPeopleSearch` turns a rejection into an `error` search state and
 the picker says the search is unavailable.
+
+### `listSupportLog(subject)` and `addSupportLogEntry(entry)`
+
+The **Support Log** is a separate, per-environment `CaseSupportLog` list
+(`uat_CaseSupportLog` in UAT), never a column on the Case. `listSupportLog`
+reads one Case's entries newest first, filtering on the indexed `CaseType` and
+`CaseId` columns so the read stays inside the List View Threshold however long
+the log grows. `addSupportLogEntry` appends one entry with a POST and returns
+its id; there is no update or delete, because Maintainers are granted add
+without edit. Who and when are never sent: `createdAt` and `createdBy` are
+SharePoint's own Created and Author.
+
+An entry's `Changes` cell is JSON. One that cannot be read as a list is shown as
+no changes, with a console warning, rather than failing the whole log. Any
+`Outcome` other than `not-applied` reads as `recorded`, since an entry exists
+only because an action was taken. The mock keeps the log in memory, seeded from
+`dev/fixtures/support-log.js`, and stamps appended entries from the persona and
+its clock.
 
 ---
 
