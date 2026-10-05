@@ -58,6 +58,45 @@ function caseTypeLoadErrorMessage(error, caseType, isRouteCaseType) {
 }
 
 /**
+ * The questions a Case Type's `selectQuestions` keeps for this Case, in bank
+ * order. Filtering the bank by the returned ids, rather than taking the
+ * returned list as it is, is what keeps the selection a narrowing: it cannot
+ * add a question, reorder the bank or hand back an altered copy of one.
+ *
+ * @param {CaseTypeConfig} config
+ * @param {QuestionDefinition[]} questions
+ * @param {Record<string, string> | undefined} details
+ * @returns {QuestionDefinition[]}
+ */
+function selectForCase(config, questions, details) {
+  if (!config.selectQuestions) return questions;
+  const kept = new Set(
+    config.selectQuestions(questions, details ?? {}).map((q) => q.id)
+  );
+  return questions.filter((q) => kept.has(q.id));
+}
+
+/**
+ * Drops Answers to bank questions the selection removed, so they can't still
+ * score the Outcome, while keys outside the bank pass through.
+ *
+ * @param {Record<string, Answer>} answers
+ * @param {QuestionDefinition[]} bankQuestions
+ * @param {QuestionDefinition[]} selected
+ * @returns {Record<string, Answer>}
+ */
+function withoutDeselectedAnswers(answers, bankQuestions, selected) {
+  if (selected.length === bankQuestions.length) return { ...answers };
+  const keep = new Set(selected.map((q) => q.id));
+  const deselected = new Set(
+    bankQuestions.filter((q) => !keep.has(q.id)).map((q) => q.id)
+  );
+  return Object.fromEntries(
+    Object.entries(answers).filter(([id]) => !deselected.has(id))
+  );
+}
+
+/**
  * @typedef {Object} CaseLoaderOptions
  * @property {SharePointClient} client
  * @property {SaveQueue} saveQueue
@@ -295,6 +334,10 @@ export class CaseLoader {
       this.catalogue = config.questions.filter((q) => !q.deprecated);
     }
 
+    // Narrow the catalogue (frozen ones too) before anything else reads it.
+    const bankQuestions = this.catalogue;
+    this.catalogue = selectForCase(config, bankQuestions, caseRow.details);
+
     // Failure is derived, not authored: annotate the catalogue with each
     // question's failing response values (every option mapped to a non-default
     // Outcome). A frozen Case derives against its snapshot's default so the
@@ -310,7 +353,11 @@ export class CaseLoader {
     // the catalogue while no Question Definition id can be mistaken for one.
     validateAnswerKeyNamespace(this.catalogue);
 
-    this.answers = { ...caseRow.answers };
+    this.answers = withoutDeselectedAnswers(
+      caseRow.answers,
+      bankQuestions,
+      this.catalogue
+    );
 
     const actualUserId = this.currentUserId || currentUser.id;
 

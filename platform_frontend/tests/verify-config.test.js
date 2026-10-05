@@ -148,6 +148,25 @@ test('checkCaseTypes fails a missing or non-function computeOutcome', async () =
   assert.match(joined(failures), /string-outcome/);
 });
 
+test('checkCaseTypes accepts a selectQuestions function and fails anything else', async () => {
+  const failures = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(demoConfig({ selectQuestions: (/** @type {any} */ q) => q }), {
+        slug: 'selecting',
+        displayName: 'Selecting',
+      }),
+      demoEntry(demoConfig({ selectQuestions: ['q-1'] }), {
+        slug: 'listed-selection',
+        displayName: 'Listed Selection',
+      }),
+    ],
+  });
+
+  assert.equal(failures.length, 1, joined(failures));
+  assert.match(failures[0].message, /selectQuestions/);
+  assert.match(joined(failures), /listed-selection/);
+});
+
 test('checkCaseTypes fails an empty listName and an empty display name', async () => {
   const failures = await checkCaseTypes({
     caseTypes: [

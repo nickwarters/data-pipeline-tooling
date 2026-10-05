@@ -4,6 +4,12 @@
 
 Accepted. Still current.
 
+> **Extended by [ADR-0056](./0056-case-types-select-questions-by-case-attributes-in-code.md):**
+> a Case Type may also narrow its bank per Case by that Case's own attributes,
+> through a `selectQuestions(questions, details)` function on its module. That
+> selection is code and sits outside this graph: `showWhen` is unchanged and
+> still reads Answers only.
+
 Within each **Case Type** module, **question applicability** is expressed as a declarative `showWhen` graph (data), while the **outcome computation** is an exported JS function (code). Both live in the same module so a Case Type's behaviour is understood from one file.
 
 `showWhen` belongs to the per-Case-Type Question Bank artifact because applicability is part of that Case Type's catalogue. A stable Question Definition ID may be reused, but each bank owns its complete definition and applicability wiring; there is no runtime join to a shared Question Definitions list. The schema starts minimal — `{questionId: {in: [...] | equals: ... | answered: true}}` plus `$and` / `$or` — and grows by extension only when a real case demands it. Resist evolving it into a Turing-complete DSL.

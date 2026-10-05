@@ -782,3 +782,210 @@ test('CaseLoader.load() refreshes person capture display names in one directory 
   );
   assert.equal(patches.length, 0, 'a display-name refresh is never persisted');
 });
+
+// --- selecting Question Definitions by the Case's own attributes ---
+
+const selectableBank = [
+  { id: 'q-common', text: 'Asked of every Case', responseType: 'yes-no-na' },
+  {
+    id: 'q-mortgage',
+    text: 'Only for mortgages',
+    responseType: 'yes-no-na',
+    questionGroup: 'Mortgage checks',
+  },
+  {
+    id: 'q-mortgage-follow-up',
+    text: 'Only when the mortgage question failed',
+    responseType: 'yes-no-na',
+    showWhen: { 'q-mortgage': { equals: 'No' } },
+  },
+  {
+    id: 'q-deprecated',
+    text: 'Retired',
+    responseType: 'yes-no-na',
+    deprecated: true,
+  },
+].map((q) => ({ deprecated: false, ...q }));
+
+/**
+ * Registers a Case Type whose bank is `selectableBank` and which keeps the
+ * mortgage questions only for a Case whose `product` detail is `Mortgage`.
+ * Every call the loader makes to the selection is recorded, so a test can see
+ * what it was handed.
+ *
+ * @param {import('node:test').TestContext} t
+ * @param {Record<string, unknown>} [overrides]
+ */
+function registerSelectingCaseType(t, overrides = {}) {
+  /** @type {Array<{ questions: any[], details: any }>} */
+  const calls = [];
+  const slug = registerFixtureCaseType(t, 'select-questions', async () => ({
+    default: /** @type {any} */ ({
+      displayName: 'Select Questions Fixture',
+      listName: 'Cases-SelectQuestionsFixture',
+      questions: selectableBank,
+      computeOutcome: () => ({ outcome: 'pass' }),
+      outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
+      defaultOutcomeId: 'pass',
+      /**
+       * @param {any[]} questions
+       * @param {Record<string, string>} details
+       */
+      selectQuestions(questions, details) {
+        calls.push({ questions, details });
+        return details.product === 'Mortgage'
+          ? questions
+          : questions.filter((q) => q.questionGroup !== 'Mortgage checks');
+      },
+      ...overrides,
+    }),
+  }));
+  return { slug, calls };
+}
+
+test('CaseLoader.load(): a Case Type narrows its questions by the Case details', async (t) => {
+  const { slug } = registerSelectingCaseType(t);
+
+  const loader = makeLoader({
+    row: { caseType: slug, details: { product: 'Savings' } },
+  });
+  await loader.load();
+
+  assert.deepEqual(
+    loader.catalogue.map((q) => q.id),
+    ['q-common', 'q-mortgage-follow-up']
+  );
+});
+
+test('CaseLoader.load(): a Case whose details select everything sees the whole bank', async (t) => {
+  const { slug, calls } = registerSelectingCaseType(t);
+
+  const loader = makeLoader({
+    row: { caseType: slug, details: { product: 'Mortgage', other: 'x' } },
+  });
+  await loader.load();
+
+  assert.deepEqual(
+    loader.catalogue.map((q) => q.id),
+    ['q-common', 'q-mortgage', 'q-mortgage-follow-up']
+  );
+  assert.deepEqual(calls[0].details, { product: 'Mortgage', other: 'x' });
+  assert.ok(
+    calls[0].questions.every((/** @type {any} */ q) => !q.deprecated),
+    'the selection is offered the bank a Reviewer could see, never a retired question'
+  );
+});
+
+test('CaseLoader.load(): a Case with no details is offered an empty details map', async (t) => {
+  const { slug, calls } = registerSelectingCaseType(t);
+
+  const loader = makeLoader({ row: { caseType: slug, details: undefined } });
+  await loader.load();
+
+  assert.deepEqual(calls[0].details, {});
+  assert.ok(!loader.catalogue.some((q) => q.id === 'q-mortgage'));
+});
+
+test('CaseLoader.load(): a selection can only narrow the bank, never add to or reorder it', async (t) => {
+  const { slug } = registerSelectingCaseType(t, {
+    /** @param {any[]} questions */
+    selectQuestions: (questions) => [
+      { id: 'q-invented', text: 'Not in the bank', responseType: 'yes-no-na' },
+      ...[...questions].reverse(),
+    ],
+  });
+
+  const loader = makeLoader({ row: { caseType: slug } });
+  await loader.load();
+
+  assert.deepEqual(
+    loader.catalogue.map((q) => q.id),
+    ['q-common', 'q-mortgage', 'q-mortgage-follow-up']
+  );
+});
+
+test('CaseLoader.load(): Answers to questions the selection removed are dropped', async (t) => {
+  const { slug } = registerSelectingCaseType(t);
+
+  const loader = makeLoader({
+    row: {
+      caseType: slug,
+      details: { product: 'Savings' },
+      answers: {
+        'q-common': { value: 'Yes' },
+        'q-mortgage': { value: 'No' },
+        'q-mortgage-follow-up': { value: 'No' },
+        'q-deprecated': { value: 'Yes' },
+        'general:reviewChannel': { value: 'Phone' },
+      },
+    },
+  });
+  await loader.load();
+
+  const snapshot = loader.toStoreSnapshot();
+  assert.deepEqual(Object.keys(snapshot.answers).sort(), [
+    'general:reviewChannel',
+    'q-common',
+    'q-deprecated',
+    'q-mortgage-follow-up',
+  ]);
+  // The follow-up survives the selection but hangs off a question that did
+  // not: with that Answer gone it is no longer applicable, so it neither
+  // shows nor holds completion open.
+  assert.deepEqual(
+    snapshot.applicableQuestions.map((q) => q.id),
+    ['q-common']
+  );
+  assert.equal(snapshot.allAnswered, true);
+});
+
+test('CaseLoader.load(): a reportable Case narrows its as-reviewed catalogue the same way', async (t) => {
+  const { slug } = registerSelectingCaseType(t);
+
+  const loader = makeLoader({
+    row: {
+      caseType: slug,
+      status: 'Completed',
+      completedAt: '2026-01-01T00:00:00Z',
+      questionBankVersion: 'v1',
+      details: { product: 'Savings' },
+      answers: { 'q-common': { value: 'Yes' } },
+    },
+    client: {
+      getVersionedExport: async () => ({
+        slug,
+        questions: selectableBank.map((q) => ({
+          category: null,
+          options: null,
+          showWhen: null,
+          ...q,
+        })),
+      }),
+    },
+  });
+  await loader.load();
+
+  assert.deepEqual(
+    loader.catalogue.map((q) => q.id),
+    ['q-common', 'q-mortgage-follow-up']
+  );
+});
+
+test('CaseLoader.load(): a Case Type without a selection loads its whole bank', async (t) => {
+  const { slug } = registerSelectingCaseType(t, { selectQuestions: undefined });
+
+  const loader = makeLoader({
+    row: {
+      caseType: slug,
+      details: { product: 'Savings' },
+      answers: { 'q-mortgage': { value: 'No' } },
+    },
+  });
+  await loader.load();
+
+  assert.deepEqual(
+    loader.catalogue.map((q) => q.id),
+    ['q-common', 'q-mortgage', 'q-mortgage-follow-up']
+  );
+  assert.deepEqual(Object.keys(loader.answers), ['q-mortgage']);
+});

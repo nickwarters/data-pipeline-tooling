@@ -193,7 +193,7 @@ The bulk-marking control on a **Question Group** a **Case Type** has opted in �
 _Avoid_: Group Verdict (the former name), Bulk outcome, Group answer
 
 **Applicable Question**:
-A **Question Definition** that, given the current state of a Case's **Answers**, should be presented to the **Reviewer**. Computed live by evaluating conditional triggers — not a stored set.
+A **Question Definition** that, given the current state of a Case's **Answers**, should be presented to the **Reviewer**. Computed live by evaluating conditional triggers — not a stored set. Before any trigger is evaluated, a **Case Type** may narrow its bank for one Case by that Case's own attributes (its **Case Details** values), through a `selectQuestions(questions, details)` function on its module. It is code, like `computeOutcome`, and it can only narrow. A question it drops is not applicable to that Case, and Answers to it are dropped when the Case is loaded. It re-runs every time the Case is opened, so a change to the Case's details is reflected until the Case freezes at **Reportable**. ([ADR-0056](./docs/adr/0056-case-types-select-questions-by-case-attributes-in-code.md))
 
 **Answer**:
 A **Reviewer**'s response to one **Question Definition** for one **Case**. Carries a value, an optional **Answer Justification**, and zero-to-many **Remediation Actions**.

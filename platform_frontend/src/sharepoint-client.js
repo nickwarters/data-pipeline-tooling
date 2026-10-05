@@ -588,9 +588,13 @@
  * Amendment Reasons in `lib/amendment-reasons.js` rather than narrowing them,
  * which is why the key is named for the direction it travels in.
  *
+ * `selectQuestions` optionally narrows the bank for one Case by its `details`,
+ * returning the questions to keep.
+ *
  * @typedef {{
  * questions: QuestionDefinition[],
  * computeOutcome: (answers: Record<string, Answer>) => OutcomeResult,
+ * selectQuestions?: (questions: QuestionDefinition[], details: Record<string, string>) => QuestionDefinition[],
  * outcomeOptions: OutcomeOption[],
  * defaultOutcomeId: string,
  * labels?: Label[],
