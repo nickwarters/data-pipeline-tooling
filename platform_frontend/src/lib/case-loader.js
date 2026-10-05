@@ -77,16 +77,8 @@ function selectForCase(config, questions, details) {
 }
 
 /**
- * The Case's Answers less any to a question its attributes no longer select.
- *
- * `computeOutcome` reads the Case Type's whole bank, so an Answer left over
- * from before an attribute changed would still score the Outcome; and a
- * selected question whose `showWhen` names a deselected one would stay
- * applicable off an Answer nobody can see. Dropping them here is the same
- * rule an Answer write applies to a question that stops being applicable, and
- * it reaches the stored Case on the next write in the same way. Keys outside
- * the bank — General Questions, retired questions — are not the selection's
- * to judge and pass through.
+ * Drops Answers to bank questions the selection removed, so they can't still
+ * score the Outcome, while keys outside the bank pass through.
  *
  * @param {Record<string, Answer>} answers
  * @param {QuestionDefinition[]} bankQuestions
@@ -342,11 +334,7 @@ export class CaseLoader {
       this.catalogue = config.questions.filter((q) => !q.deprecated);
     }
 
-    // Narrowed before anything is derived from it, so every evaluator on the
-    // page — applicability, progress, the Summary, completion — sees only the
-    // questions this Case's attributes select, and none of them needs to know
-    // attributes exist. A frozen catalogue is narrowed too: otherwise the
-    // questions the Reviewer never saw would reappear on it, unanswered.
+    // Narrow the catalogue (frozen ones too) before anything else reads it.
     const bankQuestions = this.catalogue;
     this.catalogue = selectForCase(config, bankQuestions, caseRow.details);
 

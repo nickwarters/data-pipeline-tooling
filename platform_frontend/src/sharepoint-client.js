@@ -588,15 +588,8 @@
  * Amendment Reasons in `lib/amendment-reasons.js` rather than narrowing them,
  * which is why the key is named for the direction it travels in.
  *
- * `selectQuestions` narrows the bank for one Case by that Case's own attributes
- * — its `details` — where `showWhen` can only look at other Answers. It is
- * code, like `computeOutcome`, because choosing is a predicate: it is handed
- * the bank's active questions and the Case's details and returns the ones to
- * keep. The Case Review loader applies it once, on every load until the Case
- * freezes; a question it drops is hidden for that Case and Answers to it are
- * dropped with it. It can only narrow — a returned question that is not in the
- * bank is ignored, and the bank's order stands. Absent, every question is
- * selected.
+ * `selectQuestions` optionally narrows the bank for one Case by its `details`,
+ * returning the questions to keep.
  *
  * @typedef {{
  * questions: QuestionDefinition[],
