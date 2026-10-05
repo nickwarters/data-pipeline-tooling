@@ -66,6 +66,9 @@ For every list the app reads, create the `<name>_`-prefixed copy with the
   columns must be created **while the list is empty**;
 - `<name>_Roadmap`, from the
   [provisioning runbook](provisioning-runbook.md#2-roadmap-list).
+- `<name>_CaseSupportLog`, from the
+  [provisioning runbook](provisioning-runbook.md#3-case-support-log-list--casesupportlog),
+  with its add-only permission for `CORA Owner Delegates`.
 
 There is no script for this; copy the prod list as a template where your
 SharePoint edition allows it, and check the column set against the checklist

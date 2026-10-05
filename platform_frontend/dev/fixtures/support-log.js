@@ -1,13 +1,7 @@
 // @ts-check
 /** @typedef {import('../../src/sharepoint-client.js').SupportLogEntry} SupportLogEntry */
 
-/**
- * Support Log entries for the mock dev loop, all on CR-2003 so one Case shows
- * each shape the page draws: an applied action, and an action whose Case write
- * failed — the entry written first, then the entry saying it was not applied.
- *
- * @type {SupportLogEntry[]}
- */
+/** @type {SupportLogEntry[]} Every shape the page draws, all on CR-2003. */
 export const supportLog = [
   {
     id: '5001',

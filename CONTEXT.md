@@ -111,6 +111,10 @@ _Avoid_: source (reserved for source *type*: Excel/CSV/SAS/SQLite/SharePoint), i
 A **Feed** whose source is not handed over as a file but *asked for*, repeatedly, over an API — today the SharePoint REST list read by a `Modified` window. It differs from a file Feed in one way that matters to the language: there is no snapshot boundary, so "the feed" is a sequence of overlapping windows rather than a delivery, and where the polling got to is durable **source control state** (the watermark), not run metadata. Consecutive windows deliberately overlap, so the same row arrives many times and the load must be idempotent.
 _Avoid_: stream (it says how the data moves, not that the source is asked for repeatedly), sync (reserved for the **Sync** Pipeline)
 
+**Support Log**:
+The review platform's append-only record of every action a Maintainer takes on a Case from its Case Support page, one SharePoint list item per action — the platform's own term, defined in `platform_frontend/CONTEXT.md`. Here it is the `case_support_log` **Polling Feed**, landed raw → silver. Because its items are never edited, it is the one Polling Feed whose `Modified` window is in effect a `Created` window, and an action whose Case write failed shows up as a second, `not-applied` entry naming the first rather than as a change to it ([`docs/data-dictionary-case-support-log.md`](docs/data-dictionary-case-support-log.md)).
+_Avoid_: audit log (the run log and the selection trace are audits too)
+
 **Version observation**:
 One row of a **Polling Feed**: what the source said about one item, at one source version, on one read. The unit of an append-only history — a later source version of the same item is a **new** observation, never an update — identified by the list, the item id and the version (`source_observation_id`). *When we saw it* is not part of the observation: an observation is what the source said, so read time lives in the run log and the ingestion batch id rather than in the row.
 _Avoid_: snapshot (that is the whole source at a moment), record, event

@@ -1,0 +1,56 @@
+[
+  {
+    "Id": 5001,
+    "Modified": "2026-10-01T09:15:00Z",
+    "odata.etag": "\"1\"",
+    "Title": "CMP-000101",
+    "CaseType": "complaints",
+    "CaseId": "101",
+    "SupportAction": "reassign",
+    "Reason": "The original Reviewer is on long-term leave.",
+    "Changes": "[{\"field\":\"assignedReviewer\",\"before\":\"i:0#.w|CONTOSO\\\\a.khan\",\"after\":\"i:0#.w|CONTOSO\\\\c.lewis\"}]",
+    "Outcome": "recorded",
+    "RelatesTo": "",
+    "Created": "2026-10-01T09:15:00Z",
+    "Author": {
+      "Name": "i:0#.w|CONTOSO\\r.maintainer",
+      "Title": "Robin Maintainer"
+    }
+  },
+  {
+    "Id": 5002,
+    "Modified": "2026-10-02T14:30:00Z",
+    "odata.etag": "\"1\"",
+    "Title": "CMP-000102",
+    "CaseType": "complaints",
+    "CaseId": "102",
+    "SupportAction": "flags",
+    "Reason": "The awaiting flag stayed set after the Responsible Party replied.",
+    "Changes": "[{\"field\":\"awaitingResponsibleParty\",\"before\":true,\"after\":false},{\"field\":\"awaitingSince\",\"before\":\"2026-09-20T10:00:00Z\",\"after\":null}]",
+    "Outcome": "recorded",
+    "RelatesTo": "",
+    "Created": "2026-10-02T14:30:00Z",
+    "Author": {
+      "Name": "i:0#.w|CONTOSO\\r.maintainer",
+      "Title": "Robin Maintainer"
+    }
+  },
+  {
+    "Id": 5003,
+    "Modified": "2026-10-02T14:30:02Z",
+    "odata.etag": "\"1\"",
+    "Title": "CMP-000102",
+    "CaseType": "complaints",
+    "CaseId": "102",
+    "SupportAction": "flags",
+    "Reason": "The Case changed while this action was being applied, so nothing was changed.",
+    "Changes": "[]",
+    "Outcome": "not-applied",
+    "RelatesTo": "5002",
+    "Created": "2026-10-02T14:30:02Z",
+    "Author": {
+      "Name": "i:0#.w|CONTOSO\\r.maintainer",
+      "Title": "Robin Maintainer"
+    }
+  }
+]

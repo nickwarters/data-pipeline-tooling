@@ -98,7 +98,35 @@ directly in SharePoint; this application slice does not create or edit them.
 Cards are displayed in SharePoint creation order (`Id` ascending); this slice
 does not provide manual ordering.
 
-## 3. Question Bank artifacts
+## 3. Case Support Log list — `CaseSupportLog`
+
+Provision one site-wide `CaseSupportLog` list for the **Support Log** behind the
+Case Support page, and a matching `<name>_CaseSupportLog` in every non-production
+environment (`uat_CaseSupportLog`). One entry is appended per support action; no
+entry is ever edited.
+
+| Internal name   | SharePoint type            | Indexed | Notes                                                     |
+| --------------- | -------------------------- | ------- | --------------------------------------------------------- |
+| `Title`         | Single line of text        |         | The Case Reference the action was taken on.               |
+| `CaseType`      | Single line of text        | Yes     | The Case Type slug, e.g. `complaints`.                    |
+| `CaseId`        | Single line of text        | Yes     | The Case's item id in its `Cases-{slug}` list.            |
+| `SupportAction` | Single line of text        |         | The action's id, e.g. `reassign`.                         |
+| `Reason`        | Multiple lines, plain text |         | The Maintainer's reason. Required by the app.             |
+| `Changes`       | Multiple lines, plain text |         | JSON list of `{ field, before, after }`.                  |
+| `Outcome`       | Single line of text        |         | Exactly `recorded` or `not-applied`.                      |
+| `RelatesTo`     | Single line of text        |         | On a `not-applied` entry, the id of the entry it follows. |
+
+`Created` and `Author` are SharePoint's own and are what the page shows as when
+and who. Create both indexes **while the list is empty**: every read filters on
+`CaseType` and `CaseId`, and an unindexed filter fails once the list passes the
+List View Threshold.
+
+Break permission inheritance and grant `CORA Owner Delegates` a custom
+permission level with **Add Items** and **View Items** but not **Edit Items** or
+**Delete Items**, so an entry once written stays as written. Grant nobody else
+access through the app; the data pipeline's service account needs read.
+
+## 4. Question Bank artifacts
 
 Do **not** provision a `QuestionDefinitions` list. Each Case Type owns a
 `case-types/banks/{slug}.txt` file containing JSON text. `deploy_to_sharepoint.py`
@@ -118,7 +146,7 @@ as-reviewed question catalogue.
 
 ---
 
-## 4. Groups per Case Type
+## 5. Groups per Case Type
 
 SharePoint groups fall on two orthogonal axes. For a Case Type whose
 display name is `X` (e.g. `Complaints`, **not** the slug `complaints`), provision:
@@ -180,7 +208,7 @@ serve the Case itself, including from a notification's deep link.
 
 ---
 
-## 5. Recurring maintenance — the working-day holiday list
+## 6. Recurring maintenance — the working-day holiday list
 
 The remediation SLA is **10 working days** after Send Actions, which excludes
 weekends **and** public holidays. The holiday source is an **in-code array**,
