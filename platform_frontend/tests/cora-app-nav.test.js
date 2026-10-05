@@ -274,9 +274,9 @@ const PERSONAS = [
     ['#/dashboard', '#/roadmap', '#/question-bank'],
   ],
   // A Maintainer owns the banks across every Case Type and had no link to the
-  // editor at all. They hold no working role, so they get that and nothing
-  // else.
-  ['maintainer', { isMaintainer: true }, ['#/question-bank']],
+  // editor at all. They hold no working role, so they get that and the page
+  // support corrects Cases from, and nothing else.
+  ['maintainer', { isMaintainer: true }, ['#/question-bank', '#/case-support']],
   [
     'reviewer who also manages and owns',
     {
