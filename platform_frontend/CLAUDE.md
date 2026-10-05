@@ -476,6 +476,9 @@ src/
     case-support/
       reassign.js                 # the Reassign action: candidates from the Case Type's reviewer
                                   #   group, the pure form view, and the logged, If-Match guarded write
+      unassign.js                 # the Un-assign action: In-progress only, the pure form view, and the
+                                  #   logged write that returns the Case to To-allocate
+      form-parts.js               # the reason field and submit/cancel footer every action form shares
     cora-access.js                # store-driven #/access slice, Maintainers only: find a person,
                                   #   show the internal roles they hold, give or remove one with a
                                   #   reason, and read who holds each role and the Access Log

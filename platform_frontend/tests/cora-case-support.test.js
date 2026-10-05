@@ -327,10 +327,9 @@ test('case support: every support action has a card, and only a built one can be
   });
   assert.ok(unbuilt.length < SUPPORT_ACTIONS.length);
   for (const button of unbuilt) assert.equal(button.disabled, true);
-  assert.equal(
-    getByRole(view(), 'button', { name: 'Reassign' }).disabled,
-    false
-  );
+  for (const built of ['Reassign', 'Un-assign']) {
+    assert.equal(getByRole(view(), 'button', { name: built }).disabled, false);
+  }
   assert.ok(getByRole(view(), 'heading', { name: 'Support log' }));
 });
 
@@ -1010,5 +1009,203 @@ test('reassign: an action the form does not handle leaves it as it was', async (
   assert.strictEqual(
     page.state().routes.caseSupport.selected?.reassign,
     before.routes.caseSupport.selected?.reassign
+  );
+});
+
+/** @param {ReturnType<typeof live>} page @param {string} reason */
+function unassign(page, reason) {
+  fireEvent(getByRole(page.view(), 'button', { name: 'Un-assign' }), 'click');
+  fireEvent(page.view().querySelector('textarea'), 'input', {
+    target: { value: reason },
+  });
+}
+
+const HELD = {
+  dueDate: '2026-10-09T00:00:00.000Z',
+  onHold: true,
+  placedOnHoldAt: '2026-10-02T09:00:00.000Z',
+};
+
+test('un-assign: it cannot be sent without a reason, and says what it clears', () => {
+  const page = live();
+  fireEvent(getByRole(page.view(), 'button', { name: 'Un-assign' }), 'click');
+  const submit = () =>
+    getByRole(page.view(), 'button', { name: 'Un-assign' }).disabled;
+
+  assert.ok(getByRole(page.view(), 'heading', { name: 'Un-assign the Case' }));
+  assert.match(
+    page.view().textContent,
+    /leaves zara and returns to To-allocate/
+  );
+  assert.equal(submit(), true);
+  fireEvent(page.view().querySelector('textarea'), 'input', {
+    target: { value: '  ' },
+  });
+  assert.equal(submit(), true, 'a blank reason is no reason');
+  fireEvent(page.view().querySelector('textarea'), 'input', {
+    target: { value: 'Zara has left.' },
+  });
+  assert.equal(submit(), false);
+});
+
+test('un-assign: the log is written first, then the Case returns to the pot in one write', async () => {
+  const page = live({ row: HELD });
+  await page.client.patchCase('1', HELD, 'etag-1', {
+    listName: 'Cases-Complaints',
+  });
+  const opened = await page.client.getCase('1', {
+    listName: 'Cases-Complaints',
+  });
+  page.dispatch({ type: 'case-support/case-loaded', row: opened });
+  /** @type {string[]} */
+  const order = [];
+  const addEntry = page.client.addSupportLogEntry.bind(page.client);
+  const patch = page.client.patchCase.bind(page.client);
+  page.client.addSupportLogEntry = async (entry) => {
+    order.push(`log:${entry.outcome}`);
+    return addEntry(entry);
+  };
+  page.client.patchCase = async (...args) => {
+    order.push('patch');
+    return patch(...args);
+  };
+  unassign(page, 'Zara has left.');
+
+  fireEvent(getByRole(page.view(), 'button', { name: 'Un-assign' }), 'click');
+  await flush(60);
+
+  assert.deepEqual(order, ['log:recorded', 'patch']);
+  const stored = await page.client.getCase('1', {
+    listName: 'Cases-Complaints',
+  });
+  assert.equal(stored?.status, CASE_STATUS.TO_ALLOCATE);
+  assert.equal(stored?.assignedReviewer, '');
+  assert.equal(stored?.assignedAt, null);
+  assert.equal(stored?.assignedReviewerManager, null);
+  assert.equal(stored?.dueDate, null);
+  assert.equal(stored?.onHold, false);
+  assert.deepEqual(stored?.answers, opened?.answers, 'Answers are kept');
+
+  const [entry] = await page.client.listSupportLog({
+    caseType: 'complaints',
+    caseId: '1',
+  });
+  assert.equal(entry.action, 'unassign');
+  assert.equal(entry.reason, 'Zara has left.');
+  assert.deepEqual(entry.changes, [
+    { field: 'status', before: 'In-progress', after: 'To-allocate' },
+    { field: 'assignedReviewer', before: 'zara', after: '' },
+    { field: 'assignedReviewerManager', before: 'old-manager', after: null },
+    { field: 'dueDate', before: HELD.dueDate, after: null },
+    { field: 'onHold', before: true, after: false },
+    { field: 'placedOnHoldAt', before: HELD.placedOnHoldAt, after: null },
+    { field: 'assignedAt', before: opened?.assignedAt, after: null },
+  ]);
+
+  const view = page.view();
+  assert.match(getByRole(view, 'status').textContent, /back in To-allocate/);
+  assert.equal(definitionFor(view, 'Status').textContent, 'To-allocate');
+  assert.equal(view.querySelector('textarea'), null, 'the form has closed');
+});
+
+test('un-assign: a released Case can be claimed from the pot again', async () => {
+  const page = live();
+  unassign(page, 'Rebalancing.');
+  fireEvent(getByRole(page.view(), 'button', { name: 'Un-assign' }), 'click');
+  await flush(60);
+
+  const [pot] = await page.client.listCases(
+    { status: CASE_STATUS.TO_ALLOCATE },
+    { listName: 'Cases-Complaints' }
+  );
+  assert.equal(pot?.id, '1');
+  assert.equal(pot?.assignedReviewer, '');
+});
+
+test('un-assign: a Case changed since it was opened is left alone, and the log says so', async () => {
+  const page = live();
+  unassign(page, 'Rebalancing.');
+  page.client.inject412();
+
+  fireEvent(getByRole(page.view(), 'button', { name: 'Un-assign' }), 'click');
+  await flush(60);
+
+  const stored = await page.client.getCase('1', {
+    listName: 'Cases-Complaints',
+  });
+  assert.equal(stored?.status, CASE_STATUS.IN_PROGRESS);
+  const [failed, recorded] = await page.client.listSupportLog({
+    caseType: 'complaints',
+    caseId: '1',
+  });
+  assert.equal(failed.outcome, 'not-applied');
+  assert.equal(failed.relatesTo, recorded.id);
+  assert.match(
+    getByRole(page.view(), 'alert').textContent,
+    /changed after it was opened.*Reload/
+  );
+});
+
+test('un-assign: a support log that cannot be written leaves the Case untouched', async () => {
+  const page = live();
+  let patched = false;
+  page.client.addSupportLogEntry = async () => {
+    throw new Error('HTTP 403');
+  };
+  page.client.patchCase = async () => {
+    patched = true;
+    return { ok: true, status: 200 };
+  };
+  unassign(page, 'Rebalancing.');
+
+  fireEvent(getByRole(page.view(), 'button', { name: 'Un-assign' }), 'click');
+  await flush(60);
+
+  assert.equal(patched, false);
+  assert.match(
+    getByRole(page.view(), 'alert').textContent,
+    /Nothing was changed.*HTTP 403/
+  );
+});
+
+test('un-assign: only an In-progress Case can be un-assigned', () => {
+  for (const status of [
+    CASE_STATUS.TO_ALLOCATE,
+    CASE_STATUS.ACTIONS_IN_PROGRESS,
+    CASE_STATUS.COMPLETED,
+    CASE_STATUS.VOID,
+  ]) {
+    const page = live({ row: { status } });
+    const button = getByRole(page.view(), 'button', { name: 'Un-assign' });
+    assert.equal(button.disabled, true, status);
+  }
+  const waiting = live({ row: { status: CASE_STATUS.TO_ALLOCATE } });
+  assert.match(waiting.view().textContent, /already waiting to be claimed/);
+});
+
+test('un-assign: while saving the form is locked, and cancel returns to the actions', () => {
+  const page = live();
+  unassign(page, 'On leave.');
+  page.dispatch({ type: 'case-support/unassign-saving' });
+  const view = page.view();
+  assert.equal(
+    getByRole(view, 'button', { name: 'Un-assigning…' }).disabled,
+    true
+  );
+  assert.equal(view.querySelector('textarea')?.disabled, true);
+
+  page.dispatch({ type: 'case-support/unassign-failed', message: 'No.' });
+  fireEvent(getByRole(page.view(), 'button', { name: 'Cancel' }), 'click');
+  assert.ok(getByRole(page.view(), 'heading', { name: 'Support actions' }));
+});
+
+test('un-assign: an action the form does not handle leaves it as it was', () => {
+  const page = live();
+  unassign(page, 'On leave.');
+  const before = page.state().routes.caseSupport.selected?.unassign;
+  page.dispatch({ type: 'case-support/unrelated' });
+  assert.strictEqual(
+    page.state().routes.caseSupport.selected?.unassign,
+    before
   );
 });

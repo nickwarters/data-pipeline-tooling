@@ -97,9 +97,10 @@ every live Case in the list. Nothing is stamped on it yet: no Assigned Reviewer,
 `DueDate` — the review SLA is stamped by the claim, so no review clock runs against an
 unclaimed Case and it can never read as overdue. The claim moves it to `In-progress` in
 the **same PATCH** as the Reviewer, under one `If-Match`, so no row can hold a Reviewer
-while still advertising itself as unclaimed. Nothing returns a Case to it: an
-`In-progress` Case handed to a different Reviewer is _reassigned_, which leaves the
-status alone.
+while still advertising itself as unclaimed. The one way back into it is a
+Maintainer's **Un-assign** from **Case Support**, which releases an `In-progress` Case
+to be claimed again; an `In-progress` Case handed to a named Reviewer is _reassigned_,
+which leaves the status alone.
 _Avoid_: Pending, Unassigned (the state of the person field, not the lifecycle),
 New
 
@@ -481,7 +482,7 @@ A platform administrator responsible for deploying and configuring the framework
 _Avoid_: Admin (overloaded with SharePoint admin), developer
 
 **Case Support**:
-The **Maintainer**'s page (`#/case-support`) for correcting a **Case** the people working it cannot, so that support never restores a SharePoint version or hand-edits a list item. A Maintainer finds any Case by its **Case Reference** across every **Case Type**, sees its key facts, and takes one of a fixed set of named **support actions** on it: inspect its fields and version history, reopen it, reassign or un-assign it, clear stale Action Centre flags or reset its Due Date, or void it after completion. Each action will ask for a reason and be recorded in the **Support Log**, which the page shows beside the Case. Deliberately _not_ a general field editor, which would only move hand-editing into the app. The page, its lookup, the Support Log and **Reassign** exist so far; the other actions are shown as not yet available. Reassign moves a Case to another **Reviewer** chosen only from its **Case Type**'s own `Reviewers - <type>` group, and restamps the assignment time and the Reviewer Manager in the same `If-Match` guarded write the allocation claim uses; status and Due Date are left alone. A Case with no Reviewer yet (**`To-allocate`**) or a **Void** one cannot be reassigned. Reassigning the Responsible Party or the managers directly is not built.
+The **Maintainer**'s page (`#/case-support`) for correcting a **Case** the people working it cannot, so that support never restores a SharePoint version or hand-edits a list item. A Maintainer finds any Case by its **Case Reference** across every **Case Type**, sees its key facts, and takes one of a fixed set of named **support actions** on it: inspect its fields and version history, reopen it, reassign or un-assign it, clear stale Action Centre flags or reset its Due Date, or void it after completion. Each action will ask for a reason and be recorded in the **Support Log**, which the page shows beside the Case. Deliberately _not_ a general field editor, which would only move hand-editing into the app. The page, its lookup, the Support Log, **Reassign** and **Un-assign** exist so far; the other actions are shown as not yet available. Reassign moves a Case to another **Reviewer** chosen only from its **Case Type**'s own `Reviewers - <type>` group, and restamps the assignment time and the Reviewer Manager in the same `If-Match` guarded write the allocation claim uses; status and Due Date are left alone. A Case with no Reviewer yet (**`To-allocate`**) or a **Void** one cannot be reassigned. Reassigning the Responsible Party or the managers directly is not built. Un-assign returns an `In-progress` Case to **`To-allocate`** in one guarded write, clearing its Assigned Reviewer, assignment time, Reviewer Manager, Due Date and any hold, and keeping the Answers entered so far for whoever claims it next; it is offered for no other status, because a Reportable Case needs Reopen first.
 _Avoid_: Admin view, admin page
 
 **Support Log**:
