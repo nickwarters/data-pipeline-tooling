@@ -55,6 +55,7 @@ import * as journeyCasesPage from './pages/cora-journey-cases.js';
 import * as roadmapPage from './pages/roadmap.js';
 import * as myTeamPage from './pages/cora-my-team.js';
 import * as caseSearchPage from './pages/cora-case-search.js';
+import * as caseSupportPage from './pages/cora-case-support.js';
 
 /** @typedef {import('./setup/register-routes.js').AppContext} AppContext */
 /** @typedef {import('./setup/register-routes.js').PagePlugin} PagePlugin */
@@ -256,6 +257,18 @@ export const APP_CONFIG = {
       // Adviser has a queue, and that is the more specific answer.
       defaultFor: (caps) => caps.isControls,
       defaultForOrder: 30,
+    },
+    {
+      id: 'case-support',
+      paths: ['#/case-support', '#/case-support/:caseType/:id'],
+      page: caseSupportPage,
+      // Support corrects Cases the people working them cannot, so it belongs
+      // to the Maintainers who already own the platform's configuration. The
+      // route is guarded as well as the link: these actions change Cases that
+      // nobody else may change, and offering the page to someone who cannot
+      // use it would only invite a hand-edit of the list instead.
+      guard: (caps) => caps.isMaintainer,
+      nav: { label: 'Case Support', order: 80 },
     },
   ],
 };

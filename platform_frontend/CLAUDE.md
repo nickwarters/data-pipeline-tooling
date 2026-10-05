@@ -470,6 +470,9 @@ src/
       amend-outcome-view.js    # CASE-6 pure ADR-0026 Amend Outcome form and record view
     cora-case-search.js           # store-driven #/search slice: URL-held filters, one bounded
                                   #   cross-Case-Type lookup, standard Case columns
+    cora-case-support.js          # store-driven #/case-support slice, Maintainers only: find any
+                                  #   Case by reference, show its facts, and list the support
+                                  #   actions it will offer (all placeholders for now)
     cora-dashboard.js             # store-driven dashboard slice + descriptor-selected panels (GRID-3/4)
     cora-my-stats.js               # store-driven Reviewer Report Feed load, browser-calendar range state and controls,
                                    #   the clamped typed live-tail read, and one derivation feeding the chart,

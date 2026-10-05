@@ -93,6 +93,8 @@ test('registerRoutes: registers the complete public route contract, in order', (
     '#/roadmap',
     '#/my-team',
     '#/search',
+    '#/case-support',
+    '#/case-support/:caseType/:id',
   ]);
 });
 
@@ -309,6 +311,7 @@ test('route table: only the eligibility-gated routes guard their mount', () => {
     'journey-cases',
     'my-team',
     'search',
+    'case-support',
   ]);
 });
 

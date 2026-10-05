@@ -5,7 +5,8 @@
  * Available keys: reviewer, owner, journey-owner-complaints,
  * case-type-owner-complaints, admin,
  * responsible-party, responsible-party-manager, reviewer-manager,
- * controls (a standalone Controls user),
+ * controls (a standalone Controls user), maintainer (a standalone
+ * Maintainer, the audience for Case Support),
  * action-centre (multi-role Reviewer+Controls+Owner, for seeing
  * every Action Centre reason group at once), visitor (no groups —
  * exercises the Visitor explainer-only branch).
@@ -64,6 +65,11 @@ export const personas = {
     userId: 'user-controls',
     displayName: 'Quinn Controls',
     groups: ['Controls'],
+  },
+  maintainer: {
+    userId: 'user-maintainer',
+    displayName: 'Robin Maintainer',
+    groups: ['CORA Owner Delegates'],
   },
   // Multi-role user (Reviewer + Controls + Owner) reusing user-reviewer's id so
   // the reviewer-scoped Action Centre groups pick up their assigned fixtures.

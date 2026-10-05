@@ -3288,6 +3288,143 @@
   border-radius: var(--cora-radius-sm);
 }
 
+/* Case Support — the Maintainer's lookup, the selected Case's facts, and the
+   support actions offered on it. The search bar wears the Case search's boxes so
+   the two lookups read as one control. */
+
+.cora-case-support-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--cora-space-3);
+  margin-bottom: var(--cora-space-4);
+  padding: var(--cora-space-3) var(--cora-space-4);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+}
+
+.cora-case-support-field {
+  display: grid;
+  gap: var(--cora-space-1);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-case-support-input {
+  font: inherit;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  color: inherit;
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  transition: border-color var(--cora-duration-fast) var(--cora-easing-standard);
+}
+
+.cora-case-support-input:focus {
+  outline: none;
+  border-color: var(--cora-color-accent);
+  box-shadow: var(--cora-focus-ring);
+}
+
+.cora-case-support-cap,
+.cora-case-support-error {
+  margin: 0 0 var(--cora-space-3);
+  padding: var(--cora-space-2) var(--cora-space-3);
+  font-size: var(--cora-font-size-sm);
+  border-radius: var(--cora-radius-sm);
+}
+
+.cora-case-support-cap {
+  color: var(--cora-color-warning);
+  background: var(--cora-color-warning-bg);
+}
+
+.cora-case-support-error {
+  color: var(--cora-color-danger);
+  background: var(--cora-color-danger-bg);
+}
+
+.cora-case-support-selected {
+  display: grid;
+  gap: var(--cora-space-4);
+}
+
+.cora-case-support-case,
+.cora-case-support-actions,
+.cora-case-support-log {
+  padding: var(--cora-space-3) var(--cora-space-4);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+}
+
+/* The sections carry their own padding, so a heading's default top margin
+   would only push it away from the border it sits under. */
+.cora-case-support-case h2,
+.cora-case-support-actions h2,
+.cora-case-support-log h2 {
+  margin: 0 0 var(--cora-space-2);
+}
+
+.cora-case-support-case-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--cora-space-3);
+}
+
+.cora-case-support-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--cora-space-1) var(--cora-space-4);
+  margin: var(--cora-space-3) 0 0;
+}
+
+.cora-case-support-facts dt {
+  color: var(--cora-color-text-muted);
+}
+
+.cora-case-support-facts dd {
+  margin: 0;
+}
+
+.cora-case-support-note {
+  margin: 0 0 var(--cora-space-3);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-case-support-action-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: var(--cora-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cora-case-support-action {
+  display: grid;
+  gap: var(--cora-space-2);
+  align-content: start;
+  justify-items: start;
+  padding: var(--cora-space-3);
+  background: var(--cora-color-surface-2);
+  border-radius: var(--cora-radius-md);
+}
+
+.cora-case-support-action h3,
+.cora-case-support-action p {
+  margin: 0;
+}
+
+.cora-case-support-action p {
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
 /* ── My Stats ───────────────────────────────────────────────────────────── */
 
 [data-cora-root] .cora-my-stats-top-row {
