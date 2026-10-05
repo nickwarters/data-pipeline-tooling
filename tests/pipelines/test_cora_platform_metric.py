@@ -749,8 +749,7 @@ def test_backlog_counts_the_status_each_case_closed_each_day_in():
         ),
         _observation("1", "a2", "2026-07-02T15:00:00+00:00", "In-progress"),
         _observation("1", "a3", "2026-07-03T08:00:00+00:00", "Completed"),
-        # Case 2: created 2 Jul but first seen in progress, assigned 3 Jul --
-        # open on 2 Jul in a status no poll saw.
+        # Case 2: created 2 Jul, first seen In-progress on 3 Jul: 2 Jul unobserved.
         _observation(
             "2",
             "b1",
@@ -759,8 +758,7 @@ def test_backlog_counts_the_status_each_case_closed_each_day_in():
             created="2026-07-02T09:00:00+00:00",
             assigned_at="2026-07-03T12:00:00+00:00",
         ),
-        # Case 3: arrives and is claimed on 3 Jul -- counted that day only
-        # under the status it closed the day in.
+        # Case 3: arrives and is claimed on 3 Jul: counted under its closing status.
         _observation(
             "3",
             "c1",
@@ -780,8 +778,7 @@ def test_backlog_counts_the_status_each_case_closed_each_day_in():
         ("2026-07-04", "In-progress"): 2,
         ("2026-07-05", "In-progress"): 2,
     }
-    # Dense: every day from the first open one to as_of's, for every open
-    # status plus the unobserved one -- a quiet status is a 0, not a hole.
+    # Dense grid: a quiet status is a 0, not a missing row.
     assert len(result) == 5 * 4
     assert {r["as_of_utc"] for r in _rows(result)} == {as_of}
 
@@ -858,8 +855,7 @@ LIFECYCLE_CASES = [
         completed_at="2026-07-04T21:00:00+00:00",
         had_remediation=0,
     ),
-    # Handed to another Reviewer after it became Reportable: ``assigned_at``
-    # is the latest hand-over, so its review leg runs backwards.
+    # Reassigned after Reportable, so its review leg runs backwards.
     _case(
         "c3",
         "Actions In Progress",

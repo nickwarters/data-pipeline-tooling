@@ -245,13 +245,7 @@ class ConversationPostingPattern:
 
 @dataclass
 class CaseIntakeDaily:
-    """``case_intake_daily`` -- how many Cases arrive each day.
-
-    Grain: ``intake_date`` x ``brand`` x ``case_type`` x ``status``. A Case
-    arrives on the local date of its ``created`` stamp; ``status`` is where it
-    is *now*, so one day's intake sums across it and the split says how much of
-    that day's arrivals is still open. A day with no arrivals has no row.
-    """
+    """``case_intake_daily`` -- how many Cases arrive each day."""
 
     intake_date: Annotated[str, NonNull()]
     brand: Annotated[str, NonNull()]
@@ -263,14 +257,7 @@ class CaseIntakeDaily:
 
 @dataclass
 class CaseBacklogDaily:
-    """``case_backlog_daily`` -- how many Cases were open at the close of each
-    day, and in which status.
-
-    Grain: ``backlog_date`` x ``brand`` x ``case_type`` x ``status``, a dense
-    grid from the Case Type's first open day to the snapshot's own date, so a
-    status nobody was in that day is a row holding 0. ``(unobserved)`` is time
-    a Case was open before any poll saw it.
-    """
+    """``case_backlog_daily`` -- open Cases at each day's close, by status."""
 
     backlog_date: Annotated[str, NonNull()]
     brand: Annotated[str, NonNull()]
@@ -282,14 +269,7 @@ class CaseBacklogDaily:
 
 @dataclass
 class CaseLifecycleDurationMonthly:
-    """``case_lifecycle_duration_monthly`` -- how long each leg of a Case's
-    lifecycle takes, between the source's own stamps.
-
-    Grain: ``leg`` x ``ended_month`` x ``brand`` x ``case_type`` x
-    ``assigned_reviewer_name``. ``ended_month`` is the local month the leg's
-    closing stamp falls in. ``days_total`` / ``case_count`` roll up exactly;
-    the percentiles hold at this grain only.
-    """
+    """``case_lifecycle_duration_monthly`` -- how long each lifecycle leg takes."""
 
     leg: Annotated[str, NonNull()]
     leg_order: Annotated[int, NonNull(), Range(minimum=1)]
@@ -309,14 +289,7 @@ class CaseLifecycleDurationMonthly:
 
 @dataclass
 class CaseOutcomeMonthly:
-    """``case_outcome_monthly`` -- what Reportable Cases were found, by month.
-
-    Grain: ``reportable_month`` x ``brand`` x ``case_type`` x
-    ``assigned_reviewer_name`` x ``effective_outcome``, over the non-void Cases
-    carrying a ``reportable_at`` -- the same population a check is counted
-    over. ``remediation_count`` and ``overridden_count`` are subsets of
-    ``case_count``.
-    """
+    """``case_outcome_monthly`` -- what Reportable Cases were found, by month."""
 
     reportable_month: Annotated[str, NonNull()]
     brand: Annotated[str, NonNull()]

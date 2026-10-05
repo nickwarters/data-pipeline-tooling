@@ -62,8 +62,7 @@ UNDECIDED = "(undecided)"
 UNRESOLVED = "(unresolved)"
 UNSTATED = "(unstated)"
 UNSTAMPED = "(unstamped)"
-# Time a Case was open before any poll saw it: it was open -- it existed and
-# was not yet terminal -- but which status it was in, nothing observed.
+# Time a Case was open before any poll saw which status it was in.
 UNOBSERVED = "(unobserved)"
 
 # The Case lifecycle's terminal states: a Case observed in one has stopped
@@ -78,9 +77,7 @@ FIRST_OBSERVATION_ENTRY_STAMPS = {
     "In-progress": "assigned_at",
 }
 
-# The backlog's entry rule widens dwell's to every status the source stamps its
-# entry into: Actions In Progress is entered at Reportable, and a Case first
-# seen already terminal was open from ``created`` until its terminal stamp.
+# Dwell's entry stamps, widened to every status the source stamps entry into.
 BACKLOG_ENTRY_STAMPS = {
     **FIRST_OBSERVATION_ENTRY_STAMPS,
     "Actions In Progress": "reportable_at",
@@ -91,12 +88,7 @@ BACKLOG_ENTRY_STAMPS = {
 # The open statuses every Case Type's backlog grid carries, observed or not.
 OPEN_STATUSES = ("To-allocate", "In-progress", "Actions In Progress")
 
-# Each lifecycle leg, in lifecycle order: its name, the stamps it runs between,
-# and whether only Cases that took the actions path walk it. Reportable comes
-# before Completed: a Case with Remediation Actions is Reportable when they are
-# sent and Completed when they close, while one without is both at once -- so
-# ``remediation`` is measured over the Cases stamped ``had_remediation`` only,
-# where every other Case's would be a zero diluting the ones that waited.
+# (leg, from stamp, to stamp, actions-path Cases only), in lifecycle order.
 LIFECYCLE_LEGS = (
     ("allocation", "created", "assigned_at", False),
     ("review", "assigned_at", "reportable_at", False),
@@ -442,16 +434,7 @@ def case_hold(history: Dataset, *, as_of: str) -> Dataset:
 def _open_spans(
     observations: pd.DataFrame, as_of_day: dt.date
 ) -> list[tuple[str, dt.date, dt.date]]:
-    """One Case's open time, as ``(status, first_day, end_day)`` spans.
-
-    Each span is the run of local days the Case *closed* in that status --
-    ``end_day`` exclusive -- so a Case that changed status twice in one day is
-    counted that day only under the second. The first span starts at
-    ``created``: a Case is open from the moment it exists, and where the first
-    poll to see it found it already past ``To-allocate``, the time before the
-    status it was found in is ``(unobserved)``. Terminal spans close the Case
-    and are not returned; an open last span runs through ``as_of_day``.
-    """
+    """One Case's open time as ``(status, first_day, end_day)`` spans, end exclusive."""
     first = observations.iloc[0]
     entered = _entry_instant(first, BACKLOG_ENTRY_STAMPS)
     opened = _instants(first["created"])
@@ -476,16 +459,7 @@ def _open_spans(
 
 
 def case_backlog(history: Dataset, *, as_of: str) -> Dataset:
-    """How many Cases were open at the close of each day, and in which
-    status. **Grain: backlog_date x brand x case_type x status.**
-
-    Rebuilt from the observation history on every run rather than accumulated
-    one snapshot a day, so it has no gap for a day the pipeline did not run and
-    reaches back before the table existed. A dense grid per Case Type, from its
-    first open day to ``as_of``'s local date -- whose row is as at ``as_of``,
-    the day not being over -- across ``OPEN_STATUSES`` and any other open
-    status observed, so a quiet status is a 0 rather than a missing row.
-    """
+    """Open Cases at each day's close, by status, rebuilt from the history."""
     as_of_day = local_date(as_of)
     spans = []  # (case_type, status, first_day, end_day)
     for (case_type, _), observations in _ordered_history(history).groupby(
@@ -675,14 +649,7 @@ def _flagged(values: pd.Series) -> pd.Series:
 
 
 def case_intake(current: Dataset, *, as_of: str) -> Dataset:
-    """How many Cases arrive each day. **Grain: intake_date x brand x
-    case_type x status.**
-
-    Every current Case counts once, on its ``created`` local date, under the
-    status it holds now -- voided ones included, since they arrived too. No
-    Reviewer: a Case arrives ``To-allocate``, with nobody holding it, and the
-    Reviewer it has today is not who it arrived to.
-    """
+    """How many Cases arrive each day, by the status they hold now."""
     frame = current.to_pandas()
     frame = frame.assign(
         intake_date=_local_day(_instants(frame["created"])), brand=UNKNOWN_BRAND
@@ -696,18 +663,7 @@ def case_intake(current: Dataset, *, as_of: str) -> Dataset:
 
 
 def case_lifecycle_duration(current: Dataset, *, as_of: str) -> Dataset:
-    """How long each lifecycle leg takes. **Grain: leg x ended_month x brand x
-    case_type x assigned_reviewer_name.**
-
-    Measured between the source's own stamps (see ``LIFECYCLE_LEGS``), so
-    unlike ``case_stage_dwell`` nothing between two polls is missed. A leg is
-    measured on every current Case carrying both its stamps, whatever its
-    status now, and filed under the local month it *ended* in and the Reviewer
-    the Case names now. A leg whose closing stamp is before its opening one --
-    ``assigned_at`` is the *latest* hand-over, so a Case reassigned after it
-    became Reportable has one -- is counted in ``out_of_order_count`` and kept
-    out of every statistic rather than clamped to zero inside them.
-    """
+    """How long each lifecycle leg takes; backwards legs are counted, not measured."""
     frame = _filled(current.to_pandas(), {"assigned_reviewer_name": UNASSIGNED})
     rows = []
     for order, (leg, started, ended, actions_path_only) in enumerate(
@@ -761,16 +717,7 @@ def case_lifecycle_duration(current: Dataset, *, as_of: str) -> Dataset:
 
 
 def case_outcome(current: Dataset, *, as_of: str) -> Dataset:
-    """What Reportable Cases were found. **Grain: reportable_month x brand x
-    case_type x assigned_reviewer_name x effective_outcome.**
-
-    Over the non-void Cases with a parseable ``reportable_at`` -- the rule
-    ``reviewer_activity_daily`` counts by, so a month's ``case_count`` here
-    agrees with that table's days summed. Grouped on ``effective_outcome``, the
-    Outcome as corrected by any Amended Outcome; ``remediation_count`` reads
-    ``effective_had_remediation`` for the same reason, and ``overridden_count``
-    says how many of the group an Amended Outcome changed.
-    """
+    """Reportable non-void Cases by month and ``effective_outcome``."""
     frame = current.to_pandas()
     reportable = frame.loc[frame["status"].ne("Void")].copy()
     reportable["_reportable"] = _instants(reportable["reportable_at"])
