@@ -180,6 +180,22 @@ test('HttpSharePointClient: removing posts to removebyloginname with the claims 
   assert.equal(post?.headers['x-requestdigest'], 'digest-1');
 });
 
+test('HttpSharePointClient: a membership write answered 200 with an empty body did change the group', async () => {
+  const { client } = http([
+    {
+      when: (c) => c.method === 'POST' && c.url.includes('sitegroups'),
+      respond: () => new Response('', { status: 200 }),
+    },
+  ]);
+
+  assert.deepEqual(await client.addGroupMember('Reviewers', 'zara'), {
+    ok: true,
+  });
+  assert.deepEqual(await client.removeGroupMember('Reviewers', 'zara'), {
+    ok: true,
+  });
+});
+
 test('HttpSharePointClient: a stale digest is refreshed once and the membership write retried', async () => {
   let attempts = 0;
   const { client, calls } = http([
