@@ -13,7 +13,9 @@
  * @returns {string | undefined}
  */
 export function currentOutcome(caseRow) {
-  return caseRow.amendedOutcome?.outcome ?? caseRow.outcomeAtCompletion;
+  return (
+    caseRow.amendedOutcome?.outcome ?? caseRow.outcomeAtCompletion ?? undefined
+  );
 }
 
 /**

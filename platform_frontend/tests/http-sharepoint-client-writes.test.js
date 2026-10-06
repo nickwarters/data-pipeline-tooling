@@ -199,6 +199,67 @@ test('HttpSharePointClient: patchCase writes mutable CaseRow fields to SharePoin
   });
 });
 
+test('HttpSharePointClient: patchCase writes the reopen history as a JSON blob and clears the live stamps to null', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
+      respond: () => digestResponse('d'),
+    },
+    {
+      when: (c) => c.method === 'PATCH',
+      respond: () =>
+        new Response(null, { status: 204, headers: { ETag: '"v2"' } }),
+    },
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify(caseRowResponse({ Title: 'T', Notes: 'n' })),
+          { status: 200, headers: { ETag: '"v2"' } }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+  const history = [{ reopenedAt: '2026-10-05T12:00:00.000Z', reason: 'Why.' }];
+
+  await client.patchCase(
+    'case-1',
+    {
+      status: 'In-progress',
+      previousCompletions: /** @type {any} */ (history),
+      reportableAt: null,
+      completedAt: null,
+      outcomeAtCompletion: null,
+      hadRemediation: null,
+      effectiveOutcome: null,
+      effectiveHadRemediation: null,
+      outcomeOverridden: null,
+      amendedOutcome: null,
+      remediationDueDate: null,
+    },
+    '"v1"',
+    { listName: 'Cases-ExampleReview' }
+  );
+
+  const patch = calls.find((c) => c.method === 'PATCH');
+  assert.deepEqual(JSON.parse(String(patch?.body)), {
+    Status: 'In-progress',
+    PreviousCompletions: JSON.stringify(history),
+    ReportableAt: null,
+    CompletedAt: null,
+    OutcomeAtCompletion: null,
+    HadRemediation: null,
+    EffectiveOutcome: null,
+    EffectiveHadRemediation: null,
+    OutcomeOverridden: null,
+    AmendedOutcome: 'null',
+    RemediationDueDate: null,
+  });
+});
+
 test('HttpSharePointClient: patchCase writes Action Centre state flags + clocks to SP columns', async () => {
   const { fetch, calls } = makeFetch([
     {

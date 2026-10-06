@@ -4,7 +4,8 @@ Date: 2026-07-01
 
 ## Status
 
-Accepted, as amended 2026-08 (#621) — an unset Responsible Party now disables the
+Accepted, as amended 2026-10: D14 now has one exception, a Maintainer's Reopen from
+Case Support, recorded in [ADR-0058] — and as amended 2026-08 (#621) — an unset Responsible Party now disables the
 completion button rather than hiding it — and as further amended 2026-08 (#677): the
 Responsible Party is asked for, and gates completion, only where some failed Answer's
 "Is remediation required?" decision is `yes` (amends [ADR-0012], [ADR-0016],
@@ -81,7 +82,8 @@ At the reportable moment, **in one ETag-guarded PATCH** ([ADR-0008]):
 
 1. Stamp **`reportableAt`** (ISO timestamp) on the Case row.
 2. **Freeze the Answers** — from here a newly-applicable Question Definition **no longer
-   reopens** the Case (D14). While still `In-progress` (pre-reportable), a new
+   reopens** the Case (D14; only a Maintainer's Reopen returns a reportable Case to
+   `In-progress`, see [ADR-0058]). While still `In-progress` (pre-reportable), a new
    applicable Question applies and blocks the button exactly as today.
 3. Stamp the **Outcome snapshot**: `outcomeAtCompletion` + `hadRemediation` are computed
    here (D15), not deferred to final completion. (Answers are frozen, so the value is
@@ -148,3 +150,4 @@ no re-snapshot). `canComplete` / `canAttribute` stop hard-coding `status ===
 [ADR-0020]: ./0020-unified-issue-capture-engine.md
 [ADR-0021]: ./0021-versioned-question-bank-snapshots-for-completed-cases.md
 [ADR-0024]: ./0024-remediation-tracking-tab.md
+[ADR-0058]: ./0058-a-maintainer-can-reopen-a-reportable-case.md

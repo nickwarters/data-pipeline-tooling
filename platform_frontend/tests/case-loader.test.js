@@ -460,6 +460,82 @@ test('CaseLoader.load(): In-progress Case loads live catalogue; versionWarning s
   );
 });
 
+test('CaseLoader.load(): a reopened In-progress Case stays on the Question Bank it was reviewed against', async () => {
+  const loader = makeLoader({
+    row: {
+      status: 'In-progress',
+      questionBankVersion: 'sha256:abc123',
+      answers: { 'q-welcome': { value: 'Yes' } },
+    },
+    client: {
+      getBankVersion: async () => 'sha256:live',
+      getVersionedExport: async () => ({
+        slug: 'example-review',
+        questions: versionedCatalogue,
+      }),
+    },
+  });
+
+  await loader.load();
+
+  assert.deepEqual(
+    loader.catalogue.map((q) => q.id),
+    ['q-old'],
+    'a Question added to the live bank cannot block re-completion'
+  );
+  assert.equal(loader.toStoreSnapshot().versionWarning, null);
+  assert.equal(
+    loader.toStoreSnapshot().bankVersion,
+    'sha256:abc123',
+    'completing again stamps the pinned version, not the live one'
+  );
+});
+
+test('CaseLoader.load(): a reopened Case whose version was never published reads the live bank with the warning', async () => {
+  const loader = makeLoader({
+    row: {
+      status: 'In-progress',
+      questionBankVersion: 'sha256:abc123',
+      answers: { 'q-welcome': { value: 'Yes' } },
+    },
+    client: { getBankVersion: async () => 'sha256:live' },
+  });
+
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    await loader.load();
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.ok(new Set(loader.catalogue.map((q) => q.id)).has('q-welcome'));
+  assert.ok(loader.toStoreSnapshot().versionWarning);
+  assert.equal(
+    loader.toStoreSnapshot().bankVersion,
+    'sha256:live',
+    'the live catalogue is what the Case completes against'
+  );
+});
+
+test('CaseLoader.load(): a To-allocate Case is never pinned, whatever version it carries', async () => {
+  /** @type {unknown[]} */
+  const asked = [];
+  const loader = makeLoader({
+    row: { status: 'To-allocate', questionBankVersion: 'sha256:abc123' },
+    client: {
+      getVersionedExport: async (/** @type {string} */ slug) => {
+        asked.push(slug);
+        return null;
+      },
+    },
+  });
+
+  await loader.load();
+
+  assert.deepEqual(asked, []);
+});
+
 test('CaseLoader.load(): Completed Case without questionBankVersion falls back to live (backward compat)', async () => {
   const loader = makeLoader({
     row: {
