@@ -330,6 +330,10 @@ test('case support: every support action has a card, and only a built one can be
   for (const built of ['Reassign', 'Un-assign']) {
     assert.equal(getByRole(view(), 'button', { name: built }).disabled, false);
   }
+  assert.ok(
+    getByRole(view(), 'button', { name: 'Reopen' }),
+    'Reopen is built, though this In-progress Case cannot use it'
+  );
   assert.ok(getByRole(view(), 'heading', { name: 'Support log' }));
 });
 
@@ -742,7 +746,8 @@ function live(setup = {}) {
   ctx.client = client;
   const slice = createRouteSlice(
     { caseType: 'complaints', id: '1', queryString: '' },
-    ctx
+    ctx,
+    { now: () => new Date('2026-10-05T12:00:00Z') }
   );
   let state = slice.initialState;
   const dispatch = (/** @type {any} */ action) => {
@@ -1208,4 +1213,399 @@ test('un-assign: an action the form does not handle leaves it as it was', () => 
     page.state().routes.caseSupport.selected?.unassign,
     before
   );
+});
+
+const REPORTED = {
+  status: CASE_STATUS.COMPLETED,
+  reportableAt: '2026-10-01T09:00:00.000Z',
+  completedAt: '2026-10-01T09:00:00.000Z',
+  outcomeAtCompletion: 'fail',
+  hadRemediation: true,
+  effectiveOutcome: 'fail',
+  effectiveHadRemediation: true,
+  outcomeOverridden: false,
+  questionBankVersion: 'v1',
+  remediationDueDate: '2026-10-08',
+  dueDate: '2026-10-05',
+  answers: { q1: { value: 'No' } },
+};
+
+/** @param {ReturnType<typeof live>} page */
+function startReopen(page) {
+  fireEvent(getByRole(page.view(), 'button', { name: 'Reopen' }), 'click');
+}
+
+/** @param {ReturnType<typeof live>} page @param {string} reason */
+function reopen(page, reason) {
+  startReopen(page);
+  fireEvent(page.view().querySelector('textarea'), 'input', {
+    target: { value: reason },
+  });
+}
+
+/** @param {ReturnType<typeof live>} page */
+async function submitReopen(page) {
+  fireEvent(getByRole(page.view(), 'button', { name: 'Reopen' }), 'click');
+  await flush(60);
+}
+
+/** @param {ReturnType<typeof live>} page */
+async function storedCase(page) {
+  return page.client.getCase('1', { listName: 'Cases-Complaints' });
+}
+
+/**
+ * Write fields the way a Case would have come to hold them, then show the page that stored row.
+ *
+ * @param {ReturnType<typeof live>} page
+ * @param {Record<string, unknown>} fields
+ */
+async function holdStored(page, fields) {
+  await page.client.patchCase('1', /** @type {any} */ (fields), 'etag-1', {
+    listName: 'Cases-Complaints',
+  });
+  page.dispatch({
+    type: 'case-support/case-loaded',
+    row: await storedCase(page),
+  });
+}
+
+test('reopen: it cannot be sent without a reason, and lists what it will do to this Case', () => {
+  const page = live({ row: REPORTED });
+  startReopen(page);
+  const submit = () =>
+    getByRole(page.view(), 'button', { name: 'Reopen' }).disabled;
+
+  assert.ok(getByRole(page.view(), 'heading', { name: 'Reopen the Case' }));
+  const text = page.view().textContent;
+  assert.match(text, /returns to In-progress with zara/);
+  assert.match(text, /previous completion is kept as history/);
+  assert.match(text, /Answer and remediation status is kept/);
+  assert.match(text, /Due Date restarts at 12\/10\/2026/);
+  assert.match(text, /stays at the version the Case was reviewed against/);
+  assert.match(text, /leaves the completed counts in reports/);
+  assert.doesNotMatch(text, /Amended Outcome/);
+  assert.doesNotMatch(text, /notified again/);
+  assert.equal(submit(), true);
+  fireEvent(page.view().querySelector('textarea'), 'input', {
+    target: { value: '  ' },
+  });
+  assert.equal(submit(), true, 'a blank reason is no reason');
+  fireEvent(page.view().querySelector('textarea'), 'input', {
+    target: { value: 'Wrong Outcome.' },
+  });
+  assert.equal(submit(), false);
+});
+
+test('reopen: the preview names an archived Amended Outcome, the re-send, and a Case with no recorded bank version', () => {
+  const page = live({
+    row: {
+      ...REPORTED,
+      status: CASE_STATUS.ACTIONS_IN_PROGRESS,
+      questionBankVersion: undefined,
+      amendedOutcome: {
+        outcome: 'pass',
+        justification: 'Corrected.',
+        amendedBy: 'controls',
+        amendedAt: '2026-10-02T09:00:00.000Z',
+      },
+    },
+  });
+  startReopen(page);
+
+  const text = page.view().textContent;
+  assert.match(text, /Amended Outcome is archived.*amended again/);
+  assert.match(text, /actions were already sent.*notified again/);
+  assert.match(text, /before Question Bank versions were recorded/);
+});
+
+test('reopen: the log is written first, then the Case goes back to In-progress in one write', async () => {
+  const page = live({ row: REPORTED });
+  await holdStored(page, {
+    ...REPORTED,
+    awaitingResponsibleParty: true,
+    awaitingSince: '2026-10-01T09:00:00.000Z',
+  });
+  const opened = await storedCase(page);
+  /** @type {string[]} */
+  const order = [];
+  const addEntry = page.client.addSupportLogEntry.bind(page.client);
+  const patch = page.client.patchCase.bind(page.client);
+  page.client.addSupportLogEntry = async (entry) => {
+    order.push(`log:${entry.outcome}`);
+    return addEntry(entry);
+  };
+  /** @type {any[]} */
+  const patches = [];
+  page.client.patchCase = async (...args) => {
+    order.push('patch');
+    patches.push(args);
+    return patch(...args);
+  };
+  reopen(page, 'Wrong Outcome.');
+
+  await submitReopen(page);
+
+  assert.deepEqual(order, ['log:recorded', 'patch']);
+  assert.equal(patches.length, 1, 'one guarded write');
+  assert.equal(patches[0][2], opened?.etag, 'under the etag it was read at');
+  const stored = await storedCase(page);
+  assert.equal(stored?.status, CASE_STATUS.IN_PROGRESS);
+  assert.equal(stored?.assignedReviewer, 'zara');
+  assert.deepEqual(stored?.answers, REPORTED.answers, 'Answers are kept');
+  for (const cleared of [
+    'reportableAt',
+    'completedAt',
+    'outcomeAtCompletion',
+    'hadRemediation',
+    'effectiveOutcome',
+    'effectiveHadRemediation',
+    'outcomeOverridden',
+    'amendedOutcome',
+    'remediationDueDate',
+  ]) {
+    assert.equal(
+      /** @type {any} */ (stored)?.[cleared],
+      null,
+      `${cleared} is cleared`
+    );
+  }
+  assert.equal(stored?.questionBankVersion, 'v1', 'the pinned version stays');
+  assert.equal(stored?.dueDate, '2026-10-12');
+  assert.equal(stored?.awaitingResponsibleParty, false);
+  assert.deepEqual(stored?.previousCompletions, [
+    {
+      reopenedAt: '2026-10-05T12:00:00.000Z',
+      reopenedBy: 'user-reviewer',
+      reason: 'Wrong Outcome.',
+      fromStatus: CASE_STATUS.COMPLETED,
+      reportableAt: REPORTED.reportableAt,
+      completedAt: REPORTED.completedAt,
+      outcomeAtCompletion: 'fail',
+      hadRemediation: true,
+      effectiveOutcome: 'fail',
+      effectiveHadRemediation: true,
+      outcomeOverridden: false,
+      questionBankVersion: 'v1',
+      remediationDueDate: '2026-10-08',
+      amendedOutcome: null,
+    },
+  ]);
+
+  const [entry] = await page.client.listSupportLog({
+    caseType: 'complaints',
+    caseId: '1',
+  });
+  assert.equal(entry.action, 'reopen');
+  assert.equal(entry.reason, 'Wrong Outcome.');
+  const logged = entry.changes.map((change) => change.field);
+  for (const field of [
+    'status',
+    'previousCompletions',
+    'reportableAt',
+    'completedAt',
+    'outcomeAtCompletion',
+    'hadRemediation',
+    'dueDate',
+    'awaitingResponsibleParty',
+  ]) {
+    assert.ok(logged.includes(field), `${field} is in the log`);
+  }
+  assert.deepEqual(
+    entry.changes.find((change) => change.field === 'status'),
+    { field: 'status', before: 'Completed', after: 'In-progress' }
+  );
+  assert.deepEqual(
+    entry.changes.find((change) => change.field === 'hadRemediation'),
+    { field: 'hadRemediation', before: true, after: null }
+  );
+
+  const view = page.view();
+  assert.match(
+    getByRole(view, 'status').textContent,
+    /Reopened: the Case is back In-progress with zara\./
+  );
+  assert.equal(definitionFor(view, 'Status').textContent, 'In-progress');
+  assert.equal(definitionFor(view, 'Reopened').textContent, 'Once');
+  assert.equal(view.querySelector('textarea'), null, 'the form has closed');
+});
+
+test('reopen: a Case reopened before keeps every earlier Previous Completion', async () => {
+  const earlier = { reopenedAt: '2026-09-01T00:00:00.000Z', reason: 'First.' };
+  const page = live({ row: REPORTED });
+  await holdStored(page, { ...REPORTED, previousCompletions: [earlier] });
+  assert.equal(definitionFor(page.view(), 'Reopened').textContent, 'Once');
+  reopen(page, 'Second.');
+
+  await submitReopen(page);
+
+  const stored = await storedCase(page);
+  assert.equal(stored?.previousCompletions?.length, 2);
+  assert.deepEqual(stored?.previousCompletions?.[0], earlier);
+  assert.equal(stored?.previousCompletions?.[1].reason, 'Second.');
+  assert.equal(definitionFor(page.view(), 'Reopened').textContent, '2 times');
+});
+
+test('reopen: an Actions In Progress Case can be reopened and stops waiting on the Responsible Party', async () => {
+  const page = live({ row: REPORTED });
+  await holdStored(page, {
+    ...REPORTED,
+    status: CASE_STATUS.ACTIONS_IN_PROGRESS,
+    completedAt: null,
+    awaitingResponsibleParty: true,
+    awaitingSince: '2026-10-01T09:00:00.000Z',
+  });
+  reopen(page, 'Sent in error.');
+
+  await submitReopen(page);
+
+  const stored = await storedCase(page);
+  assert.equal(stored?.status, CASE_STATUS.IN_PROGRESS);
+  assert.equal(stored?.awaitingResponsibleParty, false);
+  assert.equal(stored?.awaitingSince, null);
+  assert.equal(
+    stored?.previousCompletions?.[0].fromStatus,
+    CASE_STATUS.ACTIONS_IN_PROGRESS
+  );
+  assert.equal(stored?.previousCompletions?.[0].completedAt, null);
+});
+
+test('reopen: a reopened Case is not offered to be reopened again', async () => {
+  const page = live({ row: REPORTED });
+  reopen(page, 'Wrong Outcome.');
+  await submitReopen(page);
+
+  const button = getByRole(page.view(), 'button', { name: 'Reopen' });
+  assert.equal(button.disabled, true);
+  assert.match(
+    page.view().textContent,
+    /has been completed or sent for remediation/
+  );
+});
+
+test('reopen: a Case that changed since it was opened is left alone, and the log says so', async () => {
+  const page = live({ row: REPORTED });
+  reopen(page, 'Wrong Outcome.');
+  page.client.inject412();
+
+  await submitReopen(page);
+
+  const stored = await storedCase(page);
+  assert.equal(stored?.status, CASE_STATUS.COMPLETED);
+  const [failed, recorded] = await page.client.listSupportLog({
+    caseType: 'complaints',
+    caseId: '1',
+  });
+  assert.equal(failed.outcome, 'not-applied');
+  assert.equal(failed.relatesTo, recorded.id);
+  assert.match(
+    getByRole(page.view(), 'alert').textContent,
+    /changed after it was opened.*Reload/
+  );
+});
+
+test('reopen: a support log that cannot be written leaves the Case untouched', async () => {
+  const page = live({ row: REPORTED });
+  let patched = false;
+  page.client.addSupportLogEntry = async () => {
+    throw new Error('HTTP 403');
+  };
+  page.client.patchCase = async () => {
+    patched = true;
+    return { ok: true, status: 200 };
+  };
+  reopen(page, 'Wrong Outcome.');
+
+  await submitReopen(page);
+
+  assert.equal(patched, false);
+  assert.match(
+    getByRole(page.view(), 'alert').textContent,
+    /Nothing was changed.*HTTP 403/
+  );
+});
+
+test('reopen: only a Reportable Case without an open Appeal can be reopened, and the card says why not', () => {
+  /** @type {Array<[Record<string, unknown>, RegExp | null]>} */
+  const cases = [
+    [{ status: CASE_STATUS.COMPLETED }, null],
+    [{ status: CASE_STATUS.ACTIONS_IN_PROGRESS }, null],
+    [{ status: CASE_STATUS.TO_ALLOCATE }, /completed or sent for remediation/],
+    [{ status: CASE_STATUS.IN_PROGRESS }, /completed or sent for remediation/],
+    [{ status: CASE_STATUS.VOID }, /Void Case cannot be reopened/],
+    [
+      {
+        status: CASE_STATUS.COMPLETED,
+        appeals: [{ id: 'a', state: 'underReview' }],
+      },
+      /open Appeal/,
+    ],
+    [
+      {
+        status: CASE_STATUS.COMPLETED,
+        appeals: [{ id: 'a', state: 'resolved' }],
+      },
+      null,
+    ],
+  ];
+  for (const [row, why] of cases) {
+    const page = live({ row });
+    const button = getByRole(page.view(), 'button', { name: 'Reopen' });
+    const label = JSON.stringify(row);
+    assert.equal(button.disabled, why !== null, label);
+    if (why) assert.match(page.view().textContent, why, label);
+  }
+});
+
+test('reopen: while saving the form is locked, and cancel returns to the actions', () => {
+  const page = live({ row: REPORTED });
+  reopen(page, 'Wrong Outcome.');
+  page.dispatch({ type: 'case-support/reopen-saving' });
+  const view = page.view();
+  assert.equal(
+    getByRole(view, 'button', { name: 'Reopening…' }).disabled,
+    true
+  );
+  assert.equal(view.querySelector('textarea')?.disabled, true);
+
+  page.dispatch({ type: 'case-support/reopen-failed', message: 'No.' });
+  assert.equal(getByRole(page.view(), 'alert').textContent, 'No.');
+  fireEvent(getByRole(page.view(), 'button', { name: 'Cancel' }), 'click');
+  assert.ok(getByRole(page.view(), 'heading', { name: 'Support actions' }));
+});
+
+test('reopen: an action the form does not handle leaves it as it was', () => {
+  const page = live({ row: REPORTED });
+  reopen(page, 'Wrong Outcome.');
+  const before = page.state().routes.caseSupport.selected?.reopen;
+  page.dispatch({ type: 'case-support/unrelated' });
+  assert.strictEqual(page.state().routes.caseSupport.selected?.reopen, before);
+});
+
+test('reopen: a Case Type with its own review SLA restarts the Due Date by it', async () => {
+  const page = live({ row: REPORTED });
+  const ctx = context({ client: null });
+  ctx.client = page.client;
+  ctx.caseSources = [{ ...SOURCES[0], reviewSlaWorkingDays: 1 }, SOURCES[1]];
+  const slice = createRouteSlice(
+    { caseType: 'complaints', id: '1', queryString: '' },
+    ctx,
+    { now: () => new Date('2026-10-05T12:00:00Z') }
+  );
+  let state = slice.initialState;
+  const dispatch = (/** @type {any} */ action) => {
+    state = slice.reducer(state, action);
+  };
+  slice.start(startTools(ctx, [], { dispatch }));
+  dispatch({ type: 'case-support/case-loaded', row: await storedCase(page) });
+  const view = () => slice.view(state, { dispatch });
+  fireEvent(getByRole(view(), 'button', { name: 'Reopen' }), 'click');
+  assert.match(view().textContent, /Due Date restarts at 06\/10\/2026/);
+  fireEvent(view().querySelector('textarea'), 'input', {
+    target: { value: 'Wrong Outcome.' },
+  });
+  fireEvent(getByRole(view(), 'button', { name: 'Reopen' }), 'click');
+  await flush(60);
+
+  assert.equal((await storedCase(page))?.dueDate, '2026-10-06');
 });

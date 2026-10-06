@@ -3501,6 +3501,15 @@
   margin: 0;
 }
 
+/* What a Reopen will do to this Case, read before it is confirmed. */
+.cora-case-support-consequences {
+  display: grid;
+  gap: var(--cora-space-1);
+  margin: 0;
+  padding-left: var(--cora-space-4);
+  font-size: var(--cora-font-size-sm);
+}
+
 .cora-case-support-candidates {
   display: grid;
   gap: var(--cora-space-1);

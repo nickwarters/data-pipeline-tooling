@@ -42,6 +42,7 @@ import {
   compileExport,
 } from '../src/pages/question-bank/question-bank-compile.js';
 import { computeConfiguredOutcome } from '../src/evaluators/configured-outcome.js';
+import { buildReopenTransition } from '../src/evaluators/case-transitions.js';
 import { configureAppSections } from './helpers/configure-sections.js';
 
 configureAppSections();
@@ -253,4 +254,38 @@ test('the frozen catalogue comes from the example1234 file, not the live bank', 
     )
   );
   assert.equal(versionedFile.questions[0].text, loader.catalogue[0].text);
+});
+
+test('a reopened Case completes again against the version it was reviewed with, not the live bank', async () => {
+  const opened = await runner.client.getCase('sq-case-1', { listName: LIST });
+  assert.ok(opened);
+  const reopened = await runner.client.patchCase(
+    opened.id,
+    buildReopenTransition(opened, { reopenedBy: 'robin', reason: 'Recheck.' }),
+    opened.etag,
+    { listName: LIST }
+  );
+  assert.equal(reopened.ok, true);
+
+  await runner.run([
+    { type: 'loadCasePage', caseId: 'sq-case-1', caseType: SLUG },
+  ]);
+
+  const loader = runner.caseLoader;
+  assert.ok(loader);
+  assert.equal(loader.catalogue[0].text, AS_REVIEWED_TEXT, 'still as reviewed');
+  assert.equal(loader.versionWarning, null);
+
+  const snapshot = await runner.run([{ type: 'clickCompleteCase' }]);
+
+  const row = snapshot.lists[LIST].find((c) => c.id === 'sq-case-1');
+  assert.ok(row);
+  assert.equal(row.status, 'Completed');
+  assert.equal(
+    row.questionBankVersion,
+    'example1234',
+    'the live bank has moved on to example5678'
+  );
+  assert.equal(row.previousCompletions?.length, 1);
+  assert.equal(row.previousCompletions?.[0].questionBankVersion, 'example1234');
 });

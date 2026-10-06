@@ -21,6 +21,7 @@ import {
 } from '../views/case-columns.js';
 import { dataTableView } from '../views/data-table.js';
 import { caseTypeGroupNames } from '../services/permissions.js';
+import { reopenedDueDate } from '../evaluators/case-transitions.js';
 import {
   EMPTY_REASSIGN_FORM,
   reassignBlockedReason,
@@ -28,6 +29,12 @@ import {
   reassignFormView,
   reviewerCandidates,
 } from './case-support/reassign.js';
+import {
+  EMPTY_REOPEN_FORM,
+  reopenBlockedReason,
+  reopenCase,
+  reopenFormView,
+} from './case-support/reopen.js';
 import {
   EMPTY_UNASSIGN_FORM,
   unassignBlockedReason,
@@ -41,6 +48,7 @@ import {
 /** @typedef {import('../setup/resolve-eligible-case-types.js').CaseSource} CaseSource */
 /** @typedef {import('./case-support/reassign.js').ReassignForm} ReassignForm */
 /** @typedef {import('./case-support/unassign.js').UnassignForm} UnassignForm */
+/** @typedef {import('./case-support/reopen.js').ReopenForm} ReopenForm */
 
 /**
  * The page's effects, which a view calls and never awaits.
@@ -48,8 +56,10 @@ import {
  * @typedef {{
  *   openReassign: (row: CaseRow) => void,
  *   openUnassign: () => void,
+ *   openReopen: () => void,
  *   submitReassign: (row: CaseRow, form: ReassignForm) => void,
  *   submitUnassign: (row: CaseRow, form: UnassignForm) => void,
+ *   submitReopen: (row: CaseRow, form: ReopenForm) => void,
  * }} SupportActions
  */
 
@@ -111,6 +121,7 @@ export const SUPPORT_ACTIONS = [
  *   logError: string | null,
  *   reassign: ReassignForm | null,
  *   unassign: UnassignForm | null,
+ *   reopen: ReopenForm | null,
  *   notice: string | null,
  * }} SelectedCase
  */
@@ -266,6 +277,14 @@ function fact(term, value) {
 }
 
 /**
+ * @param {number} count
+ * @returns {string}
+ */
+function reopenedTimes(count) {
+  return count === 1 ? 'Once' : `${count} times`;
+}
+
+/**
  * @param {CaseSupportRouteState} route
  * @param {CaseRow} row
  * @returns {HTMLElement}
@@ -301,7 +320,10 @@ function caseHeaderView(route, row) {
       ...fact('Due Date', formatDate(row.dueDate)),
       ...fact('Reportable on', formatDate(row.reportableAt)),
       ...fact('Completed on', formatDate(row.completedAt)),
-      ...(row.voidedAt ? fact('Voided on', formatDate(row.voidedAt)) : [])
+      ...(row.voidedAt ? fact('Voided on', formatDate(row.voidedAt)) : []),
+      ...(row.previousCompletions?.length
+        ? fact('Reopened', reopenedTimes(row.previousCompletions.length))
+        : [])
     )
   );
 }
@@ -312,6 +334,11 @@ function caseHeaderView(route, row) {
  * @type {Record<string, { label: string, blockedBy: (row: CaseRow) => string | null, open: (actions: SupportActions, row: CaseRow) => void }>}
  */
 const ACTION_STARTERS = {
+  reopen: {
+    label: 'Reopen',
+    blockedBy: reopenBlockedReason,
+    open: (actions) => actions.openReopen(),
+  },
   reassign: {
     label: 'Reassign',
     blockedBy: reassignBlockedReason,
@@ -512,6 +539,21 @@ function unassignView(row, form, tools) {
 }
 
 /**
+ * @param {CaseRow} row
+ * @param {ReopenForm} form
+ * @param {ViewTools} tools
+ * @returns {HTMLElement}
+ */
+function reopenView(row, form, tools) {
+  return reopenFormView(form, row, {
+    onReason: (reason) =>
+      tools.dispatch({ type: 'case-support/reopen-reason', reason }),
+    onSubmit: () => tools.supportActions?.submitReopen(row, form),
+    onCancel: () => tools.dispatch({ type: 'case-support/reopen-closed' }),
+  });
+}
+
+/**
  * The open action's form in place of the action cards, or the cards when none is open.
  *
  * @param {CaseSupportRouteState} route
@@ -525,6 +567,9 @@ function actionPanelView(route, selected, tools) {
   }
   if (selected.unassign) {
     return unassignView(selected.row, selected.unassign, tools);
+  }
+  if (selected.reopen) {
+    return reopenView(selected.row, selected.reopen, tools);
   }
   return actionsView(selected.row, tools.supportActions);
 }
@@ -650,9 +695,29 @@ function unassignFormAfter(form, action) {
 }
 
 /**
+ * The open Reopen form after one of its own actions; any other action leaves it as it was.
+ *
+ * @param {ReopenForm} form
+ * @param {any} action
+ * @returns {ReopenForm}
+ */
+function reopenFormAfter(form, action) {
+  switch (action.type) {
+    case 'case-support/reopen-reason':
+      return { ...form, reason: action.reason };
+    case 'case-support/reopen-saving':
+      return { ...form, saving: true, error: null };
+    case 'case-support/reopen-failed':
+      return { ...form, saving: false, error: action.message };
+    default:
+      return form;
+  }
+}
+
+/**
  * @param {Record<string, string>} params
  * @param {import('../setup/register-routes.js').AppContext} context
- * @param {{ searchCases?: typeof searchCasesService }} [dependencies]
+ * @param {{ searchCases?: typeof searchCasesService, now?: () => Date }} [dependencies]
  * @returns {{
  *   initialState: CaseSupportState,
  *   reducer: (state: CaseSupportState, action: any) => CaseSupportState,
@@ -663,7 +728,7 @@ function unassignFormAfter(form, action) {
 export function createRouteSlice(
   params,
   context,
-  { searchCases = searchCasesService } = {}
+  { searchCases = searchCasesService, now = () => new Date() } = {}
 ) {
   const query = (
     new URLSearchParams(params.queryString ?? '').get('reference') ?? ''
@@ -680,6 +745,7 @@ export function createRouteSlice(
           logError: null,
           reassign: null,
           unassign: null,
+          reopen: null,
           notice: null,
         }
       : null;
@@ -775,12 +841,27 @@ export function createRouteSlice(
           selected: { ...route.selected, unassign: null },
         });
       }
+      if (route.selected && action.type === 'case-support/reopen-opened') {
+        return patchRoute(state, 'caseSupport', {
+          selected: {
+            ...route.selected,
+            reopen: { ...EMPTY_REOPEN_FORM, dueDate: action.dueDate },
+            notice: null,
+          },
+        });
+      }
+      if (route.selected && action.type === 'case-support/reopen-closed') {
+        return patchRoute(state, 'caseSupport', {
+          selected: { ...route.selected, reopen: null },
+        });
+      }
       if (route.selected && action.type === 'case-support/applied') {
         return patchRoute(state, 'caseSupport', {
           selected: {
             ...route.selected,
             reassign: null,
             unassign: null,
+            reopen: null,
             notice: action.notice,
           },
         });
@@ -800,6 +881,15 @@ export function createRouteSlice(
         if (next !== release) {
           return patchRoute(state, 'caseSupport', {
             selected: { ...route.selected, unassign: next },
+          });
+        }
+      }
+      const reopening = route.selected?.reopen;
+      if (route.selected && reopening) {
+        const next = reopenFormAfter(reopening, action);
+        if (next !== reopening) {
+          return patchRoute(state, 'caseSupport', {
+            selected: { ...route.selected, reopen: next },
           });
         }
       }
@@ -963,6 +1053,30 @@ export function createRouteSlice(
               }),
               'case-support/unassign-failed',
               'Un-assigned: the Case is back in To-allocate, waiting to be claimed.'
+            );
+          },
+          openReopen() {
+            tools.dispatch({
+              type: 'case-support/reopen-opened',
+              dueDate: reopenedDueDate(
+                now().toISOString(),
+                source.reviewSlaWorkingDays
+              ),
+            });
+          },
+          submitReopen(row, form) {
+            tools.dispatch({ type: 'case-support/reopen-saving' });
+            settle(
+              reopenCase(client, {
+                row,
+                listName: source.listName,
+                reason: form.reason.trim(),
+                reopenedBy: tools.context.chrome.currentUser?.id ?? '',
+                reviewSlaWorkingDays: source.reviewSlaWorkingDays,
+                now,
+              }),
+              'case-support/reopen-failed',
+              `Reopened: the Case is back In-progress with ${row.assignedReviewer || 'its Reviewer'}.`
             );
           },
         };

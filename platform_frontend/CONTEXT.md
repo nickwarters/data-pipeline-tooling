@@ -41,7 +41,8 @@ requires every _failed_ Answer to carry an explicit **Remediation Required** dec
 every sent action has been resolved on the **Remediation** Section (the actions path — see
 **Case Status** and **Reportable**). Not the same as **Reportable**: on the
 actions path a Case is Reportable (its Answers frozen, Outcome snapshotted) at **Send
-Actions**, then only later Completed.
+Actions**, then only later Completed. A Maintainer's **Reopen** can return it to
+`In-progress`, clearing `completedAt` until it is completed again.
 _Avoid_: Closed, finished, done
 
 **Void Case**:
@@ -110,7 +111,9 @@ The milestone at which a Case's **Answers** freeze and its **Outcome** snapshots
 when actions are **sent** (`Actions In Progress`) or, with no actions, when the Case is
 **Completed**. Equivalently `status ∈ { Actions In Progress, Completed }`. Timestamped as
 `reportableAt`. Past this point a newly-applicable **Question Definition** no longer
-reopens the Case. Distinct from `completedAt`, which marks final closure only.
+reopens the Case; the one way back is a Maintainer's **Reopen** from **Case Support**,
+which sets the milestone aside as a **Previous Completion** so the Case can reach it
+again. Distinct from `completedAt`, which marks final closure only.
 
 A **Void Case** is frozen but was **not** necessarily Reportable: voiding freezes the
 Answers without stamping an Outcome, so "the Answers are frozen" (`isFrozen`) and "a
@@ -482,8 +485,16 @@ A platform administrator responsible for deploying and configuring the framework
 _Avoid_: Admin (overloaded with SharePoint admin), developer
 
 **Case Support**:
-The **Maintainer**'s page (`#/case-support`) for correcting a **Case** the people working it cannot, so that support never restores a SharePoint version or hand-edits a list item. A Maintainer finds any Case by its **Case Reference** across every **Case Type**, sees its key facts, and takes one of a fixed set of named **support actions** on it: inspect its fields and version history, reopen it, reassign or un-assign it, clear stale Action Centre flags or reset its Due Date, or void it after completion. Each action will ask for a reason and be recorded in the **Support Log**, which the page shows beside the Case. Deliberately _not_ a general field editor, which would only move hand-editing into the app. The page, its lookup, the Support Log, **Reassign** and **Un-assign** exist so far; the other actions are shown as not yet available. Reassign moves a Case to another **Reviewer** chosen only from its **Case Type**'s own `Reviewers - <type>` group, and restamps the assignment time and the Reviewer Manager in the same `If-Match` guarded write the allocation claim uses; status and Due Date are left alone. A Case with no Reviewer yet (**`To-allocate`**) or a **Void** one cannot be reassigned. Reassigning the Responsible Party or the managers directly is not built. Un-assign returns an `In-progress` Case to **`To-allocate`** in one guarded write, clearing its Assigned Reviewer, assignment time, Reviewer Manager, Due Date and any hold, and keeping the Answers entered so far for whoever claims it next; it is offered for no other status, because a Reportable Case needs Reopen first.
+The **Maintainer**'s page (`#/case-support`) for correcting a **Case** the people working it cannot, so that support never restores a SharePoint version or hand-edits a list item. A Maintainer finds any Case by its **Case Reference** across every **Case Type**, sees its key facts, and takes one of a fixed set of named **support actions** on it: inspect its fields and version history, reopen it, reassign or un-assign it, clear stale Action Centre flags or reset its Due Date, or void it after completion. Each action will ask for a reason and be recorded in the **Support Log**, which the page shows beside the Case. Deliberately _not_ a general field editor, which would only move hand-editing into the app. The page, its lookup, the Support Log, **Reopen**, **Reassign** and **Un-assign** exist so far; the other actions are shown as not yet available. Reassign moves a Case to another **Reviewer** chosen only from its **Case Type**'s own `Reviewers - <type>` group, and restamps the assignment time and the Reviewer Manager in the same `If-Match` guarded write the allocation claim uses; status and Due Date are left alone. A Case with no Reviewer yet (**`To-allocate`**) or a **Void** one cannot be reassigned. Reassigning the Responsible Party or the managers directly is not built. Un-assign returns an `In-progress` Case to **`To-allocate`** in one guarded write, clearing its Assigned Reviewer, assignment time, Reviewer Manager, Due Date and any hold, and keeping the Answers entered so far for whoever claims it next; it is offered for no other status, because a Reportable Case needs Reopen first. **Reopen** is offered for `Completed` and `Actions In Progress` Cases only, and is refused with a reason on the card for any other status and for a Case with an open Appeal; the page shows how many times a Case has been reopened.
 _Avoid_: Admin view, admin page
+
+**Reopen**:
+The **Maintainer**'s **Case Support** action that returns a **Reportable** Case (`Completed` or `Actions In Progress`) to `In-progress` so its **Assigned Reviewer** can correct it, with a mandatory reason. The reversal of the rule that a Reportable Case never goes back, and the only way back. One `If-Match` guarded write sets the completion aside as a **Previous Completion**, clears every stamp the **Reportable** milestone wrote (`reportableAt`, `completedAt`, the Outcome snapshot and `effectiveOutcome` columns, `remediationDueDate`, any **Amended Outcome**), restarts the Due Date from the **Case Type**'s review SLA and stops the Case awaiting the **Responsible Party**. The Reviewer, the **Answers**, the remediation statuses and the **Conversation** are kept, and the Case stays pinned to the **Question Bank** version it was reviewed against, so a **Question Definition** added since cannot block completing it again. Completing again stamps afresh, and the Case then counts in reports on the new date, not the first; sending actions again notifies the Responsible Party again. Not available for a **Void Case**, or while an **Appeal** is open.
+_Avoid_: Restore (restoring a SharePoint version is exactly what this replaces), Undo, Re-open by the Reviewer (a Reviewer cannot)
+
+**Previous Completion**:
+One entry in a **Case**'s `previousCompletions` history, appended by a **Reopen** and never edited: when and by whom it was reopened and why, the status it was reopened from, and every stamp the **Reportable** milestone had written (`reportableAt`, `completedAt`, `outcomeAtCompletion`, `hadRemediation`, the `effective*` columns, `questionBankVersion`, `remediationDueDate` and the **Amended Outcome**). Stored oldest first in the `PreviousCompletions` JSON blob column and landed by the data pipelines, but not republished to the current-state tables.
+_Avoid_: Reopened (the retired `Reopened`/`ReopenedAt` columns are unrelated and unread), Revision, Version
 
 **Support Log**:
 The append-only record of every **Case Support** action, one entry per action, kept in a per-environment `CaseSupportLog` SharePoint list rather than on the **Case** row. An entry names the Case (by Case Type, item id and **Case Reference**), the action, the Maintainer's reason and each field it changed from and to; SharePoint stamps who wrote it and when. The entry is written _before_ the Case is changed, so no change can land unlogged; if the Case write then fails, a second entry with the outcome `not-applied` is appended naming the first, because an entry is never edited. Maintainers can add to the list but not edit or delete, and the data pipelines land it as the `case_support_log` feed.
@@ -619,7 +630,8 @@ existed and on appeal-derived ones, which carry `fromAppealId` instead. `amended
 `amendedAt` are captured explicitly for **audit** (not mined from SharePoint version
 history). Typically follows an **agreed Appeal** but does not require one. Drives the
 `effectiveOutcome` reporting column. This deliberately relaxes the old "Outcome
-is always derived, never hand-set" rule — for amended Cases only.
+is always derived, never hand-set" rule — for amended Cases only. A **Reopen** archives it with the
+**Previous Completion** and clears it, so Controls amends again after the Case is completed again.
 _Avoid_: Answer Override (retired), Outcome Override, Amendment (bare), Revised Outcome
 
 **Amendment Reason**:
