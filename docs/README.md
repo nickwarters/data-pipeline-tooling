@@ -130,7 +130,8 @@ review platform, Review Outcomes flow *back* for reporting.
   [`data-dictionary-notifications.md`](data-dictionary-notifications.md)), and a
   Case becoming Reportable while carrying remediation notifies the Responsible
   Party and their Manager, the Manager resolved from the Responsible Party's own
-  directory row. It emits what is owed since the last run and is correct at any
+  directory row, and again each time a reopened Case is sent anew (its ledger is
+  keyed on the Case's `reportable_at` too). It emits what is owed since the last run and is correct at any
   cadence. The same pass emits a **second** Deliverable, to the
   `cora_user_group_privileges` outbox: one object per frontline recipient's
   login naming the SharePoint groups they must hold to open the Case they are

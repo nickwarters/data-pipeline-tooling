@@ -14,7 +14,7 @@ the reductions are
 the wiring is
 [`pipelines/cora_platform_metric/pipeline.py`](../pipelines/cora_platform_metric/pipeline.py).
 
-## Three things to know before reading a number
+## Four things to know before reading a number
 
 **1. Three of the tables measure what the polls saw, not what happened.**
 `case_stage_dwell_current`, `case_hold_current` and `case_backlog_daily` are
@@ -40,6 +40,19 @@ nobody has yet been observed leaving, an Appeal family none of whose members
 are resolved. The paired count column (`interval_count`, `resolved_count`,
 `late_count`) says how many measurements the statistic stands on. Days and
 hours are decimal (a three-hour hold is `0.125` days), rounded to three places.
+
+**4. A reopened Case is counted at its current state.** A Maintainer's Reopen
+returns a Reportable Case to `In-progress` and clears the stamps the milestone
+wrote (`reportable_at`, `completed_at`, `outcome_at_completion`,
+`had_remediation`, the `effective_*` columns), keeping them in the Case's
+`PreviousCompletions` history, which gold does not publish. Every table here reads
+each Case's latest state, so a reopened Case leaves every Reportable and
+Completed count until it is sent or completed again, and then counts once, on
+its new date; the earlier completion is not counted a second time and not
+remembered by these tables. A month already published can therefore fall when
+a Case from it is reopened. The tables built from the observation history
+(item 1) keep the interval the Case spent in each status, so a reopened Case
+adds a second `In-progress` interval rather than rewriting the first.
 
 ## Part A — Subject overview
 
@@ -372,7 +385,10 @@ Each leg runs between two stamps **the source writes itself**, so unlike
 `case_stage_dwell_current` nothing between two polls is missed. **Reportable
 comes before Completed.** A Case with Remediation Actions becomes Reportable
 when the Actions are sent (`Actions In Progress`) and Completed when they close.
-A Case without Actions is Reportable and Completed at the same instant.
+A Case without Actions is Reportable and Completed at the same instant. A Case a
+Maintainer has reopened carries neither stamp until it is sent again, so it has
+no `review`, `remediation`, `to_reportable` or `end_to_end` leg meanwhile, and
+its legs then run to the new stamps; only `allocation` is unaffected.
 
 | `leg_order` | `leg` | From | To | Over |
 |---|---|---|---|---|

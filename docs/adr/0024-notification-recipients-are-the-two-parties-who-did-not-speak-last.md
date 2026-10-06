@@ -86,10 +86,14 @@ not need telling — so there is no separate suppression step to look for.
 ### The ledger key is `(case_id, recipient, message_at)`
 
 This key is the Conversation Message trigger's own. The Reportable-with-
-remediation trigger, added later, keeps its own ledger table keyed
-`(case_id, recipient)` rather than reusing or rekeying this one — `reportable_at`
-is frozen at the milestone and never advances, so a third column would do no
-work. See [`data-dictionary-notifications.md`](../data-dictionary-notifications.md).
+remediation trigger, added later, keeps its own ledger table rather than reusing
+or rekeying this one. It was first keyed `(case_id, recipient)`, because
+`reportable_at` was frozen at the milestone and never advanced. A Maintainer's
+Reopen ends that: a reopened Case is stamped with a new `reportable_at` when it
+is sent again, so the table is now keyed `(case_id, recipient, reportable_at)`
+and a re-send notifies once more
+([ADR-0058](../../platform_frontend/docs/adr/0058-a-maintainer-can-reopen-a-reportable-case.md)).
+See [`data-dictionary-notifications.md`](../data-dictionary-notifications.md).
 
 `message_at` is the triggering Message's own `posted_at`. A recipient is
 notified only when the Case's last Message is newer than the one they were last

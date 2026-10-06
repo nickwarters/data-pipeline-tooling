@@ -230,8 +230,8 @@ lower-cased **bare account** (`a.khan`) — see *Person columns* below.
 | `assigned_reviewer_manager_name` | `AssignedReviewerManager/Name` | `str` | Yes | — | The Reviewer's manager. | `d.reid` | PII | |
 | `responsible_party_manager_name` | `ResponsiblePartyManager/Name` | `str` | Yes | — | The Responsible Party's manager, as the directory gave it when the Responsible Party was last saved. Empty on Cases saved before the platform recorded it, and when the lookup found nobody. | `e.novak` | PII | |
 | `due_date` | `DueDate` | `datetime` | Yes | — | Working-day SLA due date. | `2026-08-14T00:00:00+00:00` | None | |
-| `completed_at` | `CompletedAt` | `datetime` | Yes | — | Stamped at the final `Completed` transition. | | None | |
-| `reportable_at` | `ReportableAt` | `datetime` | Yes | — | Stamped at the reportable milestone. | | None | |
+| `completed_at` | `CompletedAt` | `datetime` | Yes | — | Stamped at the final `Completed` transition. | | None | Cleared to null by a Maintainer's Reopen, and stamped again on the next completion. |
+| `reportable_at` | `ReportableAt` | `datetime` | Yes | — | Stamped at the reportable milestone. | | None | Cleared by a Reopen and stamped afresh by the next Send Actions or completion, so a Case can hold a later value than it once did. Each cleared value is kept in `previous_completions`. |
 | `remediation_due_date` | `RemediationDueDate` | `datetime` | Yes | — | Remediation SLA. | | None | |
 | `related_date` | `RelatedDate` | `datetime` | Yes | — | Case Type–specific reference date. | | None | |
 | `created` | `Created` | `datetime` | Yes | — | SharePoint built-in creation time. | | None | |
@@ -247,18 +247,19 @@ lower-cased **bare account** (`a.khan`) — see *Person columns* below.
 | `void_reason_note` | `VoidReasonNote` | `str` | Yes | — | The Reviewer's own words behind an `other` Void Reason. | `The file was destroyed in the flood` | Internal | Free text, and the only thing an `other` void means. Qualifies `void_reason`; nothing groups on it. |
 | `voided_by_name` | `VoidedBy/Name` | `str` | Yes | — | Whoever voided the Case. | `d.reid` | PII | |
 | `outcome` | `Outcome` | `str` | Yes | — | Live working Outcome. | `Upheld` | None | Free text; the vocabulary is the Case Type's. |
-| `outcome_at_completion` | `OutcomeAtCompletion` | `str` | Yes | — | Frozen Outcome snapshot taken at reportable. | `Not upheld` | None | |
-| `had_remediation` | `HadRemediation` | `bool` | Yes | — | Frozen at reportable. | `false` | None | |
-| `effective_outcome` | `EffectiveOutcome` | `str` | Yes | — | Corrected Outcome for RP-team reporting. | `Upheld` | None | |
-| `effective_had_remediation` | `EffectiveHadRemediation` | `bool` | Yes | — | Corrected remediation flag. | `true` | None | |
-| `outcome_overridden` | `OutcomeOverridden` | `bool` | Yes | — | Set when an Amended Outcome diverges from the snapshot. | `true` | None | |
+| `outcome_at_completion` | `OutcomeAtCompletion` | `str` | Yes | — | Outcome snapshot taken at reportable. | `Not upheld` | None | Frozen while the Case stays reportable; null again after a Reopen. |
+| `had_remediation` | `HadRemediation` | `bool` | Yes | — | Snapshot taken at reportable. | `false` | None | Null after a Reopen, until the Case is sent again. |
+| `effective_outcome` | `EffectiveOutcome` | `str` | Yes | — | Corrected Outcome for RP-team reporting. | `Upheld` | None | Null after a Reopen. |
+| `effective_had_remediation` | `EffectiveHadRemediation` | `bool` | Yes | — | Corrected remediation flag. | `true` | None | Null after a Reopen. |
+| `outcome_overridden` | `OutcomeOverridden` | `bool` | Yes | — | Set when an Amended Outcome diverges from the snapshot. | `true` | None | Null (not `false`) after a Reopen: there is no snapshot to diverge from. |
 | `question_bank_version` | `QuestionBankVersion` | `str` | Yes | — | Question-bank snapshot version for the Case. | `complaints-2026.07` | None | Needed to read `answers` correctly. |
 | `case_justification` | `CaseJustification` | `str` | Yes | — | Case-level justification. | | Internal | Free text. |
 | `notes` | `Notes` | `str` | Yes | — | Free-text notes. | | Internal | Plain text, never HTML. |
 | `answers` | `Answers` | `str` | Yes | — | All Answers, as unparsed JSON text. | `{"q-outcome":{"value":"Not upheld"}}` | Internal | Not parsed here — see below. |
 | `conversation` | `Conversation` | `str` | Yes | — | Conversation messages, as unparsed JSON text. | `[]` | PII | |
 | `appeals` | `Appeals` | `str` | Yes | — | Appeal records, as unparsed JSON text. | `[]` | Internal | |
-| `amended_outcome` | `AmendedOutcome` | `str` | Yes | — | Case-level Amended Outcome record, as unparsed JSON text. | | Internal | |
+| `amended_outcome` | `AmendedOutcome` | `str` | Yes | — | Case-level Amended Outcome record, as unparsed JSON text. | | Internal | Cleared by a Reopen; the record is archived in `previous_completions`. |
+| `previous_completions` | `PreviousCompletions` | `str` | Yes | — | The completions a Maintainer's Reopen set aside, oldest first, as unparsed JSON text. | `[{"reopenedAt":"2026-08-04T08:45:00.000Z","fromStatus":"Completed",…}]` | Internal | Each entry holds who reopened, the reason, the status it was reopened from and the stamps the milestone had written. Empty for a Case never reopened. **Silver only: gold does not publish it** (see below). The list column must exist before this feed deploys: a column the read names that the list does not have fails the poll. |
 | `details` | `Details` | `str` | Yes | — | Case Details values keyed by the Case Type's `detailFields[].key`, as unparsed JSON text. | `{"product":"Current account"}` | Internal | |
 
 #### Person columns
@@ -300,8 +301,8 @@ rebuilt from `case_current` on the next publish.
 
 #### JSON blob columns
 
-`answers`, `conversation`, `appeals`, `amended_outcome` and `details` land as
-text and are never parsed *at this layer*: silver keeps each blob exactly as
+`answers`, `conversation`, `appeals`, `amended_outcome`, `details` and
+`previous_completions` land as text and are never parsed *at this layer*: silver keeps each blob exactly as
 the list holds it, which is what makes a malformed one recoverable. Their
 normalised homes are downstream — the Detail Tables for the first four (and
 `details`), and the flattened `amended_*` columns on gold `case_current` for
@@ -1181,7 +1182,7 @@ registry — `python -m cli runs --table case_current`
 | **Identity** | a `sha256` over `{namespace: "sharepoint_cases", natural_key: {case_type, source_item_id}}`, stamped by `DeriveKey` |
 | **Load strategy** | `Refresh()` |
 | **Source** | the whole `silver.case_version` history, across every declared list |
-| **Columns** | every silver column **except the five raw JSON blobs**, plus `case_id`, `as_of_utc`, and the six columns flattened out of `amended_outcome` (below) |
+| **Columns** | every silver column **except the raw JSON blobs** (`answers`, `conversation`, `appeals`, `details`, `amended_outcome` and `previous_completions`), plus `case_id`, `as_of_utc`, and the six columns flattened out of `amended_outcome` (below) |
 
 **Which version is current.** One stable sort on `case_id`,
 `source_modified_at` (parsed UTC), the parsed source version's major then minor
@@ -1232,7 +1233,7 @@ six columns null. The Current Outcome rule the app itself applies is
 
 Two things to know about what this table holds:
 
-- It republishes every silver column **except the five raw JSON blobs**,
+- It republishes every silver column **except the raw JSON blobs**,
   which are dropped rather than published beside the tables built from them:
   a consumer reading the same data two ways — an unnormalised text blob
   beside its typed rows — is exactly the duplication the normalisation
@@ -1243,7 +1244,18 @@ Two things to know about what this table holds:
   `conversation_message`; `appeals` in `appeal`; `details` in `case_detail`;
   `amended_outcome` in the flattened `amended_*` columns on this very table.
   The landed blob text itself remains readable in silver `case_version`,
-  the faithful observation history.
+  the faithful observation history. `previous_completions` is the one blob
+  with no normalised home: nothing reports on a Case's earlier completions,
+  because reporting reads each Case's **current state** and a reopened Case
+  counts only on its latest completion, so gold drops it
+  (`UNPUBLISHED_BLOB_COLUMNS`) rather than republish unparsed text beside
+  nothing built from it. A report that wants the history reads silver.
+- **A Reopen moves a Case out of every completed count.** The stamps the
+  reportable milestone wrote (`reportable_at`, `completed_at`,
+  `outcome_at_completion`, `had_remediation`, the `effective_*` columns and
+  `amended_*`) are null again on the Case's latest observation, so the
+  current-state tables stop counting it until it is completed again, and it
+  then counts on its new date, not the first.
 - **A Case deleted from the list stays here forever.** The poll asks for items
   modified in a window, and a deleted item is not returned by anything —
   deletion inference is out of scope for this feed. `case_current` is "every

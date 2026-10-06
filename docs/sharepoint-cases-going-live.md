@@ -261,6 +261,10 @@ Do not proceed past stage 4 unless all of these hold:
       one.
 - [ ] No credential appears in a command line, a parameter, or a committed file.
 - [ ] `PIPELINE_DATA_DIR_PROD` set and resolving.
+- [ ] Every list carries the `PreviousCompletions` column the Maintainer's
+      Reopen writes ([`case-type-onboarding.md`](../platform_frontend/docs/case-type-onboarding.md)).
+      The read names it, so a list without it fails the poll rather than
+      landing a Case without its history.
 - [ ] The dry run at stage 4 produced the columns and row counts you expected.
 - [ ] A backup covers the feed's whole directory **and** the checkpoint.
 
@@ -288,6 +292,13 @@ is. Three items, all in
       Decide before that run whether the backlog should be sent or dropped, and
       act on the file accordingly. Every pass after it emits only what has
       changed.
+- [ ] If the `notifications` ledger already exists from before Reopen, run
+      `python -m cli migrate` so `notified_reportable` gains `reportable_at`,
+      and run this pipeline once **before** the frontend that offers Reopen
+      is released. That first run adopts each earlier ledger row at its
+      Case's current `reportable_at`; a Case reopened and sent again before
+      it would be adopted at the new value and not notified for that
+      re-send.
 
 ## Rollback
 
