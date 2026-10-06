@@ -3669,11 +3669,19 @@
   list-style: none;
 }
 
-.cora-access-role {
-  display: grid;
+/* Role tiles fill the row, as many as fit, so a person's roles read at a glance. */
+.cora-access-role-list {
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
   gap: var(--cora-space-2);
-  justify-items: start;
-  padding: var(--cora-space-3);
+}
+
+.cora-access-role {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--cora-space-1);
+  padding: var(--cora-space-2) var(--cora-space-3);
+  font-size: var(--cora-font-size-sm);
   background: var(--cora-color-surface-2);
   /* The recessed fill alone is a few shades on the dark surface, so the border separates the card. */
   border: 1px solid var(--cora-color-border);
@@ -3686,6 +3694,12 @@
 
 .cora-access-role p {
   margin: 0;
+}
+
+/* Actions sit on the tile's bottom edge, so tiles in a row line their buttons up. */
+.cora-access-role .cora-access-role-actions {
+  margin-top: auto;
+  padding-top: var(--cora-space-1);
 }
 
 .cora-access-role-heading,

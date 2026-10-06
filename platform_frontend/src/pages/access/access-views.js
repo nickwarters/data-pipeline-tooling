@@ -107,8 +107,8 @@ function heldRoleView(role, context) {
         'p',
         { className: 'cora-access-note' },
         orphan
-          ? 'This Reviewer access is not tied to a Case Type, so it opens no Cases.'
-          : 'Part of this role is missing, so it may not work as intended.'
+          ? 'Not tied to a Case Type, so it opens no Cases.'
+          : 'Part of this role is missing.'
       ),
     refusal && h('p', { className: 'cora-access-blocked' }, refusal),
     h(
@@ -119,7 +119,7 @@ function heldRoleView(role, context) {
           'button',
           {
             type: 'button',
-            className: 'cora-access-submit',
+            className: 'cora-access-submit cora-btn-sm',
             'aria-label': describeChange('grant', role, personName, caseTypes)
               .imperative,
             onclick: () => context.onComplete(role),
@@ -130,7 +130,7 @@ function heldRoleView(role, context) {
         'button',
         {
           type: 'button',
-          className: 'cora-btn-secondary cora-access-remove',
+          className: 'cora-btn-secondary cora-btn-sm cora-access-remove',
           disabled: refusal !== null,
           'aria-label': describeChange('revoke', role, personName, caseTypes)
             .imperative,
