@@ -56,7 +56,7 @@ export function summaryView(props) {
   // snapshot is the value it displaced, and the Outcome block is told explicitly
   // so it stays a pure view with no Case-row dependency of its own.
   const displacedOutcome = props.caseRow?.amendedOutcome
-    ? props.caseRow.outcomeAtCompletion
+    ? (props.caseRow.outcomeAtCompletion ?? undefined)
     : undefined;
   /** @type {Node[]} */
   const children = [heading];

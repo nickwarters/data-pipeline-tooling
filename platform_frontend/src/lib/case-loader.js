@@ -22,6 +22,7 @@ import {
   summarySectionsFor,
   sectionIds,
 } from '../services/section-access.js';
+import { CASE_STATUS } from './case-statuses.js';
 import { createCaseLifecycleView } from './case-lifecycle-view.js';
 import { resolveSectionLabels } from './section-labels.js';
 import {
@@ -257,8 +258,11 @@ export class CaseLoader {
     // voided after that milestone keeps the snapshot it was stamped with,
     // which is why this asks whether the milestone was reached rather than
     // what the status is now.
+    // A reopened In-progress Case still carries its version, which an ordinary one never does.
     const stampedVersion =
-      reachedReportable(caseRow) && caseRow.questionBankVersion
+      (reachedReportable(caseRow) ||
+        caseRow.status === CASE_STATUS.IN_PROGRESS) &&
+      caseRow.questionBankVersion
         ? caseRow.questionBankVersion
         : null;
 
@@ -284,7 +288,13 @@ export class CaseLoader {
     }
     this.config = config;
     this.sectionLabels = resolveSectionLabels(config);
-    this.bankVersion = bankVersion;
+    // A reopened Case completes again, so it stamps the version it is pinned to.
+    this.bankVersion =
+      caseRow.status === CASE_STATUS.IN_PROGRESS &&
+      stampedVersion &&
+      versionedExport
+        ? stampedVersion
+        : bankVersion;
 
     validateCaptureGroups(config.captureGroups);
     validateGeneralQuestions(config.generalQuestions);
