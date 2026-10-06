@@ -3446,6 +3446,9 @@
 
 .cora-case-support-log-entry {
   display: grid;
+  /* A long logged value wraps inside the entry rather than widening the page. */
+  min-width: 0;
+  overflow-wrap: anywhere;
   gap: var(--cora-space-1);
   padding: var(--cora-space-2) var(--cora-space-3);
   border-left: 3px solid var(--cora-color-border-strong);

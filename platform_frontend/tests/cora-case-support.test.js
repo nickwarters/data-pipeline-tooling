@@ -1419,6 +1419,10 @@ test('reopen: the log is written first, then the Case goes back to In-progress i
     entry.changes.find((change) => change.field === 'hadRemediation'),
     { field: 'hadRemediation', before: true, after: null }
   );
+  assert.deepEqual(
+    entry.changes.find((change) => change.field === 'previousCompletions'),
+    { field: 'previousCompletions', before: 0, after: 1 }
+  );
 
   const view = page.view();
   assert.match(

@@ -78,7 +78,7 @@ export function reopenConsequences(row, dueDate) {
 }
 
 /**
- * Each field the reopen changes, before and after.
+ * Each field the reopen changes, before and after; the history is logged by its length, since the other changes spell out the entry it gains.
  *
  * @param {CaseRow} row
  * @param {Partial<CaseRow>} fields
@@ -87,7 +87,13 @@ export function reopenConsequences(row, dueDate) {
 function reopenedFields(row, fields) {
   const current = /** @type {Record<string, unknown>} */ (row);
   return Object.entries(fields)
-    .map(([field, after]) => ({ field, before: current[field] ?? null, after }))
+    .map(([field, after]) => {
+      if (field !== 'previousCompletions') {
+        return { field, before: current[field] ?? null, after };
+      }
+      const before = row.previousCompletions?.length ?? 0;
+      return { field, before, after: before + 1 };
+    })
     .filter(
       ({ before, after }) => JSON.stringify(before) !== JSON.stringify(after)
     );
