@@ -58,8 +58,8 @@ A Case can be reopened from **`Completed`** only.
 It cannot be reopened from `Actions In Progress`: its Remediation Actions have
 been emailed to the Responsible Party, who may be working them, and the app
 cannot recall an email. Reopening there would leave the frontline acting on
-actions the Reviewer might be about to change. A Case in that state is completed
-first, or corrected with Amend Outcome. Nor from `To-allocate` or `In-progress`
+actions the Reviewer might be about to change. This is a known limitation (see
+below), not a settled rule. Nor from `To-allocate` or `In-progress`
 (nothing to reopen), from `Void` (void stays terminal), or while it has an **open
 Appeal**: an Appeal is a Controls decision about the Outcome being reopened, and
 resolving it against a Case that has moved on would write a verdict over Answers
@@ -167,13 +167,21 @@ says so.
   It was dropped: the column has to be provisioned by hand on every Cases list in
   every environment before the pipeline that names it deploys, and the Support
   Log already records the same values.
-- **Reopening `Actions In Progress`.** In the app the frontline would lose the
-  Case while it was reopened (4), but actions already emailed would still be
-  worked against a Case the Reviewer was changing.
 - **Not clearing the stamps.** Leaving `reportableAt` and `completedAt` set on an
   `In-progress` Case would keep it in completed counts while it is being
   corrected, and every reader that asks "has this reached the milestone" by its
   stamps would answer wrongly.
+
+## Known limitation: Cases with actions out
+
+A Case in `Actions In Progress` cannot be reopened. This is a limitation of this
+decision, not a rule: a later need to correct such a Case is expected, and adding
+it is left open until it has been thought through. In the app the frontline
+would lose the Case while it was reopened (4), but actions already emailed
+would still be worked against a Case the Reviewer was changing, so whatever adds
+it has to say what happens to those actions and how the Responsible Party is
+told. Until then such a Case is completed first, or corrected with Amend
+Outcome.
 
 ## What this supersedes
 
