@@ -158,27 +158,6 @@
  */
 
 /**
- * One Previous Completion: the stamps a Maintainer's Reopen set aside, appended oldest first and never edited.
- *
- * @typedef {{
- * reopenedAt: string,
- * reopenedBy: string,
- * reason: string,
- * fromStatus: string,
- * reportableAt: string | null,
- * completedAt: string | null,
- * outcomeAtCompletion: string | null,
- * hadRemediation: boolean | null,
- * effectiveOutcome: string | null,
- * effectiveHadRemediation: boolean | null,
- * outcomeOverridden: boolean | null,
- * questionBankVersion: string | null,
- * remediationDueDate: string | null,
- * amendedOutcome: AmendedOutcome | null
- * }} PreviousCompletion
- */
-
-/**
  * A Case row. The lifecycle is `In-progress → Actions In Progress → Completed`;
  * `reportableAt` is stamped at the **reportable** milestone (Send Actions, or
  * Complete Case on the no-actions path), where the Answers freeze and the
@@ -265,7 +244,6 @@
  * outcomeOverridden?: boolean | null,
  * amendedOutcome?: AmendedOutcome | null,
  * appeals?: Appeal[],
- * previousCompletions?: PreviousCompletion[],
  * responsiblePartyManager?: string | null,
  * dueDate?: string | null,
  * relatedDate?: string | null,

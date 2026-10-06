@@ -199,7 +199,7 @@ test('HttpSharePointClient: patchCase writes mutable CaseRow fields to SharePoin
   });
 });
 
-test('HttpSharePointClient: patchCase writes the reopen history as a JSON blob and clears the live stamps to null', async () => {
+test('HttpSharePointClient: patchCase clears the completion stamps a reopen sets aside to null', async () => {
   const { fetch, calls } = makeFetch([
     {
       when: (c) => c.url.endsWith('/_api/contextinfo'),
@@ -223,13 +223,11 @@ test('HttpSharePointClient: patchCase writes the reopen history as a JSON blob a
     webUrl: WEB_URL,
     fetchImpl: fetch,
   });
-  const history = [{ reopenedAt: '2026-10-05T12:00:00.000Z', reason: 'Why.' }];
 
   await client.patchCase(
     'case-1',
     {
       status: 'In-progress',
-      previousCompletions: /** @type {any} */ (history),
       reportableAt: null,
       completedAt: null,
       outcomeAtCompletion: null,
@@ -247,7 +245,6 @@ test('HttpSharePointClient: patchCase writes the reopen history as a JSON blob a
   const patch = calls.find((c) => c.method === 'PATCH');
   assert.deepEqual(JSON.parse(String(patch?.body)), {
     Status: 'In-progress',
-    PreviousCompletions: JSON.stringify(history),
     ReportableAt: null,
     CompletedAt: null,
     OutcomeAtCompletion: null,

@@ -172,9 +172,6 @@ class CaseVersion:
     conversation: str
     appeals: str
     amended_outcome: str
-    # The completions a Maintainer's Reopen set aside, oldest first. Landed as
-    # text like the other blobs; gold does not republish it.
-    previous_completions: str
     details: str
 
 

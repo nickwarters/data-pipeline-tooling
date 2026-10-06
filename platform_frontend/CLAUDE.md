@@ -478,9 +478,9 @@ src/
                                   #   group, the pure form view, and the logged, If-Match guarded write
       unassign.js                 # the Un-assign action: In-progress only, the pure form view, and the
                                   #   logged write that returns the Case to To-allocate
-      reopen.js                   # the Reopen action: Completed or Actions In Progress only, the preview of
-                                  #   what it does to this Case, and the logged write that returns it to
-                                  #   In-progress, keeping the completion as a Previous Completion
+      reopen.js                   # the Reopen action: Completed only, the preview of what it does to
+                                  #   this Case, and the logged write that returns it to In-progress,
+                                  #   the Support Log keeping the completion stamps it clears
       form-parts.js               # the reason field and submit/cancel footer every action form shares
     cora-access.js                # store-driven #/access slice, Maintainers only: find a person,
                                   #   show the internal roles they hold, give or remove one with a

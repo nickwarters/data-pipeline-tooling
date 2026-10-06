@@ -44,8 +44,8 @@ hours are decimal (a three-hour hold is `0.125` days), rounded to three places.
 **4. A reopened Case is counted at its current state.** A Maintainer's Reopen
 returns a Reportable Case to `In-progress` and clears the stamps the milestone
 wrote (`reportable_at`, `completed_at`, `outcome_at_completion`,
-`had_remediation`, the `effective_*` columns), keeping them in the Case's
-`PreviousCompletions` history, which gold does not publish. Every table here reads
+`had_remediation`, the `effective_*` columns); what they held is kept in the
+Support Log, not on the Case. Every table here reads
 each Case's latest state, so a reopened Case leaves every Reportable and
 Completed count until it is sent or completed again, and then counts once, on
 its new date; the earlier completion is not counted a second time and not

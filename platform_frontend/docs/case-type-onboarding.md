@@ -68,12 +68,6 @@ edit does, and a full dev-harness verification tour — see
       nothing without the note; without `VoidedAt` indexed, the manager's void
       report reads the whole list. `VoidedAt` can only be indexed on an empty list, so on a list
       already past the threshold the report is served unindexed.
-- [ ] **On every existing `Cases-{slug}` list, in both prod and UAT**: add
-      `PreviousCompletions` (multiple lines of text, plain, **not** indexed). A
-      Maintainer's Reopen writes it, and without it the Reopen's write fails. Add
-      it **before** the data pipeline that lists it is deployed: the feed names
-      every column it reads, so a list missing one fails the poll. Order: column,
-      then pipeline migrations and deploy, then frontend.
 - [ ] Before enabling allocation on a list that already contains Cases,
       backfill every unset `OnHold` value to **No**. The app-wide capacity count
       totals only `In-progress` Cases with `OnHold = No` across all Case Type
@@ -144,11 +138,10 @@ lead with an indexed predicate.
 | `Conversation`                                          | Multiple lines of text (JSON blob)                                                    |         | Conversation messages.                                                                                                                                                                                                                                                                                                                                          |
 | `Appeals`                                               | Multiple lines of text (JSON blob)                                                    |         | Appeal records; additive, never mutates the frozen Case.                                                                                                                                                                                                                                                                                                        |
 | `AmendedOutcome`                                        | Multiple lines of text (JSON blob)                                                    |         | Case-level Amended Outcome record.                                                                                                                                                                                                                                                                                                                              |
-| `PreviousCompletions`                                   | Multiple lines of text (JSON blob)                                                    |         | The Previous Completions a Maintainer's Reopen set aside, oldest first; app-written, additive, never edited. Not indexed. **Must exist on every list before the data pipeline is deployed**: a missing listed column fails its poll.                                                                                                                            |
 | `Details`                                               | Multiple lines of text (JSON blob)                                                    |         | Case Details values keyed by the Case Type's `detailFields[].key`; read-only.                                                                                                                                                                                                                                                                                   |
 
 The JSON-blob columns (`Answers`, `Conversation`, `Appeals`, `AmendedOutcome`,
-`PreviousCompletions`, `Details`) are **deliberately not indexed and never queried** — reason-defining
+`Details`) are **deliberately not indexed and never queried** — reason-defining
 data is hoisted onto the flag/date columns above precisely so live reads never
 have to scan a blob.
 

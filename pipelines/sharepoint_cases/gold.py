@@ -133,14 +133,6 @@ AMENDED_OUTCOME_FIELDS = {
 # the only place a malformed blob is recoverable.
 DETAIL_BLOB_COLUMNS = ("answers", "conversation", "appeals", "details")
 
-# A sixth blob with no normalised home yet, dropped from case_current for the
-# same reason as the others: previous_completions is the history of completions
-# a Reopen set aside, and nothing measures reopens, so a Detail Table for it
-# would be built for no reader. Silver keeps it as landed text, so a later
-# Detail Table can be built from the full history without re-polling. The live
-# stamps beside it describe the *current* completion only.
-UNPUBLISHED_BLOB_COLUMNS = ("previous_completions",)
-
 AS_OF_COLUMN = "as_of_utc"
 # The pair a Detail row's semi-join keys on.
 WINNER_COLUMNS = (CASE_ID_COLUMN, "source_observation_id")
@@ -519,8 +511,8 @@ def to_gold_case_current(
     malformed blob in a *losing* observation cannot abort the rebuild.
 
     No raw blob column is republished: the flatten consumes
-    ``amended_outcome``, and ``DETAIL_BLOB_COLUMNS`` and
-    ``UNPUBLISHED_BLOB_COLUMNS`` are dropped -- see the comments there for why.
+    ``amended_outcome``, and ``DETAIL_BLOB_COLUMNS`` are dropped -- see the
+    comment there for why.
     """
     at = f"gold:{CURRENT_TABLE}"
     data = read(reader, name=f"{at}:read")
@@ -542,9 +534,7 @@ def to_gold_case_current(
         name=f"{at}:flatten-amended-outcome",
     )
     data = transform(
-        DropColumns([*DETAIL_BLOB_COLUMNS, *UNPUBLISHED_BLOB_COLUMNS]),
-        data,
-        name=f"{at}:drop-blobs",
+        DropColumns(list(DETAIL_BLOB_COLUMNS)), data, name=f"{at}:drop-blobs"
     )
     data = transform(
         Stamp(AS_OF_COLUMN, as_of.isoformat()), data, name=f"{at}:stamp-as-of"

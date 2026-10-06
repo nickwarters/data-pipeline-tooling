@@ -216,7 +216,6 @@ RAW_FEED_COLUMNS = (
     "Conversation",
     "Appeals",
     "AmendedOutcome",
-    "PreviousCompletions",
     "Details",
     "source_list_name",
     "source_item_id",

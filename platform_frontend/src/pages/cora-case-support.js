@@ -81,7 +81,7 @@ export const SUPPORT_ACTIONS = [
     id: 'reopen',
     title: 'Reopen',
     description:
-      'Return a Reportable Case to In-progress so its Reviewer can correct it, keeping its previous completion as history.',
+      'Return a Completed Case to In-progress so its Reviewer can correct it. The Support Log keeps what it held at completion.',
   },
   {
     id: 'reassign',
@@ -277,14 +277,6 @@ function fact(term, value) {
 }
 
 /**
- * @param {number} count
- * @returns {string}
- */
-function reopenedTimes(count) {
-  return count === 1 ? 'Once' : `${count} times`;
-}
-
-/**
  * @param {CaseSupportRouteState} route
  * @param {CaseRow} row
  * @returns {HTMLElement}
@@ -320,10 +312,7 @@ function caseHeaderView(route, row) {
       ...fact('Due Date', formatDate(row.dueDate)),
       ...fact('Reportable on', formatDate(row.reportableAt)),
       ...fact('Completed on', formatDate(row.completedAt)),
-      ...(row.voidedAt ? fact('Voided on', formatDate(row.voidedAt)) : []),
-      ...(row.previousCompletions?.length
-        ? fact('Reopened', reopenedTimes(row.previousCompletions.length))
-        : [])
+      ...(row.voidedAt ? fact('Voided on', formatDate(row.voidedAt)) : [])
     )
   );
 }
@@ -1071,7 +1060,6 @@ export function createRouteSlice(
                 row,
                 listName: source.listName,
                 reason: form.reason.trim(),
-                reopenedBy: tools.context.chrome.currentUser?.id ?? '',
                 reviewSlaWorkingDays: source.reviewSlaWorkingDays,
                 now,
               }),

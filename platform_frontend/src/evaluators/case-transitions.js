@@ -13,7 +13,6 @@
  * @typedef {import('../sharepoint-client.js').CaseTypeConfig} CaseTypeConfig
  * @typedef {import('../sharepoint-client.js').Answer} Answer
  * @typedef {import('../sharepoint-client.js').OutcomeResult} OutcomeResult
- * @typedef {import('../sharepoint-client.js').PreviousCompletion} PreviousCompletion
  * @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition
  * @typedef {(answers: Record<string, Answer>) => OutcomeResult} ComputeOutcome
  * @typedef {{
@@ -229,42 +228,17 @@ export function reopenedDueDate(
 }
 
 /**
- * Reopen a reportable Case: keep its completion as a Previous Completion, clear the live stamps, return it to In-progress.
+ * Reopen a Completed Case: clear the stamps its completion wrote and return it to In-progress.
  *
- * @param {CaseRow} row the Case as it stands, whose stamps become the history entry
- * @param {{
- *   reopenedBy: string,
- *   reason: string,
- *   reviewSlaWorkingDays?: number,
- *   now?: () => Date,
- * }} input
+ * @param {{ reviewSlaWorkingDays?: number, now?: () => Date }} [input]
  * @returns {Partial<CaseRow>}
  */
-export function buildReopenTransition(
-  row,
-  { reopenedBy, reason, reviewSlaWorkingDays, now = () => new Date() }
-) {
-  const reopenedAt = now().toISOString();
-  /** @type {PreviousCompletion} */
-  const previous = {
-    reopenedAt,
-    reopenedBy,
-    reason,
-    fromStatus: row.status,
-    reportableAt: row.reportableAt ?? null,
-    completedAt: row.completedAt ?? null,
-    outcomeAtCompletion: row.outcomeAtCompletion ?? null,
-    hadRemediation: row.hadRemediation ?? null,
-    effectiveOutcome: row.effectiveOutcome ?? null,
-    effectiveHadRemediation: row.effectiveHadRemediation ?? null,
-    outcomeOverridden: row.outcomeOverridden ?? null,
-    questionBankVersion: row.questionBankVersion ?? null,
-    remediationDueDate: row.remediationDueDate ?? null,
-    amendedOutcome: row.amendedOutcome ?? null,
-  };
+export function buildReopenTransition({
+  reviewSlaWorkingDays,
+  now = () => new Date(),
+} = {}) {
   return {
     status: CASE_STATUS.IN_PROGRESS,
-    previousCompletions: [...(row.previousCompletions ?? []), previous],
     reportableAt: null,
     completedAt: null,
     outcomeAtCompletion: null,
@@ -274,7 +248,7 @@ export function buildReopenTransition(
     outcomeOverridden: null,
     amendedOutcome: null,
     remediationDueDate: null,
-    dueDate: reopenedDueDate(reopenedAt, reviewSlaWorkingDays),
+    dueDate: reopenedDueDate(now().toISOString(), reviewSlaWorkingDays),
     // Nothing is owed to the Responsible Party while the Reviewer corrects the Case.
     ...awaitingFrontlineCleared(),
   };

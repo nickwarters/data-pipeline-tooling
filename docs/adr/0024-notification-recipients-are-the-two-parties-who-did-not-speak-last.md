@@ -92,7 +92,7 @@ or rekeying this one. It was first keyed `(case_id, recipient)`, because
 Reopen ends that: a reopened Case is stamped with a new `reportable_at` when it
 is sent again, so the table is now keyed `(case_id, recipient, reportable_at)`
 and a re-send notifies once more
-([ADR-0058](../../platform_frontend/docs/adr/0058-a-maintainer-can-reopen-a-reportable-case.md)).
+([ADR-0058](../../platform_frontend/docs/adr/0058-a-maintainer-can-reopen-a-completed-case.md)).
 See [`data-dictionary-notifications.md`](../data-dictionary-notifications.md).
 
 `message_at` is the triggering Message's own `posted_at`. A recipient is

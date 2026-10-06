@@ -3,7 +3,6 @@ import { h } from '../../lib/html.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
 import { formatDate } from '../../lib/format-datetime.js';
 import { buildReopenTransition } from '../../evaluators/case-transitions.js';
-import { isReportable } from '../../evaluators/case-lifecycle.js';
 import { openAppealOf } from '../../evaluators/appeal-state.js';
 import { runSupportAction } from '../../services/support-action.js';
 import { formFooterView, reasonFieldView } from './form-parts.js';
@@ -37,8 +36,11 @@ export function reopenBlockedReason(row) {
   if (row.status === CASE_STATUS.VOID) {
     return 'A Void Case cannot be reopened.';
   }
-  if (!isReportable(row.status)) {
-    return 'Only a Case that has been completed or sent for remediation can be reopened.';
+  if (row.status === CASE_STATUS.ACTIONS_IN_PROGRESS) {
+    return 'Its actions are still with the Responsible Party. It can be reopened once it is Completed.';
+  }
+  if (row.status !== CASE_STATUS.COMPLETED) {
+    return 'Only a Completed Case can be reopened.';
   }
   if (openAppealOf(row)) {
     return 'This Case has an open Appeal. Resolve it before reopening the Case.';
@@ -57,16 +59,11 @@ export function reopenConsequences(row, dueDate) {
   const reviewer = row.assignedReviewer || 'its Reviewer';
   return [
     `The Case returns to In-progress with ${reviewer}.`,
-    'The previous completion is kept as history on the Case.',
+    'Its completion dates and Outcome are cleared, and kept in the Support Log.',
     'Every Answer and remediation status is kept.',
     ...(row.amendedOutcome
       ? [
-          'The Amended Outcome is archived with the previous completion and must be amended again after the Case is completed.',
-        ]
-      : []),
-    ...(row.status === CASE_STATUS.ACTIONS_IN_PROGRESS
-      ? [
-          "The Responsible Party's actions were already sent. They will be notified again when the actions are re-sent.",
+          'The Amended Outcome is cleared too, so Controls must amend it again after the Case is completed.',
         ]
       : []),
     `The Due Date restarts at ${formatDate(dueDate)}.`,
@@ -78,7 +75,7 @@ export function reopenConsequences(row, dueDate) {
 }
 
 /**
- * Each field the reopen changes, before and after; the history is logged by its length, since the other changes spell out the entry it gains.
+ * Each field the reopen changes, before and after; the befores are the only record of the completion it clears.
  *
  * @param {CaseRow} row
  * @param {Partial<CaseRow>} fields
@@ -87,27 +84,20 @@ export function reopenConsequences(row, dueDate) {
 function reopenedFields(row, fields) {
   const current = /** @type {Record<string, unknown>} */ (row);
   return Object.entries(fields)
-    .map(([field, after]) => {
-      if (field !== 'previousCompletions') {
-        return { field, before: current[field] ?? null, after };
-      }
-      const before = row.previousCompletions?.length ?? 0;
-      return { field, before, after: before + 1 };
-    })
+    .map(([field, after]) => ({ field, before: current[field] ?? null, after }))
     .filter(
       ({ before, after }) => JSON.stringify(before) !== JSON.stringify(after)
     );
 }
 
 /**
- * Return a reportable Case to In-progress in one guarded write, keeping its completion as history.
+ * Return a Completed Case to In-progress in one guarded write, logging the completion it clears.
  *
  * @param {SharePointClient} client
  * @param {{
  *   row: CaseRow,
  *   listName: string,
  *   reason: string,
- *   reopenedBy: string,
  *   reviewSlaWorkingDays?: number,
  *   now?: () => Date,
  * }} request
@@ -115,14 +105,9 @@ function reopenedFields(row, fields) {
  */
 export function reopenCase(
   client,
-  { row, listName, reason, reopenedBy, reviewSlaWorkingDays, now }
+  { row, listName, reason, reviewSlaWorkingDays, now }
 ) {
-  const fields = buildReopenTransition(row, {
-    reopenedBy,
-    reason,
-    reviewSlaWorkingDays,
-    now,
-  });
+  const fields = buildReopenTransition({ reviewSlaWorkingDays, now });
   return runSupportAction(
     client,
     { row, action: 'reopen', reason, changes: reopenedFields(row, fields) },

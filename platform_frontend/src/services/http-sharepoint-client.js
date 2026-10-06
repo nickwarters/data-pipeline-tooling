@@ -1666,9 +1666,6 @@ function rowFromItem(item, etag) {
     appeals: /** @type {CaseRow['appeals']} */ (
       parseJsonField(item?.Appeals, undefined)
     ),
-    previousCompletions: /** @type {CaseRow['previousCompletions']} */ (
-      parseJsonField(item?.PreviousCompletions, undefined)
-    ),
     dueDate: typeof item?.DueDate === 'string' ? item.DueDate : null,
     relatedDate:
       typeof item?.RelatedDate === 'string' ? item.RelatedDate : null,
@@ -1858,8 +1855,6 @@ function itemFromRow(fields) {
     out.AmendedOutcome = JSON.stringify(fields.amendedOutcome);
   if (fields.appeals !== undefined)
     out.Appeals = JSON.stringify(fields.appeals);
-  if (fields.previousCompletions !== undefined)
-    out.PreviousCompletions = JSON.stringify(fields.previousCompletions);
   if (fields.dueDate !== undefined) out.DueDate = fields.dueDate;
   if (fields.relatedDate !== undefined) out.RelatedDate = fields.relatedDate;
   // The four people — `assignedReviewer`, `responsibleParty` and their two

@@ -261,17 +261,13 @@ Do not proceed past stage 4 unless all of these hold:
       one.
 - [ ] No credential appears in a command line, a parameter, or a committed file.
 - [ ] `PIPELINE_DATA_DIR_PROD` set and resolving.
-- [ ] Every list carries the `PreviousCompletions` column the Maintainer's
-      Reopen writes ([`case-type-onboarding.md`](../platform_frontend/docs/case-type-onboarding.md)).
-      The read names it, so a list without it fails the poll rather than
-      landing a Case without its history.
 - [ ] The dry run at stage 4 produced the columns and row counts you expected.
 - [ ] A backup covers the feed's whole directory **and** the checkpoint.
 
 ### If the `notifications` pipeline is going live alongside this feed
 
 It reads this feed's gold, so it cannot be pointed at a tenant before this one
-is. Three items, all in
+is. Four items, all in
 [`data-dictionary-notifications.md`](data-dictionary-notifications.md):
 
 - [ ] `CASE_LINK_TEMPLATE` in `pipelines/notifications/pipeline.py` has the real
