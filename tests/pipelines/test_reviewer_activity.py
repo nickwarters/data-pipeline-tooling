@@ -109,6 +109,28 @@ def test_aggregate_uses_the_local_calendar_date_and_is_sparse(monkeypatch):
     ]
 
 
+def _activity(*cases: dict[str, object]) -> list[dict[str, object]]:
+    frame = aggregate_reviewer_activity(given_rows(list(cases)).read()).to_pandas()
+    return [
+        {"date": row["reportable_date"], "count": row["count"]}
+        for row in frame.to_dict(orient="records")
+    ]
+
+
+def test_a_reopened_case_drops_out_of_reviewer_activity_until_it_is_completed_again():
+    completed = _case(reportable_at="2026-08-03T10:00:00+00:00")
+    reopened = _case(status="In-progress", reportable_at=None)
+    completed_again = _case(reportable_at="2026-08-05T09:05:00+00:00")
+
+    assert _activity(completed) == [{"date": pd.Timestamp("2026-08-03"), "count": 1}]
+    assert _activity(reopened) == []
+    # Current state, not first completion: the Case counts on the day it was
+    # completed again and no longer on the day it first was.
+    assert _activity(completed_again) == [
+        {"date": pd.Timestamp("2026-08-05"), "count": 1}
+    ]
+
+
 def test_gold_builder_validates_its_aggregate_contract_before_writing():
     writer = RecordingWriter()
 

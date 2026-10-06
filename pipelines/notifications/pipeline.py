@@ -66,10 +66,13 @@ LEDGER_TABLE = "notified"
 LEDGER_KEY = ("case_id", "recipient", "message_at")
 
 # The Reportable-with-remediation trigger's own ledger, a second table rather
-# than a rekeying of the one above: reportable_at is frozen at the milestone and
-# never advances, so a third column here would do no work.
+# than a rekeying of the one above. Keyed on the Case's reportable_at as well as
+# the recipient: a Maintainer's Reopen clears reportable_at, and sending the
+# actions again stamps a new one, so a re-send is a new row and the Responsible
+# Party is told again. A Case that is never reopened keeps one reportable_at for
+# life and is notified once, exactly as before the column joined the key.
 REPORTABLE_LEDGER_TABLE = "notified_reportable"
-REPORTABLE_LEDGER_KEY = ("case_id", "recipient")
+REPORTABLE_LEDGER_KEY = ("case_id", "recipient", "reportable_at")
 
 # A Case whose review is over needs nobody's attention. Mirrors the Sync feed's
 # own terminal statuses.
@@ -156,6 +159,7 @@ _REPORTABLE_PENDING_COLUMNS = (
     "case_id",
     "case_type",
     "source_item_id",
+    "reportable_at",
     "recipient",
     "recipient_login",
     "is_frontline",
@@ -275,7 +279,10 @@ def recipients_of(threads: Dataset, users: Dataset) -> Dataset:
 
 
 def reportable_cases(cases: Dataset) -> Dataset:
-    """Select Cases newly Reportable while carrying remediation.
+    """Select Cases Reportable while carrying remediation.
+
+    A Case reopened and sent again is selected again: it carries a new
+    ``reportable_at``, which is what the ledger it is checked against keys on.
 
     Terminal Cases are excluded: ``had_remediation`` is only set on the Send
     Actions path, which leaves the Case ``Actions In Progress``, so such a Case
@@ -328,6 +335,7 @@ def responsible_party_and_manager_of(cases: Dataset, users: Dataset) -> Dataset:
                 "case_id": record["case_id"],
                 "case_type": record["case_type"],
                 "source_item_id": record["source_item_id"],
+                "reportable_at": record["reportable_at"],
                 "recipient": email,
                 "recipient_login": login,
                 # Both roles this pass selects for are frontline, so the flag is
@@ -431,6 +439,49 @@ def ledger_reader(
         return Dataset.from_pandas(frame.loc[:, list(ledger_key)])
 
     return read
+
+
+def adopted_legacy_ledger_rows(ledger: Dataset, cases: Dataset) -> Dataset:
+    """Give each pre-``reportable_at`` ledger row the ``reportable_at`` it stood for.
+
+    The ledger gained ``reportable_at`` after rows were already in it, and a SQL
+    migration cannot learn the value: it lives on the Case, in another subject's
+    database. Before the column existed a Case's ``reportable_at`` never moved,
+    so a legacy row stands for the one its Case holds *now* -- the milestone the
+    notification was sent for. This returns that stamped row, to be appended, for
+    every legacy ``(case_id, recipient)`` that has no stamped row yet.
+
+    Matching a legacy ``NULL`` against any ``reportable_at`` instead would be
+    simpler and wrong: it would suppress the first re-send of exactly the Cases
+    notified before the change, which are the ones likeliest to be reopened.
+    Once a pair has a stamped row the legacy row is spent and adopts nothing
+    again, so a later re-send is judged on its own ``reportable_at``. A legacy row
+    whose Case holds no ``reportable_at`` now stays unadopted.
+    """
+    frame = ledger.to_pandas()
+    stamped = frame["reportable_at"].notna()
+    spent = frame.loc[stamped, ["case_id", "recipient"]]
+    legacy = frame.loc[~stamped, ["case_id", "recipient"]].drop_duplicates()
+    unspent = legacy.merge(
+        spent, how="left", indicator=True, on=["case_id", "recipient"]
+    )
+    unspent = unspent[unspent["_merge"] == "left_only"].drop(columns="_merge")
+
+    current = cases.to_pandas().loc[:, ["case_id", "reportable_at"]]
+    current = current[current["reportable_at"].fillna("").astype(str).str.strip() != ""]
+    adopted = unspent.merge(current, on="case_id", how="inner")
+    return Dataset.from_pandas(
+        adopted.loc[:, list(REPORTABLE_LEDGER_KEY)].reset_index(drop=True)
+    )
+
+
+def stamped_ledger_rows(ledger: Dataset, adopted: Dataset) -> Dataset:
+    """The ledger's rows that carry a ``reportable_at``, with the adopted ones added."""
+    frame = ledger.to_pandas()
+    frame = frame[frame["reportable_at"].notna()]
+    return Dataset.from_pandas(
+        pd.concat([frame, adopted.to_pandas()], ignore_index=True).drop_duplicates()
+    )
 
 
 # --- the passes -------------------------------------------------------------
@@ -581,11 +632,26 @@ def run(context: RunContext) -> Dataset:
         users,
         ledger_reader(ledger_store, LEDGER_TABLE, LEDGER_KEY),
     )
-    pending_reportable = reportable_notifications(
-        cases,
-        users,
-        ledger_reader(ledger_store, REPORTABLE_LEDGER_TABLE, REPORTABLE_LEDGER_KEY),
+    # Ledger rows written before reportable_at joined the key are given the
+    # one their Case holds now, and recorded as such before anything is judged
+    # against them -- see adopted_legacy_ledger_rows. Recording them is what
+    # makes a later re-send count as new.
+    recorded = ledger_reader(
+        ledger_store, REPORTABLE_LEDGER_TABLE, REPORTABLE_LEDGER_KEY
+    )()
+    adopted = transform(
+        adopted_legacy_ledger_rows, recorded, cases, name="adopt-legacy-ledger"
     )
+    if len(adopted) > 0:
+        write(
+            ledger_store.writer(
+                REPORTABLE_LEDGER_TABLE, AppendOnly(REPORTABLE_LEDGER_KEY)
+            ),
+            adopted,
+            name="write-ledger-adopted",
+        )
+    known = transform(stamped_ledger_rows, recorded, adopted, name="stamped-ledger")
+    pending_reportable = reportable_notifications(cases, users, lambda: known)
 
     # Nobody is owed anything on either trigger: publishing an empty array
     # would put a file in the outbox for the service to drain and find nothing

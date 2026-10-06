@@ -14,6 +14,7 @@ from pipelines.notifications.pipeline import (
     CASE_LINK_TEMPLATE,
     LEDGER_KEY,
     LEDGER_TABLE,
+    REPORTABLE_LEDGER_KEY,
     REPORTABLE_LEDGER_TABLE,
     REPORTABLE_SUBJECT_LINE,
     SUBJECT,
@@ -767,6 +768,7 @@ def test_a_responsible_party_who_is_their_own_manager_collapses_to_one_recipient
                 "case_id": "case-1",
                 "case_type": "complaints",
                 "source_item_id": "42",
+                "reportable_at": REPORTABLE_AT,
                 "responsible_party_name": PARTY,
             }
         ]
@@ -985,3 +987,185 @@ def test_the_privileges_file_and_the_outbox_file_stamp_the_same_instant(
     privileges_stamp = _privilege_files(base_dir)[0].stem.rsplit("_", 1)[1]
 
     assert outbox_stamp == privileges_stamp
+
+
+# --- a Reopen and a second Send Actions -------------------------------------
+
+RESENT_AT = "2026-08-06T09:30:00.000Z"
+
+
+def _seed_legacy_ledger(base_dir: Path, *pairs: tuple[str, str]) -> None:
+    """Rows as the ledger held them before ``reportable_at`` joined its key."""
+    store = medallion(StoreRegistry(base_dir), SUBJECT).gold
+    rows = [
+        {"case_id": case_id, "recipient": recipient, "reportable_at": None}
+        for case_id, recipient in pairs
+    ]
+    store.writer(REPORTABLE_LEDGER_TABLE, Refresh()).write(given_rows(rows).read())
+
+
+def _stamped(base_dir: Path) -> list[tuple[str, str]]:
+    """The ledger's rows that carry a reportable_at, as (recipient, reportable_at)."""
+    return sorted(
+        (row["recipient"], row["reportable_at"])
+        for row in _reportable_ledger(base_dir)
+        if isinstance(row["reportable_at"], str)
+    )
+
+
+def _legacy_rows(base_dir: Path) -> int:
+    return sum(
+        1
+        for row in _reportable_ledger(base_dir)
+        if not isinstance(row["reportable_at"], str)
+    )
+
+
+def test_a_case_sent_again_after_a_reopen_notifies_the_party_and_manager_again(
+    base_dir, users_csv
+):
+    _seed(base_dir, [_case(reportable_at=REPORTABLE_AT, had_remediation=1)], [])
+    _run(base_dir)
+    first = _files(base_dir)
+    assert len(first) == 1
+
+    # The Maintainer reopened the Case and the Reviewer sent the actions again:
+    # the same Case and the same people, a new reportable_at.
+    _seed(base_dir, [_case(reportable_at=RESENT_AT, had_remediation=1)], [])
+    _run(base_dir)
+
+    sent = [path for path in _files(base_dir) if path not in first]
+    assert len(sent) == 1
+    [notification] = json.loads(sent[0].read_text(encoding="utf-8"))
+    assert notification["subject"] == REPORTABLE_SUBJECT_LINE
+    assert sorted(notification["recipients"].split(";")) == sorted(
+        [PARTY_EMAIL, MANAGER_EMAIL]
+    )
+    assert sorted(row["reportable_at"] for row in _reportable_ledger(base_dir)) == [
+        REPORTABLE_AT,
+        REPORTABLE_AT,
+        RESENT_AT,
+        RESENT_AT,
+    ]
+
+
+def test_a_reopened_case_waiting_to_be_sent_again_notifies_nobody(base_dir, users_csv):
+    _seed(base_dir, [_case(reportable_at=REPORTABLE_AT, had_remediation=1)], [])
+    _run(base_dir)
+    notified = _files(base_dir)
+
+    # Reopened: In-progress again, the milestone's stamps cleared.
+    _seed(base_dir, [_case(status="In-progress")], [])
+    result = _run(base_dir)
+
+    assert len(result) == 0
+    assert _files(base_dir) == notified
+
+
+def test_the_resend_is_notified_once_and_a_further_pass_emits_no_file(
+    base_dir, users_csv
+):
+    _seed(base_dir, [_case(reportable_at=REPORTABLE_AT, had_remediation=1)], [])
+    _run(base_dir)
+    _seed(base_dir, [_case(reportable_at=RESENT_AT, had_remediation=1)], [])
+    _run(base_dir)
+    sent = _files(base_dir)
+
+    result = _run(base_dir)
+
+    assert len(result) == 0
+    assert _files(base_dir) == sent
+
+
+def test_a_case_notified_before_the_ledger_carried_reportable_at_is_not_told_again(
+    base_dir, users_csv
+):
+    # The state a deploy finds: the Case was notified under the old key, so its
+    # ledger rows have no reportable_at.
+    _seed(base_dir, [_case(reportable_at=REPORTABLE_AT, had_remediation=1)], [])
+    _seed_legacy_ledger(base_dir, ("case-1", PARTY_EMAIL), ("case-1", MANAGER_EMAIL))
+
+    result = _run(base_dir)
+
+    assert len(result) == 0
+    assert _files(base_dir) == []
+    assert _stamped(base_dir) == sorted(
+        [(MANAGER_EMAIL, REPORTABLE_AT), (PARTY_EMAIL, REPORTABLE_AT)]
+    )
+
+
+def test_a_case_notified_before_the_change_is_told_again_when_it_is_sent_again(
+    base_dir, users_csv
+):
+    # The reason a legacy row is adopted at the first run rather than matched
+    # against any reportable_at: the Cases notified before the change are the
+    # ones most likely to be reopened, and their re-send must still go out.
+    _seed(base_dir, [_case(reportable_at=REPORTABLE_AT, had_remediation=1)], [])
+    _seed_legacy_ledger(base_dir, ("case-1", PARTY_EMAIL), ("case-1", MANAGER_EMAIL))
+    _run(base_dir)
+    assert _files(base_dir) == []
+
+    _seed(base_dir, [_case(reportable_at=RESENT_AT, had_remediation=1)], [])
+    _run(base_dir)
+
+    assert sorted(_recipients(base_dir)) == sorted([PARTY_EMAIL, MANAGER_EMAIL])
+
+
+def test_a_legacy_row_is_adopted_for_a_terminal_case_that_owes_nobody_anything(
+    base_dir, users_csv
+):
+    _seed(
+        base_dir,
+        [_case(status="Completed", reportable_at=REPORTABLE_AT, had_remediation=1)],
+        [],
+    )
+    _seed_legacy_ledger(base_dir, ("case-1", PARTY_EMAIL))
+
+    _run(base_dir)
+
+    assert _files(base_dir) == []
+    assert _stamped(base_dir) == [(PARTY_EMAIL, REPORTABLE_AT)]
+
+
+def test_a_legacy_row_whose_case_holds_no_reportable_at_is_left_as_it_was(
+    base_dir, users_csv
+):
+    _seed(base_dir, [_case(status="In-progress")], [])
+    _seed_legacy_ledger(base_dir, ("case-1", PARTY_EMAIL))
+
+    _run(base_dir)
+
+    assert _stamped(base_dir) == []
+    assert _legacy_rows(base_dir) == 1
+
+
+def test_a_dry_run_adopts_no_legacy_row_but_still_withholds_the_notification(
+    base_dir, users_csv
+):
+    _seed(base_dir, [_case(reportable_at=REPORTABLE_AT, had_remediation=1)], [])
+    _seed_legacy_ledger(base_dir, ("case-1", PARTY_EMAIL), ("case-1", MANAGER_EMAIL))
+
+    result = _run(base_dir, dry_run=True)
+
+    assert len(result) == 0
+    assert _stamped(base_dir) == []
+    assert _legacy_rows(base_dir) == 2
+
+
+def test_re_presenting_a_reportable_ledger_row_is_a_no_op_rather_than_a_conflict(
+    base_dir,
+):
+    store = medallion(StoreRegistry(base_dir), SUBJECT).gold
+    rows = [
+        {"case_id": "case-1", "recipient": PARTY_EMAIL, "reportable_at": REPORTABLE_AT}
+    ]
+
+    for _ in range(2):
+        store.writer(REPORTABLE_LEDGER_TABLE, AppendOnly(REPORTABLE_LEDGER_KEY)).write(
+            given_rows(rows).read()
+        )
+
+    assert [
+        {key: row[key] for key in REPORTABLE_LEDGER_KEY}
+        for row in _reportable_ledger(base_dir)
+    ] == rows

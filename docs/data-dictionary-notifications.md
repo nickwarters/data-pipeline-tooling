@@ -215,11 +215,12 @@ above because the two triggers do not share a natural key.
 | **Table name** | `notified_reportable` |
 | **Subject** | `notifications` (`<base_dir>/notifications/gold.db`) |
 | **Medallion layer** | gold |
-| **Grain** | one row per `(case_id, recipient)` |
+| **Grain** | one row per `(case_id, recipient, reportable_at)` |
 | **Is this a Case Type?** | No — application state |
 | **Reader** | `SqliteReader`, through the namespace `Store` |
-| **Load strategy** | `AppendOnly(("case_id", "recipient"))` |
-| **Written** | *after* the outbox file lands, by a sequencing edge in the graph — the same rule as `notified`, applied independently |
+| **Load strategy** | `AppendOnly(("case_id", "recipient", "reportable_at"))` |
+| **Written** | *after* the outbox file lands, by a sequencing edge in the graph — the same rule as `notified`, applied independently. The one exception is the adoption of legacy rows below, written first |
+| **Migration** | `migrations/notifications/gold/0003_add_reportable_at_to_notified_reportable.sql` adds the nullable `reportable_at` column |
 
 ### Part B — field dictionary
 
@@ -227,15 +228,42 @@ above because the two triggers do not share a natural key.
 |-------|------|----------|-------------|---------|-------------|-------|
 | `case_id` | `str` | No | The Case the notification was about, as gold already carries it. | `9f2c…` | Internal | Not re-derived here; gold's column is used as landed. |
 | `recipient` | `str` | No | The email address told. Keyed by the address rather than the login, because the address is what was actually written into a file. | `b.okafor@example.invalid` | PII | A directory email change therefore re-notifies once — the safe direction. |
+| `reportable_at` | `str` | Yes (legacy rows only) | The Case's `reportable_at` when this recipient was told, as gold carries it. A Case a Maintainer reopens and the Reviewer sends again is stamped with a new `reportable_at`, so the same Case and the same people are owed a fresh notification. | `2026-08-03 10:00:00+00:00` | Internal | Part of the key. A row written before the column existed holds `NULL` until the pipeline adopts it (below); a row this pipeline writes is never `NULL`. |
 
-**No `reportable_at` column, and no timestamp column at all.** Unlike
-`message_at` on the Conversation trigger's table, `reportable_at` is frozen at
-the Reportable milestone and never advances for a given Case — so a Case cannot
-become Reportable a second time, and a third key column would do no work
-distinguishing rows. `(case_id, recipient)` is the whole, truthful key. The row
-is otherwise exactly its key, for the same reason `notified`'s is: the
-append-only comparison spans every non-provenance column, so a non-key value
-would turn a legitimate re-present into an `AppendOnlyConflictError`.
+**`reportable_at` is part of the key, because a Case can become Reportable more
+than once.** A Reopen clears the stamps the milestone wrote and the Reviewer's
+next Send Actions writes a new `reportable_at`, so `(case_id, recipient)` alone
+would treat the re-send as already told and a Responsible Party would never hear
+that actions had been sent again. The ledger judges the `(case_id, recipient,
+reportable_at)` triple, so a re-send notifies once and a further pass does not
+repeat it. A Case that is reopened and not yet sent again has no
+`reportable_at`, matches nothing in the trigger, and notifies nobody. The row is
+otherwise exactly its key, for the same reason `notified`'s is: the append-only
+comparison spans every non-provenance column, so a non-key value would turn a
+legitimate re-present into an `AppendOnlyConflictError`.
+
+**Adoption of legacy rows.** The migration only adds the nullable column: the
+value to put in it lives in `sharepoint_cases` gold, another subject's database,
+which SQL in this subject cannot reach. So the pipeline backfills. On each
+non-dry run, before it judges anything, it takes every ledger row with a `NULL`
+`reportable_at` that has no stamped row for the same `(case_id, recipient)` and
+whose Case now holds a `reportable_at`, and appends a stamped row carrying that
+value. Before this change a Case's `reportable_at` never moved, so the current
+value is the one the legacy row was written against, and the adopted row says
+exactly that. This happens even when nothing else is owed and for a terminal
+Case, so the ledger is brought up to date by the first run after deploy. The
+legacy `NULL` row stays in place, ignored once its stamped successor exists
+(`AppendOnly` never deletes). A legacy row whose Case holds no `reportable_at`
+is left alone, and a dry run adopts nothing.
+
+A `NULL` that simply matched any `reportable_at` was rejected: it would suppress
+the first re-send of exactly the Cases notified before this change, which are the
+ones most likely to be reopened.
+
+**Deploy order.** Deploy this pipeline, and run it once, before the frontend
+release that offers Reopen. The window that remains: a Case reopened and sent
+again before the pipeline's first run after deploy is adopted at its *new*
+`reportable_at` and not notified for that re-send.
 
 ### Part C — Row checks
 
@@ -245,13 +273,17 @@ None. The row is its key; there are no other fields for a rule to relate.
 
 - The first pass reads a table that **does not exist yet**, the same guard as
   `notified`: `Store.columns_of(...)` returning `None` yields an empty
-  two-column Dataset instead of raising.
+  three-column Dataset instead of raising.
+- A database that has the table but not the `reportable_at` column fails the
+  write rather than silently keying on two columns, so the notifications
+  migration must be applied (`python -m cli migrate`) before this pipeline runs.
 - A crash between the outbox write and this ledger write costs a **duplicate
   notification** on the next pass, never a lost one — the same trade-off as
   `notified`, made independently because the two writes are unrelated.
 - The predicate reads `had_remediation`, never `effective_had_remediation`:
-  `had_remediation` is frozen at the Reportable milestone the trigger is about,
-  where `effective_had_remediation` is the later, post-amendment correction.
+  `had_remediation` is stamped at the Reportable milestone the trigger is about
+  (and stamped afresh by each re-send after a Reopen), where
+  `effective_had_remediation` is the later, post-amendment correction.
 - **Accepted cost:** a terminal Case (`Completed`/`Void`) is excluded from
   selection even while carrying remediation. A Case that becomes
   Reportable-with-remediation and reaches a terminal status before the next

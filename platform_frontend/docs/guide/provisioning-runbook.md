@@ -70,6 +70,11 @@ Three things about that schema are provisioning-critical enough to repeat here:
 / `overrides[]` blob — it is gone; corrected reporting flows from
 `AmendedOutcome` into the `Effective*` columns.
 
+Provision `PreviousCompletions` (multiple lines of text, not indexed) on every
+`Cases-{slug}` list before the data pipeline that reads it is deployed: the feed
+lists every column it polls, so a list without it fails the poll. A Maintainer's
+Reopen writes it. See the [Case Type onboarding checklist](../case-type-onboarding.md).
+
 Before enabling allocation on an existing list, backfill every unset `OnHold`
 value to **No**. The app-wide capacity check totals the Reviewer's
 `In-progress` Cases across Case Type lists using `OnHold eq 0`; legacy null

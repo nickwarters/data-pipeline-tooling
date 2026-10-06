@@ -16,6 +16,7 @@ import pytest
 from pipelines.sharepoint_cases.gold import (
     AMENDED_OUTCOME_FIELDS,
     DETAIL_BLOB_COLUMNS,
+    UNPUBLISHED_BLOB_COLUMNS,
 )
 from tests._sharepoint_cases_fixtures import (
     AS_OF,
@@ -145,10 +146,10 @@ def test_current_gold_carries_the_join_key_for_detail_tables():
 AMENDED_COLUMNS = tuple(AMENDED_OUTCOME_FIELDS.values())
 
 
-# The five raw JSON blob columns, which gold does not republish: each one's
-# data lives in its normalised home (the Detail Tables; the amended_* columns),
-# and silver case_version keeps the landed text.
-BLOB_COLUMNS = (*DETAIL_BLOB_COLUMNS, "amended_outcome")
+# The raw JSON blob columns, which gold does not republish: each one's data
+# lives in its normalised home (the Detail Tables; the amended_* columns), or
+# has none yet, and silver case_version keeps the landed text.
+BLOB_COLUMNS = (*DETAIL_BLOB_COLUMNS, *UNPUBLISHED_BLOB_COLUMNS, "amended_outcome")
 
 
 def test_current_gold_republishes_every_silver_column_except_the_blobs():

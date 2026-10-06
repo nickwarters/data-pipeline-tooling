@@ -136,6 +136,7 @@ def synthetic_silver(*, lists: int, cases: int, versions: int) -> pd.DataFrame:
                         "conversation": "[]",
                         "appeals": "[]",
                         "amended_outcome": "",
+                        "previous_completions": "[]",
                         "details": "{}",
                     }
                 )
