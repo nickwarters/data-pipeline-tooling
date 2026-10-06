@@ -280,42 +280,6 @@ test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async (
   assert.equal(row?.overdue, false);
 });
 
-test('HttpSharePointClient: the PreviousCompletions blob reads back as a list, and a row without one has none', async () => {
-  const history = [
-    {
-      reopenedAt: '2026-10-05T12:00:00.000Z',
-      reopenedBy: 'robin',
-      reason: 'Wrong Outcome.',
-      fromStatus: 'Completed',
-      reportableAt: '2026-10-01T09:00:00.000Z',
-      completedAt: '2026-10-01T09:00:00.000Z',
-      outcomeAtCompletion: 'fail',
-      hadRemediation: false,
-      effectiveOutcome: 'fail',
-      effectiveHadRemediation: false,
-      outcomeOverridden: false,
-      questionBankVersion: 'v1',
-      remediationDueDate: null,
-      amendedOutcome: null,
-    },
-  ];
-  const withHistory = readsClient(
-    caseRowResponse({ PreviousCompletions: JSON.stringify(history) })
-  );
-  const without = readsClient(caseRowResponse({}));
-
-  assert.deepEqual(
-    (await withHistory.getCase('case-1', { listName: 'Cases-ExampleReview' }))
-      ?.previousCompletions,
-    history
-  );
-  assert.equal(
-    (await without.getCase('case-1', { listName: 'Cases-ExampleReview' }))
-      ?.previousCompletions,
-    undefined
-  );
-});
-
 test('HttpSharePointClient: a legacy row missing AssignedAt hydrates it as null', async () => {
   // A historical item can omit the value even after the column is provisioned;
   // hydration normalises that omitted property to the mock's explicit-null shape.

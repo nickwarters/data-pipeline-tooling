@@ -1279,13 +1279,12 @@ test('reopen: it cannot be sent without a reason, and lists what it will do to t
   assert.ok(getByRole(page.view(), 'heading', { name: 'Reopen the Case' }));
   const text = page.view().textContent;
   assert.match(text, /returns to In-progress with zara/);
-  assert.match(text, /previous completion is kept as history/);
+  assert.match(text, /Outcome are cleared, and kept in the Support Log/);
   assert.match(text, /Answer and remediation status is kept/);
   assert.match(text, /Due Date restarts at 12\/10\/2026/);
   assert.match(text, /stays at the version the Case was reviewed against/);
   assert.match(text, /leaves the completed counts in reports/);
   assert.doesNotMatch(text, /Amended Outcome/);
-  assert.doesNotMatch(text, /notified again/);
   assert.equal(submit(), true);
   fireEvent(page.view().querySelector('textarea'), 'input', {
     target: { value: '  ' },
@@ -1297,11 +1296,10 @@ test('reopen: it cannot be sent without a reason, and lists what it will do to t
   assert.equal(submit(), false);
 });
 
-test('reopen: the preview names an archived Amended Outcome, the re-send, and a Case with no recorded bank version', () => {
+test('reopen: the preview names a cleared Amended Outcome and a Case with no recorded bank version', () => {
   const page = live({
     row: {
       ...REPORTED,
-      status: CASE_STATUS.ACTIONS_IN_PROGRESS,
       questionBankVersion: undefined,
       amendedOutcome: {
         outcome: 'pass',
@@ -1314,8 +1312,7 @@ test('reopen: the preview names an archived Amended Outcome, the re-send, and a 
   startReopen(page);
 
   const text = page.view().textContent;
-  assert.match(text, /Amended Outcome is archived.*amended again/);
-  assert.match(text, /actions were already sent.*notified again/);
+  assert.match(text, /Amended Outcome is cleared too.*amend it again/);
   assert.match(text, /before Question Bank versions were recorded/);
 });
 
@@ -1373,24 +1370,6 @@ test('reopen: the log is written first, then the Case goes back to In-progress i
   assert.equal(stored?.questionBankVersion, 'v1', 'the pinned version stays');
   assert.equal(stored?.dueDate, '2026-10-12');
   assert.equal(stored?.awaitingResponsibleParty, false);
-  assert.deepEqual(stored?.previousCompletions, [
-    {
-      reopenedAt: '2026-10-05T12:00:00.000Z',
-      reopenedBy: 'user-reviewer',
-      reason: 'Wrong Outcome.',
-      fromStatus: CASE_STATUS.COMPLETED,
-      reportableAt: REPORTED.reportableAt,
-      completedAt: REPORTED.completedAt,
-      outcomeAtCompletion: 'fail',
-      hadRemediation: true,
-      effectiveOutcome: 'fail',
-      effectiveHadRemediation: true,
-      outcomeOverridden: false,
-      questionBankVersion: 'v1',
-      remediationDueDate: '2026-10-08',
-      amendedOutcome: null,
-    },
-  ]);
 
   const [entry] = await page.client.listSupportLog({
     caseType: 'complaints',
@@ -1401,7 +1380,6 @@ test('reopen: the log is written first, then the Case goes back to In-progress i
   const logged = entry.changes.map((change) => change.field);
   for (const field of [
     'status',
-    'previousCompletions',
     'reportableAt',
     'completedAt',
     'outcomeAtCompletion',
@@ -1420,8 +1398,9 @@ test('reopen: the log is written first, then the Case goes back to In-progress i
     { field: 'hadRemediation', before: true, after: null }
   );
   assert.deepEqual(
-    entry.changes.find((change) => change.field === 'previousCompletions'),
-    { field: 'previousCompletions', before: 0, after: 1 }
+    entry.changes.find((change) => change.field === 'completedAt'),
+    { field: 'completedAt', before: REPORTED.completedAt, after: null },
+    'the log is the record of the completion the reopen cleared'
   );
 
   const view = page.view();
@@ -1430,48 +1409,7 @@ test('reopen: the log is written first, then the Case goes back to In-progress i
     /Reopened: the Case is back In-progress with zara\./
   );
   assert.equal(definitionFor(view, 'Status').textContent, 'In-progress');
-  assert.equal(definitionFor(view, 'Reopened').textContent, 'Once');
   assert.equal(view.querySelector('textarea'), null, 'the form has closed');
-});
-
-test('reopen: a Case reopened before keeps every earlier Previous Completion', async () => {
-  const earlier = { reopenedAt: '2026-09-01T00:00:00.000Z', reason: 'First.' };
-  const page = live({ row: REPORTED });
-  await holdStored(page, { ...REPORTED, previousCompletions: [earlier] });
-  assert.equal(definitionFor(page.view(), 'Reopened').textContent, 'Once');
-  reopen(page, 'Second.');
-
-  await submitReopen(page);
-
-  const stored = await storedCase(page);
-  assert.equal(stored?.previousCompletions?.length, 2);
-  assert.deepEqual(stored?.previousCompletions?.[0], earlier);
-  assert.equal(stored?.previousCompletions?.[1].reason, 'Second.');
-  assert.equal(definitionFor(page.view(), 'Reopened').textContent, '2 times');
-});
-
-test('reopen: an Actions In Progress Case can be reopened and stops waiting on the Responsible Party', async () => {
-  const page = live({ row: REPORTED });
-  await holdStored(page, {
-    ...REPORTED,
-    status: CASE_STATUS.ACTIONS_IN_PROGRESS,
-    completedAt: null,
-    awaitingResponsibleParty: true,
-    awaitingSince: '2026-10-01T09:00:00.000Z',
-  });
-  reopen(page, 'Sent in error.');
-
-  await submitReopen(page);
-
-  const stored = await storedCase(page);
-  assert.equal(stored?.status, CASE_STATUS.IN_PROGRESS);
-  assert.equal(stored?.awaitingResponsibleParty, false);
-  assert.equal(stored?.awaitingSince, null);
-  assert.equal(
-    stored?.previousCompletions?.[0].fromStatus,
-    CASE_STATUS.ACTIONS_IN_PROGRESS
-  );
-  assert.equal(stored?.previousCompletions?.[0].completedAt, null);
 });
 
 test('reopen: a reopened Case is not offered to be reopened again', async () => {
@@ -1481,10 +1419,7 @@ test('reopen: a reopened Case is not offered to be reopened again', async () => 
 
   const button = getByRole(page.view(), 'button', { name: 'Reopen' });
   assert.equal(button.disabled, true);
-  assert.match(
-    page.view().textContent,
-    /has been completed or sent for remediation/
-  );
+  assert.match(page.view().textContent, /Only a Completed Case/);
 });
 
 test('reopen: a Case that changed since it was opened is left alone, and the log says so', async () => {
@@ -1529,13 +1464,16 @@ test('reopen: a support log that cannot be written leaves the Case untouched', a
   );
 });
 
-test('reopen: only a Reportable Case without an open Appeal can be reopened, and the card says why not', () => {
+test('reopen: only a Completed Case without an open Appeal can be reopened, and the card says why not', () => {
   /** @type {Array<[Record<string, unknown>, RegExp | null]>} */
   const cases = [
     [{ status: CASE_STATUS.COMPLETED }, null],
-    [{ status: CASE_STATUS.ACTIONS_IN_PROGRESS }, null],
-    [{ status: CASE_STATUS.TO_ALLOCATE }, /completed or sent for remediation/],
-    [{ status: CASE_STATUS.IN_PROGRESS }, /completed or sent for remediation/],
+    [
+      { status: CASE_STATUS.ACTIONS_IN_PROGRESS },
+      /still with the Responsible Party/,
+    ],
+    [{ status: CASE_STATUS.TO_ALLOCATE }, /Only a Completed Case/],
+    [{ status: CASE_STATUS.IN_PROGRESS }, /Only a Completed Case/],
     [{ status: CASE_STATUS.VOID }, /Void Case cannot be reopened/],
     [
       {

@@ -109,7 +109,7 @@ had no way back to the pot: reassignment needs a named recipient, and choosing
 one by hand moves workload balancing out of allocation. **Case Support**'s
 **Un-assign** is now the one move back into `To-allocate`.
 
-- **Only from `In-progress`.** A Reportable Case has a result and needs Reopen
+- **Only from `In-progress`.** A Completed Case has a result and needs Reopen
   first; `Actions In Progress`, `Completed` and `Void` are never un-assigned.
 - **The pot's invariants hold afterwards.** The same PATCH, under the Case's
   `If-Match`, sets the status and clears the Assigned Reviewer (so

@@ -78,7 +78,7 @@ module says so, and it is the one place to change if that stops being enough.
   dropping a column is a manual, irreversible list-settings action, and an unread column
   costs nothing — but they are no longer provisioning requirements ([ADR-0031]'s index set
   drops from 14 to 13). _A Maintainer's Reopen now exists ([ADR-0058]), and it still does
-  not reuse these columns: it records a `PreviousCompletions` history instead._ Consequence tracked as issue #701: `reopened` was the only reason
+  not reuse these columns: each one is recorded in the Support Log instead._ Consequence tracked as issue #701: `reopened` was the only reason
   gated on `ownedCaseTypes`, so a Case Type Owner holding no other role now has no Action
   Centre reason at all. The dashboard panel is already gated on holding at least one
   reason, so such a viewer sees no panel rather than an empty one.
@@ -404,4 +404,4 @@ reason logic versions with the code and is unit-tested to 100% coverage.
 [ADR-0027]: ./0027-appeal-flow-journeyowner-controls.md
 [ADR-0031]: ./0031-scaling-against-the-list-view-threshold.md
 [ADR-0044]: ./0044-case-type-review-cadence-thresholds-are-data.md
-[ADR-0058]: ./0058-a-maintainer-can-reopen-a-reportable-case.md
+[ADR-0058]: ./0058-a-maintainer-can-reopen-a-completed-case.md

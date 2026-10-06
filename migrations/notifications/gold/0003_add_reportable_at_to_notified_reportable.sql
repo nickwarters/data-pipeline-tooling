@@ -4,7 +4,7 @@
 -- stamped once and never moves. A Maintainer's Reopen clears it and sending the
 -- actions again stamps a new one, so a re-send must be a new row for the
 -- Responsible Party to be told again. See
--- platform_frontend/docs/adr/0058-a-maintainer-can-reopen-a-reportable-case.md.
+-- platform_frontend/docs/adr/0058-a-maintainer-can-reopen-a-completed-case.md.
 --
 -- Rows already in the table stay NULL here: the value is the Case's, held in
 -- another subject's database, which a migration on this one cannot read. The

@@ -10,7 +10,6 @@ import {
   buildVoidTransition,
 } from '../src/evaluators/case-transitions.js';
 import { CASE_STATUS } from '../src/lib/case-statuses.js';
-import { makeCaseRow } from './helpers/fixtures.js';
 import { addWorkingDays } from '../src/lib/add-working-days.js';
 import {
   ENGLAND_WALES_HOLIDAYS,
@@ -337,34 +336,8 @@ test('un-assign returns the Case to the pot with no Reviewer, clock or hold, and
   assert.equal('answers' in fields, false);
 });
 
-const COMPLETED_ROW = makeCaseRow({
-  status: CASE_STATUS.COMPLETED,
-  assignedReviewer: 'zara',
-  reportableAt: '2026-10-01T09:00:00.000Z',
-  completedAt: '2026-10-01T09:00:00.000Z',
-  outcomeAtCompletion: 'fail',
-  hadRemediation: true,
-  effectiveOutcome: 'pass',
-  effectiveHadRemediation: false,
-  outcomeOverridden: true,
-  questionBankVersion: 'v1',
-  remediationDueDate: '2026-10-08',
-  dueDate: '2026-10-05',
-  amendedOutcome: {
-    outcome: 'pass',
-    justification: 'Corrected.',
-    amendedBy: 'controls',
-    amendedAt: '2026-10-02T09:00:00.000Z',
-  },
-  awaitingResponsibleParty: true,
-  awaitingSince: '2026-10-01T09:00:00.000Z',
-});
-
-/** @param {import('../src/sharepoint-client.js').CaseRow} [row] */
-function reopened(row = COMPLETED_ROW) {
-  return buildReopenTransition(row, {
-    reopenedBy: 'robin',
-    reason: 'Wrong Outcome.',
+function reopened() {
+  return buildReopenTransition({
     reviewSlaWorkingDays: 3,
     now: () => new Date('2026-10-05T12:00:00Z'),
   });
@@ -408,54 +381,6 @@ test('reopen leaves the Reviewer, Answers, Question Bank version and conversatio
   }
 });
 
-test('reopen keeps the completion it sets aside as a Previous Completion', () => {
-  const [entry] = reopened().previousCompletions ?? [];
-
-  assert.deepEqual(entry, {
-    reopenedAt: '2026-10-05T12:00:00.000Z',
-    reopenedBy: 'robin',
-    reason: 'Wrong Outcome.',
-    fromStatus: CASE_STATUS.COMPLETED,
-    reportableAt: '2026-10-01T09:00:00.000Z',
-    completedAt: '2026-10-01T09:00:00.000Z',
-    outcomeAtCompletion: 'fail',
-    hadRemediation: true,
-    effectiveOutcome: 'pass',
-    effectiveHadRemediation: false,
-    outcomeOverridden: true,
-    questionBankVersion: 'v1',
-    remediationDueDate: '2026-10-08',
-    amendedOutcome: COMPLETED_ROW.amendedOutcome,
-  });
-});
-
-test('a second reopen appends to the history rather than replacing it', () => {
-  const first = reopened().previousCompletions ?? [];
-  const second = reopened({
-    ...COMPLETED_ROW,
-    previousCompletions: first,
-    reportableAt: '2026-10-09T09:00:00.000Z',
-  }).previousCompletions;
-
-  assert.equal(second?.length, 2);
-  assert.deepEqual(second?.[0], first[0]);
-  assert.equal(second?.[1].reportableAt, '2026-10-09T09:00:00.000Z');
-});
-
-test('reopening an Actions In Progress Case records that it had not completed', () => {
-  const [entry] =
-    reopened({
-      ...COMPLETED_ROW,
-      status: CASE_STATUS.ACTIONS_IN_PROGRESS,
-      completedAt: null,
-      amendedOutcome: null,
-    }).previousCompletions ?? [];
-
-  assert.equal(entry.fromStatus, CASE_STATUS.ACTIONS_IN_PROGRESS);
-  assert.equal(entry.completedAt, null);
-  assert.equal(entry.amendedOutcome, null);
-});
-
 test('reopen restarts the Due Date from the review SLA and stops waiting on the Responsible Party', () => {
   const fields = reopened();
 
@@ -468,9 +393,7 @@ test('reopen restarts the Due Date from the review SLA and stops waiting on the 
 });
 
 test('reopen uses the framework review SLA when the Case Type declares none', () => {
-  const fields = buildReopenTransition(COMPLETED_ROW, {
-    reopenedBy: 'robin',
-    reason: 'Wrong Outcome.',
+  const fields = buildReopenTransition({
     now: () => new Date('2026-10-05T12:00:00Z'),
   });
 
@@ -482,14 +405,4 @@ test('reopen uses the framework review SLA when the Case Type declares none', ()
       ENGLAND_WALES_HOLIDAYS
     )
   );
-});
-
-test('a Case with no snapshot fields reopens with nulls in its history rather than gaps', () => {
-  const [entry] =
-    reopened(makeCaseRow({ status: CASE_STATUS.COMPLETED }))
-      .previousCompletions ?? [];
-
-  assert.equal(entry.questionBankVersion, null);
-  assert.equal(entry.outcomeAtCompletion, null);
-  assert.equal(entry.reportableAt, null);
 });

@@ -2,14 +2,11 @@
 
 Reporting reads each Case's latest observation, so reopening moves the Case out
 of every completed count until it is completed again, and the second completion
-is the date it then counts on. The history of what was set aside rides in the
-``PreviousCompletions`` blob, which silver keeps as landed text and gold does
-not republish.
+is the date it then counts on. What the Reopen set aside is kept in the
+Support Log, not on the Case row.
 """
 
 from __future__ import annotations
-
-import json
 
 import pandas as pd
 
@@ -31,27 +28,6 @@ from tools.store import StoreRegistry
 FIRST_COMPLETION = "2026-08-03T10:00:00Z"
 SECOND_COMPLETION = "2026-08-05T09:05:00Z"
 
-PREVIOUS_COMPLETIONS = json.dumps(
-    [
-        {
-            "reopenedAt": "2026-08-04T08:45:00.000Z",
-            "reopenedBy": "robin",
-            "reason": "The Outcome was wrong.",
-            "fromStatus": "Completed",
-            "reportableAt": FIRST_COMPLETION,
-            "completedAt": FIRST_COMPLETION,
-            "outcomeAtCompletion": "fail",
-            "hadRemediation": False,
-            "effectiveOutcome": "fail",
-            "effectiveHadRemediation": False,
-            "outcomeOverridden": False,
-            "questionBankVersion": "v1",
-            "remediationDueDate": None,
-            "amendedOutcome": None,
-        }
-    ]
-)
-
 COMPLETED = item(
     Status="Completed",
     Modified="2026-08-03T10:00:00Z",
@@ -70,7 +46,6 @@ REOPENED = item(
     Modified="2026-08-04T08:45:00Z",
     **{"odata.etag": '"4"'},
     QuestionBankVersion="v1",
-    PreviousCompletions=PREVIOUS_COMPLETIONS,
 )
 COMPLETED_AGAIN = item(
     Status="Completed",
@@ -84,7 +59,6 @@ COMPLETED_AGAIN = item(
     EffectiveHadRemediation=False,
     OutcomeOverridden=False,
     QuestionBankVersion="v1",
-    PreviousCompletions=PREVIOUS_COMPLETIONS,
 )
 
 
@@ -126,20 +100,3 @@ def test_a_reopened_case_leaves_the_completed_counts_and_lands_on_its_new_date(
     assert again["case_count"] == 1
     [case] = read_rows(med.gold, CURRENT_TABLE)
     assert pd.Timestamp(case["reportable_at"]) == pd.Timestamp(SECOND_COMPLETION)
-
-
-def test_the_history_of_completions_lands_in_silver_and_stays_out_of_gold(tmp_path):
-    client = FakeListClient(
-        pd.DataFrame([REOPENED]), server_now=SERVER_NOW, advance=NEXT_POLL
-    )
-    context = RunContext(base_dir=tmp_path, pipeline=FEED_NAME)
-    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
-
-    run(context, client=client, case_lists=(COMPLAINTS,))
-
-    [raw] = read_rows(med.raw, "case_observation")
-    assert raw["PreviousCompletions"] == PREVIOUS_COMPLETIONS
-    [silver] = read_rows(med.silver, "case_version")
-    assert silver["previous_completions"] == PREVIOUS_COMPLETIONS
-    [case] = read_rows(med.gold, CURRENT_TABLE)
-    assert "previous_completions" not in case
