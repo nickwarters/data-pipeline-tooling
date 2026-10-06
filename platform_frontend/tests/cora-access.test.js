@@ -227,7 +227,7 @@ test('access: a Reviewer with no Case Type is flagged and can only be removed', 
 
   const view = page.view();
   assert.match(view.textContent, /Reviewer \(no Case Type\)/);
-  assert.match(view.textContent, /not tied to a Case Type/);
+  assert.match(view.textContent, /Not tied to a Case Type/);
   assert.equal(
     queryAllByRole(view, 'button', { name: /^Give Lone/ }).length,
     0,
