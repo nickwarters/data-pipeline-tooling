@@ -478,6 +478,9 @@ src/
                                   #   group, the pure form view, and the logged, If-Match guarded write
       unassign.js                 # the Un-assign action: In-progress only, the pure form view, and the
                                   #   logged write that returns the Case to To-allocate
+      reopen.js                   # the Reopen action: Completed or Actions In Progress only, the preview of
+                                  #   what it does to this Case, and the logged write that returns it to
+                                  #   In-progress, keeping the completion as a Previous Completion
       form-parts.js               # the reason field and submit/cancel footer every action form shares
     cora-access.js                # store-driven #/access slice, Maintainers only: find a person,
                                   #   show the internal roles they hold, give or remove one with a
@@ -629,7 +632,9 @@ src/
     case-transitions.js         # THE PATCH fields each lifecycle transition writes, as pure builders.
                                 #   Its own module because it needs action-centre-flags, which reaches
                                 #   section-access, which reads case-lifecycle — putting these there
-                                #   would close the cycle that module was carved out to break
+                                #   would close the cycle that module was carved out to break. Includes
+                                #   the Maintainer's Reopen, the one builder that clears the completion
+                                #   stamps instead of writing them
     amended-outcome.js
     answer-remediation.js        # leaf: what remediation an Answer carries — no applicability/failure deps (#499)
     appeal-state.js              # openAppealOf(): THE definition of "the Appeal still awaiting a

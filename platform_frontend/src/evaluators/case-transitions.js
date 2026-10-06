@@ -13,6 +13,7 @@
  * @typedef {import('../sharepoint-client.js').CaseTypeConfig} CaseTypeConfig
  * @typedef {import('../sharepoint-client.js').Answer} Answer
  * @typedef {import('../sharepoint-client.js').OutcomeResult} OutcomeResult
+ * @typedef {import('../sharepoint-client.js').PreviousCompletion} PreviousCompletion
  * @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition
  * @typedef {(answers: Record<string, Answer>) => OutcomeResult} ComputeOutcome
  * @typedef {{
@@ -29,6 +30,7 @@ import { addWorkingDays } from '../lib/add-working-days.js';
 import {
   ENGLAND_WALES_HOLIDAYS,
   REMEDIATION_SLA_WORKING_DAYS,
+  REVIEW_SLA_WORKING_DAYS,
 } from '../config/working-days.js';
 // The one definition of "this Case carries remediation": the Remediation
 // Section has ≥1 row. Deliberately catalogue-aware — see `hasTrackableRemediation`.
@@ -205,5 +207,75 @@ export function buildUnassignTransition() {
     dueDate: null,
     onHold: false,
     placedOnHoldAt: null,
+  };
+}
+
+/**
+ * The date a reopened Case's review clock restarts at, the review SLA from the moment it was reopened.
+ *
+ * @param {string} reopenedAt
+ * @param {number} [reviewSlaWorkingDays]
+ * @returns {string}
+ */
+export function reopenedDueDate(
+  reopenedAt,
+  reviewSlaWorkingDays = REVIEW_SLA_WORKING_DAYS
+) {
+  return addWorkingDays(
+    reopenedAt,
+    reviewSlaWorkingDays,
+    ENGLAND_WALES_HOLIDAYS
+  );
+}
+
+/**
+ * Reopen a reportable Case: keep its completion as a Previous Completion, clear the live stamps, return it to In-progress.
+ *
+ * @param {CaseRow} row the Case as it stands, whose stamps become the history entry
+ * @param {{
+ *   reopenedBy: string,
+ *   reason: string,
+ *   reviewSlaWorkingDays?: number,
+ *   now?: () => Date,
+ * }} input
+ * @returns {Partial<CaseRow>}
+ */
+export function buildReopenTransition(
+  row,
+  { reopenedBy, reason, reviewSlaWorkingDays, now = () => new Date() }
+) {
+  const reopenedAt = now().toISOString();
+  /** @type {PreviousCompletion} */
+  const previous = {
+    reopenedAt,
+    reopenedBy,
+    reason,
+    fromStatus: row.status,
+    reportableAt: row.reportableAt ?? null,
+    completedAt: row.completedAt ?? null,
+    outcomeAtCompletion: row.outcomeAtCompletion ?? null,
+    hadRemediation: row.hadRemediation ?? null,
+    effectiveOutcome: row.effectiveOutcome ?? null,
+    effectiveHadRemediation: row.effectiveHadRemediation ?? null,
+    outcomeOverridden: row.outcomeOverridden ?? null,
+    questionBankVersion: row.questionBankVersion ?? null,
+    remediationDueDate: row.remediationDueDate ?? null,
+    amendedOutcome: row.amendedOutcome ?? null,
+  };
+  return {
+    status: CASE_STATUS.IN_PROGRESS,
+    previousCompletions: [...(row.previousCompletions ?? []), previous],
+    reportableAt: null,
+    completedAt: null,
+    outcomeAtCompletion: null,
+    hadRemediation: null,
+    effectiveOutcome: null,
+    effectiveHadRemediation: null,
+    outcomeOverridden: null,
+    amendedOutcome: null,
+    remediationDueDate: null,
+    dueDate: reopenedDueDate(reopenedAt, reviewSlaWorkingDays),
+    // Nothing is owed to the Responsible Party while the Reviewer corrects the Case.
+    ...awaitingFrontlineCleared(),
   };
 }
