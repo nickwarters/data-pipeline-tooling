@@ -13,6 +13,10 @@ from __future__ import annotations
 
 import datetime as dt
 import importlib
+import os
+import shlex
+import sqlite3
+import subprocess
 import time
 import uuid
 from collections.abc import Mapping
@@ -20,6 +24,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from framework._internal.source_location import located, raised_at
 from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError
 from framework.run.dry_run import DryRunReport
@@ -43,8 +48,10 @@ __all__ = [
     "FreshnessVerdict",
     "LoadedPipeline",
     "PipelineRunner",
+    "RunRegistryLockedError",
     "Requirement",
     "RunRequirement",
+    "PipelineLoadError",
     "UnknownPipelineError",
     "dry_run_pipeline",
     "evaluate_requirement",
@@ -58,6 +65,38 @@ class UnknownPipelineError(PipelineError):
     """Raised when no domain Pipeline is registered for the requested key."""
 
     category = ErrorCategory.CONFIG
+
+
+class PipelineLoadError(PipelineError):
+    """A pipeline exists at the requested path but failed while being imported.
+
+    Distinct from :class:`UnknownPipelineError` on purpose: "there is no such
+    pipeline" sends an operator hunting for a typo in the path, when the module
+    is right there and one of *its* imports is missing, or its top level raised.
+    The message names the error and the line of the pipeline code it came from;
+    the original is chained as ``__cause__`` for the full traceback.
+    """
+
+    category = ErrorCategory.CODE
+
+
+class RunRegistryLockedError(PipelineError):
+    """The run registry was locked by another process when this run needed it.
+
+    Two pipelines touching different data can still share one run registry
+    (``_registry/runs.db``), so one can find it locked by the other. The run
+    still fails -- a run the registry does not know about is invisible to
+    ``status`` and to every downstream freshness check -- but the message says
+    what state it was left in and, when the pipeline did run, the
+    ``python -m cli ingest-log`` command (``command``) that records it once the
+    lock clears. Ingest is idempotent, so running that command twice is safe.
+    """
+
+    category = ErrorCategory.OPERATIONAL
+
+    def __init__(self, message: str, *, command: str | None = None) -> None:
+        super().__init__(message)
+        self.command = command
 
 
 class FreshnessError(PipelineError):
@@ -156,7 +195,21 @@ def run_pipeline(
     if run_log is None:
         run_log = run_store.log_for(subject or name)
     run_log_path = run_log.path
-    run_registry = run_store.catch_up()
+    label = pipeline_label(subject, name)
+    try:
+        run_registry = run_store.catch_up()
+    except sqlite3.OperationalError as exc:
+        if not _is_lock(exc):
+            raise
+        raise RunRegistryLockedError(
+            f"pipeline {label!r} did not start: the run registry "
+            f"{run_store.registry_path} is locked by another process ({exc}).\n"
+            "Nothing ran and nothing was written. Run the pipeline again once "
+            "the other run has finished."
+        ) from exc
+    ingest = ingest_log_command(
+        root, run_log_path, run_store.log_path_for(subject or name)
+    )
 
     context = RunContext(
         base_dir=root,
@@ -193,7 +246,18 @@ def run_pipeline(
                 params=_diagnostic_params(context.params),
             )
             context.mark_run_summary_recorded()
-        run_registry.ingest(run_log_path)
+        try:
+            run_registry.ingest(run_log_path)
+        except sqlite3.OperationalError as lock:
+            if not _is_lock(lock):
+                raise
+            # The pipeline's own failure is the one to report; the unrecorded
+            # run is a note on it, not a replacement for it.
+            exc.add_note(
+                _unrecorded(
+                    f"pipeline {label!r} failed", run_store, run_log_path, lock, ingest
+                )
+            )
         raise
 
     rows = len(result) if isinstance(result, Dataset) else None
@@ -210,8 +274,60 @@ def run_pipeline(
             params=_diagnostic_params(context.params),
         )
         context.mark_run_summary_recorded()
-    run_registry.ingest(run_log_path)
+    try:
+        run_registry.ingest(run_log_path)
+    except sqlite3.OperationalError as exc:
+        if not _is_lock(exc):
+            raise
+        raise RunRegistryLockedError(
+            _unrecorded(
+                f"pipeline {label!r} finished", run_store, run_log_path, exc, ingest
+            ),
+            command=ingest,
+        ) from exc
     return result
+
+
+def _is_lock(exc: sqlite3.OperationalError) -> bool:
+    """Whether SQLite refused because another connection held the database."""
+    message = str(exc).lower()
+    return "locked" in message or "busy" in message
+
+
+def _unrecorded(
+    outcome: str,
+    run_store: RunStore,
+    run_log_path: Path,
+    exc: sqlite3.OperationalError,
+    command: str,
+) -> str:
+    """Say a run happened but is not in the registry yet, and how to fix that."""
+    return (
+        f"{outcome}, but the run could not be recorded: the run registry "
+        f"{run_store.registry_path} is locked by another process ({exc}).\n"
+        f"The run log {run_log_path} is complete, so nothing was lost and "
+        "nothing needs re-running. Once the other run has finished, record "
+        "this run with:\n"
+        f"  {command}"
+    )
+
+
+def ingest_log_command(base_dir: Path, log_path: Path, default_log: Path) -> str:
+    """The ``python -m cli ingest-log`` line that records ``log_path``.
+
+    A log in its default place (``_runs/<subject>.log``) is named by its
+    subject, as ``cli log`` names it; one a caller redirected elsewhere is named
+    by path. Quoted for the shell it will be pasted into.
+    """
+    args = ["python", "-m", "cli", "ingest-log"]
+    if Path(log_path) == Path(default_log):
+        args.append(Path(log_path).stem)
+    else:
+        args += ["--log-file", os.fspath(log_path)]
+    args += ["--base-dir", os.fspath(base_dir)]
+    if os.name == "nt":
+        return subprocess.list2cmdline(args)
+    return shlex.join(args)
 
 
 @dataclass(frozen=True)
@@ -241,18 +357,24 @@ def load_pipeline(path: str) -> LoadedPipeline:
     Shared by the operator CLI's ``run`` command and the path-addressed
     :class:`~tools.orchestration.Orchestrator`, so both resolve a scheduled or
     requested pipeline by exactly the same rule. Raises
-    :class:`UnknownPipelineError` with an operator-readable message when the
-    module can't be imported or defines no ``run(context)`` callable.
+    :class:`UnknownPipelineError` when there is no pipeline module at the path
+    or it defines no ``run(context)`` callable, and :class:`PipelineLoadError`
+    when the module is there but raises while it is imported -- a missing
+    dependency, a syntax error, a top-level statement that fails.
     """
     address = path.strip("/")
     module_path = address.replace("/", ".") + ".pipeline"
     try:
         module = importlib.import_module(module_path)
-    except ImportError as exc:
+    except ModuleNotFoundError as exc:
+        if not _names_the_pipeline_itself(exc.name, module_path):
+            raise _load_error(path, module_path, exc) from exc
         raise UnknownPipelineError(
             f"no pipeline at {path!r}: cannot import {module_path!r} "
             "(expected pipelines/<name>/pipeline.py, run from the repo root)"
         ) from exc
+    except Exception as exc:
+        raise _load_error(path, module_path, exc) from exc
     handler = getattr(module, "run", None)
     if not callable(handler):
         raise UnknownPipelineError(
@@ -260,6 +382,39 @@ def load_pipeline(path: str) -> LoadedPipeline:
         )
     name = address.split("/")[-1]
     return LoadedPipeline(name, handler, tuple(getattr(module, "UPSTREAMS", ())))
+
+
+def _names_the_pipeline_itself(missing: str | None, module_path: str) -> bool:
+    """Whether a ``ModuleNotFoundError`` is about the pipeline's own module path.
+
+    ``pipelines.nope.pipeline`` missing -- or ``pipelines.nope``, or
+    ``pipelines`` -- means there is no pipeline there. Anything else missing is
+    something the pipeline imports, which means the pipeline *is* there.
+    """
+    if missing is None:
+        return True
+    return module_path == missing or module_path.startswith(missing + ".")
+
+
+def _load_error(path: str, module_path: str, exc: Exception) -> PipelineLoadError:
+    """The located message for a pipeline module that raised while importing."""
+    reason = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+    lines = [
+        f"pipeline {path!r} exists but could not be loaded: importing "
+        f"{module_path!r} raised {reason}"
+    ]
+    if isinstance(exc, SyntaxError) and exc.filename and exc.lineno:
+        # A syntax error is raised by the compiler, not from a frame in the file
+        # it is about, so its location lives on the exception itself.
+        location = located(exc.filename, exc.lineno)
+    else:
+        location = raised_at(exc)
+    if location is not None:
+        where, code = location
+        lines.append(f"raised at {where}")
+        if code:
+            lines.append(f"  {code}")
+    return PipelineLoadError("\n".join(lines))
 
 
 def dry_run_pipeline(

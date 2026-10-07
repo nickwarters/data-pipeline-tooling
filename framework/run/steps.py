@@ -11,13 +11,14 @@ import contextvars
 import re
 import time
 from contextlib import contextmanager
-from typing import Any, Iterator
+from typing import Any, Iterable, Iterator
 
 from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError
 from framework.core.protocols import Processor, Reader, Validator, Writer
 from framework.core.validators import ValidationError
 from framework.run.run_context import RunContext, current_context
+from framework.run.transform_failure import transform_failure
 
 __all__ = [
     "coerce",
@@ -354,7 +355,8 @@ def transform(
     datasets = tuple(_require_dataset(d, "transform") for d in datasets)
     step_name = name or _component_name(processor, "transform")
     with _record(step_name, "Transform", rows_in=len(datasets[0])) as outcome:
-        result = processor(*datasets)
+        with transform_failure(step_name, processor):
+            result = processor(*datasets)
         outcome["rows_out"] = len(result) if isinstance(result, Dataset) else None
         outcome["result"] = result
     _observe(processor, step_name, datasets[0], result)
@@ -464,15 +466,22 @@ def quarantine(
     return good
 
 
-def coerce(schema: type, dataset: Dataset, *, name: str | None = None) -> Dataset:
+def coerce(
+    schema: type,
+    dataset: Dataset,
+    *,
+    key: str | Iterable[str] | None = None,
+    name: str | None = None,
+) -> Dataset:
     """Cast ``dataset``'s declared columns to the dtypes ``schema`` declares.
 
-    Sugar for ``transform(SchemaCoercion(schema), dataset)`` -- the coerce half
-    of the schema adapter, imported for you so a feed needs one import fewer.
+    Sugar for ``transform(SchemaCoercion(schema, key=key), dataset)`` -- the
+    coerce half of the schema adapter, imported for you so a feed needs one
+    import fewer. ``key`` names the rows behind an uncastable value.
     """
     from framework.transform.coercion import SchemaCoercion
 
-    return transform(SchemaCoercion(schema), dataset, name=name or "coerce")
+    return transform(SchemaCoercion(schema, key=key), dataset, name=name or "coerce")
 
 
 def enforce(
@@ -480,6 +489,7 @@ def enforce(
     dataset: Dataset,
     *,
     reject_writer: Writer | None = None,
+    key: str | Iterable[str] | None = None,
     name: str | None = None,
 ) -> Dataset:
     """Coerce to ``schema``, optionally quarantine value-rule breaches, then check it.
@@ -497,12 +507,17 @@ def enforce(
     ``name`` prefixes all three, for a feed that enforces the same schema several
     times in one run and needs the log to say which one -- ``claims:coerce``,
     ``appeals:coerce`` -- rather than ``coerce`` and ``coerce-2``.
+
+    ``key`` -- a column, or several for a composite key; typically the feed's
+    ``NATURAL_KEY`` -- names the rows behind a breach, so a coercion or
+    validation failure says ``case_ref='C-1'`` rather than only the column.
+    Without it a row is named by its 0-based position.
     """
     from framework.core.schema import SchemaValidator
     from framework.transform.quarantine import SchemaValueRulePartitioner
 
     at = f"{name}:" if name else ""
-    dataset = coerce(schema, dataset, name=f"{at}coerce")
+    dataset = coerce(schema, dataset, key=key, name=f"{at}coerce")
     if reject_writer is not None:
         dataset = quarantine(
             SchemaValueRulePartitioner(schema),
@@ -510,4 +525,6 @@ def enforce(
             dataset,
             name=f"{at}quarantine",
         )
-    return validate(SchemaValidator(schema), dataset, name=f"{at}schema_validator")
+    return validate(
+        SchemaValidator(schema, key=key), dataset, name=f"{at}schema_validator"
+    )

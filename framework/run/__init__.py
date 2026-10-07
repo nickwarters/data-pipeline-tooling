@@ -20,9 +20,10 @@ The modules behind this facade (``framework.run.builder``,
 ``framework.run.address``,
 ``framework.run.execution``, ``framework.run.runner``,
 ``framework.run.run_context``, ``framework.run.trace``,
-``framework.run.dry_run``) are internal layout: re-exports here are the
-public contract, the submodule paths are not. The ``RunLog`` / ``RunRegistry``
-types re-exported here live in the sibling ``tools.observability`` package.
+``framework.run.dry_run``, ``framework.run.transform_failure``) are internal
+layout: re-exports here are the public contract, the submodule paths are not.
+The ``RunLog`` / ``RunRegistry`` types re-exported here live in the sibling
+``tools.observability`` package.
 See ``docs/public-api.md``.
 """
 
@@ -34,8 +35,10 @@ from framework.run.runner import (
     FreshnessError,
     FreshnessRequirement,
     LoadedPipeline,
+    PipelineLoadError,
     PipelineRunner,
     Requirement,
+    RunRegistryLockedError,
     UnknownPipelineError,
     dry_run_pipeline,
     load_pipeline,
@@ -54,6 +57,7 @@ from framework.run.steps import (
     write,
     write_trace,
 )
+from framework.run.transform_failure import TransformError
 from tools.observability.run_log import RunLog
 from tools.observability.run_registry import RunRegistry
 
@@ -69,6 +73,7 @@ __all__ = [
     "explain",
     "write_trace",
     "StepError",
+    "TransformError",
     "Pipeline",
     "PipelineGraphError",
     "RunAddress",
@@ -87,4 +92,6 @@ __all__ = [
     "FreshnessRequirement",
     "FreshnessError",
     "UnknownPipelineError",
+    "PipelineLoadError",
+    "RunRegistryLockedError",
 ]

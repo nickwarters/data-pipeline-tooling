@@ -1,4 +1,4 @@
-# The operator CLI — run, orchestrate, migrate, status, runs, log
+# The operator CLI — run, orchestrate, migrate, status, runs, log, ingest-log
 
 The framework is import-only, but it is also runnable as a tool:
 `python -m cli <command>` is the single entry point for both authoring
@@ -7,7 +7,8 @@ operator side is a small command surface for the everyday tasks that would
 otherwise need a hand-written wrapper script: **run** a
 pipeline by its path, **orchestrate** scheduled due work, **migrate** the
 databases they write into, check its **status**,
-list recent **runs**, and inspect a run **log**. It is a thin shell
+list recent **runs**, inspect a run **log**, and **ingest-log** a run the
+registry was too busy to record. It is a thin shell
 over the public `framework.run` execution surface (`run_pipeline`),
 `tools.orchestration` scheduling (`Orchestrator`), and the `RunLog` /
 `RunRegistry` observability seam — everything stays local SQLite + JSONL, with
@@ -824,6 +825,54 @@ actually touched — is in the JSONL but is deliberately not rendered on these
 lines: a glob read carries one entry per matched file. Read the log file itself,
 or the run registry, to answer "which file produced this run?".
 
+## `ingest-log` — record a run the registry could not
+
+```sh
+python -m cli ingest-log [<subject>] [--base-dir DIR] [--env ENV]
+python -m cli ingest-log --log-file PATH [--base-dir DIR] [--env ENV]
+```
+
+Two pipelines that write different databases still share one run registry
+(`<base>/_registry/runs.db`), so one run can find it locked by another. When
+that happens **after** the pipeline did its work, the run fails with
+`RunRegistryLockedError` (`operational`). Its data and its run log are complete;
+only the registry, which `status`, `runs` and every downstream freshness check
+read, has not caught up. The message ends with the exact command to run:
+
+```
+Pipeline run failed [RunRegistryLockedError, operational]
+  pipeline 'orders' finished, but the run could not be recorded: the run registry /data/_registry/runs.db is locked by another process (database is locked).
+  The run log /data/_runs/orders.log is complete, so nothing was lost and nothing needs re-running. Once the other run has finished, record this run with:
+    python -m cli ingest-log orders --base-dir /data
+```
+
+```console
+$ python -m cli ingest-log orders --base-dir /data
+/data/_runs/orders.log: recorded 1 new record(s)
+```
+
+Ingest is incremental and idempotent, so the command records exactly what the
+registry has not seen and running it twice is harmless. With no subject it
+catches up every log under `_runs/`, which is also what the next `run` of *any*
+pipeline does before it starts. So a missed run is recorded eventually even if
+nobody runs the command. Run it anyway when a downstream is waiting on this
+run's freshness. `--log-file` names a run log a caller redirected outside
+`_runs/`; the printed command uses it automatically when that is the case.
+
+Where the lock hits decides the message:
+
+| When | What you get | What to do |
+|------|--------------|------------|
+| before the pipeline starts (catching the registry up) | `RunRegistryLockedError`: `did not start … Nothing ran` | run the pipeline again |
+| after the pipeline finished | `RunRegistryLockedError` with the `ingest-log` command | run the command |
+| after the pipeline itself failed | the pipeline's own error, with the `ingest-log` command as a note beneath it | fix the failure; run the command so `status` shows it |
+
+The run still fails in every case, deliberately: a run the registry does not
+know about is invisible to `status` and to downstream freshness, so reporting it
+as a success would be the worse outcome. Any other SQLite error from the registry
+(a corrupt file, a path that cannot be opened) is not a lock and still surfaces
+raw.
+
 ## Errors
 
 The CLI turns the expected failure modes into a clear message on `stderr` and a
@@ -841,11 +890,13 @@ Pipeline run failed [ValidationError]
 | Situation | Message |
 |-----------|---------|
 | Unknown pipeline path (`run`) | `no pipeline at 'pipelines/nope': cannot import 'pipelines.nope.pipeline' …` |
+| Pipeline there, but its import fails (a missing dependency, a syntax error, a top-level statement that raises) | `pipeline 'pipelines/x' exists but could not be loaded: importing 'pipelines.x.pipeline' raised ModuleNotFoundError: No module named 'openpyxl'`, then `raised at pipelines/x/pipeline.py:6, in <module>` and the source line |
 | Module without a `run` callable | `pipeline 'pipelines/x' (pipelines.x.pipeline) defines no run(context) callable` |
 | Stale upstream | `upstream ingest is stale: latest successful run was …` |
 | Validation failure | the `ValidationError` message from the failing check |
 | No registry yet (`status` / `runs`) | `no run registry under '/data'; run a pipeline first` |
-| No run log (`log`) | `no run log at /data/_runs/<pipeline>.log` |
+| No run log (`log` / `ingest-log`) | `no run log at /data/_runs/<pipeline>.log` |
+| Run registry locked by another run | `RunRegistryLockedError` naming the `ingest-log` command, or `did not start` — see [`ingest-log`](#ingest-log--record-a-run-the-registry-could-not) |
 | Missing calendar file (`orchestrate --calendar`) | `no calendar file at '/etc/holidays.yml'` |
 | Malformed calendar file (`orchestrate --calendar`) | `calendar file '/etc/holidays.yml': holidays[0] must be a YYYY-MM-DD date, got 'not-a-date'` |
 

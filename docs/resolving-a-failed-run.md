@@ -58,12 +58,16 @@ The expected failures are self-describing. Map the message to a cause:
 |---------------|-----------|---------------|
 | `missing required column(s): …` | the source didn't carry an expected column | the feed file / source export |
 | `… expected date but found object` | a dtype the coercer couldn't repair | the source values for that column |
-| `column '…' violates pattern …` / `outside {…}` / `has duplicate value(s)` | a **value rule** failed on real data | the offending rows (the message samples up to five) |
-| `column '…' contains null value(s)` | a `NonNull()` field arrived empty | the source / upstream join |
+| `column '…' violates pattern …` / `outside {…}` / `has duplicate value(s)` | a **value rule** failed on real data | the offending rows (the message samples up to five values, then names up to five rows) |
+| `column '…' contains null value(s) in 2 rows: case_ref='C-2', …` | a `NonNull()` field arrived empty | the named rows in the source / upstream join |
+| `transform step '…' failed: KeyError: …` | a transformer crashed | the `raised at` line it names — the transform code, or the data it didn't expect |
+| `pipeline '…' exists but could not be loaded: …` | the pipeline module raised while being imported — a dependency not installed in this environment, a syntax error, a failing top-level statement | the `raised at` line it names; for `No module named …`, whether that package is installed where the run happens |
+| `no pipeline at '…'` | there is no `pipeline.py` at that path | the path you passed — typo, or not run from the repo root |
 | `upstream ingest is stale: …` | a declared upstream hasn't run recently enough | run the upstream, or relax the window |
 | `write to table '…' in … failed: … has no column named …` | the frame carries a column the target table was never declared with | the migration for that table ([migrations.md](migrations.md)) |
 | `source file … does not exist` / `No files match '…' in directory …` | a CSV reader's source file has not landed (or landed under another name) | the landing directory / the upstream export |
 | `write to table '…' in … failed: database is locked` | something else held the file for longer than the busy timeout | the other writer / the schedule |
+| `pipeline '…' finished, but the run could not be recorded: the run registry … is locked` | another run held `_registry/runs.db`; the data and run log are complete | run the `python -m cli ingest-log …` command the message prints ([operator-cli.md](operator-cli.md#ingest-log--record-a-run-the-registry-could-not)) — do **not** re-run the pipeline |
 
 Each expected failure also carries a **triage category** (`framework.core.ErrorCategory`)
 that tells you *whose problem it is* before you read the message:
@@ -73,12 +77,40 @@ that tells you *whose problem it is* before you read the message:
 | `data` | the feed broke a declared data expectation | `ValidationError`, `CoercionError` | the **data** (source/upstream) |
 | `operational` | data and code are fine; the run conditions aren't | `FreshnessError`, `ForEachPipelineError`, `SqliteWriteError`, `MissingSourceFileError` | the **run/environment** |
 | `config` | the pipeline is mis-addressed, mis-wired, or writing to a shape nothing declares | `UnknownPipelineError`, `MissingTableError`, `MissingColumnError` | the **wiring** (or `migrations/`) |
+| `code` | a transform step's transformer crashed, or a pipeline module failed while being imported | `TransformError`, `PipelineLoadError` | the **pipeline code** (or data it did not anticipate, or a dependency missing from the environment) |
+
+**Which rows?** A row-level breach — a null in a `NonNull()` column, a value-rule
+offender, a row check, a value `SchemaCoercion` cannot cast — names the rows
+that committed it. With `enforce(..., key=NATURAL_KEY)` (or `key=` on
+`SchemaValidator` / `SchemaCoercion`) they are named by that key,
+`case_ref='C-2'`, which you can look up in the source; without one, or for a row
+whose key is itself empty, by its 0-based **position** in the dataset at that
+step (`frame.iloc[3]` in a debugger — not a line number in the source file).
+Five are named, then `and N more`.
 
 A genuine bug (not a `PipelineError`) keeps its traceback **and has no category**
 (`error_category` is null in the log) — that's a code defect to fix, not an
-operator-resolvable data problem. The deliberate non-categories: a source that
-won't open and a transform bug stay raw tracebacks rather than being dressed up
-as expected failures — that is the expected-failure-vs-bug line.
+operator-resolvable data problem. The deliberate non-category: a source that
+won't open stays a raw traceback rather than being dressed up as an expected
+failure — that is the expected-failure-vs-bug line.
+
+A **transformer crash** used to sit on that side of the line too, and no longer
+does ([ADR-0030](adr/0030-a-transformer-crash-is-a-located-transform-error.md)).
+A transformer is the pipeline author's own code, very often an inline lambda,
+and its raw traceback named neither the step nor the lambda — thirty frames of
+pandas ending in `KeyError: 'total'`. It now arrives as:
+
+```
+Pipeline run failed [TransformError, code]
+  transform step 'derive-ratio' failed: KeyError: 'total'
+  transformer: <lambda> at pipelines/orders/pipeline.py:42
+    data = transform(lambda d: d.assign(ratio=d["amount"] / d["total"]), data)
+  raised at pipelines/orders/pipeline.py:42, in <lambda>
+```
+
+`raised at` is the innermost line of *your* code, not the library frame the error
+surfaced in. The full traceback is still there — the original exception is the
+`TransformError`'s `__cause__` — for a debugger or `traceback.print_exception`.
 
 A failed **write** used to sit on that side of the line and no longer does. Not
 because it became more expected, but because SQLite's own complaint names

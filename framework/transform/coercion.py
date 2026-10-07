@@ -18,10 +18,12 @@ exactly as a Reader/Writer/processor does.
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Iterable
 
 import pandas as pd
 from pandas.api import types as pdt
 
+from framework._internal.row_locator import locate_mask, normalise_key
 from framework._internal.schema import _DTYPE_CHECKS, _declared_fields
 from framework.core.dataset import Dataset
 from framework.transform.processors import CoercionError
@@ -64,22 +66,28 @@ class SchemaCoercion:
     offender report and left for the validator, which owns nullability. A value
     that cannot be cast aborts the step with a located
     :class:`~framework.transform.processors.CoercionError` rather than being
-    nulled away.
+    nulled away. The error names the offending values and the rows carrying
+    them — by ``key`` when one is given (a column name, or several for a
+    composite key), else by 0-based position — exactly as the validator does.
     """
 
-    def __init__(self, schema: type) -> None:
+    def __init__(self, schema: type, *, key: str | Iterable[str] | None = None) -> None:
         self._schema = schema
         self._expected = _declared_fields(schema)
+        self._key = normalise_key(key)
 
     def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
+        # Rows are named against the frame as it arrived: a column cast earlier
+        # in the loop must not change how a later breach's key renders.
+        source = frame.copy(deep=False)
         for name, declared in self._expected:
             if name not in frame.columns:
                 continue  # a missing column is the validator's breach to report
             if declared in (date, datetime):
-                frame[name] = self._to_datetime(frame[name], name)
+                frame[name] = self._to_datetime(frame[name], name, source)
             elif declared is bool:
-                frame[name] = self._to_bool(frame[name], name)
+                frame[name] = self._to_bool(frame[name], name, source)
             elif declared in (str, int, float):
                 # Asking the validator's own dtype check what to leave alone
                 # keeps the two halves of the adapter from drifting apart.
@@ -88,11 +96,13 @@ class SchemaCoercion:
                 frame[name] = (
                     self._to_text(frame[name])
                     if declared is str
-                    else self._to_number(frame[name], name, declared)
+                    else self._to_number(frame[name], name, declared, source)
                 )
         return Dataset.from_pandas(frame)
 
-    def _to_datetime(self, series: "pd.Series", name: str) -> "pd.Series":
+    def _to_datetime(
+        self, series: "pd.Series", name: str, source: "pd.DataFrame"
+    ) -> "pd.Series":
         # format="ISO8601", not inference: bare pd.to_datetime infers one format
         # from the first non-null value and then rejects every other spelling of
         # the same ISO instant, so a batch mixing `...T09:00:00Z` with
@@ -104,7 +114,21 @@ class SchemaCoercion:
         try:
             return pd.to_datetime(series, format="ISO8601")
         except (ValueError, TypeError) as exc:
-            raise self._error(name, f"not a parseable date ({exc})") from exc
+            error = self._error(name, f"not a parseable date ({exc})")
+            # Find every offender, not just the first pandas stopped at. Only to
+            # locate them: the column is still refused, never nulled.
+            try:
+                parsed = pd.to_datetime(series, format="ISO8601", errors="coerce")
+                bad = parsed.isna() & ~self._missing(series)
+            except (ValueError, TypeError):
+                raise error from exc
+            if bad.any():
+                error = self._error(
+                    name,
+                    f"not a parseable date: {self._offenders(series[bad])}",
+                    (source, bad),
+                )
+            raise error from exc
 
     def _to_text(self, series: "pd.Series") -> "pd.Series":
         # A whole-number column with any blank cell cannot be held as an integer,
@@ -118,22 +142,28 @@ class SchemaCoercion:
                 pass  # a fraction or an infinity: render the values as they are
         return series.astype("str")
 
-    def _to_number(self, series: "pd.Series", name: str, declared: type) -> "pd.Series":
+    def _to_number(
+        self, series: "pd.Series", name: str, declared: type, source: "pd.DataFrame"
+    ) -> "pd.Series":
         numeric = pd.to_numeric(series, errors="coerce")
         missing = self._missing(series)
-        unparseable = series[numeric.isna() & ~missing]
-        if len(unparseable):
-            joined = self._offenders(unparseable)
-            raise self._error(name, f"not parseable as {declared.__name__}: {joined}")
+        bad = numeric.isna() & ~missing
+        if bad.any():
+            joined = self._offenders(series[bad])
+            raise self._error(
+                name, f"not parseable as {declared.__name__}: {joined}", (source, bad)
+            )
         if declared is float:
             return numeric.astype("float64")
         # `pd.to_numeric` hands back float64, in which a gap is NaN — and `NaN %
         # 1` is NaN, which compares unequal to 0. Without masking the gaps out,
         # every null in the column would be reported as a fractional value.
-        fractional = series[(numeric % 1 != 0) & ~missing]
-        if len(fractional):
-            joined = self._offenders(fractional)
-            raise self._error(name, f"not representable as int: {joined}")
+        bad = (numeric % 1 != 0) & ~missing
+        if bad.any():
+            joined = self._offenders(series[bad])
+            raise self._error(
+                name, f"not representable as int: {joined}", (source, bad)
+            )
         # Nullable "Int64", not numpy int64: a column with a gap cannot be held
         # as the latter, so the gap would have to be invented as a zero.
         # Nullability is the validator's question, exactly as for `bool`.
@@ -142,16 +172,20 @@ class SchemaCoercion:
         except (TypeError, ValueError) as exc:
             raise self._error(name, f"not representable as int ({exc})") from exc
 
-    def _to_bool(self, series: "pd.Series", name: str) -> "pd.Series":
+    def _to_bool(
+        self, series: "pd.Series", name: str, source: "pd.DataFrame"
+    ) -> "pd.Series":
         normalized = series.astype("string").str.strip().str.upper()
         mapped = normalized.map(_BOOL_ENCODINGS)
         # `_missing` inlined: `normalized` is already the stripped text it would
         # recompute, so the bool path makes one pass over the column, not two.
         missing = normalized.isna() | normalized.eq("")
-        unrecognized = series[mapped.isna() & ~missing]
-        if len(unrecognized):
-            joined = self._offenders(unrecognized)
-            raise self._error(name, f"unrecognized boolean encoding(s): {joined}")
+        bad = mapped.isna() & ~missing
+        if bad.any():
+            joined = self._offenders(series[bad])
+            raise self._error(
+                name, f"unrecognized boolean encoding(s): {joined}", (source, bad)
+            )
         # pandas' nullable "boolean", not numpy `bool`: the latter has no null,
         # so a gap would have to be invented as False. The validator's bool
         # dtype check accepts both, and a non-nullable declaration is then
@@ -175,7 +209,18 @@ class SchemaCoercion:
         """
         return ", ".join(repr(v) for v in sorted(set(values.astype(str))))
 
-    def _error(self, name: str, detail: str) -> CoercionError:
+    def _error(
+        self,
+        name: str,
+        detail: str,
+        offenders: "tuple[pd.DataFrame, pd.Series] | None" = None,
+    ) -> CoercionError:
+        """A located coercion failure; ``offenders`` is ``(source frame, mask)``."""
+        where = ""
+        if offenders is not None:
+            source, bad = offenders
+            mask = bad.fillna(False).to_numpy(dtype=bool)
+            where = f" in {locate_mask(source, mask, self._key)}"
         return CoercionError(
-            f"{self._schema.__name__} coercion: column {name!r} {detail}"
+            f"{self._schema.__name__} coercion: column {name!r} {detail}{where}"
         )

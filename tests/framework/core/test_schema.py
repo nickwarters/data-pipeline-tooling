@@ -230,7 +230,9 @@ def test_row_check_collects_every_breaching_row_into_one_message():
         closed=pd.to_datetime(["2026-01-01", "2026-01-02"]),
     )
 
-    with pytest.raises(ValidationError, match=r"opened is after closed \(2 rows\)"):
+    with pytest.raises(
+        ValidationError, match=r"opened is after closed \(2 rows: positions 0, 1\)"
+    ):
         SchemaValidator(CaseWithOrder).validate(Dataset.from_pandas(frame))
 
 
@@ -275,3 +277,19 @@ def test_schema_validator_rejects_an_unsupported_declared_type_early():
     # cryptic failure mid-run), naming the offending field and type.
     with pytest.raises(ValueError, match="payload.*list"):
         SchemaValidator(UnsupportedSchema)
+
+
+def test_row_check_names_each_breaching_row_by_the_declared_key():
+    frame = _ordered_frame(
+        case_ref=pd.Series(["C-1", "C-2", "C-3"], dtype="string"),
+        opened=pd.to_datetime(["2026-03-01", "2026-01-01", "2026-03-02"]),
+        closed=pd.to_datetime(["2026-01-01", "2026-02-01", "2026-01-02"]),
+    )
+
+    with pytest.raises(
+        ValidationError,
+        match=r"opened is after closed \(2 rows: case_ref='C-1', case_ref='C-3'\)",
+    ):
+        SchemaValidator(CaseWithOrder, key="case_ref").validate(
+            Dataset.from_pandas(frame)
+        )

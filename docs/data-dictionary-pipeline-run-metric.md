@@ -76,7 +76,7 @@ table every other operational question joins to.
 | `committed_step_count` | `int` | No | Steps that durably wrote an artifact. |
 | `warn_hit_count` | `int` | No | Warn hits across every record of the run. |
 | `status` | `str` | No | `ok` / `error`: the summary record's, else `error` if any step errored. |
-| `error_category` | `str` | Yes | The first triage category recorded (`data` / `operational` / `config`), else NULL. |
+| `error_category` | `str` | Yes | The first triage category recorded (`data` / `operational` / `config` / `code`), else NULL. |
 | `attempt_number` | `int` | No | Rank by start among runs sharing `logical_run_id` (a run with none is its own group). |
 | `is_latest_attempt` | `bool` | No | Whether no later attempt of the same logical run exists. |
 

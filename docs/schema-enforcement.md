@@ -186,7 +186,7 @@ coercer**: a null is the *absence* of an encoding, so the coercer passes it
 through as `pd.NA` and never reports it as an unrecognized boolean encoding.
 An `Annotated[bool, Nullable()]` column therefore coerces cleanly with its gaps
 intact, while a null in a non-nullable column is reported by `SchemaValidator`
-as the nullability breach it is (`column 'active' contains null value(s)`),
+as the nullability breach it is (`column 'active' contains null value(s) in 1 row: position 3`),
 pointing at the declaration rather than blaming the feed's data. This keeps
 `bool` consistent with every other declared type, which already leaves presence
 to the rules.
@@ -365,8 +365,28 @@ breaches are reported. It joins the same one-message validator output, for
 example:
 
 ```
-CaseA schema: column 'case_ref' contains null value(s)
+CaseA schema: column 'case_ref' contains null value(s) in 2 rows: positions 0, 4
 ```
+
+### Naming the rows behind a breach
+
+Every row-level breach — a null in a `NonNull()` column, a value-rule offender, a
+row check, and a value `SchemaCoercion` cannot cast — names the rows that
+committed it. Hand the validator (or `enforce`, which passes it to both the
+coercion and the validator) the feed's key and they are named by it:
+
+```python
+data = enforce(CaseA, data, reject_writer=rejects, key=NATURAL_KEY)
+# CaseA schema: column 'case_ref' contains null value(s) in 1 row: record_id='R-17'
+SchemaValidator(CaseA, key=("case_type", "item_id"))
+# ... in 2 rows: (case_type='claims', item_id='7'), (case_type='claims', item_id='9')
+```
+
+Without a key — or for a row whose own key is empty, or a key column the frame
+does not carry — a row is named by its **0-based position** in the dataset at that
+step, which is `frame.iloc[n]` in a debugger, not a line of the source file. The
+first five are named, then `and N more`. The key is presentation only: it
+changes no check, and a key column that is missing is not itself a breach.
 
 An empty dataset satisfies `NonNull()` because there are no null values present.
 Declaring both `Nullable()` and `NonNull()` on one field is a schema
@@ -561,10 +581,10 @@ Two properties match the value rules:
   rather than report. This is the per-column guard value rules already get; the
   footprint is what lets it apply per-check.
 - **One message, collected.** Every breaching row joins the validator's single
-  located message, distinct phrases reported with a row count:
+  located message, distinct phrases reported with the rows that hit them:
 
   ```
-  CaseB schema: opened is after closed (2 rows); closed case is missing closed_date (1 row)
+  CaseB schema: opened is after closed (2 rows: positions 0, 3); closed case is missing closed_date (1 row: position 5)
   ```
 
 One property **diverges** — and it's deliberate:

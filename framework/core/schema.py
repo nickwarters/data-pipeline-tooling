@@ -24,13 +24,13 @@ only the dataset's engine-agnostic shape), it inspects column *dtypes* and
 
 from __future__ import annotations
 
-from collections import Counter
 from dataclasses import fields
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterable
 
 if TYPE_CHECKING:
     import pandas as pd
 
+from framework._internal.row_locator import locate_mask, locate_rows, normalise_key
 from framework._internal.schema import (
     _DTYPE_CHECKS,
     _declared_fields,
@@ -74,10 +74,18 @@ class SchemaValidator:
     annotation gives the required type. Extra columns are ignored (the contract
     is the declared fields only). Reports every breach at once in one located
     message, then raises, so an abort names the full problem.
+
+    A row-level breach — a null in a non-null column, a value-rule offender, a
+    row check — also names the rows that committed it. Pass ``key`` (a column
+    name, or several for a composite key — typically the feed's
+    ``NATURAL_KEY``) to name them by that key, ``case_ref='C-1'``; without one,
+    or for a row missing its key, a row is named by its 0-based position in the
+    dataset. Only the first few are named, then a count of the rest.
     """
 
-    def __init__(self, schema: type) -> None:
+    def __init__(self, schema: type, *, key: str | Iterable[str] | None = None) -> None:
         self._schema = schema
+        self._key = normalise_key(key)
         self._expected = _declared_fields(schema)
         self._row_checks = _declared_row_checks(schema)
         self._nullable = _declared_nullability(schema)
@@ -121,8 +129,9 @@ class SchemaValidator:
             if not check(actual):
                 problems.append(f"column {name!r} expected {label} but found {actual}")
                 ill_typed.add(name)
-            elif not self._nullable[name] and frame[name].isna().any():
-                problems.append(f"column {name!r} contains null value(s)")
+            elif not self._nullable[name] and (nulls := frame[name].isna()).any():
+                rows = locate_mask(frame, nulls.to_numpy(dtype=bool), self._key)
+                problems.append(f"column {name!r} contains null value(s) in {rows}")
         # Value rules run on the same frame via the shared traversal, but only
         # over columns that carry the declared dtype — a wrong-typed column's
         # dtype breach is the prior problem to fix, and running e.g. a string rule
@@ -134,7 +143,10 @@ class SchemaValidator:
         for outcome in evaluate_rules(self._schema, frame, skip_columns=ill_typed):
             if outcome.missing_column or not outcome.mask.any():
                 continue
-            problems.append(f"column {outcome.column!r} {outcome.sampled_phrase}")
+            rows = locate_mask(frame, outcome.mask, self._key)
+            problems.append(
+                f"column {outcome.column!r} {outcome.sampled_phrase} in {rows}"
+            )
         # Row checks run last, over the relationship between a row's fields. A
         # check is skipped when any column it spans is missing or ill-typed —
         # the same per-column guard the value rules get, so a broken column
@@ -157,19 +169,18 @@ class SchemaValidator:
         A check whose footprint includes a missing or ill-typed column is
         skipped (its column is the prior problem to fix). For the rest, the
         check runs over every row; distinct breach phrases are reported with the
-        number of rows that hit them, so one message names the full spread.
+        rows that hit them, so one message names the full spread.
         """
         problems: list[str] = []
         for rc in self._row_checks:
             spanned = set(rc.columns)
             if spanned - present or spanned & ill_typed:
                 continue
-            phrases = Counter(
-                phrase
-                for _, row in frame.iterrows()
-                if (phrase := rc.check(row)) is not None
-            )
-            for phrase, count in phrases.items():
-                rows = "row" if count == 1 else "rows"
-                problems.append(f"{phrase} ({count} {rows})")
+            by_phrase: dict[str, list[int]] = {}
+            for position, (_, row) in enumerate(frame.iterrows()):
+                if (phrase := rc.check(row)) is not None:
+                    by_phrase.setdefault(phrase, []).append(position)
+            for phrase, positions in by_phrase.items():
+                rows = locate_rows(frame, positions, self._key)
+                problems.append(f"{phrase} ({rows})")
         return problems
