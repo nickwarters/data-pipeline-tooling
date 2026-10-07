@@ -205,11 +205,18 @@ def test_plan_returns_already_satisfied_when_run_succeeded_today(tmp_path):
 
 
 def test_plan_returns_ready_for_a_same_day_success_that_may_run_again(tmp_path):
-    """The default allows multiple runs, so the plan says the pass will re-run it."""
+    """An item allowing multiple runs plans ready, saying the pass will re-run it."""
     _record_run(tmp_path / "_runs" / "ingest.log", pipeline="ingest")
 
     orchestrator, _ = _orchestrator(
-        PipelineSet("claims", (ScheduledPipeline("pipelines/ingest", Weekdays()),))
+        PipelineSet(
+            "claims",
+            (
+                ScheduledPipeline(
+                    "pipelines/ingest", Weekdays(), allow_multiple_runs=True
+                ),
+            ),
+        )
     )
 
     item = orchestrator.plan(tmp_path, run_date=_DUE_DATE).items[0]

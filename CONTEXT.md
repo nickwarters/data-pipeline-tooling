@@ -596,14 +596,14 @@ A due item whose effective Deadline has passed and which has not yet succeeded
 today. _Here_: overdue items are attempted first, most overdue first. An item
 that already succeeded today exerts no Deadline pressure at all. The ordering
 reads whether an item has run today for that question **only**; the one place it
-decides whether an item runs is an item held to **Once per run date**.
+decides whether an item runs is **Once per run date**.
 
 **Once per run date** (`allow_multiple_runs=False`):
 A scheduled item that a pass skips on a run date it already succeeded on, unless
-the pass is forced. _Here_: opt-in on `ScheduledPipeline`; the default,
-`allow_multiple_runs=True`, lets a polling feed re-run every pass. Only a
-success counts, and `plan()` reports the skip as `already-satisfied`. See
-[ADR-0031](docs/adr/0031-a-scheduled-item-may-opt-into-one-run-per-run-date.md).
+the pass is forced. _Here_: the default for every `ScheduledPipeline`; a polling
+feed declares `allow_multiple_runs=True` to run every pass. Only a success
+counts, and `plan()` reports the skip as `already-satisfied`. See
+[ADR-0031](docs/adr/0031-a-scheduled-item-runs-once-per-run-date-by-default.md).
 
 **Earliest run** (`earliest_run`):
 An optional `"HH:MM"` before which an item is not attempted. _Here_: a per-pass

@@ -52,7 +52,9 @@ def _orchestrator(
                 ScheduledPipeline(
                     "pipelines/once", Weekdays(), allow_multiple_runs=False
                 ),
-                ScheduledPipeline("pipelines/polling", Weekdays()),
+                ScheduledPipeline(
+                    "pipelines/polling", Weekdays(), allow_multiple_runs=True
+                ),
             ),
         ),
     )
@@ -138,8 +140,8 @@ def test_the_plan_says_what_the_second_pass_will_do(tmp_path):
     assert "runs again (forced)" in forced["once"].reason
 
 
-def test_the_limit_is_off_by_default():
-    assert ScheduledPipeline("pipelines/x", Weekdays()).allow_multiple_runs is True
+def test_one_run_per_run_date_is_the_default():
+    assert ScheduledPipeline("pipelines/x", Weekdays()).allow_multiple_runs is False
 
 
 def test_the_plan_and_a_second_pass_agree(tmp_path):

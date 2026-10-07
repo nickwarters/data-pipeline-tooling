@@ -1064,12 +1064,13 @@ raises `FreshnessError`, and `Orchestrator.plan()` is the read-only caller that
 renders it. The two used to hold separate copies that had already drifted apart
 in wording.
 
-An item declaring `allow_multiple_runs=False` is held to one success per run
-date: the pass records it `skipped` once it has succeeded that day, and `plan()`
-reports it `already-satisfied`, unless the pass is forced (`force=True` on
-`run_due_once`, `run_until_complete` and `plan`; `orchestrate --force`). The
-default is `True`, so a polling feed re-runs every pass as before
-([ADR-0031](adr/0031-a-scheduled-item-may-opt-into-one-run-per-run-date.md)).
+A scheduled item is held to one success per run date by default
+(`allow_multiple_runs=False`): the pass records it `skipped` once it has
+succeeded that day, and `plan()` reports it `already-satisfied`, unless the pass
+is forced (`force=True` on `run_due_once`, `run_until_complete` and `plan`;
+`orchestrate --force`). A polling feed declares `allow_multiple_runs=True` to run
+every pass
+([ADR-0031](adr/0031-a-scheduled-item-runs-once-per-run-date-by-default.md)).
 
 Python definitions are canonical. YAML overrides may disable a scheduled item,
 replace its schedule timing, set `allow_multiple_runs`, or override freshness
