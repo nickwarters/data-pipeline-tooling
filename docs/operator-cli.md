@@ -239,14 +239,15 @@ supports `python -m pipelines.reviewer_activity.pipeline --publish-only`.
 
 ```sh
 python -m cli orchestrate [--base-dir DIR] [--env ENV] --app MODULE \
-    [--run-date YYYY-MM-DD] [--once | --loop] [--poll-seconds N] \
+    [--run-date YYYY-MM-DD] [--once | --loop | --plan] [--poll-seconds N] \
     [--calendar FILE]
 ```
 
 Runs the configured `PipelineSet`s for the given run date. `--once` performs one
-due-work pass and is the default when neither mode is named. `--loop` keeps
+due-work pass and is the default when no mode is named. `--loop` keeps
 polling the same run date until work due that day has settled or the idle poll
-limit is reached.
+limit is reached. `--plan` runs nothing: it prints what a pass would do for the
+run date (see [the plan preview](#orchestration-plan-preview--orchestrate---plan)).
 
 A `--app` that names a module which cannot be imported, or which exposes no
 `build_pipeline_sets()`, is a configuration error: it exits non-zero with the
@@ -503,13 +504,23 @@ terms: a weekday schedule names the weekday, a monthly one names the date. It
 used to describe every schedule in weekday language, so a day-of-month schedule
 reported "is not due on monday".
 
-## Orchestration plan preview — `Orchestrator.plan()`
+## Orchestration plan preview — `orchestrate --plan`
 
 Before running `orchestrate`, you can preview what would happen for a given run
-date without executing any pipelines or touching any log file. Call
-`Orchestrator.plan(base_dir, run_date=...)` from Python — it reads the existing
+date without executing any pipelines, writing a run log, or recording an
+orchestration decision. Pass `--plan` in place of `--once` / `--loop`; it takes
+the same `--app`, `--calendar`, `--run-date` and base directory options:
+
+```sh
+python -m cli orchestrate --app pipelines.schedules --env prod --plan \
+    --calendar holidays.yml --run-date 2026-06-23
+```
+
+It prints `Orchestrator.plan(base_dir, run_date=...)`, which reads the existing
 run registry and returns a `PlanResult` whose items describe each scheduled
-pipeline's projected status:
+pipeline's projected status. The command exits 0 whatever the statuses are,
+since a preview reports and does not fail, and it judges `earliest_run` gates
+against the current time of day, as a pass started now would.
 
 | Status | Meaning |
 |--------|---------|
@@ -519,12 +530,16 @@ pipeline's projected status:
 | `already-satisfied` | pipeline already succeeded on the run date |
 | `blocked` | a declared upstream is stale or missing |
 
+The same preview is available from Python:
+
 ```python
 from tools.orchestration import Orchestrator
 
 result = orchestrator.plan("/data", run_date=dt.date(2026, 6, 23))
 print(result)
 ```
+
+Either way the preview reads:
 
 ```
 2026-06-23  claims  claims_ingest         ready              schedule daily is due; due by 09:00 (inherited from claims_reporting)
@@ -583,10 +598,7 @@ items = plan_for_each(
 
 `plan_for_each()` returns one `PlanItem(status="ready")` per source file without
 consulting run history or calling any handler — it is a pure projection of
-planned per-file runs.
-
-> **Note:** CLI dry-run support for the `run` and `orchestrate` commands (passing
-> `--dry-run` / `--plan` on the command line) is a known follow-up.
+planned per-file runs. It has no CLI command.
 
 ## `migrate` — apply the SQL migrations that own the databases' shape
 

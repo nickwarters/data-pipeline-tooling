@@ -673,6 +673,7 @@ repository the `--app` module is `pipelines.schedules`:
 
 ```sh
 python -m cli orchestrate --app pipelines.schedules --base-dir /data --once
+python -m cli orchestrate --app pipelines.schedules --base-dir /data --plan  # preview, runs nothing
 ```
 
 `run` addresses a pipeline by **its location on disk**: `pipelines/ingest` maps
