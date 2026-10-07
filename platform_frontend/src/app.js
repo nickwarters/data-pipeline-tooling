@@ -66,7 +66,10 @@ async function boot() {
   // that Case Type is dropped and named in a banner; the app boots.
   const { caseSources, journeyCaseSources, unavailableCaseTypes } =
     await resolveAppCaseSources(userGroups, capabilities.ownedJourneyCaseTypes);
-  const allocationSources = allocationSourcesFromCaseSources(caseSources);
+  const allocationSources = allocationSourcesFromCaseSources(
+    caseSources,
+    capabilities.listAccessCaseTypes
+  );
 
   const appEl = /** @type {Element} */ (document.getElementById('app'));
   appEl.setAttribute('data-cora-root', '');

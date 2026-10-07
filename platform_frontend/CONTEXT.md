@@ -538,7 +538,9 @@ passes.
 
 **Allocation Capacity**:
 A **Reviewer** may hold at most three non-held **`In-progress` Cases** in total
-across all **Case Types** available to them. The limit is app-wide rather than
+across all the **Case Types** they review. Allocation draws only from the Case Types
+whose `Reviewers - <type>` group the Reviewer is in, never from every list a broad
+role such as Maintainer can read. The limit is app-wide rather than
 configured per Case Type. **`Actions In Progress`** and every other lifecycle
 status do not consume this capacity. The check is intentionally soft: the app
 totals indexed counts from each Case Type list immediately before a claim, then
