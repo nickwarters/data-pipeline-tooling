@@ -146,12 +146,58 @@ test('allocationSourcesFromCaseSources: projects only allocation list identity',
     ]
   );
 
-  const result = allocationSourcesFromCaseSources(caseSources);
+  const result = allocationSourcesFromCaseSources(caseSources, [
+    'complaints',
+    'example-review',
+  ]);
 
   assert.deepEqual(result, [
     { slug: 'complaints', listName: 'Cases-Complaints' },
     { slug: 'example-review', listName: 'Cases-ExampleReview' },
   ]);
+});
+
+test('allocationSourcesFromCaseSources: a Maintainer in one reviewer group draws only from that Case Type', () => {
+  const caseSources = resolveCaseSourcesFromCaseTypes(
+    ['CORA Owner Delegates', 'Reviewers - Complaints'],
+    [
+      {
+        slug: 'complaints',
+        listName: 'Cases-Complaints',
+        displayName: 'Complaints',
+        config: minimalConfig(),
+      },
+      {
+        slug: 'example-review',
+        listName: 'Cases-ExampleReview',
+        displayName: 'Example Review',
+        config: minimalConfig(),
+      },
+    ]
+  );
+  assert.equal(caseSources.length, 2, 'the Maintainer can read every list');
+
+  assert.deepEqual(
+    allocationSourcesFromCaseSources(caseSources, ['complaints']),
+    [{ slug: 'complaints', listName: 'Cases-Complaints' }]
+  );
+});
+
+test('allocationSourcesFromCaseSources: owning a Case Type without reviewing it gives no allocation source', () => {
+  const caseSources = resolveCaseSourcesFromCaseTypes(
+    ['CaseTypeOwner - Complaints'],
+    [
+      {
+        slug: 'complaints',
+        listName: 'Cases-Complaints',
+        displayName: 'Complaints',
+        config: minimalConfig(),
+      },
+    ]
+  );
+  assert.equal(caseSources.length, 1);
+
+  assert.deepEqual(allocationSourcesFromCaseSources(caseSources, []), []);
 });
 
 test('resolveCaseSourcesFromCaseTypes: a Case Type Owner gets only their Case Type source', () => {
@@ -801,7 +847,10 @@ test('resolveAppCaseSources: a broken Case Type cannot leak into any resolved so
     'the working Case Type is still usable'
   );
   assert.deepEqual(
-    allocationSourcesFromCaseSources(context.caseSources).map((s) => s.slug),
+    allocationSourcesFromCaseSources(context.caseSources, [
+      'example-review',
+      'complaints',
+    ]).map((s) => s.slug),
     ['complaints'],
     'allocation cannot draw from the broken Case Type either'
   );

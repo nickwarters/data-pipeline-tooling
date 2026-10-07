@@ -79,13 +79,20 @@ function toCaseSource({
 }
 
 /**
- * Projects app-wide Case sources down to the list identity allocation needs.
+ * Projects app-wide Case sources down to the Case Types the user reviews, as the list identity allocation needs.
  *
  * @param {CaseSource[]} caseSources
+ * @param {string[]} reviewerCaseTypes
  * @returns {AllocationSource[]}
  */
-export function allocationSourcesFromCaseSources(caseSources) {
-  return caseSources.map(({ slug, listName }) => ({ slug, listName }));
+export function allocationSourcesFromCaseSources(
+  caseSources,
+  reviewerCaseTypes
+) {
+  // Broad roles such as Maintainer span every list, so only `Reviewers - <type>` membership decides where a Reviewer may draw from.
+  return caseSources
+    .filter(({ slug }) => reviewerCaseTypes.includes(slug))
+    .map(({ slug, listName }) => ({ slug, listName }));
 }
 
 /**
