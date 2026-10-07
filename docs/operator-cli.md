@@ -248,8 +248,8 @@ due-work pass and is the default when no mode is named. `--loop` keeps
 polling the same run date until work due that day has settled or the idle poll
 limit is reached. `--plan` runs nothing: it prints what a pass would do for the
 run date (see [the plan preview](#orchestration-plan-preview--orchestrate---plan)).
-`--force` re-runs items declared `allow_multiple_runs=False` that already
-succeeded on the run date (see [once per run date](#once-per-run-date--allow_multiple_runs)),
+`--force` re-runs items that already succeeded on the run date and do not
+declare `allow_multiple_runs=True` (see [once per run date](#once-per-run-date--allow_multiple_runs)),
 in any of the three modes.
 
 A `--app` that names a module which cannot be imported, or which exposes no
@@ -345,8 +345,8 @@ Repeated `--once` passes on the same day are safe — the schedule gates the *da
 and a polling feed's watermark gates the *data*. That, and why the feed cannot
 yet reach a tenant, are in
 [sharepoint-rest-ingest.md](sharepoint-rest-ingest.md#2-the-daily-command).
-A pipeline that should run only once a day says so with `allow_multiple_runs`
-(below).
+The three polling feeds declare `allow_multiple_runs=True` so each pass runs
+them; every other item runs once per run date (below).
 
 A scheduled item's `pipelines/<name>` path lines up one-to-one with a pipeline
 package on disk, and its run-history label is that path's **leaf name** — the
@@ -485,20 +485,9 @@ in issue #429.
 
 ### Once per run date — `allow_multiple_runs`
 
-By default every pass runs every due item, so an external trigger that fires
-hourly re-runs a daily pipeline each hour. That is right for a polling feed and
-wrong for one that should publish once. Declare the second kind with
-`allow_multiple_runs=False`:
-
-```python
-ScheduledPipeline(
-    "pipelines/claims_publish",
-    Schedule.daily(),
-    allow_multiple_runs=False,
-)
-```
-
-A pass then skips the item on a run date it already succeeded on:
+By default a scheduled item runs **once per run date**: an external trigger
+that fires hourly runs a daily pipeline on the first pass, and later passes that
+day skip it:
 
 ```console
 $ python -m cli orchestrate --app my_app.schedules --base-dir /data --once
@@ -513,11 +502,23 @@ $ python -m cli orchestrate --app my_app.schedules --base-dir /data --once
 - **`--force` overrides it for the whole pass**, in `--once`, `--loop` and
   `--plan` alike. To re-run one pipeline only, use
   `python -m cli run pipelines/<name>`, which never consults a schedule.
-- **An overrides file may set it** per item, as `allow_multiple_runs: false`
+- **An overrides file may set it** per item, as `allow_multiple_runs: true`
   beside `enabled` and `schedule`.
 
-The default is `True`, so existing schedules behave as before. The reasoning is
-[ADR-0031](adr/0031-a-scheduled-item-may-opt-into-one-run-per-run-date.md).
+An item that should run on every pass, such as a polling feed whose watermark
+makes a repeat cheap, declares `allow_multiple_runs=True`:
+
+```python
+ScheduledPipeline(
+    "pipelines/claims_poll",
+    Schedule.daily(),
+    allow_multiple_runs=True,
+)
+```
+
+The default was chosen as the safe one: a pipeline nobody has checked for
+same-day repeat safety runs once. The reasoning is
+[ADR-0031](adr/0031-a-scheduled-item-runs-once-per-run-date-by-default.md).
 
 Each output line is `run_date  set_name  pipeline  status`, where `pipeline` is
 the scheduled item's leaf name, followed by the decision's reason when it has
@@ -568,7 +569,7 @@ against the current time of day, as a pass started now would.
 | `ready` | schedule is due and all freshness requirements are met |
 | `skipped` | schedule is not due on that date, or the current time is before the item's `earliest_run` |
 | `disabled` | item has `enabled=False` |
-| `already-satisfied` | already succeeded on the run date and declares `allow_multiple_runs=False`, so the pass will skip it (unless `--force`) |
+| `already-satisfied` | already succeeded on the run date and does not allow multiple runs (the default), so the pass will skip it (unless `--force`) |
 | `blocked` | a declared upstream is stale or missing |
 
 The same preview is available from Python:
@@ -598,7 +599,7 @@ and, when it already succeeded on the run date, that the pass will run it again.
 the widest value so the output stays readable regardless of pipeline name length.
 
 > **`already-satisfied` is what the pass will do.** It is reported only for an
-> item declaring `allow_multiple_runs=False` that already succeeded on the run
+> item held to once per run date (the default) that already succeeded on the run
 > date, which the pass skips. An item that may run again plans `ready` with
 > "runs again" in its reason, because the next `--once` will run it. (Before
 > `allow_multiple_runs`, every same-day success planned `already-satisfied` and

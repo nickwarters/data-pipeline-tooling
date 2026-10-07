@@ -8,7 +8,8 @@ The module an operator names on the command line::
     python -m cli orchestrate --app pipelines.schedules --base-dir BASE_DIR --once
 
 The schedule gates only the *day*; the feed's own watermark gates the *data*.
-See ``docs/sharepoint-rest-ingest.md`` for the runbook.
+Every other item runs once per run date (``allow_multiple_runs`` defaults to
+False). See ``docs/sharepoint-rest-ingest.md`` for the runbook.
 """
 
 from __future__ import annotations
@@ -22,9 +23,22 @@ def build_pipeline_sets():
         PipelineSet(
             "case_management",
             (
-                ScheduledPipeline("pipelines/sharepoint_cases", Schedule.daily()),
-                ScheduledPipeline("pipelines/case_support_log", Schedule.daily()),
-                ScheduledPipeline("pipelines/cora_access_log", Schedule.daily()),
+                # Polling feeds: a watermark makes each repeat pass cheap
+                ScheduledPipeline(
+                    "pipelines/sharepoint_cases",
+                    Schedule.daily(),
+                    allow_multiple_runs=True,
+                ),
+                ScheduledPipeline(
+                    "pipelines/case_support_log",
+                    Schedule.daily(),
+                    allow_multiple_runs=True,
+                ),
+                ScheduledPipeline(
+                    "pipelines/cora_access_log",
+                    Schedule.daily(),
+                    allow_multiple_runs=True,
+                ),
                 ScheduledPipeline(
                     "pipelines/reviewer_activity",
                     Schedule.daily(),

@@ -520,8 +520,8 @@ class ScheduledPipeline:
     never whether an item may run — that stays the freshness rule's question
     alone. All three are stored parsed, so nothing downstream re-parses them.
 
-    ``allow_multiple_runs=False`` skips the item on a run date it already
-    succeeded on, unless the pass is forced.
+    ``allow_multiple_runs`` (default False) skips the item on a run date it
+    already succeeded on, unless the pass is forced.
     """
 
     path: str
@@ -531,7 +531,7 @@ class ScheduledPipeline:
     due_time: dt.time | None = None
     earliest_run: dt.time | None = None
     priority: int = 0
-    allow_multiple_runs: bool = True
+    allow_multiple_runs: bool = False
 
     def __init__(
         self,
@@ -542,7 +542,7 @@ class ScheduledPipeline:
         due_time: str | dt.time | None = None,
         earliest_run: str | dt.time | None = None,
         priority: int = 0,
-        allow_multiple_runs: bool = True,
+        allow_multiple_runs: bool = False,
     ) -> None:
         object.__setattr__(self, "path", path)
         object.__setattr__(self, "schedule", schedule)
@@ -1001,7 +1001,7 @@ class Orchestrator:
         now: dt.time | None = None,
         force: bool = False,
     ) -> OrchestrationPassResult:
-        """Run one due-work pass; ``force`` overrides ``allow_multiple_runs=False``."""
+        """Run one due-work pass; ``force`` re-runs items that already succeeded."""
         root = Path(base_dir)
         day = run_date or dt.date.today()
         moment = now if now is not None else local_now().time()

@@ -41,8 +41,8 @@ handler registry is wired up front. Its working-day calendar is seeded by the
 optional ``--calendar <file>`` (a YAML calendar file of ``holidays`` and
 ``weekend``); omitted, the calendar is weekends-only. ``--plan`` prints
 ``Orchestrator.plan()`` for the run date instead of running anything.
-``--force`` runs items declared ``allow_multiple_runs=False`` again on a run
-date they already succeeded on.
+``--force`` runs items again on a run date they already succeeded on, even
+without ``allow_multiple_runs=True``.
 """
 
 from __future__ import annotations
@@ -608,8 +608,7 @@ def register(sub) -> None:
     orchestrate.add_argument(
         "--force",
         action="store_true",
-        help="run items with allow_multiple_runs=False even if they already "
-        "succeeded on the run date",
+        help="run items again even if they already succeeded on the run date",
     )
     orchestrate.add_argument(
         "--poll-seconds",
