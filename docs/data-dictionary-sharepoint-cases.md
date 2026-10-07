@@ -437,6 +437,13 @@ feed does not join — Groups are presentation-only.
 | `person_login` | `capture[field_key].loginName` | `str` | Yes | — | Filled for the `person` arm only. A **bare account** (`user-rp`), not the claims login `case_version`'s Person columns hold — the two vocabularies do not join. | `user-rp` | PII |
 | `person_display` | `capture[field_key].displayName` | `str` | Yes | — | Filled for the `person` arm only. Cached at selection time; not looked up here. | `Bola Okafor` | PII |
 
+A `person` value may also carry `domain` (the person's AD domain, written by the
+review application since 2026-10-07). It is **considered and deliberately not
+landed**: the application stores it only so it can name the person back to
+SharePoint in the right domain, every person column in this subject is keyed on
+the lower-cased bare account, and nothing here writes to SharePoint. A person
+value carrying it still discriminates as `person`.
+
 ### Part C — Row checks
 
 None.

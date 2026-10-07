@@ -1,5 +1,9 @@
 // @ts-check
-import { toBareAccount, toClaimsLogin } from './account-name.js';
+import {
+  toAccountDomain,
+  toBareAccount,
+  toClaimsLogin,
+} from './account-name.js';
 import { withAssignmentStamp } from './assignment-stamp.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
 import {
@@ -120,26 +124,41 @@ const CASE_SELECT =
 const CASE_EXPAND =
   '$expand=AssignedReviewer,ResponsibleParty,AssignedReviewerManager,ResponsiblePartyManager,VoidedBy';
 
+/** The Case row's Person columns, each expanded with its claims login `Name`. */
+const PERSON_COLUMNS = [
+  'AssignedReviewer',
+  'ResponsibleParty',
+  'AssignedReviewerManager',
+  'ResponsiblePartyManager',
+  'VoidedBy',
+];
+
 /** @typedef {{ Key?: unknown, Value?: unknown }} UserProfileProperty */
 
 /**
+ * The profile's `Manager` property as SharePoint spelled it, domain included.
+ *
  * @param {unknown} body
- * @returns {{ displayName: string | null, manager: string | null }}
+ * @returns {unknown}
  */
-function profileFromProperties(body) {
-  const profile = /** @type {any} */ (body);
-  const displayName = profile?.DisplayName;
-  const rawProperties = profile?.UserProfileProperties;
+function rawManagerLogin(body) {
+  const rawProperties = /** @type {any} */ (body)?.UserProfileProperties;
   /** @type {UserProfileProperty[]} */
   const properties = Array.isArray(rawProperties)
     ? rawProperties
     : Array.isArray(rawProperties?.results)
       ? rawProperties.results
       : [];
-  const managerProperty = properties.find(
-    (property) => property?.Key === 'Manager'
-  );
-  const rawManager = managerProperty?.Value;
+  return properties.find((property) => property?.Key === 'Manager')?.Value;
+}
+
+/**
+ * @param {unknown} body
+ * @returns {{ displayName: string | null, manager: string | null }}
+ */
+function profileFromProperties(body) {
+  const displayName = /** @type {any} */ (body)?.DisplayName;
+  const rawManager = rawManagerLogin(body);
   const manager =
     typeof rawManager === 'string' && rawManager !== ''
       ? toBareAccount(rawManager).toLowerCase()
@@ -183,6 +202,10 @@ export class HttpSharePointClient {
      * @type {Map<string, number>}
      */
     this._userIds = new Map();
+    /** Lower-cased bare account to the AD domain SharePoint last named it with. @type {Map<string, string>} */
+    this._domains = new Map();
+    /** In-flight or settled directory lookups for accounts whose domain is unknown. @type {Map<string, Promise<string>>} */
+    this._domainLookups = new Map();
     /**
      * @type {Map<string, Promise<{ displayName: string | null, manager: string | null }>>}
      */
@@ -219,6 +242,7 @@ export class HttpSharePointClient {
       `?${CASE_SELECT}&${CASE_EXPAND}`;
     try {
       const body = await this._read(url, opts.signal);
+      this._learnCaseLogins(body);
       return rowFromItem(body, readEtag(body));
     } catch (err) {
       if (/** @type {any} */ (err).status === 404) return null;
@@ -330,6 +354,7 @@ export class HttpSharePointClient {
         : await this._getAllPages(url, opts.signal);
     return items.map((raw) => {
       const item = /** @type {Record<string, unknown>} */ (raw);
+      this._learnCaseLogins(item);
       return rowFromItem(item, readEtag(item));
     });
   }
@@ -451,6 +476,7 @@ export class HttpSharePointClient {
   async getCurrentUser() {
     const body = await this._read(this._absolute('/_api/web/currentUser'));
     const account = toBareAccount(String(body?.LoginName ?? ''));
+    this._learnLogin(body?.LoginName);
     // This read already answers the one person id every query needs — every
     // person filter in the app names the signed-in user, and the app reads them
     // before any route mounts. Taking it here is a correctness point rather
@@ -489,7 +515,18 @@ export class HttpSharePointClient {
   async searchPeople(query) {
     const q = query.trim();
     if (q === '') return [];
+    const entities = await this._searchPeopleEntities(q);
+    for (const entity of entities) this._learnLogin(entity?.Key);
+    return entities.map(personFromEntity);
+  }
 
+  /**
+   * The people-picker endpoint's raw entities for one query.
+   *
+   * @param {string} q
+   * @returns {Promise<any[]>}
+   */
+  async _searchPeopleEntities(q) {
     const url = this._absolute(
       '/_api/SP.UI.ApplicationPages.ClientPeoplePickerWebServiceInterface.clientPeoplePickerSearchUser'
     );
@@ -508,7 +545,7 @@ export class HttpSharePointClient {
     });
 
     const json = await this._write(url, 'POST', {}, body);
-    return peoplePickerEntities(json, url).map(personFromEntity);
+    return peoplePickerEntities(json, url);
   }
 
   /**
@@ -529,6 +566,7 @@ export class HttpSharePointClient {
       if (rec.PrincipalType !== USER_PRINCIPAL) return [];
       const loginName = toBareAccount(String(rec.LoginName ?? ''));
       if (!loginName) return [];
+      this._learnLogin(rec.LoginName);
       // The member read already answers the user id a Person write needs.
       const id = Number(rec.Id);
       if (Number.isFinite(id) && id > 0) this._userIds.set(loginName, id);
@@ -547,8 +585,9 @@ export class HttpSharePointClient {
    * @returns {Promise<string[]>}
    */
   async listUserGroups(account, opts = {}) {
+    const login = await this._claimsLoginFor(account);
     const url = this._absolute(
-      `/_api/web/siteusers/getbyloginname(@v)/groups?@v='${encodeURIComponent(escapeOData(toClaimsLogin(account)))}'&$select=Id,Title`
+      `/_api/web/siteusers/getbyloginname(@v)/groups?@v='${encodeURIComponent(escapeOData(login))}'&$select=Id,Title`
     );
     try {
       const items = await this._getAllPages(url, opts.signal);
@@ -609,7 +648,7 @@ export class HttpSharePointClient {
         ),
         'POST',
         {},
-        JSON.stringify({ LoginName: toClaimsLogin(account) })
+        JSON.stringify({ LoginName: await this._claimsLoginFor(account) })
       );
       return { ok: true };
     } catch (err) {
@@ -629,7 +668,7 @@ export class HttpSharePointClient {
       await this._write(
         this._absolute(
           `/_api/web/sitegroups/getbyname('${encodeURIComponent(escapeOData(groupName))}')/users/removebyloginname(@v)` +
-            `?@v='${encodeURIComponent(escapeOData(toClaimsLogin(account)))}'`
+            `?@v='${encodeURIComponent(escapeOData(await this._claimsLoginFor(account)))}'`
         ),
         'POST',
         {},
@@ -701,9 +740,13 @@ export class HttpSharePointClient {
    * cached `displayName`.
    *
    * @param {string[]} accountNames
+   * @param {{ domains?: Record<string, string> }} [opts] domains already known for some accounts, e.g. stored beside them in the Answers JSON
    * @returns {Promise<Record<string, string | null>>}
    */
-  async resolveUsers(accountNames) {
+  async resolveUsers(accountNames, opts = {}) {
+    for (const [account, domain] of Object.entries(opts.domains ?? {})) {
+      this._learnDomain(account, domain);
+    }
     const unique = [...new Set(accountNames)];
     const entries = await Promise.all(
       unique.map(async (account) => {
@@ -763,12 +806,13 @@ export class HttpSharePointClient {
    * @returns {Promise<{ displayName: string | null, manager: string | null }>}
    */
   async _readUserProfile(account) {
-    const login = toClaimsLogin(account);
+    const login = await this._claimsLoginFor(account);
     const url = this._absolute(
       `/_api/SP.UserProfiles.PeopleManager/GetPropertiesFor(accountName=@v)?@v='${encodeURIComponent(login)}'`
     );
     try {
       const body = await this._read(url);
+      this._learnLogin(rawManagerLogin(body));
       return profileFromProperties(body);
     } catch {
       return { displayName: null, manager: null };
@@ -973,6 +1017,84 @@ export class HttpSharePointClient {
   }
 
   /**
+   * Remember the domain a full login names, keyed by its bare account.
+   *
+   * @param {unknown} login
+   */
+  _learnLogin(login) {
+    const text = typeof login === 'string' ? login : '';
+    this._learnDomain(toBareAccount(text), toAccountDomain(text));
+  }
+
+  /**
+   * @param {string} account
+   * @param {unknown} domain
+   */
+  _learnDomain(account, domain) {
+    if (account && typeof domain === 'string' && domain !== '') {
+      this._domains.set(account.toLowerCase(), domain);
+    }
+  }
+
+  /**
+   * Remember the domain of every person a Case read expanded.
+   *
+   * @param {Record<string, unknown>} item
+   */
+  _learnCaseLogins(item) {
+    for (const column of PERSON_COLUMNS) {
+      this._learnLogin(/** @type {any} */ (item?.[column])?.Name);
+    }
+  }
+
+  /**
+   * The full claims login for a bare account, in its own domain when known or found.
+   *
+   * @param {string} account
+   * @returns {Promise<string>}
+   */
+  async _claimsLoginFor(account) {
+    const known = this._domains.get(account.toLowerCase());
+    return toClaimsLogin(account, known ?? (await this._lookupDomain(account)));
+  }
+
+  /**
+   * An unknown account's domain from the directory, `''` (the default) unless exactly one domain holds it.
+   *
+   * @param {string} account
+   * @returns {Promise<string>}
+   */
+  _lookupDomain(account) {
+    const key = account.toLowerCase();
+    const pending = this._domainLookups.get(key);
+    if (pending) return pending;
+    const lookup = this._searchPeopleEntities(account).then(
+      (entities) => {
+        /** @type {Map<string, string>} */
+        const domains = new Map();
+        for (const entity of entities) {
+          const login = String(entity?.Key ?? '');
+          const domain = toAccountDomain(login);
+          if (toBareAccount(login).toLowerCase() === key && domain) {
+            domains.set(domain.toLowerCase(), domain);
+          }
+        }
+        if (domains.size !== 1) return '';
+        const [domain] = domains.values();
+        this._learnDomain(account, domain);
+        return domain;
+      },
+      () => {
+        // A failed lookup is retried next time rather than settled as "unknown".
+        this._domainLookups.delete(key);
+        return '';
+      }
+    );
+    this._domainLookups.set(key, lookup);
+    return lookup;
+  }
+
+  /**
    * The value SharePoint takes for a Person column named by `account`: the
    * numeric id for somebody, `null` for nobody. An empty account means the
    * column is being cleared, and SharePoint clears a Person column with
@@ -1009,7 +1131,7 @@ export class HttpSharePointClient {
       this._absolute('/_api/web/ensureuser'),
       'POST',
       {},
-      JSON.stringify({ logonName: toClaimsLogin(account) })
+      JSON.stringify({ logonName: await this._claimsLoginFor(account) })
     );
     const id = Number(body?.Id ?? /** @type {any} */ (body?.d)?.Id);
     // Ids are allocated from 1, so anything below that is not a person.
@@ -1430,6 +1552,8 @@ function personFromEntity(e) {
   const loginName = toBareAccount(String(e?.Key ?? ''));
   /** @type {PersonResult} */
   const out = { loginName, displayName: String(e?.DisplayText ?? loginName) };
+  const domain = toAccountDomain(String(e?.Key ?? ''));
+  if (domain) out.domain = domain;
   const email = e?.EntityData?.Email;
   if (email) out.email = String(email);
   return out;

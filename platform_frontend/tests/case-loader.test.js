@@ -783,6 +783,47 @@ test('CaseLoader.load() refreshes person capture display names in one directory 
   assert.equal(patches.length, 0, 'a display-name refresh is never persisted');
 });
 
+test('CaseLoader.load() hands the directory the domain stored beside a person', async () => {
+  /** @type {any[]} */
+  const resolveCalls = [];
+  const loader = makeLoader({
+    row: {
+      caseType: 'person-capture-review',
+      answers: {
+        'q-needs': {
+          value: 'No',
+          capture: {
+            attributedTo: {
+              loginName: '2002',
+              displayName: 'Bob',
+              domain: 'OTHERDOM',
+            },
+            raisedBy: { loginName: 'jsmith', displayName: 'Jane Smith' },
+          },
+        },
+      },
+    },
+    client: {
+      resolveUsers: async (/** @type {any[]} */ ...args) => {
+        resolveCalls.push(args);
+        return { 2002: 'Bob Brown' };
+      },
+    },
+    caseType: 'person-capture-review',
+  });
+
+  await loader.load();
+
+  assert.deepEqual(resolveCalls, [
+    [['2002', 'jsmith'], { domains: { 2002: 'OTHERDOM' } }],
+  ]);
+  assert.deepEqual(loader.answers['q-needs'].capture?.attributedTo, {
+    loginName: '2002',
+    displayName: 'Bob Brown',
+    domain: 'OTHERDOM',
+  });
+});
+
 // --- selecting Question Definitions by the Case's own attributes ---
 
 const selectableBank = [

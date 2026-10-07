@@ -48,7 +48,8 @@ The directory type-ahead behind every people picker. A blank or whitespace-only
 query short-circuits to `[]` without a request. Otherwise it POSTs to the
 people-picker endpoint across all principal sources, so it finds users who have
 never been added to this site, and reduces each result's claims `Key` to a bare
-account name.
+account name. Each result also carries the `domain` its `Key` named, which a
+`person` capture value stores beside the account.
 
 The shared debounced search reports `loading` when its 200ms timer starts the
 request, not when the query is scheduled. A query replaced during that window
@@ -79,6 +80,30 @@ no changes, with a console warning, rather than failing the whole log. Any
 only because an action was taken. The mock keeps the log in memory, seeded from
 `dev/fixtures/support-log.js`, and stamps appended entries from the persona and
 its clock.
+
+### Accounts outside the default domain
+
+Every method takes and returns bare account names, but SharePoint needs a full
+claims login (`i:0#.w|DOMAIN\account`) wherever it looks a person up or writes
+one: `ensureuser` behind a Person-column write, the profile read behind
+`resolveUsers`/`resolveManagers`, and the group reads and writes behind the
+Access page. Most people are in the farm's default domain (`AD_DOMAIN` in
+`src/services/account-name.js`), but not all, so the client rebuilds each login
+in the person's own domain:
+
+1. It remembers the domain of every full login SharePoint hands it: a
+   `searchPeople` result, `getCurrentUser`, a `listGroupMembers` member, each
+   expanded Person column on a Case read, and a profile's `Manager` value.
+2. An account it has not seen is looked up once, by its bare name, through the
+   people-picker endpoint. Exactly one match in one domain is used and
+   remembered; no match or several domains fall back to the default domain, and
+   a failed lookup falls back too and is tried again next time.
+3. `resolveUsers(accounts, { domains })` takes domains the caller already holds.
+   The Case loader passes the ones stored on `person` capture values, so a
+   person saved with their domain needs no lookup.
+
+The memory lasts for the client's lifetime, which is one page load. The mock
+directory has no domains and never looks anyone up.
 
 ### `listGroupMembers(groupName)`
 

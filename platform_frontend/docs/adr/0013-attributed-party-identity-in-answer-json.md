@@ -15,6 +15,31 @@ bullet below no longer holds. A `person` value is directory-resolved or absent â
 the picker offers the directory's matches and nothing else, and reports a search
 that is in flight or that failed rather than falling back to the typed text.
 
+Amended (2026-10-07): the farm is **not** single-domain after all. Some people
+the picker finds are in another AD domain, and reattaching the one constant
+domain named them wrongly, so their Person-column writes failed. The bare
+account stays the identity everywhere, and nothing stored needs migrating; what
+changed is how the service layer rebuilds a claims login:
+
+- `HttpSharePointClient` remembers the domain of every full login SharePoint
+  hands it (a people-picker `Key`, the signed-in user, a group member, an
+  expanded Person column on a Case read, a profile's `Manager`) and uses it when
+  it names that account back to SharePoint.
+- An account it has never seen is looked up once through the people picker by
+  its bare name; exactly one match in one domain is used and remembered, and
+  anything else (no match, several domains, a failed request) falls back to the
+  default domain, which is the old behaviour.
+- A `person` capture value now also stores `domain` beside `loginName` and
+  `displayName` when the picker named one, so a later page load can refresh the
+  name without that lookup. Values saved before this carry no `domain` and go
+  through the lookup instead. The pipelines do not land the field: they key
+  people on the lower-cased bare account and never write to SharePoint.
+
+This keeps one assumption from the original decision: a bare account name is
+unique across domains (here it is a numeric staff id). Two people sharing one
+bare name in two domains would still be indistinguishable, and fixing that would
+mean storing the domain as part of the identity everywhere, with a migration.
+
 ## Context
 
 Management asked to record, against an individual failure, the single person
@@ -99,7 +124,8 @@ The Attributed Party is pure metadata: it never feeds `computeOutcome`.
 
 - Depends on the **single-domain** assumption. If a second AD domain is ever
   introduced, bare `loginName` becomes ambiguous and stored values would need a
-  migration to disambiguate.
+  migration to disambiguate. (A second domain did appear; see the 2026-10-07
+  amendment above for how the service layer now carries it.)
 - The stored format is hard to change after Cases are saved: moving to full
   claims or a Person field would require a data migration across every Case Type
   list.
