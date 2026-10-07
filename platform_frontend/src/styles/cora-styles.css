@@ -4020,3 +4020,581 @@
   outline: var(--cora-focus-outline);
   outline-offset: var(--cora-focus-offset);
 }
+
+/* ── Reports ────────────────────────────────────────────────────────────────
+   The report page frame, its panels and headline tiles, and the report chart
+   kit. Chart marks take their colour from --cora-viz-* (series) or a status
+   token (danger, warning) and nothing else; see the design tokens header. */
+
+[data-cora-root] .cora-report-page,
+[data-cora-root] .cora-reports {
+  display: grid;
+  gap: var(--cora-space-4);
+}
+
+[data-cora-root] .cora-report {
+  display: grid;
+  gap: var(--cora-space-5);
+  min-width: 0;
+}
+
+[data-cora-root] .cora-report--rail {
+  grid-template-columns: 15.5rem minmax(0, 1fr);
+  gap: var(--cora-space-5);
+  align-items: start;
+}
+
+[data-cora-root] .cora-report__rail {
+  position: sticky;
+  top: var(--cora-space-3);
+  display: grid;
+  gap: var(--cora-space-4);
+  padding-right: var(--cora-space-5);
+  border-right: 1px solid var(--cora-color-border);
+}
+
+[data-cora-root] .cora-report__rail .cora-report__header {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+[data-cora-root] .cora-report__rail-now {
+  display: grid;
+  gap: var(--cora-space-3);
+  padding-top: var(--cora-space-4);
+  border-top: 1px solid var(--cora-color-border);
+}
+
+[data-cora-root] .cora-report__main {
+  display: grid;
+  gap: var(--cora-space-5);
+  min-width: 0;
+}
+
+[data-cora-root] .cora-report__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--cora-space-3);
+}
+
+[data-cora-root] .cora-report__eyebrow {
+  margin: 0;
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-sm);
+}
+
+[data-cora-root] .cora-report__title {
+  margin: var(--cora-space-1) 0;
+}
+
+[data-cora-root] .cora-report__freshness {
+  margin: 0;
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-sm);
+}
+
+[data-cora-root] .cora-report__freshness strong {
+  color: var(--cora-color-on-surface);
+}
+
+[data-cora-root] .cora-report__scope {
+  display: grid;
+  gap: var(--cora-space-1);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+[data-cora-root] .cora-report__scope select {
+  font: inherit;
+  color: var(--cora-color-on-surface);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border-strong);
+  border-radius: var(--cora-radius-md);
+  padding: var(--cora-space-2) var(--cora-space-3);
+}
+
+[data-cora-root] .cora-report__banner {
+  margin: 0;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  color: var(--cora-color-on-surface);
+  background: var(--cora-color-warning-bg);
+  border-left: 3px solid var(--cora-color-warning);
+  border-radius: var(--cora-radius-sm);
+  font-size: var(--cora-font-size-sm);
+}
+
+[data-cora-root] .cora-report-section {
+  display: grid;
+  gap: var(--cora-space-3);
+  min-width: 0;
+}
+
+[data-cora-root] .cora-report-section__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--cora-space-2) var(--cora-space-4);
+}
+
+[data-cora-root] .cora-report-section__head h2 {
+  margin: 0;
+  font-size: var(--cora-font-size-md);
+}
+
+[data-cora-root] .cora-report-section__scope {
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-sm);
+}
+
+[data-cora-root] .cora-report-section__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cora-space-2);
+  margin-left: auto;
+}
+
+[data-cora-root] .cora-report-filter {
+  display: inline-flex;
+  border: 1px solid var(--cora-color-border-strong);
+  border-radius: var(--cora-radius-md);
+  overflow: hidden;
+}
+
+[data-cora-root] .cora-report-filter__option {
+  color: var(--cora-color-on-surface);
+  background: var(--cora-color-surface);
+  border: 0;
+  border-radius: 0;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  font-weight: var(--cora-font-weight-medium);
+}
+
+[data-cora-root] .cora-report-filter__option + .cora-report-filter__option {
+  border-left: 1px solid var(--cora-color-border);
+}
+
+[data-cora-root] .cora-report-filter__option:hover {
+  color: var(--cora-color-on-surface);
+  background: var(--cora-color-surface-2);
+}
+
+[data-cora-root] .cora-report-filter__option[aria-pressed='true'] {
+  color: var(--cora-color-text-on-accent);
+  background: var(--cora-color-accent);
+}
+
+[data-cora-root] .cora-report-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--cora-space-4);
+}
+
+[data-cora-root] .cora-report-panel {
+  grid-column: span 12;
+  display: grid;
+  align-content: start;
+  gap: var(--cora-space-2);
+  min-width: 0;
+  padding: var(--cora-space-3) 0.875rem;
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  box-shadow: var(--cora-shadow-sm);
+}
+
+[data-cora-root] .cora-report-panel--span-3 {
+  grid-column: span 3;
+}
+[data-cora-root] .cora-report-panel--span-4 {
+  grid-column: span 4;
+}
+[data-cora-root] .cora-report-panel--span-5 {
+  grid-column: span 5;
+}
+[data-cora-root] .cora-report-panel--span-6 {
+  grid-column: span 6;
+}
+[data-cora-root] .cora-report-panel--span-7 {
+  grid-column: span 7;
+}
+[data-cora-root] .cora-report-panel--span-8 {
+  grid-column: span 8;
+}
+[data-cora-root] .cora-report-panel--span-9 {
+  grid-column: span 9;
+}
+
+[data-cora-root] .cora-report-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--cora-space-2);
+}
+
+[data-cora-root] .cora-report-panel__title {
+  margin: 0;
+  font-size: var(--cora-font-size-base);
+}
+
+[data-cora-root] .cora-report-panel__tools {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--cora-space-2);
+}
+
+[data-cora-root] .cora-report-panel__chip {
+  padding: 0 var(--cora-space-2);
+  color: var(--cora-color-text-muted);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-pill);
+  font-size: var(--cora-font-size-2xs);
+}
+
+[data-cora-root] .cora-report-panel__toggle {
+  color: var(--cora-color-text-muted);
+  background: transparent;
+  border: 1px solid var(--cora-color-border);
+  padding: var(--cora-space-1) var(--cora-space-2);
+  font-size: var(--cora-font-size-xs);
+  font-weight: var(--cora-font-weight-medium);
+}
+
+[data-cora-root] .cora-report-panel__toggle:hover {
+  color: var(--cora-color-on-surface);
+  background: var(--cora-color-surface-2);
+  border-color: var(--cora-color-border-strong);
+}
+
+[data-cora-root] .cora-report-panel__subtitle,
+[data-cora-root] .cora-report-panel__note {
+  margin: 0;
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-sm);
+}
+
+[data-cora-root] .cora-report-panel__note {
+  padding-top: var(--cora-space-2);
+  border-top: 1px solid var(--cora-color-border);
+  font-size: var(--cora-font-size-xs);
+}
+
+[data-cora-root] .cora-report-panel__body {
+  min-width: 0;
+}
+
+[data-cora-root] .cora-report-panel__body--table {
+  max-height: 24rem;
+  overflow: auto;
+}
+
+[data-cora-root] .cora-report-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cora-space-1) var(--cora-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-sm);
+}
+
+[data-cora-root] .cora-report-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+}
+
+[data-cora-root] .cora-report-legend__key--swatch {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: var(--cora-radius-sm);
+}
+
+[data-cora-root] .cora-report-legend__key--line {
+  width: 0.875rem;
+  height: 2px;
+  border-radius: 1px;
+}
+
+[data-cora-root] .cora-report-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--cora-space-3);
+}
+
+[data-cora-root] .cora-report-kpis--stacked {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-cora-root] .cora-report-tile {
+  display: grid;
+  align-content: start;
+  gap: var(--cora-space-1);
+  min-width: 0;
+  padding: var(--cora-space-3);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  box-shadow: var(--cora-shadow-sm);
+}
+
+[data-cora-root] .cora-report-tile__label {
+  display: flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-sm);
+}
+
+[data-cora-root] .cora-report-tile__status {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+}
+
+[data-cora-root] .cora-report-tile__status--danger {
+  background: var(--cora-color-danger);
+}
+
+[data-cora-root] .cora-report-tile__status--warning {
+  background: var(--cora-color-warning);
+}
+
+[data-cora-root] .cora-report-tile__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cora-space-2);
+}
+
+[data-cora-root] .cora-report-tile__value {
+  font-size: var(--cora-font-size-xl);
+  font-weight: var(--cora-font-weight-semibold);
+  line-height: var(--cora-line-height-tight);
+}
+
+[data-cora-root] .cora-report-tile__unit {
+  margin-left: 2px;
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-medium);
+}
+
+[data-cora-root] .cora-report-tile__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+  min-height: 1.125rem;
+  font-size: var(--cora-font-size-xs);
+}
+
+[data-cora-root] .cora-report-tile__delta--good {
+  color: var(--cora-color-success);
+}
+
+[data-cora-root] .cora-report-tile__delta--bad {
+  color: var(--cora-color-danger);
+}
+
+[data-cora-root] .cora-report-tile__delta--neutral {
+  color: var(--cora-color-text-muted);
+}
+
+[data-cora-root] .cora-report-tile__meter {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--cora-viz-range);
+}
+
+[data-cora-root] .cora-report-tile__meter-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 3px;
+  background: var(--cora-viz-series-1);
+}
+
+[data-cora-root] .cora-report-tile__meter-target {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--cora-color-on-surface);
+}
+
+[data-cora-root] .cora-report-message {
+  display: grid;
+  gap: var(--cora-space-3);
+}
+
+[data-cora-root] .cora-report-message__text--alert {
+  color: var(--cora-color-danger);
+}
+
+[data-cora-root] .cora-reports__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: var(--cora-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-cora-root] .cora-reports__card {
+  display: grid;
+  gap: var(--cora-space-2);
+  padding: var(--cora-space-4);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  box-shadow: var(--cora-shadow-sm);
+}
+
+[data-cora-root] .cora-reports__title {
+  margin: 0;
+  font-size: var(--cora-font-size-md);
+}
+
+[data-cora-root] .cora-reports__description {
+  margin: 0;
+  color: var(--cora-color-text-muted);
+}
+
+[data-cora-root] .cora-reports__scopes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cora-space-2) var(--cora-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Report charts. Drawn at the width the engine measured, and scaled down
+   rather than overflowing if the panel is a little narrower. */
+[data-cora-root] .cora-chart {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+[data-cora-root] .cora-chart :where(text) {
+  fill: var(--cora-color-text-muted);
+  font-family: var(--cora-font-body);
+  font-size: var(--cora-font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-cora-root] .cora-chart .cora-chart__category-label,
+[data-cora-root] .cora-chart .cora-chart__value-label,
+[data-cora-root] .cora-chart .cora-chart__target-label {
+  fill: var(--cora-color-on-surface);
+}
+
+[data-cora-root] .cora-chart .cora-chart__value {
+  font-weight: var(--cora-font-weight-semibold);
+}
+
+[data-cora-root] .cora-chart__grid-line {
+  stroke: var(--cora-viz-grid);
+  vector-effect: non-scaling-stroke;
+}
+
+[data-cora-root] .cora-chart__axis-line {
+  stroke: var(--cora-color-border-strong);
+  vector-effect: non-scaling-stroke;
+}
+
+[data-cora-root] .cora-chart__leader {
+  stroke: var(--cora-color-text-muted);
+}
+
+[data-cora-root] .cora-chart__target-line {
+  stroke: var(--cora-color-on-surface);
+  stroke-opacity: 0.6;
+  vector-effect: non-scaling-stroke;
+}
+
+[data-cora-root] .cora-chart [data-cora-chart-mark='true']:focus-visible {
+  outline: var(--cora-focus-outline);
+  outline-offset: 2px;
+}
+
+[data-cora-root] .cora-line-chart__line {
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+[data-cora-root] .cora-line-chart__area {
+  fill-opacity: 0.1;
+}
+
+[data-cora-root] .cora-line-chart__dot,
+[data-cora-root] .cora-line-chart__hover-dot {
+  stroke: var(--cora-color-surface);
+  stroke-width: 2;
+}
+
+[data-cora-root] .cora-line-chart__crosshair {
+  stroke: var(--cora-color-text-muted);
+  vector-effect: non-scaling-stroke;
+}
+
+[data-cora-root] .cora-line-chart__crosshair,
+[data-cora-root] .cora-line-chart__hover-dot {
+  visibility: hidden;
+}
+
+[data-cora-root] .cora-line-chart__column:hover .cora-line-chart__crosshair,
+[data-cora-root] .cora-line-chart__column:hover .cora-line-chart__hover-dot {
+  visibility: visible;
+}
+
+[data-cora-root] .cora-bar-list__bar:hover,
+[data-cora-root] .cora-stack-bar__segment:hover {
+  opacity: 0.85;
+}
+
+[data-cora-root] .cora-stack-bar .cora-stack-bar__count {
+  fill: var(--cora-color-text-on-accent);
+  font-weight: var(--cora-font-weight-semibold);
+  pointer-events: none;
+}
+
+[data-cora-root] .cora-stack-bar__empty {
+  fill: var(--cora-viz-grid);
+}
+
+[data-cora-root] .cora-sparkline {
+  flex: none;
+  overflow: visible;
+}
+
+[data-cora-root] .cora-sparkline__line {
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+[data-cora-root] .cora-sparkline__latest {
+  stroke: var(--cora-color-surface);
+  stroke-width: 2;
+}
+
+@media (max-width: 56rem) {
+  [data-cora-root] .cora-report--rail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-cora-root] .cora-report__rail {
+    position: static;
+    padding-right: 0;
+    border-right: 0;
+  }
+}
