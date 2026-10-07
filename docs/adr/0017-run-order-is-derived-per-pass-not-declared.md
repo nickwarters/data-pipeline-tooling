@@ -4,6 +4,13 @@ status: accepted
 
 # Run order is derived per pass from deadlines, not declared or scheduled
 
+> **Amended by
+> [ADR-0031](0031-a-scheduled-item-may-opt-into-one-run-per-run-date.md).**
+> The ordering below still reads run history for deadline pressure only, but an
+> item declaring `allow_multiple_runs=False` is now skipped by the pass on a run
+> date it already succeeded on, so "has it run today" can decide whether *that*
+> item executes.
+
 A `PipelineSet`'s run order is **derived on every pass**, as a pure function of
 (the candidate items, the wall-clock time of day, which items already succeeded
 today). It is not declared by the author, not stored anywhere, and not a

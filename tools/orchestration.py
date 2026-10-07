@@ -519,6 +519,9 @@ class ScheduledPipeline:
     influence only the *sequence* runnable items are attempted in within the set,
     never whether an item may run — that stays the freshness rule's question
     alone. All three are stored parsed, so nothing downstream re-parses them.
+
+    ``allow_multiple_runs=False`` skips the item on a run date it already
+    succeeded on, unless the pass is forced.
     """
 
     path: str
@@ -528,6 +531,7 @@ class ScheduledPipeline:
     due_time: dt.time | None = None
     earliest_run: dt.time | None = None
     priority: int = 0
+    allow_multiple_runs: bool = True
 
     def __init__(
         self,
@@ -538,6 +542,7 @@ class ScheduledPipeline:
         due_time: str | dt.time | None = None,
         earliest_run: str | dt.time | None = None,
         priority: int = 0,
+        allow_multiple_runs: bool = True,
     ) -> None:
         object.__setattr__(self, "path", path)
         object.__setattr__(self, "schedule", schedule)
@@ -548,6 +553,7 @@ class ScheduledPipeline:
             self, "earliest_run", _time_of_day(earliest_run, "earliest_run")
         )
         object.__setattr__(self, "priority", priority)
+        object.__setattr__(self, "allow_multiple_runs", allow_multiple_runs)
 
     @property
     def name(self) -> str:
@@ -993,7 +999,9 @@ class Orchestrator:
         run_date: dt.date | None = None,
         orchestration_run_id: str | None = None,
         now: dt.time | None = None,
+        force: bool = False,
     ) -> OrchestrationPassResult:
+        """Run one due-work pass; ``force`` overrides ``allow_multiple_runs=False``."""
         root = Path(base_dir)
         day = run_date or dt.date.today()
         moment = now if now is not None else local_now().time()
@@ -1015,6 +1023,7 @@ class Orchestrator:
                 ordered,
                 terminal,
                 failed_in_set,
+                force=force,
             )
             decisions.append(decision)
             store.record(decision)
@@ -1033,6 +1042,7 @@ class Orchestrator:
         run_date: dt.date | None = None,
         poll_seconds: float = 5,
         max_idle_polls: int = 3,
+        force: bool = False,
     ) -> list[OrchestrationPassResult]:
         day = run_date or dt.date.today()
         pass_run_id = uuid.uuid4().hex
@@ -1040,7 +1050,10 @@ class Orchestrator:
         idle = 0
         while idle < max_idle_polls:
             result = self.run_due_once(
-                base_dir, run_date=day, orchestration_run_id=pass_run_id
+                base_dir,
+                run_date=day,
+                orchestration_run_id=pass_run_id,
+                force=force,
             )
             results.append(result)
             if result.ran_count:
@@ -1059,6 +1072,7 @@ class Orchestrator:
         *,
         run_date: dt.date | None = None,
         now: dt.time | None = None,
+        force: bool = False,
     ) -> PlanResult:
         """Return a read-only projection of what would run, be skipped, or be blocked.
 
@@ -1070,7 +1084,8 @@ class Orchestrator:
         * ``disabled`` — item has ``enabled=False``
         * ``skipped`` — schedule is not due on ``run_date``, or ``earliest_run``
           gates it for this pass
-        * ``already-satisfied`` — pipeline already succeeded on ``run_date``
+        * ``already-satisfied`` — already succeeded on ``run_date`` and
+          ``allow_multiple_runs`` is off, so the pass skips it unless ``force``
         * ``blocked`` — a declared freshness/requirement dependency is not met
         * ``ready`` — all checks pass
 
@@ -1088,7 +1103,7 @@ class Orchestrator:
         run_registry = RunStore(root).catch_up()
 
         items = [
-            self._plan_item(ordered, day, run_registry)
+            self._plan_item(ordered, day, run_registry, force=force)
             for ordered in self._ordered_pass(run_registry, day, moment)
         ]
 
@@ -1134,6 +1149,8 @@ class Orchestrator:
         ordered: OrderedItem,
         run_date: dt.date,
         run_registry: RunRegistry,
+        *,
+        force: bool = False,
     ) -> PlanItem:
         candidate = ordered.candidate
         set_name = candidate.set_name
@@ -1166,13 +1183,13 @@ class Orchestrator:
                 reason=_earliest_run_reason(item),
             )
 
-        if candidate.ran_today:
+        if _held_to_one_run(candidate, force):
             return PlanItem(
                 run_date=run_date,
                 set_name=set_name,
                 pipeline=item.name,
                 status="already-satisfied",
-                reason=f"already succeeded on {run_date.isoformat()}",
+                reason=_one_run_reason(run_date),
             )
 
         # Check freshness requirements without running handlers, through the very
@@ -1206,7 +1223,7 @@ class Orchestrator:
             status="ready",
             reason=(
                 f"schedule {item.schedule.schedule_label()} is due"
-                f"{_deadline_note(ordered)}"
+                f"{_deadline_note(ordered)}{_rerun_note(candidate, run_date)}"
             ),
         )
 
@@ -1218,6 +1235,8 @@ class Orchestrator:
         ordered: OrderedItem,
         terminal: dict[str, str],
         set_failed: set[str],
+        *,
+        force: bool = False,
     ) -> OrchestrationDecision:
         candidate = ordered.candidate
         set_name = candidate.set_name
@@ -1257,6 +1276,16 @@ class Orchestrator:
                 run_date,
                 "skipped",
                 _earliest_run_reason(item),
+            )
+        if _held_to_one_run(candidate, force):
+            return _decision(
+                orchestration_run_id,
+                key,
+                set_name,
+                item,
+                run_date,
+                "skipped",
+                _one_run_reason(run_date),
             )
         blocked_by = self._blocked_dependency(item, set_failed)
         if blocked_by is not None:
@@ -1406,6 +1435,10 @@ class Orchestrator:
             changed = replace(
                 changed, schedule=_schedule_from_config(override["schedule"])
             )
+        if "allow_multiple_runs" in override:
+            changed = replace(
+                changed, allow_multiple_runs=bool(override["allow_multiple_runs"])
+            )
         if "freshness_days" in override:
             changed = replace(
                 changed,
@@ -1500,6 +1533,26 @@ def _earliest_run_reason(item: ScheduledPipeline) -> str:
     Only reached for an item the gate held back, so ``earliest_run`` is set.
     """
     return f"before earliest_run {item.earliest_run:%H:%M}"
+
+
+def _held_to_one_run(candidate: RunCandidate, force: bool) -> bool:
+    """Whether an item limited to one run per run date already had it."""
+    return candidate.ran_today and not candidate.item.allow_multiple_runs and not force
+
+
+def _one_run_reason(run_date: dt.date) -> str:
+    return (
+        f"already succeeded on {run_date.isoformat()} and allow_multiple_runs "
+        "is off; force to run again"
+    )
+
+
+def _rerun_note(candidate: RunCandidate, run_date: dt.date) -> str:
+    """The clause a ready item's reason carries when it runs again on a run date."""
+    if not candidate.ran_today:
+        return ""
+    why = "allow_multiple_runs" if candidate.item.allow_multiple_runs else "forced"
+    return f"; already succeeded on {run_date.isoformat()}, runs again ({why})"
 
 
 def _deadline_note(ordered: OrderedItem) -> str:

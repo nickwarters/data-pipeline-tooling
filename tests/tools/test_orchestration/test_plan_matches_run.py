@@ -26,6 +26,7 @@ _EXPECTED_DECISION = {
     "skipped": "skipped",
     "disabled": "skipped",
     "blocked": "blocked",
+    "already-satisfied": "skipped",
 }
 
 

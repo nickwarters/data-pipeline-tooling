@@ -375,6 +375,37 @@ def test_orchestrate_plan_is_exclusive_with_the_run_modes(tmp_path):
     assert "not allowed with argument" in result.stderr
 
 
+def test_orchestrate_runs_a_once_only_pipeline_again_only_when_forced(tmp_path):
+    # Every day a working day, so the default run date (today) is always due.
+    calendar = tmp_path / "calendar.yml"
+    calendar.write_text("weekend: []\n", encoding="utf-8")
+
+    def orchestrate(*extra):
+        return _cli(
+            "orchestrate",
+            "--app",
+            "clionceapp",
+            "--base-dir",
+            str(tmp_path),
+            "--calendar",
+            str(calendar),
+            *extra,
+        )
+
+    first = orchestrate("--once")
+    second = orchestrate("--once")
+    plan = orchestrate("--plan")
+    forced = orchestrate("--once", "--force")
+
+    assert first.returncode == 0, first.stderr
+    assert "fixture  _source  succeeded" in first.stdout
+    assert "fixture  _source  skipped  already succeeded on" in second.stdout
+    assert "allow_multiple_runs is off" in second.stdout
+    assert plan.stdout.split()[3] == "already-satisfied"
+    assert forced.returncode == 0, forced.stderr
+    assert "fixture  _source  succeeded" in forced.stdout
+
+
 def test_orchestrate_unknown_app_reports_clear_error(tmp_path):
     result = _cli(
         "orchestrate",
