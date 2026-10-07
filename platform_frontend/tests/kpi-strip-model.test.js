@@ -370,6 +370,39 @@ test('loadKpiModel: reviewer scope label and tiles are driven by caseSources', a
   assert.equal(tile(rev, 'overdue').breakdown, null);
 });
 
+test('loadKpiModel: a Maintainer in one reviewer group is scoped to that Case Type, not every readable list', async () => {
+  const lanes = await loadKpiModel({
+    client: /** @type {any} */ (makeClient(() => [])),
+    currentUserId: 'me',
+    capabilities: defaultCapabilities({
+      isReviewer: true,
+      isMaintainer: true,
+      listAccessCaseTypes: ['complaints'],
+    }),
+    caseSources: [source('complaints'), source('conduct'), source('lending')],
+    now: NOW,
+  });
+  assert.equal(lane(lanes, 'reviewer').scopeLabel, 'Complaints');
+});
+
+test('loadKpiModel: reviewer scope also names a Case Type the user holds a Case in without reviewer access', async () => {
+  const rows = [caseRow({ id: 'h1', caseType: 'lending', dueDate: LATER })];
+  const lanes = await loadKpiModel({
+    client: /** @type {any} */ (makeClient(() => rows)),
+    currentUserId: 'me',
+    capabilities: defaultCapabilities({
+      isReviewer: true,
+      isMaintainer: true,
+      listAccessCaseTypes: ['complaints'],
+    }),
+    caseSources: [source('complaints'), source('conduct'), source('lending')],
+    now: NOW,
+  });
+  const rev = lane(lanes, 'reviewer');
+  assert.equal(rev.scopeLabel, 'Complaints, Lending');
+  assert.equal(rev.totalItems, 1);
+});
+
 test('loadKpiModel: reviewer lane with no caseSources produces an empty pool', async () => {
   const lanes = await loadKpiModel({
     client: /** @type {any} */ (

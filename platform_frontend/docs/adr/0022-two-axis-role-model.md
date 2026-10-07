@@ -179,7 +179,11 @@ Every surface fans out its reads over the sources it is entitled to and merges, 
 an explicit `{ listName }` on every `getCase`/`patchCase`/`listCases`/`countCases`:
 
 - **Reviewer-scoped** reads (dashboard outstanding, KPI reviewer lane, team cases,
-  reports, allocation) use the eligible `caseSources`.
+  reports, allocation) use the eligible `caseSources`. Those reads are narrowed
+  by `assignedReviewer`, but the KPI reviewer lane's scope label is not a read:
+  it names only the types in `listAccessCaseTypes` plus any type the Reviewer
+  holds a Case in, so a Maintainer or other broad role who reviews one type is
+  not labelled as reviewing every list they can read.
 - **Broad-role** reads (Controls appeals, Adviser/RP dashboards, manager
   reporting, and Maintainer Question Bank samples) receive every manifest
   source, while retaining their role-specific
