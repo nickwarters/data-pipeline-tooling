@@ -139,12 +139,15 @@ only reflects them.
 `src/components/charts/`: each chart is `(data, config) => SVGSVGElement`,
 pure, keyed, and validated (it throws on a contract breach).
 
-| Chart       | For                                                                                               |
-| ----------- | ------------------------------------------------------------------------------------------------- |
-| `LineChart` | Trends over shared x positions: 1–4 series, optional area, target line, end labels, hover columns |
-| `BarList`   | Ordered or ranked categories as horizontal bars, with optional status markers                     |
-| `StackBar`  | One bar split into up to six parts of a whole                                                     |
-| `Sparkline` | A trend inside a stat tile (decorative; the tile states the value)                                |
+| Chart          | For                                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------------- |
+| `LineChart`    | Trends over shared x positions: 1–4 series, optional area, target line, end labels, hover columns |
+| `BarList`      | Ordered or ranked categories as horizontal bars, with optional status markers                     |
+| `StackBar`     | One bar split into up to six parts of a whole                                                     |
+| `Sparkline`    | A trend inside a stat tile (decorative; the tile states the value)                                |
+| `RangeChart`   | How long things take: a median dot and a band to the 90th percentile, per row                     |
+| `StackColumns` | How a whole divided up, period by period, as columns stacked to 100%                              |
+| `Heatmap`      | Magnitude on a grid (weekday × hour), in six steps of one hue with a scale                        |
 
 Colour by **role**: `s1`…`s6` for series, in order and never cycled; `quiet`
 for "the rest"; `range` for bands; `danger` and `warning` only where a mark

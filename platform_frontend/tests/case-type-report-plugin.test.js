@@ -107,5 +107,5 @@ test('the report degrades to the panels its feed can fill', () => {
   });
   assert.deepEqual(content.kpis, []);
   assert.deepEqual(content.now, []);
-  assert.deepEqual(content.sections?.[0].panels, []);
+  assert.deepEqual(content.sections, []);
 });

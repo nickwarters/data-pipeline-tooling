@@ -29,6 +29,10 @@ function model(overrides = {}) {
     flow: null,
     sla: null,
     slaTarget: null,
+    legs: null,
+    outcomes: null,
+    remediation: null,
+    posting: null,
     ...overrides,
   };
 }
@@ -53,6 +57,71 @@ function slaMonth(month, onTime, late) {
     late,
     share: onTime / (onTime + late),
   };
+}
+
+const FLOW = [{ weekEnding: '2026-10-06', arrived: 1, completed: 1 }];
+
+/** @param {number} count @returns {{ outcome: string, label: string }[]} */
+function outcomeOrder(count) {
+  return Array.from({ length: count }, (_, i) => ({
+    outcome: `o${i}`,
+    label: `Outcome ${i}`,
+  }));
+}
+
+/**
+ * Outcomes by month, with `count` outcomes in the Case Type's order.
+ *
+ * @param {number} count
+ * @param {string[]} [months]
+ */
+function outcomeMix(count, months = ['2026-08', '2026-09']) {
+  const order = outcomeOrder(count);
+  return {
+    order,
+    months: months.map((month, m) => ({
+      month,
+      counts: Object.fromEntries(
+        order.map((entry, i) => [entry.outcome, (i + 1) * (m + 1)])
+      ),
+    })),
+  };
+}
+
+/** @returns {{ leg: string, p50: number, p90: number, count: number }[]} */
+function legFigures() {
+  return [
+    { leg: 'allocation', p50: 1, p90: 2.25, count: 10 },
+    { leg: 'review', p50: 5.14, p90: 12, count: 1200 },
+    { leg: 'mystery', p50: 3, p90: 3, count: 4 },
+  ];
+}
+
+/** @returns {{ questionId: string, label: string, caseCount: number, share: number }[]} */
+function questionFigures() {
+  return [
+    {
+      questionId: 'q1',
+      label: 'Is the file complete?',
+      caseCount: 1234,
+      share: 0.256,
+    },
+    {
+      questionId: 'q2',
+      label: 'Was the customer told?',
+      caseCount: 40,
+      share: 0.05,
+    },
+  ];
+}
+
+/** @returns {number[][]} seven weekdays of 24 hours */
+function postingGrid() {
+  return Array.from({ length: 7 }, (_, day) =>
+    Array.from({ length: 24 }, (_, hour) =>
+      hour >= 9 && hour < 17 ? day + hour : 0
+    )
+  );
 }
 
 /** A model with every figure present. */
@@ -82,6 +151,10 @@ function fullModel() {
     ],
     sla: [slaMonth('2026-08', 8, 2), slaMonth('2026-09', 9, 1)],
     slaTarget: 0.9,
+    legs: legFigures(),
+    outcomes: outcomeMix(3),
+    remediation: questionFigures(),
+    posting: postingGrid(),
   });
 }
 
@@ -319,23 +392,24 @@ test('the snapshot panels are left out when their data is missing', () => {
   );
 });
 
-test('the over-time panels are left out when their data is missing', () => {
+test('a section with no panels is left out of the page', () => {
   const content = caseTypeReportContent(model());
-  assert.equal(content.sections?.length, 1);
-  assert.deepEqual(content.sections?.[0].panels, []);
+  assert.deepEqual(content.sections, []);
 });
 
 test('the over-time section offers the range filter and says what it covers', () => {
   const [section] =
-    caseTypeReportContent(model({ range: '3m' })).sections ?? [];
+    caseTypeReportContent(model({ range: '3m', flow: FLOW })).sections ?? [];
+  assert.equal(section.id, 'over-time');
   assert.deepEqual(section.filters, ['range']);
   assert.match(section.scope ?? '', /^3 months to Tue 6 Oct$/);
 });
 
 test('the over-time section names its range alone when the feed has no last day', () => {
   const [section] =
-    caseTypeReportContent(model({ range: '12m', completeThrough: null }))
-      .sections ?? [];
+    caseTypeReportContent(
+      model({ range: '12m', completeThrough: null, flow: FLOW })
+    ).sections ?? [];
   assert.equal(section.scope, '12 months');
 });
 
@@ -604,4 +678,339 @@ test('the SLA line marks each month with a dot only while there are few', () => 
       ).render(600)
     );
   assert.ok(dots(6) > dots(7));
+});
+
+/** @type {Record<string, Partial<ReturnType<typeof fullModel>>>} */
+const NEW_FIGURES = {
+  legs: { legs: legFigures() },
+  outcomes: { outcomes: outcomeMix(3) },
+  remediation: { remediation: questionFigures() },
+  posting: { posting: postingGrid() },
+};
+
+/** @param {import('../src/reports/contract.js').ReportContent} content @param {string} id */
+function sectionOf(content, id) {
+  return content.sections?.find((section) => section.id === id);
+}
+
+test('each new panel appears only when its figure exists', () => {
+  for (const [id, figure] of Object.entries(NEW_FIGURES)) {
+    const present = caseTypeReportContent(model(figure));
+    assert.deepEqual(
+      allPanels(present).map((p) => p.id),
+      [id],
+      id
+    );
+    const absent = caseTypeReportContent({
+      ...fullModel(),
+      ...nullOut(figure),
+    });
+    assert.equal(
+      allPanels(absent).find((p) => p.id === id),
+      undefined,
+      id
+    );
+  }
+});
+
+/** @param {Record<string, unknown>} figure */
+function nullOut(figure) {
+  return Object.fromEntries(Object.keys(figure).map((key) => [key, null]));
+}
+
+test('stage durations and outcomes sit with the over-time panels', () => {
+  const content = caseTypeReportContent(fullModel());
+  const ids = sectionOf(content, 'over-time')?.panels.map((p) => p.id) ?? [];
+
+  assert.ok(ids.includes('legs'));
+  assert.ok(ids.includes('outcomes'));
+  assert.ok(ids.indexOf('legs') < ids.indexOf('outcomes'));
+});
+
+test('remediation and posting sit in a section about all current Cases', () => {
+  const content = caseTypeReportContent(fullModel());
+  const section = sectionOf(content, 'all-current');
+
+  assert.equal(section?.title, 'Across all current Cases');
+  assert.deepEqual(
+    section?.panels.map((p) => p.id),
+    ['remediation', 'posting']
+  );
+  assert.equal(section?.filters, undefined);
+  assert.ok((section?.scope ?? '').length > 0);
+});
+
+test('the all-current section follows the over-time section', () => {
+  assert.deepEqual(
+    caseTypeReportContent(fullModel()).sections?.map((s) => s.id),
+    ['over-time', 'all-current']
+  );
+});
+
+test('the all-current section is left out when it has no panels', () => {
+  const content = caseTypeReportContent(model({ flow: FLOW }));
+
+  assert.deepEqual(
+    content.sections?.map((s) => s.id),
+    ['over-time']
+  );
+});
+
+test('the over-time section is left out when only all-current figures exist', () => {
+  const content = caseTypeReportContent(model({ posting: postingGrid() }));
+
+  assert.deepEqual(
+    content.sections?.map((s) => s.id),
+    ['all-current']
+  );
+});
+
+test('an empty list of remediation questions draws no panel', () => {
+  const content = caseTypeReportContent(model({ remediation: [] }));
+
+  assert.deepEqual(allPanels(content), []);
+  assert.deepEqual(content.sections, []);
+});
+
+test('every new panel draws an SVG chart at the width it is given', () => {
+  for (const id of Object.keys(NEW_FIGURES)) {
+    const svg = drawn(panel(caseTypeReportContent(fullModel()), id));
+    assert.equal(svg._tagName, 'svg', id);
+    assert.ok(
+      String(svg.getAttribute('class')).split(/\s+/).includes('cora-chart'),
+      id
+    );
+    assert.equal(svg.getAttribute('width'), '600', id);
+  }
+});
+
+test('the stage chart names median, 90th percentile and Case count for each stage', () => {
+  const svg = drawn(panel(caseTypeReportContent(fullModel()), 'legs'));
+
+  assert.deepEqual(marks(svg), [
+    'Allocation: median 1.0 d, 90th percentile 2.3 d, over 10 Cases',
+    'Review: median 5.1 d, 90th percentile 12.0 d, over 1,200 Cases',
+    'mystery: median 3.0 d, 90th percentile 3.0 d, over 4 Cases',
+  ]);
+});
+
+test('the stage table writes durations in days and names a stage the page does not know by its key', () => {
+  const legs = panel(caseTypeReportContent(fullModel()), 'legs');
+  const rows = legs.table?.rows ?? [];
+
+  assert.deepEqual(
+    rows.map((row) => cell(column(legs, 'label'), row)),
+    ['Allocation', 'Review', 'mystery']
+  );
+  assert.deepEqual(
+    rows.map((row) => cell(column(legs, 'p50'), row)),
+    ['1.0 d', '5.1 d', '3.0 d']
+  );
+  assert.deepEqual(
+    rows.map((row) => cell(column(legs, 'p90'), row)),
+    ['2.3 d', '12.0 d', '3.0 d']
+  );
+  assert.deepEqual(
+    rows.map((row) => cell(column(legs, 'count'), row)),
+    [10, 1200, 4]
+  );
+});
+
+test('the stage panel says which range it covers and explains the legend', () => {
+  const three = panel(
+    caseTypeReportContent(model({ range: '3m', legs: legFigures() })),
+    'legs'
+  );
+
+  assert.match(three.subtitle ?? '', /last 3 months/);
+  assert.deepEqual(
+    three.legend?.map((entry) => entry.label),
+    ['Median', 'Median to 90th percentile']
+  );
+});
+
+test('outcomes are coloured from the best to the worst for two to five outcomes', () => {
+  for (const count of [2, 3, 4, 5]) {
+    const outcomes = panel(
+      caseTypeReportContent(model({ outcomes: outcomeMix(count) })),
+      'outcomes'
+    );
+    const roles = outcomes.legend?.map((entry) => entry.role) ?? [];
+
+    assert.equal(roles.length, count, String(count));
+    assert.equal(roles[0], 's1', String(count));
+    assert.equal(roles.at(-1), 'danger', String(count));
+    assert.equal(new Set(roles).size, count, `${count} roles are distinct`);
+    assert.deepEqual(
+      outcomes.legend?.map((entry) => entry.label),
+      outcomeOrder(count).map((entry) => entry.label),
+      String(count)
+    );
+  }
+});
+
+test('the outcome chart paints its segments in the legend roles', () => {
+  const outcomes = panel(
+    caseTypeReportContent(model({ outcomes: outcomeMix(2, ['2026-09']) })),
+    'outcomes'
+  );
+
+  const fills = find(
+    drawn(outcomes),
+    (n) => n.getAttribute?.('class') === 'cora-stack-columns__segment'
+  ).map((n) => n.getAttribute('fill'));
+  assert.deepEqual(fills, [
+    'var(--cora-viz-series-1)',
+    'var(--cora-color-danger)',
+  ]);
+});
+
+test('outcomes with one, or more than five, outcomes leave the panel out', () => {
+  for (const count of [0, 1, 6, 7]) {
+    const content = caseTypeReportContent(
+      model({ outcomes: outcomeMix(count), flow: FLOW })
+    );
+    assert.equal(
+      allPanels(content).find((p) => p.id === 'outcomes'),
+      undefined,
+      String(count)
+    );
+  }
+});
+
+test('outcomes with no months leave the panel out', () => {
+  const content = caseTypeReportContent(
+    model({ outcomes: outcomeMix(3, []), flow: FLOW })
+  );
+
+  assert.equal(
+    allPanels(content).find((p) => p.id === 'outcomes'),
+    undefined
+  );
+});
+
+test('the outcome chart is described month by month in words', () => {
+  const svg = drawn(
+    panel(caseTypeReportContent(model({ outcomes: outcomeMix(2) })), 'outcomes')
+  );
+
+  const [august, september] = marks(svg);
+  assert.match(String(august), /^August 2026: /);
+  assert.match(String(september), /^September 2026: /);
+  assert.match(String(august), /Outcome 0 33% \(1\), Outcome 1 67% \(2\)/);
+});
+
+test('the outcome table lists the newest month first, spelled out, one column per outcome', () => {
+  const outcomes = panel(
+    caseTypeReportContent(model({ outcomes: outcomeMix(3) })),
+    'outcomes'
+  );
+  const rows = outcomes.table?.rows ?? [];
+
+  assert.deepEqual(
+    rows.map((row) => cell(column(outcomes, 'month'), row)),
+    ['September 2026', 'August 2026']
+  );
+  assert.deepEqual(
+    outcomes.table?.columns.map((c) => c.label),
+    ['Month', 'Outcome 0', 'Outcome 1', 'Outcome 2']
+  );
+  assert.deepEqual(
+    rows.map((row) => cell(column(outcomes, 'o2'), row)),
+    [6, 3]
+  );
+});
+
+test('an outcome with no Cases in a month reads as zero in the table', () => {
+  const mix = outcomeMix(2, ['2026-09']);
+  mix.months[0].counts = { o0: 4 };
+  const outcomes = panel(
+    caseTypeReportContent(model({ outcomes: mix })),
+    'outcomes'
+  );
+
+  assert.equal(cell(column(outcomes, 'o1'), outcomes.table?.rows[0]), 0);
+});
+
+test('the remediation chart reads as shares of Cases with their counts', () => {
+  const svg = drawn(panel(caseTypeReportContent(fullModel()), 'remediation'));
+
+  const said = marks(svg).join(' | ');
+  assert.match(said, /Is the file complete\?/);
+  assert.match(said, /26%/);
+  assert.match(said, /1,234 Cases/);
+});
+
+test('the remediation table lists the questions with their share as a percentage', () => {
+  const remediation = panel(caseTypeReportContent(fullModel()), 'remediation');
+  const rows = remediation.table?.rows ?? [];
+
+  assert.deepEqual(
+    rows.map((row) => cell(column(remediation, 'label'), row)),
+    ['Is the file complete?', 'Was the customer told?']
+  );
+  assert.deepEqual(
+    rows.map((row) => cell(column(remediation, 'share'), row)),
+    ['26%', '5%']
+  );
+  assert.deepEqual(
+    rows.map((row) => cell(column(remediation, 'caseCount'), row)),
+    [1234, 40]
+  );
+});
+
+test('the posting chart describes each cell by weekday and hour with its message count', () => {
+  const svg = drawn(panel(caseTypeReportContent(fullModel()), 'posting'));
+
+  const said = marks(svg);
+  assert.equal(said.length, 7 * 24);
+  assert.equal(said[0], 'Mon 00:00–01:00: 0 messages');
+  assert.equal(said[9], 'Mon 09:00–10:00: 9 messages');
+  assert.equal(said[6 * 24 + 23], 'Sun 23:00–00:00: 0 messages');
+});
+
+test('the posting chart labels a few hours along its axis', () => {
+  const svg = drawn(panel(caseTypeReportContent(fullModel()), 'posting'));
+
+  const axis = find(
+    svg,
+    (n) => n.getAttribute?.('class') === 'cora-chart__x-axis'
+  )[0];
+  assert.deepEqual(
+    axis.querySelectorAll('text').map((/** @type {any} */ t) => t.textContent),
+    ['00', '06', '12', '18', '23']
+  );
+});
+
+test('the posting table has a Day column, 24 hour columns and a Total', () => {
+  const posting = panel(caseTypeReportContent(fullModel()), 'posting');
+  const labels = posting.table?.columns.map((c) => c.label) ?? [];
+
+  assert.equal(labels.length, 26);
+  assert.equal(labels[0], 'Day');
+  assert.equal(labels.at(-1), 'Total');
+  assert.deepEqual(labels.slice(1, 4), ['00:00', '01:00', '02:00']);
+  assert.equal(labels[24], '23:00');
+});
+
+test('the posting table has a row for each weekday, Monday first, with its hours and total', () => {
+  const grid = postingGrid();
+  const posting = panel(
+    caseTypeReportContent(model({ posting: grid })),
+    'posting'
+  );
+  const rows = posting.table?.rows ?? [];
+
+  assert.deepEqual(
+    rows.map((row) => cell(column(posting, 'day'), row)),
+    ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  );
+  rows.forEach((row, day) => {
+    assert.equal(cell(column(posting, 'h9'), row), grid[day][9]);
+    assert.equal(cell(column(posting, 'h23'), row), 0);
+    assert.equal(
+      cell(column(posting, 'total'), row),
+      grid[day].reduce((a, b) => a + b, 0)
+    );
+  });
 });

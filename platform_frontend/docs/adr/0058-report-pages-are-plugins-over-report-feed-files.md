@@ -135,7 +135,7 @@ function of state (ADR-0039).
 ### The chart kit and its palette
 
 `src/components/charts/` holds pure `(data, config) => SVGSVGElement` charts
-(`LineChart`, `BarList`, `StackBar`, `Sparkline`, sharing `chart-kit.js`). They
+(`LineChart`, `BarList`, `StackBar`, `Sparkline`, `RangeChart`, `StackColumns`, `Heatmap`, sharing `chart-kit.js`). They
 colour by **role**, never by hex value: six series slots (`--cora-viz-series-1`…`6`),
 `quiet`, `range`, and the existing `danger` and `warning` status tokens.
 Each mark carries the attributes the existing tooltip controller reads, and

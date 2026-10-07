@@ -4590,6 +4590,15 @@
   fill: var(--cora-viz-grid);
 }
 
+[data-cora-root] .cora-heatmap__cell--zero {
+  fill: var(--cora-viz-grid);
+}
+
+[data-cora-root] .cora-range-chart__median {
+  stroke: var(--cora-color-surface);
+  stroke-width: 2;
+}
+
 [data-cora-root] .cora-sparkline {
   flex: none;
   overflow: visible;

@@ -7,6 +7,9 @@ import {
 import { BarList } from '../../components/charts/bar-list.js';
 import { LineChart } from '../../components/charts/line-chart.js';
 import { StackBar } from '../../components/charts/stack-bar.js';
+import { RangeChart } from '../../components/charts/range-chart.js';
+import { StackColumns } from '../../components/charts/stack-columns.js';
+import { Heatmap } from '../../components/charts/heatmap.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
 import { RANGES } from './case-type-report-model.js';
 
@@ -421,6 +424,267 @@ function slaPanel(sla, target) {
   };
 }
 
+/** @type {Readonly<Record<string, string>>} */
+const LEG_LABELS = Object.freeze({
+  allocation: 'Allocation',
+  review: 'Review',
+  remediation: 'Remediation',
+  to_reportable: 'To reportable',
+  end_to_end: 'End to end',
+});
+
+/** @param {number} days */
+const formatDays = (days) => `${days.toFixed(1)} d`;
+
+/**
+ * @param {NonNullable<CaseTypeReportModel['legs']>} legs
+ * @param {string} rangeLabel
+ * @returns {ReportPanelSpec}
+ */
+function legsPanel(legs, rangeLabel) {
+  const rows = legs.map((leg) => ({
+    ...leg,
+    label: LEG_LABELS[leg.leg] ?? leg.leg,
+  }));
+  return {
+    id: 'legs',
+    title: 'How long each stage takes',
+    subtitle: `Median and 90th percentile, for Cases finishing a stage in the last ${rangeLabel}.`,
+    span: 6,
+    legend: [
+      { label: 'Median', role: 's1' },
+      { label: 'Median to 90th percentile', role: 'range' },
+    ],
+    note: 'Worked out by the pipeline for each range: percentiles from different months cannot be combined.',
+    render: (width) =>
+      RangeChart(
+        {
+          rows: rows.map((row) => ({
+            key: row.leg,
+            label: row.label,
+            p50: row.p50,
+            p90: row.p90,
+            count: row.count,
+          })),
+        },
+        {
+          width,
+          ariaLabel:
+            'How long each stage of the lifecycle takes, median and 90th percentile',
+        }
+      ),
+    table: {
+      columns: [
+        { key: 'label', label: 'Stage', value: 'label', sortable: false },
+        {
+          key: 'p50',
+          label: 'Median',
+          value: 'p50',
+          format: (value) => formatDays(Number(value)),
+        },
+        {
+          key: 'p90',
+          label: '90th percentile',
+          value: 'p90',
+          format: (value) => formatDays(Number(value)),
+        },
+        { key: 'count', label: 'Cases', value: 'count' },
+      ],
+      rows,
+      rowKey: (row) => row.leg,
+    },
+  };
+}
+
+/**
+ * The roles an outcome scale takes, best to worst: blue for the best, red for
+ * the worst, and greys between, so the eye goes to the ends and never reads a
+ * middle outcome as a series of its own. More outcomes than this would need
+ * colours a reader cannot order, so the panel is left out instead.
+ *
+ * @type {Readonly<Record<number, readonly ChartRole[]>>}
+ */
+const OUTCOME_ROLES = Object.freeze({
+  2: Object.freeze(/** @type {ChartRole[]} */ (['s1', 'danger'])),
+  3: Object.freeze(
+    /** @type {ChartRole[]} */ (['s1', 'quiet-strong', 'danger'])
+  ),
+  4: Object.freeze(
+    /** @type {ChartRole[]} */ (['s1', 'range', 'quiet-strong', 'danger'])
+  ),
+  5: Object.freeze(
+    /** @type {ChartRole[]} */ ([
+      's1',
+      'range',
+      'quiet',
+      'quiet-strong',
+      'danger',
+    ])
+  ),
+});
+
+/**
+ * @param {NonNullable<CaseTypeReportModel['outcomes']>} outcomes
+ * @returns {ReportPanelSpec | null}
+ */
+function outcomesPanel(outcomes) {
+  const roles = OUTCOME_ROLES[outcomes.order.length];
+  if (!roles || outcomes.months.length === 0) return null;
+  const parts = outcomes.order.map((entry, i) => ({
+    key: entry.outcome,
+    label: entry.label,
+    role: roles[i],
+  }));
+  const rows = outcomes.months.map(({ month, counts }) => ({
+    month,
+    ...counts,
+  }));
+  return {
+    id: 'outcomes',
+    title: 'Outcomes by month',
+    subtitle:
+      'Reportable Cases by the outcome they reached, by month. Outcome names are the Case Type’s.',
+    span: 6,
+    legend: parts.map(({ label, role }) => ({ label, role })),
+    render: (width) =>
+      StackColumns(
+        {
+          parts,
+          columns: outcomes.months.map(({ month, counts }) => ({
+            key: month,
+            label: shortMonth(month),
+            describe: longMonth(month),
+            counts,
+          })),
+        },
+        { width, ariaLabel: 'Share of each outcome, by month' }
+      ),
+    table: {
+      columns: [
+        {
+          key: 'month',
+          label: 'Month',
+          value: 'month',
+          format: (value) => longMonth(String(value)),
+        },
+        ...parts.map((part) => ({
+          key: part.key,
+          label: part.label,
+          value: (/** @type {Record<string, unknown>} */ row) =>
+            row[part.key] ?? 0,
+        })),
+      ],
+      rows: [...rows].reverse(),
+      rowKey: (row) => row.month,
+    },
+  };
+}
+
+/**
+ * @param {NonNullable<CaseTypeReportModel['remediation']>} questions
+ * @returns {ReportPanelSpec}
+ */
+function remediationPanel(questions) {
+  return {
+    id: 'remediation',
+    title: 'Questions that most often need remediation',
+    subtitle:
+      'Share of current Cases with at least one Remediation Action on the question.',
+    span: 6,
+    render: (width) =>
+      BarList(
+        {
+          rows: questions.map((question) => ({
+            key: question.questionId,
+            label: question.label,
+            value: question.share,
+            detail: [`${formatCount(question.caseCount)} Cases`],
+          })),
+        },
+        {
+          width,
+          format: (value) => formatPercent(value),
+          unit: 'of Cases',
+          maxLabelWidth: Math.max(80, Math.floor(width * 0.42)),
+          ariaLabel: 'The questions that most often need remediation',
+        }
+      ),
+    table: {
+      columns: [
+        { key: 'label', label: 'Question', value: 'label' },
+        {
+          key: 'share',
+          label: 'Share of Cases',
+          value: 'share',
+          format: (value) => formatPercent(Number(value)),
+        },
+        { key: 'caseCount', label: 'Cases', value: 'caseCount' },
+      ],
+      rows: questions,
+      rowKey: (row) => row.questionId,
+    },
+  };
+}
+
+const WEEKDAYS = Object.freeze([
+  'Mon',
+  'Tue',
+  'Wed',
+  'Thu',
+  'Fri',
+  'Sat',
+  'Sun',
+]);
+/** @param {number} hour */
+const clock = (hour) => `${String(hour).padStart(2, '0')}:00`;
+
+/**
+ * @param {NonNullable<CaseTypeReportModel['posting']>} grid
+ * @returns {ReportPanelSpec}
+ */
+function postingPanel(grid) {
+  const rows = grid.map((hours, day) => ({
+    day: WEEKDAYS[day],
+    hours,
+    total: hours.reduce((a, b) => a + b, 0),
+  }));
+  return {
+    id: 'posting',
+    title: 'When Conversation messages are posted',
+    subtitle: 'Every message on current Cases, by local weekday and hour.',
+    span: 6,
+    render: (width) =>
+      Heatmap(
+        { values: grid },
+        {
+          width,
+          rowLabels: [...WEEKDAYS],
+          columnLabels: Array.from({ length: 24 }, (_, hour) =>
+            clock(hour).slice(0, 2)
+          ),
+          labelColumns: [0, 6, 12, 18, 23],
+          describeCell: (day, hour) =>
+            `${WEEKDAYS[day]} ${clock(hour)}–${clock((hour + 1) % 24)}`,
+          unit: 'messages',
+          ariaLabel: 'Conversation messages posted, by weekday and hour',
+        }
+      ),
+    table: {
+      columns: [
+        { key: 'day', label: 'Day', value: 'day', sortable: false },
+        ...Array.from({ length: 24 }, (_, hour) => ({
+          key: `h${hour}`,
+          label: clock(hour),
+          value: (/** @type {{ hours: number[] }} */ row) => row.hours[hour],
+        })),
+        { key: 'total', label: 'Total', value: 'total' },
+      ],
+      rows,
+      rowKey: (row) => row.day,
+    },
+  };
+}
+
 /**
  * @template T
  * @param {(T | null | false)[]} items
@@ -461,8 +725,21 @@ export function caseTypeReportContent(model) {
           model.sla && model.sla.length >= 2
             ? slaPanel(model.sla, model.slaTarget)
             : null,
+          model.legs ? legsPanel(model.legs, range.label) : null,
+          model.outcomes ? outcomesPanel(model.outcomes) : null,
         ]),
       },
-    ],
+      {
+        id: 'all-current',
+        title: 'Across all current Cases',
+        scope: 'Every Case of this type that is not void, whatever the range',
+        panels: present([
+          model.remediation && model.remediation.length > 0
+            ? remediationPanel(model.remediation)
+            : null,
+          model.posting ? postingPanel(model.posting) : null,
+        ]),
+      },
+    ].filter((section) => section.panels.length > 0),
   };
 }
