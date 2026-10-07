@@ -39,7 +39,8 @@ takes a required ``--app`` naming a module that exposes ``build_pipeline_sets()`
 (the schedules); execution itself is by path, exactly as ``run`` does it, so no
 handler registry is wired up front. Its working-day calendar is seeded by the
 optional ``--calendar <file>`` (a YAML calendar file of ``holidays`` and
-``weekend``); omitted, the calendar is weekends-only.
+``weekend``); omitted, the calendar is weekends-only. ``--plan`` prints
+``Orchestrator.plan()`` for the run date instead of running anything.
 """
 
 from __future__ import annotations
@@ -237,8 +238,11 @@ def _orchestrate(args: argparse.Namespace) -> int:
             app.build_pipeline_sets(),
             calendar,
         )
-        # The two modes are mutually exclusive at the parser, and a single pass
-        # is the default when neither is named.
+        if args.plan:
+            print(orchestrator.plan(base_dir, run_date=args.run_date))
+            return 0
+        # The modes are mutually exclusive at the parser, and a single pass
+        # is the default when none is named.
         if args.once or not args.loop:
             result = orchestrator.run_due_once(base_dir, run_date=args.run_date)
             decisions = list(result.decisions)
@@ -591,6 +595,11 @@ def register(sub) -> None:
     mode = orchestrate.add_mutually_exclusive_group()
     mode.add_argument("--once", action="store_true", help="run one due-work pass")
     mode.add_argument("--loop", action="store_true", help="poll until due work settles")
+    mode.add_argument(
+        "--plan",
+        action="store_true",
+        help="preview what a pass would run, skip or block, without running anything",
+    )
     orchestrate.add_argument(
         "--poll-seconds",
         type=float,

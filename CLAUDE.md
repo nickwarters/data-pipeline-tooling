@@ -187,6 +187,7 @@ python3 -m venv .venv
 .venv/bin/python -m cli scaffold orders --from-feed-file sample.csv  # seed schema/sample/test from a real CSV header
 .venv/bin/python -m cli scaffold --case-type claims # scaffold a Case Type ingest feed (source->raw->silver, identity declared)
 .venv/bin/python -m cli run pipelines/ingest --base-dir /tmp/demo  # operator CLI: run/orchestrate/migrate/status/runs/log (see docs/operator-cli.md)
+.venv/bin/python -m cli orchestrate --app pipelines.schedules --base-dir /tmp/demo --plan  # preview a scheduled pass without running it
 .venv/bin/python -m cli migrate --base-dir /tmp/demo --check       # report databases behind their migrations (exit 1 if any)
 .venv/bin/pre-commit run --all-files             # lint + format the whole tree on demand
 
@@ -247,7 +248,9 @@ path, run at its scheduled time by the same rule (no handler registry) — and
 takes a required `--app` naming an application's schedules module that exposes
 `build_pipeline_sets()`, plus an optional `--calendar <file>` naming a YAML
 calendar file (`holidays` + `weekend`) that seeds the `WorkingDayCalendar` every
-schedule judges against (omitted, it is weekends-only). `migrate` applies the
+schedule judges against (omitted, it is weekends-only); `--plan` in place of
+`--once` / `--loop` prints `Orchestrator.plan()` for the run date and runs
+nothing. `migrate` applies the
 SQL migrations that own those databases' *shape*: it walks the `migrations/`
 tree — the only registry of which databases are under migration control, since a
 database opts in by having a directory there — and brings each one under

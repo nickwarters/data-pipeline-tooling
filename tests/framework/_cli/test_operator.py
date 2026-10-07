@@ -312,6 +312,69 @@ def test_dry_run_passes_params_to_the_previewed_pipeline(tmp_path):
     assert not (tmp_path / "fixture" / "raw.db").exists()
 
 
+def test_orchestrate_plan_previews_the_pass_without_running_it(tmp_path):
+    result = _cli(
+        "orchestrate",
+        "--app",
+        "cliapp",
+        "--base-dir",
+        str(tmp_path),
+        "--run-date",
+        "2026-05-29",
+        "--plan",
+    )
+
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.splitlines()
+    assert lines[0].split()[:4] == ["2026-05-29", "fixture", "_source", "ready"]
+    assert lines[0].endswith("schedule daily is due")
+    assert lines[1].split()[:4] == ["2026-05-29", "fixture", "_downstream", "ready"]
+    # Nothing ran and no decision was recorded.
+    assert not (tmp_path / "fixture").exists()
+    assert not (tmp_path / "_orchestration").exists()
+
+
+def test_orchestrate_plan_reports_a_calendar_seeded_holiday_as_skipped(tmp_path):
+    calendar = tmp_path / "calendar.yml"
+    calendar.write_text("holidays:\n  - 2026-05-29\n", encoding="utf-8")
+
+    result = _cli(
+        "orchestrate",
+        "--app",
+        "cliapp",
+        "--base-dir",
+        str(tmp_path),
+        "--run-date",
+        "2026-05-29",
+        "--calendar",
+        str(calendar),
+        "--plan",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines()[0].split()[:4] == [
+        "2026-05-29",
+        "fixture",
+        "_source",
+        "skipped",
+    ]
+
+
+def test_orchestrate_plan_is_exclusive_with_the_run_modes(tmp_path):
+    result = _cli(
+        "orchestrate",
+        "--app",
+        "cliapp",
+        "--base-dir",
+        str(tmp_path),
+        "--plan",
+        "--once",
+    )
+
+    assert result.returncode != 0
+    assert "not allowed with argument" in result.stderr
+
+
 def test_orchestrate_unknown_app_reports_clear_error(tmp_path):
     result = _cli(
         "orchestrate",
