@@ -755,6 +755,9 @@
   cursor: pointer;
   text-align: left;
   color: var(--cora-color-on-surface);
+  /* The global button reset is nowrap, which pushed a long Case Type scope off the page. */
+  white-space: normal;
+  line-height: var(--cora-line-height-snug);
 }
 
 [data-cora-root] .cora-kpi-strip .cora-kpi-lane__header:hover {
@@ -768,6 +771,8 @@
 }
 
 [data-cora-root] .cora-kpi-strip .cora-kpi-lane__role {
+  flex: none;
+  white-space: nowrap;
   font-size: var(--cora-font-size-sm);
   font-weight: var(--cora-font-weight-semibold);
   letter-spacing: var(--cora-tracking-wider);
@@ -775,6 +780,9 @@
 }
 
 [data-cora-root] .cora-kpi-strip .cora-kpi-lane__scope {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
   color: var(--cora-color-text-muted);
   font-size: var(--cora-font-size-sm);
   font-weight: normal;
