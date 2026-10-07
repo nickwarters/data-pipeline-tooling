@@ -98,10 +98,11 @@ test('HttpSharePointClient: searchPeople POSTs to the people-picker endpoint, qu
     {
       loginName: 'jsmith',
       displayName: 'John Smith',
+      domain: 'CONTOSO',
       email: 'jsmith@contoso.com',
     },
-    { loginName: 'bjones', displayName: 'Bola Jones' },
-    { loginName: 'noname', displayName: 'noname' },
+    { loginName: 'bjones', displayName: 'Bola Jones', domain: 'CONTOSO' },
+    { loginName: 'noname', displayName: 'noname', domain: 'CONTOSO' },
   ]);
   const post = calls.find(
     (c) => c.method === 'POST' && c.url.includes('clientPeoplePickerSearchUser')
@@ -152,7 +153,7 @@ test('HttpSharePointClient: searchPeople reads the verbose d.ClientPeoplePickerS
 
   const results = await client.searchPeople('anna');
   assert.deepEqual(results, [
-    { loginName: 'asmith', displayName: 'Anna Smith' },
+    { loginName: 'asmith', displayName: 'Anna Smith', domain: 'CONTOSO' },
   ]);
 });
 
@@ -375,7 +376,11 @@ test('HttpSharePointClient: resolveManagers reads each unique profile once and e
     2,
     'one profile read per unique account'
   );
-  assert.equal(calls.length, 2, 'does not call a manager-specific endpoint');
+  assert.equal(
+    calls.filter((c) => c.method === 'GET').length,
+    2,
+    'does not call a manager-specific endpoint'
+  );
 });
 
 test('HttpSharePointClient: resolveManagers returns a present null key when its profile read fails', async () => {

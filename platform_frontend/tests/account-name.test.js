@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  toAccountDomain,
   toBareAccount,
   toClaimsLogin,
   CLAIMS_PREFIX,
@@ -43,4 +44,28 @@ test('toClaimsLogin: reattaches the claims prefix and AD domain to a bare accoun
 
 test('toClaimsLogin: round-trips with toBareAccount', () => {
   assert.equal(toBareAccount(toClaimsLogin('jsmith')), 'jsmith');
+});
+
+test('toClaimsLogin: attaches a known domain instead of the default one', () => {
+  assert.equal(toClaimsLogin('2002', 'OTHERDOM'), 'i:0#.w|OTHERDOM\\2002');
+  assert.equal(toClaimsLogin('2002', ''), `i:0#.w|${AD_DOMAIN}\\2002`);
+});
+
+test('toAccountDomain: takes the domain a login names, without the claims prefix', () => {
+  assert.equal(toAccountDomain('i:0#.w|OTHERDOM\\2002'), 'OTHERDOM');
+  assert.equal(toAccountDomain('  OTHERDOM\\2002 '), 'OTHERDOM');
+  assert.equal(toAccountDomain('i:0#.w|EU\\CONTOSO\\jsmith'), 'EU\\CONTOSO');
+});
+
+test('toAccountDomain: a login naming no domain answers the empty string', () => {
+  assert.equal(toAccountDomain('jsmith'), '');
+  assert.equal(toAccountDomain(/** @type {any} */ (null)), '');
+});
+
+test('toAccountDomain and toBareAccount round-trip through toClaimsLogin', () => {
+  const login = 'i:0#.w|OTHERDOM\\2002';
+  assert.equal(
+    toClaimsLogin(toBareAccount(login), toAccountDomain(login)),
+    login
+  );
 });

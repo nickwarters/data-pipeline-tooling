@@ -94,6 +94,20 @@ test('PeoplePicker renders one selectable option per search result', () => {
   assert.equal(statusLine(host).getAttribute('aria-hidden'), 'true');
 });
 
+test('PeoplePicker hands on the domain the directory named a person with', () => {
+  /** @type {any[]} */
+  const selected = [];
+  const host = PeoplePicker(
+    props({
+      people: [{ ...PERSON, domain: 'OTHERDOM', email: 'j@example.com' }],
+      status: 'success',
+      onSelect: (person) => selected.push(person),
+    })
+  );
+  fireEvent(queryAllByRole(host, 'option')[0], 'click');
+  assert.deepEqual(selected, [{ ...PERSON, domain: 'OTHERDOM' }]);
+});
+
 test('no option is ever offered for an empty result set, whatever the status', () => {
   for (const status of /** @type {const} */ ([
     'idle',

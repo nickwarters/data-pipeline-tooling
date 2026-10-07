@@ -58,7 +58,7 @@ export function findCaptureField(groups, key) {
  * What one Issue Capture Field holds: a string for the four text/choice types,
  * a person for a `person` field.
  *
- * @typedef {string | { loginName: string, displayName: string }} CaptureValue
+ * @typedef {string | { loginName: string, displayName: string, domain?: string }} CaptureValue
  */
 
 /**

@@ -399,11 +399,22 @@ export class CaseLoader {
     const personKeys = this._personCaptureKeys();
     /** @type {string[]} */
     const accounts = [];
+    /** @type {Record<string, string>} */
+    const domains = {};
     /** @param {unknown} value */
     const collect = (value) => {
       const login = /** @type {any} */ (value)?.loginName;
+      const domain = /** @type {any} */ (value)?.domain;
       if (typeof login === 'string' && login && !accounts.includes(login)) {
         accounts.push(login);
+      }
+      if (
+        typeof login === 'string' &&
+        login &&
+        typeof domain === 'string' &&
+        domain
+      ) {
+        domains[login] = domain;
       }
     };
     for (const answer of Object.values(this.answers)) {
@@ -411,7 +422,7 @@ export class CaseLoader {
     }
     if (accounts.length === 0) return;
 
-    const resolved = await this.client.resolveUsers(accounts);
+    const resolved = await this.client.resolveUsers(accounts, { domains });
     /**
      * The same person with the directory's current name, or null when nothing
      * needs rewriting.

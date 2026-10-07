@@ -227,6 +227,16 @@ _REJECTED_AS_NAN = object()
             id="a-whole-person",
         ),
         pytest.param(
+            {
+                "loginName": "user-rp",
+                "displayName": "Bola Okafor",
+                "domain": "OTHERDOM",
+            },
+            ("person", None, "user-rp", "Bola Okafor"),
+            None,
+            id="a-person-with-their-domain",
+        ),
+        pytest.param(
             "Called back within SLA.",
             ("text", "Called back within SLA.", None, None),
             None,

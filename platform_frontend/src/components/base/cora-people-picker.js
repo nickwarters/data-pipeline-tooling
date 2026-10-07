@@ -12,7 +12,7 @@ import { EmptyState, LoadingState } from '../../lib/empty-state.js';
  * @property {PeopleSearchStatus} status How far the search behind `people` got.
  * @property {string} inputValue
  * @property {(value: string) => void} onQueryInput
- * @property {(person: { loginName: string, displayName: string }) => void} onSelect
+ * @property {(person: { loginName: string, displayName: string, domain?: string }) => void} onSelect
  * @property {string} [ariaLabel] The control's accessible name. Defaults to a
  *   generic one, which suits a picker whose surroundings already say what it
  *   fills; a caller supplies its own when the name has to carry that itself.
@@ -64,7 +64,13 @@ function peoplePickerStatus(props) {
 export function PeoplePicker(props) {
   const items = props.people.map((p) =>
     peoplePickerOption(
-      { loginName: p.loginName, displayName: p.displayName },
+      p.domain
+        ? {
+            loginName: p.loginName,
+            displayName: p.displayName,
+            domain: p.domain,
+          }
+        : { loginName: p.loginName, displayName: p.displayName },
       `${p.displayName} — ${p.loginName}`,
       props.onSelect
     )
@@ -104,9 +110,9 @@ export function PeoplePicker(props) {
 }
 
 /**
- * @param {{ loginName: string, displayName: string }} person
+ * @param {{ loginName: string, displayName: string, domain?: string }} person
  * @param {string} label
- * @param {(person: { loginName: string, displayName: string }) => void} onSelect
+ * @param {(person: { loginName: string, displayName: string, domain?: string }) => void} onSelect
  * @returns {HTMLElement}
  */
 function peoplePickerOption(person, label, onSelect) {

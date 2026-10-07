@@ -63,7 +63,7 @@ test('HttpSharePointClient: a person’s groups are read by claims login, titles
 
   assert.deepEqual(groups, ['Reviewers', "Reviewers - O'Brien"]);
   assert.equal(
-    calls[0].url,
+    calls.find((c) => c.method === 'GET')?.url,
     `${WEB_URL}/_api/web/siteusers/getbyloginname(@v)/groups?@v='${ENCODED_CLAIMS}'&$select=Id,Title`
   );
   assert.equal(
@@ -81,7 +81,7 @@ test('HttpSharePointClient: an apostrophe in a login is doubled before it is enc
   await client.listUserGroups("o'brien");
 
   assert.match(
-    calls[0].url,
+    calls.find((c) => c.url.includes('getbyloginname'))?.url ?? '',
     new RegExp(`@v='${encodeURIComponent("i:0#.w|CONTOSO\\o''brien")}'`)
   );
 });
@@ -584,7 +584,7 @@ test('HttpSharePointClient: the group and Access Log reads carry the mount signa
   const client = new HttpSharePointClient({
     webUrl: WEB_URL,
     fetchImpl: async (_input, init) => {
-      signals.push(init?.signal);
+      if (init?.method === 'GET') signals.push(init.signal);
       return json({ value: [], CanCurrentUserEditMembership: true });
     },
   });
