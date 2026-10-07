@@ -581,8 +581,10 @@ tiles are that panel's four Reviewer groups — **Overdue**, **Awaiting Frontlin
 read off the same stored flags. A tile and its group are two renderings of one
 number, not two readings of one word: the lane holds every Case the Reviewer has in
 an **outstanding** status, and its tiles partition it, so they sum to the lane's own
-headline. The **Controls** and **Owner** lanes answer different questions and have no
-Action Centre counterpart.
+headline. The Reviewer lane's scope names the **Case Types** the user is a Reviewer
+for (their `Reviewers - <type>` groups) plus any Case Type they hold a Case in, never
+every list a broad role such as Maintainer can read. The **Controls** and **Owner**
+lanes answer different questions and have no Action Centre counterpart.
 
 ### Communication
 
