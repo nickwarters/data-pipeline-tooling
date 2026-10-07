@@ -41,6 +41,8 @@ handler registry is wired up front. Its working-day calendar is seeded by the
 optional ``--calendar <file>`` (a YAML calendar file of ``holidays`` and
 ``weekend``); omitted, the calendar is weekends-only. ``--plan`` prints
 ``Orchestrator.plan()`` for the run date instead of running anything.
+``--force`` runs items declared ``allow_multiple_runs=False`` again on a run
+date they already succeeded on.
 """
 
 from __future__ import annotations
@@ -239,12 +241,14 @@ def _orchestrate(args: argparse.Namespace) -> int:
             calendar,
         )
         if args.plan:
-            print(orchestrator.plan(base_dir, run_date=args.run_date))
+            print(orchestrator.plan(base_dir, run_date=args.run_date, force=args.force))
             return 0
         # The modes are mutually exclusive at the parser, and a single pass
         # is the default when none is named.
         if args.once or not args.loop:
-            result = orchestrator.run_due_once(base_dir, run_date=args.run_date)
+            result = orchestrator.run_due_once(
+                base_dir, run_date=args.run_date, force=args.force
+            )
             decisions = list(result.decisions)
         else:
             results = orchestrator.run_until_complete(
@@ -252,6 +256,7 @@ def _orchestrate(args: argparse.Namespace) -> int:
                 run_date=args.run_date,
                 poll_seconds=args.poll_seconds,
                 max_idle_polls=args.max_idle_polls,
+                force=args.force,
             )
             decisions = [d for result in results for d in result.decisions]
     except PipelineError as exc:
@@ -599,6 +604,12 @@ def register(sub) -> None:
         "--plan",
         action="store_true",
         help="preview what a pass would run, skip or block, without running anything",
+    )
+    orchestrate.add_argument(
+        "--force",
+        action="store_true",
+        help="run items with allow_multiple_runs=False even if they already "
+        "succeeded on the run date",
     )
     orchestrate.add_argument(
         "--poll-seconds",

@@ -548,7 +548,7 @@ Pipelines. Python
 definitions own the canonical sets, dependencies, and default schedules — and
 those definitions are **application-owned** and live beside the feeds they
 address, here `pipelines/schedules.py`, which the operator CLI's `--app` names. YAML
-may override enablement, timing, and freshness windows. Schedules are
+may override enablement, timing, `allow_multiple_runs`, and freshness windows. Schedules are
 expressed with the friendly `Schedule.*` constructors (`Schedule.daily()`,
 `Schedule.on_weekdays("monday", …)`, `Schedule.day_of_month(n)`,
 `Schedule.nth_working_day_of_month(n)`, `Schedule.last_working_day_of_month()`,
@@ -594,9 +594,16 @@ Deadline. Only items due today contribute one.
 **Overdue**:
 A due item whose effective Deadline has passed and which has not yet succeeded
 today. _Here_: overdue items are attempted first, most overdue first. An item
-that already succeeded today exerts no Deadline pressure at all — whether an item
-has run today is read for that question **only**, and never to decide whether it
-may run.
+that already succeeded today exerts no Deadline pressure at all. The ordering
+reads whether an item has run today for that question **only**; the one place it
+decides whether an item runs is an item held to **Once per run date**.
+
+**Once per run date** (`allow_multiple_runs=False`):
+A scheduled item that a pass skips on a run date it already succeeded on, unless
+the pass is forced. _Here_: opt-in on `ScheduledPipeline`; the default,
+`allow_multiple_runs=True`, lets a polling feed re-run every pass. Only a
+success counts, and `plan()` reports the skip as `already-satisfied`. See
+[ADR-0031](docs/adr/0031-a-scheduled-item-may-opt-into-one-run-per-run-date.md).
 
 **Earliest run** (`earliest_run`):
 An optional `"HH:MM"` before which an item is not attempted. _Here_: a per-pass

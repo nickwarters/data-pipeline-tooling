@@ -1064,9 +1064,16 @@ raises `FreshnessError`, and `Orchestrator.plan()` is the read-only caller that
 renders it. The two used to hold separate copies that had already drifted apart
 in wording.
 
+An item declaring `allow_multiple_runs=False` is held to one success per run
+date: the pass records it `skipped` once it has succeeded that day, and `plan()`
+reports it `already-satisfied`, unless the pass is forced (`force=True` on
+`run_due_once`, `run_until_complete` and `plan`; `orchestrate --force`). The
+default is `True`, so a polling feed re-runs every pass as before
+([ADR-0031](adr/0031-a-scheduled-item-may-opt-into-one-run-per-run-date.md)).
+
 Python definitions are canonical. YAML overrides may disable a scheduled item,
-replace its schedule timing, or override freshness windows for operations
-without changing the registered pipeline code. An override naming a set or
+replace its schedule timing, set `allow_multiple_runs`, or override freshness
+windows for operations without changing the registered pipeline code. An override naming a set or
 pipeline that does not exist is a start-up error; one that resolves but cannot
 take effect — `freshness_days` on an item declaring no dependencies, which is
 applied by rewriting each dependency — warns rather than passing silently. It is

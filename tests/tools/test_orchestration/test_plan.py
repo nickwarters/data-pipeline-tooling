@@ -175,7 +175,7 @@ def test_plan_returns_blocked_when_freshness_requirement_is_stale(tmp_path):
 
 
 def test_plan_returns_already_satisfied_when_run_succeeded_today(tmp_path):
-    """Write a same-day success; plan() must report already-satisfied."""
+    """Write a same-day success; a once-only item must plan as already-satisfied."""
     log_path = tmp_path / "_runs" / "ingest.log"
     _record_run(
         log_path,
@@ -186,7 +186,14 @@ def test_plan_returns_already_satisfied_when_run_succeeded_today(tmp_path):
     )
 
     orchestrator, calls = _orchestrator(
-        PipelineSet("claims", (ScheduledPipeline("pipelines/ingest", Weekdays()),))
+        PipelineSet(
+            "claims",
+            (
+                ScheduledPipeline(
+                    "pipelines/ingest", Weekdays(), allow_multiple_runs=False
+                ),
+            ),
+        )
     )
 
     result = orchestrator.plan(tmp_path, run_date=_DUE_DATE)
@@ -195,6 +202,20 @@ def test_plan_returns_already_satisfied_when_run_succeeded_today(tmp_path):
     item = result.items[0]
     assert item.status == "already-satisfied"
     assert _DUE_DATE.isoformat() in item.reason
+
+
+def test_plan_returns_ready_for_a_same_day_success_that_may_run_again(tmp_path):
+    """The default allows multiple runs, so the plan says the pass will re-run it."""
+    _record_run(tmp_path / "_runs" / "ingest.log", pipeline="ingest")
+
+    orchestrator, _ = _orchestrator(
+        PipelineSet("claims", (ScheduledPipeline("pipelines/ingest", Weekdays()),))
+    )
+
+    item = orchestrator.plan(tmp_path, run_date=_DUE_DATE).items[0]
+
+    assert item.status == "ready"
+    assert f"already succeeded on {_DUE_DATE.isoformat()}, runs again" in item.reason
 
 
 def test_plan_for_each_reports_multiple_planned_runs_without_executing(tmp_path):
