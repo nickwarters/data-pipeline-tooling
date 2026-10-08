@@ -48,8 +48,9 @@ The directory type-ahead behind every people picker. A blank or whitespace-only
 query short-circuits to `[]` without a request. Otherwise it POSTs to the
 people-picker endpoint across all principal sources, so it finds users who have
 never been added to this site, and reduces each result's claims `Key` to a bare
-account name. Each result also carries the `domain` its `Key` named, which a
-`person` capture value stores beside the account.
+account name. Each result also carries the `domain` its `Key` named and the
+person's `email` when the directory has one; a `person` capture value stores
+both beside the account.
 
 The shared debounced search reports `loading` when its 200ms timer starts the
 request, not when the query is scheduled. A query replaced during that window

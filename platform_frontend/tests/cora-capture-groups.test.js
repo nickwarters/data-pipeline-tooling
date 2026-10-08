@@ -216,6 +216,26 @@ test('CaptureGroups renders a person field as a people picker, not a text box', 
   assert.deepEqual(captured, [['attributedTo', PERSON]]);
 });
 
+test('CaptureGroups stores the domain and email the directory named a chosen person with', () => {
+  /** @type {any[]} */
+  const captured = [];
+  const found = { ...PERSON, domain: 'OTHERDOM', email: 'jane@example.com' };
+  const root = rootOf(
+    CaptureGroups(
+      personProps({
+        peopleSearch: {
+          attributedTo: { query: 'Ja', people: [found], status: 'success' },
+        },
+        onCapture: (/** @type {any} */ key, /** @type {any} */ value) =>
+          captured.push([key, value]),
+      })
+    )
+  );
+
+  fireEvent(getByRole(root, 'option', { name: /Jane Smith/ }), 'click');
+  assert.deepEqual(captured, [['attributedTo', found]]);
+});
+
 test('CaptureGroups never offers a person the directory has not resolved', () => {
   // The picker used to offer the typed text as an account whenever it had no
   // matches — which included the debounce window, the request itself, and a

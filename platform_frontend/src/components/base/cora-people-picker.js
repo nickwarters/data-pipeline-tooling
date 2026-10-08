@@ -4,6 +4,7 @@ import { EmptyState, LoadingState } from '../../lib/empty-state.js';
 
 /** @typedef {import('../../sharepoint-client.js').PersonResult} PersonResult */
 /** @typedef {import('../../lib/people-search.js').PeopleSearchStatus} PeopleSearchStatus */
+/** @typedef {{ loginName: string, displayName: string, domain?: string, email?: string }} PickedPerson */
 
 /**
  * @typedef {object} PeoplePickerProps
@@ -12,7 +13,7 @@ import { EmptyState, LoadingState } from '../../lib/empty-state.js';
  * @property {PeopleSearchStatus} status How far the search behind `people` got.
  * @property {string} inputValue
  * @property {(value: string) => void} onQueryInput
- * @property {(person: { loginName: string, displayName: string, domain?: string }) => void} onSelect
+ * @property {(person: PickedPerson) => void} onSelect
  * @property {string} [ariaLabel] The control's accessible name. Defaults to a
  *   generic one, which suits a picker whose surroundings already say what it
  *   fills; a caller supplies its own when the name has to carry that itself.
@@ -64,13 +65,7 @@ function peoplePickerStatus(props) {
 export function PeoplePicker(props) {
   const items = props.people.map((p) =>
     peoplePickerOption(
-      p.domain
-        ? {
-            loginName: p.loginName,
-            displayName: p.displayName,
-            domain: p.domain,
-          }
-        : { loginName: p.loginName, displayName: p.displayName },
+      pickedPerson(p),
       `${p.displayName} — ${p.loginName}`,
       props.onSelect
     )
@@ -110,9 +105,9 @@ export function PeoplePicker(props) {
 }
 
 /**
- * @param {{ loginName: string, displayName: string, domain?: string }} person
+ * @param {PickedPerson} person
  * @param {string} label
- * @param {(person: { loginName: string, displayName: string, domain?: string }) => void} onSelect
+ * @param {(person: PickedPerson) => void} onSelect
  * @returns {HTMLElement}
  */
 function peoplePickerOption(person, label, onSelect) {
@@ -125,4 +120,18 @@ function peoplePickerOption(person, label, onSelect) {
     },
     label
   );
+}
+
+/**
+ * What choosing a directory match hands on: the account and name, plus the domain and email the directory named.
+ *
+ * @param {PersonResult} p
+ * @returns {PickedPerson}
+ */
+function pickedPerson(p) {
+  /** @type {PickedPerson} */
+  const person = { loginName: p.loginName, displayName: p.displayName };
+  if (p.domain) person.domain = p.domain;
+  if (p.email) person.email = p.email;
+  return person;
 }
