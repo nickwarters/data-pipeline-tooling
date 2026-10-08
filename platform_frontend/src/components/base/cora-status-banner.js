@@ -7,15 +7,11 @@ import { h } from '../../lib/html.js';
  * Surfaces the SaveQueue status as user-visible UI:
  * saved -> no banner
  * saving -> polite "Saving…" indicator
- * reconnecting -> polite notice that SharePoint can't be reached and the work
- *   is being kept; once the outage is long it also says to check the
- *   connection or VPN (auto-clears on saved)
- * failed -> persistent assertive banner listing why each write was given up
- *   on, with a Reload button when a message says the Case is gone
+ * reconnecting -> polite "can't reach SharePoint" notice (auto-clears on saved)
+ * failed -> persistent assertive banner listing each given-up write
  * conflict -> persistent assertive banner with a Reload button
  *
- * The view takes strings and flags, never the failures themselves: the page
- * words them, so this stays a leaf that imports no service.
+ * Takes strings, not failures: the page words them, so this imports no service.
  *
  * @param {{
  *   status: SaveStatus,

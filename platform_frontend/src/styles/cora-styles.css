@@ -419,7 +419,6 @@
   flex: 1;
 }
 
-/* Several refused writes at once: one line each, not a run-on paragraph. */
 .cora-banner-failures {
   padding-left: var(--cora-space-4);
 }

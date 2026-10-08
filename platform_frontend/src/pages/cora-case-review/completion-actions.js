@@ -264,9 +264,9 @@ export function completionPatch(input) {
  *   opts?: import('../../sharepoint-client.js').CaseListOptions,
  *   navigate?: (hash: string) => void,
  *   onFailure?: (failure: import('../../services/save-failure.js').SaveFailure) => void,
- * }} input `onFailure` hears why the transition itself did not land, so the
- *   page can tell the person; a refusal of an earlier autosave is reported by
- *   the queue and never reaches it. `navigate` is where a successful completion goes next. Defaults to
+ * }} input `onFailure` hears why the transition itself failed; a refused
+ *   earlier autosave is reported by the queue instead. `navigate` is where a
+ *   successful completion goes next. Defaults to
  *   the `lib/navigate.js` seam so no page call site has to pass it; injectable
  *   so a non-browser caller — `tests/_in-memory-flow-runner.js` drives real
  *   completions in Node — can record the navigation instead of this action

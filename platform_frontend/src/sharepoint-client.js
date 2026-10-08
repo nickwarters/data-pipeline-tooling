@@ -410,8 +410,7 @@
  */
 
 /**
- * `failure` says why a write did not land, when the client could tell; a
- * consumer that finds none classifies from `status` alone.
+ * `failure` is absent when the client could not tell why; classify from `status`.
  *
  * @typedef {{
  * ok: boolean,

@@ -9,16 +9,15 @@ import { failureOf, isConnectionFailure } from './save-failure.js';
 /** @typedef {import('./save-failure.js').SaveFailure} SaveFailure */
 
 /**
- * In order of precedence when the queue settles: a conflict outranks a failed
- * write, which outranks a lost connection, which outranks work still in hand.
+ * Highest precedence first when the queue settles: conflict, failed,
+ * reconnecting, saving.
  *
  * @typedef {'saved' | 'saving' | 'reconnecting' | 'failed' | 'conflict'} SaveStatus
  */
 
 /**
- * A write the queue gave up on. `fields` are the Case fields it carried. The
- * queue does not know what SharePoint held before: a page that showed the new
- * value optimistically (a person picker) keeps the value to put back itself.
+ * A write the queue gave up on. It does not know the prior value: a page that
+ * showed the new one optimistically keeps its own to restore.
  *
  * @typedef {{
  * caseId: string,
@@ -28,24 +27,16 @@ import { failureOf, isConnectionFailure } from './save-failure.js';
  */
 
 /**
- * What a status listener is told beside the status itself.
- *
  * @typedef {{
  * failures: SaveFailureNotice[],
  * longOutage: boolean
  * }} SaveStatusDetail
  */
 
-/**
- * How many more times an unclassified failure is sent before the queue stops.
- * Enough to ride out a one-off blip; not enough to retry a write that can
- * never succeed for as long as the tab is open.
- */
+/** Enough to ride out a blip, not to retry a doomed write while the tab is open. */
 const UNKNOWN_EXTRA_ATTEMPTS = 2;
 
 /**
- * Where one flush has got to across its attempts.
- *
  * @typedef {{
  * connectionFailures: number,
  * unknownRetries: number,
@@ -105,9 +96,8 @@ export class SaveQueue {
     this._statusListeners = new Set();
     /** @type {SaveFailureNotice[]} */
     this._failures = [];
-    /** Flushes currently waiting out a lost connection. */
     this._reconnecting = 0;
-    /** Of those, the ones that have outlasted the whole backoff schedule. */
+    /** Reconnecting flushes that have outlasted the whole backoff schedule. */
     this._longOutages = 0;
     /** @type {Set<() => void>} */
     this._idleWaiters = new Set();
@@ -121,10 +111,7 @@ export class SaveQueue {
   /**
    * Observe status transitions. The listener is called immediately with the
    * current status and again after each transition, including a transition to
-   * the status it already holds. Its second argument says what went wrong
-   * (the writes the queue gave up on) and whether a lost connection has lasted
-   * long enough that the person should be told to check theirs; a listener
-   * that only wants the status can ignore it.
+   * the status it already holds.
    *
    * @param {(status: SaveStatus, detail: SaveStatusDetail) => void} listener
    * @returns {() => void}
@@ -144,12 +131,11 @@ export class SaveQueue {
   }
 
   /**
-   * Announce what the queue is doing, held to the precedence a person needs: a
-   * recorded failure outranks everything but a conflict, and a lost connection
-   * is not hidden by a newer write starting behind it. Notification is
-   * unconditional — a transition to the status already held still fires, which
-   * is what the retry path relies on to re-announce 'reconnecting' on each
-   * attempt.
+   * Set the status and notify. A recorded failure outranks everything but a
+   * conflict, and a lost connection is not hidden by a newer write starting
+   * behind it. Notification is unconditional — a transition to the status
+   * already held still fires, which is what the retry path relies on to
+   * re-announce 'reconnecting' on each attempt.
    *
    * Iterates a copy, and re-checks membership, so a listener that unsubscribes
    * during notification is not called afterwards.
@@ -234,8 +220,7 @@ export class SaveQueue {
   /**
    * Immediately flush all debounced writes for a Case and wait until they have
    * persisted. Returns false if a conflict or missing Case prevents persistence,
-   * or if a write for the Case was given up on: completing a Case over an edit
-   * that never saved would lose it.
+   * or if a write for the Case was given up on (completing over it would lose it).
    * @param {string} caseId
    * @returns {Promise<boolean>}
    */
@@ -389,8 +374,8 @@ export class SaveQueue {
             this._backoffSchedule.length - 1
           )
         ];
-      // Past the end of the schedule the connection has been gone for about a
-      // minute, which is when "check your connection or VPN" starts to help.
+      // Past the schedule's end the connection has been gone about a minute:
+      // time to suggest checking it.
       if (
         progress.connectionFailures >= this._backoffSchedule.length &&
         !progress.longOutage
@@ -426,15 +411,12 @@ export class SaveQueue {
   }
 
   /**
-   * Give up on a write: remember why, so the page can say so.
-   *
    * @param {string} caseId
    * @param {Partial<CaseRow>} fields
    * @param {SaveFailure} failure
    */
   _recordFailure(caseId, fields, failure) {
     const names = Object.keys(fields);
-    // A newer failure for the same fields replaces the one it supersedes.
     this._failures = this._failures.filter(
       (notice) => !this._overlaps(notice, caseId, names)
     );
@@ -442,9 +424,6 @@ export class SaveQueue {
   }
 
   /**
-   * A write that lands for a field cleared the failure recorded against it:
-   * the person fixed the text and it saved.
-   *
    * @param {string} caseId
    * @param {string[]} names
    */
@@ -511,10 +490,8 @@ export class SaveQueue {
   }
 
   /**
-   * A flush has ended. While other work is still in hand the status follows
-   * it (a write that settled the outage stops saying 'reconnecting'); once
-   * nothing is left the queue settles, and anyone waiting for idle is released
-   * — a write it gave up on included, since waiting on it forever helps nobody.
+   * A flush has ended. Idle waiters are released even after a write the queue
+   * gave up on: waiting on it forever helps nobody.
    */
   _settle() {
     if (this._hasWork()) {
