@@ -79,7 +79,10 @@ return any node, usually a chart.
 `reviewer`, `controls`, …) admit a viewer to every scope. Case Type roles
 (`caseTypeOwner`, `journeyOwner`, `caseTypeReviewer`, written
 `{ role, of: 'scope' }`) admit a viewer only to the Case Types the role covers.
-`src/reports/report-access.js` resolves each role two ways:
+A report whose audience is no role at all names a SharePoint group of its own,
+`{ group: 'Housing Report Readers' }`, which admits that group's members to
+every scope; a group per report is cheaper to keep right than a new role.
+`src/reports/report-access.js` resolves each rule two ways:
 
 - to a capability the browser already holds, which drives the Reports link,
   the index, the scope switcher and the page's own guard; and
@@ -96,7 +99,15 @@ says "You don't have access to this report", the same as a refused scope.
 It is data rather than a guard function because a provisioning script cannot
 read a function. The evaluation logic stays in code, in one module, so this is
 the kind of declaration ADR-0035 allows: a Case Type or report selects from a
-fixed list of roles, and the rules that evaluate them stay in code.
+fixed list of roles, or names a group, and the rules that evaluate them stay in
+code.
+
+Naming a group is why `Capabilities` carries the viewer's group membership as
+well as the flags derived from it: the permissions module has no reason to know
+a report's group, so the report asks for it directly. Membership of a report
+group is not a role, so someone whose only group is a report group is still a
+Visitor to the rest of the app; they find their reports through the Reports
+link.
 
 ### One file per report and scope; permissions on the scope folder
 

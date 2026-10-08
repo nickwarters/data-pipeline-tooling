@@ -187,10 +187,65 @@ test('the reviewer role needs every group that makes someone a Reviewer', () => 
   }
 });
 
+test('a named group admits its members to every scope of the report', () => {
+  const report = plugin({ access: [{ group: 'Housing Report Readers' }] });
+  const member = makePermissions({
+    isReviewer: false,
+    groups: ['Housing Report Readers'],
+  });
+  assert.deepEqual(scopesFor(report, member), allScopes(report));
+  const platformReport = plugin({
+    scope: { kind: 'platform' },
+    access: [{ group: 'Housing Report Readers' }],
+  });
+  assert.deepEqual(
+    scopesFor(platformReport, member),
+    allScopes(platformReport)
+  );
+});
+
+test('a named group admits nobody outside it, however many roles they hold', () => {
+  const report = plugin({
+    scope: { kind: 'platform' },
+    access: [{ group: 'Housing Report Readers' }],
+  });
+  const busy = makePermissions({
+    isMaintainer: true,
+    ownedCaseTypes: ['complaints'],
+    groups: ['CORA Owner Delegates', 'Housing Report Readers - Old'],
+  });
+  assert.deepEqual(scopesFor(report, busy), []);
+});
+
+test('a named group sits beside the roles in one audience', () => {
+  const report = plugin({
+    scope: { kind: 'platform' },
+    access: ['maintainer', { group: 'Housing Report Readers' }],
+  });
+  const maintainer = makePermissions({ isMaintainer: true });
+  const member = makePermissions({ groups: ['Housing Report Readers'] });
+  assert.equal(scopesFor(report, maintainer).length, 1);
+  assert.equal(scopesFor(report, member).length, 1);
+  assert.deepEqual(groupsForScope(report, allScopes(report)[0]), [
+    'CORA Owner Delegates',
+    'Housing Report Readers',
+  ]);
+});
+
+test('a folder must be readable by a named group in every scope', () => {
+  const report = plugin({ access: [{ group: 'Housing Report Readers' }] });
+  for (const scope of allScopes(report)) {
+    assert.deepEqual(groupsForScope(report, scope), ['Housing Report Readers']);
+  }
+});
+
 for (const rule of [
   'auditor',
   { role: 'caseTypeOwner', of: 'everything' },
   { role: 'auditor', of: 'scope' },
+  { group: '' },
+  { group: '   ' },
+  { group: 42 },
 ]) {
   test(`an unknown access rule (${JSON.stringify(rule)}) fails loudly instead of admitting nobody`, () => {
     const report = plugin({ access: [/** @type {any} */ (rule)] });

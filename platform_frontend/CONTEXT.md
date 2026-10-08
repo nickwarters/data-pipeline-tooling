@@ -609,10 +609,11 @@ library, and that folder is the unit SharePoint read permission is set on, so ev
 report about one scope shares one audience.
 
 **Report Access**:
-A report's audience, declared as roles from a fixed vocabulary. Platform roles
-(`maintainer`, `reviewer`, `controls`, …) admit a viewer to every scope. Case Type
-roles (`caseTypeOwner`, `journeyOwner`, `caseTypeReviewer`) admit a viewer only to the
-Case Types the role covers. The browser reads it to decide what to offer. Provisioning
+A report's audience, declared as roles from a fixed vocabulary or named SharePoint
+groups. Platform roles (`maintainer`, `reviewer`, `controls`, …) admit a viewer to
+every scope. Case Type roles (`caseTypeOwner`, `journeyOwner`, `caseTypeReviewer`)
+admit a viewer only to the Case Types the role covers. A named group (`{ group }`)
+admits its members to every scope, for an audience that is no role. The browser reads it to decide what to offer. Provisioning
 reads the same declaration, through `scripts/report-folder-access.js`, to set folder
 permissions, and those are the real boundary. Shaping a page for its viewer is for
 relevance, never secrecy: anyone who can read a file can read all of it.

@@ -35,9 +35,10 @@
 /**
  * One entry in a report's audience. A bare role admits its holders to every
  * scope; `{ role, of: 'scope' }` admits a holder only to the Case Types the
- * role covers.
+ * role covers; `{ group }` admits the members of one named SharePoint group to
+ * every scope, for a report whose audience is no role at all.
  *
- * @typedef {PlatformRole | { role: CaseTypeRole, of: 'scope' }} ReportAccessRule
+ * @typedef {PlatformRole | { role: CaseTypeRole, of: 'scope' } | { group: string }} ReportAccessRule
  */
 
 /**

@@ -261,3 +261,11 @@ test('permissions.caseTypes: group names still derive from the registry display 
     journeyOwner: 'JourneyOwner - Complaints',
   });
 });
+
+test('resolveCapabilities keeps the groups it was given, so a report can name its own audience', () => {
+  const groups = ['Reviewers', 'Housing Report Readers'];
+  const caps = resolveCapabilities(groups, sampleConfig);
+  assert.deepEqual(caps.groups, groups);
+  groups.push('Added later');
+  assert.deepEqual(caps.groups, ['Reviewers', 'Housing Report Readers']);
+});

@@ -27,6 +27,10 @@ import { CASE_TYPES } from '../../case-types/manifest.js';
  * as the standalone `Reviewers` functional group. `isVisitor` is DERIVED (not
  * config-driven): true iff the user holds no capability at all.
  *
+ * `groups` is the membership itself, kept as given. Everything above is a
+ * group this file knows the meaning of; a report may instead name a group of
+ * its own, which this file has no reason to know about, and asks for it here.
+ *
  * These are platform-wide and per-user. They are not the per-Case roles the
  * Case page's access matrix is keyed by, and only some of them ever become
  * one: `resolveRoles` in `section-access.js` is the single translation point,
@@ -44,7 +48,8 @@ import { CASE_TYPES } from '../../case-types/manifest.js';
  * isResponsiblePartyManager: boolean,
  * isMaintainer: boolean,
  * canSearchCases: boolean,
- * isVisitor: boolean
+ * isVisitor: boolean,
+ * groups: string[]
  * }} Capabilities
  */
 
@@ -166,5 +171,6 @@ export function resolveCapabilities(userGroups, config = permissions) {
     isMaintainer,
     canSearchCases,
     isVisitor,
+    groups: [...userGroups],
   };
 }
