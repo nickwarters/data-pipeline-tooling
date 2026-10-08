@@ -64,7 +64,7 @@ function draw(panel, options = {}) {
   });
 }
 
-/** @param {any} panel @returns {string[]} the first cell of each body row */
+/** @param {any} panel @returns {string[]} */
 function firstColumn(panel) {
   return queryAllByTag(panel, 'tbody')
     .flatMap((body) => queryAllByTag(body, 'tr'))

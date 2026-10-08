@@ -22,7 +22,6 @@ const { svg } = await import('../src/lib/html.js');
 /** @typedef {import('../src/reports/contract.js').ReportPlugin} ReportPlugin */
 /** @typedef {import('../src/services/report-feed-loader.js').ReportFileResult} ReportFileResult */
 
-/** Noon local, Wednesday 7 October 2026 — the day after the feeds' last day. */
 const NOW = new Date(2026, 9, 7, 12);
 
 /** @param {Record<string, unknown>} [datasets] @param {Record<string, unknown>} [extra] */
@@ -41,12 +40,7 @@ function loaded(datasets = {}) {
   return { status: 'loaded', envelope: envelope(datasets) };
 }
 
-/**
- * A report with one chart panel and one plain panel, recording what its view
- * was handed.
- *
- * @param {Partial<ReportPlugin>} [overrides]
- */
+/** @param {Partial<ReportPlugin>} [overrides] */
 function makePlugin(overrides = {}) {
   /** @type {any[]} */
   const calls = [];
@@ -111,9 +105,6 @@ function makePlugin(overrides = {}) {
 const OWNER = { ownedCaseTypes: ['complaints'], isReviewer: false };
 
 /**
- * Mount a slice the way the route adapter does: render on every state change,
- * start once after the first render.
- *
  * @param {ReportPlugin} plugin
  * @param {{
  *   params?: Record<string, string>,
@@ -172,7 +163,6 @@ function mount(plugin, options = {}) {
   };
 }
 
-/** Let the feed promises settle. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 test('without a scope in the URL, the viewer’s first scope opens and its files are requested', async () => {
@@ -348,7 +338,6 @@ test('the page is ready only when every file a report reads has arrived', async 
   });
   await settle();
   assert.deepEqual(Object.keys(calls.at(-1).feeds), ['report', 'extra']);
-  // The header reads the first-declared feed, not whichever arrived last.
   assert.match(textContent(page.container), /Complete through Tue 6 Oct/);
 });
 
@@ -360,7 +349,6 @@ test('a file that has fallen behind is still shown, under a banner saying so', a
   assert.match(textContent(banner), /only run to Tue 6 Oct/);
   assert.ok(getByText(stale.container, 'Chart for short'));
 
-  // Two missed working days are within the default allowance.
   const recent = mount(plugin, { now: new Date(2026, 9, 9, 12) });
   await settle();
   assert.equal(queryByRole(recent.container, 'status'), null);
@@ -474,7 +462,6 @@ test('every chart on the page gets a tooltip, and loses it when the chart goes',
     page.appEl.querySelectorAll('.cora-chart-tooltip').length;
   assert.equal(tooltips(), 1);
 
-  // A redraw that keeps the chart keeps its one tooltip.
   page.tools.dispatch({ type: 'report/resized', width: 1100 });
   assert.equal(tooltips(), 1);
 

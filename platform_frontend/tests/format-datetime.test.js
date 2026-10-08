@@ -121,8 +121,7 @@ test('a report date key is read as written, never as midnight in Greenwich', () 
 });
 
 test('a report date for an instant is the weekday it falls on where the reader is', () => {
-  // 23:30 UTC on Tuesday the 6th is already Wednesday the 7th in British
-  // Summer Time, and still Tuesday in New York.
+  // 23:30 UTC on Tue 6th is Wed 7th in British Summer Time, still Tue in New York.
   inZone('Europe/London', () => {
     assert.equal(formatWeekdayDate('2026-10-06T23:30:00Z'), 'Wed 7 Oct');
     assert.equal(

@@ -78,12 +78,12 @@ function labelsOf(group) {
   return group.querySelectorAll('text').map(textContent);
 }
 
-/** @param {any} root @returns {string[]} the labels drawn under the columns */
+/** @param {any} root @returns {string[]} */
 function columnLabels(root) {
   return groups(root).flatMap(labelsOf);
 }
 
-/** @param {any} segment @returns {number} where the segment sits on its baseline edge */
+/** @param {any} segment @returns {number} */
 function bottomOf(segment) {
   return Number(/^M[\d.]+,([\d.]+)/.exec(segment.getAttribute('d'))?.[1]);
 }

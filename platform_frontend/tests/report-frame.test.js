@@ -23,9 +23,6 @@ const { ReportFrame } =
 /** @typedef {import('../src/reports/contract.js').ReportPanelSpec} ReportPanelSpec */
 
 /**
- * Run `body` as if the browser were in `zone`, so a rendered instant says
- * where the suite is pinned rather than where the machine happens to be.
- *
  * @param {string} zone
  * @param {() => void} body
  */
@@ -41,9 +38,6 @@ function inZone(zone, body) {
 }
 
 /**
- * A panel whose body says which panel it is and the width it was drawn at, so
- * a test can read the arithmetic the frame did.
- *
  * @param {string} id
  * @param {Partial<ReportPanelSpec>} [overrides]
  * @returns {ReportPanelSpec}
@@ -67,8 +61,6 @@ function props(overrides = {}) {
   return {
     reportId: 'queues',
     layout: 'stacked',
-    // Eleven columns of 76px and sixteen of gap fill exactly this width, so a
-    // panel's width is whole numbers and the assertions need no tolerance.
     width: 1088,
     eyebrow: 'Case Type report',
     title: 'Complaints',
@@ -91,7 +83,7 @@ function props(overrides = {}) {
   };
 }
 
-/** @param {any} root @param {string} id @returns {number} the width panel `id` was drawn at */
+/** @param {any} root @param {string} id @returns {number} */
 function widthOf(root, id) {
   const match = queryAllByTag(root, 'div')
     .map(textContent)
@@ -100,7 +92,7 @@ function widthOf(root, id) {
   return Number(match.slice(`${id} at `.length));
 }
 
-/** @param {any} root @param {string} id @returns {string} the span class of panel `id` */
+/** @param {any} root @param {string} id @returns {string} */
 function spanOf(root, id) {
   const section = queryAllByTag(root, 'section').find((candidate) =>
     textContent(candidate).startsWith(`Panel ${id}`)
@@ -438,7 +430,6 @@ test("a panel is drawn at the width its columns allow, less the panel's own padd
     })
   );
 
-  // 76px columns, 16px gaps, 30px of panel chrome.
   assert.equal(widthOf(frame, 'full'), 1088 - 30);
   assert.equal(widthOf(frame, 'half'), 76 * 6 + 16 * 5 - 30);
   assert.equal(widthOf(frame, 'quarter'), 76 * 3 + 16 * 2 - 30);
@@ -463,7 +454,6 @@ test('in the rail layout, panels are sized to the main column beside the rail', 
 test('below 640px every panel takes the whole row', () => {
   const frame = ReportFrame(
     props({
-      // Thirty-eight 12ths of 632: 38px columns, so the arithmetic is exact.
       width: 632,
       content: {
         sections: [

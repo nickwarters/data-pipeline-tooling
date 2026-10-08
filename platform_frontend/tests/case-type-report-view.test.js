@@ -10,8 +10,6 @@ const { caseTypeReportContent } =
   await import('../src/reports/case-type/case-type-report-view.js');
 
 /**
- * A model with every figure absent, then overridden.
- *
  * @param {Partial<import('../src/reports/case-type/case-type-report-model.js').CaseTypeReportModel>} [overrides]
  * @returns {import('../src/reports/case-type/case-type-report-model.js').CaseTypeReportModel}
  */
@@ -70,8 +68,6 @@ function outcomeOrder(count) {
 }
 
 /**
- * Outcomes by month, with `count` outcomes in the Case Type's order.
- *
  * @param {number} count
  * @param {string[]} [months]
  */
@@ -115,7 +111,7 @@ function questionFigures() {
   ];
 }
 
-/** @returns {number[][]} seven weekdays of 24 hours */
+/** @returns {number[][]} */
 function postingGrid() {
   return Array.from({ length: 7 }, (_, day) =>
     Array.from({ length: 24 }, (_, hour) =>
@@ -124,7 +120,6 @@ function postingGrid() {
   );
 }
 
-/** A model with every figure present. */
 function fullModel() {
   return model({
     open: { now: 1200, before: 1000 },
@@ -173,14 +168,14 @@ function find(node, test, found = []) {
   return found;
 }
 
-/** @param {any} svg @returns {string[]} what each mark says on hover */
+/** @param {any} svg @returns {string[]} */
 function marks(svg) {
   return find(svg, (n) => n.getAttribute?.('data-cora-chart-mark') === 'true')
     .map((n) => n.getAttribute('data-cora-chart-description'))
     .filter(Boolean);
 }
 
-/** @param {any} svg @returns {string} the y axis labels */
+/** @param {any} svg @returns {string} */
 function gridLabels(svg) {
   const grid = find(
     svg,
@@ -195,8 +190,6 @@ function dotCount(svg) {
 }
 
 /**
- * A panel's chart at a typical width, as the DOM stub's element.
- *
  * @param {import('../src/reports/contract.js').ReportPanelSpec} p
  * @returns {any}
  */
@@ -553,7 +546,6 @@ test('each status states its share of open Cases as a percentage', () => {
   const p = panel(caseTypeReportContent(fullModel()), 'status');
   const share = column(p, 'share');
   const shown = p.table?.rows.map((row) => cell(share, row));
-  // 20, 100 and 30 of 150.
   assert.deepEqual(shown, ['13%', '67%', '20%']);
 });
 
@@ -627,8 +619,6 @@ test('the SLA chart draws its target line only when there is a target', () => {
 });
 
 /**
- * Where the SLA chart's value axis starts, in percent.
- *
  * @param {number[]} shares
  * @param {number | null} [slaTarget]
  * @returns {number}
