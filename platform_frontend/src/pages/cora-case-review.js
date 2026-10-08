@@ -2,6 +2,7 @@
 import { h } from '../lib/html.js';
 import { LoadingState } from '../lib/empty-state.js';
 import { StatusBanner } from '../components/base/cora-status-banner.js';
+import { describeSaveFailure, failureOf } from '../services/save-failure.js';
 import { ignoreAbortError } from '../lib/abort.js';
 import { withAbortSignal } from '../services/abortable-client.js';
 import { patchRoute, patchSnapshot } from '../core/route-state.js';
@@ -42,7 +43,16 @@ import { evaluateAccess } from '../services/section-access.js';
 import { voidReasonText } from '../lib/void-reasons.js';
 
 /** @typedef {import('../services/save-queue.js').SaveStatus} SaveStatus */
+/** @typedef {import('../services/save-queue.js').SaveFailureNotice} SaveFailureNotice */
 /** @typedef {import('../lib/people-search.js').PeopleSearchState} PeopleSearchState */
+
+/**
+ * A write the queue gave up on, with the sentence the person reads. Worded once
+ * when the notice first arrives: the display name it mentions is the one just
+ * picked, which the page stops showing the moment it reverts the pick.
+ *
+ * @typedef {{ notice: SaveFailureNotice, message: string }} WordedSaveFailure
+ */
 
 /**
  * @typedef {Object} CaseReviewSnapshot
@@ -77,6 +87,22 @@ import { voidReasonText } from '../lib/void-reasons.js';
  * @typedef {Object} CaseReviewRouteState
  * @property {string} activeTab
  * @property {SaveStatus} saveStatus
+ * @property {WordedSaveFailure[]} saveFailures
+ *   The writes the queue has given up on for this Case, in the order it
+ *   reported them. Kept as the notices themselves, not just their wording,
+ *   because a notice seen again must not be acted on twice.
+ * @property {boolean} saveLongOutage
+ *   The connection has been down for about a minute: worth telling the person
+ *   to check theirs.
+ * @property {{ message: string, offerReload: boolean } | null} actionFailure
+ *   Why the last Conversation post, Complete Case or Void did not land. Those
+ *   writes bypass the queue, so they cannot reach the banner through it.
+ * @property {{ account: string, displayName?: string } | null} responsiblePartyBeforePick
+ *   The Responsible Party the picker showed before the first pick that has not
+ *   saved yet, so a pick SharePoint could not find is put back to that person.
+ *   Null while every pick has saved (or none was made): the row then matches
+ *   what SharePoint holds. Later picks leave it alone, because it still names
+ *   the last person who was saved.
  * @property {boolean} conversationHidden
  * @property {boolean} completionPending
  * @property {boolean} voidPanelOpen
@@ -124,6 +150,10 @@ export function createInitialCaseReviewState(chrome) {
       caseReview: {
         activeTab: '',
         saveStatus: 'saved',
+        saveFailures: [],
+        saveLongOutage: false,
+        actionFailure: null,
+        responsiblePartyBeforePick: null,
         conversationHidden: true,
         completionPending: false,
         voidPanelOpen: false,
@@ -217,6 +247,8 @@ export function caseReviewReducer(state, action) {
     const tabs = visibleCaseTabs(action.snapshot);
     return patchRoute(state, 'caseReview', {
       snapshot: action.snapshot,
+      // A freshly read row is what SharePoint holds.
+      responsiblePartyBeforePick: null,
       activeTab: tabs[0]?.id ?? '',
       // The Conversation panel starts collapsed on every load — unless it is
       // the whole page. A Responsible Party on a pre-reportable Case sees no
@@ -236,6 +268,7 @@ export function caseReviewReducer(state, action) {
       : (tabs[0]?.id ?? '');
     return patchRoute(state, 'caseReview', {
       snapshot: action.snapshot,
+      responsiblePartyBeforePick: null,
       activeTab,
     });
   }
@@ -384,7 +417,7 @@ export function caseReviewReducer(state, action) {
     if (route.snapshot.caseRow.responsibleParty === action.loginName) {
       return state;
     }
-    return patchSnapshot(state, {
+    return patchSnapshot(withPickRemembered(state), {
       caseRow: {
         ...route.snapshot.caseRow,
         responsibleParty: action.loginName,
@@ -406,7 +439,7 @@ export function caseReviewReducer(state, action) {
     }
     const { responsiblePartyDisplayName: _dropDisplayName, ...caseRow } =
       route.snapshot.caseRow;
-    return patchSnapshot(state, {
+    return patchSnapshot(withPickRemembered(state), {
       caseRow: { ...caseRow, responsibleParty: '' },
     });
   }
@@ -482,9 +515,22 @@ export function caseReviewReducer(state, action) {
     return patchRoute(state, 'caseReview', { voidPending: action.pending });
   }
   if (action.type === 'case/save-status-changed') {
-    // Identity guard: SaveQueue re-reports the status it last reported.
-    if (action.status === route.saveStatus) return state;
-    return patchRoute(state, 'caseReview', { saveStatus: action.status });
+    return reduceSaveStatus(state, action);
+  }
+  if (action.type === 'case/action-failed') {
+    return patchRoute(state, 'caseReview', {
+      actionFailure: {
+        message: describeSaveFailure(action.failure, {
+          fields: action.fields,
+        }),
+        offerReload: action.failure.reason === 'not-found',
+      },
+    });
+  }
+  if (action.type === 'case/action-failure-cleared') {
+    // Identity guard: nothing was showing.
+    if (!route.actionFailure) return state;
+    return patchRoute(state, 'caseReview', { actionFailure: null });
   }
   if (
     action.type === 'case/section-write' ||
@@ -493,6 +539,113 @@ export function caseReviewReducer(state, action) {
     return reduceSectionWrite(state, action);
   }
   return reduceSection(state, action);
+}
+
+/**
+ * Take the queue's report into the slice: the status, the failures worded for
+ * the person, and — for a Responsible Party SharePoint could not find — the
+ * pick put back, so the page stops naming someone who was never saved.
+ *
+ * Only that one is undone. Text a person typed stays where they typed it,
+ * because they need it to fix it.
+ *
+ * @param {CaseReviewState} state
+ * @param {{
+ *   status: SaveStatus,
+ *   failures?: SaveFailureNotice[],
+ *   longOutage?: boolean,
+ * }} action
+ * @returns {CaseReviewState}
+ */
+function reduceSaveStatus(state, action) {
+  const route = state.routes.caseReview;
+  const longOutage = action.longOutage === true;
+  const known = new Map(
+    route.saveFailures.map((entry) => [entry.notice, entry])
+  );
+  const caseRow = route.snapshot?.caseRow ?? null;
+  const reported = (action.failures ?? []).map(
+    (notice) =>
+      known.get(notice) ?? {
+        notice,
+        message: describeSaveFailure(notice.failure, {
+          fields: notice.fields,
+          personName: notice.fields.includes('responsibleParty')
+            ? caseRow?.responsiblePartyDisplayName
+            : undefined,
+        }),
+      }
+  );
+  // Identity guard: SaveQueue re-reports the status it last reported, and the
+  // notices it already holds. Not when `saved` still has a pick to forget.
+  if (
+    action.status === route.saveStatus &&
+    !(action.status === 'saved' && route.responsiblePartyBeforePick) &&
+    longOutage === route.saveLongOutage &&
+    reported.length === route.saveFailures.length &&
+    reported.every((entry, i) => entry === route.saveFailures[i])
+  ) {
+    return state;
+  }
+  let next = state;
+  let restoredPick = false;
+  for (const { notice } of reported) {
+    if (
+      !known.has(notice) &&
+      caseRow &&
+      caseRow.id === notice.caseId &&
+      notice.failure.reason === 'person-not-found' &&
+      notice.fields.includes('responsibleParty') &&
+      // A later pick made while this one was in flight is not undone: the
+      // notice names the person who failed, and they are no longer the pick.
+      (notice.failure.account === undefined ||
+        notice.failure.account === caseRow.responsibleParty)
+    ) {
+      const { responsiblePartyDisplayName: _unsavedName, ...restored } =
+        caseRow;
+      const before = route.responsiblePartyBeforePick;
+      const displayName = before?.displayName;
+      next = patchSnapshot(next, {
+        caseRow: {
+          ...restored,
+          responsibleParty: before?.account ?? '',
+          ...(displayName ? { responsiblePartyDisplayName: displayName } : {}),
+        },
+      });
+      restoredPick = true;
+    }
+  }
+  return patchRoute(next, 'caseReview', {
+    // Everything landing means the row matches SharePoint again. A put-back
+    // does too: the row is back to the last person who was saved.
+    ...(action.status === 'saved' || restoredPick
+      ? { responsiblePartyBeforePick: null }
+      : {}),
+    saveStatus: action.status,
+    saveFailures: reported,
+    saveLongOutage: longOutage,
+  });
+}
+
+/**
+ * The state with the Responsible Party the row shows now remembered as the one
+ * to put back, unless an earlier pick that has not saved yet already holds it:
+ * that one still names the last person who was saved.
+ *
+ * @param {CaseReviewState} state
+ * @returns {CaseReviewState}
+ */
+function withPickRemembered(state) {
+  const route = state.routes.caseReview;
+  const caseRow = route.snapshot?.caseRow;
+  if (route.responsiblePartyBeforePick || !caseRow) return state;
+  const displayName = caseRow.responsiblePartyDisplayName;
+  return patchRoute(state, 'caseReview', {
+    responsiblePartyBeforePick: {
+      account: caseRow.responsibleParty ?? '',
+      ...(displayName ? { displayName } : {}),
+    },
+  });
 }
 
 /**
@@ -1004,7 +1157,27 @@ export function createRouteSlice(params, context) {
     const parts = ensureShell(container);
     const route = state.routes.caseReview;
     const snapshot = route.snapshot;
-    tools.render(parts.status, StatusBanner({ status: route.saveStatus }));
+    tools.render(parts.status, [
+      ...[
+        StatusBanner({
+          status: route.saveStatus,
+          longOutage: route.saveLongOutage,
+          messages: route.saveFailures.map((entry) => entry.message),
+          offerReload: route.saveFailures.some(
+            (entry) => entry.notice.failure.reason === 'not-found'
+          ),
+        }),
+      ].flat(),
+      ...(route.actionFailure
+        ? [
+            StatusBanner({
+              status: 'failed',
+              messages: [route.actionFailure.message],
+              offerReload: route.actionFailure.offerReload,
+            }),
+          ].flat()
+        : []),
+    ]);
 
     if (!snapshot) {
       tools.render(parts.header, LoadingState());
@@ -1114,6 +1287,18 @@ export function createRouteSlice(params, context) {
       clearResponsiblePartySearch();
     };
 
+    /**
+     * Say why a write that bypasses the queue did not land. The dispatch is
+     * post-`await`, so it takes the mount-lifetime guard.
+     *
+     * @param {import('../services/save-failure.js').SaveFailure} failure
+     * @param {string[]} [fields]
+     */
+    const reportActionFailure = (failure, fields = []) => {
+      if (!tools.isActive()) return;
+      tools.dispatch({ type: 'case/action-failed', failure, fields });
+    };
+
     const onComplete = async () => {
       const patchFields = completionPatch({
         machine: snapshot.machine,
@@ -1128,6 +1313,7 @@ export function createRouteSlice(params, context) {
         bankVersion: snapshot.bankVersion,
       });
       if (!patchFields) return;
+      tools.dispatch({ type: 'case/action-failure-cleared' });
       tools.dispatch({
         type: 'case/completion-pending',
         pending: true,
@@ -1139,6 +1325,7 @@ export function createRouteSlice(params, context) {
           saveQueue: context.saveQueue,
           patchFields,
           caseListOptions: snapshot.caseListOptions,
+          onFailure: reportActionFailure,
         });
         // Only the fields travel, never this closure's `snapshot` or `caseRow`:
         // both are as of the last render, two network round-trips ago, so
@@ -1172,6 +1359,7 @@ export function createRouteSlice(params, context) {
         note: route.voidReasonNote,
       });
       if (!patchFields) return;
+      tools.dispatch({ type: 'case/action-failure-cleared' });
       tools.dispatch({ type: 'case/void-pending', pending: true });
       try {
         const persisted = await completeCase({
@@ -1180,6 +1368,7 @@ export function createRouteSlice(params, context) {
           saveQueue: context.saveQueue,
           patchFields,
           caseListOptions: snapshot.caseListOptions,
+          onFailure: reportActionFailure,
         });
         // Only the fields travel, for the same reason completion sends only
         // its own: the snapshot in this closure is two round-trips old.
@@ -1346,7 +1535,8 @@ export function createRouteSlice(params, context) {
                   )?.focus();
                 },
                 postConversationMessage: async (body) => {
-                  await postConversationMessage({
+                  tools.dispatch({ type: 'case/action-failure-cleared' });
+                  const { result } = await postConversationMessage({
                     client: context.client,
                     saveQueue: context.saveQueue,
                     caseId: caseId(),
@@ -1361,6 +1551,9 @@ export function createRouteSlice(params, context) {
                         messages,
                       }),
                   });
+                  if (!result.ok) {
+                    reportActionFailure(failureOf(result), ['conversation']);
+                  }
                 },
               },
             })
@@ -1397,7 +1590,8 @@ export function createRouteSlice(params, context) {
       const loader = caseLoader;
       const disposeSaveStatus = observeSaveStatus(
         context.saveQueue,
-        tools.dispatch
+        tools.dispatch,
+        caseId
       );
       if (typeof document !== 'undefined') {
         tools.listen(

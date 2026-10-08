@@ -501,6 +501,7 @@ test('HttpSharePointClient: patchCase returns 404 when the 204-write case has va
 
   assert.equal(result.ok, false);
   assert.equal(result.status, 404);
+  assert.deepEqual(result.failure, { reason: 'not-found' });
 });
 
 test('HttpSharePointClient: patchCase 200 response with neither an ETag header nor an odata.etag field falls back through the || to the same empty row etag', async () => {
@@ -531,7 +532,7 @@ test('HttpSharePointClient: patchCase 200 response with neither an ETag header n
   assert.equal(result.data?.etag, '');
 });
 
-test('HttpSharePointClient: patchCase surfaces a network error without a status as {ok:false, status:500}', async () => {
+test('HttpSharePointClient: patchCase reports a fetch that never reached SharePoint as status 0', async () => {
   const client = new HttpSharePointClient({
     webUrl: WEB_URL,
     fetchImpl: async () => {
@@ -544,7 +545,8 @@ test('HttpSharePointClient: patchCase surfaces a network error without a status 
   });
 
   assert.equal(result.ok, false);
-  assert.equal(result.status, 500);
+  assert.equal(result.status, 0);
+  assert.deepEqual(result.failure, { reason: 'network' });
 });
 
 test('HttpSharePointClient: patchCase writes status, answers and conversation to SP columns', async () => {
@@ -635,6 +637,10 @@ test('HttpSharePointClient: an unresolvable account fails the save instead of wr
 
   assert.equal(result.ok, false);
   assert.equal(result.status, 500);
+  assert.deepEqual(result.failure, {
+    reason: 'person-not-found',
+    account: 'nobody',
+  });
   assert.equal(
     calls.find((c) => c.method === 'PATCH'),
     undefined,
@@ -659,6 +665,10 @@ test('HttpSharePointClient: an EnsureUser answer with no id is a failed save, no
 
   assert.equal(result.ok, false);
   assert.equal(result.status, 500);
+  assert.deepEqual(result.failure, {
+    reason: 'person-not-found',
+    account: 'jsmith',
+  });
   assert.equal(
     calls.find((c) => c.method === 'PATCH'),
     undefined

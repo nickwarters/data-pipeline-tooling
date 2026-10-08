@@ -1,4 +1,5 @@
 // @ts-check
+import { describeSaveFailure, failureOf } from './save-failure.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').PatchResult} PatchResult */
@@ -48,7 +49,7 @@ export async function runSupportAction(
   const conflict = result.status === 412;
   const failure = conflict
     ? 'The Case changed after it was opened, so nothing was changed.'
-    : `The Case could not be saved (status ${result.status}), so nothing was changed.`;
+    : `${describeSaveFailure(failureOf(result))} Nothing was changed.`;
   try {
     await client.addSupportLogEntry({
       ...subject,

@@ -155,7 +155,7 @@ test('SaveQueue: subscribeStatus delivers current and future statuses until unsu
     clearTimer: timer.clearTimer,
   });
   q.loadCase(caseRow());
-  /** @type {Array<'saved'|'saving'|'reconnecting'|'conflict'>} */
+  /** @type {import('../src/services/save-queue.js').SaveStatus[]} */
   const statuses = [];
   const unsubscribe = q.subscribeStatus((status) => statuses.push(status));
 
@@ -797,5 +797,469 @@ test('SaveQueue: a conflict re-read after navigation is not cancelled either', a
     id: 'c1',
     opts: { listName: 'complaints' },
   });
+  assert.equal(q.status.get(), 'saved');
+});
+
+// --- writes that can never succeed ---
+
+/** Let every promise already settled, and the writes they started, run. */
+const tick = () => new Promise((resolve) => setImmediate(resolve));
+
+/** Debounce timers that fire on the next microtask, so `tick` is enough. */
+const IMMEDIATE = {
+  setTimer: (/** @type {() => void} */ callback) => {
+    queueMicrotask(callback);
+    return 0;
+  },
+  clearTimer: () => {},
+};
+
+/** @param {import('../src/services/save-queue.js').SaveQueue} queue */
+function recordStatuses(queue) {
+  /** @type {{ status: string, failures: any[], longOutage: boolean }[]} */
+  const seen = [];
+  queue.subscribeStatus((status, detail) =>
+    seen.push({
+      status,
+      failures: detail.failures,
+      longOutage: detail.longOutage,
+    })
+  );
+  return seen;
+}
+
+/**
+ * A client whose PATCHes wait for the test to answer them, one gate per call,
+ * so a test can hold one field's write open while another field's lands.
+ */
+function makeGatedClient() {
+  /** @type {{ fields: Partial<CaseRow>, answer: (r: PatchResult) => void }[]} */
+  const calls = [];
+  return {
+    calls,
+    client: /** @type {any} */ ({
+      patchCase: (
+        /** @type {string} */ _id,
+        /** @type {Partial<CaseRow>} */ fields
+      ) => new Promise((answer) => calls.push({ fields, answer })),
+      getCase: async () => caseRow(),
+    }),
+  };
+}
+
+test('SaveQueue: a refused value gives up after one attempt, settles failed and says why', async () => {
+  const client = makeClient({
+    patchResponses: [
+      {
+        ok: false,
+        status: 400,
+        failure: { reason: 'invalid-value', message: 'bad character' },
+      },
+    ],
+  });
+  const q = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });
+  q.loadCase(caseRow({ notes: 'before' }));
+  const seen = recordStatuses(q);
+
+  q.enqueue('c1', 'notes', 'pasted\u0008text');
+  await q.whenIdle();
+
+  assert.equal(client.patchCalls.length, 1, 'nothing is retried');
+  assert.equal(q.status.get(), 'failed');
+  const last = seen.at(-1);
+  assert.equal(last?.status, 'failed');
+  assert.equal(last?.failures.length, 1);
+  assert.deepEqual(last?.failures[0].fields, ['notes']);
+  assert.equal(last?.failures[0].caseId, 'c1');
+  assert.equal(last?.failures[0].failure.reason, 'invalid-value');
+  assert.equal(last?.longOutage, false);
+});
+
+test('SaveQueue: a failure with no reason attached is classified from its status', async () => {
+  for (const [status, reason] of /** @type {const} */ ([
+    [400, 'invalid-value'],
+    [403, 'forbidden'],
+    [404, 'not-found'],
+  ])) {
+    const client = makeClient({ patchResponses: [{ ok: false, status }] });
+    const q = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });
+    q.loadCase(caseRow());
+    const seen = recordStatuses(q);
+
+    q.enqueue('c1', 'notes', 'x');
+    await q.whenIdle();
+
+    assert.equal(client.patchCalls.length, 1, `${status} is not retried`);
+    assert.equal(seen.at(-1)?.failures[0].failure.reason, reason);
+  }
+});
+
+test('SaveQueue: a Responsible Party SharePoint cannot find gives up at once and says which person', async () => {
+  const client = makeClient({
+    patchResponses: [
+      {
+        ok: false,
+        status: 500,
+        failure: { reason: 'person-not-found', account: 'u4' },
+      },
+    ],
+  });
+  const q = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });
+  q.loadCase(caseRow({ responsibleParty: 'u2' }));
+  const seen = recordStatuses(q);
+
+  q.enqueue('c1', 'responsibleParty', 'u4');
+  await q.whenIdle();
+
+  const notice = seen.at(-1)?.failures[0];
+  assert.equal(notice.failure.reason, 'person-not-found');
+  assert.equal(notice.failure.account, 'u4');
+  assert.deepEqual(notice.fields, ['responsibleParty']);
+  assert.equal(client.patchCalls.length, 1);
+});
+
+test('SaveQueue: a lost connection keeps retrying and becomes a long outage past the backoff schedule', async () => {
+  const client = makeClient({
+    patchResponses: [
+      { ok: false, status: 0 },
+      { ok: false, status: 503 },
+      { ok: false, status: 503 },
+      { ok: false, status: 503 },
+    ],
+  });
+  const q = new SaveQueue(/** @type {any} */ (client), {
+    debounceMs: 0,
+    backoffSchedule: [1, 2],
+    sleep: async () => {},
+  });
+  q.loadCase(caseRow());
+  const seen = recordStatuses(q);
+
+  q.enqueue('c1', 'notes', 'hello');
+  await q.whenIdle();
+
+  assert.equal(client.patchCalls.length, 5, 'four failures, then it lands');
+  const reconnecting = seen.filter((s) => s.status === 'reconnecting');
+  assert.equal(reconnecting.length, 4, 'every retry re-announces');
+  assert.deepEqual(
+    reconnecting.map((s) => s.longOutage),
+    [false, false, true, true],
+    'long once the attempts have run past the schedule'
+  );
+  assert.deepEqual(
+    { status: seen.at(-1)?.status, long: seen.at(-1)?.longOutage },
+    { status: 'saved', long: false },
+    'and the outage ends when the write lands'
+  );
+  assert.equal(seen.at(-1)?.failures.length, 0);
+});
+
+test('SaveQueue: an unclassified failure gets two more attempts and then gives up', async () => {
+  const client = makeClient({
+    patchResponses: [
+      { ok: false, status: 418 },
+      { ok: false, status: 418 },
+      { ok: false, status: 418 },
+      { ok: false, status: 418 },
+    ],
+  });
+  const q = new SaveQueue(/** @type {any} */ (client), {
+    debounceMs: 0,
+    backoffSchedule: [0],
+    sleep: async () => {},
+  });
+  q.loadCase(caseRow());
+  const seen = recordStatuses(q);
+
+  q.enqueue('c1', 'notes', 'hello');
+  await q.whenIdle();
+
+  assert.equal(client.patchCalls.length, 3, 'the first send and two more');
+  assert.equal(q.status.get(), 'failed');
+  assert.equal(seen.at(-1)?.failures[0].failure.reason, 'unknown');
+  assert.ok(
+    !seen.some((s) => s.status === 'reconnecting'),
+    'a fault that is not the connection never claims to be'
+  );
+});
+
+test('SaveQueue: an unclassified failure that clears on a retry is not reported', async () => {
+  const client = makeClient({ patchResponses: [{ ok: false, status: 418 }] });
+  const q = new SaveQueue(/** @type {any} */ (client), {
+    debounceMs: 0,
+    backoffSchedule: [0],
+    sleep: async () => {},
+  });
+  q.loadCase(caseRow());
+
+  q.enqueue('c1', 'notes', 'hello');
+  await q.whenIdle();
+
+  assert.equal(client.patchCalls.length, 2);
+  assert.equal(q.status.get(), 'saved');
+});
+
+test('SaveQueue: a later successful write of the same field clears its failure', async () => {
+  const client = makeClient({ patchResponses: [{ ok: false, status: 400 }] });
+  const q = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });
+  q.loadCase(caseRow());
+  const seen = recordStatuses(q);
+
+  q.enqueue('c1', 'notes', 'bad');
+  await q.whenIdle();
+  assert.equal(q.status.get(), 'failed');
+
+  q.enqueue('c1', 'notes', 'fixed');
+  assert.equal(
+    q.status.get(),
+    'failed',
+    'a new write does not hide the failure still standing'
+  );
+  await q.whenIdle();
+
+  assert.equal(q.status.get(), 'saved');
+  assert.deepEqual(seen.at(-1)?.failures, []);
+});
+
+test('SaveQueue: a newer failure for the same field replaces the one before it', async () => {
+  const client = makeClient({
+    patchResponses: [
+      { ok: false, status: 400 },
+      { ok: false, status: 403 },
+    ],
+  });
+  const q = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });
+  q.loadCase(caseRow());
+  const seen = recordStatuses(q);
+
+  q.enqueue('c1', 'notes', 'one');
+  await q.whenIdle();
+  q.enqueue('c1', 'notes', 'two');
+  await q.whenIdle();
+
+  assert.equal(seen.at(-1)?.failures.length, 1);
+  assert.equal(seen.at(-1)?.failures[0].failure.reason, 'forbidden');
+});
+
+test('SaveQueue: another field still saves, and the queue goes idle, while a failure is recorded', async () => {
+  const client = makeClient({ patchResponses: [{ ok: false, status: 400 }] });
+  const q = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });
+  q.loadCase(caseRow());
+  const seen = recordStatuses(q);
+
+  q.enqueue('c1', 'notes', 'bad');
+  await q.whenIdle();
+  q.enqueue('c1', 'answers', { 'q-1': { value: 'Yes' } });
+  await q.whenIdle();
+
+  assert.equal(client.patchCalls.length, 2);
+  assert.deepEqual(client.patchCalls[1].fields, {
+    answers: { 'q-1': { value: 'Yes' } },
+  });
+  assert.equal(q.status.get(), 'failed', 'the notes failure still stands');
+  assert.deepEqual(
+    seen.at(-1)?.failures.map((n) => n.fields),
+    [['notes']]
+  );
+});
+
+test('SaveQueue: flushCase returns false at once when a write gives up, instead of hanging', async () => {
+  const client = makeClient({ patchResponses: [{ ok: false, status: 400 }] });
+  const q = new SaveQueue(/** @type {any} */ (client), { debounceMs: 60_000 });
+  q.loadCase(caseRow());
+
+  q.enqueue('c1', 'notes', 'bad');
+
+  assert.equal(await q.flushCase('c1'), false);
+  assert.equal(client.patchCalls.length, 1);
+  assert.equal(q.status.get(), 'failed');
+});
+
+test('SaveQueue: flushCase refuses to complete a Case that still has an unsaved edit', async () => {
+  const client = makeClient({ patchResponses: [{ ok: false, status: 400 }] });
+  const q = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });
+  q.loadCase(caseRow());
+  q.enqueue('c1', 'notes', 'bad');
+  await q.whenIdle();
+
+  assert.equal(await q.flushCase('c1'), false, 'nothing pending, still false');
+
+  q.loadCase(caseRow({ id: 'c2' }));
+  assert.equal(await q.flushCase('c2'), true, 'another Case is unaffected');
+});
+
+test('SaveQueue: flushCase waits out an in-flight write that is given up on', async () => {
+  const { client, calls } = makeGatedClient();
+  const q = new SaveQueue(/** @type {any} */ (client), {
+    debounceMs: 0,
+    ...IMMEDIATE,
+  });
+  q.loadCase(caseRow());
+  q.enqueue('c1', 'notes', 'bad');
+  await tick();
+  const flushed = q.flushCase('c1');
+
+  calls[0].answer({ ok: false, status: 400 });
+
+  assert.equal(await flushed, false);
+});
+
+test('SaveQueue: a recorded failure outranks a lost connection and a newer write', async () => {
+  const { client, calls } = makeGatedClient();
+  const q = new SaveQueue(/** @type {any} */ (client), {
+    debounceMs: 0,
+    ...IMMEDIATE,
+    sleep: () => new Promise(() => {}),
+  });
+  q.loadCase(caseRow());
+  const seen = recordStatuses(q);
+
+  q.enqueue('c1', 'notes', 'bad');
+  await tick();
+  calls[0].answer({ ok: false, status: 400 });
+  await q.whenIdle();
+  q.enqueue('c1', 'answers', { 'q-1': { value: 'Yes' } });
+  await tick();
+  calls[1].answer({ ok: false, status: 503 });
+  await tick();
+
+  assert.deepEqual(
+    seen.slice(-2).map((s) => s.status),
+    ['failed', 'failed'],
+    'saving and reconnecting both give way to the standing failure'
+  );
+});
+
+test('SaveQueue: a write started during an outage does not hide it, and ending the outage returns to saving', async () => {
+  const { client, calls } = makeGatedClient();
+  /** @type {() => void} */
+  let wake = () => {};
+  const q = new SaveQueue(/** @type {any} */ (client), {
+    debounceMs: 0,
+    ...IMMEDIATE,
+    sleep: () =>
+      new Promise((resolve) => {
+        wake = resolve;
+      }),
+  });
+  q.loadCase(caseRow());
+
+  q.enqueue('c1', 'notes', 'a');
+  await tick();
+  calls[0].answer({ ok: false, status: 503 });
+  await tick();
+  assert.equal(q.status.get(), 'reconnecting');
+
+  q.enqueue('c1', 'answers', { 'q-1': { value: 'Yes' } });
+  assert.equal(q.status.get(), 'reconnecting', 'not masked by the newer write');
+  await tick();
+
+  wake();
+  await tick();
+  calls[2].answer({ ok: true, status: 200, data: caseRow({ etag: 'e2' }) });
+  await tick();
+  assert.equal(
+    q.status.get(),
+    'saving',
+    'the outage is over but the other write is still in hand'
+  );
+
+  calls[1].answer({ ok: true, status: 200, data: caseRow({ etag: 'e3' }) });
+  await q.whenIdle();
+  assert.equal(q.status.get(), 'saved');
+});
+
+test('SaveQueue: a conflict stays a conflict while another write finishes', async () => {
+  const { client, calls } = makeGatedClient();
+  client.getCase = async () => caseRow({ answers: { 'q-1': { value: 'No' } } });
+  const q = new SaveQueue(/** @type {any} */ (client), {
+    debounceMs: 0,
+    ...IMMEDIATE,
+  });
+  q.loadCase(caseRow());
+  const seen = recordStatuses(q);
+
+  q.enqueue('c1', 'notes', 'a');
+  q.enqueue('c1', 'answers', { 'q-1': { value: 'Yes' } });
+  await tick();
+  calls[0].answer({ ok: false, status: 412 });
+  await tick();
+  assert.equal(q.status.get(), 'conflict');
+  const announced = seen.length;
+
+  calls[1].answer({ ok: true, status: 200, data: caseRow({ etag: 'e2' }) });
+  await q.whenIdle();
+
+  assert.equal(q.status.get(), 'conflict');
+  assert.equal(seen.length, announced, 'nothing was re-announced over it');
+});
+
+test('SaveQueue: a conflict outranks a failure when the queue settles', async () => {
+  const client = makeClient({
+    patchResponses: [
+      { ok: false, status: 400 },
+      { ok: false, status: 412 },
+    ],
+    getCaseRow: caseRow({ answers: { 'q-1': { value: 'No' } } }),
+  });
+  const q = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });
+  q.loadCase(caseRow());
+
+  q.enqueue('c1', 'notes', 'bad');
+  await q.whenIdle();
+  q.enqueue('c1', 'answers', { 'q-1': { value: 'Yes' } });
+  await q.whenIdle();
+
+  assert.equal(q.status.get(), 'conflict');
+});
+
+test('SaveQueue: a write that settles while another is still waiting out an outage keeps saying so', async () => {
+  const { client, calls } = makeGatedClient();
+  const q = new SaveQueue(/** @type {any} */ (client), {
+    debounceMs: 0,
+    ...IMMEDIATE,
+    sleep: () => new Promise(() => {}),
+  });
+  q.loadCase(caseRow());
+
+  q.enqueue('c1', 'notes', 'a');
+  await tick();
+  calls[0].answer({ ok: false, status: 503 });
+  await tick();
+  q.enqueue('c1', 'answers', { 'q-1': { value: 'Yes' } });
+  await tick();
+  calls[1].answer({ ok: true, status: 200, data: caseRow({ etag: 'e2' }) });
+  await tick();
+
+  assert.equal(q.status.get(), 'reconnecting');
+});
+
+test('SaveQueue: a write that settles beside others still in hand leaves a standing failure showing', async () => {
+  const { client, calls } = makeGatedClient();
+  const q = new SaveQueue(/** @type {any} */ (client), {
+    debounceMs: 0,
+    ...IMMEDIATE,
+  });
+  q.loadCase(caseRow());
+
+  q.enqueue('c1', 'notes', 'bad');
+  await tick();
+  calls[0].answer({ ok: false, status: 400 });
+  await q.whenIdle();
+  q.enqueue('c1', 'answers', { 'q-1': { value: 'Yes' } });
+  q.enqueue('c1', 'conversation', []);
+  await tick();
+  calls[1].answer({ ok: true, status: 200, data: caseRow({ etag: 'e2' }) });
+  await tick();
+
+  assert.equal(q.status.get(), 'failed');
+  calls[2].answer({ ok: true, status: 200, data: caseRow({ etag: 'e3' }) });
+  await q.whenIdle();
+  assert.equal(q.status.get(), 'failed');
+});
+
+test('SaveQueue: whenIdle resolves at once when nothing is queued', async () => {
+  const q = new SaveQueue(/** @type {any} */ (makeClient()));
+  await q.whenIdle();
   assert.equal(q.status.get(), 'saved');
 });

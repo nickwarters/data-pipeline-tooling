@@ -265,6 +265,10 @@ test('state: route state owns loading, save status, and selected tab under route
     captureSearch: {},
     responsiblePartySearch: { query: '', people: [], status: 'idle' },
     saveStatus: 'saved',
+    saveFailures: [],
+    saveLongOutage: false,
+    responsiblePartyBeforePick: null,
+    actionFailure: null,
     sections: {},
     snapshot: null,
   });
@@ -3419,14 +3423,14 @@ test('view: loading, error, denied, saving, and reconnecting states are explicit
   );
 
   for (const [status, label] of /** @type {const} */ ([
-    ['saving', 'Saving…'],
-    ['reconnecting', 'Reconnecting…'],
+    ['saving', /^Saving…$/],
+    ['reconnecting', /Can't reach SharePoint\. Retrying…/],
   ])) {
     const statusState = caseReviewReducer(loaded, {
       type: 'case/save-status-changed',
       status,
     });
-    assert.equal(
+    assert.match(
       getByRole(renderShippedState(statusState).container, 'status')
         .textContent,
       label
@@ -3852,7 +3856,7 @@ test('save effect: conflict status re-enters route state through dispatch', asyn
     { debounceMs: 0 }
   );
   queue.loadCase(/** @type {any} */ (caseRow));
-  /** @type {Array<'saved'|'saving'|'reconnecting'|'conflict'>} */
+  /** @type {import('../src/services/save-queue.js').SaveStatus[]} */
   const statuses = [];
   const dispose = observeSaveStatus(queue, (action) =>
     statuses.push(action.status)
@@ -5881,4 +5885,559 @@ test('Notes: an edit reaches the SaveQueue through the Section seam, end to end'
     'A reviewer note',
     'and the store moved first, as it always did'
   );
+});
+
+// --- writes the queue gave up on ---
+
+/**
+ * @param {string[]} fields
+ * @param {any} failure
+ */
+function failureNotice(fields, failure) {
+  return { caseId: 'c1', fields, failure };
+}
+
+/**
+ * @param {any} state
+ * @param {any[]} failures
+ * @param {Record<string, any>} [more]
+ * @returns {any}
+ */
+function reportFailures(state, failures, more = {}) {
+  return caseReviewReducer(state, {
+    type: 'case/save-status-changed',
+    status: 'failed',
+    failures,
+    longOutage: false,
+    ...more,
+  });
+}
+
+/** @returns {any} */
+function loadedState() {
+  return caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: snapshot(),
+  });
+}
+
+/**
+ * A loaded Case whose saved Responsible Party the directory has named.
+ *
+ * @returns {any}
+ */
+function loadedStateWithSavedParty() {
+  const loaded = snapshot();
+  loaded.caseRow = {
+    ...loaded.caseRow,
+    responsibleParty: 'u2',
+    responsiblePartyDisplayName: 'Una Saved',
+  };
+  return caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: loaded,
+  });
+}
+
+/**
+ * @param {any} state
+ * @param {string} loginName
+ * @param {string} displayName
+ * @returns {any}
+ */
+function picked(state, loginName, displayName) {
+  return caseReviewReducer(state, {
+    type: 'case/responsible-party-changed',
+    loginName,
+    displayName,
+  });
+}
+
+const RESPONSIBLE_PARTY_FIELDS = ['responsibleParty'];
+
+test('save failures: a refused value is worded for the person and the page keeps their text', () => {
+  const loaded = loadedState();
+  /** @type {any} */
+  const typed = caseReviewReducer(loaded, {
+    type: 'case/section-write',
+    section: 'notes',
+    fields: { notes: 'pasted text' },
+  });
+  const notice = failureNotice(['notes'], { reason: 'invalid-value' });
+
+  const next = reportFailures(typed, [notice]);
+
+  const route = next.routes.caseReview;
+  assert.equal(route.saveStatus, 'failed');
+  assert.equal(route.saveFailures.length, 1);
+  assert.match(route.saveFailures[0].message, /Notes|Your change/);
+  assert.match(
+    route.saveFailures[0].message,
+    /character SharePoint can't store/
+  );
+  assert.strictEqual(
+    route.snapshot.caseRow,
+    typed.routes.caseReview.snapshot.caseRow,
+    'no field is put back: the text is what the person needs to fix'
+  );
+});
+
+test('save failures: a Responsible Party SharePoint cannot find is put back to the person the picker showed, and named by who was picked', () => {
+  /** @type {any} */
+  let state = picked(loadedStateWithSavedParty(), 'u9', 'Pat Gone');
+  assert.equal(state.routes.caseReview.snapshot.caseRow.responsibleParty, 'u9');
+
+  state = reportFailures(state, [
+    failureNotice(RESPONSIBLE_PARTY_FIELDS, {
+      reason: 'person-not-found',
+      account: 'u9',
+    }),
+  ]);
+
+  const row = state.routes.caseReview.snapshot.caseRow;
+  assert.equal(row.responsibleParty, 'u2', 'the picker shows who was saved');
+  assert.equal(
+    row.responsiblePartyDisplayName,
+    'Una Saved',
+    'under the name the directory gave them'
+  );
+  assert.match(state.routes.caseReview.saveFailures[0].message, /^Pat Gone /);
+  assert.equal(
+    state.routes.caseReview.responsiblePartyBeforePick,
+    null,
+    'and nothing is left to put back'
+  );
+});
+
+test('save failures: a saved person without a directory name is put back without one', () => {
+  /** @type {any} */
+  let state = picked(loadedState(), 'u9', 'Pat Gone');
+
+  state = reportFailures(state, [
+    failureNotice(RESPONSIBLE_PARTY_FIELDS, {
+      reason: 'person-not-found',
+      account: 'u9',
+    }),
+  ]);
+
+  const row = state.routes.caseReview.snapshot.caseRow;
+  assert.equal(row.responsibleParty, 'u2');
+  assert.equal('responsiblePartyDisplayName' in row, false);
+});
+
+test('save failures: two picks before a failure put the picker back to the person shown before the first', () => {
+  /** @type {any} */
+  let state = picked(loadedStateWithSavedParty(), 'u3', 'Alex Unsaved');
+  state = picked(state, 'u9', 'Pat Gone');
+
+  state = reportFailures(state, [
+    failureNotice(RESPONSIBLE_PARTY_FIELDS, {
+      reason: 'person-not-found',
+      account: 'u9',
+    }),
+  ]);
+
+  const row = state.routes.caseReview.snapshot.caseRow;
+  assert.equal(
+    row.responsibleParty,
+    'u2',
+    'the first pick never saved either, so it is not what SharePoint holds'
+  );
+  assert.equal(row.responsiblePartyDisplayName, 'Una Saved');
+});
+
+test('save failures: a pick made while an earlier one was failing is not undone by it', () => {
+  /** @type {any} */
+  let state = picked(loadedStateWithSavedParty(), 'u9', 'Pat Gone');
+  state = picked(state, 'u7', 'Sam Later');
+
+  state = reportFailures(state, [
+    failureNotice(RESPONSIBLE_PARTY_FIELDS, {
+      reason: 'person-not-found',
+      account: 'u9',
+    }),
+  ]);
+
+  const row = state.routes.caseReview.snapshot.caseRow;
+  assert.equal(row.responsibleParty, 'u7');
+  assert.equal(row.responsiblePartyDisplayName, 'Sam Later');
+  assert.deepEqual(
+    state.routes.caseReview.responsiblePartyBeforePick,
+    { account: 'u2', displayName: 'Una Saved' },
+    'and the person saved before either pick is still what a later failure restores'
+  );
+});
+
+test('save failures: once everything has saved, a later failed pick is put back to the person saved in between', () => {
+  /** @type {any} */
+  let state = picked(loadedStateWithSavedParty(), 'u3', 'Alex Kept');
+  state = caseReviewReducer(state, {
+    type: 'case/save-status-changed',
+    status: 'saved',
+    failures: [],
+  });
+  assert.equal(state.routes.caseReview.responsiblePartyBeforePick, null);
+  state = picked(state, 'u9', 'Pat Gone');
+
+  state = reportFailures(state, [
+    failureNotice(RESPONSIBLE_PARTY_FIELDS, {
+      reason: 'person-not-found',
+      account: 'u9',
+    }),
+  ]);
+
+  const row = state.routes.caseReview.snapshot.caseRow;
+  assert.equal(row.responsibleParty, 'u3');
+  assert.equal(row.responsiblePartyDisplayName, 'Alex Kept');
+});
+
+test('save failures: a Responsible Party cleared and then replaced is put back to the person who was cleared', () => {
+  /** @type {any} */
+  let state = caseReviewReducer(loadedStateWithSavedParty(), {
+    type: 'case/responsible-party-cleared',
+  });
+  state = picked(state, 'u9', 'Pat Gone');
+
+  state = reportFailures(state, [
+    failureNotice(RESPONSIBLE_PARTY_FIELDS, {
+      reason: 'person-not-found',
+      account: 'u9',
+    }),
+  ]);
+
+  const row = state.routes.caseReview.snapshot.caseRow;
+  assert.equal(row.responsibleParty, 'u2');
+  assert.equal(row.responsiblePartyDisplayName, 'Una Saved');
+});
+
+test('save failures: a Case read again after a pick has nothing left to put back to', () => {
+  for (const type of ['case/load-finished', 'case/model-changed']) {
+    /** @type {any} */
+    let state = picked(loadedStateWithSavedParty(), 'u9', 'Pat Gone');
+    const reread = snapshot();
+    reread.caseRow = { ...reread.caseRow, responsibleParty: 'u9' };
+    state = caseReviewReducer(state, { type, snapshot: reread });
+    assert.equal(
+      state.routes.caseReview.responsiblePartyBeforePick,
+      null,
+      `${type} brings the row SharePoint holds`
+    );
+  }
+});
+
+test('save failures: only a person who could not be found is reverted, and only for the Responsible Party', () => {
+  /** @type {[string[], any][]} */
+  const cases = [
+    [['responsibleParty'], { reason: 'invalid-value' }],
+    [['responsibleParty'], { reason: 'forbidden' }],
+    [['responsibleParty'], { reason: 'unknown' }],
+    [['notes'], { reason: 'person-not-found', account: 'x' }],
+  ];
+  for (const [fields, failure] of cases) {
+    const pick = picked(loadedState(), 'u9', 'Pat');
+
+    const next = reportFailures(pick, [failureNotice(fields, failure)]);
+
+    assert.equal(
+      next.routes.caseReview.snapshot.caseRow.responsibleParty,
+      'u9',
+      `${failure.reason} on ${fields} leaves the pick alone`
+    );
+  }
+});
+
+test('save failures: a failure for another Case does not touch this one', () => {
+  const pick = picked(loadedState(), 'u9', 'Pat');
+
+  const next = reportFailures(pick, [
+    {
+      ...failureNotice(RESPONSIBLE_PARTY_FIELDS, {
+        reason: 'person-not-found',
+      }),
+      caseId: 'another',
+    },
+  ]);
+
+  assert.equal(next.routes.caseReview.snapshot.caseRow.responsibleParty, 'u9');
+});
+
+test('save failures: hearing the same failure again does not undo a pick made since', () => {
+  const notice = failureNotice(RESPONSIBLE_PARTY_FIELDS, {
+    reason: 'person-not-found',
+  });
+  /** @type {any} */
+  let state = picked(loadedState(), 'u9', 'Pat');
+  state = reportFailures(state, [notice]);
+  state = picked(state, 'u7', 'Sam');
+
+  const next = reportFailures(state, [notice], { status: 'saving' });
+
+  assert.equal(next.routes.caseReview.snapshot.caseRow.responsibleParty, 'u7');
+  assert.equal(next.routes.caseReview.saveStatus, 'saving');
+  assert.match(
+    next.routes.caseReview.saveFailures[0].message,
+    /^Pat /,
+    'and the wording is not redone with whoever is shown now'
+  );
+});
+
+test('save failures: a report that changes nothing does not re-render, and one that does, does', () => {
+  const notice = failureNotice(['notes'], { reason: 'invalid-value' });
+  const failed = reportFailures(loadedState(), [notice]);
+
+  assert.strictEqual(reportFailures(failed, [notice]), failed);
+  assert.notStrictEqual(
+    reportFailures(failed, [notice], { longOutage: true }),
+    failed,
+    'a long outage is news'
+  );
+  assert.notStrictEqual(
+    reportFailures(failed, [
+      notice,
+      failureNotice(['answers'], { reason: 'forbidden' }),
+    ]),
+    failed,
+    'a second failure is news'
+  );
+  assert.notStrictEqual(
+    reportFailures(failed, []),
+    failed,
+    'a cleared failure is news'
+  );
+});
+
+test('save failures: a status report without the detail clears nothing it should keep and adds nothing', () => {
+  const next = caseReviewReducer(loadedState(), {
+    type: 'case/save-status-changed',
+    status: 'reconnecting',
+  });
+
+  assert.equal(next.routes.caseReview.saveStatus, 'reconnecting');
+  assert.deepEqual(next.routes.caseReview.saveFailures, []);
+  assert.equal(next.routes.caseReview.saveLongOutage, false);
+});
+
+test('view: a failed save is an alert naming each failure, with Reload only when the Case is gone', () => {
+  const refused = reportFailures(loadedState(), [
+    failureNotice(['notes'], { reason: 'invalid-value' }),
+    failureNotice(['answers'], { reason: 'forbidden' }),
+  ]);
+  const view = renderShippedState(refused).container;
+
+  const alert = getByRole(view, 'alert');
+  assert.match(alert.textContent, /character SharePoint can't store/);
+  assert.match(alert.textContent, /permission/);
+  assert.equal(queryByRole(view, 'button', { name: 'Reload' }), null);
+
+  const gone = reportFailures(loadedState(), [
+    failureNotice(['notes'], { reason: 'not-found' }),
+  ]);
+  assert.ok(
+    getByRole(renderShippedState(gone).container, 'button', { name: 'Reload' })
+  );
+});
+
+test('view: a long outage tells the person to check their connection', () => {
+  const reconnecting = caseReviewReducer(loadedState(), {
+    type: 'case/save-status-changed',
+    status: 'reconnecting',
+    failures: [],
+    longOutage: true,
+  });
+
+  assert.match(
+    getByRole(renderShippedState(reconnecting).container, 'status').textContent,
+    /Check your connection or VPN\.$/
+  );
+});
+
+test('observeSaveStatus: passes the failures and the outage to the page', async () => {
+  const queue = new SaveQueue(
+    /** @type {any} */ ({
+      async patchCase() {
+        return { ok: false, status: 400 };
+      },
+    }),
+    { debounceMs: 0 }
+  );
+  queue.loadCase(/** @type {any} */ (caseRow));
+  /** @type {any[]} */
+  const actions = [];
+  const dispose = observeSaveStatus(queue, (action) => actions.push(action));
+
+  queue.enqueue('c1', 'notes', 'bad');
+  await queue.whenIdle();
+  dispose();
+
+  const last = actions.at(-1);
+  assert.equal(last.status, 'failed');
+  assert.deepEqual(last.failures[0].fields, ['notes']);
+  assert.equal(last.longOutage, false);
+});
+
+test("observeSaveStatus: another Case's failure is not this page's to show", async () => {
+  const queue = new SaveQueue(
+    /** @type {any} */ ({
+      async patchCase() {
+        return { ok: false, status: 400 };
+      },
+    }),
+    { debounceMs: 0 }
+  );
+  queue.loadCase(/** @type {any} */ (caseRow));
+  queue.enqueue('c1', 'notes', 'bad');
+  await queue.whenIdle();
+  /** @type {any[]} */
+  const actions = [];
+  const dispose = observeSaveStatus(
+    queue,
+    (action) => actions.push(action),
+    () => 'c2'
+  );
+  dispose();
+
+  assert.equal(actions.at(-1).status, 'saved');
+  assert.deepEqual(actions.at(-1).failures, []);
+
+  /** @type {any[]} */
+  const own = [];
+  const disposeOwn = observeSaveStatus(
+    queue,
+    (action) => own.push(action),
+    () => 'c1'
+  );
+  disposeOwn();
+  assert.equal(own.at(-1).status, 'failed');
+});
+
+test('action: a Conversation post SharePoint refuses is explained', async () => {
+  const interactive = snapshot();
+  interactive.machine = { canToggleConversation: true };
+  let state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: interactive,
+  });
+  state = caseReviewReducer(state, { type: 'case/conversation-toggled' });
+  const view = renderShippedState(state, {
+    client: {
+      async patchCase() {
+        return { ok: false, status: 400 };
+      },
+    },
+    saveQueue: { getEtag: () => 'e1', loadCase() {} },
+  });
+  getByRole(view.container, 'textbox', {
+    name: 'Message to Responsible Party',
+  }).value = 'Please review this.';
+
+  fireEvent(
+    getByRole(view.container, 'button', { name: 'Send message' }),
+    'click'
+  );
+  await flush();
+
+  assert.match(getByRole(view.container, 'alert').textContent, /Your message/);
+});
+
+test('action: a Complete Case SharePoint refuses is explained instead of failing silently', async () => {
+  let succeed = false;
+  const state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: {
+      ...snapshot(),
+      machine: /** @type {any} */ ({
+        canComplete: true,
+        mayResolveRemediation: false,
+        catalogue: [],
+        transitionToCompleted: () => ({ status: 'Completed' }),
+      }),
+      allAnswered: true,
+    },
+  });
+  const view = renderShippedState(state, {
+    saveQueue: { flushCase: async () => true, getEtag: () => 'e1' },
+    client: {
+      async patchCase() {
+        return succeed ? { ok: true, status: 200 } : { ok: false, status: 404 };
+      },
+    },
+  });
+
+  fireEvent(
+    getByRole(view.container, 'button', { name: 'Complete Case' }),
+    'click'
+  );
+  await flush();
+
+  assert.match(
+    getByRole(view.container, 'alert').textContent,
+    /no longer be found/
+  );
+  assert.ok(getByRole(view.container, 'button', { name: 'Reload' }));
+  assert.equal(
+    view.state.routes.caseReview.completionPending,
+    false,
+    'the control is usable again'
+  );
+  succeed = true;
+  fireEvent(
+    getByRole(view.container, 'button', { name: 'Complete Case' }),
+    'click'
+  );
+  await flush();
+  assert.equal(
+    queryByRole(view.container, 'alert'),
+    null,
+    'the explanation goes when the person tries again'
+  );
+});
+
+test('action: an explanation that arrives after the person has left the page is dropped', async () => {
+  const interactive = snapshot();
+  interactive.machine = { canToggleConversation: true };
+  let state = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: interactive,
+  });
+  state = caseReviewReducer(state, { type: 'case/conversation-toggled' });
+  /** @type {(r: any) => void} */
+  let answer = () => {};
+  const view = renderShippedState(state, {
+    client: {
+      patchCase: () => new Promise((resolve) => (answer = resolve)),
+    },
+    saveQueue: { getEtag: () => 'e1', loadCase() {} },
+  });
+  getByRole(view.container, 'textbox', {
+    name: 'Message to Responsible Party',
+  }).value = 'Hello';
+  fireEvent(
+    getByRole(view.container, 'button', { name: 'Send message' }),
+    'click'
+  );
+  view.deactivate();
+
+  answer({ ok: false, status: 400 });
+  await flush();
+
+  assert.equal(view.state.routes.caseReview.actionFailure, null);
+});
+
+test('action failure: clearing when nothing is showing changes nothing', () => {
+  const loaded = loadedState();
+  assert.strictEqual(
+    caseReviewReducer(loaded, { type: 'case/action-failure-cleared' }),
+    loaded
+  );
+});
+
+test('save failures: a Responsible Party failure with no pick to undo puts the picker back to nobody', () => {
+  /** @type {any} */
+  const state = reportFailures(loadedState(), [
+    failureNotice(RESPONSIBLE_PARTY_FIELDS, { reason: 'person-not-found' }),
+  ]);
+
+  const row = state.routes.caseReview.snapshot.caseRow;
+  assert.equal(row.responsibleParty, '');
+  assert.equal('responsiblePartyDisplayName' in row, false);
 });

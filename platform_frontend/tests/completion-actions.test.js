@@ -1187,3 +1187,96 @@ test('completionPatch: writes nothing while a required General Question is unans
     'Completed'
   );
 });
+
+test('completeCase tells the page why the transition did not land, and stays on the Case', async () => {
+  /** @type {import('../src/services/save-failure.js').SaveFailure[]} */
+  const heard = [];
+  /** @type {string[]} */
+  const navigations = [];
+  const saveQueue = /** @type {any} */ ({
+    async flushCase() {
+      return true;
+    },
+    getEtag() {
+      return 'e2';
+    },
+  });
+  /** @param {any} response */
+  const clientAnswering = (response) =>
+    /** @type {any} */ ({
+      async patchCase() {
+        return response;
+      },
+    });
+  const attempt = (/** @type {any} */ response) =>
+    completeCase({
+      caseId: 'c1',
+      client: clientAnswering(response),
+      saveQueue,
+      patchFields: { status: 'Completed' },
+      navigate: (hash) => navigations.push(hash),
+      onFailure: (failure) => heard.push(failure),
+    });
+
+  assert.equal(await attempt({ ok: false, status: 0 }), false);
+  assert.equal(
+    await attempt({
+      ok: false,
+      status: 500,
+      failure: { reason: 'person-not-found', account: 'x' },
+    }),
+    false
+  );
+
+  assert.deepEqual(
+    heard.map((failure) => failure.reason),
+    ['network', 'person-not-found'],
+    'classified from the status when the client said nothing, else as told'
+  );
+  assert.deepEqual(navigations, []);
+});
+
+test('completeCase does not call onFailure when an autosave it flushed first was given up on', async () => {
+  let heard = 0;
+  const saveQueue = /** @type {any} */ ({
+    async flushCase() {
+      return false;
+    },
+  });
+
+  assert.equal(
+    await completeCase({
+      caseId: 'c1',
+      client: /** @type {any} */ ({}),
+      saveQueue,
+      patchFields: { status: 'Completed' },
+      onFailure: () => heard++,
+    }),
+    false
+  );
+  assert.equal(heard, 0, 'the queue has already told the page');
+});
+
+test('completeCase without an onFailure still reports the failure by returning false', async () => {
+  const saveQueue = /** @type {any} */ ({
+    async flushCase() {
+      return true;
+    },
+    getEtag: () => 'e2',
+  });
+  const client = /** @type {any} */ ({
+    async patchCase() {
+      return { ok: false, status: 500 };
+    },
+  });
+
+  assert.equal(
+    await completeCase({
+      caseId: 'c1',
+      client,
+      saveQueue,
+      patchFields: { status: 'Completed' },
+    }),
+    false
+  );
+});

@@ -410,7 +410,15 @@
  */
 
 /**
- * @typedef {{ ok: boolean, status: number, data?: CaseRow }} PatchResult
+ * `failure` says why a write did not land, when the client could tell; a
+ * consumer that finds none classifies from `status` alone.
+ *
+ * @typedef {{
+ * ok: boolean,
+ * status: number,
+ * data?: CaseRow,
+ * failure?: import('./services/save-failure.js').SaveFailure
+ * }} PatchResult
  */
 
 /**

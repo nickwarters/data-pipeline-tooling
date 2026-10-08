@@ -402,7 +402,8 @@
   margin-bottom: var(--cora-space-3);
 }
 
-.cora-banner-conflict {
+.cora-banner-conflict,
+.cora-banner-failed {
   background: var(--cora-color-danger-bg);
   color: var(--cora-color-danger);
   border-color: var(--cora-color-danger);
@@ -416,6 +417,11 @@
 .cora-banner-text {
   margin: 0;
   flex: 1;
+}
+
+/* Several refused writes at once: one line each, not a run-on paragraph. */
+.cora-banner-failures {
+  padding-left: var(--cora-space-4);
 }
 
 .cora-banner-reload {

@@ -36,6 +36,26 @@ their existing semantics and are not absorbed by this per-candidate read boundar
 
 **In-memory retry queue, exponential backoff** (1s, 2s, 4s, ... capped ~30s). UI indicator: `Saved` / `Saving…` / `Reconnecting…` / `Conflict — reload`. **No `localStorage` persistence in v1** — the complexity (per-case keys, eviction, stale merges) outweighs the rare benefit on a corporate intranet.
 
+### Amendment: only connection failures are retried
+
+As first built, every failure other than a 412 was treated as a network
+failure. A write SharePoint refuses on its merits — a character it cannot store,
+often pasted from Word or an AI tool, or a person `EnsureUser` cannot find —
+fails identically on every attempt, so the Reviewer saw `Reconnecting…` for as
+long as the tab was open, took it for a problem with their connection, and
+Complete Case waited behind the write forever.
+
+The retry rule is therefore narrowed to what waiting can fix. A failed write is
+classified (`src/services/save-failure.js`) as a lost connection, SharePoint
+unavailable, a refused value, an unknown person, no permission, a missing Case,
+or unknown. Only the first two are retried on the backoff above; unknown gets
+two more attempts; the rest give up at once. Giving up adds a fifth indicator
+state, `Failed`, which says what was not saved and why in words the Reviewer can
+act on. The write is dropped rather than parked, and a later successful write of
+the same field clears it — still no `localStorage`, for the reason above. The
+client also strips the invisible control characters SharePoint refuses before
+sending, so the refused-value message is a backstop rather than the normal path.
+
 ### Status transitions
 
 Recomputed client-side after each save by invoking the Case Type's `outcome`/applicability logic. The "Complete Case" button shows/hides accordingly. The `Status` field itself only changes when the Reviewer explicitly clicks Complete.

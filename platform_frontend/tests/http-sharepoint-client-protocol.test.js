@@ -434,7 +434,11 @@ test('HttpSharePointClient: patchCase fails before PATCH when contextinfo carrie
     listName: 'Cases-ExampleReview',
   });
 
-  assert.deepEqual(result, { ok: false, status: 500 });
+  assert.deepEqual(result, {
+    ok: false,
+    status: 500,
+    failure: { reason: 'unknown' },
+  });
   assert.equal(
     calls.filter(
       (c) => c.method === 'POST' && c.url.endsWith('/_api/contextinfo')

@@ -13,6 +13,7 @@ import {
   buildCompletedTransition,
   buildFinalCompleteTransition,
 } from '../../evaluators/case-transitions.js';
+import { failureOf } from '../../services/save-failure.js';
 import { navigateTo } from '../../lib/navigate.js';
 import { h } from '../../lib/html.js';
 
@@ -262,7 +263,10 @@ export function completionPatch(input) {
  *   caseListOptions?: import('../../sharepoint-client.js').CaseListOptions,
  *   opts?: import('../../sharepoint-client.js').CaseListOptions,
  *   navigate?: (hash: string) => void,
- * }} input `navigate` is where a successful completion goes next. Defaults to
+ *   onFailure?: (failure: import('../../services/save-failure.js').SaveFailure) => void,
+ * }} input `onFailure` hears why the transition itself did not land, so the
+ *   page can tell the person; a refusal of an earlier autosave is reported by
+ *   the queue and never reaches it. `navigate` is where a successful completion goes next. Defaults to
  *   the `lib/navigate.js` seam so no page call site has to pass it; injectable
  *   so a non-browser caller — `tests/_in-memory-flow-runner.js` drives real
  *   completions in Node — can record the navigation instead of this action
@@ -276,6 +280,7 @@ export async function completeCase({
   caseListOptions,
   opts,
   navigate = navigateTo,
+  onFailure,
 }) {
   if (!client || !saveQueue || !patchFields) return false;
   if (!(await saveQueue.flushCase(caseId))) return false;
@@ -286,5 +291,8 @@ export async function completeCase({
     caseListOptions ?? opts ?? {}
   );
   if (result.ok) navigate('#/dashboard');
+  else {
+    onFailure?.(failureOf(result));
+  }
   return result.ok;
 }
