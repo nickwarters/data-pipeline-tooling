@@ -294,7 +294,8 @@ None. The four fields are two independent `login`/`email` pairs.
   the same thing twice.
 - A missing column aborts the read, naming the columns it wanted.
 - The Responsible Party Manager comes from **here**, never from
-  `case_current.responsible_party_manager_name` — nothing writes that column, and
+  `case_current.responsible_party_manager_name`. The platform writes that column
+  only when the Responsible Party is saved, so it can be stale or empty, and
   live directory resolution is the documented correct authority for a role that
   is an access-control input (`platform_frontend/CONTEXT.md`, *Responsible Party
   Manager*).

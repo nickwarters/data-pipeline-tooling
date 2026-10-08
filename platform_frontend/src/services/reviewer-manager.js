@@ -1,7 +1,10 @@
 // @ts-check
 
 /**
- * A Reviewer's current manager for an assignment write; an unusable answer is `null`, never inherited.
+ * A person's current manager for a write that records it; an unusable answer is `null`, never inherited.
+ *
+ * Named for the Reviewer, whose assignment was its first caller; the Responsible
+ * Party's manager is resolved the same way.
  *
  * @param {import('../sharepoint-client.js').SharePointClient} client
  * @param {string} reviewerId

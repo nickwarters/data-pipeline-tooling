@@ -5,6 +5,7 @@ import {
   toClaimsLogin,
 } from './account-name.js';
 import { withAssignmentStamp } from './assignment-stamp.js';
+import { withResponsiblePartyManager } from './responsible-party-manager.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
 import {
   isOverdue,
@@ -260,9 +261,13 @@ export class HttpSharePointClient {
   async patchCase(id, fields, etag, opts = {}) {
     const url = this._listItemUrl(this._requireListName(opts), id);
     try {
-      // The Assigned Reviewer's clock is paired with the Reviewer before the
-      // row is serialised, so a caller that hands over a Case cannot forget it.
-      const stamped = withAssignmentStamp(fields, this._now);
+      // The Assigned Reviewer's clock is paired with the Reviewer, and the
+      // Responsible Party with their manager, before the row is serialised, so
+      // a caller that names either person cannot forget what goes with them.
+      const stamped = withAssignmentStamp(
+        await withResponsiblePartyManager(fields, this),
+        this._now
+      );
       const item = itemFromRow(stamped);
       // The Person columns are the fields whose value cannot be derived from
       // the row alone: SharePoint writes them by id, so the account name has to
@@ -286,9 +291,9 @@ export class HttpSharePointClient {
           fields.assignedReviewerManager ?? ''
         );
       }
-      if (fields.responsiblePartyManager !== undefined) {
+      if (stamped.responsiblePartyManager !== undefined) {
         item.ResponsiblePartyManagerId = await this._ensureUserId(
-          fields.responsiblePartyManager ?? ''
+          stamped.responsiblePartyManager ?? ''
         );
       }
       if (fields.voidedBy !== undefined) {

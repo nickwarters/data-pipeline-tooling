@@ -495,9 +495,10 @@ remediation.
 `responsible_party_name` appears here **as itself**, the person the
 remediation is owed by, which is exactly the Responsible Party's role. It is
 not a stand-in for the Adviser (see *Adviser* in `CONTEXT.md`). There is no
-Responsible Party *Manager*: `responsible_party_manager_name` is a column
-nothing writes, and resolving the manager from the directory would add a `users`
-reference-feed dependency this subject does not yet have.
+Responsible Party *Manager*: `responsible_party_manager_name` is written only
+when the Responsible Party is saved, so it is empty on older Cases, and
+resolving the manager from the directory would add a `users` reference-feed
+dependency this subject does not yet have.
 
 On naming: the platform's own glossary keeps "Overdue" for the review clock and
 says "past its Remediation Due Date" for this one. The table keeps the name it

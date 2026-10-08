@@ -52,7 +52,8 @@ export function createCaseReviewSaveEffect({
      * and does not move.
      *
      * Only the account is persisted; it is the identity the Case is stored and
-     * matched against. The display name travels with the action so the page can
+     * matched against. The client adds the Responsible Party's manager to the
+     * same write. The display name travels with the action so the page can
      * name the person the moment they are chosen, and is re-read from the
      * directory with the Case rather than saved onto it.
      *

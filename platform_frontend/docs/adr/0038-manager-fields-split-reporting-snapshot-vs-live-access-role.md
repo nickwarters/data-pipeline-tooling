@@ -19,6 +19,19 @@ Reviewer-manager stamp is now implemented; repair-on-touch, reconciliation and
 any Reportable freeze remain conditional future work, not behavior promised by
 this ADR.
 
+Amended (2026-10-08): `responsiblePartyManager` is now **written whenever the
+Responsible Party is**. Both clients pair the two in the same PATCH
+(`src/services/responsible-party-manager.js`), as `assignedAt` is paired with
+`assignedReviewer`. The manager is the one `resolveManagers` gives at that
+moment. A failed or empty lookup records `null` rather than failing the save.
+Clearing the Responsible Party clears the manager. A write that names the
+manager itself is left alone. Until then nothing wrote the column, so on a real
+Case no manager ever held the Role. This is the "future Responsible Party
+assignment" write the decision below anticipated. It is not the live resolution
+of follow-up 4, which is still open: `resolveRoles` still reads the column, so a
+manager change after the Responsible Party was picked is not seen until the
+Responsible Party is saved again.
+
 ## Context
 
 Two manager relationships are denormalised onto every Case row
