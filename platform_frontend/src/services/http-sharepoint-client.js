@@ -1131,10 +1131,8 @@ export class HttpSharePointClient {
    *
    * A response carrying no usable id throws rather than yielding `NaN` — a
    * write caller turns that into a failed save, a filter caller into a
-   * rejected query. Both that and an EnsureUser the server refuses carry a
-   * `saveFailure` naming the account, so a save can say which person it could
-   * not find; a lost connection or a permission refusal is left as it was,
-   * because those say nothing about the person.
+   * rejected query. That and a refused EnsureUser carry a `saveFailure`
+   * naming the account; a lost connection or permission refusal does not.
    *
    * @param {string} account bare account login name, never empty
    * @returns {Promise<number>}
@@ -1143,8 +1141,7 @@ export class HttpSharePointClient {
     const cached = this._userIds.get(account);
     if (cached !== undefined) return cached;
     const logonName = await this._claimsLoginFor(account);
-    // Acquired before the request it guards, so a digest that cannot be had is
-    // not mistaken for a directory that does not know the person.
+    // Digest first, so a digest failure isn't blamed on the person.
     await this._ensureDigest();
     let body;
     try {
@@ -1172,10 +1169,8 @@ export class HttpSharePointClient {
   }
 
   /**
-   * `_ensureUserId` for a manager recorded beside a person. A manager the
-   * directory cannot resolve is written as nobody rather than failing the
-   * save: the manager was looked up on the person's behalf, so it must not
-   * cost the person's own change. Any other failure still fails the save.
+   * A manager the directory cannot resolve is saved as nobody, so it does not
+   * cost the person's own change; any other failure still fails the save.
    *
    * @param {string} account bare account login name, or `''` for nobody
    * @returns {Promise<number | null>}
@@ -1290,10 +1285,8 @@ export class HttpSharePointClient {
   }
 
   /**
-   * One fetch. A rejection that is not an abort means no response arrived at
-   * all (offline, VPN dropped, DNS), and is thrown as status 0 so a caller can
-   * tell it from SharePoint answering with an error. An abort is the caller's
-   * own cancellation and passes through unchanged.
+   * A non-abort rejection means no response arrived (offline, VPN, DNS); it
+   * throws as status 0 to tell it from SharePoint answering with an error.
    *
    * @param {string} url
    * @param {RequestInit} init
@@ -1372,10 +1365,8 @@ function buildWriteInit(method, digest, extra, body) {
 }
 
 /**
- * SharePoint's own explanation of a refused request, from whichever JSON shape
- * the farm answered in (`odata.error` for nometadata and minimal, `error` for
- * verbose). A body that is absent, not JSON, or has neither is no message: the
- * status already says what failed, and a test double may carry no body at all.
+ * The message is under `odata.error` (nometadata, minimal) or `error`
+ * (verbose); a body that is absent or not JSON is no message.
  *
  * @param {Response} res
  * @returns {Promise<string | undefined>}
@@ -1394,10 +1385,6 @@ async function sharePointMessage(res) {
   }
 }
 
-/**
- * Statuses that say nothing about whether a person exists: the connection or
- * the server is down, or the signed-in user may not ask.
- */
 const NOT_ABOUT_THE_PERSON = new Set([0, 401, 403, 502, 503, 504]);
 
 /**
@@ -1414,10 +1401,6 @@ function withSaveFailure(err, account) {
 }
 
 /**
- * An EnsureUser failure as the error to throw: one that carries the account it
- * could not resolve, unless it is a failure of the connection or of permission,
- * or never reached the server at all.
- *
  * @param {unknown} err
  * @param {string} account
  * @returns {unknown}
@@ -1431,8 +1414,8 @@ function asPersonNotFound(err, account) {
 }
 
 /**
- * A failed `patchCase` as its result. An error with no status is a bug rather
- * than an HTTP answer and stays a 500 that classifies as unknown.
+ * An error with no status is a bug, not an HTTP answer: it stays a 500 that
+ * classifies as unknown.
  *
  * @param {unknown} err
  * @returns {PatchResult}
@@ -1449,9 +1432,6 @@ function patchFailure(err) {
 }
 
 /**
- * The item with every text value made storable, immediately before it is
- * serialised, so whichever column a pasted character lands in is cleaned.
- *
  * @param {Record<string, unknown>} item
  * @returns {Record<string, unknown>}
  */

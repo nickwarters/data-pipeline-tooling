@@ -47,9 +47,8 @@ import { voidReasonText } from '../lib/void-reasons.js';
 /** @typedef {import('../lib/people-search.js').PeopleSearchState} PeopleSearchState */
 
 /**
- * A write the queue gave up on, with the sentence the person reads. Worded once
- * when the notice first arrives: the display name it mentions is the one just
- * picked, which the page stops showing the moment it reverts the pick.
+ * Worded once when the notice first arrives: the display name it mentions is
+ * the one just picked, which the page stops showing once it reverts the pick.
  *
  * @typedef {{ notice: SaveFailureNotice, message: string }} WordedSaveFailure
  */
@@ -88,21 +87,14 @@ import { voidReasonText } from '../lib/void-reasons.js';
  * @property {string} activeTab
  * @property {SaveStatus} saveStatus
  * @property {WordedSaveFailure[]} saveFailures
- *   The writes the queue has given up on for this Case, in the order it
- *   reported them. Kept as the notices themselves, not just their wording,
- *   because a notice seen again must not be acted on twice.
- * @property {boolean} saveLongOutage
- *   The connection has been down for about a minute: worth telling the person
- *   to check theirs.
+ *   Kept as the notices, not just their wording: a notice seen again must not
+ *   be acted on twice.
+ * @property {boolean} saveLongOutage about a minute without a connection
  * @property {{ message: string, offerReload: boolean } | null} actionFailure
- *   Why the last Conversation post, Complete Case or Void did not land. Those
- *   writes bypass the queue, so they cannot reach the banner through it.
+ *   For Conversation post, Complete Case and Void, which bypass the queue.
  * @property {{ account: string, displayName?: string } | null} responsiblePartyBeforePick
- *   The Responsible Party the picker showed before the first pick that has not
- *   saved yet, so a pick SharePoint could not find is put back to that person.
- *   Null while every pick has saved (or none was made): the row then matches
- *   what SharePoint holds. Later picks leave it alone, because it still names
- *   the last person who was saved.
+ *   The picker's person before the first unsaved pick, put back if SharePoint
+ *   cannot find the picked one. Null while the row matches what is saved.
  * @property {boolean} conversationHidden
  * @property {boolean} completionPending
  * @property {boolean} voidPanelOpen
@@ -247,7 +239,6 @@ export function caseReviewReducer(state, action) {
     const tabs = visibleCaseTabs(action.snapshot);
     return patchRoute(state, 'caseReview', {
       snapshot: action.snapshot,
-      // A freshly read row is what SharePoint holds.
       responsiblePartyBeforePick: null,
       activeTab: tabs[0]?.id ?? '',
       // The Conversation panel starts collapsed on every load — unless it is
@@ -542,12 +533,8 @@ export function caseReviewReducer(state, action) {
 }
 
 /**
- * Take the queue's report into the slice: the status, the failures worded for
- * the person, and — for a Responsible Party SharePoint could not find — the
- * pick put back, so the page stops naming someone who was never saved.
- *
- * Only that one is undone. Text a person typed stays where they typed it,
- * because they need it to fix it.
+ * Only an unfound Responsible Party pick is undone; typed text stays so the
+ * person can fix it.
  *
  * @param {CaseReviewState} state
  * @param {{
@@ -576,8 +563,8 @@ function reduceSaveStatus(state, action) {
         }),
       }
   );
-  // Identity guard: SaveQueue re-reports the status it last reported, and the
-  // notices it already holds. Not when `saved` still has a pick to forget.
+  // Identity guard: SaveQueue re-reports what it last reported, except that
+  // `saved` still has a pick to forget.
   if (
     action.status === route.saveStatus &&
     !(action.status === 'saved' && route.responsiblePartyBeforePick) &&
@@ -616,8 +603,7 @@ function reduceSaveStatus(state, action) {
     }
   }
   return patchRoute(next, 'caseReview', {
-    // Everything landing means the row matches SharePoint again. A put-back
-    // does too: the row is back to the last person who was saved.
+    // Both a full save and a put-back leave the row matching SharePoint.
     ...(action.status === 'saved' || restoredPick
       ? { responsiblePartyBeforePick: null }
       : {}),
@@ -628,9 +614,8 @@ function reduceSaveStatus(state, action) {
 }
 
 /**
- * The state with the Responsible Party the row shows now remembered as the one
- * to put back, unless an earlier pick that has not saved yet already holds it:
- * that one still names the last person who was saved.
+ * An earlier unsaved pick keeps its remembered person: it is still the last
+ * one who was saved.
  *
  * @param {CaseReviewState} state
  * @returns {CaseReviewState}
@@ -1288,8 +1273,7 @@ export function createRouteSlice(params, context) {
     };
 
     /**
-     * Say why a write that bypasses the queue did not land. The dispatch is
-     * post-`await`, so it takes the mount-lifetime guard.
+     * Post-`await`, so the dispatch takes the mount-lifetime guard.
      *
      * @param {import('../services/save-failure.js').SaveFailure} failure
      * @param {string[]} [fields]

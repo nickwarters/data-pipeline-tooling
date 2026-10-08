@@ -1,18 +1,9 @@
 // @ts-check
 
 /**
- * Why a Case write did not land, in the terms a person can act on.
- *
- * - `network` — the request never reached SharePoint (offline, VPN dropped).
- * - `unavailable` — SharePoint answered that it cannot serve the request right
- *   now (502/503/504). Like `network`, waiting can fix it.
- * - `invalid-value` — SharePoint refused what was sent: a character it cannot
- *   store, or a value too long for its column. Sending it again fails again.
- * - `person-not-found` — a person could not be resolved to a SharePoint user,
- *   so a Person column could not be written. Sending it again fails again.
- * - `forbidden` — the user may not change this item.
- * - `not-found` — the Case or its list is no longer there.
- * - `unknown` — anything else. Worth one or two more attempts, then stop.
+ * Why a Case write did not land. `network` (no response) and `unavailable`
+ * (502/503/504) can clear by waiting; `invalid-value` and `person-not-found`
+ * fail again if resent.
  *
  * @typedef {'network'
  *   | 'unavailable'
@@ -30,24 +21,16 @@
  *   account?: string,
  * }} SaveFailure
  *
- * `message` is SharePoint's own explanation when it gave one, shown only for
- * `unknown`, where there is nothing better to say. `account` is the person who
- * could not be resolved, for `person-not-found`.
+ * `message` is SharePoint's own words, shown only for `unknown`; `account` is
+ * the person a `person-not-found` could not resolve.
  */
 
-/**
- * The words SharePoint uses when it refuses a value rather than the request.
- * A 400 is always a refused value; a 500 is one only when its message says so,
- * because SharePoint also answers 500 for its own faults.
- */
+/** A 400 is always a refused value; a 500 only when its message says so. */
 const REFUSED_VALUE_MESSAGE =
   /invalid character|hexadecimal value|exceeds the maximum length|too long|maximum length/i;
 
 /**
- * Classify a failed write from what the HTTP exchange left behind.
- *
- * @param {{ status: number, message?: string }} failed
- *   `status` 0 means no response was received at all.
+ * @param {{ status: number, message?: string }} failed `status` 0 means no response.
  * @returns {SaveFailure}
  */
 export function classifySaveFailure({ status, message }) {
@@ -68,9 +51,6 @@ export function classifySaveFailure({ status, message }) {
 }
 
 /**
- * Why a failed `PatchResult` failed: what the client said, or, from a client
- * or a caught throw that said nothing more, what its status says.
- *
  * @param {{ status: number, failure?: SaveFailure }} result
  * @returns {SaveFailure}
  */
@@ -79,9 +59,8 @@ export function failureOf(result) {
 }
 
 /**
- * Whether waiting and sending the same write again can succeed. `unknown` is
- * deliberately not here: the queue gives it a bounded number of attempts
- * rather than retrying it for as long as the tab is open.
+ * `unknown` is deliberately not a connection failure: the queue bounds its
+ * attempts instead of retrying for as long as the tab is open.
  *
  * @param {SaveFailure} failure
  * @returns {boolean}
@@ -90,7 +69,6 @@ export function isConnectionFailure(failure) {
   return failure.reason === 'network' || failure.reason === 'unavailable';
 }
 
-/** Display names for the Case fields a Reviewer edits directly. */
 const FIELD_LABELS = /** @type {Record<string, string>} */ ({
   notes: 'Notes',
   caseJustification: 'Case Justification',
@@ -102,13 +80,8 @@ const FIELD_LABELS = /** @type {Record<string, string>} */ ({
 });
 
 /**
- * What to tell the person about a write that will not be retried. One sentence
- * or two, naming what was not saved and what they can do about it.
- *
  * @param {SaveFailure} failure
  * @param {{ fields?: string[], personName?: string }} [context]
- *   `fields` are the Case fields the failed write carried; `personName` is the
- *   display name of the person in a `person-not-found` failure, when known.
  * @returns {string}
  */
 export function describeSaveFailure(failure, { fields = [], personName } = {}) {

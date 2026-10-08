@@ -89,10 +89,9 @@ export function createCaseReviewSaveEffect({
  * Bridge SaveQueue status transitions into route-owned state. Views consume
  * only the dispatched values and do not depend on the queue internals.
  *
- * The queue outlives the page and holds every Case's failures, so when the page
- * says which Case it shows (`caseId`, a getter because the row loads after the
- * route is built) only that Case's failures are passed on. A status of `failed`
- * caused by another Case is reported as `saved`: it is not this page's to show.
+ * The queue holds every Case's failures, so given `caseId` (a getter: the row
+ * loads after the route is built) only that Case's are passed on, and a
+ * `failed` caused by another Case is reported as `saved`.
  *
  * @param {SaveQueue} saveQueue
  * @param {(action: {

@@ -113,10 +113,8 @@ export class MockSharePointClient {
   }
 
   /**
-   * Make the next call to patchCase return this failed result without
-   * writing, so a test or the dev loop can show each way a save can fail. A
-   * result that names no `failure` is classified from its status, as the
-   * real client classifies one it has nothing more to say about.
+   * The next patchCase returns this result without writing. A result with no
+   * `failure` is classified from its status, as the real client does.
    *
    * @param {PatchResult} result a result with `ok: false`
    */
@@ -731,10 +729,8 @@ function withDerivedOverdue(row) {
 }
 
 /**
- * The fields with every text value cleaned as the real client cleans the
- * columns it writes. Blob fields are objects here rather than serialised text,
- * and their strings are escaped when the real client serialises them, so only
- * top-level text is touched.
+ * Only top-level text: blob fields are objects here, and the real client
+ * escapes their strings when it serialises them.
  *
  * @param {Partial<CaseRow>} fields
  * @returns {Partial<CaseRow>}
