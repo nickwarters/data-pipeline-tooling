@@ -14,24 +14,7 @@ import {
 /** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
 /** @typedef {import('../services/permissions.js').PermissionsConfig} PermissionsConfig */
 
-/**
- * A report's audience is declared once, as data, and read twice.
- *
- * The browser reads it to decide what to offer: whether the Reports link
- * shows, which reports the index lists, which scopes a switcher holds. That is
- * presentation, and nothing more — a report feed is a file in a document
- * library, and whoever can read the folder can read the file.
- *
- * Provisioning reads it to decide who can read each folder, which is the real
- * boundary. Both readings come from the same rules below, so the page and the
- * folder cannot disagree about who a report is for unless someone edits a
- * folder by hand.
- *
- * Each role resolves two ways for the same reason: to a capability the browser
- * already holds, and to the SharePoint groups that grant it. A named group is
- * the degenerate case of both: the browser asks whether the viewer is in it,
- * and the folder needs it.
- */
+// The browser's reading is UX only; the SharePoint folder permission is the real boundary.
 
 /** @type {Readonly<Record<PlatformRole, { holds: (caps: Capabilities) => boolean, groups: (config: PermissionsConfig) => string[] }>>} */
 const PLATFORM_ROLES = Object.freeze({
@@ -39,8 +22,6 @@ const PLATFORM_ROLES = Object.freeze({
     holds: (caps) => caps.isMaintainer,
     groups: (config) => [config.maintainer],
   },
-  // Reviewing is implied by any per-Case-Type reviewer group as well as the
-  // functional one, so the folder needs all of them to match the capability.
   reviewer: {
     holds: (caps) => caps.isReviewer,
     groups: (config) => [
@@ -85,9 +66,6 @@ const CASE_TYPE_ROLES = Object.freeze({
 });
 
 /**
- * A named group read the way a platform role is: it holds everywhere, for its
- * members. Matched exactly, as every other group name is.
- *
  * @param {string} group
  * @returns {{ holds: (caps: Capabilities) => boolean, groups: () => string[] }}
  */
@@ -98,25 +76,16 @@ function namedGroup(group) {
   };
 }
 
-/** The one scope a platform-wide report has. */
 const PLATFORM_SCOPE = Object.freeze({
   kind: /** @type {const} */ ('platform'),
   key: 'platform',
   label: 'All Case Types',
 });
 
-/**
- * The definition of one rule, or a throw. An unknown role is a mistake in a
- * report's configuration, and failing loudly beats quietly admitting nobody —
- * which looks exactly like "you do not have access" from the outside.
- *
- * @param {ReportAccessRule} rule
- */
+/** @param {ReportAccessRule} rule */
 function resolveRule(rule) {
   if (rule !== null && typeof rule === 'object' && 'group' in rule) {
     const { group } = rule;
-    // A group outside the prefix would open the folder to people the app
-    // still calls Visitors, so it is refused here, where the report is written.
     if (typeof group !== 'string' || !isReportGroupName(group)) {
       throw new TypeError(`unknown report role: ${JSON.stringify(rule)}`);
     }
@@ -135,8 +104,6 @@ function resolveRule(rule) {
 }
 
 /**
- * Every scope a report has, whoever is asking.
- *
  * @param {ReportPlugin} plugin
  * @returns {ReportScope[]}
  */
@@ -150,8 +117,6 @@ export function allScopes(plugin) {
 }
 
 /**
- * Whether these capabilities admit a viewer to one scope of a report.
- *
  * @param {ReportPlugin} plugin
  * @param {Capabilities} capabilities
  * @param {ReportScope} scope
@@ -168,9 +133,6 @@ function canViewScope(plugin, capabilities, scope) {
 }
 
 /**
- * The scopes of a report this viewer may open, in the order the Case Type
- * registry lists them. Empty means the report is not for them at all.
- *
  * @param {ReportPlugin} plugin
  * @param {Capabilities} capabilities
  * @returns {ReportScope[]}
@@ -182,9 +144,6 @@ export function scopesFor(plugin, capabilities) {
 }
 
 /**
- * The SharePoint groups that must be able to read one scope's folder, sorted
- * and without repeats.
- *
  * @param {ReportPlugin} plugin
  * @param {ReportScope} scope
  * @param {PermissionsConfig} [config]

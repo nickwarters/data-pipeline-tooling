@@ -1,21 +1,6 @@
 // @ts-check
 
-/**
- * What every report chart shares: the colour roles a mark may wear, the scale
- * and axis arithmetic, the attributes the tooltip controller reads off a mark,
- * and the number formats the figures are written in.
- *
- * A chart never names a colour. It names a role, and the role resolves to a
- * design token, so light and dark mode are the stylesheet's business and a
- * series can never borrow a status colour by accident. Red is a status here,
- * not a series: `danger` exists for marks that mean "overdue" or "the worst
- * outcome", always alongside a label that says so, and brand red is never a
- * data colour at all.
- */
-
-/**
- * @typedef {'s1' | 's2' | 's3' | 's4' | 's5' | 's6' | 'quiet' | 'quiet-strong' | 'range' | 'danger' | 'warning'} ChartRole
- */
+/** @typedef {'s1' | 's2' | 's3' | 's4' | 's5' | 's6' | 'quiet' | 'quiet-strong' | 'range' | 'danger' | 'warning'} ChartRole */
 
 /** @type {Readonly<Record<ChartRole, string>>} */
 const ROLE_TOKENS = Object.freeze({
@@ -33,10 +18,6 @@ const ROLE_TOKENS = Object.freeze({
 });
 
 /**
- * The token a role paints with. An unknown role throws rather than falling
- * back to a default: a mark drawn in the wrong colour reads as a different
- * series, which is worse than a chart that does not draw.
- *
  * @param {ChartRole} role
  * @returns {string}
  */
@@ -47,9 +28,6 @@ export function paint(role) {
 }
 
 /**
- * A straight-line mapping from a domain onto a range. A zero-width domain maps
- * everything onto the start of the range rather than dividing by zero.
- *
  * @param {number} d0
  * @param {number} d1
  * @param {number} r0
@@ -62,12 +40,8 @@ export function linearScale(d0, d1, r0, r1) {
 }
 
 /**
- * A y-axis that ends on a round number and steps in whole units. Report axes
- * count Cases, so a step of a quarter-Case is a tick label nobody can read
- * honestly; anything under one rounds up to one.
- *
- * @param {number} max the largest value the axis has to hold
- * @param {number} [ticks] how many steps above zero to aim for
+ * @param {number} max
+ * @param {number} [ticks]
  * @returns {{ max: number, step: number }}
  */
 export function niceAxis(max, ticks = 4) {
@@ -86,10 +60,6 @@ export function niceAxis(max, ticks = 4) {
 }
 
 /**
- * Up to `want` indexes spread evenly from the first item to the last, always
- * including both ends — where an x-axis puts its labels when it cannot label
- * every point.
- *
  * @param {number} count
  * @param {number} want
  * @returns {number[]}
@@ -106,10 +76,6 @@ export function evenIndexes(count, want) {
 }
 
 /**
- * A rough rendered width for a label, used only to decide whether it fits —
- * never to position it exactly. SVG text cannot be measured before it is in a
- * document, and a pure view never waits for one.
- *
  * @param {string} text
  * @param {number} [fontSize]
  * @returns {number}
@@ -121,8 +87,6 @@ export function textWidth(text, fontSize = 12) {
 const COUNT_FORMAT = new Intl.NumberFormat('en-GB');
 
 /**
- * A whole count, grouped by thousands.
- *
  * @param {number} value
  * @returns {string}
  */
@@ -131,8 +95,6 @@ export function formatCount(value) {
 }
 
 /**
- * A share between 0 and 1, as a percentage.
- *
  * @param {number} value
  * @param {number} [digits]
  * @returns {string}
@@ -142,12 +104,6 @@ export function formatPercent(value, digits = 0) {
 }
 
 /**
- * The attributes the chart tooltip controller reads off a mark: it shows the
- * description on hover and on focus. A focusable mark also announces itself,
- * so a keyboard user hears the same sentence a pointer user reads; a mark that
- * is one of hundreds (a column of a long line chart) stays out of the tab
- * order, and the panel's table carries those values instead.
- *
  * @param {string} description
  * @param {{ focusable?: boolean }} [options]
  * @returns {Record<string, string>}
@@ -167,12 +123,8 @@ export function markAttributes(description, { focusable = true } = {}) {
 }
 
 /**
- * Throw unless every value is a finite number. A chart is the last place a
- * malformed feed row can be caught before it becomes a bar of the wrong
- * length, so it is checked here rather than trusted.
- *
  * @param {unknown[]} values
- * @param {string} name what the values are, for the message
+ * @param {string} name
  */
 export function requireFiniteValues(values, name) {
   for (const value of values) {

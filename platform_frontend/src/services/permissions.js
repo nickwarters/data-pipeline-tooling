@@ -26,11 +26,7 @@ import { CASE_TYPES } from '../../case-types/manifest.js';
  * `isReviewer` is implied by any `Reviewers - <type>` list-access group as well
  * as the standalone `Reviewers` functional group. `isVisitor` is DERIVED (not
  * config-driven): true iff the user holds no capability at all.
- *
- * `reportGroups` are the user's `Reports - <name>` groups. Each one is the
- * audience of a report that names it, and holding any of them makes the user a
- * Report Viewer rather than a Visitor. This file knows only the prefix; which
- * report a group opens is the report's own declaration.
+
  *
  * These are platform-wide and per-user. They are not the per-Case roles the
  * Case page's access matrix is keyed by, and only some of them ever become
@@ -85,11 +81,6 @@ export function frontlineListAccessGroupName(displayName) {
 const REPORT_GROUP_PREFIX = 'Reports - ';
 
 /**
- * Whether a SharePoint group name is a report group: the exact prefix, then a
- * name. The one test, shared by capability resolution and by the report rule
- * that names a group, so a report cannot name a group that would not also
- * enrol its members.
- *
  * @param {string} name
  * @returns {boolean}
  */

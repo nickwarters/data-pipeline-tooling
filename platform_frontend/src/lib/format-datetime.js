@@ -138,14 +138,8 @@ const WEEKDAY_NAMES = Object.freeze([
 ]);
 
 /**
- * A recent calendar date as a reader says it — `Tue 6 Oct`. A third shape,
- * for reports, where every date on the page falls in the last year or so and
- * the weekday is what tells a reader whether a figure covers last Friday or
- * the weekend; the year would only add width. Not for anything that might be
- * older than a year, which keeps `dd/mm/yyyy`.
- *
- * @param {unknown} value An ISO instant, a `YYYY-MM-DD` key, or a `Date`.
- * @param {string} [fallback] Shown when there is no readable date.
+ * @param {unknown} value
+ * @param {string} [fallback]
  * @returns {string}
  */
 export function formatWeekdayDate(value, fallback = NO_VALUE) {

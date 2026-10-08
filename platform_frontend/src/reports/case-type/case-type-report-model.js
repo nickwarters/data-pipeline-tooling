@@ -3,18 +3,6 @@ import { shiftDateKey } from '../../lib/local-calendar.js';
 
 /** @typedef {import('../contract.js').ReportEnvelope} ReportEnvelope */
 
-/**
- * The Case Type report's numbers, taken out of its feed. No DOM and no
- * formatting: what the page shows is decided in the view, and this module
- * only answers "what are the figures for this range".
- *
- * Every dataset is optional. A feed published before a dataset existed simply
- * lacks it, and the figure built from it comes back `null` so the view can
- * leave that panel out — which lets the page ship ahead of the pipeline
- * change that fills it, rather than the two having to land together.
- */
-
-/** The ranges the report offers, measured back from the feed's last day. */
 export const RANGES = Object.freeze({
   '3m': { label: '3 months', days: 91, weeks: 13, months: 3 },
   '6m': { label: '6 months', days: 182, weeks: 26, months: 6 },
@@ -52,13 +40,13 @@ export const RANGES = Object.freeze({
  * @property {number} completed
  * @property {number} onTime
  * @property {number} late
- * @property {number} share on time, over the Cases that had a due date
+ * @property {number} share
  */
 
 /**
  * @typedef {Object} Change
  * @property {number} now
- * @property {number | null} before the value 30 days earlier, if the feed reaches back that far
+ * @property {number | null} before 30 days earlier
  */
 
 /**
@@ -66,28 +54,22 @@ export const RANGES = Object.freeze({
  * @property {RangeKey} range
  * @property {string | null} completeThrough
  * @property {Change | null} open
- * @property {number[] | null} openTrend weekly, the last 13 weeks
+ * @property {number[] | null} openTrend weekly, last 13 weeks
  * @property {Change | null} toAllocate
  * @property {number | null} overdue
  * @property {DueBucket[] | null} due
  * @property {BacklogDay | null} latest
- * @property {BacklogDay[] | null} backlog the range, oldest first
+ * @property {BacklogDay[] | null} backlog oldest first
  * @property {FlowWeek[] | null} flow
- * @property {SlaMonth[] | null} sla the range's complete months, oldest first
+ * @property {SlaMonth[] | null} sla oldest first
  * @property {number | null} slaTarget
- * @property {Leg[] | null} legs each lifecycle leg over the range's window
+ * @property {Leg[] | null} legs
  * @property {OutcomeMix | null} outcomes
- * @property {RemediationQuestion[] | null} remediation the questions most
- *   often needing remediation, most first
- * @property {number[][] | null} posting messages by weekday (Monday first) and hour
+ * @property {RemediationQuestion[] | null} remediation
+ * @property {number[][] | null} posting Monday-first weekday by hour
  */
 
 /**
- * One leg of the lifecycle — allocation, review, remediation, end to end —
- * summarised over a range. The percentiles arrive computed per window: a
- * median of months is not the median of the months' Cases, so the page never
- * derives one.
- *
  * @typedef {Object} Leg
  * @property {string} leg
  * @property {number} p50
@@ -96,10 +78,6 @@ export const RANGES = Object.freeze({
  */
 
 /**
- * Outcomes by month. `order` is the Case Type's own vocabulary, best first,
- * which is what lets the page colour the best outcome blue and the worst red
- * without knowing any outcome's name.
- *
  * @typedef {Object} OutcomeMix
  * @property {{ outcome: string, label: string }[]} order
  * @property {{ month: string, counts: Record<string, number> }[]} months oldest first
@@ -110,11 +88,10 @@ export const RANGES = Object.freeze({
  * @property {string} questionId
  * @property {string} label
  * @property {number} caseCount
- * @property {number} share of the Case Type's current Cases
+ * @property {number} share
  */
 
 const OVERDUE_BUCKETS = Object.freeze(['overdue_8_plus', 'overdue_1_7']);
-/** The lifecycle legs, in the order a Case runs through them. */
 const LEG_ORDER = Object.freeze([
   'allocation',
   'review',
@@ -135,8 +112,6 @@ function count(value) {
 }
 
 /**
- * The rows of a dataset, or null when the feed does not carry it.
- *
  * @param {ReportEnvelope} envelope
  * @param {string} name
  * @returns {any[] | null}
@@ -184,10 +159,6 @@ function change(days, pick) {
 }
 
 /**
- * The open count once a week for the last thirteen weeks, ending on the latest
- * day — the shape of the backlog, sampled sparsely enough for a sparkline.
- * Null when the feed is too short to show a direction at all.
- *
  * @param {BacklogDay[]} days
  * @returns {number[] | null}
  */
@@ -200,10 +171,6 @@ function weeklyTrend(days) {
 }
 
 /**
- * Seven-day totals for the weeks ending on the feed's last day, oldest first.
- * Days the feed has no row for count as zero — a day with no arrivals is a
- * real zero, and the pipeline writes the window whole.
- *
  * @param {ReportEnvelope} envelope
  * @param {string} lastDay
  * @param {number} weeks
@@ -239,10 +206,6 @@ function flowWeeks(envelope, lastDay, weeks) {
 }
 
 /**
- * The review SLA by month completed, over the months with something to judge.
- * A Case with no due date was judged neither way, so it is left out of the
- * share rather than counted as late or on time.
- *
  * @param {ReportEnvelope} envelope
  * @returns {SlaMonth[] | null}
  */
@@ -268,9 +231,6 @@ function slaMonths(envelope) {
 }
 
 /**
- * The lifecycle legs computed for this range's window, in lifecycle order; a
- * leg the page does not know goes last rather than being dropped.
- *
  * @param {ReportEnvelope} envelope
  * @param {string} range
  * @returns {Leg[] | null}
@@ -296,10 +256,6 @@ function legsFor(envelope, range) {
 }
 
 /**
- * Outcomes per month for the range's last months. Needs the Case Type's
- * outcome order: without it the page cannot tell the best outcome from the
- * worst, and colouring them anyway would be a guess.
- *
  * @param {ReportEnvelope} envelope
  * @param {number} months
  * @returns {OutcomeMix | null}
@@ -354,9 +310,6 @@ function remediationQuestions(envelope) {
 }
 
 /**
- * Messages posted, as seven weekday rows (Monday first) of 24 hours. The feed
- * writes the whole grid, quiet cells included; a cell it omits reads as zero.
- *
  * @param {ReportEnvelope} envelope
  * @returns {number[][] | null}
  */

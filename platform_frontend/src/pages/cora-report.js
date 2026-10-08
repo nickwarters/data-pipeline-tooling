@@ -4,10 +4,6 @@ import { EmptyState } from '../lib/empty-state.js';
 import { createReportRouteSlice } from '../reports/report-engine.js';
 
 /**
- * `#/reports/<report>/<scope>`: one report, found by its id among the reports
- * this application is configured with. The report engine does the rest; this
- * page only finds the plugin, and says so when there is no such report.
- *
  * @param {Record<string, string>} params
  * @param {import('../setup/register-routes.js').AppContext} context
  */

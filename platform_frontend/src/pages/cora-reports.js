@@ -11,10 +11,6 @@ import { scopesFor } from '../reports/report-access.js';
  */
 
 /**
- * `#/reports`: every report this viewer can open, one card each, with a link
- * per scope. The list is derived from the configured reports and the viewer's
- * own roles, so adding a report never touches this page or the nav.
- *
  * @param {ReportsState} state
  * @returns {HTMLElement}
  */

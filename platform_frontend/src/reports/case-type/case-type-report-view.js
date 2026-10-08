@@ -20,12 +20,6 @@ import { RANGES } from './case-type-report-model.js';
 /** @typedef {import('../contract.js').StatTileSpec} StatTileSpec */
 /** @typedef {import('../../components/charts/chart-kit.js').ChartRole} ChartRole */
 
-/**
- * The Case Type report's page: which figures, which panels, in which order,
- * and in what words. Each panel is one small function, so the page reads as a
- * list and a panel can be moved, dropped or added without touching another.
- */
-
 const MONTH_NAMES = Object.freeze([
   'January',
   'February',
@@ -57,10 +51,6 @@ function shortDay(dateKey) {
 }
 
 /**
- * How a figure moved over 30 days, worded for a tile. A rise in work waiting
- * is bad news and a fall is good, so the tone follows that rather than the
- * arrow.
- *
  * @param {Change} change
  * @returns {StatTileSpec['delta']}
  */
@@ -361,8 +351,6 @@ function flowPanel(flow) {
  * @returns {ReportPanelSpec}
  */
 function slaPanel(sla, target) {
-  // A line may zoom in where a bar may not; the floor sits a little under the
-  // lowest month so the movement is visible, and the axis labels say so.
   const lowest = Math.min(...sla.map((month) => month.share), target ?? 1);
   const floor = Math.max(
     0,
@@ -496,14 +484,7 @@ function legsPanel(legs, rangeLabel) {
   };
 }
 
-/**
- * The roles an outcome scale takes, best to worst: blue for the best, red for
- * the worst, and greys between, so the eye goes to the ends and never reads a
- * middle outcome as a series of its own. More outcomes than this would need
- * colours a reader cannot order, so the panel is left out instead.
- *
- * @type {Readonly<Record<number, readonly ChartRole[]>>}
- */
+/** @type {Readonly<Record<number, readonly ChartRole[]>>} */
 const OUTCOME_ROLES = Object.freeze({
   2: Object.freeze(/** @type {ChartRole[]} */ (['s1', 'danger'])),
   3: Object.freeze(
@@ -695,8 +676,6 @@ function present(items) {
 }
 
 /**
- * The page.
- *
  * @param {CaseTypeReportModel} model
  * @returns {ReportContent}
  */
@@ -721,7 +700,7 @@ export function caseTypeReportContent(model) {
             ? backlogPanel(model.backlog)
             : null,
           model.flow ? flowPanel(model.flow) : null,
-          // One month is not a trend; the headline tile already states it.
+          // One month is not a trend.
           model.sla && model.sla.length >= 2
             ? slaPanel(model.sla, model.slaTarget)
             : null,

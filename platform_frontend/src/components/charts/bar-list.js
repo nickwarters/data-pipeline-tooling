@@ -12,10 +12,6 @@ import {
 /** @typedef {import('./chart-kit.js').ChartRole} ChartRole */
 
 /**
- * One row of a bar list. `marker` is the symbol drawn before a status row's
- * label (● for overdue, ▲ for due today), so a status never rests on its
- * colour alone; `detail` adds lines to the row's tooltip.
- *
  * @typedef {Object} BarListRow
  * @property {string} key
  * @property {string} label
@@ -30,9 +26,8 @@ import {
  * @property {number} width
  * @property {string} ariaLabel
  * @property {(value: number) => string} [format]
- * @property {string} [unit] what a value counts, for the tooltip ("Cases")
- * @property {number} [maxLabelWidth] labels longer than this are shortened
- *   on the chart; the tooltip and the table keep them whole
+ * @property {string} [unit]
+ * @property {number} [maxLabelWidth]
  */
 
 const ROW_HEIGHT = 26;
@@ -40,10 +35,6 @@ const BAR_HEIGHT = 14;
 const LABEL_FONT = 12;
 
 /**
- * Horizontal bars, one per row, in the order given: a ranking, or an ordered
- * scale such as days to a due date. Each bar's value is written at its end,
- * and every bar starts from one shared baseline so lengths compare honestly.
- *
  * @param {{ rows: BarListRow[] }} data
  * @param {BarListConfig} config
  * @returns {SVGSVGElement}
@@ -131,9 +122,6 @@ export function BarList(data, config) {
               x: 0,
               y: cy + 4,
             },
-            // The marker wears the status colour; the words stay in text
-            // colour, so the label is readable and the status is never
-            // carried by colour alone.
             labels[i].marker
               ? svg(
                   'tspan',
@@ -168,10 +156,6 @@ export function BarList(data, config) {
 }
 
 /**
- * A bar that grows from the baseline with its far end rounded and its base
- * square. A zero-length bar is still a path, so it can still be hovered and
- * focused and say "0".
- *
  * @param {number} x
  * @param {number} y
  * @param {number} length
@@ -183,8 +167,6 @@ function barPath(x, y, length, height) {
 }
 
 /**
- * Shorten a label to fit a width, with an ellipsis.
- *
  * @param {string} label
  * @param {number} maxWidth
  * @returns {string}

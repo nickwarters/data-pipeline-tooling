@@ -2,15 +2,7 @@
 import { RANGES, buildCaseTypeReport } from './case-type-report-model.js';
 import { caseTypeReportContent } from './case-type-report-view.js';
 
-/**
- * The Case Type report: backlog, timeliness and flow for one Case Type.
- *
- * Its audience is that Case Type's Owners, plus Maintainers, who own every
- * Case Type's groups. The file for each Case Type sits in its own folder, and
- * that folder is readable by exactly the groups these rules name.
- *
- * @satisfies {import('../contract.js').ReportPlugin}
- */
+/** @satisfies {import('../contract.js').ReportPlugin} */
 export const CaseTypeReport = {
   id: 'case-type',
   title: 'Case Type report',

@@ -4021,10 +4021,7 @@
   outline-offset: var(--cora-focus-offset);
 }
 
-/* ── Reports ────────────────────────────────────────────────────────────────
-   The report page frame, its panels and headline tiles, and the report chart
-   kit. Chart marks take their colour from --cora-viz-* (series) or a status
-   token (danger, warning) and nothing else; see the design tokens header. */
+/* ── Reports ──────────────────────────────────────────────────────────────── */
 
 [data-cora-root] .cora-report-page,
 [data-cora-root] .cora-reports {
@@ -4106,9 +4103,7 @@
   color: var(--cora-color-text-muted);
 }
 
-/* The native caret sits flush against the border whatever the padding, so it
-   is drawn here instead: a chevron held the same distance from the right edge
-   as the text is from the left, in the text's own colour. */
+/* Drawn caret: the native one ignores padding-right. */
 [data-cora-root] .cora-report__scope select {
   appearance: none;
   font: inherit;
@@ -4493,8 +4488,6 @@
   list-style: none;
 }
 
-/* Report charts. Drawn at the width the engine measured, and scaled down
-   rather than overflowing if the panel is a little narrower. */
 [data-cora-root] .cora-chart {
   display: block;
   max-width: 100%;

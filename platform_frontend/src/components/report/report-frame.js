@@ -15,31 +15,12 @@ import { ReportPanel } from './report-panel.js';
 /** @typedef {import('../../reports/contract.js').ReportScope} ReportScope */
 /** @typedef {import('../../views/data-table.js').TableSort} TableSort */
 
-/**
- * The page every report is drawn in. A report chooses one of two layouts and
- * supplies content; where that content goes is decided here, once, so every
- * report reads the same way and a report can move between layouts without
- * its view changing.
- *
- * - `stacked`: header, then a "Right now" section holding the headline figures
- *   and snapshot panels, then the report's own sections.
- * - `rail`: the header and headline figures in a sticky left rail, so they stay
- *   in view while a long main column scrolls. Below a usable width the rail
- *   folds back into the stacked layout.
- *
- * Chart widths are arithmetic over the page width the engine measured, the
- * grid's twelve columns and a panel's span. Nothing here measures the DOM.
- */
-
 const GRID_COLUMNS = 12;
 const GRID_GAP = 16;
-/** A panel's horizontal padding and border, which its chart sits inside. */
 const PANEL_CHROME = 30;
 const RAIL_WIDTH = 248;
 const RAIL_GAP = 24;
-/** Narrower than this, the rail leaves too little room for the main column. */
 const RAIL_MIN_PAGE_WIDTH = 900;
-/** Narrower than this, panels stop sitting side by side. */
 const SINGLE_COLUMN_WIDTH = 640;
 const MIN_CHART_WIDTH = 160;
 
@@ -47,18 +28,18 @@ const MIN_CHART_WIDTH = 160;
  * @typedef {Object} ReportFrameProps
  * @property {string} reportId
  * @property {'stacked' | 'rail'} layout
- * @property {number} width the page width available to the report
- * @property {string} eyebrow what kind of report this is
- * @property {string} title which scope it is about
+ * @property {number} width
+ * @property {string} eyebrow
+ * @property {string} title
  * @property {string | null} completeThrough
  * @property {string | null} generatedAt
- * @property {ReportScope[]} scopes every scope this viewer can switch to
+ * @property {ReportScope[]} scopes
  * @property {string} scopeKey
  * @property {string | null} banner
  * @property {ReportContent} content
  * @property {Readonly<Record<string, ReportFilterSpec>>} filterSpecs
  * @property {Record<string, string>} filters
- * @property {string[]} tables ids of panels showing their table
+ * @property {string[]} tables
  * @property {Record<string, TableSort>} sorts
  * @property {(name: string, value: string) => void} onFilter
  * @property {(panelId: string) => void} onToggleTable
@@ -239,10 +220,6 @@ function sectionView(section, body, props) {
 }
 
 /**
- * One filter as a row of buttons, the pressed one being the current value.
- * A section names a filter the report does not declare is a mistake in the
- * report, and throws rather than drawing nothing.
- *
  * @param {string} name
  * @param {ReportFrameProps} props
  */

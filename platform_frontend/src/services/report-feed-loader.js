@@ -71,23 +71,12 @@ const MOCK_REPORT_ROOT = new URL(
 );
 
 /**
- * What a report page learns from asking for one of its files. Both a missing
- * file and a forbidden one are answers rather than failures: "nobody has
- * published this yet" and "this folder is not yours" are things the page says
- * to the reader, where a failure is something it apologises for.
- *
  * @typedef {{ status: 'loaded', envelope: import('../reports/contract.js').ReportEnvelope }
  *   | { status: 'missing' }
  *   | { status: 'forbidden' }} ReportFileResult
  */
 
 /**
- * Read one report file from the report-feed library.
- *
- * `path` is relative to the library and is the same path the pipeline writes
- * to and permissions are set on, so a report names each file exactly once.
- * In mock mode the same path is read from the dev fixtures instead.
- *
  * @param {string} path e.g. `case-types/complaints/case-type.txt`
  * @param {{
  *   schemaVersion: number,

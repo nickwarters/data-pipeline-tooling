@@ -11,9 +11,6 @@ import {
 } from './chart-kit.js';
 
 /**
- * One distribution, summarised: its median and its 90th percentile, and how
- * many measurements stand behind them.
- *
  * @typedef {Object} RangeRow
  * @property {string} key
  * @property {string} label
@@ -26,8 +23,8 @@ import {
  * @typedef {Object} RangeChartConfig
  * @property {number} width
  * @property {string} ariaLabel
- * @property {(value: number) => string} [format] a value, e.g. "5.1 d"
- * @property {(value: number) => string} [formatTick] an axis label, e.g. "10d"
+ * @property {(value: number) => string} [format] e.g. "5.1 d"
+ * @property {(value: number) => string} [formatTick] e.g. "10d"
  */
 
 const ROW_HEIGHT = 30;
@@ -35,14 +32,6 @@ const AXIS_HEIGHT = 22;
 const LABEL_FONT = 12;
 
 /**
- * How long things take, one row each: a dot at the median and a band out to
- * the 90th percentile. A mean would hide the long tail this exists to show —
- * the 90th percentile is the Case a reader should worry about, and the median
- * is the one they should expect.
- *
- * The dot is the row's focusable mark and names all three figures, so the
- * row reads the same by keyboard as by pointer.
- *
  * @param {{ rows: RangeRow[] }} data
  * @param {RangeChartConfig} config
  * @returns {SVGSVGElement}
