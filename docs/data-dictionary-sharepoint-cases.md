@@ -223,7 +223,7 @@ silver, `case_type` is always the Case Type of the list the row came from.
 | `responsible_party_name` | `ResponsibleParty/Name` | `str` | Yes | — | The Responsible Party, as a claims login. | `i:0#.w\|CONTOSO\b.okafor` | PII | |
 | `responsible_party_title` | `ResponsibleParty/Title` | `str` | Yes | — | The Responsible Party's directory display name. | `Bola Okafor` | PII | The only person the read asks a display name for — the one a view names a person by. |
 | `assigned_reviewer_manager_name` | `AssignedReviewerManager/Name` | `str` | Yes | — | The Reviewer's manager. | `i:0#.w\|CONTOSO\d.reid` | PII | |
-| `responsible_party_manager_name` | `ResponsiblePartyManager/Name` | `str` | Yes | — | The Responsible Party's manager. | `i:0#.w\|CONTOSO\e.novak` | PII | |
+| `responsible_party_manager_name` | `ResponsiblePartyManager/Name` | `str` | Yes | — | The Responsible Party's manager, as the directory gave it when the Responsible Party was last saved. Empty on Cases saved before the platform recorded it, and when the lookup found nobody. | `i:0#.w\|CONTOSO\e.novak` | PII | |
 | `due_date` | `DueDate` | `datetime` | Yes | — | Working-day SLA due date. | `2026-08-14T00:00:00+00:00` | None | |
 | `completed_at` | `CompletedAt` | `datetime` | Yes | — | Stamped at the final `Completed` transition. | | None | |
 | `reportable_at` | `ReportableAt` | `datetime` | Yes | — | Stamped at the reportable milestone. | | None | |

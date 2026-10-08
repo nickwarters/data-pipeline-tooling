@@ -301,3 +301,61 @@ export function peopleFilterFetch(ids, items) {
 }
 
 export const WEB_URL = 'https://sp.example.com/sites/casereview';
+
+/** @param {unknown} body @param {number} [status] */
+const fakeJson = (body, status = 200) =>
+  new Response(JSON.stringify(body), { status });
+
+/**
+ * A SharePoint fake: a people picker over `directory`, an EnsureUser that always answers, and GET routes by URL fragment.
+ *
+ * @param {{ directory?: Array<{ Key: string, DisplayText?: string }>, picker?: () => Response | null, routes?: Array<[string, () => Response]> }} [options]
+ */
+export function fakeSharePoint({ directory = [], picker, routes = [] } = {}) {
+  /** @type {Array<{ url: string, method: string, body: string | null }>} */
+  const calls = [];
+  /** @type {import('../../src/services/http-sharepoint-client.js').FetchImpl} */
+  const fetchImpl = async (input, init = {}) => {
+    const url = String(input);
+    const method = init.method ?? 'GET';
+    const body = init.body == null ? null : String(init.body);
+    calls.push({ url, method, body });
+    if (url.endsWith('/_api/contextinfo')) {
+      return fakeJson({ FormDigestValue: 'd' });
+    }
+    if (url.includes('clientPeoplePickerSearchUser')) {
+      const overridden = picker?.();
+      if (overridden) return overridden;
+      const q = JSON.parse(String(body)).queryParams.QueryString.toLowerCase();
+      const hits = directory.filter((e) => e.Key.toLowerCase().includes(q));
+      return fakeJson({ value: JSON.stringify(hits) });
+    }
+    if (url.endsWith('/_api/web/ensureuser')) return fakeJson({ Id: 7 });
+    for (const [fragment, respond] of routes) {
+      if (url.includes(fragment)) return respond();
+    }
+    return fakeJson({ value: [] });
+  };
+  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl });
+  return {
+    client,
+    calls,
+    /** The logins EnsureUser was asked for, in order. */
+    ensured: () =>
+      calls
+        .filter((c) => c.url.endsWith('/_api/web/ensureuser'))
+        .map((c) => JSON.parse(String(c.body)).logonName),
+    /** How many people-picker requests were made. */
+    lookups: () =>
+      calls.filter((c) => c.url.includes('clientPeoplePickerSearchUser'))
+        .length,
+    /** The body of the one PATCH, parsed. */
+    patched: () =>
+      JSON.parse(String(calls.find((c) => c.method === 'PATCH')?.body)),
+    /** The account each profile read named, decoded. */
+    profiles: () =>
+      calls
+        .filter((c) => c.url.includes('GetPropertiesFor'))
+        .map((c) => decodeURIComponent(c.url.split("@v='")[1].slice(0, -1))),
+  };
+}

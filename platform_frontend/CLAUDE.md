@@ -603,6 +603,9 @@ src/
     create-sharepoint-client.js
     reviewer-manager.js           # a Reviewer's current manager for an assignment write, shared by
                                   #   the allocation claim and Case Support's Reassign
+    responsible-party-manager.js  # the write-path rule pairing responsibleParty with that person's
+                                  #   manager, applied by both clients, so picking a Responsible Party
+                                  #   also records who manages them
     support-action.js             # THE Support Log write order: log the action, change the Case,
                                   #   then log not-applied if that change failed
     http-sharepoint-client.js

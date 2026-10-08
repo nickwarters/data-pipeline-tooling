@@ -2,6 +2,7 @@
 import { isOverdue } from '../evaluators/overdue-evaluator.js';
 import { toBareAccount } from './account-name.js';
 import { withAssignmentStamp } from './assignment-stamp.js';
+import { withResponsiblePartyManager } from './responsible-party-manager.js';
 import {
   BANKS_DIR,
   bankArtifactName as bankName,
@@ -129,6 +130,9 @@ export class MockSharePointClient {
       this._injectNext412 = false;
       return { ok: false, status: 412 };
     }
+    // Looked up before the row is read, so nothing can move between the ETag
+    // check and the write.
+    const withManager = await withResponsiblePartyManager(fields, this);
 
     const cases = this._caseStore(opts);
     const idx = cases.findIndex((c) => c.id === id);
@@ -138,8 +142,9 @@ export class MockSharePointClient {
     const newEtag = String(++this._etagCounter);
     // The same write-path rule the real client applies, applied here for the
     // same reason: the mock-first loop must show what production stores, so the
-    // two clients cannot drift on when a Case's assignment time is written.
-    const stamped = withAssignmentStamp(fields, this._now);
+    // two clients cannot drift on when a Case's assignment time is written, or
+    // on whose manager is recorded beside the Responsible Party.
+    const stamped = withAssignmentStamp(withManager, this._now);
     const next = /** @type {CaseRow} */ ({
       ...cases[idx],
       ...stamped,
