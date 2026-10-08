@@ -66,7 +66,7 @@ def test_current_counts_match_the_current_table():
         version(
             id=103,
             source_item_id="103",
-            assigned_reviewer_name="i:0#.w|CONTOSO\\r.okafor",
+            assigned_reviewer_name="r.okafor",
         ),
     )
 
@@ -76,7 +76,7 @@ def test_current_counts_match_the_current_table():
         (
             UNKNOWN_BRAND,
             COMPLAINTS.case_type,
-            "i:0#.w|CONTOSO\\r.okafor",
+            "r.okafor",
             "In-progress",
             1,
         ),

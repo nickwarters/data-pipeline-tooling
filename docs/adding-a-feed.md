@@ -911,8 +911,8 @@ object nor null fails with a `SharePointFeedError` naming the list, item and
 column, and so does an object carrying no `Name`: these columns hold only people
 here, an expanded person carries a claims login, so a `Name`-less object was
 never expanded and reading it as an empty role would hide a broken read. A
-missing `Title` is *not* an error — only the Responsible Party's display name is
-selected at all, and a directory display name is optional even then.
+missing `Title` or `EMail` is *not* an error — the directory may simply not
+have one.
 
 **2. A quiet window runs the same steps as a busy one**, and the feed no longer
 pays for it below raw. A zero-row batch has no value to breach a declared type,

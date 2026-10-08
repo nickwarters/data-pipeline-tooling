@@ -47,10 +47,10 @@ import datetime as dt
 import json
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from functools import partial
 from pathlib import Path
-from typing import Mapping, Protocol, Sequence
+from typing import Callable, Mapping, Protocol, Sequence
 
 import pandas as pd
 
@@ -83,6 +83,7 @@ from framework.transform import (
     SchemaValueRulePartitioner,
     Stamp,
 )
+from shared.account_names import to_bare_account, to_domain
 from tools.environments import known_environments, resolve_base_dir
 from tools.integrations.sharepoint_rest import (
     SharePointFeedError,
@@ -115,6 +116,7 @@ from .schema import (
     CaseVersion,
     ConversationMessageRow,
     GeneralAnswerRow,
+    PersonSightingRow,
 )
 
 # Pipelines this feed depends on being fresh before it runs. A source feed has
@@ -122,26 +124,29 @@ from .schema import (
 UPSTREAMS = ()
 
 # The five Person columns, expanded so each answers with the claims login rather
-# than the numeric id it otherwise returns, and the sub-field of each the read
-# asks for. Only the Responsible Party's display name is selected: it is the one
-# of the five a view names a person by, and the rest are matched, never shown.
+# than the numeric id it otherwise returns, and the sub-fields of each the read
+# asks for. The Case row keeps the login, reduced to the bare account; the
+# display name and email ride along so ``person_sighting`` can record them.
 #
 # Notification tested that premise and it held. Deciding who to notify means
 # matching the author of a Conversation Message against these columns, which
 # looks like it needs every display name landed -- but the fix belongs at the
 # source, not here: a Message carries ``author.loginName`` (see the Message
 # shape in ``platform_frontend``), so the match is login-to-login against the
-# ``Name`` sub-field already selected -- which is the *claims* spelling, so the
-# consumer normalises both sides before matching. Matching on display names would be the
+# ``Name`` sub-field, which silver reduces to the same bare spelling the Message
+# carries. Matching on display names would be the
 # wrong repair anyway -- they are neither unique nor stable, and the pair most
 # likely to collide is a Responsible Party and their own Manager.
-PERSON_SUBFIELDS = {
-    "AssignedReviewer": ("Name",),
-    "ResponsibleParty": ("Name", "Title"),
-    "AssignedReviewerManager": ("Name",),
-    "ResponsiblePartyManager": ("Name",),
-    "VoidedBy": ("Name",),
-}
+PERSON_SUBFIELDS = dict.fromkeys(
+    (
+        "AssignedReviewer",
+        "ResponsibleParty",
+        "AssignedReviewerManager",
+        "ResponsiblePartyManager",
+        "VoidedBy",
+    ),
+    ("Name", "Title", "EMail"),
+)
 EXPAND_FIELDS = tuple(PERSON_SUBFIELDS)
 
 # What is asked of the list. The ``*`` is load-bearing: naming a person's
@@ -167,11 +172,18 @@ RAW_FEED_COLUMNS = (
     "CaseType",
     "Status",
     "AssignedReviewer/Name",
+    "AssignedReviewer/Title",
+    "AssignedReviewer/EMail",
     "AssignedAt",
     "ResponsibleParty/Name",
     "ResponsibleParty/Title",
+    "ResponsibleParty/EMail",
     "AssignedReviewerManager/Name",
+    "AssignedReviewerManager/Title",
+    "AssignedReviewerManager/EMail",
     "ResponsiblePartyManager/Name",
+    "ResponsiblePartyManager/Title",
+    "ResponsiblePartyManager/EMail",
     "DueDate",
     "CompletedAt",
     "ReportableAt",
@@ -189,6 +201,8 @@ RAW_FEED_COLUMNS = (
     "VoidReason",
     "VoidReasonNote",
     "VoidedBy/Name",
+    "VoidedBy/Title",
+    "VoidedBy/EMail",
     "Outcome",
     "OutcomeAtCompletion",
     "HadRemediation",
@@ -237,8 +251,50 @@ def snake_case(name: str) -> str:
     return "_".join(word.lower() for word in _WORDS.findall(name.replace("/", "_")))
 
 
-# Source name -> canonical name, for every column raw stores.
-RENAME = {column: snake_case(column) for column in RAW_FEED_COLUMNS}
+# Source name -> canonical name, for every column raw stores. ``EMail`` is the
+# list's own spelling, which the mechanical rule alone would split to ``e_mail``.
+RENAME = {
+    column: snake_case(column.replace("/EMail", "/Email"))
+    for column in RAW_FEED_COLUMNS
+}
+
+# The Person columns' logins, by their silver names.
+PERSON_NAME_COLUMNS = tuple(RENAME[f"{person}/Name"] for person in PERSON_SUBFIELDS)
+
+# The person sub-fields raw lands only so ``person_sighting`` can record them:
+# silver's Case row keeps the account and nothing else about a person (bar the
+# Responsible Party's display name, which it has always carried).
+SIGHTING_ONLY_COLUMNS = tuple(
+    RENAME[f"{person}/{subfield}"]
+    for person, subfields in PERSON_SUBFIELDS.items()
+    for subfield in subfields
+    if RENAME[f"{person}/{subfield}"] not in {f.name for f in fields(CaseVersion)}
+)
+
+
+def _bare_or_none(login: object) -> str | None:
+    """``to_bare_account`` with nobody spelled as a null rather than ``""``."""
+    if not isinstance(login, str):
+        return None
+    return to_bare_account(login) or None
+
+
+def bare_person_names(dataset: Dataset) -> Dataset:
+    """Reduce each Person column's claims login to its lower-cased bare account.
+
+    ``i:0#.w|CONTOSO\\A.Khan`` becomes ``a.khan``: the spelling the platform's
+    JSON, the Staff Hierarchy and every other person column in this feed use,
+    so the Case row joins to them directly. The domain is not lost -- raw keeps
+    the login, and ``person_sighting`` records the domain beside the account.
+    """
+    frame = dataset.to_pandas()
+    for column in PERSON_NAME_COLUMNS:
+        frame[column] = pd.Series(
+            [_bare_or_none(login) for login in frame[column]],
+            index=frame.index,
+            dtype="object",
+        )
+    return Dataset.from_pandas(frame)
 
 
 @dataclass(frozen=True)
@@ -409,7 +465,8 @@ def to_silver(
     case_list: CaseList,
     reject_writer: Writer | None = None,
 ) -> Dataset:
-    """One list's raw -> silver: rename, settle the Case Type, enforce the schema.
+    """One list's raw -> silver: rename, settle the Case Type, reduce each person
+    to their bare account, enforce the schema.
 
     The list's own ``CaseType`` cell is nullable and hand-editable, and gold
     keys a Case on it, so silver replaces it with the Case Type declared for the
@@ -423,6 +480,10 @@ def to_silver(
     data = transform(Rename(RENAME), data, name=f"{at}:rename")
     data = transform(
         Stamp("case_type", case_list.case_type), data, name=f"{at}:case-type"
+    )
+    data = transform(bare_person_names, data, name=f"{at}:bare-accounts")
+    data = transform(
+        DropColumns(list(SIGHTING_ONLY_COLUMNS)), data, name=f"{at}:drop-sightings"
     )
     data = enforce(CaseVersion, data, reject_writer=reject_writer, name=at)
     return write(writer, data, name=f"{at}:write")
@@ -830,6 +891,136 @@ _DETAIL_TABLES = (
 )
 
 
+# --- person_sighting ---------------------------------------------------------
+
+PERSON_SIGHTING_TABLE = "person_sighting"
+PERSON_SIGHTING_KEY = ("source_observation_id", "account")
+_SIGHTING_DETAILS = ("domain", "display_name", "email")
+
+
+def _json(cell: object) -> object:
+    """A blob's parsed value, or ``None`` for an absent or malformed one.
+
+    Leniency here is not where a malformed blob goes unnoticed: the Detail
+    Table that explodes the same blob in the same poll raises on it.
+    """
+    if not isinstance(cell, str):
+        return None
+    try:
+        return json.loads(cell)
+    except ValueError:
+        return None
+
+
+def _people_named_in(row: Mapping[str, object]):
+    """Every ``(login, domain, display_name, email)`` one raw observation names,
+    the Person columns first and then the JSON blobs, in that precedence. A
+    source that records no domain of its own yields ``None`` for it."""
+    for person in PERSON_SUBFIELDS:
+        yield (
+            row.get(f"{person}/Name"),
+            None,
+            row.get(f"{person}/Title"),
+            row.get(f"{person}/EMail"),
+        )
+
+    answers = _json(row.get("Answers"))
+    for answer in answers.values() if isinstance(answers, dict) else ():
+        capture = answer.get("capture") if isinstance(answer, dict) else None
+        for value in capture.values() if isinstance(capture, dict) else ():
+            if isinstance(value, dict):
+                yield (
+                    value.get("loginName"),
+                    value.get("domain"),
+                    value.get("displayName"),
+                    value.get("email"),
+                )
+
+    conversation = _json(row.get("Conversation"))
+    for message in conversation if isinstance(conversation, list) else ():
+        author = message.get("author") if isinstance(message, dict) else None
+        if isinstance(author, dict):
+            yield author.get("loginName"), None, author.get("displayName"), None
+
+    appeals = _json(row.get("Appeals"))
+    for appeal in appeals if isinstance(appeals, list) else ():
+        if isinstance(appeal, dict):
+            yield appeal.get("appellant"), None, None, None
+            resolution = appeal.get("resolution")
+            if isinstance(resolution, dict):
+                yield resolution.get("resolver"), None, None, None
+
+    amended = _json(row.get("AmendedOutcome"))
+    if isinstance(amended, dict):
+        yield amended.get("amendedBy"), None, None, None
+
+
+def _text(value: object, fold: Callable[[str], str] = str) -> str | None:
+    """Trimmed, folded text, or ``None`` for anything blank or not text."""
+    text = value.strip() if isinstance(value, str) else ""
+    return fold(text) if text else None
+
+
+def person_sightings(dataset: Dataset) -> Dataset:
+    """One row per raw observation x person it names: their bare account, plus
+    whatever this observation said about their domain, display name and email.
+
+    A person named twice in one observation is one row, each detail taken from
+    the first place that gave it. The Person columns come first because the
+    expand reads them live from the directory; the JSON blobs hold snapshots
+    from when they were written.
+    """
+    rows = []
+    for observation in dataset.to_pandas().to_dict("records"):
+        people: dict[str, dict[str, str | None]] = {}
+        for login, domain, display, email in _people_named_in(observation):
+            account = _bare_or_none(login)
+            if account is None:
+                continue
+            seen = people.setdefault(account, dict.fromkeys(_SIGHTING_DETAILS))
+            # A claims login carries its own domain; a bare one needs the
+            # source to have recorded it beside the login.
+            for key, value in (
+                ("domain", _text(domain or to_domain(login), str.upper)),
+                ("display_name", _text(display)),
+                ("email", _text(email, str.lower)),
+            ):
+                if seen[key] is None:
+                    seen[key] = value
+        for account, details in people.items():
+            rows.append(
+                {
+                    **{column: observation[column] for column in DETAIL_ID_VARS},
+                    "account": account,
+                    **details,
+                }
+            )
+    return Dataset.from_pandas(
+        pd.DataFrame(rows, columns=[*DETAIL_ID_VARS, "account", *_SIGHTING_DETAILS])
+    )
+
+
+def to_silver_person_sighting(
+    reader: Reader, writer: Writer, case_list: CaseList, reject_writer: Writer
+) -> Dataset:
+    """One list's person-sighting table, from the **raw** batch.
+
+    Unlike the Detail Tables it reads raw rather than silver, because silver's
+    Case row has already reduced each Person column to the bare account and
+    dropped the display name and email that came with it. No value rule can
+    fire on ``PersonSightingRow`` today; quarantine stays wired anyway, as
+    ``to_silver_general_answer`` explains.
+    """
+    at = f"silver:{case_list.case_type}:{PERSON_SIGHTING_TABLE}"
+    data = read(reader, name=f"{at}:read")
+    data = transform(
+        Stamp("case_type", case_list.case_type), data, name=f"{at}:case-type"
+    )
+    data = transform(person_sightings, data, name=f"{at}:sightings")
+    data = enforce(PersonSightingRow, data, reject_writer=reject_writer, name=at)
+    return write(writer, data, name=f"{at}:write")
+
+
 def run(
     context: RunContext,
     *,
@@ -891,8 +1082,15 @@ def run(
             med.silver.quarantine_writer("case_version"),
         )
 
+        sightings = to_silver_person_sighting(
+            DatasetReader(batch),
+            med.silver.writer(PERSON_SIGHTING_TABLE, AppendOnly(PERSON_SIGHTING_KEY)),
+            case_list,
+            med.silver.quarantine_writer(PERSON_SIGHTING_TABLE),
+        )
+
         # Detail builders consume the settled silver batch, not raw.
-        detail_rows: dict[str, int] = {}
+        detail_rows: dict[str, int] = {PERSON_SIGHTING_TABLE: len(sightings)}
         for table, to_silver_detail, key_columns in _DETAIL_TABLES:
             detail_rows[table] = len(
                 to_silver_detail(

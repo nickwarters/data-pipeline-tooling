@@ -304,11 +304,11 @@ None. The four fields are two independent `login`/`email` pairs.
 
 ## Where the identity join happens
 
-The Case row's person columns hold **claims logins**
-(`i:0#.w|CONTOSO\b.okafor`); a Conversation Message's `author_login` holds a
-**bare** account name (`b.okafor`). They do not join as landed — see the
-*Bare account logins vs. claims logins* note in
+The Case row's person columns and a Conversation Message's `author_login` both
+hold the lower-cased **bare** account (`b.okafor`) — see the *One spelling for a
+person* note in
 [`data-dictionary-sharepoint-cases.md`](data-dictionary-sharepoint-cases.md).
-This pipeline applies the encoding on its own side, through
-`shared/account_names.py`, which is the Python half of
-`platform_frontend/src/services/account-name.js`. Keep the two in step.
+This pipeline still reduces both sides through `shared/account_names.py`, the
+Python half of `platform_frontend/src/services/account-name.js`, which leaves a
+bare account unchanged and so also reads a copy landed before Sync reduced the
+Case row's claims logins. Keep the two in step.
