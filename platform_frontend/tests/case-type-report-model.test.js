@@ -135,6 +135,10 @@ test('a feed carrying no datasets has no figures', () => {
     flow: null,
     sla: null,
     slaTarget: null,
+    legs: null,
+    outcomes: null,
+    remediation: null,
+    posting: null,
   });
 });
 
@@ -553,4 +557,497 @@ test('a feed without targets has no SLA target', () => {
     buildCaseTypeReport(envelope({ targets: {} }), '6m').slaTarget,
     null
   );
+});
+
+/**
+ * @param {string} window
+ * @param {string} leg
+ * @param {number} p50
+ * @param {number} p90
+ * @param {number} [n]
+ */
+function legRow(window, leg, p50, p90, n = 10) {
+  return { window, leg, p50, p90, n };
+}
+
+/** @param {string[]} outcomes best first */
+function outcomeOrder(outcomes) {
+  return outcomes.map((outcome) => ({ outcome, label: outcome.toUpperCase() }));
+}
+
+/**
+ * @param {string} month
+ * @param {string} outcome
+ * @param {number} count
+ */
+function outcomeRow(month, outcome, count) {
+  return { month, outcome, count };
+}
+
+/** @param {number} index @param {number} [share] */
+function questionRow(index, share = index / 100) {
+  return {
+    question_id: `q${index}`,
+    label: `Question ${index}`,
+    case_count: index * 10,
+    share_of_cases: share,
+  };
+}
+
+test('a figure whose dataset is missing or empty is absent', () => {
+  const figures = ['legs', 'outcomes', 'remediation', 'posting'];
+  const absent = [
+    envelope({}),
+    envelope({
+      lifecycle_window: [],
+      outcome_order: [],
+      outcome_monthly: [],
+      remediation_questions: [],
+      posting_pattern: [],
+    }),
+    envelope({
+      lifecycle_window: { not: 'a table' },
+      outcome_order: null,
+      outcome_monthly: 'nothing',
+      remediation_questions: null,
+      posting_pattern: {},
+    }),
+  ];
+  for (const feed of absent) {
+    const report = /** @type {Record<string, unknown>} */ (
+      /** @type {unknown} */ (buildCaseTypeReport(feed, '6m'))
+    );
+    for (const figure of figures) {
+      assert.equal(report[figure], null, figure);
+    }
+  }
+});
+
+test('each range reports the lifecycle legs computed for its own window', () => {
+  const feed = envelope({
+    lifecycle_window: [
+      legRow('3m', 'review', 1, 2, 11),
+      legRow('6m', 'review', 3, 4, 22),
+      legRow('12m', 'review', 5, 6, 33),
+    ],
+  });
+
+  for (const [range, p50, p90, count] of [
+    ['3m', 1, 2, 11],
+    ['6m', 3, 4, 22],
+    ['12m', 5, 6, 33],
+  ]) {
+    assert.deepEqual(
+      buildCaseTypeReport(feed, String(range)).legs,
+      [{ leg: 'review', p50, p90, count }],
+      String(range)
+    );
+  }
+});
+
+test('an unknown range reads the six-month legs', () => {
+  const feed = envelope({
+    lifecycle_window: [
+      legRow('3m', 'review', 1, 2, 11),
+      legRow('6m', 'review', 3, 4, 22),
+    ],
+  });
+
+  assert.equal(buildCaseTypeReport(feed, 'fortnight').legs?.[0].count, 22);
+});
+
+test('a feed with legs for other windows only has no legs for this range', () => {
+  const feed = envelope({ lifecycle_window: [legRow('12m', 'review', 1, 2)] });
+
+  assert.equal(buildCaseTypeReport(feed, '3m').legs, null);
+  assert.ok(buildCaseTypeReport(feed, '12m').legs);
+});
+
+test('legs are listed in lifecycle order whatever order the feed lists them', () => {
+  const feed = envelope({
+    lifecycle_window: [
+      legRow('6m', 'end_to_end', 1, 2),
+      legRow('6m', 'remediation', 1, 2),
+      legRow('6m', 'allocation', 1, 2),
+      legRow('6m', 'to_reportable', 1, 2),
+      legRow('6m', 'review', 1, 2),
+    ],
+  });
+
+  assert.deepEqual(
+    buildCaseTypeReport(feed, '6m').legs?.map((leg) => leg.leg),
+    ['allocation', 'review', 'remediation', 'to_reportable', 'end_to_end']
+  );
+});
+
+test('a leg the page does not know goes last rather than being dropped', () => {
+  const feed = envelope({
+    lifecycle_window: [
+      legRow('6m', 'mystery', 1, 2),
+      legRow('6m', 'end_to_end', 1, 2),
+      legRow('6m', 'allocation', 1, 2),
+    ],
+  });
+
+  assert.deepEqual(
+    buildCaseTypeReport(feed, '6m').legs?.map((leg) => leg.leg),
+    ['allocation', 'end_to_end', 'mystery']
+  );
+});
+
+test('a 90th percentile below the median is lifted to the median', () => {
+  const feed = envelope({
+    lifecycle_window: [
+      legRow('6m', 'allocation', 5, 3),
+      legRow('6m', 'review', 5, 5),
+      legRow('6m', 'remediation', 5, 9),
+    ],
+  });
+
+  for (const leg of buildCaseTypeReport(feed, '6m').legs ?? []) {
+    assert.ok(leg.p90 >= leg.p50, leg.leg);
+  }
+  assert.deepEqual(
+    buildCaseTypeReport(feed, '6m').legs?.map((leg) => leg.p90),
+    [5, 5, 9]
+  );
+});
+
+test('a leg figure that is not a number reads as zero', () => {
+  const feed = envelope({
+    lifecycle_window: [
+      {
+        window: '6m',
+        leg: 'review',
+        p50: 'quick',
+        p90: Number.NaN,
+        n: undefined,
+      },
+    ],
+  });
+
+  assert.deepEqual(buildCaseTypeReport(feed, '6m').legs, [
+    { leg: 'review', p50: 0, p90: 0, count: 0 },
+  ]);
+});
+
+test('lifecycle rows that are not a leg of a window are left out', () => {
+  const feed = envelope({
+    lifecycle_window: [
+      null,
+      { window: '6m', p50: 1, p90: 2, n: 3 },
+      { window: '6m', leg: 7, p50: 1, p90: 2, n: 3 },
+      legRow('6m', 'review', 1, 2),
+    ],
+  });
+
+  assert.deepEqual(
+    buildCaseTypeReport(feed, '6m').legs?.map((leg) => leg.leg),
+    ['review']
+  );
+});
+
+test('outcomes need both the Case Type outcome order and the monthly counts', () => {
+  const order = outcomeOrder(['good', 'bad']);
+  const rows = [outcomeRow('2026-09', 'good', 3)];
+
+  assert.equal(
+    buildCaseTypeReport(envelope({ outcome_order: order }), '6m').outcomes,
+    null
+  );
+  assert.equal(
+    buildCaseTypeReport(envelope({ outcome_monthly: rows }), '6m').outcomes,
+    null
+  );
+  assert.ok(
+    buildCaseTypeReport(
+      envelope({ outcome_order: order, outcome_monthly: rows }),
+      '6m'
+    ).outcomes
+  );
+});
+
+test('outcomes carry the order the Case Type gives, best first, with its labels', () => {
+  const report = buildCaseTypeReport(
+    envelope({
+      outcome_order: [
+        { outcome: 'good', label: 'Good' },
+        { outcome: 'bad', label: 'Bad' },
+      ],
+      outcome_monthly: [outcomeRow('2026-09', 'bad', 1)],
+    }),
+    '6m'
+  );
+
+  assert.deepEqual(report.outcomes?.order, [
+    { outcome: 'good', label: 'Good' },
+    { outcome: 'bad', label: 'Bad' },
+  ]);
+});
+
+test('an outcome with no label is called by its own key', () => {
+  const report = buildCaseTypeReport(
+    envelope({
+      outcome_order: [
+        { outcome: 'good' },
+        { outcome: 'bad', label: 7 },
+        null,
+        { label: 'Nameless' },
+      ],
+      outcome_monthly: [outcomeRow('2026-09', 'bad', 1)],
+    }),
+    '6m'
+  );
+
+  assert.deepEqual(report.outcomes?.order, [
+    { outcome: 'good', label: 'good' },
+    { outcome: 'bad', label: 'bad' },
+  ]);
+});
+
+test('rows for the same month and outcome are added together', () => {
+  const report = buildCaseTypeReport(
+    envelope({
+      outcome_order: outcomeOrder(['good', 'bad']),
+      outcome_monthly: [
+        outcomeRow('2026-09', 'good', 3),
+        outcomeRow('2026-09', 'good', 4),
+        outcomeRow('2026-09', 'bad', 1),
+        outcomeRow('2026-08', 'good', 2),
+      ],
+    }),
+    '6m'
+  );
+
+  assert.deepEqual(report.outcomes?.months, [
+    { month: '2026-08', counts: { good: 2 } },
+    { month: '2026-09', counts: { good: 7, bad: 1 } },
+  ]);
+});
+
+test('each range keeps its last months of outcomes, oldest first', () => {
+  const months = ['2026-03', '2026-01', '2026-09', '2026-05', '2026-07'];
+  const feed = envelope({
+    outcome_order: outcomeOrder(['good', 'bad']),
+    outcome_monthly: [
+      ...months.map((month) => outcomeRow(month, 'good', 1)),
+      ...Array.from({ length: 10 }, (_, i) =>
+        outcomeRow(`2025-${String(i + 1).padStart(2, '0')}`, 'good', 1)
+      ),
+    ],
+  });
+
+  for (const [key, window] of Object.entries(RANGES)) {
+    const kept = buildCaseTypeReport(feed, key).outcomes?.months.map(
+      (entry) => entry.month
+    );
+    assert.equal(kept?.length, window.months, key);
+    assert.deepEqual(kept, [...(kept ?? [])].sort(), key);
+    assert.equal(kept?.at(-1), '2026-09', key);
+  }
+  assert.deepEqual(
+    buildCaseTypeReport(feed, '3m').outcomes?.months.map((m) => m.month),
+    ['2026-05', '2026-07', '2026-09']
+  );
+});
+
+test('outcome rows with no month or outcome, or a bad count, are read safely', () => {
+  const report = buildCaseTypeReport(
+    envelope({
+      outcome_order: outcomeOrder(['good']),
+      outcome_monthly: [
+        null,
+        { outcome: 'good', count: 1 },
+        { month: '2026-09', count: 1 },
+        { month: '2026-09', outcome: 'good', count: 'many' },
+        outcomeRow('2026-09', 'good', 2),
+      ],
+    }),
+    '6m'
+  );
+
+  assert.deepEqual(report.outcomes?.months, [
+    { month: '2026-09', counts: { good: 2 } },
+  ]);
+});
+
+test('a feed with an order but no outcome months still reports the order', () => {
+  const report = buildCaseTypeReport(
+    envelope({
+      outcome_order: outcomeOrder(['good', 'bad']),
+      outcome_monthly: [{ not: 'a month' }],
+    }),
+    '6m'
+  );
+
+  assert.equal(report.outcomes?.order.length, 2);
+  assert.deepEqual(report.outcomes?.months, []);
+});
+
+test('remediation questions are listed with the highest share first', () => {
+  const report = buildCaseTypeReport(
+    envelope({
+      remediation_questions: [
+        questionRow(1, 0.1),
+        questionRow(2, 0.5),
+        questionRow(3, 0.3),
+      ],
+    }),
+    '6m'
+  );
+
+  assert.deepEqual(report.remediation, [
+    { questionId: 'q2', label: 'Question 2', caseCount: 20, share: 0.5 },
+    { questionId: 'q3', label: 'Question 3', caseCount: 30, share: 0.3 },
+    { questionId: 'q1', label: 'Question 1', caseCount: 10, share: 0.1 },
+  ]);
+});
+
+test('only the eight questions with the highest share are kept', () => {
+  const report = buildCaseTypeReport(
+    envelope({
+      remediation_questions: Array.from({ length: 12 }, (_, i) =>
+        questionRow(i + 1)
+      ),
+    }),
+    '6m'
+  );
+
+  assert.equal(report.remediation?.length, 8);
+  assert.deepEqual(
+    report.remediation?.map((question) => question.questionId),
+    ['q12', 'q11', 'q10', 'q9', 'q8', 'q7', 'q6', 'q5']
+  );
+});
+
+test('a feed with fewer than eight questions keeps them all', () => {
+  const report = buildCaseTypeReport(
+    envelope({ remediation_questions: [questionRow(1), questionRow(2)] }),
+    '6m'
+  );
+
+  assert.equal(report.remediation?.length, 2);
+});
+
+test('a question with no label is called by its id', () => {
+  const report = buildCaseTypeReport(
+    envelope({
+      remediation_questions: [
+        { question_id: 'q9', case_count: 4, share_of_cases: 0.2 },
+        { question_id: 'q8', label: 12, case_count: 4, share_of_cases: 0.1 },
+      ],
+    }),
+    '6m'
+  );
+
+  assert.deepEqual(
+    report.remediation?.map((question) => question.label),
+    ['q9', 'q8']
+  );
+});
+
+test('a question with no id is left out and a bad count or share reads as zero', () => {
+  const report = buildCaseTypeReport(
+    envelope({
+      remediation_questions: [
+        null,
+        { label: 'Anonymous', case_count: 1, share_of_cases: 0.9 },
+        { question_id: 'q1', case_count: 'lots', share_of_cases: Number.NaN },
+      ],
+    }),
+    '6m'
+  );
+
+  assert.deepEqual(report.remediation, [
+    { questionId: 'q1', label: 'q1', caseCount: 0, share: 0 },
+  ]);
+});
+
+test('the posting pattern is seven weekdays of 24 hours, Monday first', () => {
+  const report = buildCaseTypeReport(
+    envelope({
+      posting_pattern: [
+        { weekday_order: 1, hour_of_day: 9, message_count: 5 },
+        { weekday_order: 7, hour_of_day: 23, message_count: 2 },
+      ],
+    }),
+    '6m'
+  );
+
+  const grid = report.posting ?? [];
+  assert.equal(grid.length, 7);
+  for (const day of grid) assert.equal(day.length, 24);
+  assert.equal(grid[0][9], 5);
+  assert.equal(grid[6][23], 2);
+  assert.equal(
+    grid.flat().reduce((a, b) => a + b, 0),
+    7
+  );
+});
+
+test('an hour the feed omits reads as zero', () => {
+  const report = buildCaseTypeReport(
+    envelope({
+      posting_pattern: [{ weekday_order: 3, hour_of_day: 0, message_count: 1 }],
+    }),
+    '6m'
+  );
+
+  assert.equal(report.posting?.[2][0], 1);
+  assert.equal(report.posting?.[2][1], 0);
+  assert.equal(report.posting?.[3][0], 0);
+});
+
+test('posting rows are added together when the feed repeats a cell', () => {
+  const report = buildCaseTypeReport(
+    envelope({
+      posting_pattern: [
+        { weekday_order: 2, hour_of_day: 8, message_count: 3 },
+        { weekday_order: 2, hour_of_day: 8, message_count: 4 },
+      ],
+    }),
+    '6m'
+  );
+
+  assert.equal(report.posting?.[1][8], 7);
+});
+
+test('posting rows outside the weekday and hour grid are ignored', () => {
+  const stray = [
+    null,
+    { weekday_order: 0, hour_of_day: 5, message_count: 1 },
+    { weekday_order: 8, hour_of_day: 5, message_count: 1 },
+    { weekday_order: 1, hour_of_day: -1, message_count: 1 },
+    { weekday_order: 1, hour_of_day: 24, message_count: 1 },
+    { weekday_order: 1.5, hour_of_day: 5, message_count: 1 },
+    { weekday_order: 1, hour_of_day: 5.5, message_count: 1 },
+    { weekday_order: '1', hour_of_day: 5, message_count: 1 },
+    { weekday_order: 1, hour_of_day: '5', message_count: 1 },
+    { weekday_order: 1, message_count: 1 },
+    { hour_of_day: 5, message_count: 1 },
+  ];
+  const report = buildCaseTypeReport(
+    envelope({ posting_pattern: stray }),
+    '6m'
+  );
+
+  assert.equal(report.posting?.length, 7);
+  assert.equal(
+    report.posting?.flat().reduce((a, b) => a + b, 0),
+    0
+  );
+});
+
+test('a posting count that is not a number reads as zero', () => {
+  const report = buildCaseTypeReport(
+    envelope({
+      posting_pattern: [
+        { weekday_order: 1, hour_of_day: 1, message_count: 'many' },
+        { weekday_order: 1, hour_of_day: 2 },
+      ],
+    }),
+    '6m'
+  );
+
+  assert.deepEqual(report.posting?.[0].slice(0, 4), [0, 0, 0, 0]);
 });

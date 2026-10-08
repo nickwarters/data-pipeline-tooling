@@ -75,9 +75,54 @@ export const RANGES = Object.freeze({
  * @property {FlowWeek[] | null} flow
  * @property {SlaMonth[] | null} sla the range's complete months, oldest first
  * @property {number | null} slaTarget
+ * @property {Leg[] | null} legs each lifecycle leg over the range's window
+ * @property {OutcomeMix | null} outcomes
+ * @property {RemediationQuestion[] | null} remediation the questions most
+ *   often needing remediation, most first
+ * @property {number[][] | null} posting messages by weekday (Monday first) and hour
+ */
+
+/**
+ * One leg of the lifecycle — allocation, review, remediation, end to end —
+ * summarised over a range. The percentiles arrive computed per window: a
+ * median of months is not the median of the months' Cases, so the page never
+ * derives one.
+ *
+ * @typedef {Object} Leg
+ * @property {string} leg
+ * @property {number} p50
+ * @property {number} p90
+ * @property {number} count
+ */
+
+/**
+ * Outcomes by month. `order` is the Case Type's own vocabulary, best first,
+ * which is what lets the page colour the best outcome blue and the worst red
+ * without knowing any outcome's name.
+ *
+ * @typedef {Object} OutcomeMix
+ * @property {{ outcome: string, label: string }[]} order
+ * @property {{ month: string, counts: Record<string, number> }[]} months oldest first
+ */
+
+/**
+ * @typedef {Object} RemediationQuestion
+ * @property {string} questionId
+ * @property {string} label
+ * @property {number} caseCount
+ * @property {number} share of the Case Type's current Cases
  */
 
 const OVERDUE_BUCKETS = Object.freeze(['overdue_8_plus', 'overdue_1_7']);
+/** The lifecycle legs, in the order a Case runs through them. */
+const LEG_ORDER = Object.freeze([
+  'allocation',
+  'review',
+  'remediation',
+  'to_reportable',
+  'end_to_end',
+]);
+const TOP_QUESTIONS = 8;
 const COMPARE_DAYS = 30;
 const TREND_WEEKS = 13;
 
@@ -223,6 +268,122 @@ function slaMonths(envelope) {
 }
 
 /**
+ * The lifecycle legs computed for this range's window, in lifecycle order; a
+ * leg the page does not know goes last rather than being dropped.
+ *
+ * @param {ReportEnvelope} envelope
+ * @param {string} range
+ * @returns {Leg[] | null}
+ */
+function legsFor(envelope, range) {
+  const rows = rowsOf(envelope, 'lifecycle_window');
+  if (!rows) return null;
+  /** @param {string} leg */
+  const rank = (leg) => {
+    const index = LEG_ORDER.indexOf(leg);
+    return index === -1 ? LEG_ORDER.length : index;
+  };
+  const legs = rows
+    .filter((row) => row?.window === range && typeof row.leg === 'string')
+    .map((row) => ({
+      leg: row.leg,
+      p50: count(row.p50),
+      p90: Math.max(count(row.p50), count(row.p90)),
+      count: count(row.n),
+    }))
+    .sort((a, b) => rank(a.leg) - rank(b.leg));
+  return legs.length > 0 ? legs : null;
+}
+
+/**
+ * Outcomes per month for the range's last months. Needs the Case Type's
+ * outcome order: without it the page cannot tell the best outcome from the
+ * worst, and colouring them anyway would be a guess.
+ *
+ * @param {ReportEnvelope} envelope
+ * @param {number} months
+ * @returns {OutcomeMix | null}
+ */
+function outcomeMix(envelope, months) {
+  const order = rowsOf(envelope, 'outcome_order');
+  const rows = rowsOf(envelope, 'outcome_monthly');
+  if (!order || !rows) return null;
+  /** @type {Map<string, Record<string, number>>} */
+  const byMonth = new Map();
+  for (const row of rows) {
+    if (typeof row?.month !== 'string' || typeof row.outcome !== 'string')
+      continue;
+    const counts = byMonth.get(row.month) ?? {};
+    counts[row.outcome] = (counts[row.outcome] ?? 0) + count(row.count);
+    byMonth.set(row.month, counts);
+  }
+  return {
+    order: order
+      .filter((entry) => typeof entry?.outcome === 'string')
+      .map((entry) => ({
+        outcome: entry.outcome,
+        label: typeof entry.label === 'string' ? entry.label : entry.outcome,
+      })),
+    months: [...byMonth.keys()]
+      .sort()
+      .slice(-months)
+      .map((month) => ({
+        month,
+        counts: /** @type {Record<string, number>} */ (byMonth.get(month)),
+      })),
+  };
+}
+
+/**
+ * @param {ReportEnvelope} envelope
+ * @returns {RemediationQuestion[] | null}
+ */
+function remediationQuestions(envelope) {
+  const rows = rowsOf(envelope, 'remediation_questions');
+  if (!rows) return null;
+  return rows
+    .filter((row) => typeof row?.question_id === 'string')
+    .map((row) => ({
+      questionId: row.question_id,
+      label: typeof row.label === 'string' ? row.label : row.question_id,
+      caseCount: count(row.case_count),
+      share: count(row.share_of_cases),
+    }))
+    .sort((a, b) => b.share - a.share)
+    .slice(0, TOP_QUESTIONS);
+}
+
+/**
+ * Messages posted, as seven weekday rows (Monday first) of 24 hours. The feed
+ * writes the whole grid, quiet cells included; a cell it omits reads as zero.
+ *
+ * @param {ReportEnvelope} envelope
+ * @returns {number[][] | null}
+ */
+function postingGrid(envelope) {
+  const rows = rowsOf(envelope, 'posting_pattern');
+  if (!rows) return null;
+  const grid = Array.from({ length: 7 }, () =>
+    Array.from({ length: 24 }, () => 0)
+  );
+  for (const row of rows) {
+    const day = row?.weekday_order;
+    const hour = row?.hour_of_day;
+    if (
+      Number.isInteger(day) &&
+      day >= 1 &&
+      day <= 7 &&
+      Number.isInteger(hour) &&
+      hour >= 0 &&
+      hour <= 23
+    ) {
+      grid[day - 1][hour] += count(row.message_count);
+    }
+  }
+  return grid;
+}
+
+/**
  * @param {ReportEnvelope} envelope
  * @param {string} range
  * @returns {CaseTypeReportModel}
@@ -270,5 +431,9 @@ export function buildCaseTypeReport(envelope, range) {
     sla: sla ? sla.slice(-window.months) : null,
     slaTarget:
       typeof target === 'number' && Number.isFinite(target) ? target : null,
+    legs: legsFor(envelope, rangeKey),
+    outcomes: outcomeMix(envelope, window.months),
+    remediation: remediationQuestions(envelope),
+    posting: postingGrid(envelope),
   };
 }

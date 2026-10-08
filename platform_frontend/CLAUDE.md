@@ -437,6 +437,9 @@ src/
       bar-list.js                 # horizontal bars per row, with status markers for status rows
       stack-bar.js                # one bar split into up to six parts of a whole
       sparkline.js                # decorative trend for a stat tile
+      range-chart.js              # median dot and band to the 90th percentile, one row per measure
+      stack-columns.js            # columns stacked to 100%: how a whole divided up, per period
+      heatmap.js                  # weekday x hour grid in six steps of one hue, with a scale
     report/                     # the report page frame (ADR-0058)
       report-frame.js             # the two layouts (stacked, rail), header, sections, filter
                                   #   controls and panel width arithmetic

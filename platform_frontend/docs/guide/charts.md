@@ -1,7 +1,7 @@
 # Grouped charts
 
 > **Building a report?** Use the report chart kit in `src/components/charts/`
-> (`LineChart`, `BarList`, `StackBar`, `Sparkline`), which colours marks by role
+> (`LineChart`, `BarList`, `StackBar`, `Sparkline`, `RangeChart`, `StackColumns`, `Heatmap`), which colours marks by role
 > through the validated `--cora-viz-*` palette — see
 > [Add a report](add-a-report.md). `GroupedBarChart` below predates it, colours
 > its series with status tones, and serves My Stats until that page moves onto
