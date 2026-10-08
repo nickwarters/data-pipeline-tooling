@@ -40,6 +40,10 @@ unique across domains (here it is a numeric staff id). Two people sharing one
 bare name in two domains would still be indistinguishable, and fixing that would
 mean storing the domain as part of the identity everywhere, with a migration.
 
+Amended (2026-10-08): a `person` capture value also stores the person's `email`
+when the directory had one at selection time. It is a snapshot like
+`displayName`, never refreshed at page load.
+
 ## Context
 
 Management asked to record, against an individual failure, the single person

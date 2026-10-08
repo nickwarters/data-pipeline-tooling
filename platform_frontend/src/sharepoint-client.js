@@ -54,14 +54,14 @@
  * serialised — undecided blocks completion, decided-no does not, and a `false`
  * written into the JSON blob reads the same as a field that was never there.
  *
- * @typedef {{ value: string | string[], justification?: string, remediationRequired?: 'yes' | 'no', remediationActions?: Array<{id: string, text: string}>, freeFormRemediation?: string, remediationStatus?: RemediationStatus, capture?: Record<string, string | { loginName: string, displayName: string, domain?: string } | Array<string | RemediationAction>> }} Answer
+ * @typedef {{ value: string | string[], justification?: string, remediationRequired?: 'yes' | 'no', remediationActions?: Array<{id: string, text: string}>, freeFormRemediation?: string, remediationStatus?: RemediationStatus, capture?: Record<string, string | { loginName: string, displayName: string, domain?: string, email?: string } | Array<string | RemediationAction>> }} Answer
  */
 
 /**
  * One **Issue Capture Field** declared by a Case Type: a typed input captured
  * against a *failed* Answer. `options` lists the choices for `select`/`radio`
  * (validated at capture time); a `person` is chosen from the directory and
- * stored as `{ loginName, displayName, domain? }`. `showWhen` conditions the field on a
+ * stored as `{ loginName, displayName, domain?, email? }`. `showWhen` conditions the field on a
  * sibling field of the same group, in the same operator vocabulary a Question
  * Definition uses, and a field it hides loses its stored value on the next
  * write. `required` holds the Case out of completion while the field is
