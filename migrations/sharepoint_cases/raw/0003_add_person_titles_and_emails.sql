@@ -1,5 +1,5 @@
 -- Land every Person column's display name and email beside its login, so
--- `person_sighting` can record who each person is. Raw keeps the source's own
+-- the silver `person` table can record who each person is. Raw keeps the source's own
 -- names, as for every other column; the Responsible Party's `Title` was
 -- already landed.
 

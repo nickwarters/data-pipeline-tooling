@@ -21,10 +21,10 @@ from pipelines.sharepoint_cases.gold import (
     DETAIL_AGGREGATES,
     DETAIL_TABLES,
     GOLD_TABLES,
-    PERSON_SIGHTING_TABLE,
 )
 from pipelines.sharepoint_cases.pipeline import (
     FEED_NAME,
+    PERSON_TABLE,
     SAFETY_LAG,
     LocalJsonListClient,
     NoClientError,
@@ -57,8 +57,8 @@ from tools.store import StoreRegistry
 RAW_PREFIX = f"raw:{COMPLAINTS.case_type}"
 SILVER_PREFIX = f"silver:{COMPLAINTS.case_type}"
 # The silver tables beside the Case row: the Detail Tables, and the people
-# every observation named.
-SILVER_SIDE_TABLES = (*DETAIL_TABLES, PERSON_SIGHTING_TABLE)
+# the observations named.
+SILVER_SIDE_TABLES = (*DETAIL_TABLES, PERSON_TABLE)
 SILVER_DETAIL_PREFIX = {
     f"{SILVER_PREFIX}:{table}": table for table in SILVER_SIDE_TABLES
 }
@@ -230,7 +230,7 @@ def test_a_quiet_window_still_runs_and_records_every_step(base_dir):
         COMPLAINTS.list_name,
         "case_observation",
         "case_version",
-        PERSON_SIGHTING_TABLE,
+        PERSON_TABLE,
         *GOLD_TABLES,
     }
     # "answer" is a table in both silver.db (the exploded rows) and gold.db

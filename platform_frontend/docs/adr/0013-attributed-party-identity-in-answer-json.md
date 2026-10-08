@@ -34,7 +34,7 @@ changed is how the service layer rebuilds a claims login:
   name without that lookup. Values saved before this carry no `domain` and go
   through the lookup instead. The pipelines key people on the lower-cased bare
   account and never write to SharePoint; the Sync feed records the field as
-  that person's domain in its `person_current` table.
+  that person's domain in its `person` table.
 
 This keeps one assumption from the original decision: a bare account name is
 unique across domains (here it is a numeric staff id). Two people sharing one
@@ -44,7 +44,7 @@ mean storing the domain as part of the identity everywhere, with a migration.
 Amended (2026-10-08): a `person` capture value also stores the person's `email`
 when the directory had one at selection time. It is a snapshot like
 `displayName`, never refreshed at page load. The Sync feed reads it into
-`person_current` beside the person's bare account.
+`person` table beside the person's bare account.
 
 ## Context
 

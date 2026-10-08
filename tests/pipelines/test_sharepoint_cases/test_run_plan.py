@@ -22,24 +22,18 @@ from pipelines.sharepoint_cases.gold import (
     DETAIL_AGGREGATES,
     DETAIL_TABLES,
     GOLD_TABLES,
-    PERSON_SIGHTING_TABLE,
-    PERSON_TABLE,
 )
-from pipelines.sharepoint_cases.pipeline import FEED_NAME
+from pipelines.sharepoint_cases.pipeline import FEED_NAME, PERSON_TABLE
 from tests._sharepoint_cases_fixtures import COMPLAINTS, FakeListClient, run
 from tests.framework_testing import RecordingRunLog
 
 RAW = f"raw:{COMPLAINTS.case_type}"
 SILVER = f"silver:{COMPLAINTS.case_type}"
 SILVER_DETAIL = tuple(f"{SILVER}:{table}" for table in DETAIL_TABLES)
-SILVER_PERSON = f"{SILVER}:{PERSON_SIGHTING_TABLE}"
+SILVER_PERSON = f"{SILVER}:{PERSON_TABLE}"
 GOLD = tuple(f"gold:{table}" for table in GOLD_TABLES)
-GOLD_PERSON = f"gold:{PERSON_TABLE}"
-# The gold tables reduced on a declared grain -- the ones that validate it. The
-# Case-keyed ones derive that key from the observation they settle on; the
-# person table is keyed on the account it already carries.
-GOLD_CASE_KEYED = tuple(f"gold:{table}" for table in (CURRENT_TABLE, *DETAIL_TABLES))
-GOLD_KEYED = (*GOLD_CASE_KEYED, GOLD_PERSON)
+# The gold tables reduced on a declared grain -- the ones that validate it.
+GOLD_KEYED = tuple(f"gold:{table}" for table in (CURRENT_TABLE, *DETAIL_TABLES))
 GOLD_AGGREGATES = tuple(prefix for prefix in GOLD if prefix not in GOLD_KEYED)
 
 # ``enforce``'s three steps, in the order it promises: coerce first, so the
@@ -117,7 +111,7 @@ def test_silver_reduces_every_person_to_the_bare_account_before_it_is_enforced(
     recorded,
 ):
     # The bare account is what the rules and the stored row see; the details
-    # the reduction drops have gone to the sighting table by then.
+    # the reduction drops go to the person table instead.
     assert_in_order(
         steps_of(recorded, SILVER),
         "rename",
@@ -127,10 +121,9 @@ def test_silver_reduces_every_person_to_the_bare_account_before_it_is_enforced(
     )
 
 
-def test_the_person_sighting_table_finds_people_before_it_is_enforced(recorded):
-    assert_in_order(
-        steps_of(recorded, SILVER_PERSON), "case-type", "sightings", "coerce"
-    )
+def test_the_person_table_merges_what_it_knows_before_it_is_enforced(recorded):
+    steps = steps_of(recorded, SILVER_PERSON)
+    assert_in_order(steps, "people-seen", "read-known", "merge-known", "coerce")
 
 
 def test_every_silver_detail_table_explodes_before_it_is_enforced(recorded):
@@ -156,9 +149,7 @@ def test_a_keyed_gold_table_validates_its_grain_last_and_an_aggregate_does_not(
     for prefix in GOLD_KEYED:
         steps = steps_of(recorded, prefix)
         assert steps[-2:] == ["unique-validate", "write"], (prefix, steps)
-        assert_in_order(steps, "stamp-as-of", "unique-validate")
-    for prefix in GOLD_CASE_KEYED:
-        assert "derive-key" in steps_of(recorded, prefix), prefix
+        assert_in_order(steps, "derive-key", "stamp-as-of", "unique-validate")
     for prefix in GOLD_AGGREGATES:
         steps = steps_of(recorded, prefix)
         assert "unique-validate" not in steps, (prefix, steps)

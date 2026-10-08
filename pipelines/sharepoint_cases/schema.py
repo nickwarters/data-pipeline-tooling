@@ -118,8 +118,8 @@ class CaseVersion:
     # The Person columns, as the lower-cased bare account of the claims login
     # the list expanded them to -- the one spelling of a person every table in
     # this feed, and the platform's own JSON, agrees on. Raw keeps the claims
-    # login; the domain, display name and email a login comes with are in
-    # person_sighting / person_current, keyed on the same account. The numeric
+    # login; the domain, display name and email a login comes with are in the
+    # person table, keyed on the same account. The numeric
     # twin SharePoint also offers is a transport detail of one site collection
     # rather than an identity.
     assigned_reviewer_name: str
@@ -398,30 +398,24 @@ class CaseDetailRow:
 
 
 @dataclass
-class PersonSightingRow:
-    """One row per observation x person named anywhere in it.
+class PersonRow:
+    """One row per person this feed has seen named: user details only.
 
     A person is named by the five Person columns and inside the JSON blobs: a
     person picked in an Issue Capture Field, a Conversation author, an
-    Appellant or resolver, whoever amended the Outcome. Each sighting records
-    what that observation said about them; ``person_current`` reduces the
-    history to one row per account.
+    Appellant or resolver, whoever amended the Outcome. Each poll merges the
+    people its batch names into this table and upserts them on ``account``,
+    each detail the latest any sighting gave.
 
     ``account`` is the lower-cased bare account every person column in this
-    feed holds. ``domain`` is upper-cased. Where one observation names the same
-    person twice, the Person columns -- read live from the directory -- are
-    taken before the JSON blobs, which hold snapshots from when they were
-    written.
+    feed holds. ``domain`` is upper-cased and ``email`` lower-cased.
+    ``first_seen_at`` and ``last_seen_at`` bound the observations (by their
+    ``Modified``) that named the person; the later one is what orders a merge.
     """
-
-    case_type: Annotated[str, NonNull()]
-    source_item_id: Annotated[str, NonNull()]
-    # datetime, not str -- see AnswerRow's own field for why.
-    source_modified_at: Annotated[datetime, NonNull()]
-    source_version: Annotated[str, NonNull()]
-    source_observation_id: Annotated[str, NonNull()]
 
     account: Annotated[str, NonNull()]
     domain: str
     display_name: str
     email: str
+    first_seen_at: Annotated[datetime, NonNull()]
+    last_seen_at: Annotated[datetime, NonNull()]

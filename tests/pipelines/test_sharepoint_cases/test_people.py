@@ -3,8 +3,8 @@
 Silver reduces each Person column to the lower-cased bare account, so a Case
 row joins to the JSON blobs, the Staff Hierarchy and the platform on one
 spelling. What that reduction drops -- the domain, the display name, the
-email -- goes to ``person_sighting``, one row per observation x person it
-names, and gold reduces that history to ``person_current``, one row per person.
+email -- goes to the silver ``person`` table: user details only, one row per
+person, which each poll merges its people into and upserts on ``account``.
 """
 
 from __future__ import annotations
@@ -12,33 +12,33 @@ from __future__ import annotations
 import json
 import shutil
 import sqlite3
+from dataclasses import fields
 
 import pandas as pd
 import pytest
 
+from framework.core import Dataset
+from framework.io import DatasetReader
 from framework.run import RunContext
-from pipelines.sharepoint_cases.gold import (
-    PERSON_COLUMNS,
-    PERSON_SIGHTING_TABLE,
-    PERSON_TABLE,
-    to_gold_person_current,
-)
 from pipelines.sharepoint_cases.pipeline import (
     FEED_NAME,
     PERSON_NAME_COLUMNS,
+    PERSON_TABLE,
     SIGHTING_ONLY_COLUMNS,
     to_silver,
-    to_silver_person_sighting,
+    to_silver_person,
 )
+from pipelines.sharepoint_cases.schema import PersonRow
 from shared.account_names import to_bare_account
 from tests._sharepoint_cases_fixtures import (
-    AS_OF,
     COMPLAINTS,
+    NEXT_POLL,
+    SERVER_NOW,
     FakeListClient,
-    gold_rows,
     item,
     items,
     landed,
+    later_item,
     person,
     run,
 )
@@ -51,6 +51,8 @@ from tests.framework_testing import (
 from tools.medallion import medallion
 from tools.migrations import MIGRATIONS_ROOT, MigrationRunner
 from tools.store import StoreRegistry
+
+PERSON_COLUMNS = tuple(field.name for field in fields(PersonRow))
 
 # --- silver: the Case row ----------------------------------------------------
 
@@ -80,14 +82,18 @@ def test_silver_holds_each_person_as_the_lower_cased_bare_account():
     assert not set(SIGHTING_ONLY_COLUMNS) & set(row)
 
 
-# --- silver: person_sighting -------------------------------------------------
+# --- silver: person ---------------------------------------------------------
 
 
-def sighted(**overrides: object) -> dict[str, dict]:
-    """The sightings one observation of ``item(**overrides)`` yields, by account."""
+def merged(*observations: dict, known: tuple[dict, ...] = ()) -> dict[str, dict]:
+    """What the person step would upsert for a raw batch of ``observations``
+    over a table already holding ``known``, by account."""
     writer = RecordingWriter()
-    to_silver_person_sighting(
-        given_rows(landed(FakeListClient(items(item(**overrides))))),
+    to_silver_person(
+        given_rows(landed(FakeListClient(items(*observations)))),
+        DatasetReader(
+            Dataset.from_pandas(pd.DataFrame(list(known), columns=PERSON_COLUMNS))
+        ),
         writer,
         COMPLAINTS,
         RecordingWriter(),
@@ -98,8 +104,24 @@ def sighted(**overrides: object) -> dict[str, dict]:
         for row in rows_of(writer)
     ]
     by_account = {row["account"]: row for row in rows}
-    assert len(by_account) == len(rows), "one row per person per observation"
+    assert len(by_account) == len(rows), "one row per person"
     return by_account
+
+
+def sighted(**overrides: object) -> dict[str, dict]:
+    """The people one observation of ``item(**overrides)`` names, by account."""
+    return merged(item(**overrides))
+
+
+def known(account: str, at: str, **details: object) -> dict[str, object]:
+    """A row the person table already holds."""
+    return {
+        "account": account,
+        **dict.fromkeys(("domain", "display_name", "email")),
+        "first_seen_at": at,
+        "last_seen_at": at,
+        **details,
+    }
 
 
 EVERY_BLOB = {
@@ -147,12 +169,11 @@ def test_a_sighting_is_recorded_for_everyone_an_observation_names():
         "h.ruiz",
         "j.diaz",
     }
-    # Each row carries the observation it came from.
-    [observation] = landed(FakeListClient(items(item(**EVERY_BLOB))))
-    assert {row["source_observation_id"] for row in people.values()} == {
-        observation["source_observation_id"]
+    # User details only: nothing about the Case that named them.
+    assert {tuple(row) for row in people.values()} == {PERSON_COLUMNS}
+    assert {row["first_seen_at"] for row in people.values()} == {
+        pd.Timestamp("2026-08-05 08:10:00+00:00")
     }
-    assert {row["case_type"] for row in people.values()} == {COMPLAINTS.case_type}
 
 
 def test_a_sighting_keeps_what_its_source_said_in_one_spelling():
@@ -209,94 +230,95 @@ def test_an_observation_naming_nobody_records_no_sighting():
     assert sighted(**nobody, Answers="not json") == {}
 
 
-# --- gold: person_current ----------------------------------------------------
-
-
-def sighting(at: str, observation: str, **details: object) -> dict[str, object]:
-    """One silver person-sighting row for ``a.khan``."""
-    return {
-        "case_type": COMPLAINTS.case_type,
-        "source_item_id": "101",
-        "source_modified_at": at,
-        "source_version": observation,
-        "source_observation_id": f"101@{observation}",
-        "account": "a.khan",
-        **dict.fromkeys(("domain", "display_name", "email")),
-        **details,
-    }
-
-
-def person_rows(*sightings: dict) -> list[dict]:
-    return gold_rows(to_gold_person_current, list(sightings))
-
-
-def test_person_current_is_one_row_per_person_stamped_as_of():
-    rows = person_rows(
-        sighting("2026-08-05 08:10:00+00:00", "3"),
-        {**sighting("2026-08-05 08:10:00+00:00", "3"), "account": "b.okafor"},
-        sighting("2026-08-05 08:45:00+00:00", "4"),
-    )
-
-    assert [row["account"] for row in rows] == ["a.khan", "b.okafor"]
-    assert set(rows[0]) == {*PERSON_COLUMNS, "as_of_utc"}
-    assert {row["as_of_utc"] for row in rows} == {AS_OF.isoformat()}
-
-
-def test_person_current_keeps_the_latest_value_each_detail_was_given():
-    [row] = person_rows(
-        sighting(
-            "2026-08-05 08:10:00+00:00",
-            "3",
-            domain="CONTOSO",
-            display_name="Aisha Khan",
-            email="a.khan@contoso.com",
+def test_the_latest_observation_in_a_batch_gives_each_detail():
+    people = merged(
+        item(AssignedReviewer=person("CONTOSO\\a.khan", "Aisha Khan")),
+        later_item(
+            AssignedReviewer={"Name": "i:0#.w|CONTOSO\\a.khan", "Title": "A Khan-Ross"}
         ),
-        # Seen later as a Conversation author: a newer display name, and no
-        # email -- which must not blank the one already known.
-        sighting("2026-08-05 08:45:00+00:00", "4", display_name="Aisha Khan-Ross"),
     )
 
-    assert (row["domain"], row["display_name"], row["email"]) == (
-        "CONTOSO",
-        "Aisha Khan-Ross",
-        "a.khan@contoso.com",
-    )
+    row = people["a.khan"]
+    # The later observation renamed her and carried no email, which must not
+    # blank the one the earlier observation gave.
+    assert (row["display_name"], row["email"]) == ("A Khan-Ross", "a.khan@contoso.com")
     assert row["first_seen_at"] == pd.Timestamp("2026-08-05 08:10:00+00:00")
     assert row["last_seen_at"] == pd.Timestamp("2026-08-05 08:45:00+00:00")
 
 
-def test_an_old_observation_landed_late_does_not_overwrite_a_newer_one():
-    # Append order is not observation order: a backfill can land an old
-    # version after a new one. Modified decides.
-    [row] = person_rows(
-        sighting("2026-08-05 09:00:00+00:00", "5", display_name="New name"),
-        sighting("2026-08-05 08:00:00+00:00", "2", display_name="Old name"),
+def test_a_poll_updates_a_known_person_without_blanking_what_it_did_not_say():
+    people = merged(
+        item(
+            AssignedReviewer={"Name": "i:0#.w|CONTOSO\\a.khan", "Title": "A Khan-Ross"}
+        ),
+        known=(
+            known(
+                "a.khan",
+                "2026-08-01 10:00:00+00:00",
+                domain="CONTOSO",
+                display_name="Aisha Khan",
+                email="a.khan@contoso.com",
+            ),
+        ),
     )
 
+    row = people["a.khan"]
+    assert (row["domain"], row["display_name"], row["email"]) == (
+        "CONTOSO",
+        "A Khan-Ross",
+        "a.khan@contoso.com",
+    )
+    assert row["first_seen_at"] == pd.Timestamp("2026-08-01 10:00:00+00:00")
+    assert row["last_seen_at"] == pd.Timestamp("2026-08-05 08:10:00+00:00")
+
+
+def test_an_old_observation_polled_late_does_not_overwrite_a_newer_detail():
+    # A re-read of an old version is still a sighting -- but Modified, not the
+    # order things are polled in, decides what is current.
+    people = merged(
+        item(AssignedReviewer={"Name": "i:0#.w|CONTOSO\\a.khan", "Title": "Old name"}),
+        known=(known("a.khan", "2026-08-06 09:00:00+00:00", display_name="New name"),),
+    )
+
+    row = people["a.khan"]
     assert row["display_name"] == "New name"
-    assert row["first_seen_at"] == pd.Timestamp("2026-08-05 08:00:00+00:00")
+    assert row["first_seen_at"] == pd.Timestamp("2026-08-05 08:10:00+00:00")
+    assert row["last_seen_at"] == pd.Timestamp("2026-08-06 09:00:00+00:00")
+
+
+def test_only_the_people_a_batch_names_are_written():
+    # The upsert leaves everyone else as they are, so they are not rewritten.
+    people = merged(item(), known=(known("z.stranger", "2026-08-01 10:00:00+00:00"),))
+
+    assert "z.stranger" not in people
 
 
 # --- the whole poll ----------------------------------------------------------
 
 
-def test_a_poll_lands_bare_accounts_in_gold_and_everyone_in_person_current(base_dir):
-    run(RunContext(base_dir=base_dir, pipeline=FEED_NAME), client=FakeListClient())
+def test_polls_keep_one_row_per_person_and_the_case_row_holds_the_account(base_dir):
+    context = RunContext(base_dir=base_dir, pipeline=FEED_NAME)
+    run(context, client=FakeListClient())
+    run(
+        context,
+        client=FakeListClient(
+            items(
+                later_item(ResponsiblePartyManager=person("CONTOSO\\e.novak", "Eva N"))
+            ),
+            server_now=SERVER_NOW + NEXT_POLL,
+        ),
+    )
 
     med = medallion(StoreRegistry(base_dir), FEED_NAME)
     [case] = read_rows(med.gold, "case_current")
-    assert case["assigned_reviewer_name"] == "a.khan"
-    assert {row["account"] for row in read_rows(med.silver, PERSON_SIGHTING_TABLE)} == {
-        "a.khan",
-        "b.okafor",
-        "d.reid",
-        "e.novak",
-    }
-    people = {row["account"]: row for row in read_rows(med.gold, PERSON_TABLE)}
+    assert case["responsible_party_manager_name"] == "e.novak"
+    people = {row["account"]: row for row in read_rows(med.silver, PERSON_TABLE)}
     assert set(people) == {"a.khan", "b.okafor", "d.reid", "e.novak"}
-    assert people["e.novak"]["domain"] == "CONTOSO"
-    assert people["e.novak"]["display_name"] == "Eva Novak"
-    assert people["e.novak"]["email"] == "e.novak@contoso.com"
+    assert (people["e.novak"]["domain"], people["e.novak"]["email"]) == (
+        "CONTOSO",
+        "e.novak@contoso.com",
+    )
+    assert people["e.novak"]["display_name"] == "Eva N"
 
 
 # --- the backfill ------------------------------------------------------------
