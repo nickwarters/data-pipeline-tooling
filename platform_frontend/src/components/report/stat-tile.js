@@ -12,10 +12,6 @@ const STATUS_WORDS = Object.freeze({
 });
 
 /**
- * A ratio against a target: a filled track with a tick where the target is.
- * The track is a lighter step of the fill's own colour, so the bar reads as
- * one measure whether it is short or long.
- *
  * @param {{ value: number, target: number, label: string }} meter
  * @returns {HTMLElement}
  */
@@ -40,13 +36,6 @@ function meterView({ value, target, label }) {
 }
 
 /**
- * One headline figure: a label, a value, and optionally which way it moved, a
- * sparkline of where it has been, or a meter against its target.
- *
- * A change is coloured by whether it is good news, not by its direction — a
- * backlog going up is bad, completions going up are good — and the arrow says
- * the direction, so neither half rests on colour.
- *
  * @param {StatTileSpec} tile
  * @returns {HTMLElement}
  */
@@ -99,10 +88,8 @@ function statTileView(tile) {
 }
 
 /**
- * A row of headline figures.
- *
  * @param {StatTileSpec[]} tiles
- * @param {{ stacked?: boolean }} [options] one tile per line, for a narrow rail
+ * @param {{ stacked?: boolean }} [options]
  * @returns {HTMLElement}
  */
 export function KpiRow(tiles, { stacked = false } = {}) {

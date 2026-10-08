@@ -25,10 +25,8 @@ function envelope(datasets, rest = {}) {
 }
 
 /**
- * One backlog row per day, the last one on `lastDay`.
- *
  * @param {number} days
- * @param {(index: number) => Record<string, number>} [counts] by day index, oldest first
+ * @param {(index: number) => Record<string, number>} [counts]
  * @param {string} [lastDay]
  * @returns {Record<string, any>[]}
  */
@@ -270,7 +268,6 @@ test('open and to-allocate are compared with exactly 30 days earlier', () => {
     }),
     '6m'
   );
-  // Index 59 is the latest day; 30 days before it is index 29.
   assert.deepEqual(report.toAllocate, { now: 59, before: 29 });
   assert.deepEqual(report.open, { now: 59 * 3, before: 29 * 3 });
 });
@@ -311,7 +308,6 @@ test('the open trend covers the last thirteen weeks and no further', () => {
     envelope({ backlog_daily: backlogRows(400, (i) => ({ in_progress: i })) }),
     '12m'
   );
-  // Thirteen weeks back, plus the latest day itself.
   assert.equal(report.openTrend?.length, 14);
 });
 
@@ -398,7 +394,6 @@ test('flow adds up seven-day weeks that end on the last day', () => {
     arrived: 7,
     completed: 5,
   });
-  // 29 September is the seventh day of the week before.
   assert.deepEqual(flow.at(-2), {
     weekEnding: '2026-09-29',
     arrived: 100,
@@ -570,7 +565,7 @@ function legRow(window, leg, p50, p90, n = 10) {
   return { window, leg, p50, p90, n };
 }
 
-/** @param {string[]} outcomes best first */
+/** @param {string[]} outcomes */
 function outcomeOrder(outcomes) {
   return outcomes.map((outcome) => ({ outcome, label: outcome.toUpperCase() }));
 }

@@ -3,14 +3,6 @@ import { svg } from '../../lib/html.js';
 import { linearScale, paint, requireFiniteValues } from './chart-kit.js';
 
 /**
- * A trend with no axes, for a stat tile. The line is quiet and only the latest
- * point carries the series colour, because the tile's own number is the
- * figure being read and the line only says which way it has been heading.
- *
- * It is decorative to assistive technology on purpose: the tile states the
- * value and its change in words, and a second, vaguer reading of the same
- * thing would be noise.
- *
  * @param {number[]} values oldest first
  * @param {{ width?: number, height?: number }} [config]
  * @returns {SVGSVGElement}
@@ -23,7 +15,6 @@ export function Sparkline(values, { width = 72, height = 26 } = {}) {
   const min = Math.min(...values);
   const max = Math.max(...values);
   const x = linearScale(0, values.length - 1, 2, width - 5);
-  // A flat series sits in the middle rather than on the floor.
   const y =
     min === max ? () => height / 2 : linearScale(min, max, height - 4, 4);
   const last = values.length - 1;

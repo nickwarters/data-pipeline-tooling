@@ -12,31 +12,21 @@ import {
  * @typedef {Object} HeatmapConfig
  * @property {number} width
  * @property {string} ariaLabel
- * @property {string[]} rowLabels one per row, e.g. weekdays
- * @property {string[]} columnLabels one per column, e.g. hours
- * @property {(row: number, column: number) => string} describeCell the
- *   cell's name in its tooltip, e.g. "Mon 09:00–10:00"
- * @property {string} [unit] what a value counts, e.g. "messages"
- * @property {number[]} [labelColumns] which columns get an axis label
+ * @property {string[]} rowLabels
+ * @property {string[]} columnLabels
+ * @property {(row: number, column: number) => string} describeCell e.g. "Mon 09:00–10:00"
+ * @property {string} [unit]
+ * @property {number[]} [labelColumns]
  */
 
 const LEFT = 36;
 const GAP = 2;
 const LEGEND_HEIGHT = 30;
 const AXIS_HEIGHT = 16;
-/** Six steps of one hue. More steps than this and neighbours blur together. */
 const BINS = Object.freeze([0.16, 0.3, 0.46, 0.64, 0.82, 1]);
 
 /**
- * Magnitude on a grid — when things happen, by weekday and hour. One hue,
- * more is darker, in six steps a reader can tell apart, with a scale beneath
- * saying which way is more. Zero is its own quiet cell rather than the
- * faintest step, so "never" and "rarely" do not look the same.
- *
- * The cells are hover marks, not tab stops: a week of hours is 168 of them,
- * and the panel's table carries the same values for a keyboard.
- *
- * @param {{ values: number[][] }} data rows of columns
+ * @param {{ values: number[][] }} data
  * @param {HeatmapConfig} config
  * @returns {SVGSVGElement}
  */
@@ -122,7 +112,6 @@ export function Heatmap(data, config) {
               width: Math.max(1, cellWidth - GAP),
               height: cellHeight,
               rx: 2,
-              // A zero cell takes its quiet fill from the stylesheet.
               fill: step < 0 ? undefined : paint('s1'),
               'fill-opacity': step < 0 ? undefined : BINS[step],
               ...markAttributes(

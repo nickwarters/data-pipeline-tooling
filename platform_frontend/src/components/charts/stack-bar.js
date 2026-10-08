@@ -23,23 +23,16 @@ import {
  * @typedef {Object} StackBarConfig
  * @property {number} width
  * @property {string} ariaLabel
- * @property {string} [wholeLabel] what the whole is, for the tooltip ("open")
+ * @property {string} [wholeLabel]
  */
 
 const BAR_HEIGHT = 24;
 const GAP = 2;
 const RADIUS = 4;
 const INLINE_LABEL_PADDING = 12;
-/** Past six parts a single bar stops being readable as parts of a whole. */
 const MAX_PARTS = 6;
 
 /**
- * One bar split into the parts of a whole, at a glance. The parts are named by
- * the panel's legend, not on the bar; a part's count is written inside it only
- * where it fits, and every part says its count and share on hover and focus.
- * A 2px gap in the surface colour separates the parts, so neighbours read as
- * two things without a border drawn round either.
- *
  * @param {{ parts: StackBarPart[] }} data
  * @param {StackBarConfig} config
  * @returns {SVGSVGElement}
@@ -137,9 +130,6 @@ export function StackBar(data, config) {
 }
 
 /**
- * A segment with its outer ends rounded: the first part's left end and the
- * last part's right end, so the whole bar reads as one rounded shape.
- *
  * @param {number} x
  * @param {number} length
  * @param {boolean} first

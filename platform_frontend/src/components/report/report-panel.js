@@ -6,7 +6,6 @@ import { dataTableView } from '../../views/data-table.js';
 /** @typedef {import('../../reports/contract.js').ReportPanelSpec} ReportPanelSpec */
 /** @typedef {import('../../views/data-table.js').TableSort} TableSort */
 
-/** The column spans a panel may take, out of twelve. */
 const SPANS = Object.freeze([3, 4, 5, 6, 7, 8, 9, 12]);
 
 /**
@@ -34,13 +33,6 @@ function legendView(legend) {
 }
 
 /**
- * One panel of a report: its title, how it is measured, the chart (or the
- * same content as a table), and any caveat.
- *
- * The panel never decides its own width or whether its table is showing — the
- * engine holds both in route state and hands them in, which is what keeps this
- * a pure function of its input like every other view.
- *
  * @param {ReportPanelSpec} spec
  * @param {{
  *   width: number,

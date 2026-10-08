@@ -87,19 +87,10 @@ function hasAnyRole(caps) {
   );
 }
 
-/**
- * The reports this application offers. Declared before `APP_CONFIG` because
- * the two report routes' guard reads it: the Reports link, the index and the
- * report page all answer "is there anything here for this viewer?" from this
- * one list and each report's own `access`.
- *
- * @type {readonly import('./reports/contract.js').ReportPlugin[]}
- */
+/** @type {readonly import('./reports/contract.js').ReportPlugin[]} */
 const REPORT_PLUGINS = [CaseTypeReport];
 
 /**
- * Whether any report admits this viewer to at least one scope.
- *
  * @param {Capabilities} caps
  * @returns {boolean}
  */
@@ -147,11 +138,6 @@ export const APP_CONFIG = {
    */
   caseTypes: CASE_TYPE_ENTRIES,
 
-  /**
-   * Every report, as a plugin: what it reads, who it is for, and its view.
-   * The report engine, the index and the nav derive everything else from this
-   * list, so adding a report is a plugin module and one entry here.
-   */
   reportPlugins: REPORT_PLUGINS,
 
   /**
@@ -214,9 +200,6 @@ export const APP_CONFIG = {
       id: 'reports',
       paths: ['#/reports'],
       page: reportsPage,
-      // The link and the route share one audience: anyone a report admits to
-      // at least one scope. Which reports and scopes they see is the page's
-      // business, read off the same rules.
       guard: opensAnyReport,
       nav: { label: 'Reports', order: 35 },
     },

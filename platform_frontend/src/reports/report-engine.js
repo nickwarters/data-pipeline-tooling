@@ -21,35 +21,20 @@ import { allScopes, scopesFor } from './report-access.js';
 /** @typedef {import('../setup/register-routes.js').AppContext} AppContext */
 /** @typedef {import('../services/report-feed-loader.js').ReportFileResult} ReportFileResult */
 
-/**
- * The engine every report runs on. A report is configuration and a view; this
- * module is everything else a report page needs — which scope is open and
- * whether the viewer may open it, loading each file, the page's states, the
- * filters, each panel's table toggle and sort, the page width the charts are
- * drawn at, and the tooltips.
- *
- * It is a route slice like any other page's: state, a reducer, a pure view, and
- * effects that only ever reach state through `dispatch`.
- */
-
-/**
- * @typedef {{ status: 'loading' | 'loaded' | 'missing' | 'forbidden' | 'failed', envelope: ReportEnvelope | null }} FeedState
- */
+/** @typedef {{ status: 'loading' | 'loaded' | 'missing' | 'forbidden' | 'failed', envelope: ReportEnvelope | null }} FeedState */
 
 /**
  * @typedef {Object} ReportRouteState
- * @property {string | null} scopeKey the open scope, or null when there is none
- * @property {'denied' | 'unknown-scope' | null} problem why nothing is open
+ * @property {string | null} scopeKey
+ * @property {'denied' | 'unknown-scope' | null} problem
  * @property {Record<string, FeedState>} feeds
  * @property {Record<string, string>} filters
- * @property {string[]} tables ids of panels showing their table
+ * @property {string[]} tables
  * @property {Record<string, TableSort>} sorts
- * @property {number} width the page width the charts are drawn for
+ * @property {number} width
  */
 
-/**
- * @typedef {{ chrome: ChromeState, routes: { report: ReportRouteState } }} ReportState
- */
+/** @typedef {{ chrome: ChromeState, routes: { report: ReportRouteState } }} ReportState */
 
 /**
  * @typedef {{ type: 'report/feed-settled', name: string, result: ReportFileResult }
@@ -60,20 +45,11 @@ import { allScopes, scopesFor } from './report-access.js';
  *   | { type: 'report/resized', width: number }} ReportAction
  */
 
-/** The width charts are drawn for until the page has been measured. */
 const DEFAULT_WIDTH = 1100;
-/** A resize smaller than this is not worth redrawing every chart for. */
 const RESIZE_THRESHOLD = 8;
 const DEFAULT_STALE_AFTER_WORKING_DAYS = 2;
 
 /**
- * Which scope a mount opens, and if none, why not.
- *
- * Without a scope in the URL the viewer's first one opens. A scope in the URL
- * that exists but is not theirs is refused; one that does not exist at all is
- * a different sentence, because "you may not see this" and "there is no such
- * thing" are not the same news.
- *
  * @param {ReportPlugin} plugin
  * @param {ReportScope[]} scopes
  * @param {string | undefined} requested
@@ -92,10 +68,6 @@ function resolveScope(plugin, scopes, requested) {
 }
 
 /**
- * The page's stale banner, or null. A healthy file is complete through the
- * last working day; one that has fallen further behind than the report allows
- * is still shown — it says what it covers — but the page says it is behind.
- *
  * @param {ReportEnvelope | null} envelope
  * @param {string} today
  * @param {number} allowance working days
@@ -318,8 +290,6 @@ function reduce(state, action, plugin) {
 }
 
 /**
- * The route slice for one report.
- *
  * @param {ReportPlugin} plugin
  * @param {Record<string, string>} params
  * @param {AppContext} context
@@ -386,14 +356,9 @@ export function createReportRouteSlice(
     render(container, state, tools) {
       tools.render(container, reportView(plugin, state, tools.dispatch, env));
 
-      // The charts are drawn for the width the page actually has. One
-      // observer on the page, not one per panel, and only ever reaching state
-      // through dispatch, so every view stays a pure function of state.
       if (!observer && typeof ResizeObserver === 'function') {
         observer = new ResizeObserver(() => {
-          // Deferred to the next frame: redrawing for a new width changes the
-          // page's height, and doing that inside the observer's own callback
-          // is the loop browsers warn about.
+          // Deferred a frame: resizing inside the callback triggers a "ResizeObserver loop" warning.
           requestAnimationFrame(() => {
             if (!tools.isActive()) return;
             const width = Math.floor(container.clientWidth);
@@ -403,9 +368,6 @@ export function createReportRouteSlice(
         observer.observe(container);
       }
 
-      // One tooltip controller per chart on the page. A chart that has gone
-      // (a range changed, a panel switched to its table) takes its controller
-      // with it.
       const charts = new Set(
         /** @type {SVGSVGElement[]} */ ([
           ...container.querySelectorAll('svg.cora-chart'),
@@ -433,8 +395,7 @@ export function createReportRouteSlice(
     start(tools) {
       if (scope) {
         for (const [name, feed] of Object.entries(plugin.feeds)) {
-          // Started inside the chain, so a path function that throws is a
-          // failed feed rather than a failed mount.
+          // Inside the chain so a throwing path() is a failed feed, not a failed mount.
           void Promise.resolve()
             .then(() =>
               load(feed.path(scope), {

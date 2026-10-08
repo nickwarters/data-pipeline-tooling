@@ -14,8 +14,6 @@ import {
 /** @typedef {import('./chart-kit.js').ChartRole} ChartRole */
 
 /**
- * One line. Every series in a chart shares the same x positions, in order.
- *
  * @typedef {Object} LineSeries
  * @property {string} key
  * @property {string} label
@@ -27,15 +25,14 @@ import {
  * @typedef {Object} LineChartConfig
  * @property {number} width
  * @property {number} [height]
- * @property {string} ariaLabel what the chart shows, in one sentence
- * @property {(x: string) => string} [formatX] the x-axis label for a point
- * @property {(x: string) => string} [describeX] the tooltip's name for a point
+ * @property {string} ariaLabel
+ * @property {(x: string) => string} [formatX]
+ * @property {(x: string) => string} [describeX]
  * @property {(y: number) => string} [formatY]
- * @property {[number, number]} [yDomain] a fixed axis; omitted, it runs from
- *   zero to a round number above the largest value
- * @property {boolean} [area] wash the area under a single series
- * @property {boolean} [dots] mark every point, for short monthly series
- * @property {{ value: number, label: string }} [target] a reference line
+ * @property {[number, number]} [yDomain]
+ * @property {boolean} [area]
+ * @property {boolean} [dots]
+ * @property {{ value: number, label: string }} [target]
  */
 
 const MARGIN_TOP = 12;
@@ -45,18 +42,6 @@ const END_LABEL_SPACING = 14;
 const DEFAULT_HEIGHT = 200;
 
 /**
- * Lines over shared x positions, with the latest value written at each line's
- * end and a crosshair column per x position that shows every series' value on
- * hover.
- *
- * The y-axis starts at zero unless a domain is given. A line may zoom in where
- * a bar may not — a bar's length is its value, a line's position is not — and
- * when it does the axis says so, because its first label is no longer zero.
- *
- * The hover columns are deliberately out of the tab order: a daily line over a
- * year is 365 stops, which is an obstacle rather than an affordance, and the
- * panel's table view holds every value for keyboard and screen-reader users.
- *
  * @param {{ series: LineSeries[] }} data
  * @param {LineChartConfig} config
  * @returns {SVGSVGElement}
@@ -99,8 +84,6 @@ export function LineChart(data, config) {
       'LineChart yDomain must run from a lower to a higher value'
     );
   }
-  // Without a domain the axis starts at zero, and a value under it would be
-  // drawn below the baseline rather than on the chart.
   if (!yDomain && values.some((value) => value < 0)) {
     throw new RangeError(
       'LineChart values below zero need a yDomain that includes them'
@@ -312,10 +295,6 @@ export function LineChart(data, config) {
 }
 
 /**
- * A reference line, labelled where the line is furthest from the data so the
- * label never sits on a point. The label goes on the far side of the line from
- * that point.
- *
  * @param {{ value: number, label: string }} target
  * @param {LineSeries} line
  * @param {(i: number) => number} x
@@ -364,10 +343,6 @@ function targetView(target, line, x, y, left, plotRight) {
 }
 
 /**
- * Each line's latest value, written at its end. Labels that would overlap are
- * pushed apart and joined back to their line with a short leader, rather than
- * left to collide.
- *
  * @param {LineSeries[]} series
  * @param {number} endX
  * @param {(v: number) => number} y

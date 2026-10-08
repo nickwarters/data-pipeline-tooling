@@ -23,7 +23,7 @@ function part(root, selector) {
   return root.querySelector(selector);
 }
 
-/** @param {any} element the inline style, however the host represents it */
+/** @param {any} element */
 function inlineStyle(element) {
   return String(element.getAttribute('style') ?? element.style);
 }

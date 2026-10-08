@@ -19,8 +19,6 @@ function fixtureEnvelope() {
 }
 
 /**
- * Every value in a figure, however it is nested.
- *
  * @param {unknown} value
  * @returns {unknown[]}
  */

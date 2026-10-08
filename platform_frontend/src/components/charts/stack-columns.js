@@ -12,17 +12,9 @@ import {
 
 /** @typedef {import('./chart-kit.js').ChartRole} ChartRole */
 
-/**
- * One part of every column, in stacking order from the baseline up.
- *
- * @typedef {{ key: string, label: string, role: ChartRole }} StackColumnsPart
- */
+/** @typedef {{ key: string, label: string, role: ChartRole }} StackColumnsPart */
 
-/**
- * One column: a period, and how many fell into each part.
- *
- * @typedef {{ key: string, label: string, describe?: string, counts: Record<string, number> }} StackColumn
- */
+/** @typedef {{ key: string, label: string, describe?: string, counts: Record<string, number> }} StackColumn */
 
 /**
  * @typedef {Object} StackColumnsConfig
@@ -38,14 +30,6 @@ const RADIUS = 4;
 const DEFAULT_HEIGHT = 200;
 
 /**
- * Columns stacked to 100%: how a whole divided up, period by period. Shares,
- * not counts, because the question is "did the mix change" and a busy month
- * would otherwise look like a change of mix. Each column's counts are in its
- * description, so the volume behind a share is never lost.
- *
- * Each column is one focusable mark naming every part, rather than a mark per
- * segment: a reader asks "what happened in May", and one stop answers it.
- *
  * @param {{ parts: StackColumnsPart[], columns: StackColumn[] }} data
  * @param {StackColumnsConfig} config
  * @returns {SVGSVGElement}
@@ -163,8 +147,6 @@ export function StackColumns(data, config) {
             const top = y(from + share);
             from += share;
             const isTop = j === drawn.length - 1;
-            // The surface-coloured gap sits on top of every segment but the
-            // last, so neighbours read as two parts without a drawn border.
             const segmentHeight = Math.max(0, bottom - top - (isTop ? 0 : GAP));
             return svg('path', {
               className: 'cora-stack-columns__segment',
@@ -210,8 +192,6 @@ export function StackColumns(data, config) {
 }
 
 /**
- * A segment whose top corners are rounded and whose base is square.
- *
  * @param {number} x
  * @param {number} top
  * @param {number} w
