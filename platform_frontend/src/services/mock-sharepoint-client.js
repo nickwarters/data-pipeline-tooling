@@ -10,6 +10,8 @@ import {
 } from '../lib/bank-artifacts.js';
 import { declaredBankVersion } from '../lib/bank-version.js';
 import { loadBank } from '../../case-types/load-bank.js';
+import { failureOf } from './save-failure.js';
+import { toStorableText } from '../lib/storable-text.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').ListCasesFilter} ListCasesFilter */
@@ -84,6 +86,8 @@ export class MockSharePointClient {
     this._accessLogCounter = 7000;
     this._etagCounter = 1000;
     this._injectNext412 = false;
+    /** @type {PatchResult | null} */
+    this._injectNextFailure = null;
   }
 
   /**
@@ -109,6 +113,21 @@ export class MockSharePointClient {
   }
 
   /**
+   * Make the next call to patchCase return this failed result without
+   * writing, so a test or the dev loop can show each way a save can fail. A
+   * result that names no `failure` is classified from its status, as the
+   * real client classifies one it has nothing more to say about.
+   *
+   * @param {PatchResult} result a result with `ok: false`
+   */
+  injectPatchFailure(result) {
+    this._injectNextFailure = {
+      ...result,
+      failure: failureOf(result),
+    };
+  }
+
+  /**
    * @param {string} id
    * @param {CaseReadOptions} [opts]
    * @returns {Promise<CaseRow|null>}
@@ -126,6 +145,11 @@ export class MockSharePointClient {
    * @returns {Promise<PatchResult>}
    */
   async patchCase(id, fields, etag, opts = {}) {
+    if (this._injectNextFailure) {
+      const failed = this._injectNextFailure;
+      this._injectNextFailure = null;
+      return failed;
+    }
     if (this._injectNext412) {
       this._injectNext412 = false;
       return { ok: false, status: 412 };
@@ -136,15 +160,18 @@ export class MockSharePointClient {
 
     const cases = this._caseStore(opts);
     const idx = cases.findIndex((c) => c.id === id);
-    if (idx === -1) return { ok: false, status: 404 };
+    if (idx === -1) {
+      return { ok: false, status: 404, failure: { reason: 'not-found' } };
+    }
     if (cases[idx].etag !== etag) return { ok: false, status: 412 };
 
     const newEtag = String(++this._etagCounter);
     // The same write-path rule the real client applies, applied here for the
     // same reason: the mock-first loop must show what production stores, so the
     // two clients cannot drift on when a Case's assignment time is written, or
-    // on whose manager is recorded beside the Responsible Party.
-    const stamped = withAssignmentStamp(withManager, this._now);
+    // on whose manager is recorded beside the Responsible Party, or on which
+    // pasted characters survive into a text field.
+    const stamped = storableFields(withAssignmentStamp(withManager, this._now));
     const next = /** @type {CaseRow} */ ({
       ...cases[idx],
       ...stamped,
@@ -701,4 +728,22 @@ function cloneCase(row) {
  */
 function withDerivedOverdue(row) {
   return { ...row, overdue: isOverdue(row) };
+}
+
+/**
+ * The fields with every text value cleaned as the real client cleans the
+ * columns it writes. Blob fields are objects here rather than serialised text,
+ * and their strings are escaped when the real client serialises them, so only
+ * top-level text is touched.
+ *
+ * @param {Partial<CaseRow>} fields
+ * @returns {Partial<CaseRow>}
+ */
+function storableFields(fields) {
+  return Object.fromEntries(
+    Object.entries(fields).map(([field, value]) => [
+      field,
+      typeof value === 'string' ? toStorableText(value) : value,
+    ])
+  );
 }

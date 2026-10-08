@@ -50,20 +50,54 @@ test('a change that lands leaves one recorded entry naming the Case', async () =
   ]);
 });
 
-test('a change that fails for any reason but a conflict is logged as not applied, naming its status', async () => {
+test('a change that fails for any reason but a conflict is logged as not applied, in words a person can act on', async () => {
   const { client, entries } = loggingClient();
 
   const result = await runSupportAction(client, ACTION, async () => ({
     ok: false,
-    status: 500,
+    status: 403,
   }));
 
   assert.equal(result.ok, false);
   assert.equal(/** @type {any} */ (result).conflict, false);
-  assert.match(/** @type {any} */ (result).message, /status 500/);
+  const message = /** @type {any} */ (result).message;
+  assert.match(message, /permission/);
+  assert.match(message, /Nothing was changed\./);
+  assert.ok(!/status \d/.test(message), 'no bare status code');
   assert.equal(entries[1].outcome, 'not-applied');
   assert.equal(entries[1].relatesTo, '1');
   assert.deepEqual(entries[1].changes, []);
+  assert.equal(entries[1].reason, message, 'the log says what the person read');
+});
+
+test('a failure the client already explained is worded from that, not from the status', async () => {
+  const { client } = loggingClient();
+
+  const result = await runSupportAction(client, ACTION, async () => ({
+    ok: false,
+    status: 500,
+    failure: { reason: 'person-not-found', account: 'DOMAIN\\gone' },
+  }));
+
+  assert.match(/** @type {any} */ (result).message, /DOMAIN\\gone/);
+  assert.match(
+    /** @type {any} */ (result).message,
+    /couldn't find their account/
+  );
+});
+
+test('a conflict keeps its own wording', async () => {
+  const { client } = loggingClient();
+
+  const result = await runSupportAction(client, ACTION, async () => ({
+    ok: false,
+    status: 412,
+  }));
+
+  assert.equal(
+    /** @type {any} */ (result).message,
+    'The Case changed after it was opened, so nothing was changed.'
+  );
 });
 
 test('a write that throws is treated as a change that did not apply', async () => {

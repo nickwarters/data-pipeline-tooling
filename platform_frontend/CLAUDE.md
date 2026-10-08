@@ -388,6 +388,9 @@ src/
                                 #   over the top. Derived, never restated — the constant that used to
                                 #   hold it silently won over the plugins for all ten Sections
     showwhen-tree.js            # generic showWhen tree parse/serialise/mutate (was question-bank/)
+    storable-text.js            # toStorableText: removes the invisible control characters SharePoint
+                                #   refuses to store (pasted from Word, Outlook or AI tools) before a
+                                #   write, turning soft line breaks into newlines
     void-reasons.js             # VOID_REASONS: the framework-owned Void Reason vocabulary a
                                 #   Case Type may narrow but not extend
 
@@ -411,7 +414,7 @@ src/
                                   #   status line; nothing else is ever selectable
       cora-group-progress.js      # pure per-Question-Group progress strip
       cora-grouped-bar-chart.js   # pure grouped SVG chart with keyed accessible bars
-      cora-status-banner.js       # the save-status surface (saving/reconnecting/conflict),
+      cora-status-banner.js       # the save-status surface (saving/reconnecting/failed/conflict),
                                   #   rendered in the Case Review page chrome
       cora-toast.js
     sections/                   # domain-feature units: take config, wire base components together
@@ -621,6 +624,10 @@ src/
     mock-sharepoint-client.js
     permissions.js
     report-feed-loader.js         # document-library Report Feed read; ?mock=1 selects the canonical dev fixture
+    save-failure.js               # THE vocabulary of why a Case write did not land: classifies a
+                                  #   failed write (connection, refused value, unknown person,
+                                  #   permission, gone), says which are worth retrying, and words
+                                  #   the message a person reads
     save-queue.js
     section-access.js
     team-cases-fetcher.js

@@ -205,6 +205,75 @@ test('MockSharePointClient: patchCase against an unknown id returns 404', async 
   );
   assert.equal(result.ok, false);
   assert.equal(result.status, 404);
+  assert.deepEqual(result.failure, { reason: 'not-found' });
+});
+
+test('MockSharePointClient: an injected failure is returned once, writes nothing, and carries its failure', async () => {
+  const client = makeClient();
+  const before = await client.getCase('case-1', { listName: LIST });
+  client.injectPatchFailure({
+    ok: false,
+    status: 500,
+    failure: { reason: 'person-not-found', account: 'jsmith' },
+  });
+
+  const failed = await client.patchCase(
+    'case-1',
+    { notes: 'x' },
+    String(before?.etag),
+    { listName: LIST }
+  );
+  const after = await client.getCase('case-1', { listName: LIST });
+  const retried = await client.patchCase(
+    'case-1',
+    { notes: 'x' },
+    String(before?.etag),
+    { listName: LIST }
+  );
+
+  assert.deepEqual(failed, {
+    ok: false,
+    status: 500,
+    failure: { reason: 'person-not-found', account: 'jsmith' },
+  });
+  assert.equal(after?.notes, before?.notes, 'a failed save writes nothing');
+  assert.equal(retried.ok, true, 'only the next save fails');
+});
+
+test('MockSharePointClient: an injected failure with no reason is classified from its status', async () => {
+  const client = makeClient();
+  const expected = /** @type {const} */ ({
+    0: 'network',
+    400: 'invalid-value',
+    403: 'forbidden',
+    503: 'unavailable',
+    500: 'unknown',
+  });
+  for (const [status, reason] of Object.entries(expected)) {
+    client.injectPatchFailure({ ok: false, status: Number(status) });
+
+    const result = await client.patchCase('case-1', { notes: 'x' }, 'e', {
+      listName: LIST,
+    });
+
+    assert.equal(result.status, Number(status));
+    assert.equal(result.failure?.reason, reason, status);
+  }
+});
+
+test('MockSharePointClient: pasted control characters are cleaned from saved text as the real client cleans them', async () => {
+  const client = makeClient();
+  const before = await client.getCase('case-1', { listName: LIST });
+
+  await client.patchCase(
+    'case-1',
+    { notes: 'line one\u000Bline two\u0007 \u{1F600}' },
+    String(before?.etag),
+    { listName: LIST }
+  );
+  const after = await client.getCase('case-1', { listName: LIST });
+
+  assert.equal(after?.notes, 'line one\nline two \u{1F600}');
 });
 
 test('MockSharePointClient: patchCase with a stale ETag returns 412', async () => {

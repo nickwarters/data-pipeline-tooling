@@ -17,6 +17,9 @@ import {
   versionedExportName,
 } from '../lib/bank-artifacts.js';
 import { declaredBankVersion } from '../lib/bank-version.js';
+import { isAbortError } from '../lib/abort.js';
+import { toStorableText } from '../lib/storable-text.js';
+import { classifySaveFailure } from './save-failure.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
@@ -30,6 +33,7 @@ import { declaredBankVersion } from '../lib/bank-version.js';
 /** @typedef {import('../sharepoint-client.js').RoadmapItem} RoadmapItem */
 /** @typedef {import('../sharepoint-client.js').SupportLogEntry} SupportLogEntry */
 /** @typedef {import('../sharepoint-client.js').NewSupportLogEntry} NewSupportLogEntry */
+/** @typedef {import('./save-failure.js').SaveFailure} SaveFailure */
 
 /**
  * @typedef {(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>} FetchImpl
@@ -287,19 +291,19 @@ export class HttpSharePointClient {
         );
       }
       if (fields.assignedReviewerManager !== undefined) {
-        item.AssignedReviewerManagerId = await this._ensureUserId(
+        item.AssignedReviewerManagerId = await this._ensureManagerId(
           fields.assignedReviewerManager ?? ''
         );
       }
       if (stamped.responsiblePartyManager !== undefined) {
-        item.ResponsiblePartyManagerId = await this._ensureUserId(
+        item.ResponsiblePartyManagerId = await this._ensureManagerId(
           stamped.responsiblePartyManager ?? ''
         );
       }
       if (fields.voidedBy !== undefined) {
         item.VoidedById = await this._ensureUserId(fields.voidedBy ?? '');
       }
-      const body = JSON.stringify(item);
+      const body = JSON.stringify(storableItem(item));
       const data = await this._write(url, 'PATCH', { 'If-Match': etag }, body);
       if (data === null) {
         // The confirmation re-read belongs to the write, not to whoever asked
@@ -308,7 +312,9 @@ export class HttpSharePointClient {
         const row = await this.getCase(id, {
           listName: this._requireListName(opts),
         });
-        if (!row) return { ok: false, status: 404 };
+        if (!row) {
+          return { ok: false, status: 404, failure: { reason: 'not-found' } };
+        }
         return { ok: true, status: 204, data: row };
       }
       const newEtag = readEtag(data);
@@ -324,8 +330,7 @@ export class HttpSharePointClient {
         data: { ...row, etag: newEtag || row.etag },
       };
     } catch (err) {
-      const status = /** @type {any} */ (err).status || 500;
-      return { ok: false, status };
+      return patchFailure(err);
     }
   }
 
@@ -453,7 +458,7 @@ export class HttpSharePointClient {
         CaseType: entry.caseType,
         CaseId: entry.caseId,
         SupportAction: entry.action,
-        Reason: entry.reason,
+        Reason: toStorableText(entry.reason),
         Changes: JSON.stringify(entry.changes),
         Outcome: entry.outcome,
         RelatesTo: entry.relatesTo ?? '',
@@ -723,7 +728,7 @@ export class HttpSharePointClient {
         AccessAction: entry.action,
         AccessRole: entry.role,
         CaseType: entry.caseType,
-        Reason: entry.reason,
+        Reason: toStorableText(entry.reason),
         Changes: JSON.stringify(entry.changes),
         Outcome: entry.outcome,
         RelatesTo: entry.relatesTo ?? '',
@@ -921,6 +926,8 @@ export class HttpSharePointClient {
       const err = new Error(`HTTP Error: ${res.status}`);
       // @ts-ignore
       err.status = res.status;
+      // @ts-ignore
+      err.spMessage = await sharePointMessage(res);
       throw err;
     }
     if (res.status === 204) return null;
@@ -1124,7 +1131,10 @@ export class HttpSharePointClient {
    *
    * A response carrying no usable id throws rather than yielding `NaN` — a
    * write caller turns that into a failed save, a filter caller into a
-   * rejected query.
+   * rejected query. Both that and an EnsureUser the server refuses carry a
+   * `saveFailure` naming the account, so a save can say which person it could
+   * not find; a lost connection or a permission refusal is left as it was,
+   * because those say nothing about the person.
    *
    * @param {string} account bare account login name, never empty
    * @returns {Promise<number>}
@@ -1132,21 +1142,55 @@ export class HttpSharePointClient {
   async _resolveUserId(account) {
     const cached = this._userIds.get(account);
     if (cached !== undefined) return cached;
-    const body = await this._write(
-      this._absolute('/_api/web/ensureuser'),
-      'POST',
-      {},
-      JSON.stringify({ logonName: await this._claimsLoginFor(account) })
-    );
+    const logonName = await this._claimsLoginFor(account);
+    // Acquired before the request it guards, so a digest that cannot be had is
+    // not mistaken for a directory that does not know the person.
+    await this._ensureDigest();
+    let body;
+    try {
+      body = await this._write(
+        this._absolute('/_api/web/ensureuser'),
+        'POST',
+        {},
+        JSON.stringify({ logonName })
+      );
+    } catch (err) {
+      throw asPersonNotFound(err, account);
+    }
     const id = Number(body?.Id ?? /** @type {any} */ (body?.d)?.Id);
     // Ids are allocated from 1, so anything below that is not a person.
     // Rejecting zero here is what lets every caller treat a resolved id as
     // truthy without a filter condition quietly disappearing.
     if (!Number.isFinite(id) || id <= 0) {
-      throw new Error(`EnsureUser returned no id for account "${account}"`);
+      throw withSaveFailure(
+        new Error(`EnsureUser returned no id for account "${account}"`),
+        account
+      );
     }
     this._userIds.set(account, id);
     return id;
+  }
+
+  /**
+   * `_ensureUserId` for a manager recorded beside a person. A manager the
+   * directory cannot resolve is written as nobody rather than failing the
+   * save: the manager was looked up on the person's behalf, so it must not
+   * cost the person's own change. Any other failure still fails the save.
+   *
+   * @param {string} account bare account login name, or `''` for nobody
+   * @returns {Promise<number | null>}
+   */
+  async _ensureManagerId(account) {
+    try {
+      return await this._ensureUserId(account);
+    } catch (err) {
+      if (
+        /** @type {any} */ (err)?.saveFailure?.reason === 'person-not-found'
+      ) {
+        return null;
+      }
+      throw err;
+    }
   }
 
   /**
@@ -1238,10 +1282,34 @@ export class HttpSharePointClient {
   async _fetchWithThrottle(url, init) {
     while (true) {
       init.signal?.throwIfAborted();
-      const res = await this._fetch(url, init);
+      const res = await this._fetchOrLoseConnection(url, init);
       if (res.status !== 429) return res;
       const ra = res.headers.get('Retry-After');
       await this._sleep(parseRetryAfter(ra));
+    }
+  }
+
+  /**
+   * One fetch. A rejection that is not an abort means no response arrived at
+   * all (offline, VPN dropped, DNS), and is thrown as status 0 so a caller can
+   * tell it from SharePoint answering with an error. An abort is the caller's
+   * own cancellation and passes through unchanged.
+   *
+   * @param {string} url
+   * @param {RequestInit} init
+   * @returns {Promise<Response>}
+   */
+  async _fetchOrLoseConnection(url, init) {
+    try {
+      return await this._fetch(url, init);
+    } catch (err) {
+      if (isAbortError(err)) throw err;
+      const lost = new Error(
+        `Network error: ${/** @type {any} */ (err)?.message ?? err}`
+      );
+      // @ts-ignore
+      lost.status = 0;
+      throw lost;
     }
   }
 
@@ -1301,6 +1369,99 @@ function buildWriteInit(method, digest, extra, body) {
     },
     body,
   };
+}
+
+/**
+ * SharePoint's own explanation of a refused request, from whichever JSON shape
+ * the farm answered in (`odata.error` for nometadata and minimal, `error` for
+ * verbose). A body that is absent, not JSON, or has neither is no message: the
+ * status already says what failed, and a test double may carry no body at all.
+ *
+ * @param {Response} res
+ * @returns {Promise<string | undefined>}
+ */
+async function sharePointMessage(res) {
+  try {
+    const body =
+      typeof res.text === 'function'
+        ? JSON.parse(await res.text())
+        : await res.json();
+    const message =
+      body?.['odata.error']?.message?.value ?? body?.error?.message?.value;
+    return typeof message === 'string' && message !== '' ? message : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Statuses that say nothing about whether a person exists: the connection or
+ * the server is down, or the signed-in user may not ask.
+ */
+const NOT_ABOUT_THE_PERSON = new Set([0, 401, 403, 502, 503, 504]);
+
+/**
+ * @param {Error} err
+ * @param {string} account
+ * @returns {Error}
+ */
+function withSaveFailure(err, account) {
+  /** @type {SaveFailure} */
+  const failure = { reason: 'person-not-found', account };
+  // @ts-ignore
+  err.saveFailure = failure;
+  return err;
+}
+
+/**
+ * An EnsureUser failure as the error to throw: one that carries the account it
+ * could not resolve, unless it is a failure of the connection or of permission,
+ * or never reached the server at all.
+ *
+ * @param {unknown} err
+ * @param {string} account
+ * @returns {unknown}
+ */
+function asPersonNotFound(err, account) {
+  const status = /** @type {any} */ (err)?.status;
+  if (typeof status !== 'number' || NOT_ABOUT_THE_PERSON.has(status)) {
+    return err;
+  }
+  return withSaveFailure(/** @type {Error} */ (err), account);
+}
+
+/**
+ * A failed `patchCase` as its result. An error with no status is a bug rather
+ * than an HTTP answer and stays a 500 that classifies as unknown.
+ *
+ * @param {unknown} err
+ * @returns {PatchResult}
+ */
+function patchFailure(err) {
+  const { status, spMessage, saveFailure } = /** @type {any} */ (err);
+  const code = typeof status === 'number' ? status : 500;
+  return {
+    ok: false,
+    status: code,
+    failure:
+      saveFailure ?? classifySaveFailure({ status: code, message: spMessage }),
+  };
+}
+
+/**
+ * The item with every text value made storable, immediately before it is
+ * serialised, so whichever column a pasted character lands in is cleaned.
+ *
+ * @param {Record<string, unknown>} item
+ * @returns {Record<string, unknown>}
+ */
+function storableItem(item) {
+  return Object.fromEntries(
+    Object.entries(item).map(([column, value]) => [
+      column,
+      typeof value === 'string' ? toStorableText(value) : value,
+    ])
+  );
 }
 
 /** @param {string|null} ra */

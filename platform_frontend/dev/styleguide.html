@@ -2444,7 +2444,7 @@
 
             <div class="sg-subsection">
               <p class="sg-subsection-title">
-                Banner — conflict &amp; reconnecting
+                Banner — conflict, failed &amp; reconnecting
               </p>
               <div class="sg-demo">
                 <div class="sg-col" style="gap: var(--cora-space-3)">
@@ -2455,9 +2455,16 @@
                     </p>
                     <button class="cora-banner-reload">Reload</button>
                   </div>
+                  <div class="cora-banner cora-banner-failed" role="alert">
+                    <p class="cora-banner-text">
+                      Your Notes couldn't be saved because they contain a
+                      character SharePoint can't store. Retype that part and it
+                      will save.
+                    </p>
+                  </div>
                   <div class="cora-banner cora-banner-reconnecting" role="status">
-                    Reconnecting to SharePoint… your changes will be saved
-                    automatically.
+                    Can't reach SharePoint. Retrying… Your changes are kept
+                    while this tab stays open.
                   </div>
                 </div>
               </div>

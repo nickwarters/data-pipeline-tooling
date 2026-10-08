@@ -45,19 +45,55 @@ fetches the latest row. If the server changed only another field, it refreshes
 the ETag and retries. If Answers changed remotely, it moves to `conflict` and
 does not overwrite them.
 
-### Retry backoff
+### Retry backoff, and failures that are not retried
 
-Network and throttling failures retry with `[1s, 2s, 4s, 8s, 16s, 30s]` delays.
-The queue reports `reconnecting` during retries.
+A failed write is classified by `src/services/save-failure.js` before the queue
+decides anything. The client attaches the classification to the `PatchResult`
+as `failure`; a result without one is classified from its `status`.
+
+| Failure            | Typical cause                                                | What the queue does                            |
+| ------------------ | ------------------------------------------------------------ | ---------------------------------------------- |
+| `network`          | no response at all (offline, VPN dropped)                    | retries on the backoff, reports `reconnecting` |
+| `unavailable`      | 502 / 503 / 504                                              | same as `network`                              |
+| `invalid-value`    | 400 / 413, or a 500 whose message says the value was refused | gives up at once                               |
+| `person-not-found` | `EnsureUser` could not resolve a Person column's account     | gives up at once                               |
+| `forbidden`        | 401 / 403 after the form digest was refreshed                | gives up at once                               |
+| `not-found`        | 404: the Case or its list is gone                            | gives up at once                               |
+| `unknown`          | anything else                                                | two more attempts, then gives up               |
+
+Connection failures retry with `[1s, 2s, 4s, 8s, 16s, 30s]` delays, the last
+repeating for as long as the tab is open. Once the attempts run past the end of
+the schedule the outage is reported as long, and the banner adds "check your
+connection or VPN". Throttling (429) never reaches the queue: the client waits
+out `Retry-After` itself.
+
+Giving up records a failure notice — the Case, the fields the write carried and
+the classification — and settles the queue on `failed`. Sending the same write
+again would fail the same way, so it is not retried; a later write carrying any of the same fields that
+succeeds clears the notice. A recorded failure no longer keeps the queue busy,
+so other fields still save and `flushCase` returns `false` straight away rather
+than waiting.
+
+Before the first attempt the client removes the invisible control characters
+SharePoint refuses (`src/lib/storable-text.js`): vertical tab and form feed, the
+soft line breaks Word and Outlook paste, become newlines, and the rest are
+dropped. So `invalid-value` is the backstop, not the usual path.
 
 ### Status bridge
 
 `subscribeStatus(listener)` immediately reports the current status and then
-each transition: `saved`, `saving`, `reconnecting`, or `conflict`. Bind it in a
-route effect and dispatch the value into page state. The view renders that
-state like any other value. On Case Review that renderer is
-`src/components/base/cora-status-banner.js` — the saving/reconnecting indicators
-and the conflict banner with its Reload button.
+each transition: `saved`, `saving`, `reconnecting`, `failed`, or `conflict`.
+The listener's second argument is the detail behind it: the recorded failure
+notices and whether a connection outage has run long. Bind it in a route effect
+and dispatch the value into page state. The view renders that state like any
+other value. On Case Review that renderer is
+`src/components/base/cora-status-banner.js` — the saving/reconnecting
+indicators, the failure banner saying what was not saved and why (worded by
+`describeSaveFailure`), and the conflict banner with its Reload button. A
+Responsible Party that could not be found is put back, by the page rather than
+the queue, to the person the picker showed before the pick, so the picker never
+shows someone who was not saved; text is never put back,
+because the person needs it to fix the problem.
 
 ## Loading and list context
 

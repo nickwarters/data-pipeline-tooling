@@ -3,6 +3,7 @@
 /** @typedef {import('../../services/save-queue.js').SaveQueue} SaveQueue */
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../../services/save-queue.js').SaveStatus} SaveStatus */
+/** @typedef {import('../../services/save-queue.js').SaveFailureNotice} SaveFailureNotice */
 
 /**
  * Route effect for Case persistence — Answers, the on-hold latch and the
@@ -86,17 +87,33 @@ export function createCaseReviewSaveEffect({
 
 /**
  * Bridge SaveQueue status transitions into route-owned state. Views consume
- * only the dispatched status value and do not depend on the queue internals.
+ * only the dispatched values and do not depend on the queue internals.
+ *
+ * The queue outlives the page and holds every Case's failures, so when the page
+ * says which Case it shows (`caseId`, a getter because the row loads after the
+ * route is built) only that Case's failures are passed on. A status of `failed`
+ * caused by another Case is reported as `saved`: it is not this page's to show.
  *
  * @param {SaveQueue} saveQueue
- * @param {(action: {type: 'case/save-status-changed', status: SaveStatus}) => unknown} dispatch
+ * @param {(action: {
+ *   type: 'case/save-status-changed',
+ *   status: SaveStatus,
+ *   failures: SaveFailureNotice[],
+ *   longOutage: boolean,
+ * }) => unknown} dispatch
+ * @param {() => string} [caseId]
  * @returns {() => void}
  */
-export function observeSaveStatus(saveQueue, dispatch) {
-  return saveQueue.subscribeStatus((status) => {
+export function observeSaveStatus(saveQueue, dispatch, caseId) {
+  return saveQueue.subscribeStatus((status, detail) => {
+    const failures = caseId
+      ? detail.failures.filter((notice) => notice.caseId === caseId())
+      : detail.failures;
     dispatch({
       type: 'case/save-status-changed',
-      status,
+      status: status === 'failed' && failures.length === 0 ? 'saved' : status,
+      failures,
+      longOutage: detail.longOutage,
     });
   });
 }

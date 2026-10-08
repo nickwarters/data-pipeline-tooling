@@ -1002,7 +1002,9 @@ test('reassign: a failed save that is not a conflict says why, without asking fo
   await flush(60);
 
   const alert = getByRole(page.view(), 'alert').textContent;
-  assert.match(alert, /status 500/);
+  assert.match(alert, /couldn't be saved/);
+  assert.match(alert, /Nothing was changed/);
+  assert.doesNotMatch(alert, /status \d/, 'no bare status code');
   assert.doesNotMatch(alert, /Reload/);
 });
 

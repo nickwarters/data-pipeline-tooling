@@ -1218,9 +1218,12 @@
           <p class="concept-desc">
             SaveQueue keeps its notification mechanism private; route effects
             observe status through <code>subscribeStatus()</code> and dispatch
-            it into page state. Four states: <em>saved</em> → <em>saving</em> →
-            <em>reconnecting</em> on network error, or <em>conflict</em> when
-            another reviewer's Answer changes can't be safely merged.
+            it into page state. Five states: <em>saved</em> → <em>saving</em> →
+            <em>reconnecting</em> while SharePoint can't be reached,
+            <em>failed</em> when SharePoint refused the write itself (a value it
+            can't store, a person it can't find, no permission), or
+            <em>conflict</em> when another reviewer's Answer changes can't be
+            safely merged.
           </p>
           <div class="concept-api">
             <span class="kw">this</span>._statusSignal.<span class="fn"
@@ -1232,6 +1235,9 @@
             <span class="kw">this</span>._statusSignal.<span class="fn"
               >set</span
             >(<span class="str">'reconnecting'</span>);<br />
+            <span class="kw">this</span>._statusSignal.<span class="fn"
+              >set</span
+            >(<span class="str">'failed'</span>);<br />
             <span class="kw">this</span>._statusSignal.<span class="fn"
               >set</span
             >(<span class="str">'conflict'</span>);
