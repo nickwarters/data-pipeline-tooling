@@ -1,6 +1,10 @@
 // @ts-check
 import { CASE_TYPES } from '../../case-types/manifest.js';
-import { caseTypeGroupNames, permissions } from '../services/permissions.js';
+import {
+  caseTypeGroupNames,
+  isReportGroupName,
+  permissions,
+} from '../services/permissions.js';
 
 /** @typedef {import('./contract.js').ReportPlugin} ReportPlugin */
 /** @typedef {import('./contract.js').ReportScope} ReportScope */
@@ -89,7 +93,7 @@ const CASE_TYPE_ROLES = Object.freeze({
  */
 function namedGroup(group) {
   return {
-    holds: (caps) => caps.groups.includes(group),
+    holds: (caps) => caps.reportGroups.includes(group),
     groups: () => [group],
   };
 }
@@ -111,7 +115,9 @@ const PLATFORM_SCOPE = Object.freeze({
 function resolveRule(rule) {
   if (rule !== null && typeof rule === 'object' && 'group' in rule) {
     const { group } = rule;
-    if (typeof group !== 'string' || group.trim() === '') {
+    // A group outside the prefix would open the folder to people the app
+    // still calls Visitors, so it is refused here, where the report is written.
+    if (typeof group !== 'string' || !isReportGroupName(group)) {
       throw new TypeError(`unknown report role: ${JSON.stringify(rule)}`);
     }
     return { scoped: /** @type {const} */ (false), role: namedGroup(group) };

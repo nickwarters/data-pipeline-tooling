@@ -27,9 +27,10 @@ import { CASE_TYPES } from '../../case-types/manifest.js';
  * as the standalone `Reviewers` functional group. `isVisitor` is DERIVED (not
  * config-driven): true iff the user holds no capability at all.
  *
- * `groups` is the membership itself, kept as given. Everything above is a
- * group this file knows the meaning of; a report may instead name a group of
- * its own, which this file has no reason to know about, and asks for it here.
+ * `reportGroups` are the user's `Reports - <name>` groups. Each one is the
+ * audience of a report that names it, and holding any of them makes the user a
+ * Report Viewer rather than a Visitor. This file knows only the prefix; which
+ * report a group opens is the report's own declaration.
  *
  * These are platform-wide and per-user. They are not the per-Case roles the
  * Case page's access matrix is keyed by, and only some of them ever become
@@ -49,7 +50,7 @@ import { CASE_TYPES } from '../../case-types/manifest.js';
  * isMaintainer: boolean,
  * canSearchCases: boolean,
  * isVisitor: boolean,
- * groups: string[]
+ * reportGroups: string[]
  * }} Capabilities
  */
 
@@ -79,6 +80,24 @@ export function caseTypeGroupNames(displayName) {
  */
 export function frontlineListAccessGroupName(displayName) {
   return `Frontline - ${displayName}`;
+}
+
+const REPORT_GROUP_PREFIX = 'Reports - ';
+
+/**
+ * Whether a SharePoint group name is a report group: the exact prefix, then a
+ * name. The one test, shared by capability resolution and by the report rule
+ * that names a group, so a report cannot name a group that would not also
+ * enrol its members.
+ *
+ * @param {string} name
+ * @returns {boolean}
+ */
+export function isReportGroupName(name) {
+  return (
+    name.startsWith(REPORT_GROUP_PREFIX) &&
+    name.slice(REPORT_GROUP_PREFIX.length).trim() !== ''
+  );
 }
 
 /** @type {PermissionsConfig} */
@@ -149,6 +168,7 @@ export function resolveCapabilities(userGroups, config = permissions) {
   const isMaintainer = has(config.maintainer);
   // Widening search to a second role is this one line and no call site.
   const canSearchCases = isControls;
+  const reportGroups = userGroups.filter(isReportGroupName);
   const isVisitor =
     !isReviewer &&
     !isAdviser &&
@@ -157,7 +177,8 @@ export function resolveCapabilities(userGroups, config = permissions) {
     !isResponsiblePartyManager &&
     !isMaintainer &&
     ownedCaseTypes.length === 0 &&
-    ownedJourneyCaseTypes.length === 0;
+    ownedJourneyCaseTypes.length === 0 &&
+    reportGroups.length === 0;
 
   return {
     isReviewer,
@@ -171,6 +192,6 @@ export function resolveCapabilities(userGroups, config = permissions) {
     isMaintainer,
     canSearchCases,
     isVisitor,
-    groups: [...userGroups],
+    reportGroups,
   };
 }

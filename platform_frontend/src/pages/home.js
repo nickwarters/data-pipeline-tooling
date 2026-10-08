@@ -40,6 +40,9 @@ export function homeView(state) {
   if (capabilities.isMaintainer) {
     sections.push(roleSection('Maintainer', '#/question-bank'));
   }
+  if (capabilities.reportGroups.length > 0) {
+    sections.push(roleSection('Report Viewer', '#/reports'));
+  }
   if (capabilities.isVisitor) {
     sections.push(visitorSection());
   }

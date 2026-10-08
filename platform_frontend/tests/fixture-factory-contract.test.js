@@ -51,7 +51,7 @@ const CAPABILITY_KEYS = [
   'isMaintainer',
   'canSearchCases',
   'isVisitor',
-  'groups',
+  'reportGroups',
 ];
 
 const EXEMPT = [

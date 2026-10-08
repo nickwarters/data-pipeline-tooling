@@ -79,9 +79,9 @@ return any node, usually a chart.
 `reviewer`, `controls`, …) admit a viewer to every scope. Case Type roles
 (`caseTypeOwner`, `journeyOwner`, `caseTypeReviewer`, written
 `{ role, of: 'scope' }`) admit a viewer only to the Case Types the role covers.
-A report whose audience is no role at all names a SharePoint group of its own,
-`{ group: 'Housing Report Readers' }`, which admits that group's members to
-every scope; a group per report is cheaper to keep right than a new role.
+A report whose audience is no role at all names a report group of its own,
+`{ group: 'Reports - Housing' }`, which admits that group's members to every
+scope; a group per report is cheaper to keep right than a new role.
 `src/reports/report-access.js` resolves each rule two ways:
 
 - to a capability the browser already holds, which drives the Reports link,
@@ -102,12 +102,19 @@ the kind of declaration ADR-0035 allows: a Case Type or report selects from a
 fixed list of roles, or names a group, and the rules that evaluate them stay in
 code.
 
-Naming a group is why `Capabilities` carries the viewer's group membership as
-well as the flags derived from it: the permissions module has no reason to know
-a report's group, so the report asks for it directly. Membership of a report
-group is not a role, so someone whose only group is a report group is still a
-Visitor to the rest of the app; they find their reports through the Reports
-link.
+A report group is any SharePoint group named `Reports - <name>`, by the same
+kind of convention as `Reviewers - <type>`. Membership of any of them makes
+someone a **Report Viewer**: not a Visitor, and offered their reports on Home.
+`Capabilities.reportGroups` carries the user's report groups; the permissions
+module knows only the prefix, and which report a group opens stays the
+report's declaration. A report may name only a group under the prefix, so a
+folder is never opened to someone the app would still call a Visitor.
+
+A separate "Report Viewers" group that enrols, beside a group per report that
+admits, was rejected: each person would need both, and the two drift apart in
+both directions — enrolled with no reports, or admitted but told they are not
+enrolled. With the prefix, the group that admits is the group that enrols.
+Report groups are created in SharePoint, not given on the Access page.
 
 ### One file per report and scope; permissions on the scope folder
 

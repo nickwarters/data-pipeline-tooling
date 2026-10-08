@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   resolveCapabilities,
+  isReportGroupName,
   caseTypeGroupNames,
   permissions,
 } from '../src/services/permissions.js';
@@ -262,10 +263,36 @@ test('permissions.caseTypes: group names still derive from the registry display 
   });
 });
 
-test('resolveCapabilities keeps the groups it was given, so a report can name its own audience', () => {
-  const groups = ['Reviewers', 'Housing Report Readers'];
-  const caps = resolveCapabilities(groups, sampleConfig);
-  assert.deepEqual(caps.groups, groups);
-  groups.push('Added later');
-  assert.deepEqual(caps.groups, ['Reviewers', 'Housing Report Readers']);
+test('resolveCapabilities: a Reports - <name> group makes a Report Viewer, not a Visitor', () => {
+  const caps = resolveCapabilities(
+    ['Reports - Housing', 'Reports - Benefits'],
+    sampleConfig
+  );
+  assert.deepEqual(caps.reportGroups, [
+    'Reports - Housing',
+    'Reports - Benefits',
+  ]);
+  assert.equal(caps.isVisitor, false);
+});
+
+test('resolveCapabilities: only the exact Reports - prefix names a report group', () => {
+  const caps = resolveCapabilities(
+    [
+      'Reviewers',
+      'Housing Reports',
+      'Reports Housing',
+      'reports - housing',
+      'Reports - ',
+      'Reports -   ',
+    ],
+    sampleConfig
+  );
+  assert.deepEqual(caps.reportGroups, []);
+});
+
+test('isReportGroupName accepts a named group under the prefix and nothing else', () => {
+  assert.equal(isReportGroupName('Reports - Housing'), true);
+  for (const name of ['Housing Reports', 'Reports - ', 'reports - x', '']) {
+    assert.equal(isReportGroupName(name), false, name);
+  }
 });
