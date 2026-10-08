@@ -853,7 +853,7 @@ One row per person this feed has seen named: **user details only** — the bare
 account, domain, display name and email, and when they were first and last
 seen. Nothing about the Case that named them. It is how a Case row can hold
 only the bare account without losing anything — see *Person columns* above and
-[ADR-0031](adr/0031-cases-hold-the-bare-account-and-people-live-in-their-own-table.md).
+[ADR-0032](adr/0032-cases-hold-the-bare-account-and-people-live-in-their-own-table.md).
 
 Each poll finds everyone its batch names, merges them into what the table
 already holds for them, and upserts the result on `account`. **It reads the raw
