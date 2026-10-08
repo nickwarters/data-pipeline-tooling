@@ -63,7 +63,7 @@ from framework.core import (
     Writer,
     format_failure,
 )
-from framework.io import AppendOnly, DatasetReader
+from framework.io import AppendOnly, DatasetReader, UpsertStrategy
 from framework.run import (
     RunContext,
     enforce,
@@ -116,7 +116,7 @@ from .schema import (
     CaseVersion,
     ConversationMessageRow,
     GeneralAnswerRow,
-    PersonSightingRow,
+    PersonRow,
 )
 
 # Pipelines this feed depends on being fresh before it runs. A source feed has
@@ -126,7 +126,7 @@ UPSTREAMS = ()
 # The five Person columns, expanded so each answers with the claims login rather
 # than the numeric id it otherwise returns, and the sub-fields of each the read
 # asks for. The Case row keeps the login, reduced to the bare account; the
-# display name and email ride along so ``person_sighting`` can record them.
+# display name and email ride along so the ``person`` table can record them.
 #
 # Notification tested that premise and it held. Deciding who to notify means
 # matching the author of a Conversation Message against these columns, which
@@ -261,7 +261,7 @@ RENAME = {
 # The Person columns' logins, by their silver names.
 PERSON_NAME_COLUMNS = tuple(RENAME[f"{person}/Name"] for person in PERSON_SUBFIELDS)
 
-# The person sub-fields raw lands only so ``person_sighting`` can record them:
+# The person sub-fields raw lands only so the ``person`` table can record them:
 # silver's Case row keeps the account and nothing else about a person (bar the
 # Responsible Party's display name, which it has always carried).
 SIGHTING_ONLY_COLUMNS = tuple(
@@ -285,7 +285,7 @@ def bare_person_names(dataset: Dataset) -> Dataset:
     ``i:0#.w|CONTOSO\\A.Khan`` becomes ``a.khan``: the spelling the platform's
     JSON, the Staff Hierarchy and every other person column in this feed use,
     so the Case row joins to them directly. The domain is not lost -- raw keeps
-    the login, and ``person_sighting`` records the domain beside the account.
+    the login, and the ``person`` table records the domain beside the account.
     """
     frame = dataset.to_pandas()
     for column in PERSON_NAME_COLUMNS:
@@ -891,11 +891,11 @@ _DETAIL_TABLES = (
 )
 
 
-# --- person_sighting ---------------------------------------------------------
+# --- person ----------------------------------------------------------------
 
-PERSON_SIGHTING_TABLE = "person_sighting"
-PERSON_SIGHTING_KEY = ("source_observation_id", "account")
-_SIGHTING_DETAILS = ("domain", "display_name", "email")
+PERSON_TABLE = "person"
+_PERSON_DETAILS = ("domain", "display_name", "email")
+_PERSON_COLUMNS = ("account", *_PERSON_DETAILS, "first_seen_at", "last_seen_at")
 
 
 def _json(cell: object) -> object:
@@ -961,14 +961,41 @@ def _text(value: object, fold: Callable[[str], str] = str) -> str | None:
     return fold(text) if text else None
 
 
-def person_sightings(dataset: Dataset) -> Dataset:
-    """One row per raw observation x person it names: their bare account, plus
-    whatever this observation said about their domain, display name and email.
+def _instants(values: pd.Series) -> pd.Series:
+    return pd.to_datetime(values, utc=True, format="ISO8601")
 
-    A person named twice in one observation is one row, each detail taken from
-    the first place that gave it. The Person columns come first because the
-    expand reads them live from the directory; the JSON blobs hold snapshots
-    from when they were written.
+
+def latest_per_person(frame: pd.DataFrame) -> pd.DataFrame:
+    """One row per account: each detail the **latest one any row gave**, and
+    the earliest ``first_seen_at`` and latest ``last_seen_at``.
+
+    Rows are ordered by ``last_seen_at`` -- not by the order they arrived in --
+    so an old version polled late cannot overwrite what a newer one said, and a
+    row without an email (a Conversation author carries none) never blanks the
+    one already known.
+    """
+    frame = frame.assign(
+        first_seen_at=_instants(frame["first_seen_at"]),
+        last_seen_at=_instants(frame["last_seen_at"]),
+    ).sort_values("last_seen_at", kind="stable")
+    people = frame.groupby("account", sort=True)
+    latest = (
+        people[list(_PERSON_DETAILS)]
+        .last()
+        .join(people["first_seen_at"].min())
+        .join(people["last_seen_at"].max())
+    )
+    return latest.reset_index().reindex(columns=list(_PERSON_COLUMNS))
+
+
+def people_seen(dataset: Dataset) -> Dataset:
+    """Everyone a raw batch names, one row per account, in user details only.
+
+    Within one observation the first source to give a detail wins: the Person
+    columns come first because the expand reads them live from the directory,
+    while the JSON blobs hold snapshots from when they were written. Across
+    observations, the latest wins. The domain is upper-cased and the email
+    lower-cased, so two sightings of one person spell them alike.
     """
     rows = []
     for observation in dataset.to_pandas().to_dict("records"):
@@ -977,7 +1004,7 @@ def person_sightings(dataset: Dataset) -> Dataset:
             account = _bare_or_none(login)
             if account is None:
                 continue
-            seen = people.setdefault(account, dict.fromkeys(_SIGHTING_DETAILS))
+            seen = people.setdefault(account, dict.fromkeys(_PERSON_DETAILS))
             # A claims login carries its own domain; a bare one needs the
             # source to have recorded it beside the login.
             for key, value in (
@@ -987,38 +1014,64 @@ def person_sightings(dataset: Dataset) -> Dataset:
             ):
                 if seen[key] is None:
                     seen[key] = value
+        at = observation["source_modified_at"]
         for account, details in people.items():
             rows.append(
                 {
-                    **{column: observation[column] for column in DETAIL_ID_VARS},
                     "account": account,
                     **details,
+                    "first_seen_at": at,
+                    "last_seen_at": at,
                 }
             )
     return Dataset.from_pandas(
-        pd.DataFrame(rows, columns=[*DETAIL_ID_VARS, "account", *_SIGHTING_DETAILS])
+        latest_per_person(pd.DataFrame(rows, columns=list(_PERSON_COLUMNS)))
     )
 
 
-def to_silver_person_sighting(
-    reader: Reader, writer: Writer, case_list: CaseList, reject_writer: Writer
-) -> Dataset:
-    """One list's person-sighting table, from the **raw** batch.
+def merge_known(known: Dataset, seen: Dataset) -> Dataset:
+    """This batch's people folded into what the table already holds for them.
 
-    Unlike the Detail Tables it reads raw rather than silver, because silver's
-    Case row has already reduced each Person column to the bare account and
-    dropped the display name and email that came with it. No value rule can
-    fire on ``PersonSightingRow`` today; quarantine stays wired anyway, as
-    ``to_silver_general_answer`` explains.
+    Returns only the people this batch named, each row whole, so an upsert on
+    ``account`` can replace it without losing a detail the batch did not
+    carry. A known row sorts before a batch row seen at the same instant.
     """
-    at = f"silver:{case_list.case_type}:{PERSON_SIGHTING_TABLE}"
+    batch = seen.to_pandas()
+    held = known.to_pandas().reindex(columns=list(_PERSON_COLUMNS))
+    held = held[held["account"].isin(batch["account"])]
+    return Dataset.from_pandas(latest_per_person(pd.concat([held, batch])))
+
+
+def to_silver_person(
+    reader: Reader,
+    known: Reader,
+    writer: Writer,
+    case_list: CaseList,
+    reject_writer: Writer,
+) -> Dataset:
+    """Insert or update one row per person this list's raw batch names.
+
+    Reads the **raw** batch rather than silver, because silver's Case row has
+    already reduced each Person column to the bare account and dropped the
+    display name and email that came with it. ``known`` is the table as it
+    stands; the batch's people are merged into it and upserted on ``account``.
+    No value rule can fire on ``PersonRow`` today; quarantine stays wired
+    anyway, as ``to_silver_general_answer`` explains.
+    """
+    at = f"silver:{case_list.case_type}:{PERSON_TABLE}"
     data = read(reader, name=f"{at}:read")
-    data = transform(
-        Stamp("case_type", case_list.case_type), data, name=f"{at}:case-type"
-    )
-    data = transform(person_sightings, data, name=f"{at}:sightings")
-    data = enforce(PersonSightingRow, data, reject_writer=reject_writer, name=at)
+    data = transform(people_seen, data, name=f"{at}:people-seen")
+    held = read(known, name=f"{at}:read-known")
+    data = transform(partial(merge_known, held), data, name=f"{at}:merge-known")
+    data = enforce(PersonRow, data, reject_writer=reject_writer, name=at)
     return write(writer, data, name=f"{at}:write")
+
+
+def _known_people(store) -> Reader:
+    """The person table as it stands, or nothing where a dry run has none yet."""
+    if store.columns_of(PERSON_TABLE).columns() is None:
+        return DatasetReader(Dataset.from_pandas(pd.DataFrame(columns=_PERSON_COLUMNS)))
+    return store.reader(PERSON_TABLE)
 
 
 def run(
@@ -1082,15 +1135,16 @@ def run(
             med.silver.quarantine_writer("case_version"),
         )
 
-        sightings = to_silver_person_sighting(
+        people = to_silver_person(
             DatasetReader(batch),
-            med.silver.writer(PERSON_SIGHTING_TABLE, AppendOnly(PERSON_SIGHTING_KEY)),
+            _known_people(med.silver),
+            med.silver.writer(PERSON_TABLE, UpsertStrategy("account")),
             case_list,
-            med.silver.quarantine_writer(PERSON_SIGHTING_TABLE),
+            med.silver.quarantine_writer(PERSON_TABLE),
         )
 
         # Detail builders consume the settled silver batch, not raw.
-        detail_rows: dict[str, int] = {PERSON_SIGHTING_TABLE: len(sightings)}
+        detail_rows: dict[str, int] = {PERSON_TABLE: len(people)}
         for table, to_silver_detail, key_columns in _DETAIL_TABLES:
             detail_rows[table] = len(
                 to_silver_detail(

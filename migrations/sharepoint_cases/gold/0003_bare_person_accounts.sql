@@ -2,8 +2,6 @@
 -- accounts silver's 0003 settles on, by the same expression. The aggregates
 -- keyed on `assigned_reviewer_name` are not touched: they are rebuilt whole on
 -- the next publish, and rewriting them here could merge two rows of one grain.
---
--- `person_current` is one row per person, reduced from `person_sighting`.
 
 UPDATE "case_current" SET "assigned_reviewer_name" = substr("assigned_reviewer_name", 8) WHERE "assigned_reviewer_name" LIKE 'i:0#.w|%';
 UPDATE "case_current" SET "assigned_reviewer_name" = replace("assigned_reviewer_name", rtrim("assigned_reviewer_name", replace("assigned_reviewer_name", '\', '')), '') WHERE "assigned_reviewer_name" LIKE '%\%';
@@ -24,14 +22,3 @@ UPDATE "case_current" SET "responsible_party_manager_name" = NULLIF(lower(trim("
 UPDATE "case_current" SET "voided_by_name" = substr("voided_by_name", 8) WHERE "voided_by_name" LIKE 'i:0#.w|%';
 UPDATE "case_current" SET "voided_by_name" = replace("voided_by_name", rtrim("voided_by_name", replace("voided_by_name", '\', '')), '') WHERE "voided_by_name" LIKE '%\%';
 UPDATE "case_current" SET "voided_by_name" = NULLIF(lower(trim("voided_by_name")), '');
-
-CREATE TABLE "person_current" (
-"account" TEXT,
-  "domain" TEXT,
-  "display_name" TEXT,
-  "email" TEXT,
-  "first_seen_at" TIMESTAMP,
-  "last_seen_at" TIMESTAMP,
-  "as_of_utc" TEXT,
-  "pipeline_run_id" TEXT
-);

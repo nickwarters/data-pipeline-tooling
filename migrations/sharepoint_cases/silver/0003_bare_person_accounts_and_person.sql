@@ -9,8 +9,9 @@
 -- replacing that prefix with nothing leaves the rest); then trim, lower-case,
 -- and turn an empty value into a null.
 --
--- `person_sighting` records each person an observation names, with the
--- domain, display name and email it gave for them.
+-- `person` holds one row per person the feed has seen named: their domain,
+-- display name and email, and when they were first and last seen. User details
+-- only; each poll upserts the people its batch names.
 
 UPDATE "case_version" SET "assigned_reviewer_name" = substr("assigned_reviewer_name", 8) WHERE "assigned_reviewer_name" LIKE 'i:0#.w|%';
 UPDATE "case_version" SET "assigned_reviewer_name" = replace("assigned_reviewer_name", rtrim("assigned_reviewer_name", replace("assigned_reviewer_name", '\', '')), '') WHERE "assigned_reviewer_name" LIKE '%\%';
@@ -32,15 +33,12 @@ UPDATE "case_version" SET "voided_by_name" = substr("voided_by_name", 8) WHERE "
 UPDATE "case_version" SET "voided_by_name" = replace("voided_by_name", rtrim("voided_by_name", replace("voided_by_name", '\', '')), '') WHERE "voided_by_name" LIKE '%\%';
 UPDATE "case_version" SET "voided_by_name" = NULLIF(lower(trim("voided_by_name")), '');
 
-CREATE TABLE "person_sighting" (
-"case_type" TEXT,
-  "source_item_id" TEXT,
-  "source_modified_at" TIMESTAMP,
-  "source_version" TEXT,
-  "source_observation_id" TEXT,
-  "account" TEXT,
+CREATE TABLE "person" (
+"account" TEXT,
   "domain" TEXT,
   "display_name" TEXT,
   "email" TEXT,
+  "first_seen_at" TIMESTAMP,
+  "last_seen_at" TIMESTAMP,
   "pipeline_run_id" TEXT
 );

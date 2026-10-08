@@ -8,8 +8,9 @@ status: accepted
 bare account** (`a.khan`), reduced in silver from the claims login the list
 gives (`i:0#.w|CONTOSO\A.Khan`) with `shared.account_names.to_bare_account`.
 Raw keeps the login. **Everything else about a person** — their domain, display
-name and email — is recorded once per observation in silver `person_sighting`
-and reduced to gold `person_current`, one row per bare account.
+name and email — lives in one silver `person` table: user details only, one
+row per bare account, which each poll merges the people it saw into and
+upserts on `account`.
 
 Existing rows are brought into line by migration: the silver and gold `0003`
 migrations reduce each stored `…_name` value in SQL with the same rule, so a
@@ -29,22 +30,26 @@ Case polled before the change and one polled after spell a person alike.
   more columns on the Case row, each a snapshot of something about a person
   rather than about the Case, repeated on every Case they touch. One row per
   person states each fact once.
-- **Rebuilt from history, not upserted.** `person_current` is a `Refresh()`
-  over every sighting, each detail taking the latest value any sighting gave,
-  ordered by `source_modified_at`. An upsert replaces the whole row, so the
-  next sighting that carried no email (a Conversation author carries none)
-  would blank it, and a late-polled old version would overwrite a newer one.
+- **User details only, merged before the upsert.** The table holds nothing
+  about the Cases that named a person. An upsert replaces the whole row, so
+  each poll first merges its people into the rows already held — each detail
+  the latest value any sighting gave, ordered by when it was seen — and only
+  then upserts. Otherwise the next sighting with no email (a Conversation
+  author carries none) would blank it, and a late-polled old version would
+  overwrite a newer one.
 - **Read from raw.** Sightings come from the raw batch, because by the time the
   Case row is settled its Person columns are reduced and their details gone.
 
 ## Consequences
 
-- `person_current` is named for this feed's people, not "users": the `users`
-  reference feed (`readers/users.py`) is a different table with a different
-  source.
+- The table is named `person`, not "users": the `users` reference feed
+  (`readers/users.py`) is a different table with a different source.
+- There is no per-sighting history, so which Case named a person, and when a
+  detail changed, are not answerable from it. Raw keeps every login, title
+  and email if that is ever needed.
 - `responsible_party_title` stays on the Case row because views already read
-  it; every person's display name, that one's included, is also in
-  `person_current`.
+  it; every person's display name, that one's included, is also in the
+  `person` table.
 - A bare account is assumed unique across domains, as the platform already
   assumes ([platform ADR-0013](../../platform_frontend/docs/adr/0013-attributed-party-identity-in-answer-json.md)).
   A person seen in two domains is one row holding the domain seen last.
@@ -55,7 +60,10 @@ Case polled before the change and one polled after spell a person alike.
 
 ## Considered
 
-- **Add a domain column beside each Person column** — the first version of
+- **A per-observation sighting log reduced to a gold table** — the first
+  version of this decision. Rejected in review: it carried Case-level detail
+  the table has no use for.
+- **Add a domain column beside each Person column** — an earlier version of
   this change. Rejected for the reasons above: it multiplies per-person facts
   across Case rows and still leaves the claims login on the row.
 - **Keep the claims login on the Case row and add a bare-account column** —

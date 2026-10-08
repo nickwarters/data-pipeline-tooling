@@ -1,5 +1,5 @@
 """Gold for the ``sharepoint_cases`` feed: the current Case, its Detail Tables,
-six aggregates, and the current details of every person the feed has seen.
+and six aggregates.
 
 Silver is an append-only history of *observations* across every declared Case
 list. Gold reduces that three ways. Every table is rebuilt whole with
@@ -59,17 +59,9 @@ from .schema import FEED_NAME, NATURAL_KEY
 SILVER_TABLE = "case_version"
 CURRENT_TABLE = "case_current"
 
-# Every person the feed has seen named, and the one row per person reduced from
-# that history.
-PERSON_SIGHTING_TABLE = "person_sighting"
-PERSON_TABLE = "person_current"
-PERSON_DETAILS = ("domain", "display_name", "email")
-PERSON_COLUMNS = ("account", *PERSON_DETAILS, "first_seen_at", "last_seen_at")
-
 # Every gold table, in publication order.
 GOLD_TABLES = (
     CURRENT_TABLE,
-    PERSON_TABLE,
     "answer",
     "answer_capture",
     "answer_action",
@@ -595,49 +587,6 @@ def to_gold_detail(
     return write(writer, data, name=f"{at}:write")
 
 
-def person_current(dataset: Dataset) -> Dataset:
-    """Reduce the person-sighting history to one row per account.
-
-    Each detail is the **latest one any sighting gave** -- not the latest
-    sighting's, which would blank an email the moment someone is next seen as a
-    Conversation author, who carries none. Sightings are ordered by the
-    observation's ``Modified`` instant, then its id, so a re-poll of an old
-    version cannot overwrite what a newer one said. ``first_seen_at`` and
-    ``last_seen_at`` bound the observations that named the person.
-    """
-    frame = dataset.to_pandas()
-    frame = frame.assign(
-        _seen_at=pd.to_datetime(frame["source_modified_at"], utc=True, format="ISO8601")
-    ).sort_values(["_seen_at", "source_observation_id"], kind="stable")
-    people = frame.groupby("account", sort=True)
-    current = (
-        people[list(PERSON_DETAILS)]
-        .last()
-        .join(people["_seen_at"].agg(first_seen_at="min", last_seen_at="max"))
-    )
-    return Dataset.from_pandas(
-        current.reset_index().reindex(columns=list(PERSON_COLUMNS))
-    )
-
-
-def to_gold_person_current(
-    reader: Reader, writer: Writer, *, as_of: dt.datetime
-) -> Dataset:
-    """Person-sighting history -> one row per person. **Grain: ``account``.**
-
-    Reads every sighting, not only the winning observations' -- an email seen
-    on an older version of a Case is still that person's email.
-    """
-    at = f"gold:{PERSON_TABLE}"
-    data = read(reader, name=f"{at}:read")
-    data = transform(person_current, data, name=f"{at}:latest-details")
-    data = transform(
-        Stamp(AS_OF_COLUMN, as_of.isoformat()), data, name=f"{at}:stamp-as-of"
-    )
-    validate(UniqueValidator("account"), data, name=f"{at}:unique-validate")
-    return write(writer, data, name=f"{at}:write")
-
-
 # --- publication ------------------------------------------------------------
 
 
@@ -646,12 +595,11 @@ def publish_gold(med: Medallion, *, as_of: dt.datetime) -> None:
 
     ``case_current`` is published first and its dataset feeds the Detail
     Tables and the six aggregates, so silver is read once and each of them
-    reduces exactly the current table's own rows. ``person_current`` follows
-    it, reduced from the whole person-sighting history instead. They commit
-    independently, in order; a failure part-way leaves the earlier ones
-    refreshed, which is safe because the caller has not advanced any watermark
-    and the next run rebuilds everything. See ``docs/gold-accumulation.md`` for
-    why each source is read from memory rather than re-read from disk.
+    reduces exactly the current table's own rows. They commit independently,
+    in order; a failure part-way leaves the earlier ones refreshed, which is
+    safe because the caller has not advanced any watermark and the next run
+    rebuilds everything. See ``docs/gold-accumulation.md`` for why each source
+    is read from memory rather than re-read from disk.
 
     Every step here reads the ambient run context the runner makes active --
     which is where a dry run's write-nothing behaviour comes from, and why
@@ -662,18 +610,13 @@ def publish_gold(med: Medallion, *, as_of: dt.datetime) -> None:
     # make gold silently under-publish.
     if any(
         med.silver.columns_of(table).columns() is None
-        for table in (SILVER_TABLE, *DETAIL_TABLES, PERSON_SIGHTING_TABLE)
+        for table in (SILVER_TABLE, *DETAIL_TABLES)
     ):
         return
 
     current = to_gold_case_current(
         med.silver.reader(SILVER_TABLE),
         med.gold.writer(CURRENT_TABLE, Refresh()),
-        as_of=as_of,
-    )
-    to_gold_person_current(
-        med.silver.reader(PERSON_SIGHTING_TABLE),
-        med.gold.writer(PERSON_TABLE, Refresh()),
         as_of=as_of,
     )
 
