@@ -4106,13 +4106,32 @@
   color: var(--cora-color-text-muted);
 }
 
+/* The native caret sits flush against the border whatever the padding, so it
+   is drawn here instead: a chevron held the same distance from the right edge
+   as the text is from the left, in the text's own colour. */
 [data-cora-root] .cora-report__scope select {
+  appearance: none;
   font: inherit;
   color: var(--cora-color-on-surface);
-  background: var(--cora-color-surface);
+  background-color: var(--cora-color-surface);
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    right calc(var(--cora-space-3) + 5px) center,
+    right var(--cora-space-3) center;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
   border: 1px solid var(--cora-color-border-strong);
   border-radius: var(--cora-radius-md);
-  padding: var(--cora-space-2) var(--cora-space-3);
+  padding: var(--cora-space-2) calc(var(--cora-space-3) * 2 + 10px)
+    var(--cora-space-2) var(--cora-space-3);
+  cursor: pointer;
+}
+
+[data-cora-root] .cora-report__scope select:focus-visible {
+  outline: var(--cora-focus-outline);
+  outline-offset: var(--cora-focus-offset);
 }
 
 [data-cora-root] .cora-report__banner {
