@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   resolveCapabilities,
+  isReportGroupName,
   caseTypeGroupNames,
   permissions,
 } from '../src/services/permissions.js';
@@ -260,4 +261,38 @@ test('permissions.caseTypes: group names still derive from the registry display 
     caseTypeOwner: 'CaseTypeOwner - Complaints',
     journeyOwner: 'JourneyOwner - Complaints',
   });
+});
+
+test('resolveCapabilities: a Reports - <name> group makes a Report Viewer, not a Visitor', () => {
+  const caps = resolveCapabilities(
+    ['Reports - Housing', 'Reports - Benefits'],
+    sampleConfig
+  );
+  assert.deepEqual(caps.reportGroups, [
+    'Reports - Housing',
+    'Reports - Benefits',
+  ]);
+  assert.equal(caps.isVisitor, false);
+});
+
+test('resolveCapabilities: only the exact Reports - prefix names a report group', () => {
+  const caps = resolveCapabilities(
+    [
+      'Reviewers',
+      'Housing Reports',
+      'Reports Housing',
+      'reports - housing',
+      'Reports - ',
+      'Reports -   ',
+    ],
+    sampleConfig
+  );
+  assert.deepEqual(caps.reportGroups, []);
+});
+
+test('isReportGroupName accepts a named group under the prefix and nothing else', () => {
+  assert.equal(isReportGroupName('Reports - Housing'), true);
+  for (const name of ['Housing Reports', 'Reports - ', 'reports - x', '']) {
+    assert.equal(isReportGroupName(name), false, name);
+  }
 });

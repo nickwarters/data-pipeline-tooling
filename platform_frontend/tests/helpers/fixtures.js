@@ -81,6 +81,7 @@ export function makePermissions(overrides = {}) {
     isMaintainer: false,
     canSearchCases: false,
     isVisitor: false,
+    reportGroups: [],
     ...overrides,
   };
 }

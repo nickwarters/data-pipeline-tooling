@@ -60,6 +60,7 @@ test('home view: each role keeps its existing destination and order', () => {
       ownedCaseTypes: ['complaints'],
       ownedJourneyCaseTypes: ['complaints'],
       isMaintainer: true,
+      reportGroups: ['Reports - Housing'],
       isVisitor: true,
     })
   );
@@ -71,6 +72,7 @@ test('home view: each role keeps its existing destination and order', () => {
     'Case Type Owner',
     'Journey Owner',
     'Maintainer',
+    'Report Viewer',
     'Visitor',
   ]);
   assert.deepEqual(links(view), [
@@ -80,6 +82,7 @@ test('home view: each role keeps its existing destination and order', () => {
     '#/question-bank',
     '#/journey-cases',
     '#/question-bank',
+    '#/reports',
   ]);
 });
 
@@ -88,6 +91,13 @@ test('home view: a Controls-only user is offered search rather than an empty pag
 
   assert.deepEqual(headings(view), ['Controls']);
   assert.deepEqual(links(view), ['#/search']);
+});
+
+test('home view: someone whose only role is a report group is sent to their reports', () => {
+  const view = homeView(state({ reportGroups: ['Reports - Housing'] }));
+
+  assert.deepEqual(headings(view), ['Report Viewer']);
+  assert.deepEqual(links(view), ['#/reports']);
 });
 
 test('home view: no capabilities render an empty page tree', () => {

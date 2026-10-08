@@ -1,6 +1,10 @@
 // @ts-check
 import { CASE_TYPES } from '../../case-types/manifest.js';
-import { caseTypeGroupNames, permissions } from '../services/permissions.js';
+import {
+  caseTypeGroupNames,
+  isReportGroupName,
+  permissions,
+} from '../services/permissions.js';
 
 /** @typedef {import('./contract.js').ReportPlugin} ReportPlugin */
 /** @typedef {import('./contract.js').ReportScope} ReportScope */
@@ -24,7 +28,9 @@ import { caseTypeGroupNames, permissions } from '../services/permissions.js';
  * folder by hand.
  *
  * Each role resolves two ways for the same reason: to a capability the browser
- * already holds, and to the SharePoint groups that grant it.
+ * already holds, and to the SharePoint groups that grant it. A named group is
+ * the degenerate case of both: the browser asks whether the viewer is in it,
+ * and the folder needs it.
  */
 
 /** @type {Readonly<Record<PlatformRole, { holds: (caps: Capabilities) => boolean, groups: (config: PermissionsConfig) => string[] }>>} */
@@ -78,6 +84,20 @@ const CASE_TYPE_ROLES = Object.freeze({
   },
 });
 
+/**
+ * A named group read the way a platform role is: it holds everywhere, for its
+ * members. Matched exactly, as every other group name is.
+ *
+ * @param {string} group
+ * @returns {{ holds: (caps: Capabilities) => boolean, groups: () => string[] }}
+ */
+function namedGroup(group) {
+  return {
+    holds: (caps) => caps.reportGroups.includes(group),
+    groups: () => [group],
+  };
+}
+
 /** The one scope a platform-wide report has. */
 const PLATFORM_SCOPE = Object.freeze({
   kind: /** @type {const} */ ('platform'),
@@ -93,6 +113,15 @@ const PLATFORM_SCOPE = Object.freeze({
  * @param {ReportAccessRule} rule
  */
 function resolveRule(rule) {
+  if (rule !== null && typeof rule === 'object' && 'group' in rule) {
+    const { group } = rule;
+    // A group outside the prefix would open the folder to people the app
+    // still calls Visitors, so it is refused here, where the report is written.
+    if (typeof group !== 'string' || !isReportGroupName(group)) {
+      throw new TypeError(`unknown report role: ${JSON.stringify(rule)}`);
+    }
+    return { scoped: /** @type {const} */ (false), role: namedGroup(group) };
+  }
   if (typeof rule === 'string') {
     const role = PLATFORM_ROLES[rule];
     if (!role) throw new TypeError(`unknown report role: ${rule}`);

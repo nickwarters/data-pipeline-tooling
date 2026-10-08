@@ -88,7 +88,7 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   scaffolded from.
 - **Reports are plugins over Report Feed files (ADR-0058).** A report is a
   `ReportPlugin` in `APP_CONFIG.reportPlugins`: its audience (`access`, roles
-  from a fixed vocabulary), its scope kind, the file(s) it reads from the
+  from a fixed vocabulary or a `Reports - <name>` group), its scope kind, the file(s) it reads from the
   report-feed library, its filters, its layout (`stacked` or `rail`) and one
   pure `view({ feeds, viewer, filters })` returning headline tiles, snapshot
   panels and sections. `src/reports/report-engine.js` is the route slice behind

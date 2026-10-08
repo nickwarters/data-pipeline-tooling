@@ -116,6 +116,21 @@ export const ExampleReport = {
 };
 ```
 
+`access` lists who may open the report, and anyone matching any entry may:
+
+| Entry                                    | Admits                                           |
+| ---------------------------------------- | ------------------------------------------------ |
+| `'maintainer'`, `'controls'`, …          | everyone holding that role, to every scope       |
+| `{ role: 'caseTypeOwner', of: 'scope' }` | a role holder, to the Case Types the role covers |
+| `{ group: 'Reports - Housing' }`         | that report group's members, to every scope      |
+
+A report made for a particular audience, say one file built from three Case
+Types, is usually a `platform` scope with its own group:
+`access: ['maintainer', { group: 'Reports - Housing' }]`. Create the group in
+SharePoint. Its name must start `Reports - ` exactly: that prefix is what makes
+its members Report Viewers rather than Visitors, so a report naming any other
+group is refused. The name is matched exactly.
+
 Then add it to `REPORT_PLUGINS` in `src/app-config.js`. The Reports link, the
 index card, the routes and the guard all follow from that list.
 

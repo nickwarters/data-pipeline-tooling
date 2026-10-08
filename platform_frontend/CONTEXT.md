@@ -496,8 +496,12 @@ _Avoid_: Permissions page, user admin, group management
 The append-only record of every **Access** change, one entry per change, kept in a single site-wide `CoraAccessLog` SharePoint list that is **not** environment-prefixed, because the groups it records are shared by every environment. An entry names the person (login and display name), the action, the role and **Case Type**, the Maintainer's reason and each group it changed from and to; SharePoint stamps who wrote it and when. Like the **Support Log**, it is written _before_ the change, and a change that then fails part way appends a second `not-applied` or `partly-applied` entry naming the first, because an entry is never edited. Maintainers can add to the list but not edit or delete, and the data pipelines land it as the `cora_access_log` feed.
 _Avoid_: Audit log, permissions history
 
+**Report Viewer**:
+A member of at least one report group: a SharePoint group named `Reports - <name>`, which a **Report** names in its **Report Access** to admit that group's members. Being one is a role, so a Report Viewer is not a **Visitor**; Home sends them to their reports, and nothing else in the app is theirs. Report groups are created in SharePoint, one per report audience, and are not given on the **Access** page.
+_Avoid_: report reader, report user
+
 **Visitor**:
-A SharePoint user who is authenticated (browser NTLM/Kerberos passes) but does not belong to any named Case Review **SharePoint Group** — not a **Reviewer** (incl. any `Reviewers - <type>`), **Adviser**, **Reviewer Manager**, **Responsible Party Manager**, **Case Type Owner**, **Journey Owner**, **Controls**, or **Maintainer**. Cannot be an **Assigned Reviewer**, cannot produce **Answers**, has no ownership or management responsibilities. The `#/` landing page shows a Visitor a read-only explainer only — _no_ access-request affordance, because access is granted out-of-band via the team's centralised hierarchy record, outside this app; all other routes are inaccessible (enforced by SharePoint list ACLs, surfaced as UX by capability checks). Visitor is _derived_ from the absence of all other group memberships — there is no "Visitors" SharePoint group.
+A SharePoint user who is authenticated (browser NTLM/Kerberos passes) but does not belong to any named Case Review **SharePoint Group** — not a **Reviewer** (incl. any `Reviewers - <type>`), **Adviser**, **Reviewer Manager**, **Responsible Party Manager**, **Case Type Owner**, **Journey Owner**, **Controls**, **Maintainer** or **Report Viewer**. Cannot be an **Assigned Reviewer**, cannot produce **Answers**, has no ownership or management responsibilities. The `#/` landing page shows a Visitor a read-only explainer only — _no_ access-request affordance, because access is granted out-of-band via the team's centralised hierarchy record, outside this app; all other routes are inaccessible (enforced by SharePoint list ACLs, surfaced as UX by capability checks). Visitor is _derived_ from the absence of all other group memberships — there is no "Visitors" SharePoint group.
 _Avoid_: Guest (collides with SharePoint's external-guest concept), Unenrolled (jargon), Anonymous (the user _is_ authenticated)
 
 ### Review of the review
@@ -609,10 +613,12 @@ library, and that folder is the unit SharePoint read permission is set on, so ev
 report about one scope shares one audience.
 
 **Report Access**:
-A report's audience, declared as roles from a fixed vocabulary. Platform roles
-(`maintainer`, `reviewer`, `controls`, …) admit a viewer to every scope. Case Type
-roles (`caseTypeOwner`, `journeyOwner`, `caseTypeReviewer`) admit a viewer only to the
-Case Types the role covers. The browser reads it to decide what to offer. Provisioning
+A report's audience, declared as roles from a fixed vocabulary or named report
+groups. Platform roles (`maintainer`, `reviewer`, `controls`, …) admit a viewer to
+every scope. Case Type roles (`caseTypeOwner`, `journeyOwner`, `caseTypeReviewer`)
+admit a viewer only to the Case Types the role covers. A report group
+(`{ group: 'Reports - <name>' }`) admits its members to every scope, for an audience
+that is no role. The browser reads it to decide what to offer. Provisioning
 reads the same declaration, through `scripts/report-folder-access.js`, to set folder
 permissions, and those are the real boundary. Shaping a page for its viewer is for
 relevance, never secrecy: anyone who can read a file can read all of it.
