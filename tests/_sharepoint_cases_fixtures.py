@@ -44,6 +44,7 @@ from pipelines.sharepoint_cases.pipeline import (
     RAW_FEED_COLUMNS,
     RENAME,
     SAFETY_LAG,
+    SIGHTING_ONLY_COLUMNS,
     SOURCE_COLUMNS,
     to_raw,
 )
@@ -85,9 +86,12 @@ NEXT_POLL = dt.timedelta(minutes=10)
 # The instant gold is published as of: the candidate window end of a first poll.
 AS_OF = SERVER_NOW - SAFETY_LAG
 
-# Every column silver holds, in the order it holds them — which is exactly the
-# feed's rename map read the other way round.
-SILVER_COLUMNS = tuple(RENAME.values())
+# Every column silver holds, in the order it holds them — the feed's rename map
+# read the other way round, less the person details silver drops into the
+# sighting table.
+SILVER_COLUMNS = tuple(
+    column for column in RENAME.values() if column not in SIGHTING_ONLY_COLUMNS
+)
 
 
 # --- the source --------------------------------------------------------------
@@ -132,6 +136,17 @@ class FakeListClient:
         return now
 
 
+def person(account: str, display_name: str) -> dict[str, str]:
+    """An expanded Person column as SharePoint returns it: the claims login,
+    the display name and the directory email, each in the directory's case."""
+    bare = account.rpartition("\\")[2]
+    return {
+        "Name": f"i:0#.w|{account}",
+        "Title": display_name,
+        "EMail": f"{bare.title()}@contoso.com",
+    }
+
+
 def item(**overrides: object) -> dict[str, object]:
     """One list item in the shape SharePoint returns it: every column present
     (a real read leads with ``$select=*``), an expanded Person as a nested
@@ -145,13 +160,10 @@ def item(**overrides: object) -> dict[str, object]:
         "Title": "CMP-000101",
         "CaseType": "complaints",
         "Status": "In-progress",
-        "AssignedReviewer": {"Name": "i:0#.w|CONTOSO\\a.khan"},
-        "ResponsibleParty": {
-            "Name": "i:0#.w|CONTOSO\\b.okafor",
-            "Title": "Bola Okafor",
-        },
-        "AssignedReviewerManager": {"Name": "i:0#.w|CONTOSO\\d.reid"},
-        "ResponsiblePartyManager": {"Name": "i:0#.w|CONTOSO\\e.novak"},
+        "AssignedReviewer": person("CONTOSO\\a.khan", "Aisha Khan"),
+        "ResponsibleParty": person("CONTOSO\\b.okafor", "Bola Okafor"),
+        "AssignedReviewerManager": person("CONTOSO\\d.reid", "Dana Reid"),
+        "ResponsiblePartyManager": person("CONTOSO\\e.novak", "Eva Novak"),
         "VoidedBy": None,
         "DueDate": "2026-08-14T00:00:00Z",
         "Created": "2026-07-01T09:14:00Z",
@@ -237,8 +249,8 @@ def version(**overrides: object) -> dict[str, object]:
         {
             "id": 101,
             "status": "In-progress",
-            "assigned_reviewer_name": "i:0#.w|CONTOSO\\p.shah",
-            "assigned_reviewer_manager_name": "i:0#.w|CONTOSO\\d.reid",
+            "assigned_reviewer_name": "p.shah",
+            "assigned_reviewer_manager_name": "d.reid",
             "case_type": COMPLAINTS.case_type,
             "created": "2026-07-01 09:14:00+00:00",
             "source_list_name": COMPLAINTS.list_name,

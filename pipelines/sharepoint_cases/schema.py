@@ -115,10 +115,13 @@ class CaseVersion:
     case_type: Annotated[str, NonNull()]
     status: Annotated[str, NonNull(), OneOf(*CASE_STATUSES)]
 
-    # The Person columns, as the claims login the list expanded them to.
-    # Landed as the source spells them: mapping a login to a person is a gold
-    # concern, and the numeric twin SharePoint also offers is a transport detail
-    # of one site collection rather than an identity.
+    # The Person columns, as the lower-cased bare account of the claims login
+    # the list expanded them to -- the one spelling of a person every table in
+    # this feed, and the platform's own JSON, agrees on. Raw keeps the claims
+    # login; the domain, display name and email a login comes with are in
+    # person_sighting / person_current, keyed on the same account. The numeric
+    # twin SharePoint also offers is a transport detail of one site collection
+    # rather than an identity.
     assigned_reviewer_name: str
     # Nullable at ingestion: only outstanding assigned rows require this clock;
     # unassigned rows carry null, and the Action Centre filters legacy gaps.
@@ -238,9 +241,8 @@ class AnswerCaptureRow:
     value_kind: Annotated[str, NonNull(), OneOf(*CAPTURE_VALUE_KINDS)]
     value_text: str
 
-    # The person arm: a bare account login, e.g. ``user-rp`` -- not the
-    # claims login case_version's Person columns hold. The two vocabularies
-    # do not join.
+    # The person arm: the bare account, e.g. ``user-rp`` -- the same
+    # spelling case_version's Person columns hold, so the two join.
     person_login: str
     person_display: str
 
@@ -307,10 +309,9 @@ class ConversationMessageRow:
     is the grain key -- a durable *pointer* into an append-only list, not a
     durable message identifier.
 
-    ``author_login`` is the bare account name the app stamps at post time, not
-    the claims login every other silver person column holds -- the two
-    vocabularies do not join. ``author_display_name`` is an unrefreshed
-    snapshot of what the sender was called when they posted.
+    ``author_login`` is the bare account the app stamps at post time, the same
+    spelling every other silver person column holds. ``author_display_name``
+    is an unrefreshed snapshot of what the sender was called when they posted.
 
     ``posted_at`` is declared ``str``, not ``datetime``, deliberately: the
     coerce step sits above quarantine, so a hand-edited non-ISO value inside
@@ -394,3 +395,33 @@ class CaseDetailRow:
 
     field_key: Annotated[str, NonNull()]
     value_text: str
+
+
+@dataclass
+class PersonSightingRow:
+    """One row per observation x person named anywhere in it.
+
+    A person is named by the five Person columns and inside the JSON blobs: a
+    person picked in an Issue Capture Field, a Conversation author, an
+    Appellant or resolver, whoever amended the Outcome. Each sighting records
+    what that observation said about them; ``person_current`` reduces the
+    history to one row per account.
+
+    ``account`` is the lower-cased bare account every person column in this
+    feed holds. ``domain`` is upper-cased. Where one observation names the same
+    person twice, the Person columns -- read live from the directory -- are
+    taken before the JSON blobs, which hold snapshots from when they were
+    written.
+    """
+
+    case_type: Annotated[str, NonNull()]
+    source_item_id: Annotated[str, NonNull()]
+    # datetime, not str -- see AnswerRow's own field for why.
+    source_modified_at: Annotated[datetime, NonNull()]
+    source_version: Annotated[str, NonNull()]
+    source_observation_id: Annotated[str, NonNull()]
+
+    account: Annotated[str, NonNull()]
+    domain: str
+    display_name: str
+    email: str

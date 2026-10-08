@@ -111,7 +111,7 @@ observation names, so a reassigned Case's holds follow the Case.
 |-------|------|----------|-------------|
 | `brand` | `str` | No | `(unknown)`. |
 | `case_type` | `str` | No | Case Type slug. |
-| `assigned_reviewer_name` | `str` | No | The Reviewer's claims login as the source holds it; `(unassigned)` where the latest observation names nobody. |
+| `assigned_reviewer_name` | `str` | No | The Reviewer's bare account, as the source holds it; `(unassigned)` where the latest observation names nobody. |
 | `case_count` | `int` | No | Cases with at least one observed hold. |
 | `hold_count` | `int` | No | Observed holds (a Case held twice counts twice). |
 | `open_hold_count` | `int` | No | Holds still open at `as_of_utc`. |
@@ -139,7 +139,7 @@ calendar the run was given.
 | `completed_month` | `str` | No | `YYYY-MM` of `completed_at`'s local date. |
 | `brand` | `str` | No | `(unknown)`. |
 | `case_type` | `str` | No | Case Type slug. |
-| `assigned_reviewer_manager_name` | `str` | No | The Reviewer Manager's claims login; `(unassigned)` where absent. |
+| `assigned_reviewer_manager_name` | `str` | No | The Reviewer Manager's bare account; `(unassigned)` where absent. |
 | `case_count` | `int` | No | Completed Cases in the group. |
 | `on_time_count` | `int` | No | Completed on or before the due date. |
 | `late_count` | `int` | No | Completed after it. |
@@ -195,7 +195,7 @@ dropped.
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
 | `case_type` | `str` | No | Case Type slug. |
-| `responsible_party_manager_name` | `str` | No | The manager's claims login; `(unassigned)` where absent. |
+| `responsible_party_manager_name` | `str` | No | The manager's bare account; `(unassigned)` where absent. |
 | `remediation_required` | `str` | No | `yes` / `no` / `(undecided)`. |
 | `remediation_status` | `str` | No | `complete` / `partial` / `cancelled` / `(unresolved)`. |
 | `answer_count` | `int` | No | Answers in the group. |
@@ -239,9 +239,7 @@ Each Case's thread is walked in `seq` order. A Message whose `author_login`
 differs from the previous Message's is a **reply**, and its hours run from that
 previous Message; two consecutive Messages by one author are one turn, not a
 reply to oneself. The measure is deliberately **author-agnostic** — it does not
-say which *side* replied. Splitting by side needs the bare-login-to-claims-login
-join the Sync data dictionary refuses on principle (see *Bare account logins vs.
-claims logins* there), and the source's own `awaiting_responsible_party` /
+say which *side* replied: the source's own `awaiting_responsible_party` /
 `awaiting_since` already state who is being waited on right now. This table
 answers the other question: across a Case Type, how long does a reply take.
 
@@ -405,7 +403,7 @@ percentiles do **not** roll up: a median of medians is not a median. Read
 | `ended_month` | `str` | No | `YYYY-MM` of the closing stamp's local date. |
 | `brand` | `str` | No | `(unknown)`. |
 | `case_type` | `str` | No | Case Type slug. |
-| `assigned_reviewer_name` | `str` | No | The Reviewer's claims login as the source holds it; `(unassigned)` where absent. |
+| `assigned_reviewer_name` | `str` | No | The Reviewer's bare account, as the source holds it; `(unassigned)` where absent. |
 | `case_count` | `int` | No | Legs measured — `0` where every leg in the group was out of order. |
 | `out_of_order_count` | `int` | No | Legs whose closing stamp is before their opening one. |
 | `days_total` | `float` | No | Sum of the measured legs, in decimal days. |
@@ -431,7 +429,7 @@ every dimension.
 | `reportable_month` | `str` | No | `YYYY-MM` of `reportable_at`'s local date. |
 | `brand` | `str` | No | `(unknown)`. |
 | `case_type` | `str` | No | Case Type slug. |
-| `assigned_reviewer_name` | `str` | No | The Reviewer's claims login; `(unassigned)` where absent. |
+| `assigned_reviewer_name` | `str` | No | The Reviewer's bare account; `(unassigned)` where absent. |
 | `effective_outcome` | `str` | No | As the source holds it, in the Case Type's own vocabulary; `(unstated)` where absent. |
 | `case_count` | `int` | No | Reportable Cases in the group. |
 | `remediation_count` | `int` | No | Of those, carrying `effective_had_remediation`. |
@@ -471,7 +469,7 @@ are held.
 | `sla_kind` | `str` | No | `review` or `remediation`. |
 | `brand` | `str` | No | `(unknown)`. |
 | `case_type` | `str` | No | Case Type slug. |
-| `assigned_reviewer_name` | `str` | No | The Reviewer's claims login; `(unassigned)` where absent. |
+| `assigned_reviewer_name` | `str` | No | The Reviewer's bare account; `(unassigned)` where absent. |
 | `due_bucket` | `str` | No | One of the six above. |
 | `due_bucket_order` | `int` | No | `1`–`6`, most urgent first; sort on this. |
 | `case_count` | `int` | No | Cases on that clock in that bucket. |
@@ -515,8 +513,8 @@ was asked for, and the clock is stated here.
 |-------|------|----------|-------------|
 | `brand` | `str` | No | `(unknown)`. |
 | `case_type` | `str` | No | Case Type slug. |
-| `assigned_reviewer_name` | `str` | No | The Reviewer's claims login; `(unassigned)` where absent. |
-| `responsible_party_name` | `str` | No | The Responsible Party's claims login as the source holds it; `(unassigned)` where absent. |
+| `assigned_reviewer_name` | `str` | No | The Reviewer's bare account; `(unassigned)` where absent. |
+| `responsible_party_name` | `str` | No | The Responsible Party's bare account, as the source holds it; `(unassigned)` where absent. |
 | `days_over_bucket` | `str` | No | One of the four above. |
 | `days_over_bucket_order` | `int` | No | `1`–`4`; sort on this. |
 | `case_count` | `int` | No | Cases past their date in the group. |
@@ -551,7 +549,7 @@ A Reviewer with no work in hand and no output in the window has no row.
 |-------|------|----------|-------------|
 | `brand` | `str` | No | `(unknown)`. |
 | `case_type` | `str` | No | Case Type slug. |
-| `assigned_reviewer_name` | `str` | No | The Reviewer's claims login; `(unassigned)` where absent. |
+| `assigned_reviewer_name` | `str` | No | The Reviewer's bare account; `(unassigned)` where absent. |
 | `in_progress_count` | `int` | No | `In-progress` Cases held. |
 | `in_progress_on_hold_count` | `int` | No | Of those, on hold. |
 | `actions_in_progress_count` | `int` | No | `Actions In Progress` Cases held. |
@@ -584,7 +582,7 @@ counted.
 | `reportable_month` | `str` | No | `YYYY-MM` of the Case's `reportable_at` local date. |
 | `brand` | `str` | No | `(unknown)`. |
 | `case_type` | `str` | No | Case Type slug. |
-| `assigned_reviewer_name` | `str` | No | The Reviewer's claims login; `(unassigned)` where absent. |
+| `assigned_reviewer_name` | `str` | No | The Reviewer's bare account; `(unassigned)` where absent. |
 | `reportable_count` | `int` | No | Reportable Cases in the group. |
 | `appealed_case_count` | `int` | No | Of those, with at least one Appeal. |
 | `appeal_count` | `int` | No | Appeals on those Cases (a Case appealed twice counts twice). |

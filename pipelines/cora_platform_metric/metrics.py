@@ -1225,9 +1225,8 @@ def conversation_response_time(messages: Dataset, *, as_of: str) -> Dataset:
     ``author_login`` differs from the previous Message's is a reply, and its
     hours are measured from that previous Message. Two consecutive Messages by
     one author are one turn, not a reply to oneself. Author-agnostic by design:
-    which *side* replied needs the bare-login-to-claims-login join the Sync
-    subject refuses (see its data dictionary), and the source's own
-    ``awaiting_since`` already says who is being waited on right now.
+    the source's own ``awaiting_since`` already says who is being waited on
+    right now.
     """
     frame = messages.to_pandas().copy()
     frame["_posted"] = _instants(frame["posted_at"])

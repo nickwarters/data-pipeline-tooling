@@ -21,6 +21,7 @@ from pipelines.sharepoint_cases.gold import (
     DETAIL_AGGREGATES,
     DETAIL_TABLES,
     GOLD_TABLES,
+    PERSON_SIGHTING_TABLE,
 )
 from pipelines.sharepoint_cases.pipeline import (
     FEED_NAME,
@@ -55,7 +56,12 @@ from tools.store import StoreRegistry
 # ``pipeline`` stays the run's own label throughout.
 RAW_PREFIX = f"raw:{COMPLAINTS.case_type}"
 SILVER_PREFIX = f"silver:{COMPLAINTS.case_type}"
-SILVER_DETAIL_PREFIX = {f"{SILVER_PREFIX}:{table}": table for table in DETAIL_TABLES}
+# The silver tables beside the Case row: the Detail Tables, and the people
+# every observation named.
+SILVER_SIDE_TABLES = (*DETAIL_TABLES, PERSON_SIGHTING_TABLE)
+SILVER_DETAIL_PREFIX = {
+    f"{SILVER_PREFIX}:{table}": table for table in SILVER_SIDE_TABLES
+}
 GOLD_PREFIX = {f"gold:{table}": table for table in GOLD_TABLES}
 EVERY_STEP_PREFIX = {RAW_PREFIX, SILVER_PREFIX, *SILVER_DETAIL_PREFIX, *GOLD_PREFIX}
 
@@ -84,12 +90,13 @@ def test_the_bundled_sample_lands_every_item_across_both_pages(base_dir, capsys)
     assert sample["Title"].isna().any()
     assert (poll.raw_rows, poll.silver_rows) == (len(sample), len(sample))
     # The fixture pages are written to populate every Detail Table (both
-    # Conversation and Appeals timestamps there deliberately mix formats), and
-    # what the poll reports for each is what landed in silver.
-    assert set(poll.detail_rows) == set(DETAIL_TABLES)
+    # Conversation and Appeals timestamps there deliberately mix formats) and
+    # to name people, and what the poll reports for each is what landed in
+    # silver.
+    assert set(poll.detail_rows) == set(SILVER_SIDE_TABLES)
     assert all(count > 0 for count in poll.detail_rows.values()), poll.detail_rows
     assert poll.detail_rows == {
-        table: len(read_rows(med.silver, table)) for table in DETAIL_TABLES
+        table: len(read_rows(med.silver, table)) for table in SILVER_SIDE_TABLES
     }
     # The fixture exercises every real status, so the whole vocabulary passes
     # the schema gate rather than only the one a happy path would use.
@@ -223,6 +230,7 @@ def test_a_quiet_window_still_runs_and_records_every_step(base_dir):
         COMPLAINTS.list_name,
         "case_observation",
         "case_version",
+        PERSON_SIGHTING_TABLE,
         *GOLD_TABLES,
     }
     # "answer" is a table in both silver.db (the exploded rows) and gold.db

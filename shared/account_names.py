@@ -7,7 +7,7 @@ the two in step.
 
 CLAIMS_PREFIX = "i:0#.w|"
 
-__all__ = ["CLAIMS_PREFIX", "to_bare_account"]
+__all__ = ["CLAIMS_PREFIX", "to_bare_account", "to_domain"]
 
 
 def to_bare_account(value: object) -> str:
@@ -23,3 +23,18 @@ def to_bare_account(value: object) -> str:
     if text.startswith(CLAIMS_PREFIX):
         text = text[len(CLAIMS_PREFIX) :]
     return text.rsplit("\\", 1)[-1].strip().lower()
+
+
+def to_domain(value: object) -> str:
+    """Return the domain before the final backslash, as it is spelled.
+
+    ``""`` when the login names no domain, and for blank, ``None`` and NaN --
+    the same guard, and the same limit on ``pandas.NA``, as ``to_bare_account``.
+    """
+    if value is None or value != value:
+        return ""
+    text = str(value).strip()
+    if text.startswith(CLAIMS_PREFIX):
+        text = text[len(CLAIMS_PREFIX) :]
+    domain, slash, _ = text.rpartition("\\")
+    return domain.strip() if slash else ""

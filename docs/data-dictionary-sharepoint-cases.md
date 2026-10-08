@@ -1,13 +1,14 @@
 # Data dictionary — `sharepoint_cases`
 
 The filled-in entry for the `sharepoint_cases` feed, following
-[`data-dictionary-template.md`](data-dictionary-template.md). Twenty-three
+[`data-dictionary-template.md`](data-dictionary-template.md). Twenty-five
 tables: the faithful raw observation, the typed Case version and its silver
 `answer`, `answer_capture`, `answer_action`, `general_answer`,
-`conversation_message`, `appeal` and `case_detail` Detail Tables, and the
-fourteen gold tables reduced from the version history — the current Case,
-those same seven Detail Tables, and six aggregates, two of which reduce from
-a Detail Table rather than from the current Case. Every declared Case list
+`conversation_message`, `appeal` and `case_detail` Detail Tables, the silver
+`person_sighting` log of everyone an observation names, and the fifteen gold
+tables — the current Case, the current Person, those same seven Detail Tables,
+and six aggregates, two of which reduce from a Detail Table rather than from
+the current Case. Every declared Case list
 lands in the same tables and is told apart by
 `case_type`. The
 Python contract is
@@ -166,8 +167,9 @@ None. Raw is a faithful mirror.
 One row per observed Case version, snake_cased and typed. The change-over-time
 record: a later `Modified` on the same item is a **new row**, never an update.
 
-This step is the rename and the type contract, and deliberately nothing more.
-There is no derivation, no reshaping and no parsing — the JSON blob columns land
+This step is the rename, the type contract and the one reduction every person
+column needs, and deliberately nothing more. There is no other derivation, no
+reshaping and no parsing — the JSON blob columns land
 as the unparsed text the list holds, because parsing them needs the Case Type's
 own question bank and that is a gold concern.
 
@@ -204,6 +206,10 @@ hand in the SharePoint web UI, and gold keys a Case on it — `DeriveKey` refuse
 null natural-key value, so one blank cell would abort gold for every list. After
 silver, `case_type` is always the Case Type of the list the row came from.
 
+**The five `…_name` Person columns are not faithful copies either.** Raw holds
+the claims login the list gave (`i:0#.w|CONTOSO\A.Khan`); silver holds the
+lower-cased **bare account** (`a.khan`) — see *Person columns* below.
+
 ### Part B — Field dictionary
 
 | Field | Source column | Type | Nullable | Value rules | Description | Example | Sensitivity | Notes |
@@ -218,12 +224,12 @@ silver, `case_type` is always the Case Type of the list the row came from.
 | `title` | `Title` | `str` | Yes | — | The human **Case Reference**. | `CMP-000101` | Internal | Nullable, and carries no format the application enforces. Unique only within a Case Type, and prefix-searchable only. A Case without one is ordinary. |
 | `case_type` | *(declared)* | `str` | No | `NonNull` | The Case Type of the list polled. | `complaints` | None | **Not** the list's `CaseType` cell, which raw keeps and silver overwrites — see above. Part of the natural key. |
 | `status` | `Status` | `str` | No | `NonNull`, `OneOf(To-allocate, In-progress, Actions In Progress, Completed, Void)` | The Case's lifecycle state at this version. | `In-progress` | None | The list's only Choice column. Note the hyphen in `To-allocate` and `In-progress`, and that `Actions In Progress` has none — these are persisted values, not display copy. `To-allocate` is where a Case starts, waiting for a Reviewer to claim it; a list whose Choice column is missing it cannot be written to at all. |
-| `assigned_reviewer_name` | `AssignedReviewer/Name` | `str` | Yes | — | The Reviewer the Case is assigned to, as a claims login. | `i:0#.w\|CONTOSO\a.khan` | PII | See *Person columns* below. |
+| `assigned_reviewer_name` | `AssignedReviewer/Name` | `str` | Yes | — | The Reviewer the Case is assigned to, as a bare account. | `a.khan` | PII | See *Person columns* below. |
 | `assigned_at` | `AssignedAt` | `datetime` | Yes | — | When the Case was last handed to its Reviewer. | `2026-07-01T09:15:00+00:00` | None | The operational predeploy gate establishes the conditional invariant: an outstanding row with `AssignedReviewer` must have `AssignedAt`; unassigned rows carry null. It remains nullable in the landed schema because the rule is conditional, not global over completed or void rows. The Action Centre filter only defensively excludes legacy gaps, which would otherwise fail silently by disappearing from the worklist and count. The SharePoint source column is indexed for Action Centre age/order, with no `Created` fallback. |
-| `responsible_party_name` | `ResponsibleParty/Name` | `str` | Yes | — | The Responsible Party, as a claims login. | `i:0#.w\|CONTOSO\b.okafor` | PII | |
-| `responsible_party_title` | `ResponsibleParty/Title` | `str` | Yes | — | The Responsible Party's directory display name. | `Bola Okafor` | PII | The only person the read asks a display name for — the one a view names a person by. |
-| `assigned_reviewer_manager_name` | `AssignedReviewerManager/Name` | `str` | Yes | — | The Reviewer's manager. | `i:0#.w\|CONTOSO\d.reid` | PII | |
-| `responsible_party_manager_name` | `ResponsiblePartyManager/Name` | `str` | Yes | — | The Responsible Party's manager, as the directory gave it when the Responsible Party was last saved. Empty on Cases saved before the platform recorded it, and when the lookup found nobody. | `i:0#.w\|CONTOSO\e.novak` | PII | |
+| `responsible_party_name` | `ResponsibleParty/Name` | `str` | Yes | — | The Responsible Party, as a bare account. | `b.okafor` | PII | |
+| `responsible_party_title` | `ResponsibleParty/Title` | `str` | Yes | — | The Responsible Party's directory display name. | `Bola Okafor` | PII | Kept for the views that already read it. Every person's display name, this one's included, is in `person_current`. |
+| `assigned_reviewer_manager_name` | `AssignedReviewerManager/Name` | `str` | Yes | — | The Reviewer's manager. | `d.reid` | PII | |
+| `responsible_party_manager_name` | `ResponsiblePartyManager/Name` | `str` | Yes | — | The Responsible Party's manager, as the directory gave it when the Responsible Party was last saved. Empty on Cases saved before the platform recorded it, and when the lookup found nobody. | `e.novak` | PII | |
 | `due_date` | `DueDate` | `datetime` | Yes | — | Working-day SLA due date. | `2026-08-14T00:00:00+00:00` | None | |
 | `completed_at` | `CompletedAt` | `datetime` | Yes | — | Stamped at the final `Completed` transition. | | None | |
 | `reportable_at` | `ReportableAt` | `datetime` | Yes | — | Stamped at the reportable milestone. | | None | |
@@ -240,7 +246,7 @@ silver, `case_type` is always the Case Type of the list the row came from.
 | `voided_at` | `VoidedAt` | `datetime` | Yes | — | When the Case was voided. | | None | |
 | `void_reason` | `VoidReason` | `str` | Yes | — | Void Reason key from the framework vocabulary. | `duplicate` | None | A key, not display copy. Not constrained here: the vocabulary is the review application's and may widen. |
 | `void_reason_note` | `VoidReasonNote` | `str` | Yes | — | The Reviewer's own words behind an `other` Void Reason. | `The file was destroyed in the flood` | Internal | Free text, and the only thing an `other` void means. Qualifies `void_reason`; nothing groups on it. |
-| `voided_by_name` | `VoidedBy/Name` | `str` | Yes | — | Whoever voided the Case. | `i:0#.w\|CONTOSO\d.reid` | PII | |
+| `voided_by_name` | `VoidedBy/Name` | `str` | Yes | — | Whoever voided the Case. | `d.reid` | PII | |
 | `outcome` | `Outcome` | `str` | Yes | — | Live working Outcome. | `Upheld` | None | Free text; the vocabulary is the Case Type's. |
 | `outcome_at_completion` | `OutcomeAtCompletion` | `str` | Yes | — | Frozen Outcome snapshot taken at reportable. | `Not upheld` | None | |
 | `had_remediation` | `HadRemediation` | `bool` | Yes | — | Frozen at reportable. | `false` | None | |
@@ -260,27 +266,38 @@ silver, `case_type` is always the Case Type of the list the row came from.
 
 There are **no multi-value columns on this list** — no Lookup, no multi Choice,
 no multi User. All five person columns hold a single user, and the read expands
-each so it answers with its selected sub-fields rather than the numeric id it
-otherwise returns. The columns are provisioned "Person or Group" but hold only
-people here, so an expanded value carries a claims login: an object arriving
-without a `Name` was never expanded, and is refused rather than read as an empty
-role. A missing `Title` is not an error — a directory display name is optional,
-and only the Responsible Party's is selected at all.
+each so it answers with its selected sub-fields — `Name`, `Title` and `EMail` —
+rather than the numeric id it otherwise returns. The columns are provisioned
+"Person or Group" but hold only people here, so an expanded value carries a
+claims login: an object arriving without a `Name` was never expanded, and is
+refused rather than read as an empty role. A missing `Title` or `EMail` is not
+an error — the directory may simply not have one.
 
 An expanded person arrives **nested on the property** —
-`{"AssignedReviewer": {"Name": …}}` — or as a plain `null` where nobody holds the
-role. The feed flattens that onto the `AssignedReviewer/Name` columns above
-before anything is stored; the `Name`/`Title` split in the column names is this
-feed's storage shape, not the payload's. Only `ResponsibleParty` has a `Title`
-column, because it is the only one of the five whose display name the read
-selects.
+`{"AssignedReviewer": {"Name": …, "Title": …, "EMail": …}}` — or as a plain
+`null` where nobody holds the role. The feed flattens that onto
+`AssignedReviewer/Name`, `AssignedReviewer/Title` and `AssignedReviewer/EMail`
+before anything is stored; the split in the column names is this feed's storage
+shape, not the payload's. Raw keeps all three for all five roles.
 
-`Name` is the claims login (`i:0#.w|CONTOSO\a.khan`) and is what the review
-application keys identity on, right down to which Sections a viewer may open.
+`Name` is the claims login (`i:0#.w|CONTOSO\a.khan`). **Silver reduces it to
+the lower-cased bare account** (`a.khan`) with `shared.account_names.to_bare_account`:
+the spelling the platform stamps into its JSON blobs, the Staff Hierarchy keys
+on, and every other person column in this feed holds — so a Case row joins
+to all of them without a translation. Nobody holding the role is a null. The
+domain the reduction drops is not lost: raw keeps the login, and
+`person_sighting` records the domain, display name and email beside the
+account, which is where every other detail of a person goes too. Only
+`responsible_party_title` stays on the Case row, because views already read it.
+
 The numeric `…Id` twin SharePoint also offers is a transport detail of one site
 collection — allocated on first use and re-allocated if the account is removed —
-so it is **not** stored. Silver lands the login as the source spells it; reducing
-it to a bare account name, or joining it to a person, is a gold concern.
+so it is **not** stored.
+
+Rows stored before the reduction held the claims login. The silver and gold
+`0003` migrations reduce those in place with the same rule, so every row
+spells a person one way; the aggregates keyed on `assigned_reviewer_name` are
+rebuilt from `case_current` on the next publish.
 
 #### JSON blob columns
 
@@ -434,7 +451,7 @@ feed does not join — Groups are presentation-only.
 | `field_key` | the `capture` map's key | `str` | No | `NonNull` | The Issue Capture Field key — unique within a Case Type by app contract, not enforced here. | `field-owner` | None |
 | `value_kind` | *(derived)* | `str` | No | `NonNull`, `OneOf(text, person)` | Which arm the value discriminated to; see `discriminate_capture_value`. A legacy `Action[]` value, a half-filled person, or any other unrecognised shape is stamped `unsupported` and quarantines on this rule, rather than earning a label of its own. | `person` | None |
 | `value_text` | the `capture` map's value | `str` | Yes | — | Filled for the `text` arm only. A `person`-typed field holding a bare string still lands here, as `text` — discrimination is on the value, never on a declared type this feed does not see, matching the review application's own reader. | `Called back within SLA.` | Internal |
-| `person_login` | `capture[field_key].loginName` | `str` | Yes | — | Filled for the `person` arm only. A **bare account** (`user-rp`), not the claims login `case_version`'s Person columns hold — the two vocabularies do not join. | `user-rp` | PII |
+| `person_login` | `capture[field_key].loginName` | `str` | Yes | — | Filled for the `person` arm only. A **bare account** (`user-rp`), the same spelling `case_version`'s Person columns hold. | `user-rp` | PII |
 | `person_display` | `capture[field_key].displayName` | `str` | Yes | — | Filled for the `person` arm only. Cached at selection time; not looked up here. | `Bola Okafor` | PII |
 
 A `person` value may also carry `domain` (the person's AD domain, written by the
@@ -636,7 +653,7 @@ carries. Reads the settled silver batch, never raw, for the same reason
 | `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
 | `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema — the Writer adds it after validation — so it appears in no schema and in no grain. | *(32-char hex)* | None |
 | `seq` | the `conversation` list's 0-based position | `int` | No | `NonNull` | The grain key — the app mints no message id. A durable *pointer* only while the Conversation stays append-only: a mid-list insert would renumber every later message silently. | `0` | None |
-| `author_login` | `conversation[].author.loginName` | `str` | Yes | — | The bare account name the app stamped at post time — see *Bare account logins vs. claims logins*, below. | `a.khan` | Internal |
+| `author_login` | `conversation[].author.loginName` | `str` | Yes | — | The bare account the app stamped at post time — see *One spelling for a person*, below. | `a.khan` | Internal |
 | `author_display_name` | `conversation[].author.displayName` | `str` | Yes | — | An **unrefreshed snapshot** of what the sender was called when they posted; never join it as a current name. | `Amira Khan` | Internal |
 | `posted_at` | `conversation[].timestamp` | `str` | Yes | — | Kept as text on purpose — see *Blob timestamps stay text*, below. | `2026-08-04T16:02:00Z` | None |
 | `body` | `conversation[].body` | `str` | Yes | — | Free text, unmoderated. | `Please confirm the call date.` | Internal |
@@ -697,14 +714,14 @@ this table reads silver, not raw* above.
 | `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema — the Writer adds it after validation — so it appears in no schema and in no grain. | *(32-char hex)* | None |
 | `appeal_id` | `appeals[].id` | `str` | No | `NonNull` | The grain key, minted by the app as `appeal-${Date.now()}`. No `Pattern`/`Unique` — see *Part D*. | `appeal-1754210400000` | None |
 | `appeal_seq` | the `appeals` list's 0-based position | `int` | No | `NonNull` | Declared, not dropped, for the same reason `answer_action.action_seq` is — `ExplodeJsonList`'s ordinal is mandatory and typed either way. Descriptive only; `appeal_id` is the key. | `0` | None |
-| `appellant` | `appeals[].appellant` | `str` | Yes | — | A bare account name — see *Bare account logins vs. claims logins*, below. | `e.novak` | Internal |
+| `appellant` | `appeals[].appellant` | `str` | Yes | — | A bare account — see *One spelling for a person*, below. | `e.novak` | Internal |
 | `raised_at` | `appeals[].at` | `str` | Yes | — | Kept as text — see *Blob timestamps stay text*. | `2026-08-05T08:30:00Z` | None |
 | `rationale` | `appeals[].rationale` | `str` | Yes | — | Free text. | | Internal |
 | `state` | `appeals[].state` | `str` | Yes | `OneOf(raised, underReview, resolved)` | `underReview` is included although unwritten today — `openAppealOf` treats anything but `resolved` as open, so excluding it would quarantine real rows the moment that transition ships. | `raised` | None |
 | `cited_question_ids_json` | `appeals[].citedAnswerKeys` | `str` | Yes | — | JSON array text of Question Definition ids, joining `answer.question_id` — never a joined string. **Null means the key was omitted**, which is what "no citations" looks like; the app never writes `[]`. | `["q-outcome","q-timeliness"]` | Internal |
 | `resolution_verdict` | `appeals[].resolution.verdict` | `str` | Yes | `OneOf(agreed, rejected)` | Null while unresolved — see the `resolution_*` group note below. | `agreed` | None |
 | `resolution_rationale` | `appeals[].resolution.rationale` | `str` | Yes | — | Free text. Null while unresolved. | | Internal |
-| `resolution_resolver` | `appeals[].resolution.resolver` | `str` | Yes | — | A bare account name — see *Bare account logins vs. claims logins*, below. Null while unresolved. | `d.reid` | Internal |
+| `resolution_resolver` | `appeals[].resolution.resolver` | `str` | Yes | — | A bare account — see *One spelling for a person*, below. Null while unresolved. | `d.reid` | Internal |
 | `resolution_at` | `appeals[].resolution.at` | `str` | Yes | — | Kept as text — see *Blob timestamps stay text*. Null while unresolved. | `2026-08-04T10:00:00Z` | None |
 
 The four `resolution_*` columns are null **together**: the shared prefix says
@@ -831,17 +848,93 @@ None.
 - A structural breach — a missing column, a wrong dtype, a null provenance
   column — still aborts the run.
 
+## `person_sighting` — silver layer
+
+One row per observation × person it names: the bare account, and whatever that
+observation said about the person's domain, display name and email. The
+history `person_current` is reduced from. It is how a Case row can hold only
+the bare account without losing anything — see *Person columns* above and
+[ADR-0031](adr/0031-cases-hold-the-bare-account-and-people-live-in-their-own-table.md).
+
+**Unlike the Detail Tables, it reads the raw batch**, not the settled silver
+one: by the time `case_version` is settled its Person columns are reduced and
+their display names and emails dropped.
+
+### Where a person is found
+
+| Source | Account | Domain | Display name | Email |
+|--------|---------|--------|--------------|-------|
+| the five Person columns | `…/Name`, reduced | from the claims login | `…/Title` | `…/EMail` |
+| `Answers` — a captured person | `capture[field_key].loginName` | `capture[field_key].domain` | `capture[field_key].displayName` | `capture[field_key].email` |
+| `Conversation` | `author.loginName` | — | `author.displayName` | — |
+| `Appeals` | `appellant`, `resolution.resolver` | — | — | — |
+| `AmendedOutcome` | `amendedBy` | — | — | — |
+
+Every account is reduced with `to_bare_account`; a login in claims form gives
+the domain when its source recorded none. A person named twice in one
+observation is **one row**, each detail taken from the first source above that
+gave it — the Person columns lead, because the expand reads the directory live
+while the blobs hold snapshots from when they were written. The domain is
+upper-cased and the email lower-cased, so two sightings of one person spell
+them alike.
+
+### Part A — Table / Feed overview
+
+| Attribute | Value |
+|-----------|-------|
+| **Table / Feed name** | `person_sighting` |
+| **Subject / Case Type** | `sharepoint_cases` |
+| **Medallion layer** | silver |
+| **Grain** | one row per observation × bare account |
+| **Is this a Case Type?** | No |
+| **Natural key → `case_id`** | n/a — a person is keyed on `account` at gold |
+| **Source system** | the raw `case_observation` batch just fetched |
+| **Reader** | `DatasetReader` over that batch |
+| **Load strategy** | `AppendOnly(("source_observation_id", "account"))` |
+| **Upstream dependencies** | none declared — the batch is in memory |
+| **Schedule / freshness** | with the poll |
+| **Owner / data steward** | *<team>* |
+| **Source of truth doc** | `pipelines/sharepoint_cases/schema.py` (`PersonSightingRow`) |
+| **Last reviewed** | 2026-10-08 |
+
+### Part B — Field dictionary
+
+| Field | Source | Type | Nullable | Value rules | Description | Example | Sensitivity |
+|-------|--------|------|----------|-------------|-------------|---------|-------------|
+| `case_type` | *(declared)* | `str` | No | `NonNull` | The Case Type of the list polled. | `complaints` | None |
+| `source_item_id` | *(stamped)* | `str` | No | `NonNull` | The list item observed. | `101` | Internal |
+| `source_modified_at` | *(stamped)* | `datetime` | No | `NonNull` | When the source last changed the item — what orders sightings at gold. | `2026-08-05T08:10:00+00:00` | None |
+| `source_version` | *(stamped)* | `str` | No | `NonNull` | The version observed. | `"3"` | None |
+| `source_observation_id` | *(stamped)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
+| `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. | *(32-char hex)* | None |
+| `account` | see above | `str` | No | `NonNull` | The lower-cased bare account. | `a.khan` | PII |
+| `domain` | see above | `str` | Yes | — | The account's domain, upper-cased. | `CONTOSO` | Internal |
+| `display_name` | see above | `str` | Yes | — | What this observation called the person. | `Aisha Khan` | PII |
+| `email` | see above | `str` | Yes | — | The person's email, lower-cased. | `a.khan@contoso.com` | PII |
+
+### Part C — Row checks
+
+None.
+
+### Part D — Quarantine & data quality
+
+- **No value rule on this schema can quarantine a row today**; the quarantine
+  step stays wired anyway, for the same reason `to_silver_general_answer`'s
+  does.
+- A blob that is not JSON yields no sightings rather than aborting: the
+  Detail Table that explodes the same blob in the same poll raises on it.
+
 ## Two prose points shared between `conversation_message` and `appeal`
 
-**Bare account logins vs. claims logins.** `conversation_message.author_login`,
-`appeal.appellant` and `appeal.resolution_resolver` are bare account names
-(`a.khan`) — what the app itself stamps — never the claims login
-(`i:0#.w|CONTOSO\a.khan`) every `case_version` Person column holds. The two
-vocabularies do not join: matching one against the other silently matches
-nothing. This feed lands each verbatim rather than guessing at a farm's AD
-domain, which is Case-Type-agnostic and has no business knowing it. A consumer
-that must match the two — the `notifications` pipeline is the first — applies
-the encoding on its own side, through `shared/account_names.py`.
+**One spelling for a person.** `conversation_message.author_login`,
+`appeal.appellant` and `appeal.resolution_resolver` are bare accounts
+(`a.khan`) — what the app itself stamps — and so is every `case_version` Person
+column, which silver reduces from the claims login the list gives. The two
+join directly. Each blob value lands verbatim; a consumer reading an older
+copy of a table, from before the reduction, still reduces both sides through
+`shared/account_names.py`, which leaves a bare account unchanged. The domain,
+display name and email of everyone here are in `person_sighting` and
+`person_current`.
 
 **Blob timestamps stay text on purpose.** `posted_at`, `raised_at` and
 `resolution_at` are declared `str`, not `datetime`. `SchemaCoercion` now
@@ -856,7 +949,7 @@ the blobs are clean enough to re-type. (`source_modified_at` stays
 `datetime` because it comes from OData, is uniform, and is already typed
 upstream — it is not one of these blob fields.)
 
-## Gold — the current Case, its Detail Tables, and six aggregates
+## Gold — the current Case, the current Person, the Detail Tables, and six aggregates
 
 Silver accumulates *observations*; gold answers *what is true now*. Every
 table is rebuilt whole with `Refresh()` on every poll from the entire silver
@@ -869,6 +962,7 @@ everything.
 | Table | Declared grain | Measure |
 |-------|----------------|---------|
 | `case_current` | one row per `case_id` | the Case, as it currently stands |
+| `person_current` | one row per `account` | the latest domain, display name and email seen for a person |
 | `answer` | `case_id` × `question_id` | the winning observation's answer rows |
 | `answer_capture` | `case_id` × `question_id` × `field_key` | the winning observation's Issue Capture rows |
 | `answer_action` | `case_id` × `question_id` × `action_id` | the winning observation's Remediation Action rows |
@@ -883,7 +977,8 @@ everything.
 | `answer_remediation_current` | `case_type` × `question_id` × `remediation_required` × `remediation_status` | `answer_count` |
 | `appeal_outcomes_current` | `case_type` × `state` × `resolution_verdict` | `appeal_count` |
 
-Only `case_current` carries a live grain gate (`UniqueValidator("case_id")`);
+`case_current` carries a live grain gate (`UniqueValidator("case_id")`), and
+`person_current` one on `account`;
 each Detail Table carries one too (e.g. `UniqueValidator(("case_id",
 "question_id", "field_key"))` for `answer_capture`, via
 `to_gold_detail`'s generic `grain=`); the six aggregates get none,
@@ -1116,7 +1211,7 @@ beside them.
 | `amended_outcome_id` | `outcome` | an `OutcomeOption` **id** (`poor-with-harm`), not the display wording |
 | `amended_reason` | `reason` | an Amendment Reason key (`qa-check` \| `tm-check` \| `appeal`, plus per-Case-Type extras). **No `OneOf`**: Case Types may declare `extraAmendmentReasons` in frontend config this pipeline cannot see — the same argument that left `general_answer.general_key` unruled. Absent on pre-field amendments and **always** absent on appeal-derived ones |
 | `amended_justification` | `justification` | free text |
-| `amended_by` | `amendedBy` | a **bare account login** (`user-controls`), not the claims login the Person columns hold — the two vocabularies do not join (see the shared prose point above) |
+| `amended_by` | `amendedBy` | a **bare account** (`user-controls`), the same spelling the Person columns hold (see the shared prose point above) |
 | `amended_at` | `amendedAt` | ISO text, verbatim — text inside a blob stays text, as every Detail Table's blob timestamp does |
 | `amended_from_appeal_id` | `fromAppealId` | present **iff** the amendment came from agreeing an Appeal; **joins the gold `appeal` table's `appeal_id`**. Mutually exclusive with `amended_reason` in practice |
 
@@ -1146,6 +1241,33 @@ Two things to know about what this table holds:
   Case we have ever seen, at its latest observed version", which is the same
   thing only while nothing is deleted.
 
+### `person_current`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | one row per `account` |
+| **Load strategy** | `Refresh()` |
+| **Source** | the whole `silver.person_sighting` history — every sighting, not only the winning observations' |
+| **Columns** | `account`, `domain`, `display_name`, `email`, `first_seen_at`, `last_seen_at`, `as_of_utc` |
+
+**Each detail is the latest one any sighting gave**, not the latest sighting's:
+someone last seen as a Conversation author carries no email, and that must not
+blank the email a Person column gave earlier. Sightings are ordered by
+`source_modified_at`, then `source_observation_id`, so an old version polled
+late cannot overwrite what a newer one said. `first_seen_at` and
+`last_seen_at` bound the observations that named the person.
+
+It joins to every person column in this feed on `account`: `case_current`'s
+five `…_name` columns, `answer_capture.person_login`,
+`conversation_message.author_login`, `appeal.appellant` and
+`resolution_resolver`, and `case_current.amended_by`. A person the directory
+spells in two domains is still one row, keyed on the bare account, holding the
+domain seen last.
+
+Rebuilt from the whole history rather than upserted, because an upsert
+replaces the whole row and so would lose any detail the newest sighting did
+not carry.
+
 ### `case_counts_current`
 
 | Attribute | Value |
@@ -1157,8 +1279,8 @@ The base grain (above) plus `status`, the one dimension this table adds: the
 question it answers is who is holding what, split by that Case's current
 status. Manager rollups join the Staff Hierarchy at report time.
 
-`assigned_reviewer_name` is a **claims login**, as silver holds it — not a
-display name. There is no team column on the provisioned list; what the
+`assigned_reviewer_name` is the **bare account**, as silver holds it — not a
+display name; `person_current` has the display name. There is no team column on the provisioned list; what the
 review platform calls "my team" is exactly the set of Cases whose
 `AssignedReviewerManagerId` is the signed-in user, which this table does not
 carry.
@@ -1358,9 +1480,7 @@ rather than deferred quietly. Each earns its refusal on its own terms.
   `case_current.awaiting_since` are already source-written and already answer
   the latency question directly, so an aggregate here would be a second,
   derived spelling of a fact the source already states. Splitting by author
-  side would also need the bare-account-to-claims-login join
-  `conversation_message.author_login` and `case_current`'s Person columns
-  deliberately do not support (see *Bare account logins vs. claims logins*,
-  above) — this feed refuses that join on principle, not for lack of time.
-  #356, the in-app clock, is the related inverse and should be read before
-  re-proposing this.
+  side is now a plain join of `conversation_message.author_login` to
+  `case_current`'s Person columns, which share one spelling — but it would
+  still be that second spelling. #356, the in-app clock, is the related
+  inverse and should be read before re-proposing this.
