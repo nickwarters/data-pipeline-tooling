@@ -47,6 +47,7 @@ EXPECTED_LOGGED = [
     "params",
     "profile",
     "data_locations",
+    "run_date",
 ]
 
 EXPECTED_COLUMNS = [
@@ -69,6 +70,7 @@ EXPECTED_COLUMNS = [
     ("committed", "INTEGER"),
     ("profile", "TEXT"),
     ("data_locations", "TEXT"),
+    ("run_date", "TEXT"),
 ]
 
 
@@ -110,6 +112,7 @@ def test_the_declared_table_matches_the_deployed_shape():
             committed        INTEGER,
             profile          TEXT,
             data_locations   TEXT,
+            run_date         TEXT,
             PRIMARY KEY (pipeline_run_id, step, step_ordinal)
         )
     """

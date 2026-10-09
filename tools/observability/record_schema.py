@@ -246,6 +246,10 @@ RUN_RECORD_FIELDS: tuple[Field, ...] = (
         encode=_json_list_to_sql,
         decode=_json_list_from_sql,
     ),
+    # The business date the run was for (``RunContext.run_date``), written on
+    # the ``run`` summary only. A re-drive of an old date carries that date, not
+    # the day it ran.
+    Field("run_date", "TEXT"),
 )
 
 #: The fields that appear in a JSONL line, in order.

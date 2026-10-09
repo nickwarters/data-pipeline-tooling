@@ -191,6 +191,7 @@ def run_pipeline(
                 duration=time.perf_counter() - started,
                 errors=[str(exc)],
                 params=_diagnostic_params(context.params),
+                run_date=context.run_date.isoformat(),
             )
             context.mark_run_summary_recorded()
         run_registry.ingest(run_log_path)
@@ -208,6 +209,7 @@ def run_pipeline(
             rows_out=rows,
             duration=time.perf_counter() - started,
             params=_diagnostic_params(context.params),
+            run_date=context.run_date.isoformat(),
         )
         context.mark_run_summary_recorded()
     run_registry.ingest(run_log_path)

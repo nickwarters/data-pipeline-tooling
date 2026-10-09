@@ -309,6 +309,8 @@ def test_runner_context_correlates_logs_registry_and_accumulated_rows(tmp_path):
     assert set(landed["pipeline_run_id"]) == {run["pipeline_run_id"]}
     assert set(landed["logical_run_id"]) == {"cases/selection:2026-05-29"}
     assert set(landed["load_date"]) == {"2026-05-29"}
+    # The summary carries the business date, not the day it happened to run.
+    assert run["run_date"] == "2026-05-29"
 
 
 def test_bare_nested_runs_share_one_pipeline_run_id(tmp_path):
