@@ -591,6 +591,31 @@ def test_percentiles_are_taken_across_the_days_of_the_window():
     assert row["p50_change_ratio_28d"] == 10.0
 
 
+def test_the_change_falls_back_to_the_latest_row_in_the_week_before():
+    # A job that did not run 28 days before 5 Feb (8 Jan) is compared with
+    # its latest row in the week before that: 2 Jan, when its p50 was 4. A
+    # different pipeline that did run on 8 Jan is not its baseline.
+    jan2 = dt.date(2026, 1, 2)
+    records = (
+        _daily_runs([4.0], start=jan2)
+        + _daily_runs([100.0], pipeline="other", start=dt.date(2026, 1, 8))
+        + _daily_runs([8.0], start=dt.date(2026, 2, 5))
+    )
+    row = _row(_percentiles(records), date="2026-02-05")
+    assert (row["pipeline"], row["duration_p50"]) == ("ingest", 8.0)
+    assert row["p50_change_ratio_28d"] == 1.0
+
+
+def test_the_change_is_null_when_no_row_is_within_the_week_before():
+    # 12 Feb looks back to 15 Jan; 2 Jan is 13 days before that, too far.
+    records = _daily_runs([4.0], start=dt.date(2026, 1, 2)) + _daily_runs(
+        [8.0], start=dt.date(2026, 2, 12)
+    )
+    row = _row(_percentiles(records), date="2026-02-12")
+    assert row["duration_p50"] == 8.0
+    assert row["p50_change_ratio_28d"] is None
+
+
 def test_a_percentile_needs_enough_samples_to_mean_anything():
     rows = _percentiles(_daily_runs(range(1, 31)))
 
