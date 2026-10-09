@@ -1019,7 +1019,13 @@ class SqliteAppendOnlyWriter:
     Physical uniqueness on the target is **not** required: the repository's
     single-writer rule plus this Writer's one transaction is the boundary
     today, and a later schema migration can add a UNIQUE constraint without
-    changing these semantics.
+    changing these semantics. An **index on the key** is a different matter: it
+    is what keeps a write proportional to the batch rather than the history.
+    Both match statements are correlated ``EXISTS`` subqueries against the
+    target, so with no index behind the key each is a full scan of the target
+    per staged row. The Writer creates no index itself; a database under
+    migration control declares one beside the table (a plain index, which
+    unlike a UNIQUE one cannot fail to build over a duplicate already there).
     """
 
     def __init__(
