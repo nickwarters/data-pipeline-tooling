@@ -1,7 +1,13 @@
 """Test the on-disk run-metadata locations owned by ``RunStore``."""
 
+import sqlite3
 from pathlib import Path
 
+from tools.observability.record_schema import (
+    RUN_RECORD_COLUMNS,
+    RUN_RECORD_PRIMARY_KEY,
+    create_table_sql,
+)
 from tools.observability.run_log import RunLog
 from tools.observability.run_registry import RunRegistry
 from tools.observability.run_store import RunStore
@@ -68,3 +74,28 @@ def test_catch_up_is_repeatable_without_double_counting(tmp_path):
     registry = store.catch_up()
 
     assert len(registry.query_runs()) == 1
+
+
+def test_catch_up_migrates_an_existing_registry_with_no_log_to_ingest(tmp_path):
+    # A registry from before ``run_date`` was declared, whose logs have been
+    # rotated away: nothing is ingested, yet a reader going straight to the
+    # table must still find every declared column.
+    store = RunStore(tmp_path)
+    store.registry_path.parent.mkdir(parents=True)
+    older = [f for f in RUN_RECORD_COLUMNS if f.name != "run_date"]
+    with sqlite3.connect(store.registry_path) as con:
+        con.execute(create_table_sql("run_records", older, RUN_RECORD_PRIMARY_KEY))
+    con.close()
+
+    store.catch_up()
+
+    con = sqlite3.connect(store.registry_path)
+    columns = {row[1] for row in con.execute("PRAGMA table_info(run_records)")}
+    con.close()
+    assert columns == {f.name for f in RUN_RECORD_COLUMNS}
+
+
+def test_catch_up_does_not_create_a_registry_where_none_exists(tmp_path):
+    store = RunStore(tmp_path)
+    store.catch_up()
+    assert not store.registry_path.exists()

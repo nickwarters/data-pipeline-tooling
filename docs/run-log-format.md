@@ -300,8 +300,12 @@ with the index. The write path is a shared-drive SQLite file that inserts
 row-by-row under an exclusive lock with WAL unavailable, so an index has a cost
 there: about 8 µs more per inserted record, measured, against a day's ~1,200.
 `CREATE INDEX IF NOT EXISTS` runs on every open; once the index exists it is a
-no-op that takes no write lock, so a current file still opens without one. It
-changes no on-disk record format.
+no-op that takes no write lock, so a current file still opens without one. The
+**first** open after deploying it is the exception: it scans the whole table
+and builds the index under the exclusive write lock, and any concurrent writer
+waits on the 5 s busy timeout and can fail with "database is locked" if the
+build runs longer on a slow share — so deploy it with the orchestrator idle.
+It changes no on-disk record format.
 
 The runner adds one domain-level opt-in step before a handler executes:
 `freshness`. It is emitted for a downstream Pipeline that declares an upstream
@@ -414,7 +418,12 @@ declared column the table lacks (nullable, in place — never a re-create) and
 returns the names it added. A database written before `committed`, `step_address`,
 `logical_run_id`, `profile`, `data_locations`, `run_date`, `orchestration_run_id` or
 the four wait fields existed therefore keeps ingesting, and its older
-rows read back with those fields empty. `tools.orchestration`'s decision store
+rows read back with those fields empty. `RunStore.catch_up()` opens an existing
+registry for this even when there is no log left to ingest, so a reader that
+goes straight to `run_records` (the `pipeline_run_metric` pipeline's
+`SqliteReader`) finds every declared column on an older file whose logs were
+rotated away; it does not create a registry where none exists.
+`tools.orchestration`'s decision store
 uses the same helper over its own separate declaration — shared machinery, two
 distinct contracts.
 
