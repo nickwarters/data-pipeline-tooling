@@ -27,7 +27,7 @@ class ComplaintsCCasesReader:
         columns: Sequence[str] | None = None,
     ) -> None:
         self._reader = medallion(StoreRegistry(base_dir), _SUBJECT).silver.reader(
-            _TABLE, columns
+            _TABLE, columns=columns
         )
 
     @property

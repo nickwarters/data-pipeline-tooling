@@ -33,7 +33,8 @@ narrowed to 14 of its 47 columns, which cut a 100k-row read from 6.6s and 914MB
 to 1.1s and 87MB.
 
 A named column the table lacks fails the read with a `ValidationError` naming
-every missing column. So narrowing moves a missing column's failure from the
+every missing column. Names match as SQLite matches them, ignoring ASCII case,
+and each column comes back under the spelling the consumer named. So narrowing moves a missing column's failure from the
 step that needed it to the read. `UsersReader` and the Question Bank store do
 not take `columns`: the first already reads a fixed, normalised set, and the
 second reads files.
@@ -78,7 +79,9 @@ _CASE_CURRENT_TABLE = "case_current"
 
 
 def _gold_reader(base_dir, table, columns):
-    return medallion(StoreRegistry(base_dir), _SUBJECT).gold.reader(table, columns)
+    return medallion(StoreRegistry(base_dir), _SUBJECT).gold.reader(
+        table, columns=columns
+    )
 
 
 class CurrentCasesReader:
@@ -338,8 +341,8 @@ declared nothing.
 
 ## The guardrails
 
-They are also in `readers/__init__.py`, so they are readable from inside the
-package.
+This page is where they live; `readers/__init__.py` points here rather than
+keeping a second copy that could drift.
 
 **G1 — Read-only.** `readers/` mints Readers, never Writers. This is what stops
 it becoming a second store facade beside `tools.store`, and it is encoded in the

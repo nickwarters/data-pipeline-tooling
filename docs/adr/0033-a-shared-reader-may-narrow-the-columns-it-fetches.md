@@ -55,5 +55,6 @@ it fetches (`CurrentCasesReader(base_dir, case_ids=...)`), is still not decided.
 - **Readers that are not a table pass-through do not take it.** `UsersReader`
   already reads a fixed column set and normalises it (the G5 carve-out), and
   the Question Bank store reads files, not tables.
-- **`Store.reader(table, columns=None)`** carries the list to the `SqliteReader`,
-  which already supported it.
+- **`Store.reader(table, *, columns=None)`** carries the list to the
+  `SqliteReader`, which already supported it; keyword-only there as on every
+  Shared Reader.

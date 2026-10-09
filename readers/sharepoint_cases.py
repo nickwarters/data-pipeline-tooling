@@ -28,14 +28,18 @@ def _gold_reader(
     base_dir: str | os.PathLike[str], table: str, columns: Sequence[str] | None
 ) -> Reader:
     """Mint a Reader over a published gold table in this subject."""
-    return medallion(StoreRegistry(base_dir), _SUBJECT).gold.reader(table, columns)
+    return medallion(StoreRegistry(base_dir), _SUBJECT).gold.reader(
+        table, columns=columns
+    )
 
 
 def _silver_reader(
     base_dir: str | os.PathLike[str], table: str, columns: Sequence[str] | None
 ) -> Reader:
     """Mint a Reader over one of the subject's silver tables -- the history."""
-    return medallion(StoreRegistry(base_dir), _SUBJECT).silver.reader(table, columns)
+    return medallion(StoreRegistry(base_dir), _SUBJECT).silver.reader(
+        table, columns=columns
+    )
 
 
 class CurrentCasesReader:

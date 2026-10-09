@@ -71,6 +71,28 @@ def test_requested_columns_the_table_lacks_fail_naming_every_one(fixture_db):
         reader.read()
 
 
+def test_requested_columns_match_the_table_ignoring_ascii_case(tmp_path):
+    # SQLite would SELECT "adviser_id" from a column declared "Adviser_ID", so
+    # the check must not call it missing; the frame carries the name asked for.
+    # Its case folding is ASCII only, and a quoted name it cannot resolve
+    # reads back as a string literal, so a non-ASCII mismatch is still missing.
+    db = tmp_path / "mixed.db"
+    con = sqlite3.connect(db)
+    try:
+        con.execute('CREATE TABLE Advisers ("Adviser_ID" INTEGER, "Émis" TEXT)')
+        con.execute("INSERT INTO Advisers VALUES (1, 'x')")
+        con.commit()
+    finally:
+        con.close()
+
+    dataset = SqliteReader(db, "Advisers", columns=["adviser_id"]).read()
+
+    assert dataset.columns == ["adviser_id"]
+    assert dataset.to_pandas()["adviser_id"].tolist() == [1]
+    with pytest.raises(ValidationError, match=r"missing required column\(s\): émis"):
+        SqliteReader(db, "Advisers", columns=["émis"]).read()
+
+
 def test_requested_columns_on_a_missing_table_fail_as_a_missing_table(fixture_db):
     # No table means no columns to compare against: the read reports the
     # missing table, not every requested column as missing.

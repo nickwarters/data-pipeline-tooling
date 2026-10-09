@@ -96,7 +96,7 @@ class Store:
             self._db_path, table, busy_timeout_ms=self._busy_timeout_ms
         )
 
-    def reader(self, table: str, columns: Sequence[str] | None = None) -> Reader:
+    def reader(self, table: str, *, columns: Sequence[str] | None = None) -> Reader:
         """Mint a Reader over a table in this namespace; ``columns`` narrows it."""
         return SqliteReader(
             self._db_path,

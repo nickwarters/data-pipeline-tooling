@@ -64,6 +64,9 @@ def test_store_reader_narrows_to_the_columns_named(tmp_path):
 
     assert store.reader("cases").read().columns == ["case_id", "status"]
     assert store.reader("cases", columns=("status",)).read().columns == ["status"]
+    # Keyword-only, as on every Shared Reader that passes it through.
+    with pytest.raises(TypeError):
+        store.reader("cases", ("status",))
 
 
 def test_store_columns_of_reads_the_prior_landing_and_labels_the_table(tmp_path):
