@@ -6,7 +6,13 @@ import time
 
 import pytest
 
-from tools.source_checkpoint import InstantWindow, SourceCheckpointStore, instant_window
+from tools import source_checkpoint as checkpoint_module
+from tools.source_checkpoint import (
+    CheckpointCommit,
+    InstantWindow,
+    SourceCheckpointStore,
+    instant_window,
+)
 
 UTC = dt.timezone.utc
 SOURCE_NOW = dt.datetime(2026, 8, 5, 9, 0, tzinfo=UTC)
@@ -196,6 +202,93 @@ def test_a_naive_watermark_creates_no_control_state(tmp_path):
 
     with pytest.raises(ValueError, match="timezone-aware"):
         commit(store, at=NAIVE)
+
+    assert not store.path.exists()
+
+
+def batch_of(*sources, at=COMMITTED, run="run-1"):
+    return [CheckpointCommit(s, at, f"batch-{s}", run) for s in sources]
+
+
+def test_several_sources_commit_together_each_with_its_own_provenance(tmp_path):
+    store = SourceCheckpointStore(tmp_path)
+
+    store.commit_all(batch_of(SOURCE, OTHER))
+
+    assert store.watermark(SOURCE) == COMMITTED
+    assert store.watermark(OTHER) == COMMITTED
+    assert {r["source_key"]: r["batch_id"] for r in stored_rows(store)} == {
+        SOURCE: f"batch-{SOURCE}",
+        OTHER: f"batch-{OTHER}",
+    }
+
+
+def test_a_batch_with_one_source_going_backwards_commits_none_of_them(tmp_path):
+    # All or nothing: the batch is one transaction, so a refusal part-way rolls
+    # back the sources that were checked and upserted before it -- including a
+    # source with no row yet, which must not appear.
+    store = SourceCheckpointStore(tmp_path)
+    commit(store, OTHER, batch="batch-1", run="run-1")
+    earlier = COMMITTED - dt.timedelta(minutes=30)
+    later = COMMITTED + dt.timedelta(minutes=30)
+
+    with pytest.raises(ValueError, match="must not move backwards") as refused:
+        store.commit_all(
+            [
+                CheckpointCommit(SOURCE, later, "b2", "r2"),
+                CheckpointCommit(OTHER, earlier, "b2", "r2"),
+            ]
+        )
+
+    assert OTHER in str(refused.value)
+    assert store.watermark(SOURCE) is None
+    assert [
+        (r["source_key"], r["watermark_utc"], r["batch_id"]) for r in stored_rows(store)
+    ] == [(OTHER, COMMITTED.isoformat(), "batch-1")]
+
+
+def test_a_batch_is_one_connection_and_one_transaction(tmp_path, monkeypatch):
+    opened = []
+    statements = []
+    real_connect = checkpoint_module.connect
+
+    def spying_connect(*args, **kwargs):
+        con = real_connect(*args, **kwargs)
+        con.set_trace_callback(statements.append)
+        opened.append(con)
+        return con
+
+    monkeypatch.setattr(checkpoint_module, "connect", spying_connect)
+    store = SourceCheckpointStore(tmp_path)
+
+    store.commit_all(batch_of(SOURCE, OTHER, "claims.dbo.Third"))
+
+    assert len(opened) == 1
+    assert statements.count("BEGIN IMMEDIATE") == 1
+    assert statements.count("COMMIT") == 1
+
+
+def test_an_empty_batch_is_a_no_op_and_creates_nothing(tmp_path):
+    store = SourceCheckpointStore(tmp_path)
+
+    store.commit_all([])
+
+    assert not store.path.exists()
+    assert not store.path.parent.exists()
+
+
+def test_a_naive_instant_anywhere_in_a_batch_commits_nothing_and_creates_nothing(
+    tmp_path,
+):
+    store = SourceCheckpointStore(tmp_path)
+
+    with pytest.raises(ValueError, match="timezone-aware"):
+        store.commit_all(
+            [
+                CheckpointCommit(SOURCE, COMMITTED, "b", "r"),
+                CheckpointCommit(OTHER, NAIVE, "b", "r"),
+            ]
+        )
 
     assert not store.path.exists()
 

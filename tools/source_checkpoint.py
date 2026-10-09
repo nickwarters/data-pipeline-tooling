@@ -11,7 +11,11 @@ sources.db``, keyed by the source's stable key. Reading a watermark never
 writes — an unseen source reads as ``None`` and brings no file into existence —
 and :meth:`SourceCheckpointStore.commit` is the **last act of a successful
 run**: nothing else advances a watermark, so a run that failed part-way simply
-re-polls the same span next time, and a dry run commits nothing.
+re-polls the same span next time, and a dry run commits nothing. A run that
+polled several sources commits their watermarks **together**, with
+:meth:`SourceCheckpointStore.commit_all`: one connection, one transaction, all or
+none, so a failure while committing never leaves some sources advanced and the
+rest not. ``commit`` is that, for one source.
 
 **The rule** is :func:`instant_window`, pure, and handed the committed watermark
 rather than reading it from the store: the store has no business knowing about
@@ -33,13 +37,19 @@ from __future__ import annotations
 
 import datetime as dt
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 from framework._internal.connection import connect
 from tools.observability.timestamps import utc_now_iso
 
-__all__ = ["InstantWindow", "SourceCheckpointStore", "instant_window"]
+__all__ = [
+    "CheckpointCommit",
+    "InstantWindow",
+    "SourceCheckpointStore",
+    "instant_window",
+]
 
 
 @dataclass(frozen=True)
@@ -108,6 +118,20 @@ def instant_window(
     if end <= committed:
         return None
     return InstantWindow(start=committed - overlap, end=end)
+
+
+@dataclass(frozen=True)
+class CheckpointCommit:
+    """One source's watermark to advance, with the provenance that goes with it.
+
+    The unit :meth:`SourceCheckpointStore.commit_all` takes several of. The fields
+    are :meth:`SourceCheckpointStore.commit`'s arguments, by the same names.
+    """
+
+    source_key: str
+    window_end: dt.datetime
+    batch_id: str
+    pipeline_run_id: str
 
 
 _CREATE_CHECKPOINTS = """
@@ -199,35 +223,70 @@ class SourceCheckpointStore:
         hide the fact that a run lost its place.
 
         ``batch_id`` is opaque provenance, handed in rather than derived here;
-        the caller owns what a batch is.
+        the caller owns what a batch is. This is :meth:`commit_all` for one
+        source, so the two cannot disagree about the rule.
         """
-        end = _require_utc_instant(window_end, "window_end")
+        self.commit_all(
+            [CheckpointCommit(source_key, window_end, batch_id, pipeline_run_id)]
+        )
+
+    def commit_all(self, commits: Sequence[CheckpointCommit]) -> None:
+        """Advance every source in ``commits`` in one transaction: all, or none.
+
+        A run that polled several sources commits them here rather than one
+        :meth:`commit` each: one connection and one write transaction instead of
+        one per source — which on a network share is the cost that matters — and,
+        more to the point, no half-advanced state. If the ninth of fifteen could
+        not be committed, the first eight would have moved and the last seven
+        not; here the failure rolls the whole batch back and every source re-polls
+        its same span next time.
+
+        Each commit obeys :meth:`commit`'s rule: an equal ``window_end`` is
+        accepted and refreshes the provenance, an *earlier* one raises (a
+        ``ValueError`` naming that source) and **nothing** in the batch is
+        committed. Every instant is checked before anything is opened, so a naive
+        one creates no control state either. An empty batch is a no-op: no file,
+        no table, no lock.
+        """
+        if not commits:
+            return
+        ends = [_require_utc_instant(c.window_end, "window_end") for c in commits]
         self.path.parent.mkdir(parents=True, exist_ok=True)
         con = connect(self.path, self._busy_timeout_ms)
         try:
             con.execute(_CREATE_CHECKPOINTS)
-            # BEGIN IMMEDIATE puts the monotonicity read inside the write
+            # BEGIN IMMEDIATE puts the monotonicity reads inside the write
             # transaction, so a concurrent committer cannot slip a newer
-            # watermark in between the SELECT and the upsert. It has to come
+            # watermark in between a SELECT and its upsert. It has to come
             # before any DML on this connection: sqlite3 opens its own implicit
             # transaction at the first write statement, and BEGIN would then
             # fail as a nested one.
             con.execute("BEGIN IMMEDIATE")
-            row = con.execute(_SELECT_WATERMARK, (source_key,)).fetchone()
-            if row is not None:
-                stored = dt.datetime.fromisoformat(row[0])
-                if end < stored:
-                    raise ValueError(
-                        f"checkpoint for {source_key} must not move backwards: "
-                        f"committed {stored.isoformat()}, "
-                        f"asked to commit {end.isoformat()}"
-                    )
-            con.execute(
-                _UPSERT_CHECKPOINT,
-                (source_key, end.isoformat(), batch_id, pipeline_run_id, utc_now_iso()),
-            )
+            committed_at = utc_now_iso()
+            for commit, end in zip(commits, ends):
+                row = con.execute(_SELECT_WATERMARK, (commit.source_key,)).fetchone()
+                if row is not None:
+                    stored = dt.datetime.fromisoformat(row[0])
+                    if end < stored:
+                        raise ValueError(
+                            f"checkpoint for {commit.source_key} must not move "
+                            f"backwards: committed {stored.isoformat()}, "
+                            f"asked to commit {end.isoformat()}"
+                        )
+                con.execute(
+                    _UPSERT_CHECKPOINT,
+                    (
+                        commit.source_key,
+                        end.isoformat(),
+                        commit.batch_id,
+                        commit.pipeline_run_id,
+                        committed_at,
+                    ),
+                )
             con.commit()
         finally:
+            # Closing with the transaction still open rolls it back: a raise
+            # above leaves the file as it was before the batch began.
             con.close()
 
 

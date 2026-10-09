@@ -65,14 +65,16 @@ The generic loop (see it, diagnose it, resolve it, re-drive it) is
 [resolving-a-failed-run.md](resolving-a-failed-run.md). Its §4 rule —
 idempotent by *logical run id* — is **not** why this feed is safe. Raw and silver
 use `AppendOnly("source_observation_id")`, gold is rebuilt whole with `Refresh()`,
-and **every** watermark commits last. The feed polls each list in `CASE_LISTS`,
-and each keeps its own watermark, so these shapes are per list. Four of them:
+and **every** watermark commits last, **together** — one transaction, all or
+none. The feed polls each list in `CASE_LISTS`, and each keeps its own
+watermark, so these shapes are per list. Four of them:
 
 - **Failure above the commit.** Nothing advanced the checkpoint, so the next run
   polls from the same watermark and covers the failed window's ground again.
   Re-run the ordinary command; no cleanup first.
-- **The commit itself failed.** The window was published but the watermark did
-  not move. The rerun starts from that same watermark — its *end* is a fresh
+- **The commit itself failed.** The window was published but no watermark
+  moved — the lists commit in one transaction, so it is every list or none, never
+  some of them. The rerun starts from that same watermark — its *end* is a fresh
   `server_now - safety_lag`, so it is a wider window, not the identical one —
   and `AppendOnly` no-ops the observations already landed (the observation id is
   derived from immutable metadata, so a re-read *is* the same observation). Gold

@@ -477,7 +477,9 @@ committed - overlap` (`None` on a first load, meaning everything the source
 holds), and no window at all when `end` has not passed `committed` — handed the
 watermark rather than reading it, because overlaps and lags belong to the
 source being polled. The commit is
-the **last act of a successful run**; nothing else advances it, and **a run's
+the **last act of a successful run**; a run that polled several sources commits
+their watermarks **together** (`commit_all`: one transaction, all or none, so a
+failure never leaves some advanced and the rest not); nothing else advances it, and **a run's
 time is never a source's watermark** — the run registry's "last success" is a
 fact about this box's clock, and under a failed run the two diverge. **Do not confuse
 the two senses of "checkpoint"**: elsewhere in this glossary and in
