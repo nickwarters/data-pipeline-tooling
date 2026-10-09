@@ -84,6 +84,10 @@ def local_date(value: str | dt.datetime) -> dt.date:
     date it is compared against is local, so the instant is moved into the local
     zone before its date is taken. A timestamp that carries no offset is already
     read as local wall time.
+
+    One value at a time, it raises where the system zone cannot place the
+    instant (``OSError`` on Windows before 1970); a column goes through
+    :func:`local_wall_clock`, which turns such an instant into ``NaT``.
     """
     moment = parse_timestamp(value) if isinstance(value, str) else value
     if hasattr(moment, "to_pydatetime"):
@@ -92,9 +96,26 @@ def local_date(value: str | dt.datetime) -> dt.date:
     return moment.astimezone(local_timezone()).date()
 
 
-# Every zone's offset changes on a quarter-hour, so one lookup per slot is one
-# per distinct offset an instant in it could have.
+# One system-zone lookup per quarter-hour slot, taken at the slot's start. That
+# is exact wherever a zone changes offset on a quarter-hour UTC boundary, as
+# every UK change does. Not every zone always has: tzdata 2026c lists changes
+# since 1972 off that grid (Newfoundland's and Labrador's 00:01 changes until
+# 2011, Gaza's in 2010-11, Casey's to 2022, Monrovia's in 1972), and on such a
+# box the instants between the change and the end of its slot take the old
+# offset.
 _OFFSET_SLOT = "15min"
+
+
+def _system_offset(moment: dt.datetime) -> dt.timedelta | None:
+    """The system zone's UTC offset at ``moment``; ``None`` where it has none.
+
+    Windows' C runtime cannot place an instant before 1970 (or one past its
+    range), and ``astimezone()`` raises ``OSError`` for it rather than answering.
+    """
+    try:
+        return moment.astimezone().utcoffset()
+    except (OSError, OverflowError):
+        return None
 
 
 def local_wall_clock(instants: pd.Series) -> pd.Series:
@@ -102,7 +123,9 @@ def local_wall_clock(instants: pd.Series) -> pd.Series:
 
     :func:`local_date`'s rule for a whole column: through the same zone seam,
     and with the system zone resolved per instant (``tz_convert(None)`` would
-    give UTC), so each instant takes the offset in force when it happened.
+    give UTC), so each instant takes the offset in force when it happened. An
+    instant the system zone cannot place (one before 1970, on Windows) becomes
+    ``NaT``, as an unparseable stamp does, rather than failing the column.
     """
     utc = pd.to_datetime(instants, utc=True)
     zone = local_timezone()
@@ -110,8 +133,7 @@ def local_wall_clock(instants: pd.Series) -> pd.Series:
         return utc.dt.tz_convert(zone).dt.tz_localize(None)
     slots = utc.dt.floor(_OFFSET_SLOT)
     offsets = {
-        slot: slot.to_pydatetime().astimezone().utcoffset()
-        for slot in slots.dropna().unique()
+        slot: _system_offset(slot.to_pydatetime()) for slot in slots.dropna().unique()
     }
     return utc.dt.tz_localize(None) + pd.to_timedelta(slots.map(offsets))
 

@@ -72,6 +72,38 @@ def test_the_weekend_and_holidays_are_readable_for_vectorised_arithmetic(tmp_pat
     assert WorkingDayCalendar().weekend == frozenset({5, 6})
 
 
+def test_constructor_holidays_are_held_as_dates_whatever_form_they_came_in():
+    calendar = WorkingDayCalendar(
+        holidays=[
+            dt.date(2026, 5, 25),
+            dt.datetime(2026, 8, 31, 9, 30),
+            "2026-12-25",
+        ]
+    )
+
+    assert calendar.holidays == frozenset(
+        {dt.date(2026, 5, 25), dt.date(2026, 8, 31), dt.date(2026, 12, 25)}
+    )
+    assert calendar.is_working_day(dt.date(2026, 8, 31)) is False
+    assert calendar.is_working_day(dt.date(2026, 12, 25)) is False
+
+
+@pytest.mark.parametrize(
+    ("holiday", "error"),
+    [
+        ("2026/12/25", ValueError),
+        ("20261225", ValueError),
+        ("2026-W52-5", ValueError),
+        ("2026-02-30", ValueError),
+        (20261225, TypeError),
+        (None, TypeError),
+    ],
+)
+def test_a_constructor_holiday_that_is_not_a_date_is_refused(holiday, error):
+    with pytest.raises(error, match="holiday"):
+        WorkingDayCalendar(holidays=[holiday])
+
+
 def test_a_seeded_holiday_shifts_the_availability_window(tmp_path):
     # The Availability/CasePool side of the same seam: "the last N working days"
     # must step over a seeded holiday, not just the weekend.

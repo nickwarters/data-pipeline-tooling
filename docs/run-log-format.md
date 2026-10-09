@@ -167,7 +167,10 @@ from there:
   column of UTC instants into local wall-clock times through the same zone
   seam, resolving the system zone per instant (pandas' own `tz_convert(None)`
   means UTC, not the system zone), so a reduction can take local dates, months
-  or hours of a million rows without a Python call per row.
+  or hours of a million rows without a Python call per row. An instant the
+  system zone cannot place — one before 1970, which Windows' C runtime refuses —
+  becomes `NaT`, as an unparseable stamp does, rather than failing the column;
+  `local_date`, one value at a time, still raises for it.
 
 The behavioural consequence, and the bug that motivated it: the deployment
 target is a UK box, at UTC+1 for roughly half the year. An upstream that
