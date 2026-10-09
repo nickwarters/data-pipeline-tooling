@@ -115,6 +115,37 @@ def test_local_wall_clock_resolves_the_system_zone_per_instant(system_zone_uk):
     assert pd.isna(local_wall_clock(instants).iloc[4])
 
 
+class _WindowsDatetime(dt.datetime):
+    """A datetime whose system-zone ``astimezone()`` fails before 1970, as
+    Windows' C runtime does, so the deployment target's error can be raised on
+    any box."""
+
+    def astimezone(self, tz=None):
+        if tz is None and self < dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc):
+            raise OSError(22, "Invalid argument")
+        return super().astimezone(tz)
+
+
+def test_local_wall_clock_treats_an_instant_the_system_zone_cannot_place_as_nat(
+    system_zone_uk, monkeypatch
+):
+    looked_up = timestamps._system_offset
+    monkeypatch.setattr(
+        timestamps,
+        "_system_offset",
+        lambda moment: looked_up(_WindowsDatetime.fromisoformat(moment.isoformat())),
+    )
+    instants = pd.to_datetime(
+        pd.Series(["1900-01-01T09:00:00+00:00", "2026-07-27T23:10:00+00:00"]),
+        utc=True,
+    )
+
+    wall = local_wall_clock(instants)
+
+    assert pd.isna(wall.iloc[0])
+    assert wall.iloc[1] == pd.Timestamp("2026-07-28T00:10:00")
+
+
 def test_local_wall_clock_agrees_with_local_date_through_the_seam(uk_summer):
     instants = pd.to_datetime(pd.Series(["2026-07-27T23:10:00+00:00"]), utc=True)
     [wall] = local_wall_clock(instants)
