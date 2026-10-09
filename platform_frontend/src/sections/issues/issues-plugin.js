@@ -63,6 +63,7 @@ export const IssuesPlugin = /** @type {const} */ ({
       },
       canEditIssues,
       dispatchResponsibleParty: actions?.selectResponsibleParty,
+      dispatchResponsiblePartyClear: actions?.clearResponsibleParty,
       dispatchResponsiblePartySearch: actions?.requestResponsiblePartySearch,
       dispatchCapture: actions?.captureEdited,
       dispatchCaptureSearch: actions?.requestCaptureSearch,

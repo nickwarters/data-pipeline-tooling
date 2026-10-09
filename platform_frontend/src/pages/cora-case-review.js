@@ -1216,6 +1216,7 @@ export function createRouteSlice(params, context) {
       captureEdited,
       requestCaptureSearch,
       selectResponsibleParty,
+      clearResponsibleParty,
       requestResponsiblePartySearch,
       appeals,
       onComplete,

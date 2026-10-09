@@ -48,6 +48,7 @@ function props(overrides = {}) {
     dispatchRemediationFreeForm() {},
     dispatchRemediationRequired() {},
     dispatchResponsibleParty() {},
+    dispatchResponsiblePartyClear() {},
     dispatchResponsiblePartySearch() {},
     ...overrides,
   });
@@ -194,6 +195,44 @@ test('choosing a search result hands the whole Party to the route', () => {
   const [option] = queryAllByRole(root, 'option');
   fireEvent(option, 'click');
   assert.deepEqual(chosen, [person]);
+});
+
+test('a chosen Responsible Party can be cleared back to nobody', () => {
+  // Choosing again only ever swaps one person for another, so without this a
+  // Party named by mistake could never be taken off the Case before sending.
+  let cleared = 0;
+  const node = ResponsiblePartyField(
+    props({
+      canEditIssues: true,
+      responsibleParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
+      dispatchResponsiblePartyClear: () => cleared++,
+    })
+  );
+  const root = host(node ? [node] : []);
+  fireEvent(
+    getByRole(root, 'button', { name: 'Clear Responsible Party' }),
+    'click'
+  );
+  assert.equal(cleared, 1);
+});
+
+test('there is nothing to clear until a Responsible Party is chosen', () => {
+  const node = ResponsiblePartyField(props({ canEditIssues: true }));
+  const root = host(node ? [node] : []);
+  assert.equal(
+    queryByRole(root, 'button', { name: 'Clear Responsible Party' }),
+    null
+  );
+});
+
+test('a read-only Responsible Party cannot be cleared', () => {
+  const node = ResponsiblePartyField(
+    props({
+      responsibleParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
+    })
+  );
+  const root = host(node ? [node] : []);
+  assert.equal(queryByRole(root, 'button'), null);
 });
 
 test('a Responsible Party search that finds nobody offers no account, and says so', () => {

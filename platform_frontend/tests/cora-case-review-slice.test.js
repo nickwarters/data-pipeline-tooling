@@ -955,6 +955,49 @@ test('route: the Responsible Party search is debounced and its choice is persist
   route.dispose();
 });
 
+test('route: clearing the chosen Responsible Party persists nobody and keeps the picker', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const route = renderResponsiblePartyRoute(async () => [], 'jsmith');
+  const panel = queryAllByRole(route.container, 'tabpanel').find(
+    (candidate) => candidate.id === 'case-panel-issues'
+  );
+  assert.ok(panel);
+
+  fireEvent(
+    getByRole(panel, 'button', { name: 'Clear Responsible Party' }),
+    'click'
+  );
+  assert.equal(
+    route.state.routes.caseReview.snapshot?.caseRow?.responsibleParty,
+    ''
+  );
+  assert.deepEqual(
+    route.actions.filter(
+      (action) => action.type === 'case/responsible-party-cleared'
+    ),
+    [{ type: 'case/responsible-party-cleared' }]
+  );
+  t.mock.timers.tick(1);
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(route.patches, [{ responsibleParty: '' }]);
+
+  const after = queryAllByRole(route.container, 'tabpanel').find(
+    (candidate) => candidate.id === 'case-panel-issues'
+  );
+  assert.ok(
+    getByRole(after, 'combobox', {
+      name: 'Search people for Responsible Party',
+    }),
+    'remediation is still required, so a new Party can be named'
+  );
+  assert.equal(
+    queryByRole(after, 'button', { name: 'Clear Responsible Party' }),
+    null
+  );
+  route.dispose();
+});
+
 test('route: withdrawing the last remediation decision clears the party and resets its search', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   /** @type {(people: any[]) => void} */
