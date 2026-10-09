@@ -1,29 +1,14 @@
 """Build the ``cora_platform_metric`` gold tables from the Sync subject.
 
-Aggregate tables, each reduced from the Sync subject's published current state
-or its observation history through the Shared Readers in
-``readers.sharepoint_cases``, and written into this subject's own gold on every
-run: whole (``Refresh()``), but for the ``ACCUMULATED_TABLES``, which add the
-day's rows (``AccumulateByRun``). Each reduction is a function in ``metrics``;
-this module only wires readers and writers around them, with the eager steps,
-so a run reads top to bottom and can be stepped through in a debugger.
+``run`` reads each Sync source once through the Shared Readers, takes the
+snapshot instant off the current Cases, orders the observation history once,
+and hands each ``to_*`` step what it reduces (a function in ``metrics``), that
+instant and its table's Writer. A step gates its source on the columns it
+reads, so a missing column fails that table and leaves the earlier ones
+written. The tables are in ``docs/data-dictionary-cora-platform-metric.md``.
 
-``run`` does the wiring: it reads each source once, takes the Sync snapshot
-instant off the current Cases -- the one ``as_of_utc`` every table is stamped
-with -- puts the observation history in order once, and hands each ``to_*``
-step what it reduces, that instant, and the Writer for its table. A step gates
-the source it reduces on the columns it needs, so a source missing a column
-fails that table rather than the ones before it: the tables commit
-independently, in order, and a failure part-way leaves the earlier ones
-refreshed, which is safe because the next run rebuilds everything from the same
-Sync snapshot or a newer one.
-
-Run parameters:
-
-* ``calendar`` -- path to a YAML working-day calendar (``holidays`` +
-  ``weekend``, the same file ``orchestrate --calendar`` takes). Seeds the
-  working-day arithmetic behind ``case_sla_attainment_monthly`` and the
-  ``sla_margin_review`` percentiles; omitted, the calendar is weekends-only.
+Run parameter ``calendar``: a YAML working-day calendar, the file
+``orchestrate --calendar`` takes; omitted, weekends-only.
 """
 
 from __future__ import annotations

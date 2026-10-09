@@ -1,15 +1,10 @@
 """Declared gold schemas for the ``cora_platform_metric`` Reporting subject.
 
-One dataclass per published table, in publication order. Every table is an
-Aggregate: one row per combination of the dimensions it declares, plus its
-measures, stamped with the Sync snapshot's ``as_of_utc``. The grain of each is
-stated in ``docs/data-dictionary-cora-platform-metric.md``; this module states
-the type contract the ``SchemaValidator`` gates each table on before it is
-written.
-
-Measures that are statistics over an interval (means, percentiles, maxima) are
-``float`` and nullable: a group whose intervals are all still open has a count
-but no statistic, and NULL says so where a zero would lie.
+One dataclass per published table, in publication order: the type contract
+each table's ``SchemaValidator`` gates it on. Grains and meanings are in
+``docs/data-dictionary-cora-platform-metric.md``. A statistic is ``float`` and
+nullable: a group with nothing measured has a count but no statistic, and NULL
+says so where a zero would lie.
 """
 
 from __future__ import annotations
@@ -47,12 +42,7 @@ OPEN_AGE_MEASURES = (
 
 @dataclass
 class CaseStageDwell:
-    """``case_stage_dwell_current`` -- how long Cases sit in each status.
-
-    Grain: ``brand`` x ``case_type`` x ``status``. Statistics are over the
-    *closed* intervals only -- a status the Case has been observed leaving;
-    ``open_interval_count`` counts the Cases still in the status at ``as_of``.
-    """
+    """``case_stage_dwell_current``; statistics over closed intervals only."""
 
     brand: Annotated[str, NonNull()]
     case_type: Annotated[str, NonNull()]
@@ -68,11 +58,7 @@ class CaseStageDwell:
 
 @dataclass
 class CaseHold:
-    """``case_hold_current`` -- how often and how long Cases are held.
-
-    Grain: ``brand`` x ``case_type`` x ``assigned_reviewer_name``. Held days
-    include holds still open at ``as_of``, measured to that instant.
-    """
+    """``case_hold_current``; an open hold is measured to ``as_of``."""
 
     brand: Annotated[str, NonNull()]
     case_type: Annotated[str, NonNull()]
@@ -87,13 +73,7 @@ class CaseHold:
 
 @dataclass
 class CaseSlaAttainmentMonthly:
-    """``case_sla_attainment_monthly`` -- completed Cases against their SLA.
-
-    Grain: ``sla_kind`` x ``completed_month`` x ``brand`` x ``case_type`` x
-    ``assigned_reviewer_manager_name``. Lateness is in working days after the
-    due date; ``no_due_date_count`` Cases are in ``case_count`` but in neither
-    the on-time nor the late count.
-    """
+    """``case_sla_attainment_monthly``; lateness in working days."""
 
     sla_kind: Annotated[str, NonNull(), OneOf(*SLA_KINDS)]
     completed_month: Annotated[str, NonNull()]
@@ -112,11 +92,7 @@ class CaseSlaAttainmentMonthly:
 
 @dataclass
 class CaseVoidMonthly:
-    """``case_void_monthly`` -- voided Cases by reason and by whom.
-
-    Grain: ``void_month`` x ``brand`` x ``case_type`` x ``void_reason`` x
-    ``voided_by_name``. Age at void is calendar days from ``created``.
-    """
+    """``case_void_monthly``."""
 
     void_month: Annotated[str, NonNull()]
     brand: Annotated[str, NonNull()]
@@ -131,11 +107,7 @@ class CaseVoidMonthly:
 
 @dataclass
 class AnswerActionLoad:
-    """``answer_action_load_current`` -- remediation Actions per question.
-
-    Grain: ``case_type`` x ``question_id``, over the current non-void Cases,
-    so ``share_of_cases`` -- ``case_count`` over those Cases -- is at most 1.
-    """
+    """``answer_action_load_current``, over the live Cases."""
 
     case_type: Annotated[str, NonNull()]
     question_id: Annotated[str, NonNull()]
@@ -149,12 +121,7 @@ class AnswerActionLoad:
 
 @dataclass
 class AnswerRemediationByManager:
-    """``answer_remediation_by_manager_current`` -- remediation decisions and
-    statuses under each Responsible Party Manager.
-
-    Grain: ``case_type`` x ``responsible_party_manager_name`` x
-    ``remediation_required`` x ``remediation_status``.
-    """
+    """``answer_remediation_by_manager_current``."""
 
     case_type: Annotated[str, NonNull()]
     responsible_party_manager_name: Annotated[str, NonNull()]
@@ -167,12 +134,7 @@ class AnswerRemediationByManager:
 
 @dataclass
 class AppealCycleTime:
-    """``appeal_cycle_time_current`` -- how long Appeals take to resolve.
-
-    Grain: ``case_type`` x ``state`` x ``resolution_verdict``. Cycle days run
-    from ``raised_at`` to ``resolution_at``; statistics are over the
-    ``resolved_count`` Appeals carrying both.
-    """
+    """``appeal_cycle_time_current``; statistics over the resolved Appeals."""
 
     case_type: Annotated[str, NonNull()]
     state: Annotated[str, NonNull()]
@@ -188,11 +150,7 @@ class AppealCycleTime:
 
 @dataclass
 class AppealQuestionCitation:
-    """``appeal_question_citations_current`` -- which questions get appealed.
-
-    Grain: ``case_type`` x ``question_id``. An Appeal citing several questions
-    counts once under each.
-    """
+    """``appeal_question_citations_current``."""
 
     case_type: Annotated[str, NonNull()]
     question_id: Annotated[str, NonNull()]
@@ -203,12 +161,7 @@ class AppealQuestionCitation:
 
 @dataclass
 class ConversationResponseTime:
-    """``conversation_response_time_current`` -- how quickly Conversations
-    are replied to.
-
-    Grain: ``brand`` x ``case_type``. A reply is a Message whose author differs
-    from the Message before it; its hours run from that previous Message.
-    """
+    """``conversation_response_time_current``."""
 
     brand: Annotated[str, NonNull()]
     case_type: Annotated[str, NonNull()]
@@ -223,12 +176,7 @@ class ConversationResponseTime:
 
 @dataclass
 class ConversationVolume:
-    """``conversation_volume_current`` -- how much Conversation Cases carry.
-
-    Grain: ``brand`` x ``case_type``, over the current non-void Cases. The
-    thread-length statistics are over the ``thread_count`` Cases that have a
-    Message at all; NULL where none does.
-    """
+    """``conversation_volume_current``, over the live Cases."""
 
     brand: Annotated[str, NonNull()]
     case_type: Annotated[str, NonNull()]
@@ -246,12 +194,7 @@ class ConversationVolume:
 
 @dataclass
 class ConversationPostingPattern:
-    """``conversation_posting_pattern_current`` -- when Messages get posted.
-
-    Grain: ``brand`` x ``case_type`` x ``weekday_order`` x ``hour_of_day``,
-    the full 7 x 24 grid per Case Type with a Message; a quiet cell is a 0.
-    Local clock, like every calendar date in the system.
-    """
+    """``conversation_posting_pattern_current``; the full 7 x 24 grid."""
 
     brand: Annotated[str, NonNull()]
     case_type: Annotated[str, NonNull()]
@@ -264,7 +207,7 @@ class ConversationPostingPattern:
 
 @dataclass
 class CaseIntakeDaily:
-    """``case_intake_daily`` -- how many Cases arrive each day."""
+    """``case_intake_daily``."""
 
     intake_date: Annotated[str, NonNull()]
     brand: Annotated[str, NonNull()]
@@ -276,7 +219,7 @@ class CaseIntakeDaily:
 
 @dataclass
 class CaseBacklogDaily:
-    """``case_backlog_daily`` -- open Cases at each day's close, by status."""
+    """``case_backlog_daily``."""
 
     backlog_date: Annotated[str, NonNull()]
     brand: Annotated[str, NonNull()]
@@ -288,7 +231,7 @@ class CaseBacklogDaily:
 
 @dataclass
 class CaseLifecycleDurationMonthly:
-    """``case_lifecycle_duration_monthly`` -- how long each lifecycle leg takes."""
+    """``case_lifecycle_duration_monthly``."""
 
     leg: Annotated[str, NonNull()]
     leg_order: Annotated[int, NonNull(), Range(minimum=1)]
@@ -308,7 +251,7 @@ class CaseLifecycleDurationMonthly:
 
 @dataclass
 class CaseOutcomeMonthly:
-    """``case_outcome_monthly`` -- what Reportable Cases were found, by month."""
+    """``case_outcome_monthly``."""
 
     reportable_month: Annotated[str, NonNull()]
     brand: Annotated[str, NonNull()]
@@ -323,7 +266,7 @@ class CaseOutcomeMonthly:
 
 @dataclass
 class CaseDueProfile:
-    """``case_due_profile_current`` -- open Cases by distance to their due date."""
+    """``case_due_profile_current``."""
 
     sla_kind: Annotated[str, NonNull(), OneOf(*SLA_KINDS)]
     brand: Annotated[str, NonNull()]
@@ -338,7 +281,7 @@ class CaseDueProfile:
 
 @dataclass
 class RemediationOverdue:
-    """``remediation_overdue_current`` -- outstanding remediation past its due date."""
+    """``remediation_overdue_current``."""
 
     brand: Annotated[str, NonNull()]
     case_type: Annotated[str, NonNull()]
@@ -355,7 +298,7 @@ class RemediationOverdue:
 
 @dataclass
 class ReviewerWorkload:
-    """``reviewer_workload_current`` -- what each Reviewer holds, and their output."""
+    """``reviewer_workload_current``."""
 
     brand: Annotated[str, NonNull()]
     case_type: Annotated[str, NonNull()]
@@ -371,7 +314,7 @@ class ReviewerWorkload:
 
 @dataclass
 class AppealRateByReviewerMonthly:
-    """``appeal_rate_by_reviewer_monthly`` -- appeals per Reviewer per month."""
+    """``appeal_rate_by_reviewer_monthly``."""
 
     reportable_month: Annotated[str, NonNull()]
     brand: Annotated[str, NonNull()]
@@ -388,7 +331,7 @@ class AppealRateByReviewerMonthly:
 
 @dataclass
 class CaseDurationPercentilesDaily:
-    """``case_duration_percentiles_daily`` -- trailing-window duration percentiles."""
+    """``case_duration_percentiles_daily``; small-n percentiles are NULL."""
 
     as_of_date: Annotated[str, NonNull()]
     window_days: Annotated[int, NonNull(), OneOf(*DURATION_WINDOWS)]
@@ -404,7 +347,7 @@ class CaseDurationPercentilesDaily:
 
 @dataclass
 class CaseOpenAgeDaily:
-    """``case_open_age_daily`` -- the age of what is open, one row set per run."""
+    """``case_open_age_daily``, accumulated a day per run."""
 
     as_of_date: Annotated[str, NonNull()]
     case_type: Annotated[str, NonNull()]
@@ -419,8 +362,7 @@ class CaseOpenAgeDaily:
 
 @dataclass
 class CaseFirstTimeRightMonthly:
-    """``case_first_time_right_monthly`` -- Reportable Cases never appealed,
-    amended or overridden."""
+    """``case_first_time_right_monthly``."""
 
     reportable_month: Annotated[str, NonNull()]
     brand: Annotated[str, NonNull()]
@@ -434,7 +376,7 @@ class CaseFirstTimeRightMonthly:
 
 @dataclass
 class ReviewerThroughputWeekly:
-    """``reviewer_throughput_weekly`` -- Cases made Reportable per ISO week."""
+    """``reviewer_throughput_weekly``."""
 
     iso_week: Annotated[str, NonNull()]
     brand: Annotated[str, NonNull()]
@@ -449,7 +391,7 @@ class ReviewerThroughputWeekly:
 
 @dataclass
 class ReviewerWorkloadDaily:
-    """``reviewer_workload_daily`` -- ``reviewer_workload_current``, kept per day."""
+    """``reviewer_workload_daily``, accumulated a day per run."""
 
     as_of_date: Annotated[str, NonNull()]
     brand: Annotated[str, NonNull()]

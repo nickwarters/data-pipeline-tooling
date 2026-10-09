@@ -139,22 +139,9 @@ review platform, Review Outcomes flow *back* for reporting.
   Case before the request for their access to it has landed.
 - **Platform metrics** (platform-wide) — `pipelines/cora_platform_metric` —
   reads Sync's **gold current state** and its **observation history** through
-  the Shared Readers and builds twenty-four gold **Aggregate tables** on how the
-  platform is operating: stage dwell and holds (from the history — a floor, since
-  a change reversed between two polls was never seen), SLA attainment in working
-  days and voids by month, remediation Action load and remediation by
-  Responsible Party Manager, Appeal cycle time and cited questions, and
-  Conversation reply time, volume per Case and posting pattern by local
-  weekday and hour; and the Case flow — daily intake and a daily open backlog
-  rebuilt from the history per Case Type, lifecycle-leg durations and Outcomes
-  by month down to the Assigned Reviewer; and, per Reviewer, open Cases by due
-  bucket on each SLA clock, remediation outstanding past its Remediation Due
-  Date, work in hand against four weeks of output, and Appeal rate by
-  Reportable month; and the distributions — trailing 28- and 90-day
-  percentiles of each lifecycle leg and of the review SLA margin, rebuilt for
-  every day, the age of the open work kept a day at a time, first-time-right
-  rate by Reviewer and month, weekly Reviewer throughput, and Reviewer workload
-  kept a day at a time
+  the Shared Readers and builds gold **Aggregate tables** on how the platform is
+  operating: Case flow and backlog, SLAs, holds, voids, remediation, Appeals,
+  Conversations, Reviewer workload and throughput, and duration percentiles
   ([`data-dictionary-cora-platform-metric.md`](data-dictionary-cora-platform-metric.md)).
 - **Case Support Log** (platform-wide) — `pipelines/case_support_log` — polls
   the platform's append-only `CaseSupportLog` list, where every Maintainer
@@ -742,7 +729,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`data-dictionary-template.md`](data-dictionary-template.md) | The Confluence-ready template for documenting what every table/Feed and each of its fields means — the prose companion to `schema.py`. |
 | [`data-dictionary-sharepoint-cases.md`](data-dictionary-sharepoint-cases.md) | The template filled in for the `sharepoint_cases` feed: the raw observation, the Case version, the `answer`/`answer_capture`/`answer_action`/`general_answer`/`conversation_message`/`appeal`/`case_detail` silver Detail Tables, the silver `person` table of user details, keyed on the bare account every Case row now holds, and the fourteen gold tables with their declared grains — including the two aggregates reduced from a Detail Table rather than `case_current` — all shared across every declared Case list and discriminated by `case_type`; why raw and silver do not store when we saw the row; why silver settles `case_type` to the polled list's declared value; the two provisioning prerequisites (an index on `Modified`, and the site/GUID placeholders) that stand between it and a tenant; and which further aggregates were deliberately refused, and why. |
 | [`data-dictionary-reviewer-activity.md`](data-dictionary-reviewer-activity.md) | The working-day, freshness-guarded `reviewer_activity_daily` aggregate and its sparse per-Reviewer `my-stats/{account}.txt` Report Feed, reduced from Sync's `case_current`. |
-| [`data-dictionary-cora-platform-metric.md`](data-dictionary-cora-platform-metric.md) | The twenty-four `cora_platform_metric` gold aggregates — stage dwell, holds and the daily backlog reduced from the Sync observation history, SLA attainment and voids by month, remediation Action load and remediation by manager, Appeal cycle time and cited questions, Conversation reply time, volume and local-clock posting pattern, daily intake, lifecycle-leg durations and Outcomes by month, due profile, remediation past its due date, Reviewer workload and Appeal rate, trailing-window duration percentiles, daily open-work age, first time right, weekly Reviewer throughput and daily Reviewer workload — their grains, why the three history tables measure what the polls saw rather than what happened, and what was deliberately left out. |
+| [`data-dictionary-cora-platform-metric.md`](data-dictionary-cora-platform-metric.md) | The `cora_platform_metric` gold aggregates on Case flow, SLAs, holds, voids, remediation, Appeals, Conversations, Reviewer workload and throughput, and duration percentiles — their grains, why the three history tables measure what the polls saw rather than what happened, and what was deliberately left out. |
 | [`data-dictionary-pipeline-run-metric.md`](data-dictionary-pipeline-run-metric.md) | The three `pipeline_run_metric` gold aggregates over the run registry — `pipeline_run_summary`, `step_duration_trend_daily`, `step_row_flow` — their grains, why the registry's run id lands as `run_id` rather than the reserved provenance column, and why the reporting run never sees itself. |
 | [`data-dictionary-notifications.md`](data-dictionary-notifications.md) | The notification outbox file and the three keys that are its consumer's contract; the user-group privileges file beside it and the two keys that are *its* consumer's contract; the `notified` ledger and why its row is exactly its key; the `users` reference feed the recipients and the Responsible Party Manager are resolved through; and the placeholder link template, unmapped Case Type names and example addresses standing between it and a tenant. |
 | [`data-dictionary-case-support-log.md`](data-dictionary-case-support-log.md) | The `case_support_log` feed: the Support Log entry in raw and silver, why polling `Modified` is polling `Created` on an append-only list, how a failed action shows up as a second `not-applied` entry, and the site/GUID placeholders standing between it and a tenant. |

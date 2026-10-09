@@ -11,7 +11,9 @@ a re-run over the same snapshot gives the same numbers.
 Each reduction hands its rows to ``_finish`` with the dataclass in ``schema``
 that declares the table: that dataclass is the one statement of a table's
 columns, their order and their types, so an empty result still lands the shape
-the table's ``SchemaValidator`` gates.
+the table's ``SchemaValidator`` gates. Each table's rules are stated in
+``docs/data-dictionary-cora-platform-metric.md``; a docstring here names its
+grain and the rule its code turns on.
 """
 
 from __future__ import annotations
@@ -584,17 +586,8 @@ def _elapsed_days(started: pd.Series, ended: pd.Series) -> pd.Series:
 
 def case_stage_dwell(history: Dataset, *, as_of: str) -> Dataset:
     """How long Cases dwell in each status. **Grain: brand x case_type x
-    status.**
-
-    Reduces the ordered history (``ordered_history``). Every change of
-    ``status`` closes an interval at that observation's ``Modified`` and opens
-    the next. A Case's last interval is *open* unless its status is terminal,
-    and a terminal status left by a reopen closes no interval: that was the gap
-    until the reopen, not a stage. Statistics are over closed intervals only --
-    an open one has no length yet, and measuring it to ``as_of`` would mix two
-    different questions (the Sync subject's age-bucket aggregates already
-    answer "how long has it been waiting").
-    """
+    status.** Statistics are over closed intervals; a terminal status closes
+    none, even when a reopen leaves it."""
     frame = history.to_pandas()
     first = _case_starts(frame)
     last = first.shift(-1, fill_value=True)
@@ -634,17 +627,8 @@ def case_stage_dwell(history: Dataset, *, as_of: str) -> Dataset:
 
 def case_hold(history: Dataset, *, as_of: str) -> Dataset:
     """How often and how long Cases are held. **Grain: brand x case_type x
-    assigned_reviewer_name.**
-
-    Reduces the ordered history. A hold opens at the first observation
-    carrying ``on_hold`` (from the source's ``placed_on_hold_at`` where it has
-    one, else that observation's ``Modified``) and closes at the first later
-    observation without it. A hold still open at the last observation is
-    measured to ``as_of`` and counted in ``open_hold_count`` -- unless the Case
-    has since closed, when it ends where the Case entered its terminal status.
-    Attributed to the Reviewer the Case's latest observation names, so a
-    reassigned Case's holds follow the Case.
-    """
+    assigned_reviewer_name.** A hold open at the last observation runs to
+    ``as_of``, or to where the Case entered a terminal status."""
     frame = history.to_pandas()
     first = _case_starts(frame)
     last = first.shift(-1, fill_value=True)
@@ -865,17 +849,9 @@ SLA_DUE_DATES = ((REVIEW_SLA, "due_date"), (REMEDIATION_SLA, "remediation_due_da
 def sla_attainment(
     current: Dataset, *, as_of: str, calendar: WorkingDayCalendar | None = None
 ) -> Dataset:
-    """Completed Cases against each SLA. **Grain: sla_kind x completed_month x
-    brand x case_type x assigned_reviewer_manager_name.**
-
-    One row family per SLA: the review SLA judges ``completed_at`` against
-    ``due_date``; the remediation SLA judges it against
-    ``remediation_due_date`` over only the Cases that carry one -- the source
-    stamps no remediation-complete instant of its own, and the Case's final
-    ``Completed`` transition is after its Actions close. Days late are
-    ``working_days_late`` between the two local dates, on the calendar the run
-    was given (weekends-only when none).
-    """
+    """Completed Cases against each SLA, in working days late on
+    ``calendar``. **Grain: sla_kind x completed_month x brand x case_type x
+    assigned_reviewer_manager_name.**"""
     calendar = calendar or WorkingDayCalendar()
     frame = current.to_pandas()
     completed = frame.loc[frame["status"].eq("Completed")].copy()
@@ -1254,12 +1230,9 @@ def _in_progress_since(history: Dataset) -> pd.DataFrame:
 
 
 def reviewer_workload(current: Dataset, history: Dataset, *, as_of: str) -> Dataset:
-    """What each Reviewer holds, against their last 28 days' output.
-
-    An ``In-progress`` Case's age runs from when the history last saw it enter
-    that status, so a reopened Case's Completed spell is not counted; a Case
-    the history has not seen there falls back to its ``assigned_at``.
-    """
+    """What each Reviewer holds, against their last 28 days' output. An
+    ``In-progress`` Case ages from its latest entry into that status, else
+    from ``assigned_at``."""
     today = local_date(as_of)
     frame = _filled(current.to_pandas(), {"assigned_reviewer_name": UNASSIGNED})
     frame = frame.merge(_in_progress_since(history), on=list(HISTORY_KEY), how="left")
@@ -1354,11 +1327,8 @@ def appeal_rate_by_reviewer(
 
 
 def answer_action_load(actions: Dataset, current: Dataset, *, as_of: str) -> Dataset:
-    """Remediation Actions per question. **Grain: case_type x question_id.**
-
-    Over the current non-void Cases only, so ``share_of_cases`` reads as "this
-    share of the Case Type's live Cases carry an Action on this question".
-    """
+    """Remediation Actions per question, over the live Cases. **Grain:
+    case_type x question_id.**"""
     live = _live_cases(current)
     live_counts = live.groupby("case_type").size()
     per_case = (
@@ -1393,14 +1363,9 @@ def answer_action_load(actions: Dataset, current: Dataset, *, as_of: str) -> Dat
 def answer_remediation_by_manager(
     answers: Dataset, current: Dataset, *, as_of: str
 ) -> Dataset:
-    """Remediation decisions and statuses under each Responsible Party
+    """Answers, and the Cases behind them, under each Responsible Party
     Manager. **Grain: case_type x responsible_party_manager_name x
-    remediation_required x remediation_status.**
-
-    The Sync subject's ``answer_remediation_current`` has no people on it;
-    this joins each Answer to its Case for the manager who answers for the
-    remediation, and counts both Answers and the distinct Cases behind them.
-    """
+    remediation_required x remediation_status.**"""
     cases = current.to_pandas()[[CASE_ID_COLUMN, "responsible_party_manager_name"]]
     frame = answers.to_pandas().merge(cases, on=CASE_ID_COLUMN, how="inner")
     frame = _filled(
@@ -1509,16 +1474,9 @@ def appeal_question_citations(appeals: Dataset, *, as_of: str) -> Dataset:
 def conversation_response_time(
     messages: Dataset, current: Dataset, *, as_of: str
 ) -> Dataset:
-    """How quickly Conversations are replied to. **Grain: brand x case_type.**
-
-    Each Case's thread is read in ``seq`` order; a Message whose
-    ``author_login`` differs from the previous Message's is a reply, and its
-    hours are measured from that previous Message. Two consecutive Messages by
-    one author are one turn, not a reply to oneself. Author-agnostic by design:
-    the source's own ``awaiting_since`` already says who is being waited on
-    right now. Over the Messages on live Cases, as the other Conversation
-    tables count.
-    """
+    """How quickly Conversations on live Cases are replied to; a reply is a
+    Message by a different author from the one before it. **Grain: brand x
+    case_type.**"""
     frame = _live_rows(messages, _live_cases(current)).copy()
     frame["_posted"] = _instants(frame["posted_at"])
     frame = frame.sort_values([CASE_ID_COLUMN, "seq"], kind="stable")
@@ -1561,14 +1519,8 @@ def _live_cases(current: Dataset) -> pd.DataFrame:
 
 
 def conversation_volume(messages: Dataset, current: Dataset, *, as_of: str) -> Dataset:
-    """How much Conversation Cases carry. **Grain: brand x case_type.**
-
-    Counts over the current non-void Cases of each Case Type: how many have a
-    thread at all, how many have none, and how the thread lengths are spread.
-    A Message whose Case is not among those Cases is not counted -- the Case
-    is void, or no longer current -- so ``message_count`` is the volume on the
-    live population, not on the Detail Table.
-    """
+    """How much Conversation the live Cases carry. **Grain: brand x
+    case_type.**"""
     live = _live_cases(current)
     per_thread = (
         _live_rows(messages, live).groupby(CASE_ID_COLUMN).size().rename("messages")
@@ -1608,17 +1560,9 @@ def _live_rows(rows: Dataset, live: pd.DataFrame) -> pd.DataFrame:
 def conversation_posting_pattern(
     messages: Dataset, current: Dataset, *, as_of: str
 ) -> Dataset:
-    """When Messages get posted. **Grain: brand x case_type x weekday_order x
-    hour_of_day.**
-
-    Every Case Type with at least one counted Message gets the full 7 x 24
-    grid, so a quiet cell is a row holding 0 rather than a hole a chart would
-    have to infer. Weekday and hour are on the *local* clock, the same zone
-    the calendar dates are expressed in -- converted instant by instant, so a
-    thread spanning a summer-time change files each Message under the hour it
-    was actually posted at. A Message with no parseable ``posted_at`` is not
-    counted.
-    """
+    """When Messages on live Cases get posted, on the local clock instant by
+    instant. **Grain: brand x case_type x weekday_order x hour_of_day**, the
+    full 7 x 24 grid for each Case Type with a Message."""
     posted = _live_rows(messages, _live_cases(current)).copy()
     posted["_posted"] = _instants(posted["posted_at"])
     posted = posted.loc[posted["_posted"].notna()]
@@ -1729,13 +1673,8 @@ def case_duration_percentiles(
     current: Dataset, *, as_of: str, calendar: WorkingDayCalendar | None = None
 ) -> Dataset:
     """Trailing-window duration percentiles. **Grain: as_of_date x window_days
-    x case_type x measure.**
-
-    A row's window is the measurements whose end falls on a local date in
-    ``(as_of_date - window_days, as_of_date]``. Rebuilt for every as-of date
-    from the first completion to the snapshot's, so the table is its own
-    backfill.
-    """
+    x case_type x measure.** Every as-of date from the first completion, so the
+    table is its own backfill."""
     measured = _with_all_case_types(
         _durations(current, calendar or WorkingDayCalendar())
     )
@@ -1797,10 +1736,8 @@ def case_duration_percentiles(
 
 
 def case_open_age(current: Dataset, *, as_of: str) -> Dataset:
-    """How old what is open is, at the snapshot. **Grain: as_of_date x
-    case_type x measure.** Days to ``as_of_utc``: an open Case's from
-    ``created``; an awaited one's from ``awaiting_since``; an open Appeal's from
-    ``appeal_raised_at``."""
+    """How old the open work is at the snapshot. **Grain: as_of_date x
+    case_type x measure.**"""
     frame = current.to_pandas()
     live = frame.loc[frame["status"].ne("Void")]
     open_cases = live.loc[live["status"].isin(list(OPEN_AGE_BY_STATUS))]
