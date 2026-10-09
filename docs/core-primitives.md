@@ -722,6 +722,7 @@ succeed, how many rows, did anything warn?" without grepping `.log` files:
 ```python
 registry = RunRegistry("/path/to/share/_registry/runs.db")
 registry.ingest("/path/to/share/cases/runs.log")   # idempotent
+registry.migrate()   # bring the file to the declared shape now, not on first use
 
 registry.query_runs(pipeline="cases", status="error")  # narrow by pipeline/status
 registry.latest_run_per_pipeline()                     # one row per pipeline
@@ -894,7 +895,8 @@ handler, a pipeline `name`, an optional `subject`, an `upstreams` tuple, and
 optional run `params`, it builds the `RunContext`, catches the shared
 `RunRegistry` up from every
 `_runs/*.log` via `RunStore.catch_up()` (so an upstream's history is visible
-regardless of which log partitioned it), runs the requirement checks, dispatches the handler, and records
+regardless of which log partitioned it, and an existing registry is migrated
+to the declared shape even with no log to ingest), runs the requirement checks, dispatches the handler, and records
 the run summary. Run summary records include the parameters after default
 redaction of likely secret keys.
 
