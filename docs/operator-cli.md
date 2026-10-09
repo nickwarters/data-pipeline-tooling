@@ -539,7 +539,9 @@ alongside it in `<base>/_orchestration/runs.db`. That flag is what `--loop` uses
 to decide the day's work has settled, so a reworded message can no longer change
 when an orchestration stops polling. Disabled and not-due items are the ones
 recorded with `was_due = 0`; rows written before the flag existed read back
-`NULL` (see [run-log-format.md](run-log-format.md)).
+`NULL` (see [run-log-format.md](run-log-format.md)). Each decision also records
+when its pass began and, for an item that ran, when it started, so the time an
+item spent queued behind the rest of the pass can be read off the store.
 
 The not-due reason names the schedule that was not due, in that schedule's own
 terms: a weekday schedule names the weekday, a monthly one names the date. It

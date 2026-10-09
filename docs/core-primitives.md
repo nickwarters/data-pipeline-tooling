@@ -997,7 +997,9 @@ carries its schedule, dependencies, and enablement; the path's leaf is the
 run-history label the pipeline records under (and the name a `depends_on`
 requirement targets an upstream by). Execution is by path — no handler registry
 is wired up front — so a `PathPipelineInvoker` (the default) resolves the module
-at run time, or a custom `invoker=` can be injected for tests. Dependencies may
+at run time, or a custom `invoker=` can be injected for tests. An invoker's
+`run(...)` is also passed the pass's `orchestration_run_id`, which it hands on to
+`run_pipeline` so the run summary names the pass. Dependencies may
 be legacy `FreshnessRequirement` values or `Requirement` predicates that target
 whole-Pipeline or task-level `RunAddress` history. `Weekdays()` is the normal
 daily schedule, using `WorkingDayCalendar` for weekends and holidays; other
@@ -1023,7 +1025,10 @@ records the `logical_run_id` the pass assigned the item (the stable business key
 and the `pipeline_run_id` it read back from the registry, so
 `OrchestrationStore.lineage(orchestration_run_id)` joins one pass to every
 pipeline execution it triggered — `pipeline_run_id` is the key into
-`RunRegistry.records_for_run(...)`. `RunLog` and
+`RunRegistry.records_for_run(...)`. The pass's `orchestration_run_id` is also
+handed to the invoker and written on each run's `run` summary, and each decision
+records when its pass began (`pass_started_at`) and when the item started
+(`started_at`), so how long an item queued is on the record. `RunLog` and
 `RunRegistry` stay reserved for actual Pipeline execution records. A failed
 scheduled item is terminal for that orchestrator run and blocks downstream
 dependants. Requirement failures from stale task/pipeline history, missing

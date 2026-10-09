@@ -158,6 +158,10 @@ def _when_set(label: str) -> Callable[[Any], str | None]:
     return lambda value: f"{label}={value}" if value else None
 
 
+def _seconds_when_set(label: str) -> Callable[[Any], str | None]:
+    return lambda value: f"{label}={value:.1f}s" if value else None
+
+
 def _joined(label: str) -> Callable[[Any], str | None]:
     return lambda value: f"{label}={'; '.join(value)}" if value else None
 
@@ -250,6 +254,14 @@ RUN_RECORD_FIELDS: tuple[Field, ...] = (
     # the ``run`` summary only. A re-drive of an old date carries that date, not
     # the day it ran.
     Field("run_date", "TEXT"),
+    # The orchestration pass that started the run, on the ``run`` summary only;
+    # NULL for a run started by hand.
+    Field("orchestration_run_id", "TEXT"),
+    # Time a step (or, on the ``run`` summary, the whole run) spent waiting
+    # rather than working: attempts a RetryPolicy retried and what they cost.
+    # See tools.observability.waits. NULL on records written before they existed.
+    Field("retry_attempts", "INTEGER", console=_when_set("retries")),
+    Field("retry_wait_seconds", "REAL", console=_seconds_when_set("retry_wait")),
 )
 
 #: The fields that appear in a JSONL line, in order.

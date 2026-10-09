@@ -20,7 +20,15 @@ class _RecordingInvoker:
         self.calls: list[str] = []
 
     def run(
-        self, path, base_dir, *, run_date, logical_run_id, freshness_days, freshness
+        self,
+        path,
+        base_dir,
+        *,
+        run_date,
+        logical_run_id,
+        freshness_days,
+        freshness,
+        orchestration_run_id=None,
     ):
         self.calls.append(path)
 

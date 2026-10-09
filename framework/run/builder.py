@@ -27,6 +27,7 @@ from framework.run.address import RunAddress
 from framework.run.execution import PipelineExecution
 from framework.run.run_context import RunContext, active_context, current_context
 from tools.observability.run_log import NULL_RUN_LOG, RunLog
+from tools.observability.waits import measure_waits
 
 log = logging.getLogger(__name__)
 
@@ -93,7 +94,8 @@ class Node:
 
         started = time.perf_counter()
         try:
-            step = self._do_execute(session, context, *input_results)
+            with measure_waits() as waits:
+                step = self._do_execute(session, context, *input_results)
             self._result = step.dataset
             self._executed = True
 
@@ -123,6 +125,7 @@ class Node:
                 warn_hits=self.warn_hits,
                 committed=step.committed,
                 step_address=self.address.label if self.address is not None else None,
+                **waits.fields(),
                 **measured,
             )
             if context.dry_run and context.dry_run_report is not None:
@@ -144,6 +147,7 @@ class Node:
                 # Retry notes gathered before the failure are the evidence for it.
                 warn_hits=self.warn_hits,
                 step_address=self.address.label if self.address is not None else None,
+                **waits.fields(),
             )
             # A dry run still surfaces the failing step so the preview shows the
             # shape so far and the clear reason it stopped.
@@ -604,68 +608,75 @@ class Pipeline:
             )
 
         started = time.perf_counter()
-        try:
-            # Execute leaf nodes (nodes that nothing else depends on).
-            leaf_nodes = self._get_leaf_nodes()
-            if self._nodes and not leaf_nodes:
-                # Every node is some other node's input, so the walk has nowhere
-                # to start: without this guard the run would execute nothing at
-                # all and still report success.
-                raise PipelineGraphError(
-                    f"pipeline {self._name!r} graph has a cycle: every node is an "
-                    "input to another node, so there is no node to execute from"
-                )
-            results = self._execute(session, context, leaf_nodes)
-
-            # Compute total rows in/out for the summary if possible
-            rows_in = None
-            rows_out = None
-            if self._nodes:
-                from framework.core.dataset import Dataset
-
-                read_nodes = [
-                    n
-                    for n in self._nodes
-                    if isinstance(n, ReadNode) and n._result is not None
-                ]
-                if read_nodes:
-                    rows_in = sum(
-                        len(n._result)
-                        for n in read_nodes
-                        if isinstance(n._result, Dataset)
+        with measure_waits() as waits:
+            try:
+                # Execute leaf nodes (nodes that nothing else depends on).
+                leaf_nodes = self._get_leaf_nodes()
+                if self._nodes and not leaf_nodes:
+                    # Every node is some other node's input, so the walk has nowhere
+                    # to start: without this guard the run would execute nothing at
+                    # all and still report success.
+                    raise PipelineGraphError(
+                        f"pipeline {self._name!r} graph has a cycle: every node is an "
+                        "input to another node, so there is no node to execute from"
                     )
+                results = self._execute(session, context, leaf_nodes)
 
-                # Assume the leaf nodes are the output nodes
-                if results and isinstance(results[0], Dataset):
-                    rows_out = sum(len(r) for r in results if isinstance(r, Dataset))
+                # Compute total rows in/out for the summary if possible
+                rows_in = None
+                rows_out = None
+                if self._nodes:
+                    from framework.core.dataset import Dataset
 
-            session.record(
-                "run",
-                "ok",
-                duration=time.perf_counter() - started,
-                warn_hits=session.warn_hits,
-                rows_in=rows_in,
-                rows_out=rows_out,
-                step_address=self._pipeline_address().label,
-                run_date=context.run_date.isoformat(),
-            )
+                    read_nodes = [
+                        n
+                        for n in self._nodes
+                        if isinstance(n, ReadNode) and n._result is not None
+                    ]
+                    if read_nodes:
+                        rows_in = sum(
+                            len(n._result)
+                            for n in read_nodes
+                            if isinstance(n._result, Dataset)
+                        )
 
-            if len(results) == 1:
-                return results[0]
-            return results
-        except Exception as exc:
-            session.record(
-                "run",
-                "error",
-                duration=time.perf_counter() - started,
-                errors=[str(exc)],
-                error_category=getattr(exc, "category", None),
-                step_address=self._pipeline_address().label,
-                run_date=context.run_date.isoformat(),
-            )
-            raise
-        finally:
-            context.mark_run_summary_recorded()
+                    # Assume the leaf nodes are the output nodes
+                    if results and isinstance(results[0], Dataset):
+                        rows_out = sum(
+                            len(r) for r in results if isinstance(r, Dataset)
+                        )
+
+                session.record(
+                    "run",
+                    "ok",
+                    duration=time.perf_counter() - started,
+                    warn_hits=session.warn_hits,
+                    rows_in=rows_in,
+                    rows_out=rows_out,
+                    step_address=self._pipeline_address().label,
+                    run_date=context.run_date.isoformat(),
+                    orchestration_run_id=context.orchestration_run_id,
+                    **waits.fields(),
+                )
+
+                if len(results) == 1:
+                    return results[0]
+                return results
+            except Exception as exc:
+                session.record(
+                    "run",
+                    "error",
+                    duration=time.perf_counter() - started,
+                    errors=[str(exc)],
+                    error_category=getattr(exc, "category", None),
+                    step_address=self._pipeline_address().label,
+                    run_date=context.run_date.isoformat(),
+                    orchestration_run_id=context.orchestration_run_id,
+                    **waits.fields(),
+                )
+                raise
+            finally:
+                context.mark_run_summary_recorded()
 
     def _execute(
         self, session: PipelineExecution, context: RunContext, leaf_nodes: list[Node]

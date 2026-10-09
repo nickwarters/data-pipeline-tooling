@@ -39,6 +39,7 @@ class _FakeInvoker:
         logical_run_id,
         freshness_days,
         freshness,
+        orchestration_run_id=None,
     ):
         name = path.strip("/").split("/")[-1]
 
@@ -131,7 +132,15 @@ def test_task_level_requirement_allows_downstream_when_task_success_is_fresh(tmp
 
     class _Invoker:
         def run(
-            self, path, base_dir, *, run_date, logical_run_id, freshness_days, freshness
+            self,
+            path,
+            base_dir,
+            *,
+            run_date,
+            logical_run_id,
+            freshness_days,
+            freshness,
+            orchestration_run_id=None,
         ):
             name = path.strip("/").split("/")[-1]
             return run_pipeline(

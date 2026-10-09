@@ -377,6 +377,14 @@ declaration order is a live on-disk contract (JSONL key order, column order):
 append, never reorder. The orchestration decision store keeps its **own**
 declaration of a different contract, sharing only the machinery.
 
+**Retry wait**:
+Time a step spent on attempts a `RetryPolicy` retried rather than working: each
+failed attempt plus the backoff after it. _Here_: counted per step and per run
+on the run record (`retry_attempts` / `retry_wait_seconds`) by
+`tools/observability/waits.py`, so a slow step can be told apart from a step
+slowed by retrying a flaky source. _Avoid_: "latency"; a retry wait is measured
+from the caller's side and includes the failed attempts.
+
 **Run store**:
 The owner of a base directory's **run-metadata layout** — `_runs/<subject>.log`,
 `_registry/runs.db`, `_orchestration/runs.db` — and the pieces it opens over

@@ -22,6 +22,7 @@ from typing import TypeVar
 from framework._internal.describe import component_summary
 from framework.core.dataset import Dataset
 from framework.core.protocols import Reader
+from tools.observability.waits import note_retry
 
 log = logging.getLogger(__name__)
 
@@ -37,6 +38,10 @@ class RetryPolicy:
     exception propagates immediately on the first failure. ``backoff_seconds`` is
     slept between attempts via the injectable ``sleep`` (so tests stay fast and
     the wait stays cross-platform).
+
+    Each retried attempt is counted towards the step it runs in (see
+    :mod:`tools.observability.waits`), with the time the failed attempt and its
+    backoff took, measured by ``clock``.
     """
 
     def __init__(
@@ -45,11 +50,13 @@ class RetryPolicy:
         retry_on: tuple[type[BaseException], ...] = (),
         backoff_seconds: float = 0.0,
         sleep: Callable[[float], None] = time.sleep,
+        clock: Callable[[], float] = time.perf_counter,
     ) -> None:
         self.attempts = attempts
         self.retry_on = retry_on
         self.backoff_seconds = backoff_seconds
         self._sleep = sleep
+        self._clock = clock
 
     def call(
         self,
@@ -63,6 +70,7 @@ class RetryPolicy:
         number that failed and the exception, before the next attempt.
         """
         for attempt in range(1, self.attempts + 1):
+            started = self._clock()
             try:
                 return operation()
             except self.retry_on as exc:
@@ -72,6 +80,7 @@ class RetryPolicy:
                     on_retry(attempt, exc)
                 if self.backoff_seconds:
                     self._sleep(self.backoff_seconds)
+                note_retry(self._clock() - started)
         raise AssertionError("RetryPolicy.call exhausted without returning")
 
 

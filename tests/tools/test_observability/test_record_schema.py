@@ -48,6 +48,9 @@ EXPECTED_LOGGED = [
     "profile",
     "data_locations",
     "run_date",
+    "orchestration_run_id",
+    "retry_attempts",
+    "retry_wait_seconds",
 ]
 
 EXPECTED_COLUMNS = [
@@ -71,6 +74,9 @@ EXPECTED_COLUMNS = [
     ("profile", "TEXT"),
     ("data_locations", "TEXT"),
     ("run_date", "TEXT"),
+    ("orchestration_run_id", "TEXT"),
+    ("retry_attempts", "INTEGER"),
+    ("retry_wait_seconds", "REAL"),
 ]
 
 
@@ -113,6 +119,9 @@ def test_the_declared_table_matches_the_deployed_shape():
             profile          TEXT,
             data_locations   TEXT,
             run_date         TEXT,
+            orchestration_run_id TEXT,
+            retry_attempts   INTEGER,
+            retry_wait_seconds REAL,
             PRIMARY KEY (pipeline_run_id, step, step_ordinal)
         )
     """
