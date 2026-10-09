@@ -120,7 +120,6 @@ table every other operational question joins to.
 | `orchestration_run_id` | `str` | Yes | The orchestration pass that started the run; NULL for a run started by hand. |
 | `overhead_seconds` | `float` | No | `wall_clock_seconds − step_duration_seconds`, floored at zero: time no step accounts for (imports, registry catch-up, freshness checks). |
 | `retry_attempts` / `retry_wait_seconds` | `float` | Yes | Attempts retried during the run and the time they cost, from the summary record; NULL where the run wrote none, or predates the fields. |
-| `external_calls` / `external_wait_seconds` | `float` | Yes | Calls to other services during the run and the time spent waiting on them; likewise. |
 
 ### `step_duration_trend_daily` — step durations per day against their recent past
 
@@ -179,7 +178,6 @@ the slow tail.
 | `duration_p50` / `duration_p90` / `duration_p95` / `duration_max` | `float` | Yes | Seconds over the `ok` executions. p90 is NULL below 10 samples and p95 below 20, where they are in effect the max; all four are NULL when no execution in the window succeeded. |
 | `failure_rate` | `float` | Yes | `error` executions over `execution_count`. |
 | `retry_rate` | `float` | Yes | Share of executions in which anything was retried; NULL where no execution recorded the retry fields. |
-| `external_wait_p50` / `external_wait_p95` | `float` | Yes | Seconds spent waiting on other services per `ok` execution; NULL where none recorded it. Read against the duration, it says how much of a slow step is the service. |
 | `rows_per_second_p50` | `float` | Yes | Median throughput of a step's `ok` executions that reported `rows_out`; NULL at pipeline level. |
 | `p50_change_ratio_28d` / `p90_change_ratio_28d` | `float` | Yes | Change against the same subject's row 28 days earlier (or the latest within a week before that, for a job that did not run that day), as a ratio: `0.25` is a quarter slower. NULL with no such row or a zero baseline. |
 

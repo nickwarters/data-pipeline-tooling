@@ -32,7 +32,6 @@ def _row(pipeline, date, **values):
         "duration_max": 120.0,
         "failure_rate": 0.0,
         "retry_rate": None,
-        "external_wait_p50": None,
         "p50_change_ratio_28d": None,
         "p90_change_ratio_28d": None,
     }

@@ -197,7 +197,6 @@ def perf_table(
         "p90 chg",
         "fail",
         "retry",
-        "ext p50",
         "",
     )
     rows = []
@@ -220,7 +219,6 @@ def perf_table(
                 _ratio(change),
                 _share(row["failure_rate"]),
                 _share(row["retry_rate"]),
-                _seconds(row["external_wait_p50"]),
                 " ".join(notes),
             )
         )

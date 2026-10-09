@@ -890,8 +890,7 @@ python -m cli perf [--base-dir DIR] [--env ENV] [--steps] [--pipeline NAME]
 
 One line per pipeline (or per step with `--steps`), slowest p95 first: the
 p50 / p90 / p95 / max duration over the last 28 days (or 90), their change
-against 28 days earlier, the failure and retry rates, and the median time spent
-waiting on other services. A pipeline whose p90 is more than `--threshold`
+against 28 days earlier, and the failure and retry rates. A pipeline whose p90 is more than `--threshold`
 slower than 28 days earlier is flagged `SLOWER`; one that has not run for over
 a week says when it last did. Above the table, one line says when the latest
 scheduled batch finished against its 28-day p50 and p90, how many items ran,
@@ -903,10 +902,10 @@ $ python -m cli perf --base-dir /data --limit 3
 Batch 2026-10-08 finished 06:42 (28-day p50 06:30, p90 06:55); 96 run, 1 failed, 0 blocked; longest queue 5h48m
 
 Pipelines over the 28 days to 2026-10-08, slowest p95 first (SLOWER: p90 up more than 20% on 28 days earlier):
-pipeline           n    p50     p90     p95     max  p50 chg  p90 chg  fail  retry  ext p50
-claims_selection  20  9m12s  10m03s  10m40s  14m02s      +4%     +31%    0%     5%    8m50s  SLOWER
-cases_ingest      28  4m10s   5m02s   5m30s   7m15s      -2%      +3%    0%     0%    3m55s
-complaints_a      27  48.2s   55.0s   1m01s   1m20s      +1%      -1%    4%     0%        -
+pipeline           n    p50     p90     p95     max  p50 chg  p90 chg  fail  retry
+claims_selection  20  9m12s  10m03s  10m40s  14m02s      +4%     +31%    0%     5%  SLOWER
+cases_ingest      28  4m10s   5m02s   5m30s   7m15s      -2%      +3%    0%     0%
+complaints_a      27  48.2s   55.0s   1m01s   1m20s      +1%      -1%    4%     0%
 ```
 
 It shows what `pipelines/pipeline_run_metric` last published

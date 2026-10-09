@@ -76,15 +76,11 @@ RECORD_COLUMNS = (
     "orchestration_run_id",
     "retry_attempts",
     "retry_wait_seconds",
-    "external_calls",
-    "external_wait_seconds",
 )
 
 WAIT_COLUMNS = (
     "retry_attempts",
     "retry_wait_seconds",
-    "external_calls",
-    "external_wait_seconds",
 )
 
 
@@ -403,7 +399,7 @@ def _executions(frame: pd.DataFrame) -> pd.DataFrame:
 
     "Is this getting slower?" is a question about when it ran, so a re-drive
     of an old date lands on the day it executed, as in the duration trend.
-    Durations, external waits and throughput are kept for ``ok`` executions
+    Durations and throughput are kept for ``ok`` executions
     only: a failure's duration says how long it took to fail.
     """
     runs = _runs(frame)
@@ -418,7 +414,6 @@ def _executions(frame: pd.DataFrame) -> pd.DataFrame:
             "failed": runs["status"].eq(ERROR_STATUS),
             "duration": runs["wall_clock_seconds"].where(run_ok),
             "retry_attempts": runs["retry_attempts"],
-            "external_wait": runs["external_wait_seconds"].where(run_ok),
             "rows_per_second": float("nan"),
         }
     )
@@ -437,9 +432,6 @@ def _executions(frame: pd.DataFrame) -> pd.DataFrame:
             "failed": steps["status"].eq(ERROR_STATUS),
             "duration": took,
             "retry_attempts": pd.to_numeric(steps["retry_attempts"]),
-            "external_wait": pd.to_numeric(steps["external_wait_seconds"]).where(
-                step_ok
-            ),
             "rows_per_second": rows_out / took.where(took > 0),
         }
     )
@@ -480,8 +472,6 @@ def _over_window(executions: pd.DataFrame, window_days: int) -> pd.DataFrame:
         "duration_p90": rolling("duration").quantile(0.90),
         "duration_p95": rolling("duration").quantile(0.95),
         "duration_max": rolling("duration").max(),
-        "external_wait_p50": rolling("external_wait").median(),
-        "external_wait_p95": rolling("external_wait").quantile(0.95),
         "rows_per_second_p50": rolling("rows_per_second").median(),
         "_finished": rolling("finished").sum(),
         "_failed": rolling("failed").sum(),
@@ -540,8 +530,6 @@ PERCENTILE_MEASURES = (
     "duration_max",
     "failure_rate",
     "retry_rate",
-    "external_wait_p50",
-    "external_wait_p95",
     "rows_per_second_p50",
     "p50_change_ratio_28d",
     "p90_change_ratio_28d",
