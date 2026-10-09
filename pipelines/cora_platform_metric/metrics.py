@@ -562,28 +562,35 @@ def case_hold(history: Dataset, *, as_of: str) -> Dataset:
     """How often and how long Cases are held. **Grain: brand x case_type x
     assigned_reviewer_name.**
 
-    Reduces the ordered history. A hold opens at the first observation
-    carrying ``on_hold`` (from the source's ``placed_on_hold_at`` where it has
-    one, else that observation's ``Modified``) and closes at the first later
-    observation without it. A hold still open at the last observation is
-    measured to ``as_of`` and counted in ``open_hold_count`` -- unless the Case
-    has since closed, when it ends where the Case entered its terminal status.
-    Attributed to the Reviewer the Case's latest observation names, so a
-    reassigned Case's holds follow the Case.
+    Reduces the ordered history (``ordered_history``). A hold opens at the
+    first open-status observation carrying ``on_hold`` (from the source's
+    ``placed_on_hold_at`` where it has one, else that observation's
+    ``Modified``) and closes at the first later observation without it, or at
+    the observation where the Case entered ``Completed`` or ``Void`` if that
+    comes first. Terminal spells are not held time, as they are not a stage in
+    ``case_stage_dwell``: a flag first seen on a terminal observation opens
+    nothing, and a flag still set when the Case is reopened opens a new hold
+    from the reopen (never from a ``placed_on_hold_at`` before it). A hold
+    still open at the last observation is measured to ``as_of`` and counted in
+    ``open_hold_count``. Attributed to the Reviewer the Case's latest
+    observation names, so a reassigned Case's holds follow the Case.
     """
     frame = history.to_pandas()
     first = _case_starts(frame)
     last = first.shift(-1, fill_value=True)
-    on_hold = _flagged(frame["on_hold"])
-    was_on_hold = on_hold.shift(fill_value=False) & ~first
-    placed = _instants(frame["placed_on_hold_at"])
     terminal = frame["status"].isin(TERMINAL_STATUSES)
-    closed_at = (
+    # A terminal row reads as unheld whatever its flag says: entering a
+    # terminal status ends a hold there, and a flag seen there opens none.
+    on_hold = _flagged(frame["on_hold"]) & ~terminal
+    was_on_hold = on_hold.shift(fill_value=False) & ~first
+    reopened = (
         frame["_modified"]
-        .where(terminal & (first | ~terminal.shift(fill_value=False)))
+        .where(~terminal & terminal.shift(fill_value=False) & ~first)
+        .groupby(frame["_case"])
         .ffill()
-        .where(last & terminal)
     )
+    placed = _instants(frame["placed_on_hold_at"])
+    started = placed.where(placed.notna(), frame["_modified"])
     hold = (on_hold & ~was_on_hold).cumsum()
     reviewer = (
         frame["assigned_reviewer_name"]
@@ -594,26 +601,16 @@ def case_hold(history: Dataset, *, as_of: str) -> Dataset:
 
     opened = frame.loc[on_hold & ~was_on_hold].assign(
         _hold=hold,
-        _started=placed.where(placed.notna(), frame["_modified"]),
+        _started=started.mask(reopened.gt(started), reopened),
         _reviewer=reviewer,
     )
     released = pd.Series(
         frame["_modified"].loc[~on_hold & was_on_hold].array,
         index=hold.loc[~on_hold & was_on_hold].to_numpy(),
     )
-    trailing = pd.Series(
-        closed_at.loc[last & on_hold].array,
-        index=hold.loc[last & on_hold].to_numpy(),
-    )
-    ends = pd.DataFrame(
-        {
-            "released": released.reindex(opened["_hold"]).array,
-            "closed": trailing.reindex(opened["_hold"]).array,
-        },
-        index=opened.index,
-    )
-    still_open = ends["released"].isna() & ends["closed"].isna()
-    ended = ends["released"].fillna(ends["closed"]).fillna(pd.Timestamp(as_of))
+    ended = pd.Series(released.reindex(opened["_hold"]).array, index=opened.index)
+    still_open = ended.isna()
+    ended = ended.fillna(pd.Timestamp(as_of))
     held = pd.DataFrame(
         {
             "case_type": opened["case_type"],

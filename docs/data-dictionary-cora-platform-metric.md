@@ -54,8 +54,9 @@ a Case from it is reopened. The tables built from the observation history
 (item 1) keep the interval the Case spent in each status, so a reopened Case
 adds a second `In-progress` interval rather than rewriting the first; the spell
 it spent `Completed` before the reopen is not a stage and is not published as
-one. `reviewer_workload_current` ages a reopened `In-progress` Case from the
-reopen, read off the same history, not from its original `assigned_at`.
+one, nor counted as held time in `case_hold_current`.
+`reviewer_workload_current` ages a reopened `In-progress` Case from the reopen,
+read off the same history, not from its original `assigned_at`.
 
 ## Part A — Subject overview
 
@@ -118,13 +119,26 @@ it been waiting".
 Reduced from the observation history. Grain: `brand` × `case_type` ×
 `assigned_reviewer_name`.
 
-A hold opens at the first observation carrying `on_hold` — from the source's
-`placed_on_hold_at` where it has one, else that observation's `Modified` — and
-closes at the first later observation without it. A hold still open at the
-Case's last observation is measured to `as_of_utc` and counted in
-`open_hold_count` — unless the Case is by then `Completed` or `Void`, when the
-hold ends where the Case entered that status and counts as closed. Holds are attributed to the Reviewer the Case's *latest*
-observation names, so a reassigned Case's holds follow the Case.
+A hold opens at the first observation carrying `on_hold` while the Case is in
+an open status — from the source's `placed_on_hold_at` where it has one, else
+that observation's `Modified` — and closes at the first later observation
+without it. A spell in `Completed` or `Void` is not held time, by the same rule
+that keeps it out of `case_stage_dwell_current` (item 4):
+
+- A hold ends no later than the observation where the Case entered `Completed`
+  or `Void`, even if the flag is still set there and is cleared on a later
+  observation; it counts as closed.
+- A flag first seen on a `Completed` or `Void` observation opens no hold, so a
+  closed Case never adds a zero-length hold.
+- When a Case is reopened with the flag still set, a new hold opens at the
+  reopening observation's `Modified` — never earlier, even if
+  `placed_on_hold_at` still carries the stamp from before the Case closed — so
+  the Case counts two holds with the terminal spell between them in neither.
+
+A hold still open at the Case's last observation (so the Case is itself in an
+open status) is measured to `as_of_utc` and counted in `open_hold_count`. Holds
+are attributed to the Reviewer the Case's *latest* observation names, so a
+reassigned Case's holds follow the Case.
 
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
