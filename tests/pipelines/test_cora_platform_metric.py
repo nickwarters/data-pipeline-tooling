@@ -29,8 +29,16 @@ from pipelines.cora_platform_metric.metrics import (
     UNRESOLVED,
     UNSTATED,
 )
-from pipelines.cora_platform_metric.pipeline import GOLD_TABLES, UPSTREAMS, main
-from pipelines.cora_platform_metric.schema import AnswerActionLoad
+from pipelines.cora_platform_metric.pipeline import (
+    ACCUMULATED_TABLES,
+    GOLD_TABLES,
+    UPSTREAMS,
+    main,
+)
+from pipelines.cora_platform_metric.schema import (
+    AnswerActionLoad,
+    CaseDurationPercentilesDaily,
+)
 from pipelines.sharepoint_cases.schema import FEED_NAME as SYNC_SUBJECT
 from tests.framework_testing import build_databases, given_rows, read_rows
 from tools.calendar import WorkingDayCalendar
@@ -102,6 +110,12 @@ def _case(case_id: str, status: str, **overrides: object) -> dict[str, object]:
         "effective_outcome": None,
         "effective_had_remediation": None,
         "outcome_overridden": None,
+        "amended_outcome_id": None,
+        "amended_at": None,
+        "has_open_appeal": None,
+        "appeal_raised_at": None,
+        "awaiting_responsible_party": None,
+        "awaiting_since": None,
         "on_hold": 0,
         "responsible_party_name": None,
         "as_of_utc": AS_OF,
@@ -543,6 +557,19 @@ def test_the_column_form_of_working_days_late_agrees_with_the_day_walk(calendar)
     ]
     assert pd.isna(late.iloc[-1])
 
+    # Signed, an early completion counts back: minus the day walk run from the
+    # completion to the due date.
+    signed = metrics._working_days_after(
+        calendar,
+        pd.Series([pd.Timestamp(due) for due, _ in pairs]),
+        pd.Series([pd.Timestamp(done) for _, done in pairs]),
+    )
+    assert signed.tolist() == [
+        metrics.working_days_late(calendar, due, done)
+        - metrics.working_days_late(calendar, done, due)
+        for due, done in pairs
+    ]
+
 
 def test_grouped_statistics_match_each_groups_own_series_bit_for_bit():
     # The published rounding depends on the last bit of a sum or a quantile,
@@ -590,6 +617,7 @@ def test_sla_attainment_judges_each_sla_against_its_own_due_date():
             "no_due_date_count": 0,
             "late_working_days_mean": None,
             "late_working_days_max": None,
+            "on_time_rate": 1.0,
             "as_of_utc": AS_OF,
         },
         {
@@ -604,6 +632,7 @@ def test_sla_attainment_judges_each_sla_against_its_own_due_date():
             "no_due_date_count": 0,
             "late_working_days_mean": 1.5,
             "late_working_days_max": 2.0,
+            "on_time_rate": 0.0,
             "as_of_utc": AS_OF,
         },
     ]
@@ -623,6 +652,7 @@ def test_sla_attainment_takes_the_calendar_it_is_given():
     assert review[0]["on_time_count"] == 1
     assert review[0]["late_count"] == 1
     assert review[0]["late_working_days_max"] == 1.0
+    assert review[0]["on_time_rate"] == 0.5
 
 
 def test_sla_attainment_counts_a_completed_case_with_no_due_date_separately():
@@ -646,6 +676,8 @@ def test_sla_attainment_counts_a_completed_case_with_no_due_date_separately():
     assert row["assigned_reviewer_manager_name"] == UNASSIGNED
     assert (row["case_count"], row["on_time_count"], row["late_count"]) == (1, 0, 0)
     assert row["no_due_date_count"] == 1
+    # Judged neither way, so there is no rate to give.
+    assert row["on_time_rate"] is None
 
 
 def test_void_monthly_groups_by_reason_and_actor_on_the_local_void_month(
@@ -1563,6 +1595,339 @@ def test_every_metric_carries_syncs_snapshot_instant_and_refuses_an_empty_one():
     assert metrics.snapshot_as_of(_current()) == AS_OF
 
 
+# --- distributions and trends -------------------------------------------------
+
+
+def _ago(days: float, before: str = AS_OF) -> str:
+    """The instant ``days`` before ``before``, as Sync stamps it."""
+    return (dt.datetime.fromisoformat(before) - dt.timedelta(days=days)).isoformat()
+
+
+def _distribution(dataset: Dataset, **keys: object) -> dict[tuple, tuple]:
+    """(case_type, measure) -> (n, p50, p90, p95, max) of the rows matching
+    ``keys``."""
+    return {
+        (r["case_type"], r["measure"]): (r["n"], r["p50"], r["p90"], r["p95"], r["max"])
+        for r in _rows(dataset)
+        if all(r[k] == v for k, v in keys.items())
+    }
+
+
+def test_duration_percentiles_take_each_window_over_the_days_measurements_end():
+    cases = [
+        # Created 1 Jul 09:00: 9 days, ending 10 Jul; 40 days, ending 10 Aug.
+        _case("a", "Completed", completed_at="2026-07-10T09:00:00+00:00"),
+        _case("b", "Completed", completed_at="2026-08-10T09:00:00+00:00"),
+        # Assigned 4 Jul, before anything had completed.
+        _case("w", "In-progress", assigned_at="2026-07-04T09:00:00+00:00"),
+    ]
+    rows = _rows(metrics.case_duration_percentiles(_current(cases), as_of=AS_OF))
+    end_to_end = {
+        (r["as_of_date"], r["window_days"]): (r["n"], r["p50"], r["max"])
+        for r in rows
+        if r["case_type"] == "complaints" and r["measure"] == "end_to_end"
+    }
+
+    # From the first completion to the snapshot's own date; what ended before
+    # the first completion is in the windows that reach back to it.
+    assert min(r["as_of_date"] for r in rows) == "2026-07-10"
+    assert max(r["as_of_date"] for r in rows) == "2026-08-20"
+    assert [
+        (r["n"], r["max"])
+        for r in rows
+        if (r["as_of_date"], r["window_days"], r["case_type"], r["measure"])
+        == ("2026-07-10", 28, "complaints", "allocation_wait")
+    ] == [(1, 3.0)]
+    assert end_to_end[("2026-07-10", 28)] == (1, 9.0, 9.0)
+    # (9 Jul, 6 Aug] still holds 10 Jul; (10 Jul, 7 Aug] does not.
+    assert end_to_end[("2026-08-06", 28)] == (1, 9.0, 9.0)
+    assert ("2026-08-07", 28) not in end_to_end
+    assert end_to_end[("2026-08-07", 90)] == (1, 9.0, 9.0)
+    assert end_to_end[("2026-08-10", 90)] == (2, 24.5, 40.0)
+
+
+def test_duration_percentiles_measure_each_leg_and_add_an_all_row():
+    cases = [
+        *CURRENT,
+        _case("k1", "Completed", case_type="claims", completed_at=_ago(42)),
+    ]
+    result = metrics.case_duration_percentiles(_current(cases), as_of=AS_OF)
+
+    # On 13 Jul: c1 (created 1 Jul, assigned 4, Reportable 8, done Fri 10 Jul
+    # against Wed 8: 2 working days over) and c4 (done Mon 13 against Fri 10:
+    # 1 over). Only c1 took the Actions path. k1, a claim, ended 9 Jul.
+    assert _distribution(result, as_of_date="2026-07-13", window_days=28) == {
+        ("complaints", "allocation_wait"): (1, 3.0, None, None, 3.0),
+        ("complaints", "end_to_end"): (2, 10.5, None, None, 12.0),
+        ("complaints", "remediation"): (1, 2.0, None, None, 2.0),
+        ("complaints", "review"): (1, 4.0, None, None, 4.0),
+        ("complaints", "sla_margin_review"): (2, 1.5, None, None, 2.0),
+        ("complaints", "to_reportable"): (1, 7.0, None, None, 7.0),
+        ("claims", "end_to_end"): (1, 7.875, None, None, 7.875),
+        ("(all)", "allocation_wait"): (1, 3.0, None, None, 3.0),
+        ("(all)", "end_to_end"): (3, 9.0, None, None, 12.0),
+        ("(all)", "remediation"): (1, 2.0, None, None, 2.0),
+        ("(all)", "review"): (1, 4.0, None, None, 4.0),
+        ("(all)", "sla_margin_review"): (2, 1.5, None, None, 2.0),
+        ("(all)", "to_reportable"): (1, 7.0, None, None, 7.0),
+    }
+
+
+def test_duration_percentiles_skip_void_and_backward_legs_but_sign_the_margin():
+    cases = [
+        _case("v", "Void", completed_at="2026-07-10T09:00:00+00:00"),
+        # Assigned after it was Reportable: its review leg runs backwards.
+        _case(
+            "r",
+            "Actions In Progress",
+            assigned_at="2026-07-09T09:00:00+00:00",
+            reportable_at="2026-07-08T09:00:00+00:00",
+        ),
+        # Done Wed 8 Jul against Fri 10 Jul: Thursday and Friday to spare.
+        _case(
+            "e",
+            "Completed",
+            due_date="2026-07-10T00:00:00+00:00",
+            completed_at="2026-07-08T09:00:00+00:00",
+        ),
+    ]
+    result = metrics.case_duration_percentiles(_current(cases), as_of=AS_OF)
+
+    assert _distribution(
+        result, as_of_date="2026-07-10", window_days=28, case_type="complaints"
+    ) == {
+        ("complaints", "allocation_wait"): (1, 8.0, None, None, 8.0),
+        ("complaints", "end_to_end"): (1, 7.0, None, None, 7.0),
+        ("complaints", "sla_margin_review"): (1, -2.0, None, None, -2.0),
+        ("complaints", "to_reportable"): (1, 7.0, None, None, 7.0),
+    }
+
+
+@pytest.mark.parametrize(
+    ("n", "p90", "p95"),
+    [(9, None, None), (10, 9.1, None), (19, 17.2, None), (20, 18.1, 19.05)],
+)
+def test_duration_percentiles_publish_a_tail_only_over_enough_cases(n, p90, p95):
+    # End to end of 1, 2, ... n days, every one ending 2 Aug.
+    done = "2026-08-02T09:00:00+00:00"
+    cases = [
+        _case(f"k{days}", "Completed", created=_ago(days, done), completed_at=done)
+        for days in range(1, n + 1)
+    ]
+    result = metrics.case_duration_percentiles(_current(cases), as_of=AS_OF)
+
+    [row] = [
+        stats
+        for (case_type, measure), stats in _distribution(
+            result, as_of_date="2026-08-02", window_days=28
+        ).items()
+        if (case_type, measure) == ("complaints", "end_to_end")
+    ]
+    assert row == (n, (n + 1) / 2, p90, p95, float(n))
+
+
+def test_duration_percentiles_file_a_measurement_under_its_local_end_day(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        timestamps, "local_timezone", lambda: dt.timezone(dt.timedelta(hours=1))
+    )
+    # 23:30 UTC on 10 Jul is 00:30 on 11 Jul, an hour east.
+    cases = [_case("a", "Completed", completed_at="2026-07-10T23:30:00+00:00")]
+    rows = _rows(metrics.case_duration_percentiles(_current(cases), as_of=AS_OF))
+
+    assert min(r["as_of_date"] for r in rows) == "2026-07-11"
+
+
+def test_duration_percentiles_with_nothing_measured_land_the_declared_shape():
+    result = metrics.case_duration_percentiles(
+        _current([_case("c2", "In-progress")]), as_of=AS_OF
+    )
+
+    assert _rows(result) == []
+    assert list(result.to_pandas().columns) == list(
+        CaseDurationPercentilesDaily.__dataclass_fields__
+    )
+
+
+def test_open_age_measures_what_is_open_at_the_snapshot():
+    cases = [
+        _case("t", "To-allocate", created=_ago(10)),
+        _case("p", "In-progress", created=_ago(4.5)),
+        _case(
+            "a",
+            "Actions In Progress",
+            created=_ago(30),
+            awaiting_responsible_party=1,
+            awaiting_since=_ago(1),
+            has_open_appeal=1,
+            appeal_raised_at=_ago(2),
+        ),
+        # A Completed Case's open Appeal counts; the Case itself is not open.
+        _case("c", "Completed", has_open_appeal=1, appeal_raised_at=_ago(7)),
+        _case("v", "Void", has_open_appeal=1, appeal_raised_at=_ago(7)),
+        _case("k", "In-progress", case_type="claims", created=_ago(2)),
+    ]
+    result = metrics.case_open_age(_current(cases), as_of=AS_OF)
+
+    assert {row["as_of_date"] for row in _rows(result)} == {"2026-08-20"}
+    assert _distribution(result) == {
+        ("complaints", "open_age_to_allocate"): (1, 10.0, None, None, 10.0),
+        ("complaints", "open_age_in_progress"): (1, 4.5, None, None, 4.5),
+        ("complaints", "open_age_actions_in_progress"): (1, 30.0, None, None, 30.0),
+        ("complaints", "awaiting_responsible_party"): (1, 1.0, None, None, 1.0),
+        ("complaints", "open_appeal_age"): (2, 4.5, None, None, 7.0),
+        ("claims", "open_age_in_progress"): (1, 2.0, None, None, 2.0),
+        ("(all)", "open_age_to_allocate"): (1, 10.0, None, None, 10.0),
+        ("(all)", "open_age_in_progress"): (2, 3.25, None, None, 4.5),
+        ("(all)", "open_age_actions_in_progress"): (1, 30.0, None, None, 30.0),
+        ("(all)", "awaiting_responsible_party"): (1, 1.0, None, None, 1.0),
+        ("(all)", "open_appeal_age"): (2, 4.5, None, None, 7.0),
+    }
+
+
+@pytest.mark.parametrize(
+    ("n", "p90", "p95"), [(9, None, None), (10, 9.1, None), (20, 18.1, 19.05)]
+)
+def test_open_age_publishes_a_tail_only_over_enough_cases(n, p90, p95):
+    cases = [
+        _case(f"p{days}", "In-progress", created=_ago(days)) for days in range(1, n + 1)
+    ]
+    result = metrics.case_open_age(_current(cases), as_of=AS_OF)
+
+    assert _distribution(result)[("complaints", "open_age_in_progress")] == (
+        n,
+        (n + 1) / 2,
+        p90,
+        p95,
+        float(n),
+    )
+
+
+def test_first_time_right_excludes_appealed_amended_and_overridden_cases():
+    cases = [
+        _case("r1", "Completed", reportable_at="2026-07-08T09:00:00+00:00"),
+        # Appealed, even though the Appeal was rejected.
+        _case("r2", "Completed", reportable_at="2026-07-09T09:00:00+00:00"),
+        _case(
+            "r3",
+            "Actions In Progress",
+            reportable_at="2026-07-10T09:00:00+00:00",
+            amended_outcome_id="o2",
+        ),
+        _case(
+            "r4",
+            "Completed",
+            reportable_at="2026-07-11T09:00:00+00:00",
+            outcome_overridden=1,
+        ),
+        _case(
+            "r5",
+            "Completed",
+            reportable_at="2026-07-12T09:00:00+00:00",
+            outcome_overridden=0,
+        ),
+        _case("r6", "Void", reportable_at="2026-07-12T09:00:00+00:00"),
+        _case(
+            "r7",
+            "Completed",
+            reportable_at="2026-08-03T09:00:00+00:00",
+            assigned_reviewer_name=JONES,
+        ),
+    ]
+    appeals = given_rows([_appeal("r2", "ap1", "resolved", "rejected")]).read()
+    result = _rows(metrics.first_time_right(_current(cases), appeals, as_of=AS_OF))
+
+    assert [
+        (
+            r["reportable_month"],
+            r["assigned_reviewer_name"],
+            r["reportable_count"],
+            r["first_time_right_count"],
+            r["first_time_right_rate"],
+        )
+        for r in result
+    ] == [("2026-07", KHAN, 5, 2, 0.4), ("2026-08", JONES, 1, 1, 1.0)]
+    assert {r["brand"] for r in result} == {UNKNOWN_BRAND}
+
+
+def test_reviewer_throughput_spreads_a_weeks_reportable_cases_over_reviewers():
+    # 6-12 Jul is ISO week 28. Khan makes three complaints Reportable, Jones a
+    # complaint and a claim; one complaint names no Reviewer.
+    monday = "2026-07-06T09:00:00+00:00"
+    cases = [
+        *(_case(f"k{i}", "Completed", reportable_at=monday) for i in range(3)),
+        _case("j1", "Completed", reportable_at=monday, assigned_reviewer_name=JONES),
+        _case(
+            "j2",
+            "Completed",
+            case_type="claims",
+            reportable_at=monday,
+            assigned_reviewer_name=JONES,
+        ),
+        _case("u", "Completed", reportable_at=monday, assigned_reviewer_name=None),
+        _case("v", "Void", reportable_at=monday),
+    ]
+    result = _rows(metrics.reviewer_throughput(_current(cases), as_of=AS_OF))
+
+    assert [
+        (
+            r["iso_week"],
+            r["case_type"],
+            r["active_reviewer_count"],
+            r["completions_total"],
+            r["completions_per_reviewer_p50"],
+            r["completions_per_reviewer_p90"],
+            r["completions_per_reviewer_max"],
+        )
+        for r in result
+    ] == [
+        ("2026-W28", "(all)", 2, 6, 2.5, None, 3.0),
+        ("2026-W28", "claims", 1, 1, 1.0, None, 1.0),
+        ("2026-W28", "complaints", 2, 5, 2.0, None, 3.0),
+    ]
+
+
+@pytest.mark.parametrize(("reviewers", "p90"), [(9, None), (10, 1.0)])
+def test_reviewer_throughput_publishes_a_p90_only_over_enough_reviewers(reviewers, p90):
+    cases = [
+        _case(
+            f"c{i}",
+            "Completed",
+            reportable_at="2026-07-06T09:00:00+00:00",
+            assigned_reviewer_name=f"R{i}",
+        )
+        for i in range(reviewers)
+    ]
+    [everything, complaints] = _rows(
+        metrics.reviewer_throughput(_current(cases), as_of=AS_OF)
+    )
+
+    assert complaints["completions_per_reviewer_p90"] == p90
+    assert everything["completions_per_reviewer_p90"] == p90
+
+
+def test_reviewer_throughput_weeks_run_on_the_local_calendar(monkeypatch):
+    monkeypatch.setattr(
+        timestamps, "local_timezone", lambda: dt.timezone(dt.timedelta(hours=1))
+    )
+    # Sunday 12 Jul 23:30 UTC is Monday 13 Jul, week 29, an hour east.
+    cases = [_case("c", "Completed", reportable_at="2026-07-12T23:30:00+00:00")]
+
+    assert {
+        r["iso_week"]
+        for r in _rows(metrics.reviewer_throughput(_current(cases), as_of=AS_OF))
+    } == {"2026-W29"}
+
+
+def test_reviewer_workload_daily_is_the_current_workload_under_its_date():
+    workload = metrics.reviewer_workload(_current(), _no_history(), as_of=AS_OF)
+
+    assert _rows(metrics.reviewer_workload_daily(workload, as_of=AS_OF)) == [
+        {"as_of_date": "2026-08-20", **row} for row in _rows(workload)
+    ]
+
+
 # --- end to end -------------------------------------------------------------
 
 
@@ -1631,6 +1996,9 @@ def test_main_reads_sync_and_refreshes_every_table_through_the_migrated_path(
         assert rows, table
         for row in rows:
             assert row.pop(RUN_PROVENANCE_COLUMN)
+            if table in ACCUMULATED_TABLES:
+                assert row.pop("logical_run_id")
+                assert row.pop("load_date")
             assert row["as_of_utc"] == AS_OF
             # Every column the contract declares landed, and nothing the
             # contract does not declare did.
@@ -1649,10 +2017,15 @@ def test_main_reads_sync_and_refreshes_every_table_through_the_migrated_path(
     sync.silver.writer("case_version", Refresh()).write(
         Dataset.from_pandas(pd.DataFrame(HISTORY[:5]))
     )
+    accumulated = {table: len(read_rows(gold, table)) for table in ACCUMULATED_TABLES}
     assert main(["prog", "--base-dir", str(base_dir)]) == 0
     assert [
         r["assigned_reviewer_name"] for r in read_rows(gold, "case_hold_current")
     ] == [KHAN]
+    # The day-at-a-time tables replace a re-driven day rather than repeat it.
+    assert {
+        table: len(read_rows(gold, table)) for table in ACCUMULATED_TABLES
+    } == accumulated
 
 
 def test_the_pipeline_declares_sync_as_its_freshness_upstream():

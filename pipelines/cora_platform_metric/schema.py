@@ -26,6 +26,24 @@ REVIEW_SLA = "review"
 REMEDIATION_SLA = "remediation"
 SLA_KINDS = (REVIEW_SLA, REMEDIATION_SLA)
 
+# The trailing windows, in days, each duration percentile is taken over.
+DURATION_WINDOWS = (28, 90)
+DURATION_MEASURES = (
+    "end_to_end",
+    "to_reportable",
+    "allocation_wait",
+    "review",
+    "remediation",
+    "sla_margin_review",
+)
+OPEN_AGE_MEASURES = (
+    "open_age_to_allocate",
+    "open_age_in_progress",
+    "open_age_actions_in_progress",
+    "awaiting_responsible_party",
+    "open_appeal_age",
+)
+
 
 @dataclass
 class CaseStageDwell:
@@ -88,6 +106,7 @@ class CaseSlaAttainmentMonthly:
     no_due_date_count: Annotated[int, NonNull(), Range(minimum=0)]
     late_working_days_mean: float
     late_working_days_max: float
+    on_time_rate: Annotated[float, Range(minimum=0, maximum=1)]
     as_of_utc: Annotated[str, NonNull()]
 
 
@@ -364,4 +383,82 @@ class AppealRateByReviewerMonthly:
     open_appeal_count: Annotated[int, NonNull(), Range(minimum=0)]
     agreed_appeal_count: Annotated[int, NonNull(), Range(minimum=0)]
     rejected_appeal_count: Annotated[int, NonNull(), Range(minimum=0)]
+    as_of_utc: Annotated[str, NonNull()]
+
+
+@dataclass
+class CaseDurationPercentilesDaily:
+    """``case_duration_percentiles_daily`` -- trailing-window duration percentiles."""
+
+    as_of_date: Annotated[str, NonNull()]
+    window_days: Annotated[int, NonNull(), OneOf(*DURATION_WINDOWS)]
+    case_type: Annotated[str, NonNull()]
+    measure: Annotated[str, NonNull(), OneOf(*DURATION_MEASURES)]
+    n: Annotated[int, NonNull(), Range(minimum=1)]
+    p50: Annotated[float, NonNull()]
+    p90: float
+    p95: float
+    max: Annotated[float, NonNull()]
+    as_of_utc: Annotated[str, NonNull()]
+
+
+@dataclass
+class CaseOpenAgeDaily:
+    """``case_open_age_daily`` -- the age of what is open, one row set per run."""
+
+    as_of_date: Annotated[str, NonNull()]
+    case_type: Annotated[str, NonNull()]
+    measure: Annotated[str, NonNull(), OneOf(*OPEN_AGE_MEASURES)]
+    n: Annotated[int, NonNull(), Range(minimum=1)]
+    p50: Annotated[float, NonNull(), Range(minimum=0)]
+    p90: Annotated[float, Range(minimum=0)]
+    p95: Annotated[float, Range(minimum=0)]
+    max: Annotated[float, NonNull(), Range(minimum=0)]
+    as_of_utc: Annotated[str, NonNull()]
+
+
+@dataclass
+class CaseFirstTimeRightMonthly:
+    """``case_first_time_right_monthly`` -- Reportable Cases never appealed,
+    amended or overridden."""
+
+    reportable_month: Annotated[str, NonNull()]
+    brand: Annotated[str, NonNull()]
+    case_type: Annotated[str, NonNull()]
+    assigned_reviewer_name: Annotated[str, NonNull()]
+    reportable_count: Annotated[int, NonNull(), Range(minimum=1)]
+    first_time_right_count: Annotated[int, NonNull(), Range(minimum=0)]
+    first_time_right_rate: Annotated[float, NonNull(), Range(minimum=0, maximum=1)]
+    as_of_utc: Annotated[str, NonNull()]
+
+
+@dataclass
+class ReviewerThroughputWeekly:
+    """``reviewer_throughput_weekly`` -- Cases made Reportable per ISO week."""
+
+    iso_week: Annotated[str, NonNull()]
+    brand: Annotated[str, NonNull()]
+    case_type: Annotated[str, NonNull()]
+    active_reviewer_count: Annotated[int, NonNull(), Range(minimum=0)]
+    completions_total: Annotated[int, NonNull(), Range(minimum=1)]
+    completions_per_reviewer_p50: Annotated[float, Range(minimum=1)]
+    completions_per_reviewer_p90: Annotated[float, Range(minimum=1)]
+    completions_per_reviewer_max: Annotated[float, Range(minimum=1)]
+    as_of_utc: Annotated[str, NonNull()]
+
+
+@dataclass
+class ReviewerWorkloadDaily:
+    """``reviewer_workload_daily`` -- ``reviewer_workload_current``, kept per day."""
+
+    as_of_date: Annotated[str, NonNull()]
+    brand: Annotated[str, NonNull()]
+    case_type: Annotated[str, NonNull()]
+    assigned_reviewer_name: Annotated[str, NonNull()]
+    in_progress_count: Annotated[int, NonNull(), Range(minimum=0)]
+    in_progress_on_hold_count: Annotated[int, NonNull(), Range(minimum=0)]
+    actions_in_progress_count: Annotated[int, NonNull(), Range(minimum=0)]
+    oldest_in_progress_days: float
+    reportable_last_28_days_count: Annotated[int, NonNull(), Range(minimum=0)]
+    weeks_of_work: float
     as_of_utc: Annotated[str, NonNull()]

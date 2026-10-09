@@ -1,9 +1,10 @@
 """Build the ``cora_platform_metric`` gold tables from the Sync subject.
 
-Nineteen Aggregate tables, each reduced from the Sync subject's published current
-state or its observation history through the Shared Readers in
-``readers.sharepoint_cases``, and written whole (``Refresh()``) into this
-subject's own gold on every run. Each reduction is a function in ``metrics``;
+Aggregate tables, each reduced from the Sync subject's published current state
+or its observation history through the Shared Readers in
+``readers.sharepoint_cases``, and written into this subject's own gold on every
+run: whole (``Refresh()``), but for the ``ACCUMULATED_TABLES``, which add the
+day's rows (``AccumulateByRun``). Each reduction is a function in ``metrics``;
 this module only wires readers and writers around them, with the eager steps,
 so a run reads top to bottom and can be stepped through in a debugger.
 
@@ -21,8 +22,8 @@ Run parameters:
 
 * ``calendar`` -- path to a YAML working-day calendar (``holidays`` +
   ``weekend``, the same file ``orchestrate --calendar`` takes). Seeds the
-  working-day arithmetic behind ``case_sla_attainment_monthly``; omitted, the
-  calendar is weekends-only.
+  working-day arithmetic behind ``case_sla_attainment_monthly`` and the
+  ``sla_margin_review`` percentiles; omitted, the calendar is weekends-only.
 """
 
 from __future__ import annotations
@@ -39,7 +40,7 @@ from framework.core import (
     SchemaValidator,
     format_failure,
 )
-from framework.io import Refresh, Writer
+from framework.io import AccumulateByRun, Refresh, Writer
 from framework.run import (
     FreshnessRequirement,
     RunContext,
@@ -87,7 +88,16 @@ GOLD_TABLES = (
     ("remediation_overdue_current", schema.RemediationOverdue),
     ("reviewer_workload_current", schema.ReviewerWorkload),
     ("appeal_rate_by_reviewer_monthly", schema.AppealRateByReviewerMonthly),
+    ("case_duration_percentiles_daily", schema.CaseDurationPercentilesDaily),
+    ("case_open_age_daily", schema.CaseOpenAgeDaily),
+    ("case_first_time_right_monthly", schema.CaseFirstTimeRightMonthly),
+    ("reviewer_throughput_weekly", schema.ReviewerThroughputWeekly),
+    ("reviewer_workload_daily", schema.ReviewerWorkloadDaily),
 )
+
+# The tables kept a day at a time (``AccumulateByRun``) rather than rebuilt: a
+# snapshot of what is open cannot be rebuilt from Sync once the day has passed.
+ACCUMULATED_TABLES = ("case_open_age_daily", "reviewer_workload_daily")
 
 # One gate per source, on the columns the reductions read from it. Stateless,
 # so the steps that share a source share its gate.
@@ -106,6 +116,10 @@ ANSWER_GATE = ColumnValidator(metrics.ANSWER_COLUMNS)
 ACTION_GATE = ColumnValidator(metrics.ANSWER_ACTION_COLUMNS)
 APPEAL_GATE = ColumnValidator(metrics.APPEAL_COLUMNS)
 MESSAGE_GATE = ColumnValidator(metrics.CONVERSATION_COLUMNS)
+DURATION_GATE = ColumnValidator(metrics.DURATION_COLUMNS)
+OPEN_AGE_GATE = ColumnValidator(metrics.OPEN_AGE_COLUMNS)
+FIRST_TIME_RIGHT_GATE = ColumnValidator(metrics.FIRST_TIME_RIGHT_COLUMNS)
+THROUGHPUT_GATE = ColumnValidator(metrics.THROUGHPUT_COLUMNS)
 
 CALENDAR_PARAM = "calendar"
 
@@ -379,6 +393,80 @@ def to_appeal_rate(
     return write(writer, data, name="appeal_rate:write")
 
 
+def to_duration_percentiles(
+    cases: Dataset, as_of: str, writer: Writer, calendar: WorkingDayCalendar
+) -> Dataset:
+    validate(DURATION_GATE, cases, name="durations:current")
+    data = transform(
+        partial(metrics.case_duration_percentiles, as_of=as_of, calendar=calendar),
+        cases,
+        name="durations:reduce",
+    )
+    validate(
+        SchemaValidator(schema.CaseDurationPercentilesDaily),
+        data,
+        name="durations:validate",
+    )
+    return write(writer, data, name="durations:write")
+
+
+def to_open_age(cases: Dataset, as_of: str, writer: Writer) -> Dataset:
+    validate(OPEN_AGE_GATE, cases, name="open_age:current")
+    data = transform(
+        partial(metrics.case_open_age, as_of=as_of), cases, name="open_age:reduce"
+    )
+    validate(SchemaValidator(schema.CaseOpenAgeDaily), data, name="open_age:validate")
+    return write(writer, data, name="open_age:write")
+
+
+def to_first_time_right(
+    cases: Dataset, appeals: Dataset, as_of: str, writer: Writer
+) -> Dataset:
+    validate(FIRST_TIME_RIGHT_GATE, cases, name="first_time_right:current")
+    validate(APPEAL_GATE, appeals, name="first_time_right:appeals")
+    data = transform(
+        partial(metrics.first_time_right, as_of=as_of),
+        cases,
+        appeals,
+        name="first_time_right:reduce",
+    )
+    validate(
+        SchemaValidator(schema.CaseFirstTimeRightMonthly),
+        data,
+        name="first_time_right:validate",
+    )
+    return write(writer, data, name="first_time_right:write")
+
+
+def to_throughput(cases: Dataset, as_of: str, writer: Writer) -> Dataset:
+    validate(THROUGHPUT_GATE, cases, name="throughput:current")
+    data = transform(
+        partial(metrics.reviewer_throughput, as_of=as_of),
+        cases,
+        name="throughput:reduce",
+    )
+    validate(
+        SchemaValidator(schema.ReviewerThroughputWeekly),
+        data,
+        name="throughput:validate",
+    )
+    return write(writer, data, name="throughput:write")
+
+
+def to_workload_daily(workload: Dataset, as_of: str, writer: Writer) -> Dataset:
+    data = transform(
+        partial(metrics.reviewer_workload_daily, as_of=as_of),
+        workload,
+        name="workload_daily:reduce",
+    )
+    validate(
+        SchemaValidator(schema.ReviewerWorkloadDaily),
+        data,
+        name="workload_daily:validate",
+    )
+    return write(writer, data, name="workload_daily:write")
+
+
 def run(context: RunContext) -> Dataset:
     """Read each Sync source once, then build each table in publication order.
 
@@ -455,11 +543,26 @@ def run(context: RunContext) -> Dataset:
         as_of,
         gold.writer("remediation_overdue_current", Refresh()),
     )
-    to_workload(
+    workload = to_workload(
         cases, observations, as_of, gold.writer("reviewer_workload_current", Refresh())
     )
-    return to_appeal_rate(
+    to_appeal_rate(
         cases, appeals, as_of, gold.writer("appeal_rate_by_reviewer_monthly", Refresh())
+    )
+    to_duration_percentiles(
+        cases,
+        as_of,
+        gold.writer("case_duration_percentiles_daily", Refresh()),
+        calendar,
+    )
+    by_run = AccumulateByRun.from_context(context)
+    to_open_age(cases, as_of, gold.writer("case_open_age_daily", by_run))
+    to_first_time_right(
+        cases, appeals, as_of, gold.writer("case_first_time_right_monthly", Refresh())
+    )
+    to_throughput(cases, as_of, gold.writer("reviewer_throughput_weekly", Refresh()))
+    return to_workload_daily(
+        workload, as_of, gold.writer("reviewer_workload_daily", by_run)
     )
 
 
