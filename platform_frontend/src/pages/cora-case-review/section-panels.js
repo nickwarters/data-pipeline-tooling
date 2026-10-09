@@ -46,6 +46,7 @@
  * @property {(questionId: string, fieldKey: string, value: import('../../evaluators/issue-capture.js').CaptureValue | null) => void} captureEdited
  * @property {(questionId: string, fieldKey: string, query: string) => void} requestCaptureSearch
  * @property {(party: { loginName: string, displayName: string }) => void} selectResponsibleParty
+ * @property {() => void} clearResponsibleParty
  * @property {(query: string) => void} requestResponsiblePartySearch
  * @property {ReturnType<typeof import('./appeal-effects.js').createAppealEffects>} appeals
  *   The whole effect object, not a hand-written shape — these three are the

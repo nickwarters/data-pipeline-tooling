@@ -80,6 +80,7 @@ export class CORARemediationSection extends HTMLElement {
       responsiblePartySearch: { query: '', people: [], status: 'idle' },
       canEditIssues: this.canEditIssues,
       dispatchResponsibleParty() {},
+      dispatchResponsiblePartyClear() {},
       dispatchResponsiblePartySearch() {},
       dispatchCapture: (questionId, fieldKey, value) =>
         this._emit('cora-capture', { questionId, fieldKey, value }),

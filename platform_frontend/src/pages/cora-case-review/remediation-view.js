@@ -30,6 +30,7 @@ import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.
  *   remediation decision and its actions, and the Responsible Party. One flag,
  *   because they are one permission.
  * @property {(party: Party) => void} dispatchResponsibleParty
+ * @property {() => void} dispatchResponsiblePartyClear
  * @property {(query: string) => void} dispatchResponsiblePartySearch
  * @property {(questionId: string, fieldKey: string, value: import('../../evaluators/issue-capture.js').CaptureValue | null) => void} dispatchCapture
  * @property {(questionId: string, fieldKey: string, query: string) => void} dispatchCaptureSearch
@@ -96,8 +97,10 @@ export function RemediationSection(props) {
  * the recipient and choosing what is sent to them are one act. Afterwards it
  * reads back as plain text, because the person named is who the sent actions
  * are already addressed to. The picker stays visible even once a Party is
- * chosen — a wrong choice is corrected by choosing again, and there is
- * deliberately no clear button.
+ * chosen, so a wrong choice is corrected by choosing again; the clear button
+ * beside the name is the only way back to nobody, since choosing again can only
+ * swap one person for another. Clearing leaves the field asking for a Party,
+ * because the remediation that needs one is still required.
  *
  * @param {RemediationSectionProps} props
  * @returns {Node | null}
@@ -133,6 +136,16 @@ export function ResponsiblePartyField(props) {
         'span',
         { className: 'cora-responsible-party-current' },
         current.displayName
+      ),
+      h(
+        'button',
+        {
+          className: 'cora-responsible-party-clear',
+          type: 'button',
+          'aria-label': 'Clear Responsible Party',
+          onclick: () => props.dispatchResponsiblePartyClear(),
+        },
+        '✕'
       )
     );
   }

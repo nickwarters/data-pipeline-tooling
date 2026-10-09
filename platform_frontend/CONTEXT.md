@@ -384,7 +384,9 @@ assessed) — an **Adviser** by group membership, named on one specific **Case**
 from the **Reviewer**. One per **Case**. Distinct from an **Attributed Party** (which is
 per-failure, not per-Case). The **Assigned Reviewer** _sets_ the Responsible Party in-app,
 at the bottom of the **Issues** Section, before **Send Actions**; it cannot be changed
-after send. The field only appears — and is only required — once at least one failed
+after send. Before send it can be replaced by choosing someone else, or cleared back to
+nobody with the clear button beside the name, which leaves the field asking for a Party
+again while remediation is still required. The field only appears — and is only required — once at least one failed
 **Answer**'s "Is remediation required?" decision is `yes`: with nothing to send there is
 nobody to send it to (#677). Before **Send Actions**, withdrawing the last such decision
 clears any stored Responsible Party and removes the value from the Case tables' Responsible

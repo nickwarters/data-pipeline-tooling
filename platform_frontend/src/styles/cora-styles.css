@@ -1421,7 +1421,7 @@
 }
 
 /* The person currently named, with the picker still below it: choosing again
-   is how a wrong choice is corrected. */
+   is how a wrong choice is corrected, and the button beside it clears it. */
 .cora-responsible-party-current {
   display: inline-flex;
   align-items: center;
@@ -1434,6 +1434,27 @@
   background: var(--cora-color-surface-2);
   border: 1px solid var(--cora-color-border);
   border-radius: var(--cora-radius-pill, 999px);
+}
+
+/* Beside the name, the one way back to nobody before the actions are sent. */
+.cora-responsible-party-clear {
+  display: inline-flex;
+  margin: 0 0 var(--cora-space-2) var(--cora-space-1);
+  padding: var(--cora-space-1);
+  font: inherit;
+  font-size: var(--cora-font-size-xs);
+  line-height: 1;
+  color: var(--cora-color-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--cora-radius-sm);
+  cursor: pointer;
+}
+
+.cora-responsible-party-clear:hover,
+.cora-responsible-party-clear:focus-visible {
+  color: var(--cora-color-danger);
+  outline: none;
 }
 
 /* Read-only once the actions are sent: the person named is who they went to. */
