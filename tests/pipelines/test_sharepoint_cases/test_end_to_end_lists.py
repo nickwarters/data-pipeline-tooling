@@ -8,11 +8,12 @@ safety lag is ordinary operation rather than a failure.
 
 from __future__ import annotations
 
+import pandas as pd
 import pytest
 
 from framework.run import RunContext
-from pipelines.sharepoint_cases.gold import GOLD_TABLES
-from pipelines.sharepoint_cases.pipeline import FEED_NAME, SAFETY_LAG
+from pipelines.sharepoint_cases.gold import DETAIL_TABLES, GOLD_TABLES
+from pipelines.sharepoint_cases.pipeline import FEED_NAME, PERSON_TABLE, SAFETY_LAG
 from tests._sharepoint_cases_fixtures import (
     COMPLAINTS,
     OTHER,
@@ -180,5 +181,125 @@ def test_a_retry_after_a_partial_failure_converges_and_advances_both_lists(base_
         assert sorted(row["case_type"] for row in read_rows(layer, table)) == sorted(
             case_list.case_type for case_list in TWO_LISTS
         ), table
+    assert checkpoints.watermark(SOURCE.key) == SERVER_NOW - SAFETY_LAG
+    assert checkpoints.watermark(OTHER_SOURCE.key) == SERVER_NOW - SAFETY_LAG
+
+
+# --- a quiet list -------------------------------------------------------------
+
+
+def quiet_other_client() -> FakeListClient:
+    """The first list answering one item, the second answering nothing."""
+    return FakeListClient(
+        by_list={
+            COMPLAINTS.list_name: [items(item())],
+            OTHER.list_name: [pd.DataFrame()],
+        }
+    )
+
+
+def steps_of(run_log: RecordingRunLog, case_list) -> set[str]:
+    """Every step a list recorded, by the Case Type its step names carry."""
+    return {
+        record["step"]
+        for record in run_log.records
+        if record["step"].split(":")[1] == case_list.case_type
+    }
+
+
+def test_a_quiet_list_records_its_read_and_runs_no_write_or_silver_step(base_dir):
+    # Polled and found empty: the run log shows the list was read, but there is
+    # nothing to land, so it opens no connection to raw, silver or quarantine.
+    run_log = RecordingRunLog()
+
+    run(
+        RunContext(base_dir=base_dir, pipeline=FEED_NAME, run_log=run_log),
+        client=quiet_other_client(),
+        case_lists=TWO_LISTS,
+    )
+
+    assert steps_of(run_log, OTHER) == {
+        f"raw:{OTHER.case_type}:read",
+        f"raw:{OTHER.case_type}:observation",
+    }
+    # ... while the busy list beside it records every step it always did.
+    busy = steps_of(run_log, COMPLAINTS)
+    assert f"raw:{COMPLAINTS.case_type}:write" in busy
+    assert f"silver:{COMPLAINTS.case_type}:write" in busy
+    assert f"silver:{COMPLAINTS.case_type}:{PERSON_TABLE}:write" in busy
+    for table in DETAIL_TABLES:
+        assert f"silver:{COMPLAINTS.case_type}:{table}:write" in busy, table
+
+
+def test_a_quiet_list_still_gets_a_poll_of_zeros_and_the_busy_list_is_unaffected(
+    base_dir,
+):
+    polls = run(
+        RunContext(base_dir=base_dir, pipeline=FEED_NAME),
+        client=quiet_other_client(),
+        case_lists=TWO_LISTS,
+    )
+
+    busy, quiet = polls
+    assert (busy.case_list, quiet.case_list) == (COMPLAINTS, OTHER)
+    assert (busy.raw_rows, busy.silver_rows) == (1, 1)
+    assert busy.detail_rows[PERSON_TABLE] > 0
+    # The quiet poll has the busy one's shape -- person and every Detail Table
+    # named -- so anything reading ListPoll needs no special case for it.
+    assert (quiet.raw_rows, quiet.silver_rows) == (0, 0)
+    assert dict(quiet.detail_rows) == {table: 0 for table in busy.detail_rows}
+    assert set(quiet.detail_rows) == {PERSON_TABLE, *DETAIL_TABLES}
+    assert quiet.window == busy.window
+
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
+    assert {row["case_type"] for row in read_rows(med.silver, "case_version")} == {
+        COMPLAINTS.case_type
+    }
+
+
+def test_a_quiet_list_still_advances_its_watermark(base_dir):
+    # The window was read and found empty, which is exactly what the watermark
+    # vouches for.
+    run(
+        RunContext(base_dir=base_dir, pipeline=FEED_NAME),
+        client=quiet_other_client(),
+        case_lists=TWO_LISTS,
+    )
+
+    checkpoints = SourceCheckpointStore(base_dir)
+    assert checkpoints.watermark(SOURCE.key) == SERVER_NOW - SAFETY_LAG
+    assert checkpoints.watermark(OTHER_SOURCE.key) == SERVER_NOW - SAFETY_LAG
+
+
+def test_a_quiet_list_leaves_its_watermark_alone_under_a_dry_run(base_dir):
+    run(
+        RunContext(base_dir=base_dir, pipeline=FEED_NAME, dry_run=True),
+        client=quiet_other_client(),
+        case_lists=TWO_LISTS,
+    )
+
+    checkpoints = SourceCheckpointStore(base_dir)
+    assert checkpoints.watermark(SOURCE.key) is None
+    assert checkpoints.watermark(OTHER_SOURCE.key) is None
+
+
+def test_gold_is_still_published_when_every_list_is_quiet(base_dir):
+    run_log = RecordingRunLog()
+
+    polls = run(
+        RunContext(base_dir=base_dir, pipeline=FEED_NAME, run_log=run_log),
+        client=FakeListClient(pd.DataFrame()),
+        case_lists=TWO_LISTS,
+    )
+
+    assert [poll.raw_rows for poll in polls] == [0, 0]
+    assert published_gold(run_log) == set(GOLD_TABLES)
+    # Every list recorded its read and nothing it would have written.
+    for case_list in TWO_LISTS:
+        assert steps_of(run_log, case_list) == {
+            f"raw:{case_list.case_type}:read",
+            f"raw:{case_list.case_type}:observation",
+        }
+    checkpoints = SourceCheckpointStore(base_dir)
     assert checkpoints.watermark(SOURCE.key) == SERVER_NOW - SAFETY_LAG
     assert checkpoints.watermark(OTHER_SOURCE.key) == SERVER_NOW - SAFETY_LAG

@@ -11,6 +11,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
+from framework.run import RunContext, active_context
 from pipelines.sharepoint_cases.pipeline import (
     PERSON_SUBFIELDS,
     RAW_FEED_COLUMNS,
@@ -27,7 +28,7 @@ from tests._sharepoint_cases_fixtures import (
     landed,
     source_reader,
 )
-from tests.framework_testing import RecordingWriter, rows_of
+from tests.framework_testing import RecordingRunLog, RecordingWriter, rows_of
 from tools.integrations.sharepoint_rest import SharePointFeedError
 
 # Every flattened Person column raw stores, as (person, sub-field) pairs --
@@ -173,12 +174,28 @@ def test_the_read_asks_for_the_star_and_expands_every_person():
 def test_raw_reads_a_quiet_window_as_the_declared_shape():
     # Almost every column arrives because the client expanded the star, so none
     # of them can be there when there are no rows; the shape is declared anyway.
+    landed_batch = to_raw(
+        source_reader(FakeListClient(pd.DataFrame())), RecordingWriter(), COMPLAINTS
+    )
+
+    assert rows_of(landed_batch) == []
+    assert set(landed_batch.to_pandas().columns) == set(RAW_FEED_COLUMNS)
+
+
+def test_raw_writes_nothing_for_a_quiet_window():
+    # Nothing to land is nothing to write: no write step, so no connection to
+    # raw -- the read and the observation are all a quiet list records.
     writer = RecordingWriter()
+    run_log = RecordingRunLog()
 
-    to_raw(source_reader(FakeListClient(pd.DataFrame())), writer, COMPLAINTS)
+    with active_context(RunContext(base_dir=None, run_log=run_log)):
+        to_raw(source_reader(FakeListClient(pd.DataFrame())), writer, COMPLAINTS)
 
-    assert rows_of(writer) == []
-    assert set(writer.writes[0].to_pandas().columns) == set(RAW_FEED_COLUMNS)
+    assert writer.dataset is None
+    assert [record["step"] for record in run_log.records] == [
+        f"raw:{COMPLAINTS.case_type}:read",
+        f"raw:{COMPLAINTS.case_type}:observation",
+    ]
 
 
 def test_a_populated_response_missing_a_stored_column_is_refused():
