@@ -91,7 +91,9 @@ def _prepared(records: Dataset) -> pd.DataFrame:
     frame["step_address"] = address.mask(address.isna() | address.eq(""), derived)
 
     run_start = frame.groupby("pipeline_run_id")["_at"].transform("min")
-    frame["run_date"] = run_start.map(lambda at: local_date(at).isoformat())
+    # One local-date conversion per run, not per record.
+    dates = {at: local_date(at).isoformat() for at in run_start.unique()}
+    frame["run_date"] = run_start.map(dates)
     return frame
 
 
@@ -151,48 +153,59 @@ def run_summary(records: Dataset, *, as_of: str) -> Dataset:
     run it replaced is no longer the latest.
     """
     frame = _prepared(records).sort_values("_at", kind="stable")
-    rows = []
-    for run_id, run in frame.groupby("pipeline_run_id", sort=False):
-        steps = run.loc[~run["_is_summary"]]
-        summaries = run.loc[run["_is_summary"]]
-        summary = summaries.iloc[-1] if not summaries.empty else None
-        started, finished = run["_at"].min(), run["_at"].max()
+    is_step = ~frame["_is_summary"]
+    failed = is_step & frame["status"].eq(ERROR_STATUS)
+    committed = pd.to_numeric(frame["committed"]).fillna(0).astype(bool)
+    frame = frame.assign(
+        _step=is_step,
+        _failed=failed,
+        _committed=is_step & committed,
+        _step_duration=pd.to_numeric(frame["duration"]).where(is_step),
+        _warns=frame["warn_hits"].map(_warn_count),
+    )
 
-        wall = (finished - started).total_seconds()
-        status = ERROR_STATUS if steps["status"].eq(ERROR_STATUS).any() else OK_STATUS
-        if summary is not None:
-            if pd.notna(summary["duration"]):
-                wall = float(summary["duration"])
-            if pd.notna(summary["status"]):
-                status = str(summary["status"])
-
-        categories = run["error_category"].dropna()
-        rows.append(
-            {
-                RUN_ID_COLUMN: run_id,
-                "pipeline": run["pipeline"].iloc[0],
-                "logical_run_id": run["logical_run_id"].iloc[0],
-                "run_date": run["run_date"].iloc[0],
-                "started_at": started.isoformat(),
-                "finished_at": finished.isoformat(),
-                "wall_clock_seconds": round(max(wall, 0.0), 6),
-                "step_duration_seconds": round(
-                    float(pd.to_numeric(steps["duration"]).fillna(0).sum()), 6
-                ),
-                "step_count": len(steps),
-                "failed_step_count": int(steps["status"].eq(ERROR_STATUS).sum()),
-                "committed_step_count": int(
-                    pd.to_numeric(steps["committed"]).fillna(0).astype(bool).sum()
-                ),
-                "warn_hit_count": int(run["warn_hits"].map(_warn_count).sum()),
-                "status": status,
-                "error_category": categories.iloc[0] if not categories.empty else None,
-            }
+    by_run = frame.groupby("pipeline_run_id", sort=False)
+    # A run is labelled by its first record, even where that field is NULL.
+    runs = by_run[["pipeline", "logical_run_id"]].first(skipna=False)
+    runs = runs.join(
+        by_run.agg(
+            run_date=("run_date", "first"),
+            started=("_at", "min"),
+            finished=("_at", "max"),
+            step_duration_seconds=("_step_duration", "sum"),
+            step_count=("_step", "sum"),
+            failed_step_count=("_failed", "sum"),
+            committed_step_count=("_committed", "sum"),
+            warn_hit_count=("_warns", "sum"),
+            error_category=("error_category", "first"),
         )
+    )
 
-    summarised = pd.DataFrame(
-        rows, columns=list(_columns(PipelineRunSummary))
-    ).sort_values(["started_at", RUN_ID_COLUMN], kind="stable")
+    # The run's own summary record, where one was written; the last one wins.
+    summary = (
+        frame.loc[frame["_is_summary"], ["pipeline_run_id", "duration", "status"]]
+        .drop_duplicates("pipeline_run_id", keep="last")
+        .set_index("pipeline_run_id")
+        .reindex(runs.index)
+    )
+    span = (runs["finished"] - runs["started"]).dt.total_seconds()
+    wall = pd.to_numeric(summary["duration"]).fillna(span)
+    derived = (
+        runs["failed_step_count"].gt(0).map({True: ERROR_STATUS, False: OK_STATUS})
+    )
+
+    summarised = (
+        runs.assign(
+            started_at=runs["started"].map(pd.Timestamp.isoformat),
+            finished_at=runs["finished"].map(pd.Timestamp.isoformat),
+            wall_clock_seconds=wall.clip(lower=0).round(6),
+            step_duration_seconds=runs["step_duration_seconds"].round(6),
+            status=summary["status"].fillna(derived),
+        )
+        .rename_axis(RUN_ID_COLUMN)
+        .reset_index()
+        .sort_values(["started_at", RUN_ID_COLUMN], kind="stable")
+    )
     # A run with no logical run id is its own attempt series. The rows are in
     # start order, so a key's last row is its latest attempt.
     attempt_key = summarised["logical_run_id"].fillna(summarised[RUN_ID_COLUMN])
@@ -227,19 +240,23 @@ def step_duration_trend(
     steps = frame.loc[~frame["_is_summary"] & frame["duration"].notna()].copy()
     steps["duration"] = pd.to_numeric(steps["duration"])
 
-    daily = (
-        steps.groupby(["pipeline", "step_address", "run_date"], sort=True)["duration"]
-        .agg(
-            execution_count="size",
-            duration_p50=lambda durations: durations.quantile(0.5),
-            duration_p95=lambda durations: durations.quantile(0.95),
-            duration_max="max",
-        )
-        .reset_index()
+    by_day = steps.groupby(["pipeline", "step_address", "run_date"], sort=True)
+    durations = by_day["duration"]
+    daily = durations.agg(
+        execution_count="size", duration_p50="median", duration_max="max"
     )
-    per_step = daily.groupby(["pipeline", "step_address"], sort=False)["duration_p50"]
-    daily["trailing_p50_median"] = per_step.transform(
-        lambda p50: p50.shift(1).rolling(trailing_days, min_periods=1).median()
+    daily["duration_p95"] = durations.quantile(0.95)
+    daily = daily.reset_index()
+
+    # Shift each step's daily p50 back a day, then take a rolling median within
+    # the step; both run per step in compiled code, not per step in Python.
+    step_keys = [daily["pipeline"], daily["step_address"]]
+    previous = daily["duration_p50"].groupby(step_keys, sort=False).shift(1)
+    daily["trailing_p50_median"] = (
+        previous.groupby(step_keys, sort=False)
+        .rolling(trailing_days, min_periods=1)
+        .median()
+        .droplevel([0, 1])
     )
     baseline = daily["trailing_p50_median"]
     daily["delta_seconds"] = daily["duration_p50"] - baseline
@@ -253,11 +270,6 @@ def step_duration_trend(
 COUNT_COLUMNS = ("rows_in", "rows_out", "rows_quarantined", "rows_excluded")
 
 
-def _sum(counts: pd.Series) -> float:
-    """Sum that stays NULL when no execution reported the count at all."""
-    return counts.sum(min_count=1)
-
-
 def step_row_flow(records: Dataset, *, as_of: str) -> Dataset:
     """The row funnel through each step of each run. **Grain: run_id x
     step_address.** Only steps that reported a row count appear; a count no
@@ -268,20 +280,13 @@ def step_row_flow(records: Dataset, *, as_of: str) -> Dataset:
     reported = frame[list(COUNT_COLUMNS)].notna().any(axis=1)
     steps = frame.loc[~frame["_is_summary"] & reported]
 
-    flow = (
-        steps.groupby(
-            ["pipeline_run_id", "pipeline", "step_address", "run_date"], sort=True
-        )
-        .agg(
-            execution_count=("step", "size"),
-            rows_in=("rows_in", _sum),
-            rows_out=("rows_out", _sum),
-            rows_quarantined=("rows_quarantined", _sum),
-            rows_excluded=("rows_excluded", _sum),
-        )
-        .reset_index()
-        .rename(columns={"pipeline_run_id": RUN_ID_COLUMN})
+    by_step = steps.groupby(
+        ["pipeline_run_id", "pipeline", "step_address", "run_date"], sort=True
     )
+    # ``min_count=1`` keeps a count no execution reported NULL, not zero.
+    flow = by_step[list(COUNT_COLUMNS)].sum(min_count=1)
+    flow.insert(0, "execution_count", by_step.size())
+    flow = flow.reset_index().rename(columns={"pipeline_run_id": RUN_ID_COLUMN})
     rows_in = flow["rows_in"].where(flow["rows_in"] > 0)
     flow["out_ratio"] = (flow["rows_out"] / rows_in).round(6)
     flow["quarantine_ratio"] = (flow["rows_quarantined"] / rows_in).round(6)
