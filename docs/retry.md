@@ -85,8 +85,15 @@ rows = policy.call(lambda: client.fetch(site, list_name, auth))
 A retried attempt is recorded on the **same** `read` / `write` step record that
 already carries the step's final outcome. Each retry adds a note to that record's
 `warn_hits` (and is logged to the console as it happens); the step's `status`
-stays `ok` if a retry recovered, or becomes `error` if every attempt failed. No
-new run-log fields — see [run-log-format.md](run-log-format.md).
+stays `ok` if a retry recovered, or becomes `error` if every attempt failed.
+
+The step record also counts them: `retry_attempts` is how many attempts were
+retried and `retry_wait_seconds` what they cost, each failed attempt plus the
+backoff after it (the attempt that finally failed or succeeded is not a retry).
+The `run` summary carries the totals for the run. This counts every
+`RetryPolicy` the step ran through, a bare `policy.call(...)` included; a test
+can pin the time with the policy's injectable `clock`. See
+[run-log-format.md](run-log-format.md#waiting-versus-working).
 
 ## Where to use it — and where not to
 

@@ -18,6 +18,7 @@ from framework.core.errors import ErrorCategory, PipelineError
 from framework.core.protocols import Processor, Reader, Validator, Writer
 from framework.core.validators import ValidationError
 from framework.run.run_context import RunContext, current_context
+from tools.observability.waits import measure_waits
 
 __all__ = [
     "coerce",
@@ -176,7 +177,8 @@ def _record(
     pipeline = context.label or (context.pipeline or "")
     started = time.perf_counter()
     try:
-        yield outcome
+        with measure_waits() as waits:
+            yield outcome
     except Exception as exc:
         context.run_log.record(
             context.pipeline_run_id,
@@ -189,6 +191,7 @@ def _record(
             errors=[str(exc)],
             error_category=getattr(exc, "category", None),
             warn_hits=outcome["warn_hits"] or None,
+            **waits.fields(),
         )
         if context.dry_run and context.dry_run_report is not None:
             context.dry_run_report.observe(unique, kind, note=f"FAILED: {exc}")
@@ -207,6 +210,7 @@ def _record(
         warn_hits=outcome["warn_hits"] or None,
         committed=bool(outcome["committed"]),
         data_locations=outcome["data_locations"],
+        **waits.fields(),
     )
     if context.dry_run and context.dry_run_report is not None:
         context.dry_run_report.observe(

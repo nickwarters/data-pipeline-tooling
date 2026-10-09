@@ -160,6 +160,7 @@ class PipelineInvoker(Protocol):
         logical_run_id: str,
         freshness_days: int,
         freshness: tuple[RunRequirement, ...],
+        orchestration_run_id: str | None = None,
     ) -> object: ...
 
 
@@ -183,6 +184,7 @@ class PathPipelineInvoker:
         logical_run_id: str,
         freshness_days: int,
         freshness: tuple[RunRequirement, ...],
+        orchestration_run_id: str | None = None,
     ) -> object:
         loaded = load_pipeline(path)
         return run_pipeline(
@@ -193,6 +195,7 @@ class PathPipelineInvoker:
             run_date=run_date,
             logical_run_id=logical_run_id,
             freshness_days=freshness_days,
+            orchestration_run_id=orchestration_run_id,
         )
 
 
@@ -770,6 +773,11 @@ class OrchestrationDecision:
     # Joins to run_records.pipeline_run_id, so one orchestration_run_id fans out
     # to every pipeline execution it triggered. None when no run was produced.
     pipeline_run_id: str | None = None
+    # UTC instants: when this pass began, and when this item was handed to the
+    # invoker (None for an item that never ran). The gap between them is how
+    # long the item queued behind the items before it.
+    pass_started_at: str | None = None
+    started_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -847,6 +855,9 @@ ORCHESTRATION_RECORD_FIELDS: tuple[Field, ...] = (
     # the order of this list is the on-disk column order of a live file. Reads
     # back NULL on rows written before it joined the schema.
     Field("was_due", "INTEGER"),
+    # When the pass began and when this item started (see OrchestrationDecision).
+    Field("pass_started_at", "TEXT"),
+    Field("started_at", "TEXT"),
 )
 
 _CREATE_ORCHESTRATION_RECORDS = create_table_sql(
@@ -909,6 +920,8 @@ class OrchestrationStore:
                     decision.logical_run_id,
                     decision.pipeline_run_id,
                     int(decision.was_due),
+                    decision.pass_started_at,
+                    decision.started_at,
                 ),
             )
             con.commit()
@@ -1006,6 +1019,7 @@ class Orchestrator:
         day = run_date or dt.date.today()
         moment = now if now is not None else local_now().time()
         pass_run_id = orchestration_run_id or uuid.uuid4().hex
+        pass_started_at = utc_now_iso()
         run_store = RunStore(root)
         store = OrchestrationStore(run_store.orchestration_path)
         decisions: list[OrchestrationDecision] = []
@@ -1025,6 +1039,7 @@ class Orchestrator:
                 failed_in_set,
                 force=force,
             )
+            decision = replace(decision, pass_started_at=pass_started_at)
             decisions.append(decision)
             store.record(decision)
             if decision.status == "failed":
@@ -1310,6 +1325,7 @@ class Orchestrator:
                 f"already {existing} in this orchestration run",
             )
         started = time.perf_counter()
+        started_at = utc_now_iso()
         # The orchestrator owns the business key. It matches the framework's
         # default (label + run_date), but assigning it explicitly means the value
         # we store is the value that ran — no coupling to the default formula. It
@@ -1326,6 +1342,7 @@ class Orchestrator:
                 logical_run_id=logical_run_id,
                 freshness_days=_freshness_days(item),
                 freshness=item.depends_on,
+                orchestration_run_id=orchestration_run_id,
             )
         except FreshnessError as exc:
             return _decision(
@@ -1339,6 +1356,7 @@ class Orchestrator:
                 time.perf_counter() - started,
                 logical_run_id=logical_run_id,
                 pipeline_run_id=_latest_pipeline_run_id(base_dir, label),
+                started_at=started_at,
             )
         except Exception as exc:
             return _decision(
@@ -1352,6 +1370,7 @@ class Orchestrator:
                 time.perf_counter() - started,
                 logical_run_id=logical_run_id,
                 pipeline_run_id=_latest_pipeline_run_id(base_dir, label),
+                started_at=started_at,
             )
         return _decision(
             orchestration_run_id,
@@ -1364,6 +1383,7 @@ class Orchestrator:
             time.perf_counter() - started,
             logical_run_id=logical_run_id,
             pipeline_run_id=_latest_pipeline_run_id(base_dir, label),
+            started_at=started_at,
         )
 
     def _blocked_dependency(
@@ -1496,6 +1516,7 @@ def _decision(
     was_due: bool = True,
     logical_run_id: str | None = None,
     pipeline_run_id: str | None = None,
+    started_at: str | None = None,
 ) -> OrchestrationDecision:
     return OrchestrationDecision(
         orchestration_run_id=orchestration_run_id,
@@ -1509,6 +1530,7 @@ def _decision(
         was_due=was_due,
         logical_run_id=logical_run_id,
         pipeline_run_id=pipeline_run_id,
+        started_at=started_at,
     )
 
 

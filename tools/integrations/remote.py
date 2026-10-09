@@ -27,6 +27,7 @@ from framework._internal.describe import render
 from framework.core.dataset import Dataset
 from framework.io.strategy import AccumulateByRun, Refresh
 from tools.integrations.locations import sharepoint_location
+from tools.observability.waits import external_call
 
 
 @runtime_checkable
@@ -112,7 +113,8 @@ class SharePointReader:
 
     def read(self) -> Dataset:
         self.data_locations = [sharepoint_location(self._site, self._list_name)]
-        return self._fetcher.fetch(self._site, self._list_name, self._auth)
+        with external_call():
+            return self._fetcher.fetch(self._site, self._list_name, self._auth)
 
     def describe(self) -> str:
         # The auth config is omitted from the plan.
@@ -142,13 +144,14 @@ class SharePointWriter:
         self.data_locations = [sharepoint_location(self._site, self._list_name)]
         if isinstance(self._strategy, AccumulateByRun):
             dataset = Dataset.from_pandas(self._strategy.stamp(dataset.to_pandas()))
-        self._pusher.push(
-            self._site,
-            self._list_name,
-            self._auth,
-            dataset,
-            self._strategy,
-        )
+        with external_call():
+            self._pusher.push(
+                self._site,
+                self._list_name,
+                self._auth,
+                dataset,
+                self._strategy,
+            )
 
     def describe(self) -> str:
         # The auth config is omitted from the plan.

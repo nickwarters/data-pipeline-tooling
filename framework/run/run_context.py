@@ -23,8 +23,9 @@ class RunContext:
     The three run identifiers, widest to narrowest scope:
 
     * ``orchestration_run_id`` — the umbrella id of one runner/orchestrator pass,
-      shared by every pipeline it triggers. Owned by ``tools.orchestration``; it
-      is not minted here (a bare ``Pipeline.run()`` has no orchestration above it).
+      shared by every pipeline it triggers. Owned by ``tools.orchestration``,
+      which passes it in; it is not minted here (a run started by hand has no
+      orchestration above it, and keeps ``None``).
     * ``pipeline_run_id`` — this one concrete pipeline attempt. A fresh id per
       execution; the correlating key every RunLog/RunRegistry record carries.
     * ``logical_run_id`` — the business run / idempotency key (``<label>:<run_date>``)
@@ -46,8 +47,10 @@ class RunContext:
         freshness_days: int = 0,
         params: RunParams | None = None,
         dry_run: bool = False,
+        orchestration_run_id: str | None = None,
     ) -> None:
         self.dry_run = dry_run
+        self.orchestration_run_id = orchestration_run_id
         self.dry_run_report: DryRunReport | None = DryRunReport() if dry_run else None
         self.base_dir = Path(base_dir) if base_dir is not None else None
         self.subject = subject
@@ -122,6 +125,7 @@ class RunContext:
             freshness_days=self.freshness_days,
             params=self.params,
             dry_run=self.dry_run,
+            orchestration_run_id=self.orchestration_run_id,
         )
         # Share the parent's report so a dry-run preview captures nested stages.
         child.dry_run_report = self.dry_run_report

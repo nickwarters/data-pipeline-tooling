@@ -99,7 +99,15 @@ def test_a_due_item_still_running_keeps_the_loop_going():
 
 class _NoopInvoker:
     def run(
-        self, path, base_dir, *, run_date, logical_run_id, freshness_days, freshness
+        self,
+        path,
+        base_dir,
+        *,
+        run_date,
+        logical_run_id,
+        freshness_days,
+        freshness,
+        orchestration_run_id=None,
     ):
         return None
 

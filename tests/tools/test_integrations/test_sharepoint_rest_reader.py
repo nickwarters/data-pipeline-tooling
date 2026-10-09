@@ -14,6 +14,7 @@ from tools.integrations.sharepoint_rest import (
     SharePointModifiedReader,
     StubbedSharePointListClient,
 )
+from tools.observability.waits import measure_waits
 from tools.retry import RetryingReader, RetryPolicy
 from tools.source_checkpoint import InstantWindow
 
@@ -500,3 +501,12 @@ def test_composes_in_the_pipeline_builder(tmp_path):
     assert isinstance(landed, Dataset)
     assert len(landed) == 2
     assert "source_observation_id" in landed.columns
+
+
+def test_the_fetch_is_counted_as_one_external_call():
+    # The list fetch is the read's wait on the tenant, so it is what the run
+    # record's external-call counters measure.
+    with measure_waits() as waits:
+        reader(FakeListClient()).read()
+
+    assert waits.external_calls == 1

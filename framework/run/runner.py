@@ -32,6 +32,7 @@ from framework.run.freshness import (
 from framework.run.run_context import RunContext, active_context
 from tools.observability.run_log import RunLog
 from tools.observability.run_store import RunStore
+from tools.observability.waits import measure_waits
 
 # The requirement vocabulary is defined alongside the rule that evaluates it and
 # re-exported here, so the long-standing ``framework.run.runner`` import path
@@ -127,6 +128,7 @@ def run_pipeline(
     freshness_days: int = 0,
     freshness_guard: FreshnessGuard | None = None,
     run_log: RunLog | None = None,
+    orchestration_run_id: str | None = None,
 ) -> object:
     """Execute one pipeline handler with freshness checks and run recording.
 
@@ -142,6 +144,9 @@ def run_pipeline(
     is opened at ``<base_dir>/_runs/<subject or name>.log``. A supplied log placed
     outside ``_runs/`` won't be picked up by the freshness sweep below, so prefer
     the default unless you have a reason to redirect it.
+
+    ``orchestration_run_id`` is the pass that started this run, when an
+    orchestrator did; it is recorded on the run summary.
 
     Where those files sit under ``base_dir`` is not decided here: ``RunStore``
     owns the run-metadata layout, and the shared ``RunRegistry`` it opens is
@@ -169,6 +174,7 @@ def run_pipeline(
         run_log=run_log,
         run_registry=run_registry,
         freshness_days=freshness_days,
+        orchestration_run_id=orchestration_run_id,
     )
 
     started = time.perf_counter()
@@ -176,7 +182,7 @@ def run_pipeline(
         # Make the context ambient so a handler's bare ``p.run()`` calls inherit
         # this attempt's identity (one ``pipeline_run_id`` across every one's
         # run-log records and the rows they stamp) rather than minting fresh ids.
-        with active_context(context):
+        with measure_waits() as waits, active_context(context):
             for requirement in upstreams:
                 guard.check(context, requirement)
             result = handler(context)
@@ -192,6 +198,8 @@ def run_pipeline(
                 errors=[str(exc)],
                 params=_diagnostic_params(context.params),
                 run_date=context.run_date.isoformat(),
+                orchestration_run_id=context.orchestration_run_id,
+                **waits.fields(),
             )
             context.mark_run_summary_recorded()
         run_registry.ingest(run_log_path)
@@ -210,6 +218,8 @@ def run_pipeline(
             duration=time.perf_counter() - started,
             params=_diagnostic_params(context.params),
             run_date=context.run_date.isoformat(),
+            orchestration_run_id=context.orchestration_run_id,
+            **waits.fields(),
         )
         context.mark_run_summary_recorded()
     run_registry.ingest(run_log_path)

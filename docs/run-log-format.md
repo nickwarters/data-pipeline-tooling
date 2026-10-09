@@ -79,7 +79,9 @@ rows), while each row still carries its own `pipeline_run_id` for traceability.
 Note the scope nuance: `logical_run_id` is *also* per-pipeline — it differs from
 `pipeline_run_id` by **attempt vs. business-run**, not by scope. The umbrella
 `orchestration_run_id` is the only one shared across pipelines; it lives in the
-orchestration decision store, joined to the run log via `pipeline_run_id`.
+orchestration decision store, joined to the run log via `pipeline_run_id`, and is
+also written on the `run` summary of every run a pass started, so the registry
+can group one night's batch without opening the decision store.
 
 ## Record schema
 
@@ -133,6 +135,35 @@ appears in the log; `params` is logged but has no column.
 | `profile`   | object \| null      | The per-column statistical profile a `profile` step recorded: a `DatasetProfile` record (`row_count` + per-column `null_rate`, `distinct_count`, `min`/`max`, bounded top-N distribution). `null` on every non-profile step. The registry stores it in a queryable `profile` column and trends it across runs via `recent_profiles(address)`. |
 | `data_locations` | object[]     | The file(s) or table(s) this step actually touched, one `{"namespace", "name"}` entry each (OpenLineage's dataset identity): `{"namespace": "file", "name": "/data/orders.csv"}` for a file, `{"namespace": "sqlite:/data/raw.db", "name": "orders"}` for a table. `[]` on every step that is not a read or a write — and on a few that are, see below. A `GlobCsvReader` over three files carries three entries. Stored by the registry; never shown on the console line. |
 | `run_date` | string \| null   | The business date the run was for (`RunContext.run_date`, `YYYY-MM-DD`), written on the `run` summary only and `null` on every other record. A re-drive of an old date carries that date, not the day it ran, so reporting can file it with its `logical_run_id`. Stored by the registry; never shown on the console line. |
+| `orchestration_run_id` | string \| null | The orchestration pass that started the run, written on the `run` summary only; `null` on step records and on a run started by hand. |
+| `retry_attempts` | int \| null | Attempts a `RetryPolicy` retried during this step; on the `run` summary, during the whole run. `0` when none; `null` on a record that is not a timed step or run (and on records written before the field existed). Shown on the console line as `retries=N` when non-zero. |
+| `retry_wait_seconds` | float \| null | The time those retried attempts took, each failed attempt plus the backoff after it. Same scope and nulls as `retry_attempts`. |
+| `external_calls` | int \| null | Calls made inside an `external_call()` block during this step (the SharePoint seams wrap theirs); on the `run` summary, during the whole run. A wrapped call made inside another counts once. Same nulls as `retry_attempts`. |
+| `external_wait_seconds` | float \| null | The time spent inside those calls, failed calls included. `duration` less this is the step's own work. See [Waiting versus working](#waiting-versus-working). |
+
+### Waiting versus working
+
+A step that takes ten minutes may be working for ten minutes, or waiting nine of
+them on a slow service or on retries of a flaky one. The four wait fields keep
+the two apart. They are gathered by `tools.observability.waits`: whatever records
+a step (a builder node, an eager step, `step(...)`, the runner's `run` summary)
+opens `measure_waits()` around it, and a `RetryPolicy` retry or an
+`external_call()` block anywhere beneath it counts towards it. A step's tally
+also adds to the run's, so the `run` summary's totals cover every step.
+
+Wrap a call to a slow service yourself to have it counted:
+
+```python
+from tools.observability.waits import external_call
+
+with external_call():
+    response = client.fetch(...)
+```
+
+Wrap the call alone, not the work around it, so the time recorded is time spent
+waiting. The tally follows the running code through a context variable, so work
+handed to a thread pool is only counted when the thread was started with the
+caller's context (`contextvars.copy_context().run`).
 
 Known-empty cases for `data_locations`, all of them deliberate:
 
@@ -298,6 +329,10 @@ way. The decision store also records `was_due` (0/1): whether the item was
 scheduled work for that run date at all. It was appended to that store's
 declaration, so rows written earlier read back `NULL` — the orchestrator only
 reads the flag on decisions it has just made, so the older rows are unaffected.
+Two UTC instants were appended after it the same way: `pass_started_at`, when the
+pass began, on every decision; and `started_at`, when the item was handed to the
+invoker, on items that ran (`NULL` otherwise). `started_at − pass_started_at` is
+how long an item queued behind the items before it in the pass.
 
 ### Happy path (a successful run of 4 rows)
 
@@ -377,7 +412,8 @@ only a stat + DB lookup.
 one is also how it catches up with the declaration: `ensure_columns` adds any
 declared column the table lacks (nullable, in place — never a re-create) and
 returns the names it added. A database written before `committed`, `step_address`,
-`logical_run_id`, `profile`, `data_locations` or `run_date` existed therefore keeps ingesting, and its older
+`logical_run_id`, `profile`, `data_locations`, `run_date`, `orchestration_run_id` or
+the four wait fields existed therefore keeps ingesting, and its older
 rows read back with those fields empty. `tools.orchestration`'s decision store
 uses the same helper over its own separate declaration — shared machinery, two
 distinct contracts.

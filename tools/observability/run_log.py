@@ -28,6 +28,7 @@ from typing import Iterator
 from framework._internal.describe import render
 from tools.observability.record_schema import build_run_record, console_parts
 from tools.observability.timestamps import utc_now_iso
+from tools.observability.waits import measure_waits
 
 log = logging.getLogger(__name__)
 
@@ -88,7 +89,8 @@ class RunLog:
         metrics.rows_in = rows_in
         started = time.perf_counter()
         try:
-            yield metrics
+            with measure_waits() as waits:
+                yield metrics
         except Exception as exc:
             self.record(
                 pipeline_run_id,
@@ -106,6 +108,7 @@ class RunLog:
                 # exception (a genuine bug) has none — that absence is the signal.
                 error_category=getattr(exc, "category", None),
                 warn_hits=metrics.warn_hits,
+                **waits.fields(),
             )
             raise
         self.record(
@@ -121,6 +124,7 @@ class RunLog:
             duration=time.perf_counter() - started,
             warn_hits=metrics.warn_hits,
             committed=committed,
+            **waits.fields(),
         )
 
     def record(
@@ -145,6 +149,11 @@ class RunLog:
         profile: dict | None = None,
         data_locations: list[dict[str, str]] | None = None,
         run_date: str | None = None,
+        orchestration_run_id: str | None = None,
+        retry_attempts: int | None = None,
+        retry_wait_seconds: float | None = None,
+        external_calls: int | None = None,
+        external_wait_seconds: float | None = None,
     ) -> None:
         """Append one JSONL record and echo a human-readable line to the console.
 
@@ -176,6 +185,11 @@ class RunLog:
             profile=profile,
             data_locations=data_locations,
             run_date=run_date,
+            orchestration_run_id=orchestration_run_id,
+            retry_attempts=retry_attempts,
+            retry_wait_seconds=retry_wait_seconds,
+            external_calls=external_calls,
+            external_wait_seconds=external_wait_seconds,
         )
         self._path.parent.mkdir(parents=True, exist_ok=True)
         with self._path.open("a", encoding="utf-8") as fh:

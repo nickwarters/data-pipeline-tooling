@@ -61,6 +61,7 @@ from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError
 from tools.integrations.locations import sharepoint_location
 from tools.observability.timestamps import utc_now_iso
+from tools.observability.waits import external_call
 from tools.source_checkpoint import InstantWindow
 
 __all__ = [
@@ -240,12 +241,13 @@ class SharePointModifiedReader:
 
     def read(self) -> Dataset:
         self.data_locations = [sharepoint_location(self._site, self._list_name)]
-        frame = self._client.fetch_items(
-            self._list_name,
-            list(self._expand_fields),
-            list(self._select_fields),
-            modified_filters(self._window),
-        )
+        with external_call():
+            frame = self._client.fetch_items(
+                self._list_name,
+                list(self._expand_fields),
+                list(self._select_fields),
+                modified_filters(self._window),
+            )
         if frame.empty:
             # A window with no changes is not a failure, so it returns the
             # declared shape rather than nothing: the projection plus the
