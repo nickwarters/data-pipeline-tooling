@@ -234,6 +234,13 @@ def test_a_run_just_after_local_midnight_counts_as_today(uk_summer):
 `tests/tools/test_orchestration/test_freshness_rule.py` all do this — the last
 even over a zone that changes offset mid-year.
 
+To exercise the *system* zone itself — the seam's `None` — set the seam to
+`None`, set `TZ` (a POSIX rule such as `GMT0BST,M3.5.0/1,M10.5.0` needs no zone
+database) and call `time.tzset()`, restoring both afterwards; `tzset` is
+POSIX-only, so such a test skips on Windows.
+`tests/tools/test_observability/test_timestamps.py` and
+`tests/pipelines/test_cora_platform_metric.py` have one.
+
 Keep such a fixture **function-scoped**. A module- or session-scoped one is set
 up *before* the autouse pin and would be silently overwritten by it.
 

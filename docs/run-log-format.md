@@ -163,6 +163,11 @@ from there:
   date, and a "successes on this run date" query bounds on **local midnight
   expressed as UTC**, formatted exactly as the emitter formats a record so
   SQLite's text comparison compares like with like.
+- **A column converts the same way.** `local_wall_clock` turns a pandas
+  column of UTC instants into local wall-clock times through the same zone
+  seam, resolving the system zone per instant (pandas' own `tz_convert(None)`
+  means UTC, not the system zone), so a reduction can take local dates, months
+  or hours of a million rows without a Python call per row.
 
 The behavioural consequence, and the bug that motivated it: the deployment
 target is a UK box, at UTC+1 for roughly half the year. An upstream that

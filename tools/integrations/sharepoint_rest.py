@@ -48,6 +48,7 @@ reconciliation is a separate mechanism), and any knowledge of raw/silver/gold.
 from __future__ import annotations
 
 import datetime as dt
+import re
 from dataclasses import dataclass
 from typing import Callable, Protocol, Sequence, runtime_checkable
 from urllib.parse import urlsplit
@@ -71,6 +72,7 @@ __all__ = [
     "SharePointModifiedReader",
     "SharePointSource",
     "StubbedSharePointListClient",
+    "version_order",
 ]
 
 # The observation metadata every row carries, in the order it is stamped. Fixed
@@ -391,6 +393,44 @@ def _digest(row: "pd.Series") -> str:
     identity encoding.
     """
     return sha256_json({str(column): _canonical(row[column]) for column in row.index})
+
+
+# ``"3"``, ``W/"3"``, ``"4,1"`` and ``"3.0"`` are all shapes a list's version
+# column really holds; the separator is whichever of the two the source used.
+_VERSION_SEPARATOR = re.compile(r"[.,]")
+
+# The version an observation with no parseable one sorts at. Deliberately ``-1``
+# and not NA: pandas sorts NA *last*, which would let a version-less observation
+# beat a properly versioned one at the same ``Modified``.
+_NO_VERSION = -1
+
+
+def version_order(value: object) -> tuple[int, int]:
+    """A ``source_version`` as the ``(major, minor)`` pair it sorts on.
+
+    The column holds an ETag (``'"3"'``, ``'W/"3"'``, ``'"4,1"'``), a dotted UI
+    version (``'3.0'``), or the sha256 digest this Reader falls back to when the
+    row carried no version. Only the first two order; the digest sorts at
+    ``(-1, -1)``.
+
+    Parsed rather than compared as *text*: ``"10"`` sorts before ``"9"``
+    lexically, so a same-``Modified`` tie would resolve backwards.
+    """
+    if not isinstance(value, str):
+        return (_NO_VERSION, _NO_VERSION)
+    text = value.strip()
+    if text.startswith("W/"):
+        text = text[2:]
+    parts = _VERSION_SEPARATOR.split(text.strip('"'))
+    try:
+        major = int(parts[0])
+    except ValueError:
+        return (_NO_VERSION, _NO_VERSION)
+    try:
+        minor = int(parts[1]) if len(parts) > 1 else 0
+    except ValueError:
+        minor = 0
+    return (major, minor)
 
 
 def _observation_id(list_name: str, item_id: str, version: str) -> str:

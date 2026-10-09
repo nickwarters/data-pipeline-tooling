@@ -21,6 +21,7 @@ from tools.observability import timestamps
 from tools.observability.timestamps import (
     local_date,
     local_now,
+    local_wall_clock,
     parse_timestamp,
     start_of_local_day,
     utc_now_iso,
@@ -77,6 +78,48 @@ def test_local_date_of_a_pandas_timestamp_uses_the_system_zone(
     stamp = pd.Timestamp("2026-07-27T23:10:00+00:00")
     assert local_date(stamp) == dt.date(2026, 7, 28)
     assert local_date(stamp) == local_date(stamp.isoformat())
+
+
+@pytest.fixture
+def system_zone_uk(monkeypatch):
+    """Make the *system* zone the UK's, summer time and all, with the seam on None."""
+    if not hasattr(time, "tzset"):
+        pytest.skip("time.tzset is POSIX-only")
+    monkeypatch.setattr(timestamps, "local_timezone", lambda: None)
+    monkeypatch.setenv("TZ", "GMT0BST,M3.5.0/1,M10.5.0")
+    time.tzset()
+    yield
+    monkeypatch.undo()
+    time.tzset()
+
+
+def test_local_wall_clock_resolves_the_system_zone_per_instant(system_zone_uk):
+    instants = pd.to_datetime(
+        pd.Series(
+            [
+                "2026-07-27T23:10:00+00:00",  # BST: 00:10 on the 28th
+                "2026-12-07T23:10:00+00:00",  # GMT: unchanged
+                "2026-10-25T00:59:00+00:00",  # 01:59 BST, a minute before the change
+                "2026-10-25T01:00:00+00:00",  # 01:00 GMT, the change itself
+                None,
+            ]
+        ),
+        utc=True,
+    )
+    assert local_wall_clock(instants).tolist()[:4] == [
+        pd.Timestamp("2026-07-28T00:10:00"),
+        pd.Timestamp("2026-12-07T23:10:00"),
+        pd.Timestamp("2026-10-25T01:59:00"),
+        pd.Timestamp("2026-10-25T01:00:00"),
+    ]
+    assert pd.isna(local_wall_clock(instants).iloc[4])
+
+
+def test_local_wall_clock_agrees_with_local_date_through_the_seam(uk_summer):
+    instants = pd.to_datetime(pd.Series(["2026-07-27T23:10:00+00:00"]), utc=True)
+    [wall] = local_wall_clock(instants)
+    assert wall == pd.Timestamp("2026-07-28T00:10:00")
+    assert wall.date() == local_date("2026-07-27T23:10:00+00:00")
 
 
 def test_local_date_of_a_daytime_stamp_is_unchanged(uk_summer):

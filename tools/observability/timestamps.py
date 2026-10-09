@@ -32,10 +32,13 @@ from __future__ import annotations
 
 import datetime as dt
 
+import pandas as pd
+
 __all__ = [
     "local_date",
     "local_now",
     "local_timezone",
+    "local_wall_clock",
     "parse_timestamp",
     "start_of_local_day",
     "utc_now_iso",
@@ -87,6 +90,30 @@ def local_date(value: str | dt.datetime) -> dt.date:
         # A pandas Timestamp: its astimezone(None) drops to UTC, not the system zone.
         moment = moment.to_pydatetime()
     return moment.astimezone(local_timezone()).date()
+
+
+# Every zone's offset changes on a quarter-hour, so one lookup per slot is one
+# per distinct offset an instant in it could have.
+_OFFSET_SLOT = "15min"
+
+
+def local_wall_clock(instants: pd.Series) -> pd.Series:
+    """UTC instants as naive local wall-clock times; ``NaT`` stays ``NaT``.
+
+    :func:`local_date`'s rule for a whole column: through the same zone seam,
+    and with the system zone resolved per instant (``tz_convert(None)`` would
+    give UTC), so each instant takes the offset in force when it happened.
+    """
+    utc = pd.to_datetime(instants, utc=True)
+    zone = local_timezone()
+    if zone is not None:
+        return utc.dt.tz_convert(zone).dt.tz_localize(None)
+    slots = utc.dt.floor(_OFFSET_SLOT)
+    offsets = {
+        slot: slot.to_pydatetime().astimezone().utcoffset()
+        for slot in slots.dropna().unique()
+    }
+    return utc.dt.tz_localize(None) + pd.to_timedelta(slots.map(offsets))
 
 
 def start_of_local_day(day: dt.date) -> str:

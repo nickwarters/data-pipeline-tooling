@@ -52,7 +52,10 @@ its new date; the earlier completion is not counted a second time and not
 remembered by these tables. A month already published can therefore fall when
 a Case from it is reopened. The tables built from the observation history
 (item 1) keep the interval the Case spent in each status, so a reopened Case
-adds a second `In-progress` interval rather than rewriting the first.
+adds a second `In-progress` interval rather than rewriting the first; the spell
+it spent `Completed` before the reopen is not a stage and is not published as
+one. `reviewer_workload_current` ages a reopened `In-progress` Case from the
+reopen, read off the same history, not from its original `assigned_at`.
 
 ## Part A — Subject overview
 
@@ -69,7 +72,7 @@ adds a second `In-progress` interval rather than rewriting the first.
 | **Run parameters** | `calendar` — path to a YAML working-day calendar (`holidays` + `weekend`, the same file `orchestrate --calendar` takes) for `case_sla_attainment_monthly`; omitted, weekends-only |
 | **Migrations** | `migrations/cora_platform_metric/gold/` |
 | **Owner / data steward** | *<team>* |
-| **Last reviewed** | 2026-10-04 |
+| **Last reviewed** | 2026-10-09 |
 
 The Sync snapshot instant, `as_of_utc`, is read off `case_current` — one
 literal on every row — once at the top of the run, and is what an open hold is
@@ -88,14 +91,16 @@ stamps. Neither is repeated below.
 
 Reduced from the observation history. Grain: `brand` × `case_type` × `status`.
 
-Each Case's observations are walked in the source's `Modified` order; every
-change of `status` closes an interval at that observation's `Modified` and
-opens the next. Where a Case's *first* observation already carries
+Each Case's observations are walked in the source's `Modified` order — two
+observations sharing a `Modified` are ordered by their parsed `source_version`,
+as Sync's own current-state rule orders them; every change of `status` closes
+an interval at that observation's `Modified` and opens the next. Where a Case's *first* observation already carries
 `To-allocate` or `In-progress`, the interval starts at the source's own
 `created` / `assigned_at` stamp rather than at the poll that first saw it — the
 source knows when it entered the state, the poll only knows when it looked. A
 Case's last interval is *open* unless its status is terminal (`Completed`,
-`Void`). Statistics are over closed intervals only: an open one has no length
+`Void`), and a terminal status is never an interval: a reopened Case's time
+`Completed` is the gap until the reopen, so leaving it closes nothing. Statistics are over closed intervals only: an open one has no length
 yet, and the Sync subject's age-bucket aggregates already answer "how long has
 it been waiting".
 
@@ -103,7 +108,7 @@ it been waiting".
 |-------|------|----------|-------------|
 | `brand` | `str` | No | `(unknown)` — see above. |
 | `case_type` | `str` | No | Case Type slug. |
-| `status` | `str` | No | The status dwelt in, as the source spells it. |
+| `status` | `str` | No | The open status dwelt in, as the source spells it; never `Completed` or `Void`. |
 | `interval_count` | `int` | No | Closed intervals: times a Case was observed leaving this status. |
 | `open_interval_count` | `int` | No | Cases whose latest observation is in this status. |
 | `dwell_days_mean` / `_p50` / `_p90` / `_max` | `float` | Yes | Over the closed intervals, in decimal days; NULL when `interval_count` is 0. |
@@ -117,7 +122,8 @@ A hold opens at the first observation carrying `on_hold` — from the source's
 `placed_on_hold_at` where it has one, else that observation's `Modified` — and
 closes at the first later observation without it. A hold still open at the
 Case's last observation is measured to `as_of_utc` and counted in
-`open_hold_count`. Holds are attributed to the Reviewer the Case's *latest*
+`open_hold_count` — unless the Case is by then `Completed` or `Void`, when the
+hold ends where the Case entered that status and counts as closed. Holds are attributed to the Reviewer the Case's *latest*
 observation names, so a reassigned Case's holds follow the Case.
 
 | Field | Type | Nullable | Description |
@@ -127,7 +133,7 @@ observation names, so a reassigned Case's holds follow the Case.
 | `assigned_reviewer_name` | `str` | No | The Reviewer's bare account, as the source holds it; `(unassigned)` where the latest observation names nobody. |
 | `case_count` | `int` | No | Cases with at least one observed hold. |
 | `hold_count` | `int` | No | Observed holds (a Case held twice counts twice). |
-| `open_hold_count` | `int` | No | Holds still open at `as_of_utc`. |
+| `open_hold_count` | `int` | No | Holds still open at `as_of_utc` on a Case that is itself still open. |
 | `held_days_total` | `float` | No | Sum of hold lengths, open ones to `as_of_utc`. |
 | `held_days_mean` | `float` | No | `held_days_total / hold_count`. |
 
@@ -141,10 +147,11 @@ Two row families. `review` judges `completed_at` against `due_date`.
 `remediation` judges it against `remediation_due_date`, over only the Cases
 that carry one: the source stamps no remediation-complete instant of its own,
 and the Case's final `Completed` transition comes after its Actions close, so
-the completion instant is the one available proxy. A Case is late when its
-completion falls on a later **local** date than its due date; days late are the
-working days after the due date up to and including the completion date, on the
-calendar the run was given.
+the completion instant is the one available proxy. Lateness is counted in
+**working days**: the working days after the due date's **local** date up to and
+including the completion's, on the calendar the run was given. A Case is late
+when that count is above zero, so a completion whose lateness falls only on
+non-working days — the Saturday after a Friday due date — is on time.
 
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
@@ -154,8 +161,8 @@ calendar the run was given.
 | `case_type` | `str` | No | Case Type slug. |
 | `assigned_reviewer_manager_name` | `str` | No | The Reviewer Manager's bare account; `(unassigned)` where absent. |
 | `case_count` | `int` | No | Completed Cases in the group. |
-| `on_time_count` | `int` | No | Completed on or before the due date. |
-| `late_count` | `int` | No | Completed after it. |
+| `on_time_count` | `int` | No | Completed with no working day late. |
+| `late_count` | `int` | No | Completed one or more working days late. |
 | `no_due_date_count` | `int` | No | In `case_count` but judged neither way (`review` only — a `remediation` row is by construction over Cases with a due date). |
 | `late_working_days_mean` / `_max` | `float` | Yes | Over the late Cases; NULL when `late_count` is 0. |
 
@@ -172,7 +179,7 @@ Reduced from `case_current` over `status = Void` with a `voided_at`. Grain:
 | `void_reason` | `str` | No | The Void Reason key as the source holds it; `(unstated)` where absent. |
 | `voided_by_name` | `str` | No | Who voided it, as the source holds it; `(unassigned)` where absent. |
 | `case_count` | `int` | No | Voided Cases in the group. |
-| `age_at_void_days_mean` / `_max` | `float` | Yes | `voided_at − created` in decimal days; NULL where no Case in the group carries `created`. |
+| `age_at_void_days_mean` / `_max` | `float` | Yes | `voided_at − created` in decimal days, a void stamped before `created` counting as zero; NULL where no Case in the group carries `created`. |
 
 `void_reason_note` — the free text behind an `other` void — deliberately does not
 reach this table. It is a per-Case sentence, not a dimension: grouping on it
@@ -182,8 +189,10 @@ it.
 
 ### `answer_action_load_current` — remediation Actions per question
 
-Reduced from the `answer_action` Detail Table, with `case_current` for the
-denominator. Grain: `case_type` × `question_id`.
+Reduced from the `answer_action` Detail Table over the Actions on current
+non-void Cases, with `case_current` for the denominator. Grain: `case_type` ×
+`question_id`. Numerator and denominator are the same live population, so
+`share_of_cases` is at most 1.
 
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
@@ -193,7 +202,7 @@ denominator. Grain: `case_type` × `question_id`.
 | `action_count` | `int` | No | Actions across those Cases. |
 | `actions_per_case_mean` | `float` | No | `action_count / case_count`. |
 | `actions_per_case_max` | `int` | No | Most Actions any one Case carries on this question. |
-| `share_of_cases` | `float` | Yes | `case_count` over the Case Type's current non-void Cases; NULL when that denominator is 0. |
+| `share_of_cases` | `float` | Yes | `case_count` over the Case Type's current non-void Cases, in `[0, 1]`; NULL when that denominator is 0. |
 
 ### `answer_remediation_by_manager_current` — remediation under each Responsible Party Manager
 
@@ -218,7 +227,8 @@ dropped.
 
 Reduced from the `appeal` Detail Table. Grain: `case_type` × `state` ×
 `resolution_verdict`. Cycle days run from `raised_at` to `resolution_at`; the
-statistics are over the Appeals carrying both.
+statistics are over the Appeals carrying both, a resolution stamped before the
+raise counting as zero.
 
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
@@ -234,7 +244,8 @@ statistics are over the Appeals carrying both.
 Reduced from the `appeal` Detail Table's `cited_question_ids_json`, exploded.
 Grain: `case_type` × `question_id`. An Appeal citing several questions counts
 once under each; a blob that is not a JSON list cites nothing rather than
-aborting the table.
+aborting the table, and a list member that is not a string or a number (a
+JSON `true`, a `null`) is not a question id.
 
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
@@ -245,8 +256,9 @@ aborting the table.
 
 ### `conversation_response_time_current` — how quickly Conversations are replied to
 
-Reduced from the `conversation_message` Detail Table. Grain: `brand` ×
-`case_type`.
+Reduced from the `conversation_message` Detail Table, over the Messages on
+current non-void Cases — the population the volume and posting-pattern tables
+count. Grain: `brand` × `case_type`.
 
 Each Case's thread is walked in `seq` order. A Message whose `author_login`
 differs from the previous Message's is a **reply**, and its hours run from that
@@ -378,7 +390,8 @@ Sync subject.
 
 ### `case_lifecycle_duration_monthly` — how long each leg of the lifecycle takes
 
-Reduced from `case_current`. Grain: `leg` × `ended_month` × `brand` ×
+Reduced from `case_current` over the **non-void** Cases, the population the
+Outcome and Appeal-rate tables count. Grain: `leg` × `ended_month` × `brand` ×
 `case_type` × `assigned_reviewer_name`.
 
 Each leg runs between two stamps **the source writes itself**, so unlike
@@ -540,8 +553,8 @@ was asked for, and the clock is stated here.
 
 ### `reviewer_workload_current` — what each Reviewer holds, and how fast they clear it
 
-Reduced from `case_current`. Grain: `brand` × `case_type` ×
-`assigned_reviewer_name`.
+Reduced from `case_current`, with the observation history for the age of the
+work in hand. Grain: `brand` × `case_type` × `assigned_reviewer_name`.
 
 - `in_progress_count` is the review work in hand. Less
   `in_progress_on_hold_count`, it is what the platform's **Allocation
@@ -558,6 +571,11 @@ Reduced from `case_current`. Grain: `brand` × `case_type` ×
 - `actions_in_progress_count` is reported alongside but kept out of
   `weeks_of_work`, because that phase is the Responsible Party's work, not the
   Reviewer's.
+- `oldest_in_progress_days` ages each `In-progress` Case from the moment the
+  history last saw it **enter** `In-progress`, so a reopened Case counts from
+  its reopen and its spell `Completed` is not work in hand. A reassignment
+  within `In-progress` changes no status and does not restart it. A Case the
+  history has not seen in `In-progress` falls back to its `assigned_at`.
 
 A Reviewer with no work in hand and no output in the window has no row.
 
@@ -569,7 +587,7 @@ A Reviewer with no work in hand and no output in the window has no row.
 | `in_progress_count` | `int` | No | `In-progress` Cases held. |
 | `in_progress_on_hold_count` | `int` | No | Of those, on hold. |
 | `actions_in_progress_count` | `int` | No | `Actions In Progress` Cases held. |
-| `oldest_in_progress_days` | `float` | Yes | Local calendar days since the oldest `In-progress` Case's `assigned_at`; NULL where none carries one. Rolls up as a max. |
+| `oldest_in_progress_days` | `float` | Yes | Local calendar days since the oldest `In-progress` Case entered that status (above); NULL where none has a start. Rolls up as a max. |
 | `reportable_last_28_days_count` | `int` | No | Cases made Reportable in the window. |
 | `weeks_of_work` | `float` | Yes | As above; NULL with no output. |
 
@@ -611,7 +629,7 @@ counted.
 None. Each group-by produces its declared grain, so no uniqueness gate is
 attached — the same reasoning as the Sync subject's aggregates. Every table is
 gated by its `SchemaValidator` (columns, types, nullability, `OneOf` on
-`sla_kind`, `Range` on the counts) before it is written.
+`sla_kind`, `Range` on the counts and on `share_of_cases`) before it is written.
 
 ## Part D — Quarantine & data quality
 
@@ -627,8 +645,12 @@ gated by its `SchemaValidator` (columns, types, nullability, `OneOf` on
   measure it feeds — a Completed Case with an unparseable `completed_at` is not
   in the SLA table; an Appeal with an unparseable `resolution_at` is in
   `appeal_count` but not `resolved_count`.
+- An observation whose `source_modified_at` does not parse has no place in a
+  Case's order, so it is dropped from every reduction of the history alike
+  (silver declares the column non-null, so this guards rather than expects).
 - A negative interval (a `placed_on_hold_at` after the observation that first
-  showed the hold; a reply posted before the Message it follows) is clamped to
+  showed the hold; a reply posted before the Message it follows; an Appeal
+  resolved before it was raised; a void stamped before `created`) is clamped to
   zero rather than subtracting from a total. `case_lifecycle_duration_monthly`
   is the exception: a leg that runs backwards is a real thing to see (a Case
   reassigned after it became Reportable), so it is counted in

@@ -33,7 +33,6 @@ Every column is documented in ``docs/data-dictionary-sharepoint-cases.md``.
 from __future__ import annotations
 
 import datetime as dt
-import re
 from functools import partial
 from typing import Sequence
 
@@ -49,6 +48,7 @@ from framework.transform import (
     JoinWith,
     Stamp,
 )
+from tools.integrations.sharepoint_rest import version_order
 from tools.medallion import Medallion
 from tools.observability.timestamps import local_date
 
@@ -199,45 +199,7 @@ AGE_BUCKETS = (
 )
 UNKNOWN_AGE_BUCKET = ("unknown", len(AGE_BUCKETS))
 
-# ``"3"``, ``W/"3"``, ``"4,1"`` and ``"3.0"`` are all shapes this list's version
-# column really holds; the separator is whichever of the two the source used.
-_VERSION_SEPARATOR = re.compile(r"[.,]")
-
-# The version an observation with no parseable one sorts at. Deliberately ``-1``
-# and not NA: pandas sorts NA *last*, which would let a version-less observation
-# beat a properly versioned one at the same ``Modified``.
-_NO_VERSION = -1
-
-
 # --- the current-state rule -------------------------------------------------
-
-
-def _version_parts(value: object) -> tuple[int, int]:
-    """One ``source_version`` as the ``(major, minor)`` pair it sorts on.
-
-    The column holds an ETag (``'"3"'``, ``'W/"3"'``, ``'"4,1"'``), a dotted UI
-    version (``'3.0'``), or the sha256 digest the Reader falls back to when the
-    row carried no version. Only the first two order; the digest sorts at
-    ``(-1, -1)``.
-
-    Parsed rather than compared as *text*: ``"10"`` sorts before ``"9"``
-    lexically, so a same-``Modified`` tie would resolve backwards.
-    """
-    if not isinstance(value, str):
-        return (_NO_VERSION, _NO_VERSION)
-    text = value.strip()
-    if text.startswith("W/"):
-        text = text[2:]
-    parts = _VERSION_SEPARATOR.split(text.strip('"'))
-    try:
-        major = int(parts[0])
-    except ValueError:
-        return (_NO_VERSION, _NO_VERSION)
-    try:
-        minor = int(parts[1]) if len(parts) > 1 else 0
-    except ValueError:
-        minor = 0
-    return (major, minor)
 
 
 def latest_case_version(dataset: Dataset) -> Dataset:
@@ -251,10 +213,10 @@ def latest_case_version(dataset: Dataset) -> Dataset:
 
     ``source_modified_at`` is parsed **without** ``errors="coerce"``: silver
     declares it non-null and typed, and coercing would sort a bad row *last* and
-    hand it the Case -- the NA trap ``_NO_VERSION`` also exists to avoid.
+    hand it the Case -- the NA trap ``version_order``'s ``-1`` also avoids.
     """
     frame = dataset.to_pandas()
-    parts = [_version_parts(value) for value in frame["source_version"]]
+    parts = [version_order(value) for value in frame["source_version"]]
     ordered = frame.assign(
         _modified_at_utc=pd.to_datetime(
             frame["source_modified_at"], utc=True, format="ISO8601"

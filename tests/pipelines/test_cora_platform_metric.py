@@ -8,11 +8,17 @@ path from a seeded Sync subject.
 from __future__ import annotations
 
 import datetime as dt
+import time
 
 import pandas as pd
 import pytest
 
-from framework.core import RUN_PROVENANCE_COLUMN, Dataset
+from framework.core import (
+    RUN_PROVENANCE_COLUMN,
+    Dataset,
+    SchemaValidator,
+    ValidationError,
+)
 from framework.io import Refresh
 from framework.run import FreshnessRequirement
 from pipelines.cora_platform_metric import metrics
@@ -23,6 +29,7 @@ from pipelines.cora_platform_metric.metrics import (
     UNSTATED,
 )
 from pipelines.cora_platform_metric.pipeline import GOLD_TABLES, UPSTREAMS, main
+from pipelines.cora_platform_metric.schema import AnswerActionLoad
 from pipelines.sharepoint_cases.schema import FEED_NAME as SYNC_SUBJECT
 from tests.framework_testing import build_databases, given_rows, read_rows
 from tools.calendar import WorkingDayCalendar
@@ -52,12 +59,13 @@ def _observation(
     reportable_at: str | None = None,
     completed_at: str | None = None,
     voided_at: str | None = None,
+    version: str = '"1"',
 ) -> dict[str, object]:
     return {
         "case_type": "complaints",
         "source_item_id": item,
         "source_observation_id": observation_id,
-        "source_version": '"1"',
+        "source_version": version,
         "source_modified_at": modified,
         "status": status,
         "assigned_reviewer_name": reviewer,
@@ -74,6 +82,7 @@ def _observation(
 def _case(case_id: str, status: str, **overrides: object) -> dict[str, object]:
     row: dict[str, object] = {
         "case_id": case_id,
+        "source_item_id": case_id,
         "case_type": "complaints",
         "status": status,
         "assigned_reviewer_name": KHAN,
@@ -350,6 +359,54 @@ def test_an_unassigned_case_dwells_in_to_allocate_again_as_its_own_interval():
     assert by_status["In-progress"]["open_interval_count"] == 1
 
 
+def test_stage_dwell_publishes_no_interval_for_a_terminal_status_left_by_a_reopen():
+    # Completed 6 Jul, reopened 9 Jul, completed again 10 Jul: the three days
+    # Completed are the gap until the reopen, not a stage.
+    history = [
+        _observation("1", "a", "2026-07-02T09:00:00+00:00", "In-progress"),
+        _observation("1", "b", "2026-07-06T09:00:00+00:00", "Completed"),
+        _observation("1", "c", "2026-07-09T09:00:00+00:00", "In-progress"),
+        _observation("1", "d", "2026-07-10T09:00:00+00:00", "Completed"),
+    ]
+    result = _rows(metrics.case_stage_dwell(given_rows(history).read(), as_of=AS_OF))
+
+    assert [(r["status"], r["interval_count"]) for r in result] == [("In-progress", 2)]
+
+
+def test_a_same_instant_tie_is_ordered_by_the_parsed_source_version():
+    # One Modified, two versions. The observation ids sort the other way, and
+    # "10" sorts before "9" as text: only the parsed version puts 10 last.
+    history = [
+        _observation(
+            "1", "z", "2026-07-02T09:00:00+00:00", "In-progress", version='"9"'
+        ),
+        _observation(
+            "1", "a", "2026-07-02T09:00:00+00:00", "Completed", version='"10"'
+        ),
+    ]
+    result = _rows(metrics.case_stage_dwell(given_rows(history).read(), as_of=AS_OF))
+
+    assert [(r["status"], r["open_interval_count"]) for r in result] == [
+        ("In-progress", 0)
+    ]
+
+
+def test_an_unparseable_modified_drops_the_observation_from_every_history_table():
+    history = [
+        _observation("1", "a", "2026-07-01T09:00:00+00:00", "To-allocate"),
+        _observation("1", "b", "not a time", "In-progress"),
+    ]
+    observations = given_rows(history).read()
+    backlog = metrics.case_backlog(observations, as_of="2026-07-02T18:00:00+00:00")
+    [dwell] = _rows(metrics.case_stage_dwell(observations, as_of=AS_OF))
+
+    assert _counts(backlog, "backlog_date") == {
+        ("2026-07-01", "To-allocate"): 1,
+        ("2026-07-02", "To-allocate"): 1,
+    }
+    assert (dwell["status"], dwell["open_interval_count"]) == ("To-allocate", 1)
+
+
 def test_backlog_counts_an_unassigned_case_back_in_to_allocate():
     as_of = "2026-07-04T18:00:00+00:00"
     history = [
@@ -401,6 +458,24 @@ def test_hold_runs_from_the_source_stamp_or_the_observation_to_release_or_as_of(
             "as_of_utc": AS_OF,
         },
     ]
+
+
+def test_a_hold_still_flagged_on_a_completed_case_closes_at_its_completion():
+    history = [
+        _observation(
+            "1",
+            "a",
+            "2026-07-02T09:00:00+00:00",
+            "In-progress",
+            on_hold=1,
+            placed_on_hold_at="2026-07-01T09:00:00+00:00",
+        ),
+        _observation("1", "b", "2026-07-04T09:00:00+00:00", "Completed", on_hold=1),
+        _observation("1", "c", "2026-07-08T09:00:00+00:00", "Completed", on_hold=1),
+    ]
+    [row] = _rows(metrics.case_hold(given_rows(history).read(), as_of=AS_OF))
+
+    assert (row["open_hold_count"], row["held_days_total"]) == (0, 3.0)
 
 
 def test_a_history_with_no_holds_lands_the_declared_shape_and_no_rows():
@@ -556,6 +631,28 @@ def test_answer_action_load_measures_actions_per_case_and_share_of_live_cases():
     }
 
 
+def test_answer_action_load_counts_only_live_cases_so_the_share_cannot_pass_one():
+    # c3 is void: its Action is not on a live Case, so it is not counted either.
+    actions = [*ACTIONS, _action("c3", "q1", "a9"), _action("c3", "q2", "a10")]
+    result = _rows(
+        metrics.answer_action_load(given_rows(actions).read(), _current(), as_of=AS_OF)
+    )
+
+    assert [
+        (r["question_id"], r["case_count"], r["share_of_cases"]) for r in result
+    ] == [("q1", 2, 0.6667)]
+
+
+def test_a_share_of_cases_above_one_fails_the_tables_gate():
+    [row] = _rows(
+        metrics.answer_action_load(given_rows(ACTIONS).read(), _current(), as_of=AS_OF)
+    )
+    impossible = Dataset.from_pandas(pd.DataFrame([{**row, "share_of_cases": 1.5}]))
+
+    with pytest.raises(ValidationError, match="share_of_cases"):
+        SchemaValidator(AnswerActionLoad).validate(impossible)
+
+
 def test_answer_remediation_by_manager_joins_each_answer_to_its_case():
     result = _rows(
         metrics.answer_remediation_by_manager(
@@ -606,6 +703,28 @@ def test_appeal_cycle_time_is_measured_over_the_resolved_appeals_only():
     ]
 
 
+def test_appeal_cycle_time_clamps_a_resolution_stamped_before_the_raise():
+    # Raised 11 Jul, resolution stamped 10 Jul.
+    appeal = {**APPEALS[0], "resolution_at": "2026-07-10T09:00:00+00:00"}
+    [row] = _rows(metrics.appeal_cycle_time(given_rows([appeal]).read(), as_of=AS_OF))
+
+    assert (row["cycle_days_mean"], row["cycle_days_max"]) == (0.0, 0.0)
+
+
+def test_void_age_clamps_a_void_stamped_before_the_case_was_created():
+    rows = [
+        _case(
+            "c3",
+            "Void",
+            voided_at="2026-07-01T09:00:00+00:00",
+            created="2026-07-02T09:00:00+00:00",
+        )
+    ]
+    [row] = _rows(metrics.void_monthly(_current(rows), as_of=AS_OF))
+
+    assert (row["age_at_void_days_mean"], row["age_at_void_days_max"]) == (0.0, 0.0)
+
+
 def test_appeal_question_citations_count_an_appeal_once_per_cited_question():
     result = _rows(
         metrics.appeal_question_citations(given_rows(APPEALS).read(), as_of=AS_OF)
@@ -622,9 +741,15 @@ def test_a_citation_blob_that_is_not_a_list_of_ids_cites_nothing(blob):
     assert metrics._cited_questions(blob) in ([], ["1"])
 
 
+def test_a_json_boolean_is_not_a_cited_question_id():
+    assert metrics._cited_questions('["q1", true, false, 2]') == ["q1", "2"]
+
+
 def test_conversation_response_time_measures_replies_across_an_author_change():
     [row] = _rows(
-        metrics.conversation_response_time(given_rows(MESSAGES).read(), as_of=AS_OF)
+        metrics.conversation_response_time(
+            given_rows(MESSAGES).read(), _current(), as_of=AS_OF
+        )
     )
 
     # seq 2 is the same author as seq 1: one turn, not a reply. seq 3 replies
@@ -640,6 +765,17 @@ def test_conversation_response_time_measures_replies_across_an_author_change():
         "reply_hours_max": 24.0,
         "as_of_utc": AS_OF,
     }
+
+
+def test_conversation_response_time_counts_only_messages_on_live_cases():
+    void_thread = [{**message, "case_id": "c3"} for message in MESSAGES]
+    [row] = _rows(
+        metrics.conversation_response_time(
+            given_rows(MESSAGES + void_thread).read(), _current(), as_of=AS_OF
+        )
+    )
+
+    assert (row["thread_count"], row["reply_count"]) == (1, 2)
 
 
 def test_conversation_volume_counts_threads_over_the_live_cases():
@@ -726,6 +862,38 @@ def test_conversation_posting_pattern_files_each_message_under_its_local_hour(
 
     posted = {(r["weekday"], r["hour_of_day"]) for r in rows if r["message_count"]}
     assert posted == {("Sunday", 14), ("Sunday", 15), ("Sunday", 18), ("Monday", 18)}
+
+
+@pytest.fixture
+def system_zone_uk(monkeypatch):
+    """The *system* zone is the UK's, summer time and all; the seam is None."""
+    if not hasattr(time, "tzset"):
+        pytest.skip("time.tzset is POSIX-only")
+    monkeypatch.setattr(timestamps, "local_timezone", lambda: None)
+    monkeypatch.setenv("TZ", "GMT0BST,M3.5.0/1,M10.5.0")
+    time.tzset()
+    yield
+    monkeypatch.undo()
+    time.tzset()
+
+
+def test_conversation_posting_pattern_reads_the_system_zone_per_message(
+    system_zone_uk,
+):
+    # Sunday 5 Jul 23:30 UTC is Monday 00:30 BST; Monday 7 Dec 23:30 UTC is
+    # 23:30 GMT.
+    messages = [
+        {**MESSAGES[0], "posted_at": "2026-07-05T23:30:00+00:00"},
+        {**MESSAGES[1], "posted_at": "2026-12-07T23:30:00+00:00"},
+    ]
+    rows = _rows(
+        metrics.conversation_posting_pattern(
+            given_rows(messages).read(), _current(), as_of=AS_OF
+        )
+    )
+
+    posted = {(r["weekday"], r["hour_of_day"]) for r in rows if r["message_count"]}
+    assert posted == {("Monday", 0), ("Monday", 23)}
 
 
 def test_conversation_posting_pattern_with_no_messages_has_no_grid():
@@ -945,6 +1113,28 @@ def test_lifecycle_duration_measures_each_leg_between_the_sources_stamps():
     # Sorted into lifecycle order, not by leg name.
     assert [r["leg"] for r in result][:2] == ["allocation", "allocation"]
     assert {r["brand"] for r in result} == {UNKNOWN_BRAND}
+
+
+def test_lifecycle_duration_leaves_void_cases_out():
+    cases = [
+        *LIFECYCLE_CASES,
+        _case(
+            "c4",
+            "Void",
+            created="2026-07-01T09:00:00+00:00",
+            assigned_at="2026-07-05T09:00:00+00:00",
+            voided_at="2026-07-06T09:00:00+00:00",
+        ),
+    ]
+    result = _rows(metrics.case_lifecycle_duration(_current(cases), as_of=AS_OF))
+    [allocation] = [
+        r
+        for r in result
+        if (r["leg"], r["ended_month"], r["assigned_reviewer_name"])
+        == ("allocation", "2026-07", KHAN)
+    ]
+
+    assert (allocation["case_count"], allocation["days_total"]) == (2, 3.0)
 
 
 def test_lifecycle_duration_files_a_leg_under_the_month_it_ended_in(monkeypatch):
@@ -1180,7 +1370,9 @@ def test_reviewer_workload_sets_work_in_hand_against_four_weeks_of_output():
         _case("w6", "In-progress", assigned_reviewer_name=JONES),
         _case("w7", "Void", reportable_at="2026-08-15T09:00:00+00:00"),
     ]
-    result = _rows(metrics.reviewer_workload(_current(cases), as_of=AS_OF))
+    result = _rows(
+        metrics.reviewer_workload(_current(cases), _no_history(), as_of=AS_OF)
+    )
 
     assert result == [
         {
@@ -1209,6 +1401,43 @@ def test_reviewer_workload_sets_work_in_hand_against_four_weeks_of_output():
             "as_of_utc": AS_OF,
         },
     ]
+
+
+def _no_history() -> Dataset:
+    return Dataset.from_pandas(pd.DataFrame(columns=metrics.HISTORY_COLUMNS))
+
+
+def test_reviewer_workload_ages_a_reopened_case_from_its_return_to_in_progress():
+    # Assigned 4 Jul, Completed 10 Jul, reopened 15 Jul, measured 20 Jul: five
+    # days in progress, not sixteen. w2 has no history, so its assigned_at
+    # stands (8 Jul: twelve days).
+    as_of = "2026-07-20T06:00:00+00:00"
+    history = [
+        _observation(
+            "w1",
+            "a",
+            "2026-07-04T10:00:00+00:00",
+            "In-progress",
+            assigned_at="2026-07-04T09:00:00+00:00",
+        ),
+        _observation("w1", "b", "2026-07-10T09:00:00+00:00", "Completed"),
+        _observation("w1", "c", "2026-07-15T09:00:00+00:00", "In-progress"),
+    ]
+    cases = [
+        _case("w1", "In-progress", assigned_at="2026-07-04T09:00:00+00:00"),
+        _case("w2", "In-progress", assigned_at="2026-07-08T09:00:00+00:00"),
+    ]
+
+    def oldest(rows):
+        [row] = _rows(
+            metrics.reviewer_workload(
+                _current(rows), given_rows(history).read(), as_of=as_of
+            )
+        )
+        return row["oldest_in_progress_days"]
+
+    assert oldest(cases[:1]) == 5.0
+    assert oldest(cases) == 12.0
 
 
 def _appeal(case_id, appeal_id, state, verdict=None):
