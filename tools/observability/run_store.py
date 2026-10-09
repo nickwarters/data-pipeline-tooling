@@ -64,9 +64,16 @@ class RunStore:
         The sweep a run or a plan does before it consults history: an upstream's
         records are visible no matter which subject's log partitioned them.
         Ingest is incremental and idempotent, so repeating it is cheap and safe.
+
+        An existing registry is also brought up to the declared shape here, even
+        with no log left to ingest (they were rotated away), so a reader that
+        goes straight to its table finds every declared column. A base directory
+        with no registry yet is left without one.
         """
         registry = self.registry()
         if self.runs_dir.exists():
             for log_file in sorted(self.runs_dir.glob("*.log")):
                 registry.ingest(log_file)
+        if self.registry_path.exists():
+            registry.migrate()
         return registry
