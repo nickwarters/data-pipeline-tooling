@@ -514,6 +514,11 @@ alternative is worse than a failure: `None`, `<NA>` and `nan` stringify
 differently, so a missing value would mint a plausible key that changes with the
 column's dtype.
 
+A key is hashed **once per distinct natural key**, not once per row: a history
+table repeats each Case's key on every version row, and one key can only have one
+digest, so the digest is reused for the rest of the call. The output is the same
+as hashing every row; only the number of `sha256` calls changes.
+
 `namespace` is the caller's key space as a plain string — typically the Case
 Type's `name`. This is the deterministic `case_id` of the case-identity
 contract: because the Case pipeline and each Detail pipeline derive it from the

@@ -453,6 +453,56 @@ def test_derive_key_refuses_a_row_with_no_natural_key(dtype):
         _key_of(dataset)
 
 
+def test_derive_key_hashes_each_distinct_key_once_with_the_same_digests(monkeypatch):
+    # A history table repeats a key on every version row. The digests must be
+    # what hashing every row gives, and the hash must run once per distinct key.
+    from framework._internal import identity
+    from framework.transform import processors
+
+    frame = pd.DataFrame(
+        {
+            "ref": ["A", "B", "A", "A", "C", "B"],
+            "version": [1, 1, 2, 3, 1, 2],
+        }
+    )
+    calls = []
+    real = identity.sha256_json
+
+    def spy(payload):
+        calls.append(payload)
+        return real(payload)
+
+    monkeypatch.setattr(processors, "sha256_json", spy)
+    result = DeriveKey(into="case_id", namespace=_NS, natural_key=["ref"])(
+        Dataset.from_pandas(frame)
+    ).to_pandas()
+
+    assert len(calls) == 3
+    assert list(result["case_id"]) == [
+        real({"namespace": _NS, "natural_key": {"ref": ref}}) for ref in frame["ref"]
+    ]
+
+
+def test_derive_key_caches_on_the_whole_key_not_on_one_column():
+    # Two rows sharing one column of a composite key are still different keys.
+    frame = pd.DataFrame({"a": ["x", "x", "x"], "b": ["1", "2", "1"]})
+    ids = list(
+        DeriveKey(into="k", namespace=_NS, natural_key=["a", "b"])(
+            Dataset.from_pandas(frame)
+        ).to_pandas()["k"]
+    )
+    assert ids[0] == ids[2]
+    assert ids[0] != ids[1]
+
+
+def test_derive_key_still_names_the_first_null_row_after_repeated_keys():
+    frame = pd.DataFrame({"ref": ["A", "A", None, "A"]})
+    with pytest.raises(IdentityError, match="row 2 has no 'ref'"):
+        DeriveKey(into="case_id", namespace=_NS, natural_key=["ref"])(
+            Dataset.from_pandas(frame)
+        )
+
+
 def test_derive_key_returns_a_dataset_not_a_dataframe():
     dataset = Dataset.from_pandas(pd.DataFrame({"ref": ["A"]}))
     result = DeriveKey(into="case_id", namespace=_NS, natural_key=["ref"])(dataset)

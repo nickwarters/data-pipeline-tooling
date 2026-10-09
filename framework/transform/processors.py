@@ -669,6 +669,10 @@ class DeriveKey:
     by, and the alternative is worse than a failure: each flavour of null
     stringifies differently, so a missing value would mint a plausible key that
     changes with the column's dtype.
+
+    A key is hashed **once per distinct natural key**, not once per row: a
+    history table repeats each Case's key on every version row, and the digest
+    of a key cannot differ between its rows.
     """
 
     def __init__(
@@ -687,15 +691,23 @@ class DeriveKey:
         rendered = {
             col: _render_key_column(frame, col, self._into) for col in self._natural_key
         }
-        frame[self._into] = [
-            sha256_json(
-                {
-                    "namespace": self._namespace,
-                    "natural_key": {col: rendered[col][row] for col in rendered},
-                }
-            )
-            for row in range(len(frame))
-        ]
+        # A key is hashed once however many rows carry it: the cache is keyed on
+        # the rendered text, which is exactly what the payload is built from, so
+        # a hit is always the digest hashing that row would have produced.
+        digests: dict[tuple[str, ...], str] = {}
+        keys = []
+        for row in range(len(frame)):
+            texts = tuple(rendered[col][row] for col in rendered)
+            digest = digests.get(texts)
+            if digest is None:
+                digest = digests[texts] = sha256_json(
+                    {
+                        "namespace": self._namespace,
+                        "natural_key": dict(zip(rendered, texts, strict=True)),
+                    }
+                )
+            keys.append(digest)
+        frame[self._into] = keys
         return Dataset.from_pandas(frame)
 
     def describe(self) -> str:

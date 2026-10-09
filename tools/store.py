@@ -18,6 +18,7 @@ convention.
 from __future__ import annotations
 
 import os
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Protocol
 
@@ -26,6 +27,7 @@ from framework.io import (
     LoadStrategy,
     QuarantineWriter,
     Reader,
+    SqliteKeyedReader,
     SqliteReader,
     Writer,
 )
@@ -99,6 +101,22 @@ class Store:
     def reader(self, table: str) -> Reader:
         """Mint a Reader over a table in this namespace."""
         return SqliteReader(self._db_path, table, busy_timeout_ms=self._busy_timeout_ms)
+
+    def keyed_reader(
+        self, table: str, column: str, keys: Iterable[str | int | float]
+    ) -> Reader:
+        """Mint a Reader over the rows of ``table`` whose ``column`` is in ``keys``.
+
+        A separate method rather than a parameter of :meth:`reader`, which stays
+        the whole-table read. See :class:`~framework.io.SqliteKeyedReader`.
+        """
+        return SqliteKeyedReader(
+            self._db_path,
+            table,
+            column,
+            keys,
+            busy_timeout_ms=self._busy_timeout_ms,
+        )
 
     def quarantine_writer(self, table: str) -> Writer:
         """Mint a QuarantineWriter over this subject's quarantine file."""
