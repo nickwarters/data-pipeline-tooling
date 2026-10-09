@@ -152,8 +152,6 @@ class RunLog:
         orchestration_run_id: str | None = None,
         retry_attempts: int | None = None,
         retry_wait_seconds: float | None = None,
-        external_calls: int | None = None,
-        external_wait_seconds: float | None = None,
     ) -> None:
         """Append one JSONL record and echo a human-readable line to the console.
 
@@ -188,8 +186,6 @@ class RunLog:
             orchestration_run_id=orchestration_run_id,
             retry_attempts=retry_attempts,
             retry_wait_seconds=retry_wait_seconds,
-            external_calls=external_calls,
-            external_wait_seconds=external_wait_seconds,
         )
         self._path.parent.mkdir(parents=True, exist_ok=True)
         with self._path.open("a", encoding="utf-8") as fh:
