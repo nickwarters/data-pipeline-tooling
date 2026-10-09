@@ -6,7 +6,9 @@ the protocol signature.
 
 from __future__ import annotations
 
+import json
 import os
+from collections.abc import Iterable
 from pathlib import Path
 
 import pandas as pd
@@ -30,6 +32,7 @@ __all__ = [
     "GlobCsvReader",
     "ExcelReader",
     "SqliteReader",
+    "SqliteKeyedReader",
 ]
 
 
@@ -420,4 +423,82 @@ class SqliteReader:
             db_path=str(self._db_path),
             table=self._table,
             columns=self._columns,
+        )
+
+
+class SqliteKeyedReader:
+    """Read the rows of one table whose ``column`` value is among ``keys``.
+
+    The narrow counterpart of :class:`SqliteReader` for a consumer that already
+    knows which rows it wants -- gold reading a Detail Table's *winning*
+    observations out of an accumulated history, say -- so the unwanted rows are
+    never read, let alone hashed or joined away afterwards.
+
+    One statement with **one bound parameter**::
+
+        SELECT * FROM "t" WHERE "col" IN (SELECT value FROM json_each(?))
+        ORDER BY rowid
+
+    The keys travel as a single JSON array, which is why there is no temporary
+    table to create (and no write on a read path) and no limit on how many there
+    can be: a ``col IN (?, ?, ...)`` list would meet SQLite's bound-variable
+    ceiling at a few tens of thousands, and an unbounded key set is the point.
+    SQLite plans the ``IN`` against an index on ``column`` when one exists (a
+    ``SEARCH ... USING INDEX``); without one it scans, and the cost is no worse
+    than reading the table whole -- only the matching rows are materialised.
+
+    ``keys`` is a collection of JSON scalars (``str`` / ``int`` / ``float``);
+    duplicates are harmless. It is captured when the Reader is built. **No keys
+    reads no rows**, but still the table's columns, so an empty selection is the
+    same shape as any other. A key the table lacks matches nothing and is not an
+    error: the caller asked for the rows that exist.
+
+    Rows come back in the order a whole-table :class:`SqliteReader` read would
+    give them (``rowid``), whichever index the lookup used, so swapping one for
+    the other cannot reorder what is written downstream. That needs a rowid
+    table; a ``WITHOUT ROWID`` table or a view is not supported here.
+    """
+
+    def __init__(
+        self,
+        db_path: str | os.PathLike[str],
+        table: str,
+        column: str,
+        keys: Iterable[str | int | float],
+        busy_timeout_ms: int = 5000,
+    ) -> None:
+        self._db_path = Path(db_path)
+        self._table = table
+        self._column = column
+        self._keys = tuple(keys)
+        self._busy_timeout_ms = busy_timeout_ms
+        self.data_locations: list[dict[str, str]] = []
+
+    def _statement(self) -> str:
+        return (
+            f"SELECT * FROM {quote_identifier(self._table)} "
+            f"WHERE {quote_identifier(self._column)} "
+            "IN (SELECT value FROM json_each(?)) ORDER BY rowid"
+        )
+
+    def read(self) -> Dataset:
+        self.data_locations = [table_location(self._db_path, self._table)]
+        con = connect(self._db_path, self._busy_timeout_ms)
+        try:
+            frame = pd.read_sql(
+                self._statement(), con, params=(json.dumps(self._keys),)
+            )
+        finally:
+            con.close()
+        return Dataset.from_pandas(frame)
+
+    def describe(self) -> str:
+        # The count, not the keys: a selection can be hundreds of thousands long
+        # and the plan summary is read by people.
+        return render(
+            self,
+            db_path=str(self._db_path),
+            table=self._table,
+            column=self._column,
+            keys=f"{len(self._keys)} keys",
         )

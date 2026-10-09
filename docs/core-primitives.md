@@ -128,6 +128,20 @@ selectable by name or zero-based index; pandas + **openpyxl** behind the seam);
 `SqliteReader(db_path, table)` is the read-side dual of the Sqlite Writers — it
 reads one table from a layer db back into a `Dataset` (a subject's own layer, or
 another subject's read-only Reference Data medallion, joined in Python).
+`SqliteKeyedReader(db_path, table, column, keys)` is its narrow sibling for a
+consumer that already knows which rows it wants: it reads only the rows whose
+`column` is among `keys`. The statement is one `SELECT * FROM t WHERE col IN
+(SELECT value FROM json_each(?)) ORDER BY rowid` with the keys bound as a
+single JSON array, so there is no temporary table (a read path writes
+nothing) and no ceiling on the key count, which a `col IN (?, ?, ...)` list
+would meet at SQLite's bound-variable limit. SQLite searches an index on
+`column` when there is one and scans when there is not — then no cheaper than
+`SqliteReader`, though only the matching rows are materialised. Rows come back
+in table order, so swapping it for a whole-table read cannot reorder what is
+written downstream (this needs a rowid table). No keys reads no rows but
+still the table's columns, and a key the table lacks is not an error. It is a
+separate class and not a parameter of `SqliteReader` because a selection by
+key is a different read, not a projection of the same one.
 `SharePointReader(site, list_name, auth)` and
 `SharePointModifiedReader(site, list_name, columns, window)` follow the same
 `read()` shape but
@@ -182,7 +196,7 @@ directions are explicit:
 | CSV file | `CsvReader`, `StrictCsvReader`, `GlobCsvReader` | `CsvWriter` | Every reader here lands text; types are the declared schema's answer at silver. `CsvWriter(path, strategy)` emits one CSV file; `StrictCsvReader` is the char-by-char RFC 4180 parser for grammar-correct feeds that defeat pandas (and lands an empty field as `""` where the others land a gap); `GlobCsvReader` is read-only because many inbound files together form one logical snapshot, and text keeps its parts from disagreeing on a column's dtype. |
 | Excel file | `ExcelReader` | `ExcelWriter` | Both target one worksheet (`sheet=...`). |
 | JSON file | _intentionally absent_ | `JsonWriter` | JSON is currently a Reporting Deliverable format only; no inbound JSON Feed has been needed yet. |
-| SQLite table | `SqliteReader` | `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `SqliteInsertOrIgnoreWriter`, `SqliteInsertIfAbsentWriter`, `SqliteAppendOnlyWriter` | The Store mints these over medallion layer databases. |
+| SQLite table | `SqliteReader`, `SqliteKeyedReader` | `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `SqliteInsertOrIgnoreWriter`, `SqliteInsertIfAbsentWriter`, `SqliteAppendOnlyWriter` | The Store mints these over medallion layer databases. |
 | SAS extract (landed file) | `CsvReader` (`GlobCsvReader` for a multi-part export) | _intentionally absent_ | SAS runs outside the framework ([ADR-0029](adr/0029-sas-runs-outside-the-framework.md)): the SAS job lands a CSV and the pipeline reads it like any other file. There is no SAS-specific Reader; a freshness declaration on the ingest, not a fetch step, guards against the file not having arrived. |
 | SharePoint list | `SharePointReader` | `SharePointWriter` | Target is **SE on-prem**. Both sides are stubbed behind swappable `SharePointFetcher` / `SharePointPusher` seams until the on-prem SE client (NTLM/Kerberos/REST) lands. `SharePointWriter` emits the canonical Selection Deliverable — one list per Case Type. |
 | SharePoint list, incremental | `SharePointModifiedReader` | _intentionally absent_ | The items whose `Modified` falls in a caller-supplied half-open window, stamped with immutable observation metadata. Configures the organisational client behind the `SharePointListClient` seam; holds no checkpoint. Cannot see a **hard delete** — a deleted item has no `Modified`, so reconciliation against a snapshot is a separate mechanism. |
@@ -424,6 +438,8 @@ components over the tables in its file:
   store branches on nothing and any `LoadStrategy` works. Context-driven
   accumulation uses `AccumulateByRun.from_context(context)`.
 - `store.reader(table)` — a `SqliteReader` over the same file.
+- `store.keyed_reader(table, column, keys)` — a `SqliteKeyedReader` over the same
+  file: only the rows of `table` whose `column` is among `keys`.
 
 The strategy lives on the Writer the store mints, not on the store. The
 namespace's file (and its parent directories) is created on first write.

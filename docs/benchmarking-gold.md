@@ -53,6 +53,11 @@ finding and the absolute seconds as specific to the machine and the disk.
 Silver is append-only, so the first phase has no natural ceiling. The second
 touches one row per Case, and never sees the history at all.
 
+The Detail Tables are a third phase this script does not time (see below). They
+read only the rows of the winning observations, through `case_current`'s
+winners, so they scale with the Case count and not with history; `case_current`
+is the one phase left that reads a whole silver table.
+
 **This script measures neither of the two Detail Table aggregates
 (`answer_remediation_current`, `appeal_outcomes_current`)**: it runs only
 `to_gold_case_current` and `publish_aggregates`, never the Detail Tables

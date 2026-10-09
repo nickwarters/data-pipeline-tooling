@@ -297,6 +297,27 @@ The implementation is `to_gold_detail` in `pipelines/sharepoint_cases/gold.py`,
 generic over a per-table grain, declared in `DETAIL_GRAIN` — one call for every
 Detail Table rather than a per-table judgement about what "latest" means.
 
+**How each gold source is read.** `case_current` reads `case_version` whole: the
+winner of each Case can only be found by looking at every observation of it. A
+Detail Table does *not* read its silver history whole. Once `case_current` is
+built, `publish_gold` takes the winners' `source_observation_id`s from it and
+reads each Detail Table through `Store.keyed_reader(table,
+"source_observation_id", winners)`, so only the winning observations' rows are
+read, hashed by `DeriveKey` and joined — a Detail Table's cost follows the
+Cases' current state, not the length of the history behind it (a year of
+polling is ~2.1M Detail rows in silver against ~400k winning ones). The
+`(case_id, source_observation_id)` semi-join stays after the narrowing as the
+guard it always was: it is what keeps the result right for any Reader handed
+to `to_gold_detail`, so the narrowing changes what is read and cannot change
+what is published. The read is cheapest with an index on the Detail Table's
+`source_observation_id` — without one SQLite scans the table, no worse than the
+whole read it replaces. `DeriveKey` additionally hashes each distinct natural
+key once per call, not once per row.
+
+Follow-up, not done here: `case_current`'s own read could narrow to the five
+columns the winner is chosen on and read the winners' full rows second, once
+`SqliteReader`'s `columns=` reaches the Shared Reader that feed reads through.
+
 Silver keys a Detail Table's own `AppendOnly` load on a **composite**
 key — `answer` on `(source_observation_id, question_id)`, `answer_capture` on
 `(source_observation_id, question_id, field_key)`, `answer_action` on

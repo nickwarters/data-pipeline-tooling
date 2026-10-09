@@ -250,3 +250,29 @@ def test_registry_db_file_goes_through_the_configured_backend(tmp_path):
     registry = StoreRegistry(tmp_path, backend=FlatBackend())
 
     assert registry.db_file("cases/silver") == tmp_path / "cases_silver.db"
+
+
+def test_store_keyed_reader_reads_only_the_keyed_rows_of_its_namespace(tmp_path):
+    # Store.reader stays the whole-table read; keyed_reader is the narrow one,
+    # over the same file and the same table.
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"obs": ["a", "b", "a", "c"], "n": [1, 2, 3, 4]})
+    )
+    store = _namespace_store(tmp_path)
+    store.writer("history", Refresh()).write(dataset)
+
+    landed = store.keyed_reader("history", "obs", ["a", "c"]).read().to_pandas()
+
+    assert list(landed["n"]) == [1, 3, 4]
+    assert len(store.reader("history").read()) == 4
+
+
+def test_store_keyed_reader_with_no_keys_reads_the_columns_and_no_rows(tmp_path):
+    dataset = Dataset.from_pandas(pd.DataFrame({"obs": ["a"], "n": [1]}))
+    store = _namespace_store(tmp_path)
+    store.writer("history", Refresh()).write(dataset)
+
+    landed = store.keyed_reader("history", "obs", []).read()
+
+    assert landed.columns == ["obs", "n"]
+    assert len(landed) == 0

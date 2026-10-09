@@ -552,14 +552,21 @@ def to_gold_detail(
     as_of: dt.datetime,
     name: str,
 ) -> Dataset:
-    """One Detail Table's silver history -> gold. **Grain: one row per ``grain``.**
+    """One Detail Table's silver rows -> gold. **Grain: one row per ``grain``.**
 
-    Reduces a silver Detail Table's accumulated history to the child rows of
-    the Cases' *winning* observation. It never orders and never breaks a tie --
-    ``latest_case_version`` has already picked the winner, and a second
-    ordering path here could disagree with it. **Precondition**: a
-    Detail row's ``case_type`` must be the settled one, or the semi-join
-    matches nothing and gold lands zero rows silently.
+    Reduces a silver Detail Table to the child rows of the Cases' *winning*
+    observation. ``reader`` is expected to be **narrowed to the winners already**
+    (``publish_gold`` hands it a ``Store.keyed_reader`` over the winning
+    observation ids), so ``DeriveKey`` hashes only winning rows. The
+    ``(case_id, source_observation_id)`` semi-join stays regardless, as the
+    guard: it is what makes the result right for any ``reader``, including one
+    handed the whole history, and what drops a row whose observation id matches
+    a winner's but whose Case does not.
+
+    It never orders and never breaks a tie -- ``latest_case_version`` has
+    already picked the winner, and a second ordering path here could disagree
+    with it. **Precondition**: a Detail row's ``case_type`` must be the settled
+    one, or the semi-join matches nothing and gold lands zero rows silently.
     """
     at = name
     data = read(reader, name=f"{at}:read")
@@ -596,12 +603,15 @@ def publish_gold(med: Medallion, *, as_of: dt.datetime) -> None:
     """Rebuild every gold table from the accumulated silver history.
 
     ``case_current`` is published first and its dataset feeds the Detail
-    Tables and the six aggregates, so silver is read once and each of them
-    reduces exactly the current table's own rows. They commit independently,
-    in order; a failure part-way leaves the earlier ones refreshed, which is
-    safe because the caller has not advanced any watermark and the next run
-    rebuilds everything. See ``docs/gold-accumulation.md`` for why each source
-    is read from memory rather than re-read from disk.
+    Tables and the six aggregates, so ``case_version`` is read once and each of
+    them reduces exactly the current table's own rows. The Detail Tables take
+    from it the ids of the winning observations and read **only those
+    observations' rows** from their silver history, so a Detail Table's cost
+    follows the Cases' current state and not the length of the history behind
+    it. They commit independently, in order; a failure part-way leaves the
+    earlier ones refreshed, which is safe because the caller has not advanced
+    any watermark and the next run rebuilds everything. See
+    ``docs/gold-accumulation.md`` for how each source is read.
 
     Every step here reads the ambient run context the runner makes active --
     which is where a dry run's write-nothing behaviour comes from, and why
@@ -622,10 +632,15 @@ def publish_gold(med: Medallion, *, as_of: dt.datetime) -> None:
         as_of=as_of,
     )
 
+    # The winners' observation ids, from the table just built. A Detail Table's
+    # history is read through them, so what is read, hashed and joined is the
+    # winning rows and not the table's whole history.
+    winning_ids = current.to_pandas()["source_observation_id"].tolist()
+
     sources: dict[str, Dataset] = {CURRENT_TABLE: current}
     for table in DETAIL_TABLES:
         dataset = to_gold_detail(
-            med.silver.reader(table),
+            med.silver.keyed_reader(table, "source_observation_id", winning_ids),
             med.gold.writer(table, Refresh()),
             grain=DETAIL_GRAIN[table],
             observations=DatasetReader(current),
