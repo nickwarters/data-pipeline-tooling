@@ -138,7 +138,7 @@ appears in the log; `params` is logged but has no column.
 | `orchestration_run_id` | string \| null | The orchestration pass that started the run, written on the `run` summary only; `null` on step records and on a run started by hand. |
 | `retry_attempts` | int \| null | Attempts a `RetryPolicy` retried during this step; on the `run` summary, during the whole run. `0` when none; `null` on a record that is not a timed step or run (and on records written before the field existed). Shown on the console line as `retries=N` when non-zero. |
 | `retry_wait_seconds` | float \| null | The time those retried attempts took, each failed attempt plus the backoff after it. Same scope and nulls as `retry_attempts`. |
-| `external_calls` | int \| null | Calls made inside an `external_call()` block during this step (the SharePoint seams wrap theirs); on the `run` summary, during the whole run. A wrapped call made inside another counts once. Same nulls as `retry_attempts`. |
+| `external_calls` | int \| null | Calls made inside an `external_call()` block during this step (the SharePoint seams wrap theirs, and the polling feeds wrap the `server_time()` read that bounds each window); on the `run` summary, during the whole run. A wrapped call made inside another counts once. Same nulls as `retry_attempts`. |
 | `external_wait_seconds` | float \| null | The time spent inside those calls, failed calls included. `duration` less this is the step's own work. See [Waiting versus working](#waiting-versus-working). |
 
 ### Waiting versus working
