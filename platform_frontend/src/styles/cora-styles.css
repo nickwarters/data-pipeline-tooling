@@ -1442,7 +1442,10 @@
    Scoped under [data-cora-root] to out-specify the button reset (0,1,1), which
    otherwise paints it as a solid accent button, with the reset's hover, active
    and focus states re-declared so they cannot win it back. The 24px box keeps
-   the minimum target size while the glyph stays small. */
+   the minimum target size while the glyph stays small. `min-width` is reset
+   because SharePoint's core styles give every button a 6em minimum width,
+   which the reset never touches and which stretches this circle into a wide
+   oval on a deployed page. */
 [data-cora-root] .cora-responsible-party-clear,
 [data-cora-root] .cora-responsible-party-clear:hover,
 [data-cora-root] .cora-responsible-party-clear:active {
@@ -1450,6 +1453,7 @@
   align-items: center;
   justify-content: center;
   width: 24px;
+  min-width: 0;
   height: 24px;
   margin: calc(-1 * var(--cora-space-1)) 0;
   padding: 0;
