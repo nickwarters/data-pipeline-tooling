@@ -10,6 +10,12 @@ the two apart with four counters, gathered here:
 * ``external_calls`` / ``external_wait_seconds`` -- calls made inside an
   :func:`external_call` block, and the time spent in them.
 
+The two times are **not additive**. A retried attempt that was itself an
+external call (a retrying reader over a SharePoint one) is counted in both:
+its time is in ``retry_wait_seconds`` as a failed attempt and in
+``external_wait_seconds`` as a failed call. A step's own work is its duration
+less ``external_wait_seconds`` alone.
+
 Whatever records a step opens :func:`measure_waits` around it; retries and
 external calls anywhere beneath it count towards it, however deep. A measured
 block nested in another (a step inside a run) also adds to the outer one when it

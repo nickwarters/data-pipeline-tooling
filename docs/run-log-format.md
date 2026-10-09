@@ -51,7 +51,7 @@ Each ends in `_run_id`; the prefix names what it identifies.
 
 | Identifier | Scope | Minted by | Stable across re-drives? |
 |---|---|---|---|
-| `orchestration_run_id` | one runner/orchestrator pass, **shared by every pipeline it triggers** | `tools.orchestration` (its decision store) | no — a fresh pass each time |
+| `orchestration_run_id` | one runner/orchestrator pass (under `--loop`, every poll of the loop), **shared by every pipeline it triggers** | `tools.orchestration` (its decision store) | no — a fresh pass each time |
 | `pipeline_run_id` | one **individual pipeline attempt** | the framework, per `.run()` (a fresh uuid) | no — fresh per attempt |
 | `logical_run_id` | the **business run / idempotency key** (`<label>:<run_date>`) | the caller / the default | **yes** — a re-drive of the same `run_date` reuses it |
 
@@ -137,9 +137,9 @@ appears in the log; `params` is logged but has no column.
 | `run_date` | string \| null   | The business date the run was for (`RunContext.run_date`, `YYYY-MM-DD`), written on the `run` summary only and `null` on every other record. A re-drive of an old date carries that date, not the day it ran, so reporting can file it with its `logical_run_id`. Stored by the registry; never shown on the console line. |
 | `orchestration_run_id` | string \| null | The orchestration pass that started the run, written on the `run` summary only; `null` on step records and on a run started by hand. |
 | `retry_attempts` | int \| null | Attempts a `RetryPolicy` retried during this step; on the `run` summary, during the whole run. `0` when none; `null` on a record that is not a timed step or run (and on records written before the field existed). Shown on the console line as `retries=N` when non-zero. |
-| `retry_wait_seconds` | float \| null | The time those retried attempts took, each failed attempt plus the backoff after it. Same scope and nulls as `retry_attempts`. |
-| `external_calls` | int \| null | Calls made inside an `external_call()` block during this step (the SharePoint seams wrap theirs, and the polling feeds wrap the `server_time()` read that bounds each window); on the `run` summary, during the whole run. A wrapped call made inside another counts once. Same nulls as `retry_attempts`. |
-| `external_wait_seconds` | float \| null | The time spent inside those calls, failed calls included. `duration` less this is the step's own work. See [Waiting versus working](#waiting-versus-working). |
+| `retry_wait_seconds` | float \| null | The time those retried attempts took, each failed attempt plus the backoff after it. Same scope and nulls as `retry_attempts`. Shown on the console line as `retry_wait=1.5s` when non-zero. **Overlaps** `external_wait_seconds`: see [Waiting versus working](#waiting-versus-working). |
+| `external_calls` | int \| null | Calls made inside an `external_call()` block during this step (the SharePoint seams wrap theirs, and the polling feeds wrap the `server_time()` read that bounds each window); on the `run` summary, during the whole run. A wrapped call made inside another counts once. Same nulls as `retry_attempts`. Shown on the console line as `external_calls=N` when non-zero. |
+| `external_wait_seconds` | float \| null | The time spent inside those calls, failed calls included. `duration` less this is the step's own work. Shown on the console line as `external_wait=0.3s` when non-zero. **Not additive** with `retry_wait_seconds`: see [Waiting versus working](#waiting-versus-working). |
 
 ### Waiting versus working
 
@@ -150,6 +150,15 @@ a step (a builder node, an eager step, `step(...)`, the runner's `run` summary)
 opens `measure_waits()` around it, and a `RetryPolicy` retry or an
 `external_call()` block anywhere beneath it counts towards it. A step's tally
 also adds to the run's, so the `run` summary's totals cover every step.
+
+**The two wait times overlap; do not add them.** A retried attempt that was
+itself an external call (a `RetryingReader` over a SharePoint reader) is counted
+in both: its time is in `retry_wait_seconds`, as a failed attempt, and in
+`external_wait_seconds`, as a failed call. One failed 5 s call, 10 s of backoff
+and a 5 s success take 20 s and record `retry_wait_seconds=15` and
+`external_wait_seconds=10`. To estimate a step's own work, subtract
+`external_wait_seconds` alone from `duration`; read `retry_wait_seconds` as what
+the retries cost, not as a separate slice of the step.
 
 Wrap a call to a slow service yourself to have it counted:
 
@@ -336,7 +345,12 @@ reads the flag on decisions it has just made, so the older rows are unaffected.
 Two UTC instants were appended after it the same way: `pass_started_at`, when the
 pass began, on every decision; and `started_at`, when the item was handed to the
 invoker, on items that ran (`NULL` otherwise). `started_at − pass_started_at` is
-how long an item queued behind the items before it in the pass.
+how long an item queued behind the items before it in the pass. Under
+`orchestrate --loop` one `orchestration_run_id` spans many passes, one per poll,
+and each pass has its own `pass_started_at`: rows sharing an
+`orchestration_run_id` carry several, so take `MIN(pass_started_at)` for when the
+loop began, and read an item's `started_at − pass_started_at` as its wait within
+the poll that ran it, not since the loop began.
 
 ### Happy path (a successful run of 4 rows)
 
