@@ -42,6 +42,7 @@ def _record(
     error_category=None,
     warn_hits: str = "[]",
     committed: int = 0,
+    run_date: str | None = None,
 ) -> dict[str, object]:
     """One registry row as ``SqliteReader`` hands it over: lists as JSON text,
     the flag as 0/1."""
@@ -61,6 +62,7 @@ def _record(
         "error_category": error_category,
         "warn_hits": warn_hits,
         "committed": committed,
+        "run_date": run_date,
     }
 
 
@@ -131,7 +133,8 @@ def test_run_summary_is_one_row_per_run_ranked_within_its_logical_run():
             "pipeline": "ingest",
             "logical_run_id": LOGICAL,
             "run_date": "2026-08-27",
-            "started_at": "2026-08-27T07:00:00+00:00",
+            # The first record ends at 07:00:00 after a 0.5 s step.
+            "started_at": "2026-08-27T06:59:59.500000+00:00",
             "finished_at": "2026-08-27T07:00:02+00:00",
             "wall_clock_seconds": 1.1,  # the summary record's, not last - first
             "step_duration_seconds": 1.0,
@@ -150,7 +153,7 @@ def test_run_summary_is_one_row_per_run_ranked_within_its_logical_run():
             "pipeline": "ingest",
             "logical_run_id": LOGICAL,
             "run_date": "2026-08-27",
-            "started_at": "2026-08-27T07:00:04+00:00",
+            "started_at": "2026-08-27T07:00:03.100000+00:00",
             "finished_at": AS_OF,
             "wall_clock_seconds": 1.0,
             "step_duration_seconds": 0.9,
@@ -168,17 +171,55 @@ def test_run_summary_is_one_row_per_run_ranked_within_its_logical_run():
 
 
 def test_run_summary_without_a_summary_record_derives_wall_clock_and_status():
-    # A run that died before its summary was written: the clock is first to
-    # last record, and an errored step makes the run an error.
+    # A run that died before its summary was written: the clock runs from the
+    # first step's start to the last record, and an errored step makes the run
+    # an error.
     records = [
         _record("r9", "read", at="2026-08-27T07:00:00+00:00", duration=0.5),
         _record("r9", "write", "error", at="2026-08-27T07:00:03+00:00", duration=0.1),
     ]
     [row] = _rows(metrics.run_summary(given_rows(records).read(), as_of=AS_OF))
 
-    assert row["wall_clock_seconds"] == 3.0
+    assert row["wall_clock_seconds"] == 3.5  # the read began 0.5 s before 07:00:00
     assert row["status"] == "error"
     assert row["attempt_number"] == 1 and row["is_latest_attempt"] is True
+
+
+def test_run_summary_marks_a_run_with_no_summary_and_no_failure_incomplete():
+    # Killed mid-run, or still running when the registry was read.
+    records = [_record("r9", "read", at="2026-08-27T07:00:00+00:00", duration=0.5)]
+    [row] = _rows(metrics.run_summary(given_rows(records).read(), as_of=AS_OF))
+
+    assert row["status"] == "incomplete"
+
+
+def test_run_summary_counts_a_warn_once_though_the_summary_repeats_it():
+    # Builder pipelines copy every step's warns onto the run summary.
+    records = [
+        _record("r9", "validate", at="2026-08-27T07:00:00+00:00", warn_hits='["w"]'),
+        _record("r9", "run", at="2026-08-27T07:00:01+00:00", warn_hits='["w"]'),
+    ]
+    [row] = _rows(metrics.run_summary(given_rows(records).read(), as_of=AS_OF))
+
+    assert row["warn_hit_count"] == 1
+
+
+def test_run_summary_dates_a_run_on_the_run_date_it_recorded():
+    # A re-drive of 5 Jan run on 27 Aug is filed under 5 Jan, like its
+    # logical run id.
+    records = [
+        _record(
+            "r9",
+            "run",
+            at="2026-08-27T07:00:00+00:00",
+            duration=1.0,
+            logical_run_id="ingest:2026-01-05",
+            run_date="2026-01-05",
+        ),
+    ]
+    [row] = _rows(metrics.run_summary(given_rows(records).read(), as_of=AS_OF))
+
+    assert row["run_date"] == "2026-01-05"
 
 
 def test_run_summary_dates_a_run_on_the_local_date_it_started(monkeypatch):
@@ -189,6 +230,17 @@ def test_run_summary_dates_a_run_on_the_local_date_it_started(monkeypatch):
     [row] = _rows(metrics.run_summary(given_rows(records).read(), as_of=AS_OF))
 
     assert row["run_date"] == "2026-08-27"
+
+
+def test_run_summary_dates_a_run_on_when_it_started_not_when_it_ended(monkeypatch):
+    monkeypatch.setattr(
+        timestamps, "local_timezone", lambda: dt.timezone(dt.timedelta(hours=1))
+    )
+    # Ends 00:10 local on the 27th, but began 22:50 local on the 26th.
+    records = [_record("r9", "run", at="2026-08-26T23:10:00+00:00", duration=1200.0)]
+    [row] = _rows(metrics.run_summary(given_rows(records).read(), as_of=AS_OF))
+
+    assert row["run_date"] == "2026-08-26"
 
 
 def test_step_duration_trend_baselines_each_day_on_the_previous_days_p50s():
@@ -218,6 +270,17 @@ def test_step_duration_trend_baselines_each_day_on_the_previous_days_p50s():
     assert [r["trailing_p50_median"] for r in result] == [None, 1.0, 1.5]
     assert [r["delta_seconds"] for r in result] == [None, 1.0, 3.5]
     assert [r["delta_ratio"] for r in result] == [None, 1.0, 2.333333]
+
+
+def test_step_duration_trend_leaves_failed_executions_out():
+    records = [
+        _record("a", "read", at="2026-08-20T07:00:00+00:00", duration=10.0),
+        _record("b", "read", "error", at="2026-08-20T08:00:00+00:00", duration=0.1),
+    ]
+    [row] = _rows(metrics.step_duration_trend(given_rows(records).read(), as_of=AS_OF))
+
+    assert row["execution_count"] == 1
+    assert row["duration_p50"] == 10.0
 
 
 def test_step_duration_trend_looks_back_over_a_bounded_number_of_days():
@@ -367,3 +430,19 @@ def test_main_on_a_base_dir_nothing_has_run_in_lands_empty_tables(base_dir):
     gold = medallion(StoreRegistry(base_dir), "pipeline_run_metric").gold
     for table, _ in GOLD_TABLES:
         assert read_rows(gold, table) == []
+
+
+def test_main_writes_no_table_when_a_later_table_fails_to_build(base_dir, monkeypatch):
+    log = RunLog(base_dir / "_runs" / "ingest.log")
+    log.record("r1", "ingest", "run", "ok", logical_run_id=LOGICAL, duration=1.0)
+
+    def broken(records, *, as_of):
+        raise ValueError("row flow broke")
+
+    monkeypatch.setattr(metrics, "step_row_flow", broken)
+    with pytest.raises(ValueError):
+        main(["prog", "--base-dir", str(base_dir)])
+
+    # The summary built fine but was never written: the tables move together.
+    gold = medallion(StoreRegistry(base_dir), "pipeline_run_metric").gold
+    assert read_rows(gold, "pipeline_run_summary") == []

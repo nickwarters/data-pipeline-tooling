@@ -19,8 +19,8 @@ from framework.core import NonNull, OneOf, Range
 SUBJECT = "pipeline_run_metric"
 
 # A run's overall outcome: the summary record's status where one was written,
-# else derived from its steps.
-RUN_STATUSES = ("ok", "error")
+# else ``error`` if a step failed, else ``incomplete`` (killed or still running).
+RUN_STATUSES = ("ok", "error", "incomplete")
 
 
 @dataclass

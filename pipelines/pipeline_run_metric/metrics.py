@@ -40,6 +40,8 @@ RUN_SUMMARY_STEP = "run"
 # A step record's outcomes, as the run log writes them.
 ERROR_STATUS = "error"
 OK_STATUS = "ok"
+# A run with no summary record and no failed step: killed, or still running.
+INCOMPLETE_STATUS = "incomplete"
 
 # How many prior run dates the duration trend's baseline looks back over.
 TRAILING_DAYS = 7
@@ -62,6 +64,7 @@ RECORD_COLUMNS = (
     "error_category",
     "warn_hits",
     "committed",
+    "run_date",
 )
 
 
@@ -77,11 +80,18 @@ def latest_instant(records: Dataset) -> str | None:
 
 
 def _prepared(records: Dataset) -> pd.DataFrame:
-    """Records with parsed instants, a local ``run_date`` per run, and a step
-    address for every row (derived from pipeline + step where the record
-    predates the column, as the registry's own backfill does)."""
+    """Records with parsed instants, a ``run_date`` per run, and a step address
+    for every row (derived from pipeline + step where the record predates the
+    column, as the registry's own backfill does).
+
+    A record is stamped when its step *ends*, so its start is ``_at`` less its
+    duration. ``run_date`` is the date the run summary recorded, else the local
+    date the run started.
+    """
     frame = records.to_pandas().copy()
     frame["_at"] = pd.to_datetime(frame["timestamp"], utc=True, format="ISO8601")
+    took = pd.to_timedelta(pd.to_numeric(frame["duration"]).clip(lower=0), unit="s")
+    frame["_start"] = (frame["_at"] - took.fillna(pd.Timedelta(0))).dt.round("us")
     frame["_is_summary"] = frame["step"].eq(RUN_SUMMARY_STEP)
 
     pipeline = frame["pipeline"].astype("string")
@@ -90,10 +100,13 @@ def _prepared(records: Dataset) -> pd.DataFrame:
     derived = derived.mask(frame["_is_summary"], pipeline)
     frame["step_address"] = address.mask(address.isna() | address.eq(""), derived)
 
-    run_start = frame.groupby("pipeline_run_id")["_at"].transform("min")
+    by_run = frame.groupby("pipeline_run_id")
+    run_start = by_run["_start"].transform("min")
     # One local-date conversion per run, not per record.
     dates = {at: local_date(at).isoformat() for at in run_start.unique()}
-    frame["run_date"] = run_start.map(dates)
+    recorded = frame["run_date"].where(frame["_is_summary"])
+    recorded = recorded.groupby(frame["pipeline_run_id"]).transform("last")
+    frame["run_date"] = recorded.fillna(run_start.map(dates))
     return frame
 
 
@@ -147,10 +160,10 @@ def run_summary(records: Dataset, *, as_of: str) -> Dataset:
     """One row per pipeline run. **Grain: run_id.**
 
     Wall clock is the summary record's ``duration`` where one was written,
-    else first-to-last record; ``status`` is the summary's, else ``error`` if
-    any step errored. ``attempt_number`` ranks a run among those sharing its
-    ``logical_run_id`` by start, so a re-drive is the second attempt and the
-    run it replaced is no longer the latest.
+    else first start to last end; ``status`` is the summary's, else ``error``
+    if any step errored, else ``incomplete``. ``attempt_number`` ranks a run
+    among those sharing its ``logical_run_id`` by start, so a re-drive is the
+    second attempt and the run it replaced is no longer the latest.
     """
     frame = _prepared(records).sort_values("_at", kind="stable")
     is_step = ~frame["_is_summary"]
@@ -161,7 +174,8 @@ def run_summary(records: Dataset, *, as_of: str) -> Dataset:
         _failed=failed,
         _committed=is_step & committed,
         _step_duration=pd.to_numeric(frame["duration"]).where(is_step),
-        _warns=frame["warn_hits"].map(_warn_count),
+        # Builder pipelines repeat every step's warns on the run summary.
+        _warns=frame["warn_hits"].map(_warn_count).where(is_step, 0),
     )
 
     by_run = frame.groupby("pipeline_run_id", sort=False)
@@ -170,7 +184,7 @@ def run_summary(records: Dataset, *, as_of: str) -> Dataset:
     runs = runs.join(
         by_run.agg(
             run_date=("run_date", "first"),
-            started=("_at", "min"),
+            started=("_start", "min"),
             finished=("_at", "max"),
             step_duration_seconds=("_step_duration", "sum"),
             step_count=("_step", "sum"),
@@ -191,7 +205,9 @@ def run_summary(records: Dataset, *, as_of: str) -> Dataset:
     span = (runs["finished"] - runs["started"]).dt.total_seconds()
     wall = pd.to_numeric(summary["duration"]).fillna(span)
     derived = (
-        runs["failed_step_count"].gt(0).map({True: ERROR_STATUS, False: OK_STATUS})
+        runs["failed_step_count"]
+        .gt(0)
+        .map({True: ERROR_STATUS, False: INCOMPLETE_STATUS})
     )
 
     summarised = (
@@ -237,7 +253,9 @@ def step_duration_trend(
     ``delta_ratio`` is NULL where the baseline is NULL or zero.
     """
     frame = _prepared(records)
-    steps = frame.loc[~frame["_is_summary"] & frame["duration"].notna()].copy()
+    # A failed step's duration says how long it took to fail, not to run.
+    ran = frame["status"].eq(OK_STATUS) & frame["duration"].notna()
+    steps = frame.loc[~frame["_is_summary"] & ran].copy()
     steps["duration"] = pd.to_numeric(steps["duration"])
 
     by_day = steps.groupby(["pipeline", "step_address", "run_date"], sort=True)

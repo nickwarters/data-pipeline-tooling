@@ -12,7 +12,7 @@ the reductions are
 the wiring is
 [`pipelines/pipeline_run_metric/pipeline.py`](../pipelines/pipeline_run_metric/pipeline.py).
 
-## Three things to know before reading a number
+## Four things to know before reading a number
 
 **1. `run_id`, not `pipeline_run_id`.** Every table-backed Writer stamps the
 reserved `pipeline_run_id` column with the id of the run that *wrote the
@@ -32,6 +32,11 @@ before this one. It is scheduled last in the day for the same reason.
 `step_duration_seconds` is the sum of its step records. Statistics over an
 empty set are NULL, never zero.
 
+**4. A record is stamped when its step ends.** So a step started at its
+`timestamp` less its `duration`, and a run started at the earliest of those.
+`started_at` and the fallback `run_date` both use that start, not the first
+record's stamp, which would be late by the whole first step.
+
 ## Part A — Subject overview
 
 | Attribute | Value |
@@ -45,7 +50,7 @@ empty set are NULL, never zero.
 | **Schedule / freshness** | Daily, in its own `operations` set after every other set |
 | **Migrations** | `migrations/pipeline_run_metric/gold/` |
 | **Owner / data steward** | *<team>* |
-| **Last reviewed** | 2026-08-28 |
+| **Last reviewed** | 2026-10-09 |
 
 `as_of_utc` is the latest record timestamp in the registry at the read, so a
 re-run over the same registry produces the same tables; an empty registry has
@@ -55,7 +60,9 @@ none, and the run's own clock stands in.
 
 Every table also carries `as_of_utc` and the reserved `pipeline_run_id`
 provenance column (see *1.* above). Neither is repeated below. `run_date` is
-everywhere the **local** calendar date of the run's first record.
+everywhere the run's **business date**: the `run_date` its run summary recorded
+(a re-drive of an old date keeps that date), else the **local** calendar date
+the run started.
 
 ### `pipeline_run_summary` — one row per pipeline run
 
@@ -67,29 +74,30 @@ table every other operational question joins to.
 | `run_id` | `str` | No | The registry's `pipeline_run_id`. |
 | `pipeline` | `str` | No | The run's pipeline label. |
 | `logical_run_id` | `str` | Yes | The business run this attempt belongs to; what a re-drive shares with the run it replaces. |
-| `run_date` | `str` | No | `YYYY-MM-DD`, local. |
-| `started_at` / `finished_at` | `str` | No | First and last record instants, UTC ISO. |
+| `run_date` | `str` | No | `YYYY-MM-DD`: the recorded run date, else the local date the run started. |
+| `started_at` / `finished_at` | `str` | No | Earliest step start (`timestamp − duration`) and last record instant, UTC ISO. |
 | `wall_clock_seconds` | `float` | No | The summary record's `duration`; where a run died before writing one, `finished_at − started_at`. |
 | `step_duration_seconds` | `float` | No | Sum of the step records' durations. |
 | `step_count` | `int` | No | Step records (the summary is not a step). |
 | `failed_step_count` | `int` | No | Steps with `status = error`. |
 | `committed_step_count` | `int` | No | Steps that durably wrote an artifact. |
-| `warn_hit_count` | `int` | No | Warn hits across every record of the run. |
-| `status` | `str` | No | `ok` / `error`: the summary record's, else `error` if any step errored. |
+| `warn_hit_count` | `int` | No | Warn hits across the run's step records. The summary is left out because a builder pipeline repeats every step's warns on it. |
+| `status` | `str` | No | `ok` / `error` / `incomplete`: the summary record's, else `error` if any step errored, else `incomplete` (killed, or still running when the registry was read). |
 | `error_category` | `str` | Yes | The first triage category recorded (`data` / `operational` / `config`), else NULL. |
 | `attempt_number` | `int` | No | Rank by start among runs sharing `logical_run_id` (a run with none is its own group). |
 | `is_latest_attempt` | `bool` | No | Whether no later attempt of the same logical run exists. |
 
 ### `step_duration_trend_daily` — step durations per day against their recent past
 
-Grain: `pipeline` × `step_address` × `run_date`, over step records carrying a
-duration.
+Grain: `pipeline` × `step_address` × `run_date`, over **successful** step
+records carrying a duration. A failed step's duration is how long it took to
+fail, so it would drag the percentiles down (a fast failure) or up (a timeout).
 
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
 | `pipeline` / `step_address` | `str` | No | The step's stable address; derived from `pipeline.step` for a record predating the column, as the registry's own backfill does. |
-| `run_date` | `str` | No | Local date of the run the execution belonged to. |
-| `execution_count` | `int` | No | Executions that day. |
+| `run_date` | `str` | No | The run date of the run the execution belonged to (see Part B). |
+| `execution_count` | `int` | No | Successful executions that day. |
 | `duration_p50` / `duration_p95` / `duration_max` | `float` | No | Over that day's executions, seconds. |
 | `trailing_p50_median` | `float` | Yes | Median of the step's daily p50 over its previous seven run dates *with data*; NULL on the step's first day. |
 | `delta_seconds` | `float` | Yes | `duration_p50 − trailing_p50_median`. |
@@ -122,6 +130,11 @@ on the counts) before it is written.
 - The registry is read once for the whole run and gated by a `ColumnValidator`
   on the record columns the reductions use, so a registry the reductions cannot
   read fails the run with the column named, before any table is written.
+- All three tables are reduced and pass their `SchemaValidator` before any is
+  written, so a reduction or check that fails leaves the previous three tables
+  in place together. The three `Refresh()` writes are still separate
+  transactions: a failure *during* the writes can leave the earlier tables new
+  and the later ones old, until the next run rebuilds all three.
 - The reductions read the registry's *stored* forms (`warn_hits` as JSON text,
   `committed` as 0/1) directly rather than through `RunRegistry`'s decode; a
   `warn_hits` value that is not a JSON list counts as no hits.

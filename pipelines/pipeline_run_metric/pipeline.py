@@ -5,10 +5,8 @@ run log, so a run recorded under any subject is visible -- and refreshes three
 Aggregate tables in this subject's own gold: one row per run, step durations
 per day against their recent past, and the row funnel per step per run.
 
-``run`` does the wiring: it reads the registry once, gates it once, settles the
-instant the tables are stamped with, and hands each ``to_*`` step the records
-and the Writer for its table. Each ``to_*`` step then reduces, validates and
-writes one table; the reductions themselves are in ``metrics``.
+``run`` reads the registry once, builds and checks every table, and only then
+writes them; the reductions themselves are in ``metrics``.
 
 Where the registry lives is ``RunStore``'s to say (``tools.observability``),
 the same way ``tools.store`` says where data lives; this pipeline names
@@ -35,7 +33,7 @@ from framework.core import (
     SchemaValidator,
     format_failure,
 )
-from framework.io import DatasetReader, Refresh, SqliteReader, Writer
+from framework.io import DatasetReader, Refresh, SqliteReader
 from framework.run import RunContext, read, run_pipeline, transform, validate, write
 from tools.medallion import medallion
 from tools.observability import timestamps
@@ -73,39 +71,40 @@ def run_records_reader(base_dir) -> SqliteReader | DatasetReader:
     return SqliteReader(store.registry_path, RUN_RECORDS_TABLE)
 
 
-def to_run_summary(records: Dataset, as_of: str, writer: Writer) -> Dataset:
+def build_run_summary(records: Dataset, as_of: str) -> Dataset:
     data = transform(
         partial(metrics.run_summary, as_of=as_of), records, name="run_summary:reduce"
     )
-    validate(SchemaValidator(schema.PipelineRunSummary), data, name="run_summary:check")
-    return write(writer, data, name="run_summary:write")
+    return validate(
+        SchemaValidator(schema.PipelineRunSummary), data, name="run_summary:check"
+    )
 
 
-def to_step_duration_trend(records: Dataset, as_of: str, writer: Writer) -> Dataset:
+def build_step_duration_trend(records: Dataset, as_of: str) -> Dataset:
     data = transform(
         partial(metrics.step_duration_trend, as_of=as_of),
         records,
         name="duration_trend:reduce",
     )
-    validate(
+    return validate(
         SchemaValidator(schema.StepDurationTrendDaily),
         data,
         name="duration_trend:check",
     )
-    return write(writer, data, name="duration_trend:write")
 
 
-def to_step_row_flow(records: Dataset, as_of: str, writer: Writer) -> Dataset:
+def build_step_row_flow(records: Dataset, as_of: str) -> Dataset:
     data = transform(
         partial(metrics.step_row_flow, as_of=as_of), records, name="row_flow:reduce"
     )
-    validate(SchemaValidator(schema.StepRowFlow), data, name="row_flow:check")
-    return write(writer, data, name="row_flow:write")
+    return validate(SchemaValidator(schema.StepRowFlow), data, name="row_flow:check")
 
 
 def run(context: RunContext) -> Dataset:
-    """Read the registry once, then build each table in publication order.
+    """Read the registry once, build and check every table, then write them.
 
+    Nothing is written until all three tables have passed their checks, so a
+    reduction or check that fails leaves the previous tables in place together.
     A registry with nothing in it has no latest record to date the tables by;
     the run's own clock stands in, and the three tables land empty.
     """
@@ -117,11 +116,14 @@ def run(context: RunContext) -> Dataset:
     )
     as_of = metrics.latest_instant(records) or timestamps.utc_now_iso()
 
-    to_run_summary(records, as_of, gold.writer("pipeline_run_summary", Refresh()))
-    to_step_duration_trend(
-        records, as_of, gold.writer("step_duration_trend_daily", Refresh())
-    )
-    return to_step_row_flow(records, as_of, gold.writer("step_row_flow", Refresh()))
+    tables = {
+        "pipeline_run_summary": build_run_summary(records, as_of),
+        "step_duration_trend_daily": build_step_duration_trend(records, as_of),
+        "step_row_flow": build_step_row_flow(records, as_of),
+    }
+    for table, data in tables.items():
+        written = write(gold.writer(table, Refresh()), data, name=f"{table}:write")
+    return written
 
 
 def main(argv: list[str]) -> int:
