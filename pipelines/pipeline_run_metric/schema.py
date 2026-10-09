@@ -157,7 +157,8 @@ class BatchFinishDaily:
     orchestration decision store, not the run registry. The finish is
     measured from the start of the run date on the local calendar; its p50 and
     p90 are over the run dates in the 28 days ending on this one, p90 NULL
-    below 10 of them.
+    below 10 of them. The ``items_*`` counts are of items, each by its last
+    decision that was not a skip, not of the decisions a ``--loop`` re-records.
     """
 
     run_date: Annotated[str, NonNull()]

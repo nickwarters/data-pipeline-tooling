@@ -189,15 +189,22 @@ Grain: `run_date` — the orchestration's business date. From the orchestration
 decision store, so only scheduled work counts; a run date appears once an item
 ran for it.
 
+The `items_*` columns count **items** (the decision's `item_key`), not
+decisions. `orchestrate --loop` decides every item again on each poll: an item
+whose upstream is late is recorded `blocked` on every poll until it runs, and
+an item that has run is recorded `skipped` on every poll after. Counting
+decisions would report one late item as several blocked ones; here it is one
+item, filed by how it ended.
+
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
 | `run_date` | `str` | No | `YYYY-MM-DD`. |
-| `pass_count` | `int` | No | Orchestration passes that decided items for the date. |
+| `pass_count` | `int` | No | Orchestration runs (distinct `orchestration_run_id`) that decided items for the date. An `orchestrate --loop` is one, however many polls it made. |
 | `started_at` / `finished_at` | `str` | No | When the first pass began and when the last item that ran finished, UTC ISO. |
 | `finished_after_midnight_seconds` | `float` | No | `finished_at` measured from the start of `run_date` on the local calendar; more than 86,400 when the batch ran past midnight. "Is everything done by 07:00?" is this against 25,200. |
 | `finish_p50_28d` / `finish_p90_28d` | `float` | No / Yes | Over the run dates in the 28 days ending on this one; p90 NULL below 10 of them. |
-| `items_run` | `int` | No | Items handed to a pipeline: succeeded, failed, or blocked by a freshness check. |
-| `items_succeeded` / `items_failed` / `items_blocked` | `int` | No | By outcome. `items_blocked` also counts items blocked by a failed upstream, which never ran. |
+| `items_run` | `int` | No | Items handed to a pipeline at least once for the date: succeeded, failed, or blocked by a freshness check. |
+| `items_succeeded` / `items_failed` / `items_blocked` | `int` | No | Items by outcome: each item's **last** decision for the date that was not a skip, so an item blocked twice and then run counts once, as succeeded. `items_blocked` also counts items blocked by a failed upstream, which never ran. |
 | `queue_wait_max_seconds` | `float` | Yes | The longest an item waited between its pass starting and it starting, behind the items before it; NULL for decisions written before the start columns existed. |
 
 ## Part C — Row checks

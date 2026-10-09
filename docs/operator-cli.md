@@ -894,8 +894,9 @@ against 28 days earlier, the failure and retry rates, and the median time spent
 waiting on other services. A pipeline whose p90 is more than `--threshold`
 slower than 28 days earlier is flagged `SLOWER`; one that has not run for over
 a week says when it last did. Above the table, one line says when the latest
-scheduled batch finished against its 28-day p50 and p90, and the longest any
-item queued behind the others.
+scheduled batch finished against its 28-day p50 and p90, how many items ran,
+failed and were blocked (each item once, by how it ended, however many polls
+of an `--loop` decided it), and the longest any item queued behind the others.
 
 ```console
 $ python -m cli perf --base-dir /data --limit 3

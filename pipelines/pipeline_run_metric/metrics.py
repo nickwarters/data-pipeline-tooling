@@ -588,6 +588,7 @@ def duration_percentiles(
 DECISION_COLUMNS = (
     "timestamp",
     "orchestration_run_id",
+    "item_key",
     "run_date",
     "status",
     "pass_started_at",
@@ -605,6 +606,13 @@ def batch_finish(decisions: Dataset, *, as_of: str) -> Dataset:
     start of the run date on the local calendar, so a batch that runs past
     midnight reads as more than a day; its p50 and p90 are over the run
     dates in the ``FINISH_WINDOW`` days ending on this one.
+
+    The ``items_*`` columns count *items* (``item_key``), not decisions.
+    ``orchestrate --loop`` decides every item again on each poll: an item
+    blocked on a late upstream is recorded ``blocked`` on every poll until it
+    runs, and one that has run is recorded ``skipped`` on every poll after.
+    So ``items_run`` is the items handed to a pipeline at least once, and each
+    outcome count is by the item's last decision that was not a skip.
     """
     frame = decisions.to_pandas().copy()
     if frame.empty:
@@ -633,11 +641,27 @@ def batch_finish(decisions: Dataset, *, as_of: str) -> Dataset:
         _first_pass=("_pass_start", "min"),
         _first_decision=("_at", "min"),
         _finished=("_finish", "max"),
-        items_run=("_ran", "sum"),
-        items_succeeded=("_succeeded", "sum"),
-        items_failed=("_failed", "sum"),
-        items_blocked=("_blocked", "sum"),
         queue_wait_max_seconds=("_queued", "max"),
+    )
+    # One row per item: run if any of its decisions ran; its outcome is its
+    # last decision that was not a skip (a skip settles nothing about it).
+    items = frame.sort_values("_at", kind="stable")
+    ran_items = items.groupby(["run_date", "item_key"])["_ran"].any()
+    outcomes = (
+        items.loc[items["status"].ne("skipped")]
+        .drop_duplicates(["run_date", "item_key"], keep="last")
+        .groupby("run_date")[["_succeeded", "_failed", "_blocked"]]
+        .sum()
+    )
+    days = days.join(ran_items.groupby("run_date").sum().rename("items_run"))
+    days = days.join(
+        outcomes.rename(
+            columns={
+                "_succeeded": "items_succeeded",
+                "_failed": "items_failed",
+                "_blocked": "items_blocked",
+            }
+        )
     )
     days = days.loc[days["_finished"].notna()].reset_index()
     started = days["_first_pass"].fillna(days["_first_decision"])

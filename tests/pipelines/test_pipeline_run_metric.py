@@ -688,10 +688,11 @@ def test_rolling_percentiles_match_a_direct_computation():
 # --- the scheduled batch ----------------------------------------------------
 
 
-def _decision(run_date, status, *, at, pass_started_at=None, started_at=None):
+def _decision(run_date, status, *, at, item="a", pass_started_at=None, started_at=None):
     return {
         "timestamp": at,
         "orchestration_run_id": f"o-{run_date}",
+        "item_key": f"nightly/{item}/{run_date}",
         "run_date": run_date,
         "status": status,
         "pass_started_at": pass_started_at,
@@ -712,6 +713,7 @@ def test_batch_finish_is_the_last_item_to_run_measured_from_local_midnight():
             "2026-08-27",
             "failed",
             at="2026-08-27T06:30:00+00:00",
+            item="b",
             pass_started_at="2026-08-27T05:00:00+00:00",
             started_at="2026-08-27T05:10:00+00:00",
         ),
@@ -720,6 +722,7 @@ def test_batch_finish_is_the_last_item_to_run_measured_from_local_midnight():
             "2026-08-27",
             "skipped",
             at="2026-08-27T07:00:00+00:00",
+            item="c",
             pass_started_at="2026-08-27T05:00:00+00:00",
         ),
         # A day where nothing ran has no batch to finish.
@@ -736,6 +739,42 @@ def test_batch_finish_is_the_last_item_to_run_measured_from_local_midnight():
     assert row["queue_wait_max_seconds"] == 600
     assert row["finish_p50_28d"] == 6.5 * 3600
     assert row["finish_p90_28d"] is None  # one run date is not enough
+
+
+def test_batch_finish_counts_items_not_the_decisions_a_loop_re_records():
+    # orchestrate --loop decides every item on each poll of one orchestration
+    # run: "late" is blocked on its upstream twice, then runs; "early" runs on
+    # the first poll and is recorded skipped (already ran) on the next two.
+    def poll(n: int, item: str, status: str, *, ran: bool = True):
+        at = f"2026-08-27T0{n}:00:00+00:00"
+        return _decision(
+            "2026-08-27",
+            status,
+            at=at,
+            item=item,
+            pass_started_at=at,
+            started_at=at if ran else None,
+        )
+
+    decisions = [
+        poll(1, "early", "succeeded"),
+        poll(1, "late", "blocked"),
+        poll(2, "early", "skipped", ran=False),
+        poll(2, "late", "blocked"),
+        poll(3, "early", "skipped", ran=False),
+        poll(3, "late", "succeeded"),
+    ]
+    data = given_rows(decisions).read()
+    [row] = _rows(metrics.batch_finish(data, as_of=AS_OF))
+
+    assert row["pass_count"] == 1
+    assert (
+        row["items_run"],
+        row["items_succeeded"],
+        row["items_failed"],
+        row["items_blocked"],
+    ) == (2, 2, 0, 0)
+    assert row["finished_at"] == "2026-08-27T03:00:00+00:00"
 
 
 def test_batch_finish_reads_decisions_written_before_the_start_columns():
