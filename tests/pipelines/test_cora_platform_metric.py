@@ -379,7 +379,7 @@ def test_stage_dwell_publishes_no_interval_for_a_terminal_status_left_by_a_reope
     assert [(r["status"], r["interval_count"]) for r in result] == [("In-progress", 2)]
 
 
-def test_a_same_instant_tie_is_ordered_by_the_parsed_source_version():
+def test_a_same_instant_tie_is_ordered_by_the_version_as_a_number():
     # One Modified, two versions. The observation ids sort the other way, and
     # "10" sorts before "9" as text: only the parsed version puts 10 last.
     history = [

@@ -25,7 +25,6 @@ import pandas as pd
 
 from framework.core import Dataset
 from tools.calendar import WorkingDayCalendar
-from tools.integrations.sharepoint_rest import version_order
 from tools.observability import timestamps
 from tools.observability.timestamps import local_date
 
@@ -442,32 +441,26 @@ def _days_since(stamps: pd.Series, today: dt.date) -> pd.Series:
 def ordered_history(history: Dataset) -> Dataset:
     """The observation history in the order things happened, per Case.
 
-    Ordered by the source's own ``Modified`` instant, then -- as Sync's
-    current-state rule does -- the parsed ``source_version``, since two versions
-    can share a ``Modified`` and the later status must come last; then the
-    observation id, a digest, as a deterministic last resort. An observation
-    whose ``Modified`` does not parse, or that names no Case, has no place in
-    that order and is dropped. Parsed and sorted once, for every reduction of
-    the history; each row carries ``_modified``, the parsed instant, and
-    ``_case``, its Case's position in that order.
+    Ordered by the source's own ``Modified`` instant, then ``source_version``
+    as a number, since two versions can share a ``Modified`` and the later
+    status must come last; then the observation id, a digest, as a
+    deterministic last resort. An observation whose ``Modified`` does not
+    parse, or that names no Case, has no place in that order and is dropped.
+    Parsed and sorted once, for every reduction of the history; each row
+    carries ``_modified``, the parsed instant, and ``_case``, its Case's
+    position in that order.
     """
     frame = history.to_pandas()
-    codes, versions = pd.factorize(frame["source_version"])
-    parsed = np.array(
-        [version_order(value) for value in [*versions, None]], dtype="int64"
-    )
     frame = frame.assign(
         _modified=_instants(frame["source_modified_at"]),
-        _version_major=parsed[codes, 0],
-        _version_minor=parsed[codes, 1],
+        _version=_version_number(frame["source_version"]),
     )
     placed = frame["_modified"].notna() & frame[list(HISTORY_KEY)].notna().all(axis=1)
     ordered = frame.loc[placed].sort_values(
         [
             *HISTORY_KEY,
             "_modified",
-            "_version_major",
-            "_version_minor",
+            "_version",
             "source_observation_id",
         ],
         kind="stable",
@@ -475,6 +468,18 @@ def ordered_history(history: Dataset) -> Dataset:
     keys = ordered[list(HISTORY_KEY)]
     ordered = ordered.assign(_case=keys.ne(keys.shift()).any(axis=1).cumsum())
     return Dataset.from_pandas(ordered.reset_index(drop=True))
+
+
+def _version_number(versions: pd.Series) -> pd.Series:
+    """Each ``source_version`` -- a whole number in double quotes, ``'"10"'`` --
+    as the number it sorts on.
+
+    As text ``"10"`` sorts before ``"9"``. A version that is not a number (the
+    digest the Reader stamps when the item carried none) sorts first, at -1,
+    rather than as NA, which pandas would sort last.
+    """
+    number = pd.to_numeric(versions.astype("string").str.strip('"'), errors="coerce")
+    return number.fillna(-1)
 
 
 def _history_frame(history: Dataset) -> pd.DataFrame:
