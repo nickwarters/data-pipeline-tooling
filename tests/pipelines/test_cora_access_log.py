@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 
 from framework.core import ErrorCategory
-from framework.run import RunContext, active_context, dry_run_pipeline, run_pipeline
+from framework.run import RunContext, active_context, dry_run_pipeline
 from pipelines.cora_access_log.pipeline import (
     SAFETY_LAG,
     LocalJsonListClient,
@@ -22,7 +22,6 @@ from pipelines.cora_access_log.schema import FEED_NAME, LIST_ID, LIST_NAME, SITE
 from tests.framework_testing import build_databases, read_rows
 from tools.integrations.sharepoint_rest import SharePointFeedError, SharePointSource
 from tools.medallion import medallion
-from tools.observability.run_log import RunLog
 from tools.source_checkpoint import SourceCheckpointStore
 from tools.store import StoreRegistry
 
@@ -206,29 +205,6 @@ def test_a_poll_sooner_than_the_safety_lag_reads_nothing(base_dir):
 
     assert run(context, client=client) is None
     assert client.calls == 1
-
-
-def test_the_server_time_call_is_counted_as_an_external_call(base_dir, tmp_path):
-    # A poll inside the safety lag makes one call to the list: the server-time
-    # read that bounds the window. It is a tenant round-trip like any fetch, so
-    # the run summary counts it rather than filing its time as the run's own work.
-    SourceCheckpointStore(base_dir).commit(
-        SOURCE.key, SERVER_NOW, batch_id="earlier", pipeline_run_id="earlier-run"
-    )
-    client = FakeListClient(entries(entry()))
-    log_path = tmp_path / "run.log"
-
-    result = run_pipeline(
-        lambda context: _run(context, client=client),
-        FEED_NAME,
-        base_dir,
-        run_log=RunLog(log_path),
-    )
-
-    assert result is None and client.calls == 0
-    records = [json.loads(line) for line in log_path.read_text().splitlines()]
-    [summary] = [r for r in records if r["step"] == "run"]
-    assert summary["external_calls"] == 1
 
 
 def test_a_dry_run_lands_nothing_and_commits_no_watermark(base_dir):

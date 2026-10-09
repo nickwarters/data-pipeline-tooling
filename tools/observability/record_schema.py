@@ -248,13 +248,10 @@ RUN_RECORD_FIELDS: tuple[Field, ...] = (
     # NULL for a run started by hand.
     Field("orchestration_run_id", "TEXT"),
     # Time a step (or, on the ``run`` summary, the whole run) spent waiting
-    # rather than working: attempts a RetryPolicy retried and what they cost,
-    # and calls made inside ``external_call`` and how long they took. See
-    # tools.observability.waits. NULL on records written before they existed.
+    # rather than working: attempts a RetryPolicy retried and what they cost.
+    # See tools.observability.waits. NULL on records written before they existed.
     Field("retry_attempts", "INTEGER", console=_when_set("retries")),
     Field("retry_wait_seconds", "REAL", console=_seconds_when_set("retry_wait")),
-    Field("external_calls", "INTEGER", console=_when_set("external_calls")),
-    Field("external_wait_seconds", "REAL", console=_seconds_when_set("external_wait")),
 )
 
 #: The fields that appear in a JSONL line, in order.

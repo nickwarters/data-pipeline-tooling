@@ -137,42 +137,22 @@ appears in the log; `params` is logged but has no column.
 | `run_date` | string \| null   | The business date the run was for (`RunContext.run_date`, `YYYY-MM-DD`), written on the `run` summary only and `null` on every other record. A re-drive of an old date carries that date, not the day it ran, so reporting can file it with its `logical_run_id`. Stored by the registry; never shown on the console line. |
 | `orchestration_run_id` | string \| null | The orchestration pass that started the run, written on the `run` summary only; `null` on step records and on a run started by hand. |
 | `retry_attempts` | int \| null | Attempts a `RetryPolicy` retried during this step; on the `run` summary, during the whole run. `0` when none; `null` on a record that is not a timed step or run (and on records written before the field existed). Shown on the console line as `retries=N` when non-zero. |
-| `retry_wait_seconds` | float \| null | The time those retried attempts took, each failed attempt plus the backoff after it. Same scope and nulls as `retry_attempts`. Shown on the console line as `retry_wait=1.5s` when non-zero. **Overlaps** `external_wait_seconds`: see [Waiting versus working](#waiting-versus-working). |
-| `external_calls` | int \| null | Calls made inside an `external_call()` block during this step (the SharePoint seams wrap theirs, and the polling feeds wrap the `server_time()` read that bounds each window); on the `run` summary, during the whole run. A wrapped call made inside another counts once. Same nulls as `retry_attempts`. Shown on the console line as `external_calls=N` when non-zero. |
-| `external_wait_seconds` | float \| null | The time spent inside those calls, failed calls included. `duration` less this is the step's own work. Shown on the console line as `external_wait=0.3s` when non-zero. **Not additive** with `retry_wait_seconds`: see [Waiting versus working](#waiting-versus-working). |
+| `retry_wait_seconds` | float \| null | The time those retried attempts took, each failed attempt plus the backoff after it. Same scope and nulls as `retry_attempts`. Shown on the console line as `retry_wait=1.5s` when non-zero. See [Waiting versus working](#waiting-versus-working). |
 
 ### Waiting versus working
 
-A step that takes ten minutes may be working for ten minutes, or waiting nine of
-them on a slow service or on retries of a flaky one. The four wait fields keep
-the two apart. They are gathered by `tools.observability.waits`: whatever records
-a step (a builder node, an eager step, `step(...)`, the runner's `run` summary)
-opens `measure_waits()` around it, and a `RetryPolicy` retry or an
-`external_call()` block anywhere beneath it counts towards it. A step's tally
-also adds to the run's, so the `run` summary's totals cover every step.
+A step that takes ten minutes may be working for ten minutes, or waiting nine
+of them on retries of a flaky source. The two retry fields keep the two apart.
+They are gathered by `tools.observability.waits`: whatever records a step (a
+builder node, an eager step, `step(...)`, the runner's `run` summary) opens
+`measure_waits()` around it, and a `RetryPolicy` retry anywhere beneath it
+counts towards it. A step's tally also adds to the run's, so the `run`
+summary's totals cover every step. To estimate a step's own work, subtract
+`retry_wait_seconds` from `duration`.
 
-**The two wait times overlap; do not add them.** A retried attempt that was
-itself an external call (a `RetryingReader` over a SharePoint reader) is counted
-in both: its time is in `retry_wait_seconds`, as a failed attempt, and in
-`external_wait_seconds`, as a failed call. One failed 5 s call, 10 s of backoff
-and a 5 s success take 20 s and record `retry_wait_seconds=15` and
-`external_wait_seconds=10`. To estimate a step's own work, subtract
-`external_wait_seconds` alone from `duration`; read `retry_wait_seconds` as what
-the retries cost, not as a separate slice of the step.
-
-Wrap a call to a slow service yourself to have it counted:
-
-```python
-from tools.observability.waits import external_call
-
-with external_call():
-    response = client.fetch(...)
-```
-
-Wrap the call alone, not the work around it, so the time recorded is time spent
-waiting. The tally follows the running code through a context variable, so work
-handed to a thread pool is only counted when the thread was started with the
-caller's context (`contextvars.copy_context().run`).
+The tally follows the running code through a context variable, so a retry in
+work handed to a thread pool is only counted when the thread was started with
+the caller's context (`contextvars.copy_context().run`).
 
 Known-empty cases for `data_locations`, all of them deliberate:
 
@@ -441,7 +421,7 @@ one is also how it catches up with the declaration: `ensure_columns` adds any
 declared column the table lacks (nullable, in place — never a re-create) and
 returns the names it added. A database written before `committed`, `step_address`,
 `logical_run_id`, `profile`, `data_locations`, `run_date`, `orchestration_run_id` or
-the four wait fields existed therefore keeps ingesting, and its older
+the retry fields existed therefore keeps ingesting, and its older
 rows read back with those fields empty. `RunStore.catch_up()` opens an existing
 registry for this even when there is no log left to ingest, so a reader that
 goes straight to `run_records` (the `pipeline_run_metric` pipeline's

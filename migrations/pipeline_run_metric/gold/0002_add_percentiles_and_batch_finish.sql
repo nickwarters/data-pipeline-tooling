@@ -1,5 +1,5 @@
 -- Rolling percentiles per pipeline and step, the scheduled batch's finish
--- time, and the run record's new wait and orchestration fields carried into
+-- time, and the run record's new retry and orchestration fields carried into
 -- the existing tables. A per-day p95 of a step that runs once a day is its
 -- only value, so step_duration_trend_daily drops it: the percentiles live in
 -- duration_percentiles_daily now.
@@ -18,8 +18,6 @@ CREATE TABLE "duration_percentiles_daily" (
   "duration_max" REAL,
   "failure_rate" REAL,
   "retry_rate" REAL,
-  "external_wait_p50" REAL,
-  "external_wait_p95" REAL,
   "rows_per_second_p50" REAL,
   "p50_change_ratio_28d" REAL,
   "p90_change_ratio_28d" REAL,
@@ -48,8 +46,6 @@ ALTER TABLE "pipeline_run_summary" ADD COLUMN "orchestration_run_id" TEXT;
 ALTER TABLE "pipeline_run_summary" ADD COLUMN "overhead_seconds" REAL;
 ALTER TABLE "pipeline_run_summary" ADD COLUMN "retry_attempts" REAL;
 ALTER TABLE "pipeline_run_summary" ADD COLUMN "retry_wait_seconds" REAL;
-ALTER TABLE "pipeline_run_summary" ADD COLUMN "external_calls" REAL;
-ALTER TABLE "pipeline_run_summary" ADD COLUMN "external_wait_seconds" REAL;
 
 ALTER TABLE "step_row_flow" ADD COLUMN "duration_seconds" REAL;
 ALTER TABLE "step_row_flow" ADD COLUMN "rows_per_second" REAL;

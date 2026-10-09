@@ -54,8 +54,6 @@ class PipelineRunSummary:
     overhead_seconds: Annotated[float, NonNull(), Range(minimum=0)]
     retry_attempts: float
     retry_wait_seconds: float
-    external_calls: float
-    external_wait_seconds: float
 
 
 @dataclass
@@ -137,8 +135,6 @@ class DurationPercentilesDaily:
     duration_max: Annotated[float, Range(minimum=0)]
     failure_rate: Annotated[float, Range(minimum=0, maximum=1)]
     retry_rate: Annotated[float, Range(minimum=0, maximum=1)]
-    external_wait_p50: Annotated[float, Range(minimum=0)]
-    external_wait_p95: Annotated[float, Range(minimum=0)]
     rows_per_second_p50: Annotated[float, Range(minimum=0)]
     p50_change_ratio_28d: float
     p90_change_ratio_28d: float

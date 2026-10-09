@@ -54,8 +54,6 @@ def _record(
     orchestration_run_id: str | None = None,
     retry_attempts=None,
     retry_wait_seconds=None,
-    external_calls=None,
-    external_wait_seconds=None,
 ) -> dict[str, object]:
     """One registry row as ``SqliteReader`` hands it over: lists as JSON text,
     the flag as 0/1."""
@@ -79,8 +77,6 @@ def _record(
         "orchestration_run_id": orchestration_run_id,
         "retry_attempts": retry_attempts,
         "retry_wait_seconds": retry_wait_seconds,
-        "external_calls": external_calls,
-        "external_wait_seconds": external_wait_seconds,
     }
 
 
@@ -169,8 +165,6 @@ def test_run_summary_is_one_row_per_run_ranked_within_its_logical_run():
             "overhead_seconds": 0.1,  # wall clock no step accounts for
             "retry_attempts": None,
             "retry_wait_seconds": None,
-            "external_calls": None,
-            "external_wait_seconds": None,
         },
         {
             "run_id": "r2",
@@ -194,8 +188,6 @@ def test_run_summary_is_one_row_per_run_ranked_within_its_logical_run():
             "overhead_seconds": 0.1,  # wall clock no step accounts for
             "retry_attempts": None,
             "retry_wait_seconds": None,
-            "external_calls": None,
-            "external_wait_seconds": None,
         },
     ]
 
@@ -492,20 +484,13 @@ def test_run_summary_carries_the_waits_and_pass_its_summary_recorded():
             orchestration_run_id="o1",
             retry_attempts=2,
             retry_wait_seconds=40.0,
-            external_calls=3,
-            external_wait_seconds=550.5,
         ),
     ]
     [row] = _rows(metrics.run_summary(given_rows(records).read(), as_of=AS_OF))
 
     assert row["orchestration_run_id"] == "o1"
     assert row["overhead_seconds"] == 1.0
-    assert (
-        row["retry_attempts"],
-        row["retry_wait_seconds"],
-        row["external_calls"],
-        row["external_wait_seconds"],
-    ) == (2, 40.0, 3, 550.5)
+    assert (row["retry_attempts"], row["retry_wait_seconds"]) == (2, 40.0)
 
 
 def test_step_row_flow_reports_rows_per_second():
@@ -553,7 +538,6 @@ def _daily_runs(
                 logical_run_id=f"{pipeline}:{day.isoformat()}",
                 duration=duration,
                 rows_out=100,
-                external_wait_seconds=duration / 2,
                 retry_attempts=1 if offset % 2 else 0,
             )
         )
@@ -651,13 +635,12 @@ def test_a_failed_run_counts_towards_the_failure_rate_not_the_durations():
     assert row["failure_rate"] == 0.25
 
 
-def test_step_rows_carry_their_waits_retries_and_throughput():
+def test_step_rows_carry_their_retries_and_throughput():
     rows = _percentiles(_daily_runs([4.0, 8.0]))
     row = _row(rows, level="step", date="2026-01-02")
 
     assert (row["pipeline"], row["step_address"]) == ("ingest", "ingest.read")
     assert row["duration_p50"] == 6.0
-    assert row["external_wait_p50"] == 3.0
     assert row["retry_rate"] == 0.5
     assert row["rows_per_second_p50"] == (25.0 + 12.5) / 2
 

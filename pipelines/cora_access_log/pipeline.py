@@ -39,7 +39,6 @@ from tools.integrations.sharepoint_rest import (
     SharePointSource,
 )
 from tools.medallion import medallion
-from tools.observability.waits import external_call
 from tools.source_checkpoint import (
     InstantWindow,
     SourceCheckpointStore,
@@ -210,11 +209,9 @@ def run(
     checkpoints = SourceCheckpointStore(context.base_dir)
     source = SharePointSource(site, list_id)
     committed = checkpoints.watermark(source.key)
-    with external_call():
-        server_now = client.server_time()
     window = instant_window(
         committed,
-        source_now=server_now,
+        source_now=client.server_time(),
         overlap=OVERLAP,
         safety_lag=SAFETY_LAG,
     )
