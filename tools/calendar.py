@@ -80,6 +80,16 @@ class WorkingDayCalendar:
             ),
         )
 
+    @property
+    def weekend(self) -> frozenset[int]:
+        """The non-working weekday ordinals (``date.weekday()``: Monday=0)."""
+        return self._weekend
+
+    @property
+    def holidays(self) -> frozenset[date]:
+        """The individual non-working dates layered on top of the weekend."""
+        return self._holidays
+
     def is_working_day(self, day: date) -> bool:
         """``True`` unless ``day`` falls on the weekend or is a holiday."""
         return day.weekday() not in self._weekend and day not in self._holidays

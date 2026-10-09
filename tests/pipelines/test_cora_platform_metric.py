@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime as dt
 import time
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -284,11 +285,16 @@ def _current(rows=CURRENT) -> Dataset:
     return given_rows(rows).read()
 
 
+def _history(rows) -> Dataset:
+    """Observations as the history reductions take them: ordered once."""
+    return metrics.ordered_history(given_rows(rows).read())
+
+
 # --- the history metrics ----------------------------------------------------
 
 
 def test_stage_dwell_closes_an_interval_at_each_observed_status_change():
-    result = _rows(metrics.case_stage_dwell(given_rows(HISTORY).read(), as_of=AS_OF))
+    result = _rows(metrics.case_stage_dwell(_history(HISTORY), as_of=AS_OF))
 
     # To-allocate: entered at ``created`` (1 Jul), not at the poll that first
     # saw it (2 Jul), and left on 4 Jul: three days. In-progress: 4 Jul to
@@ -329,7 +335,7 @@ def test_stage_dwell_credits_a_status_only_when_a_later_poll_saw_it_change():
         _observation("1", "b", "2026-07-03T09:00:00+00:00", "Completed"),
         _observation("1", "a", "2026-07-02T09:00:00+00:00", "In-progress"),
     ]
-    [row] = _rows(metrics.case_stage_dwell(given_rows(history).read(), as_of=AS_OF))
+    [row] = _rows(metrics.case_stage_dwell(_history(history), as_of=AS_OF))
 
     assert row["status"] == "In-progress"
     assert row["interval_count"] == 1
@@ -349,7 +355,7 @@ def test_an_unassigned_case_dwells_in_to_allocate_again_as_its_own_interval():
         ),
         _observation("1", "d", "2026-07-05T09:00:00+00:00", "In-progress"),
     ]
-    result = _rows(metrics.case_stage_dwell(given_rows(history).read(), as_of=AS_OF))
+    result = _rows(metrics.case_stage_dwell(_history(history), as_of=AS_OF))
     by_status = {row["status"]: row for row in result}
 
     assert by_status["To-allocate"]["interval_count"] == 2
@@ -368,7 +374,7 @@ def test_stage_dwell_publishes_no_interval_for_a_terminal_status_left_by_a_reope
         _observation("1", "c", "2026-07-09T09:00:00+00:00", "In-progress"),
         _observation("1", "d", "2026-07-10T09:00:00+00:00", "Completed"),
     ]
-    result = _rows(metrics.case_stage_dwell(given_rows(history).read(), as_of=AS_OF))
+    result = _rows(metrics.case_stage_dwell(_history(history), as_of=AS_OF))
 
     assert [(r["status"], r["interval_count"]) for r in result] == [("In-progress", 2)]
 
@@ -384,7 +390,7 @@ def test_a_same_instant_tie_is_ordered_by_the_parsed_source_version():
             "1", "a", "2026-07-02T09:00:00+00:00", "Completed", version='"10"'
         ),
     ]
-    result = _rows(metrics.case_stage_dwell(given_rows(history).read(), as_of=AS_OF))
+    result = _rows(metrics.case_stage_dwell(_history(history), as_of=AS_OF))
 
     assert [(r["status"], r["open_interval_count"]) for r in result] == [
         ("In-progress", 0)
@@ -396,7 +402,7 @@ def test_an_unparseable_modified_drops_the_observation_from_every_history_table(
         _observation("1", "a", "2026-07-01T09:00:00+00:00", "To-allocate"),
         _observation("1", "b", "not a time", "In-progress"),
     ]
-    observations = given_rows(history).read()
+    observations = _history(history)
     backlog = metrics.case_backlog(observations, as_of="2026-07-02T18:00:00+00:00")
     [dwell] = _rows(metrics.case_stage_dwell(observations, as_of=AS_OF))
 
@@ -418,7 +424,7 @@ def test_backlog_counts_an_unassigned_case_back_in_to_allocate():
             "1", "c", "2026-07-04T09:00:00+00:00", "To-allocate", reviewer=None
         ),
     ]
-    result = metrics.case_backlog(given_rows(history).read(), as_of=as_of)
+    result = metrics.case_backlog(_history(history), as_of=as_of)
 
     assert _counts(result, "backlog_date") == {
         ("2026-07-01", "To-allocate"): 1,
@@ -429,7 +435,7 @@ def test_backlog_counts_an_unassigned_case_back_in_to_allocate():
 
 
 def test_hold_runs_from_the_source_stamp_or_the_observation_to_release_or_as_of():
-    result = _rows(metrics.case_hold(given_rows(HISTORY).read(), as_of=AS_OF))
+    result = _rows(metrics.case_hold(_history(HISTORY), as_of=AS_OF))
 
     assert result == [
         {
@@ -473,14 +479,14 @@ def test_a_hold_still_flagged_on_a_completed_case_closes_at_its_completion():
         _observation("1", "b", "2026-07-04T09:00:00+00:00", "Completed", on_hold=1),
         _observation("1", "c", "2026-07-08T09:00:00+00:00", "Completed", on_hold=1),
     ]
-    [row] = _rows(metrics.case_hold(given_rows(history).read(), as_of=AS_OF))
+    [row] = _rows(metrics.case_hold(_history(history), as_of=AS_OF))
 
     assert (row["open_hold_count"], row["held_days_total"]) == (0, 3.0)
 
 
 def test_a_history_with_no_holds_lands_the_declared_shape_and_no_rows():
     history = [_observation("1", "o1", "2026-07-02T09:00:00+00:00", "To-allocate")]
-    result = metrics.case_hold(given_rows(history).read(), as_of=AS_OF)
+    result = metrics.case_hold(_history(history), as_of=AS_OF)
 
     assert len(result) == 0
     assert list(result.columns) == [
@@ -512,6 +518,59 @@ def test_working_days_late_counts_working_days_after_the_due_date(
     due, completed, expected
 ):
     assert metrics.working_days_late(WorkingDayCalendar(), due, completed) == expected
+
+
+@pytest.mark.parametrize(
+    "calendar",
+    [
+        WorkingDayCalendar(),
+        WorkingDayCalendar(holidays=[dt.date(2026, 7, 9), dt.date(2026, 7, 13)]),
+        WorkingDayCalendar(weekend=[4]),
+        WorkingDayCalendar(weekend=range(7)),
+    ],
+)
+def test_the_column_form_of_working_days_late_agrees_with_the_day_walk(calendar):
+    days = [dt.date(2026, 7, 1) + dt.timedelta(days=n) for n in range(16)]
+    pairs = [(due, done) for due in days for done in days]
+    late = metrics._working_days_late(
+        calendar,
+        pd.Series([pd.Timestamp(due) for due, _ in pairs] + [pd.NaT]),
+        pd.Series([pd.Timestamp(done) for _, done in pairs] + [pd.Timestamp(days[0])]),
+    )
+
+    assert late.iloc[:-1].tolist() == [
+        metrics.working_days_late(calendar, due, done) for due, done in pairs
+    ]
+    assert pd.isna(late.iloc[-1])
+
+
+def test_grouped_statistics_match_each_groups_own_series_bit_for_bit():
+    # The published rounding depends on the last bit of a sum or a quantile,
+    # so the vectorised summaries must be the per-group Series figures exactly.
+    rng = np.random.default_rng(1)
+    frame = pd.DataFrame(
+        {
+            "a": rng.choice(["x", "y", None], 3000),
+            "b": rng.integers(0, 40, 3000),
+            "v": np.where(rng.random(3000) < 0.1, np.nan, rng.exponential(3, 3000)),
+        }
+    )
+    stats = metrics._summaries(frame, ["a", "b"], "v")
+
+    for (a, b), group in frame.groupby(["a", "b"], sort=True):
+        values = group["v"].dropna()
+        row = stats.loc[(a, b)]
+        assert (row["rows"], row["count"]) == (len(group), len(values))
+        assert row["total"] == values.sum()
+        for statistic, expected in (
+            ("mean", values.mean()),
+            ("p50", values.quantile(0.5)),
+            ("p90", values.quantile(0.9)),
+            ("max", values.max()),
+        ):
+            assert row[statistic] == expected or (
+                pd.isna(expected) and pd.isna(row[statistic])
+            )
 
 
 def test_sla_attainment_judges_each_sla_against_its_own_due_date():
@@ -981,7 +1040,7 @@ def test_backlog_counts_the_status_each_case_closed_each_day_in():
         ),
         _observation("3", "c2", "2026-07-03T16:00:00+00:00", "In-progress"),
     ]
-    result = metrics.case_backlog(given_rows(history).read(), as_of=as_of)
+    result = metrics.case_backlog(_history(history), as_of=as_of)
 
     assert _counts(result, "backlog_date") == {
         ("2026-07-01", "To-allocate"): 1,
@@ -1017,9 +1076,7 @@ def test_backlog_dates_a_late_first_sighting_from_the_sources_own_stamp():
             reportable_at="2026-07-02T09:00:00+00:00",
         ),
     ]
-    result = metrics.case_backlog(
-        given_rows(history).read(), as_of="2026-07-04T06:00:00+00:00"
-    )
+    result = metrics.case_backlog(_history(history), as_of="2026-07-04T06:00:00+00:00")
 
     assert _counts(result, "backlog_date") == {
         ("2026-07-01", metrics.UNOBSERVED): 2,
@@ -1034,7 +1091,7 @@ def test_a_history_with_nothing_open_lands_the_backlog_shape_and_no_rows():
     history = [
         _observation("1", "a1", "2026-07-02T09:00:00+00:00", "Completed", created=None)
     ]
-    result = metrics.case_backlog(given_rows(history).read(), as_of=AS_OF)
+    result = metrics.case_backlog(_history(history), as_of=AS_OF)
 
     assert len(result) == 0
     assert list(result.columns) == [
@@ -1404,7 +1461,9 @@ def test_reviewer_workload_sets_work_in_hand_against_four_weeks_of_output():
 
 
 def _no_history() -> Dataset:
-    return Dataset.from_pandas(pd.DataFrame(columns=metrics.HISTORY_COLUMNS))
+    return metrics.ordered_history(
+        Dataset.from_pandas(pd.DataFrame(columns=metrics.HISTORY_COLUMNS))
+    )
 
 
 def test_reviewer_workload_ages_a_reopened_case_from_its_return_to_in_progress():
@@ -1430,9 +1489,7 @@ def test_reviewer_workload_ages_a_reopened_case_from_its_return_to_in_progress()
 
     def oldest(rows):
         [row] = _rows(
-            metrics.reviewer_workload(
-                _current(rows), given_rows(history).read(), as_of=as_of
-            )
+            metrics.reviewer_workload(_current(rows), _history(history), as_of=as_of)
         )
         return row["oldest_in_progress_days"]
 

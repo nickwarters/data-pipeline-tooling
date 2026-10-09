@@ -62,6 +62,16 @@ def test_an_empty_weekend_list_means_every_day_works(tmp_path):
     assert calendar.is_working_day(dt.date(2026, 5, 24)) is True  # Sunday
 
 
+def test_the_weekend_and_holidays_are_readable_for_vectorised_arithmetic(tmp_path):
+    path = _calendar_file(tmp_path, "weekend: [friday]\nholidays: [2026-05-25]\n")
+
+    calendar = WorkingDayCalendar.from_yaml(path)
+
+    assert calendar.weekend == frozenset({4})
+    assert calendar.holidays == frozenset({dt.date(2026, 5, 25)})
+    assert WorkingDayCalendar().weekend == frozenset({5, 6})
+
+
 def test_a_seeded_holiday_shifts_the_availability_window(tmp_path):
     # The Availability/CasePool side of the same seam: "the last N working days"
     # must step over a seeded holiday, not just the weekend.

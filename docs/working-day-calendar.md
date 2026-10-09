@@ -110,6 +110,13 @@ cal.last_n_working_days(2, date(2026, 1, 3))   # a Saturday
 For an availability criterion, `result[-1]` is the earliest eligible day (the
 window's far edge) and `result[0]` the most recent.
 
+### `weekend` and `holidays`
+Read-only: the non-working weekday ordinals (`date.weekday()`, Monday=0) and
+the holiday dates, as `frozenset`s. They exist so a caller counting working days
+over a whole column can hand the same rule to `numpy.busday_count` (a
+`weekmask` of the weekdays not in `weekend`, plus `holidays`) rather than walking
+day by day; `cora_platform_metric`'s SLA lateness does exactly that.
+
 ## Where the calendar is used — orchestration
 
 A scheduled pipeline reaches the calendar through its `Schedule`. The worked

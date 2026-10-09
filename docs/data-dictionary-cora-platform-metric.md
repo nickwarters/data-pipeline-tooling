@@ -636,7 +636,9 @@ gated by its `SchemaValidator` (columns, types, nullability, `OneOf` on
 - Nothing is quarantined: these are reductions of already-published gold and
   silver, whose row contracts the Sync subject enforces.
 - Each source is read once for the run. `case_current` is gated as it is read,
-  since the snapshot instant is taken off it there; every other source is gated
+  since the snapshot instant is taken off it there, and the observation history
+  is gated on the columns that order it and put in order once (`history:order`)
+  for every reduction that walks it; every other source is gated
   by the step that reduces it, with a `ColumnValidator` on the columns that
   reduction reads. So a Sync shape change fails that step with the column named
   rather than publishing a wrong number; the tables before it in publication
