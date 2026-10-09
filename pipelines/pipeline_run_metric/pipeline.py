@@ -63,6 +63,9 @@ GOLD_TABLES = (
 def run_records_reader(base_dir) -> SqliteReader | DatasetReader:
     """A Reader over the caught-up run registry under ``base_dir``.
 
+    Catching up also migrates an existing registry, logs or none, so the
+    ``SqliteReader`` finds every declared record column on an older file.
+
     A base directory nothing has run in yet has no registry file at all; that
     reads as no records, not as a failure, so the first run lands empty
     tables rather than refusing to start until something else has run.

@@ -95,6 +95,17 @@ The `run` summary carries the totals for the run. This counts every
 can pin the time with the policy's injectable `clock`. See
 [run-log-format.md](run-log-format.md#waiting-versus-working).
 
+`retry_wait_seconds` and `external_wait_seconds` are **not additive**. When the
+retried operation is itself an external call (a `RetryingReader` over a
+SharePoint reader), a failed attempt's time is counted in both: once as a retry
+and once as a call that failed. Subtract `external_wait_seconds` alone from a
+step's `duration` to estimate its own work.
+
+The record field `retry_attempts` is a count. It is not the
+`RetryingReader` / `RetryingWriter` attribute of the same name, which is the
+list of human retry notes the step drains into `warn_hits` (a duck-typed
+convention the framework reads, so it keeps its name).
+
 ## Where to use it — and where not to
 
 | Use retry | Don't use retry |

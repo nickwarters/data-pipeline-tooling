@@ -39,8 +39,8 @@ empty set are NULL, never zero.
 
 **4. A record is stamped when its step ends.** So a step started at its
 `timestamp` less its `duration`, and a run started at the earliest of those.
-`started_at` and the fallback `run_date` both use that start, not the first
-record's stamp, which would be late by the whole first step.
+`started_at` and the execution date (below) both use that start, not the
+first record's stamp, which would be late by the whole first step.
 
 **5. A run is filed under the pipeline its own summary names.** A handler that
 runs nested `Pipeline` stages writes each stage's steps and a summary under the
@@ -72,10 +72,25 @@ none, and the run's own clock stands in.
 ## Part B — The tables
 
 Every table also carries `as_of_utc` and the reserved `pipeline_run_id`
-provenance column (see *1.* above). Neither is repeated below. `run_date` is
-everywhere the run's **business date**: the `run_date` its run summary recorded
-(a re-drive of an old date keeps that date), else the **local** calendar date
-the run started.
+provenance column (see *1.* above). Neither is repeated below.
+
+Every table has a `run_date` column, and it is **not the same date in all
+three**. A run has two dates, which differ only for a re-drive of an earlier
+date:
+
+- its **business date** — the `run_date` its run summary recorded, else the
+  local calendar date the run started. `pipeline_run_summary` and
+  `step_row_flow` carry this: they file a run beside its `logical_run_id`.
+- its **execution date** — the **local** calendar date the run started (*4.*
+  above), whatever date it was run for. `step_duration_trend_daily` carries
+  this: "is this step slower than its recent past?" is a question about when
+  it ran, on that day's machine and data.
+
+So when an operator re-drives `ingest` on 27 Aug for 5 Jan
+(`cli run pipelines/ingest --run-date 2026-01-05`), the run's summary and row
+flow rows land under `run_date = 2026-01-05`, beside the attempt it replaces;
+its step durations land in the trend's **27 Aug** row, and the 5 Jan row and
+the baselines of the January days after it are left as they were.
 
 ### `pipeline_run_summary` — one row per pipeline run
 
@@ -87,8 +102,8 @@ table every other operational question joins to.
 | `run_id` | `str` | No | The registry's `pipeline_run_id`. |
 | `pipeline` | `str` | No | The run's pipeline label. |
 | `logical_run_id` | `str` | Yes | The business run this attempt belongs to; what a re-drive shares with the run it replaces. |
-| `run_date` | `str` | No | `YYYY-MM-DD`: the recorded run date, else the local date the run started. |
-| `started_at` / `finished_at` | `str` | No | Earliest step start (`timestamp − duration`) and last record instant, UTC ISO. |
+| `run_date` | `str` | No | `YYYY-MM-DD`, the **business date**: the recorded run date, else the local date the run started. |
+| `started_at` / `finished_at` | `str` | No | Earliest record start (`timestamp − duration`, the run summary included — for a runner-recorded run the summary's clock starts first, so it is the run's own start) and last record instant, UTC ISO. |
 | `wall_clock_seconds` | `float` | No | The summary record's `duration`; where a run died before writing one, `finished_at − started_at`. |
 | `step_duration_seconds` | `float` | No | Sum of the step records' durations. |
 | `step_count` | `int` | No | Step records (the summary is not a step). |
@@ -106,17 +121,18 @@ table every other operational question joins to.
 
 ### `step_duration_trend_daily` — step durations per day against their recent past
 
-Grain: `pipeline` × `step_address` × `run_date`, over **successful** step
-records carrying a duration. A failed step's duration is how long it took to
+Grain: `pipeline` × `step_address` × `run_date`, where `run_date` is the
+**execution date** (Part B, above), over **successful** step records carrying
+a duration. A failed step's duration is how long it took to
 fail, so it would drag the percentiles down (a fast failure) or up (a timeout).
 
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
 | `pipeline` / `step_address` | `str` | No | The step's stable address; derived from `pipeline.step` for a record predating the column, as the registry's own backfill does. |
-| `run_date` | `str` | No | The run date of the run the execution belonged to (see Part B). |
+| `run_date` | `str` | No | `YYYY-MM-DD`, the **execution date**: the local date the run the execution belonged to started — not the business date the other two tables carry under the same name (see Part B). The column keeps the name its baseline migration gave it; renaming it would be a migration of its own. |
 | `execution_count` | `int` | No | Successful executions that day. |
 | `duration_p50` / `duration_max` | `float` | No | Over that day's executions, seconds. There is no daily p95: a step that runs once a day has one value per day, so it was the max. Percentiles across days are in `duration_percentiles_daily`. |
-| `trailing_p50_median` | `float` | Yes | Median of the step's daily p50 over its previous seven run dates *with data*; NULL on the step's first day. |
+| `trailing_p50_median` | `float` | Yes | Median of the step's daily p50 over its previous seven execution dates *with data*; NULL on the step's first day. |
 | `delta_seconds` | `float` | Yes | `duration_p50 − trailing_p50_median`. |
 | `delta_ratio` | `float` | Yes | `delta_seconds / trailing_p50_median`; NULL where the baseline is NULL or zero. |
 
@@ -128,7 +144,8 @@ one row count. A step executed more than once in a run is summed.
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
 | `run_id` | `str` | No | The registry's `pipeline_run_id`. |
-| `pipeline` / `step_address` / `run_date` | `str` | No | As above. |
+| `pipeline` / `step_address` | `str` | No | As above. |
+| `run_date` | `str` | No | `YYYY-MM-DD`, the **business date**, as in `pipeline_run_summary`. |
 | `execution_count` | `int` | No | Executions summed. |
 | `rows_in` / `rows_out` / `rows_quarantined` / `rows_excluded` | `float` | Yes | Summed; NULL where no execution reported that count (a read has no `rows_in`). |
 | `out_ratio` | `float` | Yes | `rows_out / rows_in`; NULL where `rows_in` is NULL or zero. |
@@ -188,9 +205,11 @@ None. Each group-by produces its declared grain. Every table is gated by its
 
 - Nothing is quarantined: the source is the registry, whose shape is derived
   from the one field declaration the run log writes from.
-- The registry is read once for the whole run and gated by a `ColumnValidator`
-  on the record columns the reductions use, so a registry the reductions cannot
-  read fails the run with the column named, before any table is written.
+- The registry is caught up — and so migrated to the declared record shape,
+  even where its logs have been rotated away — then read once for the whole run
+  and gated by a `ColumnValidator` on the record columns the reductions use, so
+  a registry the reductions cannot read fails the run with the column named,
+  before any table is written.
 - Every table is reduced and passes its `SchemaValidator` before any is
   written, so a reduction or check that fails leaves the previous tables in
   place together. The `Refresh()` writes are still separate transactions: a

@@ -775,7 +775,8 @@ class OrchestrationDecision:
     pipeline_run_id: str | None = None
     # UTC instants: when this pass began, and when this item was handed to the
     # invoker (None for an item that never ran). The gap between them is how
-    # long the item queued behind the items before it.
+    # long the item queued behind the items before it. Under --loop each poll is
+    # a pass with its own pass_started_at, all sharing one orchestration_run_id.
     pass_started_at: str | None = None
     started_at: str | None = None
 

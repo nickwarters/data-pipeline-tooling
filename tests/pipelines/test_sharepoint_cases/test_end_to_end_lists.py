@@ -8,11 +8,14 @@ safety lag is ordinary operation rather than a failure.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
-from framework.run import RunContext
+from framework.run import RunContext, run_pipeline
 from pipelines.sharepoint_cases.gold import GOLD_TABLES
 from pipelines.sharepoint_cases.pipeline import FEED_NAME, SAFETY_LAG
+from pipelines.sharepoint_cases.pipeline import run as _run
 from tests._sharepoint_cases_fixtures import (
     COMPLAINTS,
     OTHER,
@@ -29,6 +32,7 @@ from tests._sharepoint_cases_fixtures import (
 from tests.framework_testing import RecordingRunLog, read_rows
 from tools.integrations.sharepoint_rest import SharePointFeedError
 from tools.medallion import medallion
+from tools.observability.run_log import RunLog
 from tools.source_checkpoint import SourceCheckpointStore
 from tools.store import StoreRegistry
 
@@ -182,3 +186,29 @@ def test_a_retry_after_a_partial_failure_converges_and_advances_both_lists(base_
         ), table
     assert checkpoints.watermark(SOURCE.key) == SERVER_NOW - SAFETY_LAG
     assert checkpoints.watermark(OTHER_SOURCE.key) == SERVER_NOW - SAFETY_LAG
+
+
+def test_the_server_time_call_is_counted_as_an_external_call(base_dir, tmp_path):
+    # With every list inside its safety lag, the one call the poll makes is the
+    # server-time read that bounds the windows. It is a tenant round-trip like
+    # any fetch, so the run summary counts it rather than filing its time as
+    # the run's own work.
+    checkpoints = SourceCheckpointStore(base_dir)
+    for source in (SOURCE, OTHER_SOURCE):
+        checkpoints.commit(
+            source.key, SERVER_NOW, batch_id="earlier", pipeline_run_id="earlier-run"
+        )
+    client = two_list_client()
+    log_path = tmp_path / "run.log"
+
+    polls = run_pipeline(
+        lambda context: _run(context, client=client, case_lists=TWO_LISTS),
+        FEED_NAME,
+        base_dir,
+        run_log=RunLog(log_path),
+    )
+
+    assert polls == [] and client.calls == []
+    records = [json.loads(line) for line in log_path.read_text().splitlines()]
+    [summary] = [r for r in records if r["step"] == "run"]
+    assert summary["external_calls"] == 1
