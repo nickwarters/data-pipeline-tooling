@@ -95,8 +95,8 @@ stamps. Neither is repeated below.
 Reduced from the observation history. Grain: `brand` × `case_type` × `status`.
 
 Each Case's observations are walked in the source's `Modified` order — two
-observations sharing a `Modified` are ordered by their parsed `source_version`,
-as Sync's own current-state rule orders them; every change of `status` closes
+observations sharing a `Modified` are ordered by `source_version` read as a
+number (it is a whole number in quotes, so `"10"` comes after `"9"`); every change of `status` closes
 an interval at that observation's `Modified` and opens the next. Where a Case's *first* observation already carries
 `To-allocate` or `In-progress`, the interval starts at the source's own
 `created` / `assigned_at` stamp rather than at the poll that first saw it — the
