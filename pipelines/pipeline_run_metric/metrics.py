@@ -1,18 +1,7 @@
 """The reductions behind the ``pipeline_run_metric`` gold tables.
 
-Each function takes the run registry's ``run_records`` as read -- one row per
-step execution, the shape ``tools.observability.record_schema`` declares -- and
-returns one table. Nothing here reads or writes; the pipeline module reads the
-registry once and hands it to each of these, so each can be exercised on a few
-records.
-
-The registry stores JSON-encoded lists (``errors``, ``warn_hits``) and a 0/1
-``committed`` flag as SQLite text and integers; these reductions read those
-stored forms directly rather than going through ``RunRegistry``'s decode, so
-a record lands here exactly as the ``SqliteReader`` handed it over.
-
-``as_of_utc`` is the latest record timestamp in the registry: a re-run over
-the same registry contents produces the same tables.
+They read the registry's stored forms directly -- ``warn_hits`` as JSON text,
+``committed`` as 0/1 -- exactly as the ``SqliteReader`` hands them over.
 """
 
 from __future__ import annotations
@@ -44,6 +33,9 @@ RUN_ID_COLUMN = "run_id"
 # The run-level summary record ``run_pipeline`` writes once per run, beside the
 # step records. Its duration is the run's wall clock; it is not itself a step.
 RUN_SUMMARY_STEP = "run"
+
+# What a run whose records name no pipeline is filed under.
+UNKNOWN_PIPELINE = "(unknown)"
 
 # A step record's outcomes, as the run log writes them.
 ERROR_STATUS = "error"
@@ -115,7 +107,8 @@ def _prepared(records: Dataset) -> pd.DataFrame:
     """
     frame = records.to_pandas().copy()
     frame["_at"] = pd.to_datetime(frame["timestamp"], utc=True, format="ISO8601")
-    frame = frame.sort_values("_at", kind="stable")
+    # A record with no instant cannot be placed in time; it is left out.
+    frame = frame.loc[frame["_at"].notna()].sort_values("_at", kind="stable")
     took = pd.to_timedelta(pd.to_numeric(frame["duration"]).clip(lower=0), unit="s")
     frame["_start"] = (frame["_at"] - took.fillna(pd.Timedelta(0))).dt.round("us")
     frame["_is_summary"] = frame["step"].eq(RUN_SUMMARY_STEP)
@@ -129,7 +122,8 @@ def _prepared(records: Dataset) -> pd.DataFrame:
     first = frame.drop_duplicates("pipeline_run_id").set_index("pipeline_run_id")
     named = pipeline.where(frame["_is_summary"])
     named = named.groupby(frame["pipeline_run_id"]).transform("last")
-    frame["pipeline"] = named.fillna(frame["pipeline_run_id"].map(first["pipeline"]))
+    named = named.fillna(frame["pipeline_run_id"].map(first["pipeline"]))
+    frame["pipeline"] = named.fillna(UNKNOWN_PIPELINE)
 
     by_run = frame.groupby("pipeline_run_id")
     run_start = by_run["_start"].transform("min")

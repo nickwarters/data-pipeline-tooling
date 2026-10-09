@@ -30,11 +30,7 @@ PERCENTILE_LEVELS = ("pipeline", "step")
 class PipelineRunSummary:
     """``pipeline_run_summary`` -- one row per pipeline run.
 
-    Grain: ``run_id`` -- the registry's ``pipeline_run_id``, renamed because
-    every table-backed Writer stamps its *own* run's id into a reserved
-    ``pipeline_run_id`` column, and a grain column of that name would be
-    overwritten. The registry has only step rows; this is the "one row per
-    run" every other operational question joins to.
+    Grain: ``run_id`` (the registry's ``pipeline_run_id``; see ``metrics``).
     """
 
     run_id: Annotated[str, NonNull()]

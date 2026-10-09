@@ -440,6 +440,19 @@ def test_step_row_flow_reports_rows_per_second():
     assert (row["duration_seconds"], row["rows_per_second"]) == (2.0, 250.0)
 
 
+def test_a_record_with_no_timestamp_or_pipeline_does_not_sink_the_tables():
+    records = [
+        _record("r1", "read", at="2026-08-27T07:00:00+00:00", pipeline=None),
+        _record("r1", "write", at=None, duration=1.0),
+        _record("r1", "run", at="2026-08-27T07:00:01+00:00", pipeline=None),
+    ]
+    data = given_rows(records).read()
+
+    [row] = _rows(metrics.run_summary(data, as_of=AS_OF))
+    assert (row["pipeline"], row["step_count"]) == ("(unknown)", 1)
+    assert _rows(metrics.duration_percentiles(data, as_of=AS_OF))
+
+
 # --- rolling percentiles ----------------------------------------------------
 
 

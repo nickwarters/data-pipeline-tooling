@@ -1,18 +1,5 @@
-"""Build the ``pipeline_run_metric`` gold tables from the run registry.
-
-Reads the base directory's run registry -- after catching it up with every
-run log, so a run recorded under any subject is visible -- and its
-orchestration decision store, and refreshes five Aggregate tables in this
-subject's own gold: one row per run, step durations per day against their
-recent past, the row funnel per step per run, rolling percentiles per pipeline
-and step, and when each day's scheduled batch finished.
-
-``run`` reads each store once, builds and checks every table, and only then
-writes them; the reductions themselves are in ``metrics``.
-
-Where the stores live is ``RunStore``'s to say (``tools.observability``), the
-same way ``tools.store`` says where data lives; this pipeline names neither a
-path nor a table of its own for them.
+"""Build the ``pipeline_run_metric`` gold tables from the run registry and the
+orchestration decisions. See docs/data-dictionary-pipeline-run-metric.md.
 
 This pipeline's own run is being recorded while it reads, and its records are
 ingested after it returns -- so a run sees every run before it, including its

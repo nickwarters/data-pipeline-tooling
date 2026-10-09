@@ -1,37 +1,15 @@
-"""Per-column data profiling: the *statistical* sibling of the run log.
+"""Per-column data profiling: the statistical sibling of the run log.
 
-Where the validators only *gate* a feed (raise or quarantine) and
-``VolumeAnomalyValidator`` watches a single run-over-run number (the row count),
-a **profile** captures a feed's *shape* — null rate, distinct count, min/max, and
-a bounded top-N value distribution per column — and records it on the run log so
-it can be **trended across runs**. That turns "the data looks weird this run"
-(a column that quietly slides 5% → 60% null; a categorical that gains junk
-values) from an undetectable problem into a trendable one.
+A profile records a feed's shape -- null rate, distinct count, min/max and a
+bounded top-N distribution per column -- on the run log, so a column that
+quietly slides from 5% to 60% null shows up as a trend rather than not at all.
 
-The pieces here sit beside the operational metadata on the same
-``tools.observability`` surface:
-
-- :func:`profile_dataset` computes a :class:`DatasetProfile` from a ``Dataset``.
-  Cost is bounded by ``top_n`` (the distribution is capped) and by an optional
-  ``columns`` allow-list, and the whole task is opt-in — a pipeline only profiles
-  when a profile node is wired in, so profiling never dominates a large-feed run.
-- :class:`DatasetProfile` / :class:`ColumnProfile` serialise to a plain JSON
-  record (:meth:`DatasetProfile.to_record`) that the ``RunLog`` writes and the
-  ``RunRegistry`` stores in a queryable column, and round-trip back
-  (:meth:`DatasetProfile.from_record`) for comparison.
-- :class:`ProfileDriftCheck` is the baseline comparison — the statistical analogue
-  of ``VolumeAnomalyValidator``. Given a :class:`ProfileBaseline` (the
-  ``RunRegistry`` in production) it derives a per-column null-rate baseline from
-  recent run history and reports the columns whose null rate has deviated beyond a
-  configured tolerance. The wiring (``Pipeline.profile``) decides whether a
-  deviation *warns* (logged, run continues) or *fails* (raises
-  :class:`ProfileError`, an :class:`~framework.core.errors.ErrorCategory.DATA`
-  abort), so the check itself only knows how to compare, not what to do about it —
-  exactly like a Validator.
-
-This module computes over the pandas frame behind the ``Dataset`` seam (a
-transform-like computation); the ``RunRegistry`` that stores the result stays
-stdlib-only and never touches pandas — it just persists the JSON.
+:func:`profile_dataset` computes a :class:`DatasetProfile`, which round-trips
+through the JSON record the registry stores. :class:`ProfileDriftCheck`
+compares a profile with recent history (a :class:`ProfileBaseline`, the
+``RunRegistry`` in production) and reports drifted columns; whether that warns
+or fails (:class:`ProfileError`) is the wiring's call, as with a Validator.
+Profiling is opt-in and bounded by ``top_n`` and an optional column list.
 """
 
 from __future__ import annotations
@@ -244,9 +222,7 @@ class ProfileDriftCheck:
     **null rate** against the median null rate of the same column over the feed's
     recent profiled runs, and reports every column whose rate moved by more than
     ``null_rate_tolerance`` (an absolute change in the 0–1 rate, so ``0.2`` is a
-    twenty-point swing). That catches silent drift a row-count check
-    misses — a column sliding 5% → 60% null while every row stays individually
-    valid.
+    twenty-point swing).
 
     The baseline is sourced from run history (:class:`ProfileBaseline`,
     ``RunRegistry`` in production) keyed by the profile node's stable

@@ -1,24 +1,14 @@
 """The run-record schema, declared once as data.
 
-A run record has three surfaces: the JSONL line a ``RunLog`` appends, the
-``run_records`` row the ``RunRegistry`` stores, and the human-readable console
-line the ``RunLog`` echoes. Stating the field set separately on
-each surface is how a new field silently half-lands — added to the log and the
-``CREATE TABLE`` but missed in the migration, so fresh deployments pass every
-test while existing ones break.
+Every surface of a run record -- the JSONL line, the registry's DDL, its
+additive migration, the ``INSERT``, the row decode and the console line -- is
+derived from :data:`RUN_RECORD_FIELDS`, so adding a field is one entry there.
 
-So the field set is declared here, once and in order, and every surface is
-derived from it: the DDL, the additive column migration, the ``INSERT``, the
-row decode, and the console line. Adding a field is one entry in
-:data:`RUN_RECORD_FIELDS`.
+The declaration order is the key order of a JSONL line and the column order
+of the live table: append, never reorder.
 
-The declaration order is load-bearing. It is the order of the keys in a JSONL
-line and of the columns in the table, and it must keep reproducing what already
-exists on disk — reordering it rewrites a live format.
-
-:class:`Field` and :func:`ensure_columns` are deliberately generic: the
-orchestration decision store keeps its own, separate declaration of a different
-contract and reuses the same machinery.
+:class:`Field` and :func:`ensure_columns` are generic; the orchestration
+decision store reuses them for its own, separate declaration.
 """
 
 from __future__ import annotations

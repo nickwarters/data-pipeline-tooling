@@ -1,34 +1,16 @@
 """The run registry: a query store for structured ``RunLog`` records.
 
-A ``RunLog`` writes one JSON object per step plus a run summary to a ``.log``
-file, all sharing a ``pipeline_run_id`` (the concrete pipeline attempt). This
-module loads those records into its own queryable SQLite store so operators can
-answer
-"did last night's Ingest for Case Type B succeed, how many rows, did anything
-warn?" without grepping free text.
-
-The stored shape is not restated here: the table, the additive column migration,
-the ``INSERT`` and the row decode are all derived from the single field
-declaration in :mod:`tools.observability.record_schema`, so what is written and
-what is read can never drift from what the log emits.
+It loads the JSONL records a ``RunLog`` writes into SQLite, so an operator can
+ask "did last night's Ingest succeed, how many rows, did anything warn?"
+without grepping text. Its table is derived from
+:mod:`tools.observability.record_schema`.
 
 Opening the file and migrating it are separate jobs. Migration is write work,
-and a writer's lock is exclusive because WAL is unavailable on the share.
-Migration is therefore attempted once per instance and writes only when the file
-is actually behind, leaving later read-only connections free of migration work.
+and a writer's lock is exclusive because WAL is unavailable on the share, so it
+is attempted once per instance and writes only when the file is behind.
 
-It is a *query* store, not a ``Dataset`` carrier, so it stays stdlib-only
-(``json`` + ``sqlite3``) and never touches pandas. It opens through the shared
-``connect`` factory in ``framework._internal.connection`` so SQLite settings stay
-centralized.
-
-Ingest is incremental: each ``.log`` file's last consumed byte position is
-persisted in the registry DB (``ingest_progress`` table).  On the next call,
-only the new tail bytes are read so cost does not grow with total history — an
-important property when the file lives on a network share.  If the
-file is shorter than the recorded offset (truncation / rotation), the offset is
-reset to 0 and the whole file is re-read from the top; idempotency via
-``INSERT OR IGNORE`` guarantees no double-counting.
+It is a query store, not a ``Dataset`` carrier: stdlib only (``json`` +
+``sqlite3``), opened through the shared ``connect`` factory.
 """
 
 from __future__ import annotations
@@ -36,6 +18,7 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -167,43 +150,14 @@ class RunRegistry:
     def ingest(self, log_path: str | os.PathLike[str]) -> int:
         """Load a RunLog JSONL file into the store; return the count of new records.
 
-        Incremental (high-water-mark) ingest
-        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        The byte offset of the last fully consumed line is persisted in the
-        ``ingest_progress`` table, keyed by the normalised absolute path of the
-        log file.  On each call only the *new tail* is read, so cost is
-        proportional to new records rather than total history.
-
-        Truncation / rotation
-            If the file is shorter than the stored offset, the file has been
-            rotated or replaced.  The offset is reset to 0 and the whole file
-            is re-read from the top.  ``INSERT OR IGNORE`` on the primary key
-            ``(pipeline_run_id, step, step_ordinal)`` guarantees idempotency — no
-            row is double-counted even if a later ingest revisits earlier content.
-
-        Partial-line safety
-            The tail is read in binary mode so byte positions are not distorted
-            by newline translation on Windows (CRLF/LF).  Only lines terminated
-            by ``\\n`` are parsed; a trailing fragment without a final ``\\n``
-            means the writer is still mid-append.  That fragment is left for the
-            next call: the stored offset advances only through the last complete
-            line (the last ``\\n`` in the tail).  Blank lines are skipped but
-            their bytes do count toward the consumed offset.
-
-        Ordinal seeding across the boundary
-            ``step_ordinal`` is the zero-based position of a record among all
-            records sharing the same ``(pipeline_run_id, step)`` in the file.  When
-            ingesting only the tail, a naïve empty ``seen`` dict would restart
-            ordinal numbering from 0, colliding with rows already in the DB.
-            To prevent silent drops via ``INSERT OR IGNORE``, the distinct
-            ``pipeline_run_id`` values appearing in the tail are looked up in
-            ``run_records`` first, and the ``seen`` dict is pre-seeded with
-            ``MAX(step_ordinal) + 1`` per ``(pipeline_run_id, step)`` so tail
-            records continue from the correct next ordinal.
-
-        The new offset and the inserted records are committed in the same
-        transaction so a crash leaves the DB in a consistent, re-ingestion-safe
-        state.
+        Resumes from the byte offset stored for the file in ``ingest_progress``,
+        and starts again from 0 if the file has shrunk (rotated or replaced).
+        Only ``\n``-terminated lines are consumed, read in binary so CRLF does
+        not shift offsets; a trailing partial line waits for the next call.
+        ``step_ordinal`` continues from what is already stored for a run, so a
+        tail cannot collide with earlier rows, and ``INSERT OR IGNORE`` on the
+        primary key makes re-reading harmless. Records and offset commit
+        together.
         """
         path = Path(log_path)
         norm_path = os.fspath(path.resolve())
@@ -454,10 +408,10 @@ class RunRegistry:
             clauses.append("step != 'run'")
         if on is not None:
             clauses.append("timestamp >= ? AND timestamp < ?")
-            params.extend((_start_of_day(on), _start_of_next_day(on)))
+            params.extend((start_of_local_day(on), _start_of_next_day(on)))
         if on_or_after is not None:
             clauses.append("timestamp >= ?")
-            params.append(_start_of_day(on_or_after))
+            params.append(start_of_local_day(on_or_after))
         rows = self._select(
             "WHERE "
             + " AND ".join(clauses)
@@ -564,6 +518,41 @@ class RunRegistry:
         finally:
             con.close()
 
+    def prune(self, before: date, *, apply: bool = False) -> PruneResult:
+        """Delete the records of runs that ended before ``before``.
+
+        ``before`` is a local calendar date; a run is old when its last record
+        was written before that day began. Each pipeline's latest run and each
+        address's latest success are kept however old they are. Without
+        ``apply`` nothing is deleted and the result says what would be.
+
+        The run logs are not touched, so a log that is later truncated or
+        replaced is re-read whole and brings its pruned records back.
+        """
+        con = self._connect()
+        try:
+            cutoff = (start_of_local_day(before),)
+            # Each side is its own subquery: compound SELECTs associate left,
+            # so a bare "old EXCEPT a UNION b" would add b back in.
+            old = f"SELECT pipeline_run_id FROM ({_ENDED_BEFORE})"
+            protected = f"SELECT pipeline_run_id FROM ({_PROTECTED_RUNS})"
+            doomed = f"{old} EXCEPT {protected}"
+            runs = con.execute(f"SELECT COUNT(*) FROM ({doomed})", cutoff).fetchone()
+            kept = con.execute(
+                f"SELECT COUNT(*) FROM ({old} INTERSECT {protected})", cutoff
+            ).fetchone()
+            where = f"WHERE pipeline_run_id IN ({doomed})"
+            if apply:
+                records = con.execute(f"DELETE FROM {_TABLE} {where}", cutoff).rowcount
+                con.commit()
+            else:
+                records = con.execute(
+                    f"SELECT COUNT(*) FROM {_TABLE} {where}", cutoff
+                ).fetchone()[0]
+            return PruneResult(before, runs[0], records, kept[0], apply)
+        finally:
+            con.close()
+
     def _select(self, where: str, params: tuple) -> list[dict]:
         """Run a SELECT over run_records and decode each row to a record dict."""
         con = self._connect()
@@ -573,6 +562,44 @@ class RunRegistry:
             return [_row_to_record(dict(zip(cols, row))) for row in cur.fetchall()]
         finally:
             con.close()
+
+
+@dataclass(frozen=True)
+class PruneResult:
+    """What :meth:`RunRegistry.prune` deleted, or would delete."""
+
+    before: date
+    runs: int
+    records: int
+    kept_runs: int
+    applied: bool
+
+
+# The runs pruning never deletes, however old: each pipeline's latest run (what
+# ``status`` shows) and each address's latest success (what a freshness check
+# and ``runs --table`` look for). Deleting those would turn "it ran a year ago"
+# into "it never ran".
+_PROTECTED_RUNS = """
+SELECT pipeline_run_id FROM (
+    SELECT pipeline_run_id, ROW_NUMBER() OVER (
+        PARTITION BY pipeline ORDER BY timestamp DESC, rowid DESC
+    ) AS newest
+    FROM run_records WHERE step = 'run'
+) WHERE newest = 1
+UNION
+SELECT pipeline_run_id FROM (
+    SELECT pipeline_run_id, ROW_NUMBER() OVER (
+        PARTITION BY step_address ORDER BY timestamp DESC, rowid DESC
+    ) AS newest
+    FROM run_records WHERE status = 'ok' AND step_address IS NOT NULL
+) WHERE newest = 1
+"""
+
+# Runs whose last record was written before the cutoff.
+_ENDED_BEFORE = """
+SELECT pipeline_run_id FROM run_records
+GROUP BY pipeline_run_id HAVING MAX(timestamp) < ?
+"""
 
 
 def _row_to_record(row: dict) -> dict:
@@ -598,18 +625,6 @@ def _mark_migration_applied(con, name: str) -> None:
         "INSERT OR IGNORE INTO registry_migrations (name, applied_at) VALUES (?, ?)",
         (name, utc_now_iso()),
     )
-
-
-def _start_of_day(value: date) -> str:
-    """The lower bound of a run date, in the shape the stored column carries.
-
-    A run date is a *local* calendar date and a stored timestamp is a UTC
-    instant, so the bound is local midnight expressed as UTC — and formatted
-    exactly as the emitter formats a record, so SQLite's text comparison is
-    comparing like with like rather than relying on a naive string happening to
-    sort next to an offset-bearing one.
-    """
-    return start_of_local_day(value)
 
 
 def _start_of_next_day(value: date) -> str:

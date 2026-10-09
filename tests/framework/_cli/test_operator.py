@@ -573,6 +573,37 @@ def test_status_without_a_registry_reports_clear_error(tmp_path):
     assert "Traceback" not in result.stderr
 
 
+def test_prune_runs_reports_first_and_deletes_only_with_apply(tmp_path):
+    log = tmp_path / "_runs" / "cases.log"
+    log.parent.mkdir()
+    lines = []
+    for run_id, day in (("old", "2020-01-01"), ("older", "2019-01-01")):
+        for step in ("read", "run"):
+            lines.append(
+                {
+                    "timestamp": f"{day}T07:00:00+00:00",
+                    "pipeline_run_id": run_id,
+                    "pipeline": "cases",
+                    "step": step,
+                    "status": "ok",
+                }
+            )
+    log.write_text("".join(json.dumps(line) + "\n" for line in lines))
+    # Nothing has ingested the log yet: prune catches the registry up first.
+    args = ("prune-runs", "--base-dir", str(tmp_path), "--older-than", "365")
+
+    reported = _cli(*args)
+    assert reported.returncode == 0, reported.stderr
+    # The newer run is the pipeline's latest, so only the older one goes.
+    assert "would delete 2 record(s) of 1 run(s)" in reported.stdout
+    assert "--apply" in reported.stdout
+
+    applied = _cli(*args, "--apply")
+    assert applied.returncode == 0, applied.stderr
+    assert "deleted 2 record(s) of 1 run(s)" in applied.stdout
+    assert "would delete 0 record(s)" in _cli(*args).stdout
+
+
 def test_log_without_a_log_file_reports_clear_error(tmp_path):
     result = _cli("log", "_source", "--base-dir", str(tmp_path))
 
@@ -876,7 +907,7 @@ def test_every_usage_example_in_the_module_docstring_parses():
     import cli.operator as operator
 
     examples = re.findall(r"^    python -m cli (.+)$", operator.__doc__, re.MULTILINE)
-    assert len(examples) == 7, examples
+    assert len(examples) == 8, examples
     parser = operator.build_parser()
     for example in examples:
         args = shlex.split(example.replace("<", "_").replace(">", "_"))
