@@ -183,11 +183,9 @@ def test_a_quiet_window_writes_cleanly_and_a_later_one_still_appends(base_dir):
 
 def test_a_quiet_first_window_still_types_the_columns_it_creates(base_dir):
     # The steady-state poll is a quiet one, so a feed's *first* run is quite
-    # likely to be empty -- and an empty write is what creates the silver table,
-    # fixing each column's SQLite affinity for the life of the feed. A zero-row
-    # frame carrying object columns would create `id` as TEXT and store every
-    # later integer id as text, silently, for as long as nobody compared types.
-    # So the id a quiet-first feed lands must be the id a busy-first one lands.
+    # likely to be empty. A quiet list writes nothing, so it cannot fix a
+    # column's SQLite affinity any more -- the migration declares it -- but the
+    # id a quiet-first feed lands must still be the id a busy-first one lands.
     quiet_first = FakeListClient(pd.DataFrame(), items(item()), advance=NEXT_POLL)
     busy_first = FakeListClient(items(item()), pd.DataFrame(), advance=NEXT_POLL)
 
@@ -204,11 +202,12 @@ def test_a_quiet_first_window_still_types_the_columns_it_creates(base_dir):
     assert isinstance(landed_ids[0], int)
 
 
-def test_a_quiet_window_still_runs_and_records_every_step(base_dir):
-    # A quiet poll is not a different pipeline: an operator reading the run log
-    # still sees every step, against every table, with zero rows -- and the same
-    # data locations a busy one names, since the wiring declares those, not the
-    # row count.
+def test_a_quiet_window_records_its_read_and_gold_but_no_write_or_silver_step(
+    base_dir,
+):
+    # A quiet list still shows in the run log -- its read and observation prove
+    # it was polled -- but it has nothing to land, so it writes nothing and
+    # refines nothing. Gold is still published, over whatever history exists.
     log_path = base_dir / "runs.log"
     context = RunContext(
         base_dir=base_dir, pipeline=FEED_NAME, run_log=RunLog(log_path)
@@ -217,7 +216,13 @@ def test_a_quiet_window_still_runs_and_records_every_step(base_dir):
     run(context, client=FakeListClient(pd.DataFrame()))
 
     records = read_run_log(log_path)
-    assert {prefix_of(record["step"]) for record in records} == EVERY_STEP_PREFIX
+    steps = {record["step"] for record in records}
+    assert {step for step in steps if step.startswith("raw:")} == {
+        f"{RAW_PREFIX}:read",
+        f"{RAW_PREFIX}:observation",
+    }
+    assert not {step for step in steps if step.startswith("silver:")}
+    assert {prefix_of(step) for step in steps} == {RAW_PREFIX, *GOLD_PREFIX}
     # One label for the whole poll: the grouping is in the step name, not in a
     # second identity the run also records under.
     assert {record["pipeline"] for record in records} == {FEED_NAME}
@@ -226,11 +231,11 @@ def test_a_quiet_window_still_runs_and_records_every_step(base_dir):
     ]
     # The list is named by its site, which is the only location not a database.
     assert {"namespace": COMPLAINTS.site, "name": COMPLAINTS.list_name} in locations
+    # Gold's own reads of silver are still named; the raw table and the person
+    # table, which only a list's own steps touch, are not.
     assert {location["name"] for location in locations} == {
         COMPLAINTS.list_name,
-        "case_observation",
         "case_version",
-        PERSON_TABLE,
         *GOLD_TABLES,
     }
     # "answer" is a table in both silver.db (the exploded rows) and gold.db

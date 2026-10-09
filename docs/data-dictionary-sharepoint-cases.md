@@ -71,6 +71,12 @@ returned on each `ListPoll` identifies the source window that list's poll
 resumed from. The Reader's `observed_at` stamp is an injectable callable and is
 dropped by `to_raw`'s `observation` transform for the same reason.
 
+A list whose window came back empty leaves only its `raw:<type>:read` and
+`raw:<type>:observation` records: `to_raw` returns the empty batch without a
+`write` step, and `run` runs none of that list's silver, person or Detail Table
+steps, so nothing is connected to, staged or committed for it. Its `ListPoll`
+still reports zero counts, and its watermark still advances.
+
 ## Where a quarantined row lands
 
 Every silver step here is handed a quarantine Writer of its own, so a

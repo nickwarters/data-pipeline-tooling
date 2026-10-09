@@ -5,7 +5,11 @@ refined source -> raw -> silver, all into the same two tables; gold is then
 published once, over every list's accumulated history.
 
 - ``to_raw``    lands the observation faithfully, in SharePoint's own
-  column names, keyed on the observation id so a re-read is a no-op.
+  column names, keyed on the observation id so a re-read is a no-op. A quiet
+  window (nothing changed in it) records the read and the observation and
+  stops: ``run`` then skips that list's silver, person and Detail Table steps
+  too, so a list with nothing to land opens no connection. It still gets a
+  ``ListPoll`` of zero counts, and its watermark still advances.
 - ``to_silver`` snake_cases those names, settles ``case_type`` to the
   polled list's declared one, then ``enforce``s ``CaseVersion`` -- coerce,
   quarantine value-rule breaches, validate, in that order.
@@ -91,7 +95,7 @@ from tools.integrations.sharepoint_rest import (
     SharePointModifiedReader,
     SharePointSource,
 )
-from tools.medallion import medallion
+from tools.medallion import Medallion, medallion
 from tools.source_checkpoint import (
     InstantWindow,
     SourceCheckpointStore,
@@ -448,6 +452,12 @@ def to_raw(reader: Reader, writer: Writer, case_list: CaseList) -> Dataset:
 
     Every step name is prefixed with the list being polled, so a run log that
     holds one of these per list still says which list each ``read`` was.
+
+    A quiet window -- the steady-state poll of most lists -- has nothing to land,
+    so it records the ``read`` and ``observation`` (the log still shows the list
+    was polled) and stops: no ``write`` step, so no connection to raw. The empty
+    ``Dataset`` is still returned, in the declared shape, and ``run`` reads its
+    length to leave the list's silver steps out too.
     """
     at = f"raw:{case_list.case_type}"
     data = read(reader, name=f"{at}:read")
@@ -456,6 +466,8 @@ def to_raw(reader: Reader, writer: Writer, case_list: CaseList) -> Dataset:
         data,
         name=f"{at}:observation",
     )
+    if len(data) == 0:
+        return data
     return write(writer, data, name=f"{at}:write")
 
 
@@ -1074,6 +1086,51 @@ def _known_people(store) -> Reader:
     return store.reader(PERSON_TABLE)
 
 
+def _refine_silver(
+    med: Medallion, batch: Dataset, case_list: CaseList
+) -> tuple[int, dict[str, int]]:
+    """One list's raw batch -> every silver table; the rows each one received.
+
+    Returns the Case row count and ``detail_rows`` -- ``person`` and every Detail
+    Table, keyed by name. An empty ``batch`` runs nothing and answers zero for
+    every one of them, so a quiet list's :class:`ListPoll` has the same shape as
+    a busy list's.
+    """
+    detail_rows = {PERSON_TABLE: 0, **{table: 0 for table, _, _ in _DETAIL_TABLES}}
+    if len(batch) == 0:
+        return 0, detail_rows
+
+    # Silver normalises the batch just fetched, never the whole raw history --
+    # which is simply the dataset ``to_raw`` just handed back.
+    versions = to_silver(
+        DatasetReader(batch),
+        med.silver.writer("case_version", AppendOnly("source_observation_id")),
+        case_list,
+        med.silver.quarantine_writer("case_version"),
+    )
+
+    people = to_silver_person(
+        DatasetReader(batch),
+        _known_people(med.silver),
+        med.silver.writer(PERSON_TABLE, UpsertStrategy("account")),
+        case_list,
+        med.silver.quarantine_writer(PERSON_TABLE),
+    )
+
+    # Detail builders consume the settled silver batch, not raw.
+    detail_rows[PERSON_TABLE] = len(people)
+    for table, to_silver_detail, key_columns in _DETAIL_TABLES:
+        detail_rows[table] = len(
+            to_silver_detail(
+                DatasetReader(versions),
+                med.silver.writer(table, AppendOnly(key_columns)),
+                case_list,
+                med.silver.quarantine_writer(table),
+            )
+        )
+    return len(versions), detail_rows
+
+
 def run(
     context: RunContext,
     *,
@@ -1084,7 +1141,9 @@ def run(
 
     Returns one :class:`ListPoll` per list polled. A list polled again sooner
     than the safety lag has nothing safe to read and is skipped; when every list
-    is skipped the result is empty and nothing is written.
+    is skipped the result is empty and nothing is written. A list whose window
+    read back empty is polled but refined no further: it is still returned, with
+    zero counts, and gold is still published over the others' history.
     """
     client = _resolve_client(client)
     med = medallion(StoreRegistry(context.base_dir), FEED_NAME)
@@ -1126,41 +1185,18 @@ def run(
             case_list,
         )
 
-        # Silver normalises the batch just fetched, never the whole raw history --
-        # which is simply the dataset ``to_raw`` just handed back.
-        versions = to_silver(
-            DatasetReader(batch),
-            med.silver.writer("case_version", AppendOnly("source_observation_id")),
-            case_list,
-            med.silver.quarantine_writer("case_version"),
-        )
-
-        people = to_silver_person(
-            DatasetReader(batch),
-            _known_people(med.silver),
-            med.silver.writer(PERSON_TABLE, UpsertStrategy("account")),
-            case_list,
-            med.silver.quarantine_writer(PERSON_TABLE),
-        )
-
-        # Detail builders consume the settled silver batch, not raw.
-        detail_rows: dict[str, int] = {PERSON_TABLE: len(people)}
-        for table, to_silver_detail, key_columns in _DETAIL_TABLES:
-            detail_rows[table] = len(
-                to_silver_detail(
-                    DatasetReader(versions),
-                    med.silver.writer(table, AppendOnly(key_columns)),
-                    case_list,
-                    med.silver.quarantine_writer(table),
-                )
-            )
+        # A quiet window has nothing to refine: `to_raw` wrote nothing, and the
+        # silver steps would each open a connection, stage nothing and commit.
+        # The list still gets its poll, with zero counts, and its watermark
+        # advances below like any other -- the window was read, and found empty.
+        silver_rows, detail_rows = _refine_silver(med, batch, case_list)
         polls.append(
             ListPoll(
                 case_list,
                 window,
                 batch_id,
                 len(batch),
-                len(versions),
+                silver_rows,
                 detail_rows,
             )
         )
