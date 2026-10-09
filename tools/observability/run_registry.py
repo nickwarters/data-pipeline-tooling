@@ -61,6 +61,13 @@ _CREATE_RUN_RECORDS = create_table_sql(
 )
 _INSERT_RUN_RECORD = insert_sql(_TABLE, RUN_RECORD_COLUMNS, or_ignore=True)
 
+# "Latest run of each pipeline" walks this backwards instead of scanning the
+# whole table once per run (``latest_run_per_pipeline``, ``cli status``).
+_CREATE_LATEST_RUN_INDEX = """
+    CREATE INDEX IF NOT EXISTS run_records_by_pipeline_time
+    ON run_records (step, pipeline, timestamp)
+"""
+
 _CREATE_INGEST_PROGRESS = """
     CREATE TABLE IF NOT EXISTS ingest_progress (
         log_path    TEXT PRIMARY KEY,
@@ -144,6 +151,7 @@ class RunRegistry:
         and a file that still has rows awaiting an address gets them.
         """
         con.execute(_CREATE_RUN_RECORDS)
+        con.execute(_CREATE_LATEST_RUN_INDEX)
         con.execute(_CREATE_INGEST_PROGRESS)
         con.execute(_CREATE_MIGRATIONS)
         added = ensure_columns(con, _TABLE, RUN_RECORD_COLUMNS)

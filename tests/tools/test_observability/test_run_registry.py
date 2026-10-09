@@ -147,6 +147,24 @@ def test_latest_run_per_pipeline_returns_the_most_recent_summary_each(tmp_path):
     assert latest == {"alpha": alpha_latest, "beta": beta_only}
 
 
+def test_latest_run_per_pipeline_seeks_an_index_rather_than_scanning(tmp_path):
+    # Without it the correlated lookup rescans every record once per run
+    # summary, and ``cli status`` grows quadratically with history.
+    registry = RunRegistry(tmp_path / "registry.db")
+    registry.query_runs()  # opening the file creates the table and its index
+    con = sqlite3.connect(tmp_path / "registry.db")
+    plan = " ".join(
+        str(row[-1])
+        for row in con.execute(
+            "EXPLAIN QUERY PLAN SELECT rowid FROM run_records i "
+            "WHERE i.step = 'run' AND i.pipeline = 'x' "
+            "ORDER BY timestamp DESC, rowid DESC LIMIT 1"
+        )
+    )
+    con.close()
+    assert "run_records_by_pipeline_time" in plan
+
+
 def _run_failing_pipeline(log_path, name="cases"):
     """Run a failing pre-validation and return its run ID."""
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
