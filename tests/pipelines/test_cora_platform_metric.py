@@ -21,7 +21,7 @@ from framework.core import (
     ValidationError,
 )
 from framework.io import Refresh
-from framework.run import FreshnessRequirement
+from framework.run import FreshnessRequirement, run_pipeline
 from pipelines.cora_platform_metric import metrics
 from pipelines.cora_platform_metric.metrics import (
     UNASSIGNED,
@@ -32,8 +32,10 @@ from pipelines.cora_platform_metric.metrics import (
 from pipelines.cora_platform_metric.pipeline import (
     ACCUMULATED_TABLES,
     GOLD_TABLES,
+    PIPELINE_NAME,
     UPSTREAMS,
     main,
+    run,
 )
 from pipelines.cora_platform_metric.schema import (
     AnswerActionLoad,
@@ -2150,6 +2152,35 @@ def test_main_reads_sync_and_refreshes_every_table_through_the_migrated_path(
     assert {
         table: len(read_rows(gold, table)) for table in ACCUMULATED_TABLES
     } == accumulated
+
+
+def test_a_re_drive_under_another_run_date_replaces_the_snapshots_day(base_dir):
+    # An operator re-drives yesterday's run after today's Sync published: both
+    # runs read the one snapshot (as_of 20 Aug), so the day-at-a-time tables
+    # must hold one row set for 20 Aug, keyed on that day, not one per run date.
+    _seed_sync(base_dir)
+    gold = medallion(StoreRegistry(base_dir), "cora_platform_metric").gold
+
+    landed = {}
+    for run_date in (dt.date(2026, 10, 8), dt.date(2026, 10, 9)):
+        run_pipeline(
+            run,
+            PIPELINE_NAME,
+            base_dir=base_dir,
+            upstreams=UPSTREAMS,
+            run_date=run_date,
+        )
+        landed[run_date] = {
+            table: read_rows(gold, table) for table in ACCUMULATED_TABLES
+        }
+
+    first, second = landed.values()
+    for table in ACCUMULATED_TABLES:
+        assert len(second[table]) == len(first[table]) > 0, table
+        assert {
+            (row["as_of_date"], row["logical_run_id"], row["load_date"])
+            for row in second[table]
+        } == {("2026-08-20", "cora_platform_metric:2026-08-20", "2026-08-20")}, table
 
 
 def test_the_pipeline_declares_sync_as_its_freshness_upstream():
