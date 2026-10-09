@@ -1,4 +1,4 @@
-# The operator CLI — run, orchestrate, migrate, status, runs, log
+# The operator CLI — run, orchestrate, migrate, status, runs, log, perf
 
 The framework is import-only, but it is also runnable as a tool:
 `python -m cli <command>` is the single entry point for both authoring
@@ -7,7 +7,8 @@ operator side is a small command surface for the everyday tasks that would
 otherwise need a hand-written wrapper script: **run** a
 pipeline by its path, **orchestrate** scheduled due work, **migrate** the
 databases they write into, check its **status**,
-list recent **runs**, and inspect a run **log**. It is a thin shell
+list recent **runs**, inspect a run **log**, and see durations at a glance with
+**perf**. It is a thin shell
 over the public `framework.run` execution surface (`run_pipeline`),
 `tools.orchestration` scheduling (`Orchestrator`), and the `RunLog` /
 `RunRegistry` observability seam — everything stays local SQLite + JSONL, with
@@ -48,7 +49,7 @@ back, so one orchestration pass joins to every pipeline execution it triggered
 (`pipeline_run_id` is the key into the run registry). Actual pipeline execution
 records remain in `RunLog` / `RunRegistry` only.
 
-The read-only commands (`status`, `runs`, `log`) are **safe to run while
+The read-only commands (`status`, `runs`, `log`, `perf`) are **safe to run while
 pipelines are running**. Opening a registry and migrating it are separate
 steps: against an up-to-date file a query opens a connection and reads
 without executing a single write statement, so it takes no write lock and cannot
@@ -879,6 +880,41 @@ The `data_locations` field — the file(s) or table(s) a read or write step
 actually touched — is in the JSONL but is deliberately not rendered on these
 lines: a glob read carries one entry per matched file. Read the log file itself,
 or the run registry, to answer "which file produced this run?".
+
+## `perf` — durations at a glance
+
+```sh
+python -m cli perf [--base-dir DIR] [--env ENV] [--steps] [--pipeline NAME]
+                   [--window 28|90] [--as-of YYYY-MM-DD] [--threshold 0.2] [--limit N]
+```
+
+One line per pipeline (or per step with `--steps`), slowest p95 first: the
+p50 / p90 / p95 / max duration over the last 28 days (or 90), their change
+against 28 days earlier, the failure and retry rates, and the median time spent
+waiting on other services. A pipeline whose p90 is more than `--threshold`
+slower than 28 days earlier is flagged `SLOWER`; one that has not run for over
+a week says when it last did. Above the table, one line says when the latest
+scheduled batch finished against its 28-day p50 and p90, and the longest any
+item queued behind the others.
+
+```console
+$ python -m cli perf --base-dir /data --limit 3
+Batch 2026-10-08 finished 06:42 (28-day p50 06:30, p90 06:55); 96 run, 1 failed, 0 blocked; longest queue 5h48m
+
+Pipelines over the 28 days to 2026-10-08, slowest p95 first (SLOWER: p90 up more than 20% on 28 days earlier):
+pipeline           n    p50     p90     p95     max  p50 chg  p90 chg  fail  retry  ext p50
+claims_selection  20  9m12s  10m03s  10m40s  14m02s      +4%     +31%    0%     5%    8m50s  SLOWER
+cases_ingest      28  4m10s   5m02s   5m30s   7m15s      -2%      +3%    0%     0%    3m55s
+complaints_a      27  48.2s   55.0s   1m01s   1m20s      +1%      -1%    4%     0%        -
+```
+
+It shows what `pipelines/pipeline_run_metric` last published
+([data dictionary](data-dictionary-pipeline-run-metric.md)), read through
+`readers/pipeline_run_metric.py`, so schedule that pipeline (it runs last in
+the day) or run it first; before it has run, `perf` says so and exits 1. A p90
+needs 10 runs in the window and a p95 needs 20, so a new or weekly pipeline
+shows `-` until it has them. `--as-of` shows the figures as they stood on an
+earlier date.
 
 ## Errors
 

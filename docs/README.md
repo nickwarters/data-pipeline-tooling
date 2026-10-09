@@ -165,11 +165,13 @@ review platform, Review Outcomes flow *back* for reporting.
 - **Reporting** (platform-wide) joins Review Outcomes to the selected Cases and
   emits **Deliverables**.
 - **Pipeline run metrics** (operational) — `pipelines/pipeline_run_metric` —
-  reads the base directory's **run registry** and refreshes three gold
-  **Aggregate tables** about the pipelines themselves: one row per run, step
-  durations per day against their trailing baseline, and the row funnel per
-  step per run
+  reads the base directory's **run registry** and orchestration decisions and
+  refreshes five gold **Aggregate tables** about the pipelines themselves: one
+  row per run, step durations per day against their trailing baseline, the row
+  funnel per step per run, rolling p50/p90/p95 per pipeline and step over 28
+  and 90 days, and when each day's scheduled batch finished
   ([`data-dictionary-pipeline-run-metric.md`](data-dictionary-pipeline-run-metric.md)).
+  `python -m cli perf` shows the percentiles at a glance.
 
 **Ingest** is **per Case Type** and **Selection** is **per Selection group**
 ([Selection plans per group](adr/0021-selection-plans-per-group-over-the-whole-eligible-pool.md));
@@ -652,10 +654,11 @@ review queue with plain-Python rules, and separately aggregates an
 `AccumulateByRun`, so rerunning the same `logical_run_id` replaces that run's
 rows without touching prior loads.
 
-### Operate pipelines from the CLI — run, status, runs, log
+### Operate pipelines from the CLI — run, status, runs, log, perf
 
 For the everyday operator tasks — running a pipeline, checking its status,
-listing recent runs, inspecting a run log — use `python -m cli` instead
+listing recent runs, inspecting a run log, seeing which pipelines are slowest
+and whether they are getting slower — use `python -m cli` instead
 of writing a wrapper script. It is a thin shell over the runner and the
 `RunRegistry` / `RunLog` seam; full reference with example output is
 [`operator-cli.md`](operator-cli.md).
@@ -739,7 +742,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`data-dictionary-sharepoint-cases.md`](data-dictionary-sharepoint-cases.md) | The template filled in for the `sharepoint_cases` feed: the raw observation, the Case version, the `answer`/`answer_capture`/`answer_action`/`general_answer`/`conversation_message`/`appeal`/`case_detail` silver Detail Tables, the silver `person` table of user details, keyed on the bare account every Case row now holds, and the fourteen gold tables with their declared grains — including the two aggregates reduced from a Detail Table rather than `case_current` — all shared across every declared Case list and discriminated by `case_type`; why raw and silver do not store when we saw the row; why silver settles `case_type` to the polled list's declared value; the two provisioning prerequisites (an index on `Modified`, and the site/GUID placeholders) that stand between it and a tenant; and which further aggregates were deliberately refused, and why. |
 | [`data-dictionary-reviewer-activity.md`](data-dictionary-reviewer-activity.md) | The working-day, freshness-guarded `reviewer_activity_daily` aggregate and its sparse per-Reviewer `my-stats/{account}.txt` Report Feed, reduced from Sync's `case_current`. |
 | [`data-dictionary-cora-platform-metric.md`](data-dictionary-cora-platform-metric.md) | The nineteen `cora_platform_metric` gold aggregates — stage dwell, holds and the daily backlog reduced from the Sync observation history, SLA attainment and voids by month, remediation Action load and remediation by manager, Appeal cycle time and cited questions, Conversation reply time, volume and local-clock posting pattern, daily intake, lifecycle-leg durations and Outcomes by month, due profile, remediation past its due date, Reviewer workload and Appeal rate — their grains, why the three history tables measure what the polls saw rather than what happened, and what was deliberately left out. |
-| [`data-dictionary-pipeline-run-metric.md`](data-dictionary-pipeline-run-metric.md) | The three `pipeline_run_metric` gold aggregates over the run registry — `pipeline_run_summary`, `step_duration_trend_daily`, `step_row_flow` — their grains, why the registry's run id lands as `run_id` rather than the reserved provenance column, and why the reporting run never sees itself. |
+| [`data-dictionary-pipeline-run-metric.md`](data-dictionary-pipeline-run-metric.md) | The five `pipeline_run_metric` gold aggregates over the run registry and orchestration decisions — `pipeline_run_summary`, `step_duration_trend_daily`, `step_row_flow`, `duration_percentiles_daily`, `batch_finish_daily` — their grains, why the registry's run id lands as `run_id` rather than the reserved provenance column, and why the reporting run never sees itself. |
 | [`data-dictionary-notifications.md`](data-dictionary-notifications.md) | The notification outbox file and the three keys that are its consumer's contract; the user-group privileges file beside it and the two keys that are *its* consumer's contract; the `notified` ledger and why its row is exactly its key; the `users` reference feed the recipients and the Responsible Party Manager are resolved through; and the placeholder link template, unmapped Case Type names and example addresses standing between it and a tenant. |
 | [`data-dictionary-case-support-log.md`](data-dictionary-case-support-log.md) | The `case_support_log` feed: the Support Log entry in raw and silver, why polling `Modified` is polling `Created` on an append-only list, how a failed action shows up as a second `not-applied` entry, and the site/GUID placeholders standing between it and a tenant. |
 | [`data-dictionary-cora-access-log.md`](data-dictionary-cora-access-log.md) | The `cora_access_log` feed: the Access Log entry in raw and silver, why one site-wide list covers every environment, how a change that fell short shows up as a `not-applied` or `partly-applied` follow-up entry, and the logins and free-text reasons it holds. |
@@ -754,7 +757,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`run-log-format.md`](run-log-format.md) | The JSONL record schema and the run registry. |
 | [`retry.md`](retry.md) | Targeted retry at the reader/writer edges — `RetryPolicy`, where to use it and where not. |
 | [`migrations.md`](migrations.md) | SQL migrations as the authority for a database's physical shape: the `migrations/<subject>/<database>/` layout, the per-database `schema_migrations` ledger whose presence is the opt-in, and the three rules (one transaction per file, an edited migration is an error, line endings are not an edit). |
-| [`operator-cli.md`](operator-cli.md) | The operator CLI (`run` / `orchestrate` / `status` / `runs` / `log` / `scaffold`) with example commands and output. |
+| [`operator-cli.md`](operator-cli.md) | The operator CLI (`run` / `orchestrate` / `status` / `runs` / `log` / `perf` / `scaffold`) with example commands and output. |
 | [`resolving-a-failed-run.md`](resolving-a-failed-run.md) | The operator loop from a failed run — investigate (`status`/`log`), diagnose, resolve, and re-drive idempotently. |
 | [`shared-readers.md`](shared-readers.md) | Reading data your pipeline does **not** own: the `readers/<subject>.py` Shared Readers that declare a cross-subject read once, how to add one (medallion-backed, backed by nothing, or a store over a family such as the review platform's **Question Bank** exports — including when a second grain in one artifact earns a second Reader, why the grain is the method and the scope is the arguments, and where a sweep silently double counts), the guardrails G1–G6, and why a Shared Reader is a pass-through and never a shaping layer. |
 | [`escape-hatch-store.md`](escape-hatch-store.md) | Iterating against a flat scratch db (and a pre-baked SQL query) outside the medallion / namespace Store, and migrating back. |

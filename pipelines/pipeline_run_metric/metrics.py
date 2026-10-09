@@ -17,15 +17,23 @@ the same registry contents produces the same tables.
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 from typing import get_type_hints
 
 import pandas as pd
 
 from framework.core import Dataset
+from tools.observability import timestamps
 from tools.observability.timestamps import local_date
 
-from .schema import PipelineRunSummary, StepDurationTrendDaily, StepRowFlow
+from .schema import (
+    BatchFinishDaily,
+    DurationPercentilesDaily,
+    PipelineRunSummary,
+    StepDurationTrendDaily,
+    StepRowFlow,
+)
 
 AS_OF_COLUMN = "as_of_utc"
 
@@ -65,6 +73,18 @@ RECORD_COLUMNS = (
     "warn_hits",
     "committed",
     "run_date",
+    "orchestration_run_id",
+    "retry_attempts",
+    "retry_wait_seconds",
+    "external_calls",
+    "external_wait_seconds",
+)
+
+WAIT_COLUMNS = (
+    "retry_attempts",
+    "retry_wait_seconds",
+    "external_calls",
+    "external_wait_seconds",
 )
 
 
@@ -80,16 +100,22 @@ def latest_instant(records: Dataset) -> str | None:
 
 
 def _prepared(records: Dataset) -> pd.DataFrame:
-    """Records with parsed instants, a ``run_date`` per run, and a step address
-    for every row (derived from pipeline + step where the record predates the
-    column, as the registry's own backfill does).
+    """Records in time order with parsed instants, a ``run_date`` and pipeline
+    per run, and a step address for every row (derived from pipeline + step
+    where the record predates the column, as the registry's own backfill does).
 
     A record is stamped when its step *ends*, so its start is ``_at`` less its
     duration. ``run_date`` is the date the run summary recorded, else the local
     date the run started.
+
+    A run's ``pipeline`` is the one its last summary record names. A handler
+    that runs nested ``Pipeline`` stages writes a summary per stage, under the
+    stage's name, before the runner writes the run's own; labelling the run
+    by its first record would file it under a stage.
     """
     frame = records.to_pandas().copy()
     frame["_at"] = pd.to_datetime(frame["timestamp"], utc=True, format="ISO8601")
+    frame = frame.sort_values("_at", kind="stable")
     took = pd.to_timedelta(pd.to_numeric(frame["duration"]).clip(lower=0), unit="s")
     frame["_start"] = (frame["_at"] - took.fillna(pd.Timedelta(0))).dt.round("us")
     frame["_is_summary"] = frame["step"].eq(RUN_SUMMARY_STEP)
@@ -99,6 +125,11 @@ def _prepared(records: Dataset) -> pd.DataFrame:
     derived = pipeline + "." + frame["step"].astype("string")
     derived = derived.mask(frame["_is_summary"], pipeline)
     frame["step_address"] = address.mask(address.isna() | address.eq(""), derived)
+
+    first = frame.drop_duplicates("pipeline_run_id").set_index("pipeline_run_id")
+    named = pipeline.where(frame["_is_summary"])
+    named = named.groupby(frame["pipeline_run_id"]).transform("last")
+    frame["pipeline"] = named.fillna(frame["pipeline_run_id"].map(first["pipeline"]))
 
     by_run = frame.groupby("pipeline_run_id")
     run_start = by_run["_start"].transform("min")
@@ -160,12 +191,18 @@ def run_summary(records: Dataset, *, as_of: str) -> Dataset:
     """One row per pipeline run. **Grain: run_id.**
 
     Wall clock is the summary record's ``duration`` where one was written,
-    else first start to last end; ``status`` is the summary's, else ``error``
-    if any step errored, else ``incomplete``. ``attempt_number`` ranks a run
+    else first start to last end, and ``overhead_seconds`` is what of it no
+    step accounts for. ``status`` and the wait counters are the summary's;
+    without one, ``status`` is ``error`` if any step errored, else
+    ``incomplete``. ``attempt_number`` ranks a run
     among those sharing its ``logical_run_id`` by start, so a re-drive is the
     second attempt and the run it replaced is no longer the latest.
     """
-    frame = _prepared(records).sort_values("_at", kind="stable")
+    return _typed(_runs(_prepared(records)), PipelineRunSummary, as_of=as_of)
+
+
+def _runs(frame: pd.DataFrame) -> pd.DataFrame:
+    """``run_summary``'s rows, before they are typed."""
     is_step = ~frame["_is_summary"]
     failed = is_step & frame["status"].eq(ERROR_STATUS)
     committed = pd.to_numeric(frame["committed"]).fillna(0).astype(bool)
@@ -179,7 +216,7 @@ def run_summary(records: Dataset, *, as_of: str) -> Dataset:
     )
 
     by_run = frame.groupby("pipeline_run_id", sort=False)
-    # A run is labelled by its first record, even where that field is NULL.
+    # The logical run id is the first record's, even where that is NULL.
     runs = by_run[["pipeline", "logical_run_id"]].first(skipna=False)
     runs = runs.join(
         by_run.agg(
@@ -192,12 +229,16 @@ def run_summary(records: Dataset, *, as_of: str) -> Dataset:
             committed_step_count=("_committed", "sum"),
             warn_hit_count=("_warns", "sum"),
             error_category=("error_category", "first"),
+            orchestration_run_id=("orchestration_run_id", "first"),
         )
     )
 
     # The run's own summary record, where one was written; the last one wins.
     summary = (
-        frame.loc[frame["_is_summary"], ["pipeline_run_id", "duration", "status"]]
+        frame.loc[
+            frame["_is_summary"],
+            ["pipeline_run_id", "duration", "status", *WAIT_COLUMNS],
+        ]
         .drop_duplicates("pipeline_run_id", keep="last")
         .set_index("pipeline_run_id")
         .reindex(runs.index)
@@ -216,7 +257,14 @@ def run_summary(records: Dataset, *, as_of: str) -> Dataset:
             finished_at=runs["finished"].map(pd.Timestamp.isoformat),
             wall_clock_seconds=wall.clip(lower=0).round(6),
             step_duration_seconds=runs["step_duration_seconds"].round(6),
+            overhead_seconds=(wall - runs["step_duration_seconds"])
+            .clip(lower=0)
+            .round(6),
             status=summary["status"].fillna(derived),
+            **{
+                column: pd.to_numeric(summary[column]).round(6)
+                for column in WAIT_COLUMNS
+            },
         )
         .rename_axis(RUN_ID_COLUMN)
         .reset_index()
@@ -227,13 +275,12 @@ def run_summary(records: Dataset, *, as_of: str) -> Dataset:
     attempt_key = summarised["logical_run_id"].fillna(summarised[RUN_ID_COLUMN])
     summarised["attempt_number"] = attempt_key.groupby(attempt_key).cumcount() + 1
     summarised["is_latest_attempt"] = ~attempt_key.duplicated(keep="last")
-    return _typed(summarised, PipelineRunSummary, as_of=as_of)
+    return summarised
 
 
 # The trend's measures, rounded to the same place before they are published.
 TREND_MEASURES = (
     "duration_p50",
-    "duration_p95",
     "duration_max",
     "trailing_p50_median",
     "delta_seconds",
@@ -262,9 +309,7 @@ def step_duration_trend(
     durations = by_day["duration"]
     daily = durations.agg(
         execution_count="size", duration_p50="median", duration_max="max"
-    )
-    daily["duration_p95"] = durations.quantile(0.95)
-    daily = daily.reset_index()
+    ).reset_index()
 
     # Shift each step's daily p50 back a day, then take a rolling median within
     # the step; both run per step in compiled code, not per step in Python.
@@ -291,9 +336,10 @@ COUNT_COLUMNS = ("rows_in", "rows_out", "rows_quarantined", "rows_excluded")
 def step_row_flow(records: Dataset, *, as_of: str) -> Dataset:
     """The row funnel through each step of each run. **Grain: run_id x
     step_address.** Only steps that reported a row count appear; a count no
-    execution reported stays NULL rather than becoming zero."""
+    execution reported stays NULL rather than becoming zero.
+    ``rows_per_second`` is ``rows_out`` over the step's duration."""
     frame = _prepared(records)
-    for column in COUNT_COLUMNS:
+    for column in (*COUNT_COLUMNS, "duration"):
         frame[column] = pd.to_numeric(frame[column])
     reported = frame[list(COUNT_COLUMNS)].notna().any(axis=1)
     steps = frame.loc[~frame["_is_summary"] & reported]
@@ -302,11 +348,299 @@ def step_row_flow(records: Dataset, *, as_of: str) -> Dataset:
         ["pipeline_run_id", "pipeline", "step_address", "run_date"], sort=True
     )
     # ``min_count=1`` keeps a count no execution reported NULL, not zero.
-    flow = by_step[list(COUNT_COLUMNS)].sum(min_count=1)
+    flow = by_step[[*COUNT_COLUMNS, "duration"]].sum(min_count=1)
     flow.insert(0, "execution_count", by_step.size())
-    flow = flow.reset_index().rename(columns={"pipeline_run_id": RUN_ID_COLUMN})
+    flow = flow.reset_index().rename(
+        columns={"pipeline_run_id": RUN_ID_COLUMN, "duration": "duration_seconds"}
+    )
     rows_in = flow["rows_in"].where(flow["rows_in"] > 0)
     flow["out_ratio"] = (flow["rows_out"] / rows_in).round(6)
     flow["quarantine_ratio"] = (flow["rows_quarantined"] / rows_in).round(6)
+    took = flow["duration_seconds"].where(flow["duration_seconds"] > 0)
+    flow["rows_per_second"] = (flow["rows_out"] / took).round(6)
+    flow["duration_seconds"] = flow["duration_seconds"].round(6)
 
     return _typed(flow, StepRowFlow, as_of=as_of)
+
+
+# --- percentiles over rolling windows -------------------------------------------
+
+# The windows a percentile is taken over: calendar days ending on the as-of
+# date. 28 days gives a daily job about 20 samples; 90 days shows the slow tail.
+WINDOWS = (28, 90)
+# Below these sample counts a p90 / p95 is in effect the max, so it is NULL.
+MIN_SAMPLES_P90 = 10
+MIN_SAMPLES_P95 = 20
+# The change columns compare with the row this many days earlier, or the latest
+# one within the tolerance before it when the subject did not run that day.
+CHANGE_DAYS = 28
+CHANGE_TOLERANCE_DAYS = 7
+
+PIPELINE_LEVEL = "pipeline"
+STEP_LEVEL = "step"
+SUBJECT_KEYS = ["level", "pipeline", "step_address"]
+
+
+def _executions(frame: pd.DataFrame) -> pd.DataFrame:
+    """One row per execution of a run (``level`` pipeline) or of a step.
+
+    Durations, external waits and throughput are kept for ``ok`` executions
+    only: a failure's duration says how long it took to fail.
+    """
+    runs = _runs(frame)
+    run_ok = runs["status"].eq(OK_STATUS)
+    pipelines = pd.DataFrame(
+        {
+            "level": PIPELINE_LEVEL,
+            "pipeline": runs["pipeline"],
+            "step_address": runs["pipeline"],
+            "run_date": runs["run_date"],
+            "finished": runs["status"].isin([OK_STATUS, ERROR_STATUS]),
+            "failed": runs["status"].eq(ERROR_STATUS),
+            "duration": runs["wall_clock_seconds"].where(run_ok),
+            "retry_attempts": runs["retry_attempts"],
+            "external_wait": runs["external_wait_seconds"].where(run_ok),
+            "rows_per_second": float("nan"),
+        }
+    )
+
+    steps = frame.loc[~frame["_is_summary"]]
+    step_ok = steps["status"].eq(OK_STATUS)
+    took = pd.to_numeric(steps["duration"]).where(step_ok)
+    rows_out = pd.to_numeric(steps["rows_out"])
+    steps = pd.DataFrame(
+        {
+            "level": STEP_LEVEL,
+            "pipeline": steps["pipeline"],
+            "step_address": steps["step_address"],
+            "run_date": steps["run_date"],
+            "finished": steps["status"].isin([OK_STATUS, ERROR_STATUS]),
+            "failed": steps["status"].eq(ERROR_STATUS),
+            "duration": took,
+            "retry_attempts": pd.to_numeric(steps["retry_attempts"]),
+            "external_wait": pd.to_numeric(steps["external_wait_seconds"]).where(
+                step_ok
+            ),
+            "rows_per_second": rows_out / took.where(took > 0),
+        }
+    )
+    executions = pd.concat([pipelines, steps], ignore_index=True)
+    for flag in ("finished", "failed"):
+        executions[flag] = executions[flag].astype(float)
+    executions["retried"] = executions["retry_attempts"].gt(0).astype(float)
+    executions["retried"] = executions["retried"].where(
+        executions["retry_attempts"].notna()
+    )
+    known = executions[["pipeline", "step_address", "run_date"]].notna().all(axis=1)
+    return executions.loc[known]
+
+
+def _over_window(executions: pd.DataFrame, window_days: int) -> pd.DataFrame:
+    """Each subject's statistics over the ``window_days`` ending on each date
+    it ran, one row per subject per such date.
+
+    Every measure is a grouped time-based rolling aggregate, so all subjects
+    are computed in one pass rather than a Python call per subject per day.
+    """
+    days = pd.to_datetime(executions["run_date"])
+    ordered = executions.assign(_day=days).sort_values(
+        [*SUBJECT_KEYS, "_day"], kind="stable"
+    )
+    grouped = ordered.set_index("_day").groupby(SUBJECT_KEYS, sort=False)
+    span = f"{window_days}D"
+
+    def rolling(column: str):
+        return grouped[column].rolling(span)
+
+    # The rolling results come back in the rows' own order (the frame is
+    # sorted by subject, and each subject's rows keep their order).
+    measures = {
+        "ok_count": rolling("duration").count(),
+        "duration_p50": rolling("duration").median(),
+        "duration_p90": rolling("duration").quantile(0.90),
+        "duration_p95": rolling("duration").quantile(0.95),
+        "duration_max": rolling("duration").max(),
+        "external_wait_p50": rolling("external_wait").median(),
+        "external_wait_p95": rolling("external_wait").quantile(0.95),
+        "rows_per_second_p50": rolling("rows_per_second").median(),
+        "_finished": rolling("finished").sum(),
+        "_failed": rolling("failed").sum(),
+        "_retried": rolling("retried").sum(),
+        "_retry_known": rolling("retried").count(),
+    }
+    for name, values in measures.items():
+        ordered[name] = values.to_numpy()
+
+    # A day's last row has seen every execution of that day.
+    daily = ordered.drop_duplicates([*SUBJECT_KEYS, "_day"], keep="last").copy()
+    n = daily["ok_count"]
+    daily["duration_p90"] = daily["duration_p90"].where(n >= MIN_SAMPLES_P90)
+    daily["duration_p95"] = daily["duration_p95"].where(n >= MIN_SAMPLES_P95)
+    daily["execution_count"] = daily["_finished"]
+    daily["failure_rate"] = daily["_failed"] / daily["_finished"].where(
+        daily["_finished"] > 0
+    )
+    daily["retry_rate"] = daily["_retried"] / daily["_retry_known"].where(
+        daily["_retry_known"] > 0
+    )
+    daily["window_days"] = window_days
+    return _with_change(daily)
+
+
+def _with_change(daily: pd.DataFrame) -> pd.DataFrame:
+    """Add each row's p50 and p90 change against the same subject's row
+    ``CHANGE_DAYS`` earlier, as a ratio (0.25 = a quarter slower)."""
+    earlier = daily[[*SUBJECT_KEYS, "_day", "duration_p50", "duration_p90"]]
+    earlier = earlier.rename(
+        columns={"duration_p50": "_p50_then", "duration_p90": "_p90_then"}
+    ).sort_values("_day", kind="stable")
+    current = daily.assign(
+        _then=daily["_day"] - pd.Timedelta(days=CHANGE_DAYS)
+    ).sort_values("_then", kind="stable")
+    matched = pd.merge_asof(
+        current,
+        earlier.rename(columns={"_day": "_then"}),
+        on="_then",
+        by=SUBJECT_KEYS,
+        direction="backward",
+        tolerance=pd.Timedelta(days=CHANGE_TOLERANCE_DAYS),
+    )
+    for measure, then in (("p50", "_p50_then"), ("p90", "_p90_then")):
+        base = matched[then].where(matched[then] > 0)
+        matched[f"{measure}_change_ratio_28d"] = (
+            matched[f"duration_{measure}"] - base
+        ) / base
+    return matched
+
+
+PERCENTILE_MEASURES = (
+    "duration_p50",
+    "duration_p90",
+    "duration_p95",
+    "duration_max",
+    "failure_rate",
+    "retry_rate",
+    "external_wait_p50",
+    "external_wait_p95",
+    "rows_per_second_p50",
+    "p50_change_ratio_28d",
+    "p90_change_ratio_28d",
+)
+
+
+def duration_percentiles(
+    records: Dataset, *, as_of: str, windows: tuple[int, ...] = WINDOWS
+) -> Dataset:
+    """Rolling percentiles per pipeline and per step. **Grain: level x
+    pipeline x step_address x window_days x as_of_date.**
+
+    One row for each date a subject ran, over the ``window_days`` calendar
+    days ending on it, so the table is the history of each percentile. A
+    pipeline-level row measures the run's wall clock and has the pipeline as
+    its ``step_address``. Durations count ``ok`` executions only (``ok_count``);
+    ``failure_rate`` is over every finished one. p90 is NULL below
+    ``MIN_SAMPLES_P90`` samples and p95 below ``MIN_SAMPLES_P95``.
+    """
+    executions = _executions(_prepared(records))
+    if executions.empty:
+        table = pd.DataFrame(columns=list(_columns(DurationPercentilesDaily)))
+        return _typed(table, DurationPercentilesDaily, as_of=as_of)
+    table = pd.concat(
+        [_over_window(executions, days) for days in windows], ignore_index=True
+    )
+    table["as_of_date"] = table["_day"].dt.strftime("%Y-%m-%d")
+    for column in PERCENTILE_MEASURES:
+        table[column] = table[column].round(6)
+    table = table.sort_values(
+        ["level", "pipeline", "step_address", "window_days", "as_of_date"],
+        kind="stable",
+    )
+    return _typed(table, DurationPercentilesDaily, as_of=as_of)
+
+
+# --- the scheduled batch ----------------------------------------------------------
+
+# The orchestration decision columns ``batch_finish`` reads.
+DECISION_COLUMNS = (
+    "timestamp",
+    "orchestration_run_id",
+    "run_date",
+    "status",
+    "pass_started_at",
+    "started_at",
+)
+# How many earlier run dates the finish-time percentiles look back over.
+FINISH_WINDOW = 28
+
+
+def batch_finish(decisions: Dataset, *, as_of: str) -> Dataset:
+    """When each run date's scheduled work finished. **Grain: run_date.**
+
+    Read from the orchestration decision store. A run date appears once an
+    item ran for it. ``finished_after_midnight_seconds`` is measured from the
+    start of the run date on the local calendar, so a batch that runs past
+    midnight reads as more than a day; its p50 and p90 are over the run
+    dates in the ``FINISH_WINDOW`` days ending on this one.
+    """
+    frame = decisions.to_pandas().copy()
+    if frame.empty:
+        table = pd.DataFrame(columns=list(_columns(BatchFinishDaily)))
+        return _typed(table, BatchFinishDaily, as_of=as_of)
+
+    def instant(column: str) -> pd.Series:
+        return pd.to_datetime(frame[column], utc=True, format="ISO8601")
+
+    frame["_at"] = instant("timestamp")
+    frame["_pass_start"] = instant("pass_started_at")
+    frame["_start"] = instant("started_at")
+    # Decisions written before the start columns existed: an item that
+    # succeeded or failed was run.
+    ran = frame["_start"].notna() | frame["status"].isin(["succeeded", "failed"])
+    frame = frame.assign(
+        _ran=ran,
+        _finish=frame["_at"].where(ran),
+        _queued=(frame["_start"] - frame["_pass_start"]).dt.total_seconds(),
+        _succeeded=frame["status"].eq("succeeded"),
+        _failed=frame["status"].eq("failed"),
+        _blocked=frame["status"].eq("blocked"),
+    )
+    days = frame.groupby("run_date", sort=True).agg(
+        pass_count=("orchestration_run_id", "nunique"),
+        _first_pass=("_pass_start", "min"),
+        _first_decision=("_at", "min"),
+        _finished=("_finish", "max"),
+        items_run=("_ran", "sum"),
+        items_succeeded=("_succeeded", "sum"),
+        items_failed=("_failed", "sum"),
+        items_blocked=("_blocked", "sum"),
+        queue_wait_max_seconds=("_queued", "max"),
+    )
+    days = days.loc[days["_finished"].notna()].reset_index()
+    started = days["_first_pass"].fillna(days["_first_decision"])
+    days["started_at"] = started.map(pd.Timestamp.isoformat)
+    days["finished_at"] = days["_finished"].map(pd.Timestamp.isoformat)
+    midnight = pd.to_datetime(
+        days["run_date"].map(
+            lambda day: timestamps.start_of_local_day(dt.date.fromisoformat(day))
+        ),
+        utc=True,
+        format="ISO8601",
+    )
+    finish = (days["_finished"] - midnight).dt.total_seconds()
+    days["finished_after_midnight_seconds"] = finish
+
+    by_day = finish.set_axis(pd.to_datetime(days["run_date"])).rolling(
+        f"{FINISH_WINDOW}D"
+    )
+    count = by_day.count().to_numpy()
+    days["finish_p50_28d"] = by_day.median().to_numpy()
+    days["finish_p90_28d"] = by_day.quantile(0.90).to_numpy()
+    days["finish_p90_28d"] = days["finish_p90_28d"].where(count >= MIN_SAMPLES_P90)
+    for column in (
+        "finished_after_midnight_seconds",
+        "finish_p50_28d",
+        "finish_p90_28d",
+        "queue_wait_max_seconds",
+    ):
+        days[column] = days[column].round(6)
+    return _typed(days, BatchFinishDaily, as_of=as_of)

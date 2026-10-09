@@ -1,16 +1,18 @@
 """Build the ``pipeline_run_metric`` gold tables from the run registry.
 
 Reads the base directory's run registry -- after catching it up with every
-run log, so a run recorded under any subject is visible -- and refreshes three
-Aggregate tables in this subject's own gold: one row per run, step durations
-per day against their recent past, and the row funnel per step per run.
+run log, so a run recorded under any subject is visible -- and its
+orchestration decision store, and refreshes five Aggregate tables in this
+subject's own gold: one row per run, step durations per day against their
+recent past, the row funnel per step per run, rolling percentiles per pipeline
+and step, and when each day's scheduled batch finished.
 
-``run`` reads the registry once, builds and checks every table, and only then
+``run`` reads each store once, builds and checks every table, and only then
 writes them; the reductions themselves are in ``metrics``.
 
-Where the registry lives is ``RunStore``'s to say (``tools.observability``),
-the same way ``tools.store`` says where data lives; this pipeline names
-neither a path nor a table of its own for it.
+Where the stores live is ``RunStore``'s to say (``tools.observability``), the
+same way ``tools.store`` says where data lives; this pipeline names neither a
+path nor a table of its own for them.
 
 This pipeline's own run is being recorded while it reads, and its records are
 ingested after it returns -- so a run sees every run before it, including its
@@ -38,6 +40,7 @@ from framework.run import RunContext, read, run_pipeline, transform, validate, w
 from tools.medallion import medallion
 from tools.observability import timestamps
 from tools.observability.run_store import RunStore
+from tools.orchestration import OrchestrationStore
 from tools.store import StoreRegistry
 
 from . import metrics, schema
@@ -52,6 +55,8 @@ GOLD_TABLES = (
     ("pipeline_run_summary", schema.PipelineRunSummary),
     ("step_duration_trend_daily", schema.StepDurationTrendDaily),
     ("step_row_flow", schema.StepRowFlow),
+    ("duration_percentiles_daily", schema.DurationPercentilesDaily),
+    ("batch_finish_daily", schema.BatchFinishDaily),
 )
 
 
@@ -59,7 +64,7 @@ def run_records_reader(base_dir) -> SqliteReader | DatasetReader:
     """A Reader over the caught-up run registry under ``base_dir``.
 
     A base directory nothing has run in yet has no registry file at all; that
-    reads as no records, not as a failure, so the first run lands three empty
+    reads as no records, not as a failure, so the first run lands empty
     tables rather than refusing to start until something else has run.
     """
     store = RunStore(base_dir)
@@ -71,42 +76,32 @@ def run_records_reader(base_dir) -> SqliteReader | DatasetReader:
     return SqliteReader(store.registry_path, RUN_RECORDS_TABLE)
 
 
-def build_run_summary(records: Dataset, as_of: str) -> Dataset:
-    data = transform(
-        partial(metrics.run_summary, as_of=as_of), records, name="run_summary:reduce"
-    )
-    return validate(
-        SchemaValidator(schema.PipelineRunSummary), data, name="run_summary:check"
-    )
+def decisions_reader(base_dir) -> DatasetReader:
+    """A Reader over the orchestration decisions under ``base_dir``.
+
+    Read through ``OrchestrationStore`` so a store written before a column
+    existed is brought up to date first. Nothing orchestrated yet reads as no
+    decisions.
+    """
+    path = RunStore(base_dir).orchestration_path
+    rows = OrchestrationStore(path).records() if path.exists() else []
+    frame = pd.DataFrame(rows, columns=list(metrics.DECISION_COLUMNS))
+    return DatasetReader(Dataset.from_pandas(frame))
 
 
-def build_step_duration_trend(records: Dataset, as_of: str) -> Dataset:
-    data = transform(
-        partial(metrics.step_duration_trend, as_of=as_of),
-        records,
-        name="duration_trend:reduce",
-    )
-    return validate(
-        SchemaValidator(schema.StepDurationTrendDaily),
-        data,
-        name="duration_trend:check",
-    )
-
-
-def build_step_row_flow(records: Dataset, as_of: str) -> Dataset:
-    data = transform(
-        partial(metrics.step_row_flow, as_of=as_of), records, name="row_flow:reduce"
-    )
-    return validate(SchemaValidator(schema.StepRowFlow), data, name="row_flow:check")
+def _built(reduce, table: type, data: Dataset, as_of: str, name: str) -> Dataset:
+    """Reduce ``data`` to one table and check it against its declared schema."""
+    reduced = transform(partial(reduce, as_of=as_of), data, name=f"{name}:reduce")
+    return validate(SchemaValidator(table), reduced, name=f"{name}:check")
 
 
 def run(context: RunContext) -> Dataset:
-    """Read the registry once, build and check every table, then write them.
+    """Read each store once, build and check every table, then write them.
 
-    Nothing is written until all three tables have passed their checks, so a
+    Nothing is written until every table has passed its checks, so a
     reduction or check that fails leaves the previous tables in place together.
     A registry with nothing in it has no latest record to date the tables by;
-    the run's own clock stands in, and the three tables land empty.
+    the run's own clock stands in, and the tables land empty.
     """
     gold = medallion(StoreRegistry(context.base_dir), schema.SUBJECT).gold
 
@@ -116,10 +111,40 @@ def run(context: RunContext) -> Dataset:
     )
     as_of = metrics.latest_instant(records) or timestamps.utc_now_iso()
 
+    decisions = read(decisions_reader(context.base_dir), name="decisions:read")
+
     tables = {
-        "pipeline_run_summary": build_run_summary(records, as_of),
-        "step_duration_trend_daily": build_step_duration_trend(records, as_of),
-        "step_row_flow": build_step_row_flow(records, as_of),
+        "pipeline_run_summary": _built(
+            metrics.run_summary,
+            schema.PipelineRunSummary,
+            records,
+            as_of,
+            "run_summary",
+        ),
+        "step_duration_trend_daily": _built(
+            metrics.step_duration_trend,
+            schema.StepDurationTrendDaily,
+            records,
+            as_of,
+            "duration_trend",
+        ),
+        "step_row_flow": _built(
+            metrics.step_row_flow, schema.StepRowFlow, records, as_of, "row_flow"
+        ),
+        "duration_percentiles_daily": _built(
+            metrics.duration_percentiles,
+            schema.DurationPercentilesDaily,
+            records,
+            as_of,
+            "percentiles",
+        ),
+        "batch_finish_daily": _built(
+            metrics.batch_finish,
+            schema.BatchFinishDaily,
+            decisions,
+            as_of,
+            "batch_finish",
+        ),
     }
     for table, data in tables.items():
         written = write(gold.writer(table, Refresh()), data, name=f"{table}:write")

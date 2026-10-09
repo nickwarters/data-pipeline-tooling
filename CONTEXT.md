@@ -387,6 +387,20 @@ record (`external_calls` / `external_wait_seconds`, `retry_attempts` /
 told apart from a step slowed by a slow service. _Avoid_: "latency" for these;
 a wait is measured from the caller's side and includes failed calls.
 
+**Duration percentiles** (p50 / p90 / p95):
+How long a pipeline or step usually takes (p50) and in its slow runs (p90,
+p95), over a rolling window of calendar days ending on a date — 28 and 90 —
+counting successful executions only. _Here_: `pipeline_run_metric` publishes
+one row per date in `duration_percentiles_daily`, so the table is their history
+and a trend is a plot of it; `python -m cli perf` shows the latest. A daily job
+has one execution a day, so a percentile "per day" is meaningless for it; the
+window is what gives it samples. p90 needs 10 and p95 needs 20, NULL below.
+
+**Batch finish**:
+When a run date's scheduled work finished: the last item an orchestration ran
+for that date, measured from the start of the date on the local calendar.
+_Here_: `batch_finish_daily`, from the orchestration decision store.
+
 **Run store**:
 The owner of a base directory's **run-metadata layout** — `_runs/<subject>.log`,
 `_registry/runs.db`, `_orchestration/runs.db` — and the pieces it opens over
