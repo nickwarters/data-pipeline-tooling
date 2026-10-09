@@ -537,8 +537,9 @@ class RunRegistry:
         """Delete the records of runs that ended before ``before``.
 
         ``before`` is a local calendar date; a run is old when its last record
-        was written before that day began. Each pipeline's latest run and each
-        address's latest success are kept however old they are. Without
+        was written before that day began. Each pipeline's latest run, and each
+        address's latest success and latest committed write, are kept however
+        old they are. Without
         ``apply`` nothing is deleted and the result says what would be.
 
         The run logs are not touched, so a log that is later truncated or
@@ -591,9 +592,11 @@ class PruneResult:
 
 
 # The runs pruning never deletes, however old: each pipeline's latest run (what
-# ``status`` shows) and each address's latest success (what a freshness check
-# and ``runs --table`` look for). Deleting those would turn "it ran a year ago"
-# into "it never ran".
+# ``status`` shows), each address's latest success (what a freshness check
+# looks for) and each address's latest committed write (what ``runs --table``
+# looks for -- a step can be ok without committing, such as a quarantine with
+# nothing to reject). Deleting those would turn "it ran a year ago" into "it
+# never ran".
 _PROTECTED_RUNS = """
 SELECT pipeline_run_id FROM (
     SELECT pipeline_run_id, ROW_NUMBER() OVER (
@@ -607,6 +610,13 @@ SELECT pipeline_run_id FROM (
         PARTITION BY step_address ORDER BY timestamp DESC, rowid DESC
     ) AS newest
     FROM run_records WHERE status = 'ok' AND step_address IS NOT NULL
+) WHERE newest = 1
+UNION
+SELECT pipeline_run_id FROM (
+    SELECT pipeline_run_id, ROW_NUMBER() OVER (
+        PARTITION BY step_address ORDER BY timestamp DESC, rowid DESC
+    ) AS newest
+    FROM run_records WHERE committed = 1 AND step_address IS NOT NULL
 ) WHERE newest = 1
 """
 

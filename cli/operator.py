@@ -576,7 +576,7 @@ def _prune_runs(args: argparse.Namespace) -> int:
     print(
         f"{verb} {result.records} record(s) of {result.runs} run(s) that ended "
         f"before {result.before.isoformat()}; kept {result.kept_runs} older run(s) "
-        "that are a pipeline's latest run or a step's latest success"
+        "that are a pipeline's latest run, or a step's latest success or write"
     )
     if not result.applied and result.runs:
         print("nothing was deleted; add --apply to delete them")
@@ -744,10 +744,10 @@ def register(sub) -> None:
     prune.add_argument(
         "--older-than",
         dest="older_than",
-        type=int,
+        type=_days,
         required=True,
         metavar="DAYS",
-        help="runs that ended more than DAYS days ago",
+        help="runs that ended more than DAYS days ago (0: before today)",
     )
     prune.add_argument(
         "--apply", action="store_true", help="delete them; without it, only report"
@@ -784,6 +784,24 @@ def date(value: str) -> dt.date:
         raise argparse.ArgumentTypeError(
             f"expected YYYY-MM-DD date, got {value!r}"
         ) from exc
+
+
+def _days(value: str) -> int:
+    """An argparse ``type`` for ``prune-runs --older-than``: 0 or more days.
+
+    0 is allowed and means every run that ended before today began. A negative
+    number is refused: it would put the cutoff in the future, where it reaches
+    today's runs, including any still being written.
+    """
+    try:
+        days = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"expected a whole number of days, got {value!r}"
+        ) from exc
+    if days < 0:
+        raise argparse.ArgumentTypeError(f"expected 0 or more days, got {days}")
+    return days
 
 
 def _param(value: str) -> tuple[str, str]:

@@ -249,6 +249,33 @@ def test_prune_keeps_what_status_and_freshness_look_up_however_old(tmp_path):
     assert latest["annual"]["pipeline_run_id"] == "yearly"
 
 
+def test_prune_keeps_the_run_that_last_committed_each_steps_write(tmp_path):
+    # A feed quarantined rows once, long ago; every quarantine step since was
+    # ok with nothing to reject, so committed nothing. The old run is the one
+    # ``runs --table rejects`` names, though it is neither the latest run nor
+    # the step's latest success.
+    rejects = {"namespace": "sqlite:/data/feed/quarantine.db", "name": "rejects"}
+
+    def quarantined(run_id, day, *, committed):
+        at = f"{day}T07:00:00+00:00"
+        step = _record(run_id, "feed", "quarantine", "ok", at)
+        step["committed"] = committed
+        step["data_locations"] = [rejects] if committed else []
+        return [step, _record(run_id, "feed", "run", "ok", at)]
+
+    registry = _pruned_registry(
+        tmp_path,
+        quarantined("wrote-rejects", "2025-01-01", committed=True),
+        quarantined("nothing-rejected", "2026-06-01", committed=False),
+    )
+    assert registry.last_write_of("rejects")["pipeline_run_id"] == "wrote-rejects"
+
+    result = registry.prune(date(2026, 1, 1), apply=True)
+
+    assert (result.runs, result.kept_runs) == (0, 1)
+    assert registry.last_write_of("rejects")["pipeline_run_id"] == "wrote-rejects"
+
+
 def test_prune_dates_a_run_by_its_last_record(tmp_path):
     # A run that began before the cutoff and finished after it is not old.
     records = [
