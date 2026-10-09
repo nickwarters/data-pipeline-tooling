@@ -92,7 +92,6 @@ from tools.integrations.sharepoint_rest import (
     SharePointSource,
 )
 from tools.medallion import medallion
-from tools.observability.waits import external_call
 from tools.source_checkpoint import (
     InstantWindow,
     SourceCheckpointStore,
@@ -1093,8 +1092,7 @@ def run(
     # The list evaluates the window's predicate, so the list's clock bounds it; a
     # skewed local one would silently widen or narrow every window. Read once, so
     # every list's window ends at the same instant.
-    with external_call():
-        server_now = client.server_time()
+    server_now = client.server_time()
 
     polls = []
     for case_list in case_lists:
