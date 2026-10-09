@@ -189,7 +189,7 @@ test('choosing a search result hands the whole Party to the route', () => {
   );
   const root = host(node ? [node] : []);
   assert.equal(
-    findByClass(root, 'cora-responsible-party-current').textContent,
+    findByClass(root, 'cora-responsible-party-name').textContent,
     'Old Owner'
   );
   const [option] = queryAllByRole(root, 'option');

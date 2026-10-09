@@ -1421,13 +1421,15 @@
 }
 
 /* The person currently named, with the picker still below it: choosing again
-   is how a wrong choice is corrected, and the button beside it clears it. */
+   is how a wrong choice is corrected, and the button inside it clears it. The
+   tighter right padding sits the button's round hover area against the edge. */
 .cora-responsible-party-current {
   display: inline-flex;
   align-items: center;
   gap: var(--cora-space-1);
   margin: 0 0 var(--cora-space-2);
-  padding: var(--cora-space-1) var(--cora-space-3);
+  padding: var(--cora-space-1) var(--cora-space-1) var(--cora-space-1)
+    var(--cora-space-3);
   font-size: var(--cora-font-size-sm);
   font-weight: var(--cora-font-weight-medium);
   color: var(--cora-color-on-surface);
@@ -1436,25 +1438,34 @@
   border-radius: var(--cora-radius-pill, 999px);
 }
 
-/* Beside the name, the one way back to nobody before the actions are sent. */
-.cora-responsible-party-clear {
+/* Inside the pill, the one way back to nobody before the actions are sent.
+   Scoped under [data-cora-root] to out-specify the button reset (0,1,1), which
+   otherwise paints it as a solid accent button, with the reset's hover, active
+   and focus states re-declared so they cannot win it back. The 24px box keeps
+   the minimum target size while the glyph stays small. */
+[data-cora-root] .cora-responsible-party-clear,
+[data-cora-root] .cora-responsible-party-clear:hover,
+[data-cora-root] .cora-responsible-party-clear:active {
   display: inline-flex;
-  margin: 0 0 var(--cora-space-2) var(--cora-space-1);
-  padding: var(--cora-space-1);
-  font: inherit;
-  font-size: var(--cora-font-size-xs);
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: calc(-1 * var(--cora-space-1)) 0;
+  padding: 0;
+  font-size: var(--cora-font-size-2xs);
+  font-weight: var(--cora-font-weight-medium);
   line-height: 1;
   color: var(--cora-color-text-muted);
   background: transparent;
   border: none;
-  border-radius: var(--cora-radius-sm);
-  cursor: pointer;
+  border-radius: 50%;
 }
 
-.cora-responsible-party-clear:hover,
-.cora-responsible-party-clear:focus-visible {
+[data-cora-root] .cora-responsible-party-clear:hover,
+[data-cora-root] .cora-responsible-party-clear:focus-visible {
   color: var(--cora-color-danger);
-  outline: none;
+  background: var(--cora-color-border);
 }
 
 /* Read-only once the actions are sent: the person named is who they went to. */
