@@ -46,6 +46,7 @@ from readers.sharepoint_cases import (
 )
 from tools.calendar import WorkingDayCalendar
 from tools.medallion import medallion
+from tools.observability.timestamps import local_date
 from tools.store import StoreRegistry
 
 from . import metrics, schema
@@ -81,8 +82,10 @@ GOLD_TABLES = (
     ("reviewer_workload_daily", schema.ReviewerWorkloadDaily),
 )
 
-# The tables kept a day at a time (``AccumulateByRun``) rather than rebuilt: a
-# snapshot of what is open cannot be rebuilt from Sync once the day has passed.
+# The tables kept a day at a time (``AccumulateByRun``, keyed by
+# ``snapshot_day_strategy``) rather than rebuilt: a snapshot of what is open
+# cannot be rebuilt from Sync once the day has passed. ``run`` gives these the
+# accumulating Writer and every other table a ``Refresh()``.
 ACCUMULATED_TABLES = ("case_open_age_daily", "reviewer_workload_daily")
 
 # One gate per source, on the columns the reductions read from it. Stateless,
@@ -481,6 +484,18 @@ def to_workload_daily(workload: Dataset, as_of: str, writer: Writer) -> Dataset:
     return write(writer, data, name="workload_daily:write")
 
 
+def snapshot_day_strategy(as_of: str) -> AccumulateByRun:
+    """How a day-at-a-time table accumulates: keyed on the Sync snapshot's
+    local date -- the ``as_of_date`` its rows carry -- not on the run date.
+
+    A run replaces the day its rows describe. Keyed on the run date instead, a
+    re-drive under an earlier ``--run-date`` over a later snapshot would land
+    that snapshot's day a second time under another key.
+    """
+    day = local_date(as_of).isoformat()
+    return AccumulateByRun(logical_run_id=f"{PIPELINE_NAME}:{day}", load_date=day)
+
+
 def run(context: RunContext) -> Dataset:
     """Read each Sync source once, then build each table in publication order.
 
@@ -498,6 +513,10 @@ def run(context: RunContext) -> Dataset:
     )
     validate(CURRENT_GATE, cases, name="current:columns")
     as_of = metrics.snapshot_as_of(cases)
+    by_day = snapshot_day_strategy(as_of)
+
+    def target(table: str) -> Writer:
+        return gold.writer(table, by_day if table in ACCUMULATED_TABLES else Refresh())
 
     observations = to_ordered_history(
         read(
@@ -515,79 +534,42 @@ def run(context: RunContext) -> Dataset:
         name="messages:read",
     )
 
-    to_stage_dwell(
-        observations, as_of, gold.writer("case_stage_dwell_current", Refresh())
-    )
-    to_hold(observations, as_of, gold.writer("case_hold_current", Refresh()))
-    to_sla_attainment(
-        cases, as_of, gold.writer("case_sla_attainment_monthly", Refresh()), calendar
-    )
-    to_void_monthly(cases, as_of, gold.writer("case_void_monthly", Refresh()))
-    to_action_load(
-        actions, cases, as_of, gold.writer("answer_action_load_current", Refresh())
-    )
+    to_stage_dwell(observations, as_of, target("case_stage_dwell_current"))
+    to_hold(observations, as_of, target("case_hold_current"))
+    to_sla_attainment(cases, as_of, target("case_sla_attainment_monthly"), calendar)
+    to_void_monthly(cases, as_of, target("case_void_monthly"))
+    to_action_load(actions, cases, as_of, target("answer_action_load_current"))
     to_remediation_by_manager(
-        answers,
-        cases,
-        as_of,
-        gold.writer("answer_remediation_by_manager_current", Refresh()),
+        answers, cases, as_of, target("answer_remediation_by_manager_current")
     )
-    to_appeal_cycle_time(
-        appeals, as_of, gold.writer("appeal_cycle_time_current", Refresh())
-    )
-    to_appeal_citations(
-        appeals, as_of, gold.writer("appeal_question_citations_current", Refresh())
-    )
+    to_appeal_cycle_time(appeals, as_of, target("appeal_cycle_time_current"))
+    to_appeal_citations(appeals, as_of, target("appeal_question_citations_current"))
     to_response_time(
-        messages,
-        cases,
-        as_of,
-        gold.writer("conversation_response_time_current", Refresh()),
+        messages, cases, as_of, target("conversation_response_time_current")
     )
-    to_volume(
-        messages, cases, as_of, gold.writer("conversation_volume_current", Refresh())
-    )
+    to_volume(messages, cases, as_of, target("conversation_volume_current"))
     to_posting_pattern(
-        messages,
-        cases,
-        as_of,
-        gold.writer("conversation_posting_pattern_current", Refresh()),
+        messages, cases, as_of, target("conversation_posting_pattern_current")
     )
-    to_intake(cases, as_of, gold.writer("case_intake_daily", Refresh()))
-    to_backlog(observations, as_of, gold.writer("case_backlog_daily", Refresh()))
-    to_lifecycle_duration(
-        cases, as_of, gold.writer("case_lifecycle_duration_monthly", Refresh())
-    )
-    to_outcome(cases, as_of, gold.writer("case_outcome_monthly", Refresh()))
-    to_due_profile(cases, as_of, gold.writer("case_due_profile_current", Refresh()))
+    to_intake(cases, as_of, target("case_intake_daily"))
+    to_backlog(observations, as_of, target("case_backlog_daily"))
+    to_lifecycle_duration(cases, as_of, target("case_lifecycle_duration_monthly"))
+    to_outcome(cases, as_of, target("case_outcome_monthly"))
+    to_due_profile(cases, as_of, target("case_due_profile_current"))
     to_remediation_overdue(
-        cases,
-        answers,
-        actions,
-        as_of,
-        gold.writer("remediation_overdue_current", Refresh()),
+        cases, answers, actions, as_of, target("remediation_overdue_current")
     )
     workload = to_workload(
-        cases, observations, as_of, gold.writer("reviewer_workload_current", Refresh())
+        cases, observations, as_of, target("reviewer_workload_current")
     )
-    to_appeal_rate(
-        cases, appeals, as_of, gold.writer("appeal_rate_by_reviewer_monthly", Refresh())
-    )
+    to_appeal_rate(cases, appeals, as_of, target("appeal_rate_by_reviewer_monthly"))
     to_duration_percentiles(
-        cases,
-        as_of,
-        gold.writer("case_duration_percentiles_daily", Refresh()),
-        calendar,
+        cases, as_of, target("case_duration_percentiles_daily"), calendar
     )
-    by_run = AccumulateByRun.from_context(context)
-    to_open_age(cases, as_of, gold.writer("case_open_age_daily", by_run))
-    to_first_time_right(
-        cases, appeals, as_of, gold.writer("case_first_time_right_monthly", Refresh())
-    )
-    to_throughput(cases, as_of, gold.writer("reviewer_throughput_weekly", Refresh()))
-    return to_workload_daily(
-        workload, as_of, gold.writer("reviewer_workload_daily", by_run)
-    )
+    to_open_age(cases, as_of, target("case_open_age_daily"))
+    to_first_time_right(cases, appeals, as_of, target("case_first_time_right_monthly"))
+    to_throughput(cases, as_of, target("reviewer_throughput_weekly"))
+    return to_workload_daily(workload, as_of, target("reviewer_workload_daily"))
 
 
 def main(argv: list[str]) -> int:

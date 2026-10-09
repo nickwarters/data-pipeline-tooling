@@ -21,7 +21,7 @@ from framework.core import (
     ValidationError,
 )
 from framework.io import Refresh
-from framework.run import FreshnessRequirement
+from framework.run import FreshnessRequirement, run_pipeline
 from pipelines.cora_platform_metric import metrics
 from pipelines.cora_platform_metric.metrics import (
     UNASSIGNED,
@@ -32,8 +32,10 @@ from pipelines.cora_platform_metric.metrics import (
 from pipelines.cora_platform_metric.pipeline import (
     ACCUMULATED_TABLES,
     GOLD_TABLES,
+    PIPELINE_NAME,
     UPSTREAMS,
     main,
+    run,
 )
 from pipelines.cora_platform_metric.schema import (
     AnswerActionLoad,
@@ -498,6 +500,117 @@ def test_a_hold_still_flagged_on_a_completed_case_closes_at_its_completion():
     assert (row["open_hold_count"], row["held_days_total"]) == (0, 3.0)
 
 
+def _hold_counts(history) -> tuple[int, int, int, float]:
+    """(case_count, hold_count, open_hold_count, held_days_total) of one row."""
+    [row] = _rows(metrics.case_hold(_history(history), as_of=AS_OF))
+    return (
+        row["case_count"],
+        row["hold_count"],
+        row["open_hold_count"],
+        row["held_days_total"],
+    )
+
+
+HELD_THEN_COMPLETED = [
+    _observation("1", "a", "2026-07-02T09:00:00+00:00", "In-progress", on_hold=1),
+    _observation("1", "b", "2026-07-04T09:00:00+00:00", "Completed", on_hold=1),
+]
+
+
+def test_a_hold_cleared_after_completion_still_ends_at_the_completion():
+    # The flag is tidied four days after the Case completed: the hold is the
+    # two days to the completion, not six to the tidy-up.
+    history = [
+        *HELD_THEN_COMPLETED,
+        _observation("1", "c", "2026-07-08T09:00:00+00:00", "Completed", on_hold=0),
+    ]
+
+    assert _hold_counts(history) == (1, 1, 0, 2.0)
+
+
+def test_a_hold_does_not_count_the_spell_the_case_spent_completed():
+    # Completed on 4 Jul still flagged, reopened on 10 Jul with the flag clear:
+    # one hold of two days, not eight running through the Completed spell.
+    history = [
+        *HELD_THEN_COMPLETED,
+        _observation("1", "c", "2026-07-10T09:00:00+00:00", "In-progress", on_hold=0),
+    ]
+
+    assert _hold_counts(history) == (1, 1, 0, 2.0)
+
+
+def test_a_hold_flag_first_seen_on_a_terminal_case_opens_no_hold():
+    history = [
+        _observation("1", "a", "2026-07-02T09:00:00+00:00", "In-progress"),
+        _observation("1", "b", "2026-07-04T09:00:00+00:00", "Completed"),
+        _observation("1", "c", "2026-07-08T09:00:00+00:00", "Completed", on_hold=1),
+        _observation("1", "d", "2026-07-09T09:00:00+00:00", "Void", on_hold=1),
+    ]
+
+    assert len(metrics.case_hold(_history(history), as_of=AS_OF)) == 0
+
+
+def test_a_flag_still_set_at_a_reopen_opens_a_new_hold_from_the_reopen():
+    # The reopened observation still carries the original placed_on_hold_at
+    # (2 Jul): the new hold runs from the reopen (10 Jul 09:00) to as_of
+    # (20 Aug 06:00), 40.875 days, beside the closed two-day hold before it.
+    stale = "2026-07-02T09:00:00+00:00"
+    history = [
+        _observation(
+            "1", "a", stale, "In-progress", on_hold=1, placed_on_hold_at=stale
+        ),
+        _observation(
+            "1",
+            "b",
+            "2026-07-04T09:00:00+00:00",
+            "Completed",
+            on_hold=1,
+            placed_on_hold_at=stale,
+        ),
+        _observation(
+            "1",
+            "c",
+            "2026-07-10T09:00:00+00:00",
+            "In-progress",
+            on_hold=1,
+            placed_on_hold_at=stale,
+        ),
+    ]
+
+    assert _hold_counts(history) == (1, 2, 1, 42.875)
+
+
+def test_a_nullable_boolean_hold_flag_reads_as_the_flag_it_carries():
+    # SchemaCoercion lands a bool column as pandas' nullable "boolean"; NA
+    # reads as not set, as NULL does.
+    assert metrics._flagged(
+        pd.Series([True, False, pd.NA], dtype="boolean")
+    ).tolist() == [True, False, False]
+    frame = _history(HISTORY).to_pandas()
+    flags = frame.assign(on_hold=frame["on_hold"].astype(bool).astype("boolean"))
+
+    assert _rows(metrics.case_hold(Dataset.from_pandas(flags), as_of=AS_OF)) == _rows(
+        metrics.case_hold(_history(HISTORY), as_of=AS_OF)
+    )
+
+
+@pytest.mark.parametrize(
+    "reduce",
+    [
+        lambda history: metrics.case_stage_dwell(history, as_of=AS_OF),
+        lambda history: metrics.case_hold(history, as_of=AS_OF),
+        lambda history: metrics.case_backlog(history, as_of=AS_OF),
+        lambda history: metrics.reviewer_workload(_current(), history, as_of=AS_OF),
+    ],
+    ids=["stage_dwell", "hold", "backlog", "reviewer_workload"],
+)
+def test_a_history_reduction_names_ordered_history_when_handed_an_unordered_one(
+    reduce,
+):
+    with pytest.raises(ValueError, match=r"ordered_history\(\)"):
+        reduce(given_rows(HISTORY).read())
+
+
 def test_a_history_with_no_holds_lands_the_declared_shape_and_no_rows():
     history = [_observation("1", "o1", "2026-07-02T09:00:00+00:00", "To-allocate")]
     result = metrics.case_hold(_history(history), as_of=AS_OF)
@@ -539,6 +652,7 @@ def test_working_days_late_counts_working_days_after_the_due_date(
     [
         WorkingDayCalendar(),
         WorkingDayCalendar(holidays=[dt.date(2026, 7, 9), dt.date(2026, 7, 13)]),
+        WorkingDayCalendar(holidays=["2026-07-09", dt.datetime(2026, 7, 13, 9)]),
         WorkingDayCalendar(weekend=[4]),
         WorkingDayCalendar(weekend=range(7)),
     ],
@@ -569,6 +683,18 @@ def test_the_column_form_of_working_days_late_agrees_with_the_day_walk(calendar)
         - metrics.working_days_late(calendar, done, due)
         for due, done in pairs
     ]
+
+
+def test_a_holiday_given_as_text_is_honoured_by_both_forms_of_lateness():
+    # Due Wed 8 Jul, completed Fri 10 Jul, Thu 9 Jul a holiday given as text:
+    # one working day late by the day walk and by the column form alike.
+    calendar = WorkingDayCalendar(holidays=["2026-07-09"])
+    due, done = dt.date(2026, 7, 8), dt.date(2026, 7, 10)
+
+    assert metrics.working_days_late(calendar, due, done) == 1
+    assert metrics._working_days_late(
+        calendar, pd.Series([pd.Timestamp(due)]), pd.Series([pd.Timestamp(done)])
+    ).tolist() == [1.0]
 
 
 def test_grouped_statistics_match_each_groups_own_series_bit_for_bit():
@@ -2026,6 +2152,35 @@ def test_main_reads_sync_and_refreshes_every_table_through_the_migrated_path(
     assert {
         table: len(read_rows(gold, table)) for table in ACCUMULATED_TABLES
     } == accumulated
+
+
+def test_a_re_drive_under_another_run_date_replaces_the_snapshots_day(base_dir):
+    # An operator re-drives yesterday's run after today's Sync published: both
+    # runs read the one snapshot (as_of 20 Aug), so the day-at-a-time tables
+    # must hold one row set for 20 Aug, keyed on that day, not one per run date.
+    _seed_sync(base_dir)
+    gold = medallion(StoreRegistry(base_dir), "cora_platform_metric").gold
+
+    landed = {}
+    for run_date in (dt.date(2026, 10, 8), dt.date(2026, 10, 9)):
+        run_pipeline(
+            run,
+            PIPELINE_NAME,
+            base_dir=base_dir,
+            upstreams=UPSTREAMS,
+            run_date=run_date,
+        )
+        landed[run_date] = {
+            table: read_rows(gold, table) for table in ACCUMULATED_TABLES
+        }
+
+    first, second = landed.values()
+    for table in ACCUMULATED_TABLES:
+        assert len(second[table]) == len(first[table]) > 0, table
+        assert {
+            (row["as_of_date"], row["logical_run_id"], row["load_date"])
+            for row in second[table]
+        } == {("2026-08-20", "cora_platform_metric:2026-08-20", "2026-08-20")}, table
 
 
 def test_the_pipeline_declares_sync_as_its_freshness_upstream():

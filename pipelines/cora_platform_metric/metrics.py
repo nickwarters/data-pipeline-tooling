@@ -477,7 +477,7 @@ def _finish(
 
 def _flagged(values: pd.Series) -> pd.Series:
     """A source flag as True/False, NULL reading as not set."""
-    return values.notna() & values.fillna(0).astype(bool)
+    return values.notna() & values.astype("object").fillna(0).astype(bool)
 
 
 def _local_days(instants: pd.Series) -> pd.Series:
@@ -553,6 +553,17 @@ def ordered_history(history: Dataset) -> Dataset:
     return Dataset.from_pandas(ordered.reset_index(drop=True))
 
 
+def _history_frame(history: Dataset) -> pd.DataFrame:
+    """The frame of a history that has been through ``ordered_history``."""
+    frame = history.to_pandas()
+    if "_case" not in frame.columns:
+        raise ValueError(
+            "a history reduction takes the ordered history: pass the observation "
+            "history through ordered_history() first"
+        )
+    return frame
+
+
 def _case_starts(frame: pd.DataFrame) -> pd.Series:
     """True on each Case's first row of an ordered history."""
     return frame["_case"].ne(frame["_case"].shift())
@@ -588,7 +599,7 @@ def case_stage_dwell(history: Dataset, *, as_of: str) -> Dataset:
     """How long Cases dwell in each status. **Grain: brand x case_type x
     status.** Statistics are over closed intervals; a terminal status closes
     none, even when a reopen leaves it."""
-    frame = history.to_pandas()
+    frame = _history_frame(history)
     first = _case_starts(frame)
     last = first.shift(-1, fill_value=True)
     changed, began = _stays(frame, first)
@@ -627,21 +638,26 @@ def case_stage_dwell(history: Dataset, *, as_of: str) -> Dataset:
 
 def case_hold(history: Dataset, *, as_of: str) -> Dataset:
     """How often and how long Cases are held. **Grain: brand x case_type x
-    assigned_reviewer_name.** A hold open at the last observation runs to
-    ``as_of``, or to where the Case entered a terminal status."""
-    frame = history.to_pandas()
+    assigned_reviewer_name.** A hold ends at its release, or where the Case
+    entered a terminal status if that comes first; a terminal spell is never
+    held, so a reopen still flagged opens a new hold from the reopen. One open
+    at the last observation runs to ``as_of``."""
+    frame = _history_frame(history)
     first = _case_starts(frame)
     last = first.shift(-1, fill_value=True)
-    on_hold = _flagged(frame["on_hold"])
-    was_on_hold = on_hold.shift(fill_value=False) & ~first
-    placed = _instants(frame["placed_on_hold_at"])
     terminal = frame["status"].isin(TERMINAL_STATUSES)
-    closed_at = (
+    # A terminal row reads as unheld whatever its flag says: entering a
+    # terminal status ends a hold there, and a flag seen there opens none.
+    on_hold = _flagged(frame["on_hold"]) & ~terminal
+    was_on_hold = on_hold.shift(fill_value=False) & ~first
+    reopened = (
         frame["_modified"]
-        .where(terminal & (first | ~terminal.shift(fill_value=False)))
+        .where(~terminal & terminal.shift(fill_value=False) & ~first)
+        .groupby(frame["_case"])
         .ffill()
-        .where(last & terminal)
     )
+    placed = _instants(frame["placed_on_hold_at"])
+    started = placed.where(placed.notna(), frame["_modified"])
     hold = (on_hold & ~was_on_hold).cumsum()
     reviewer = (
         frame["assigned_reviewer_name"]
@@ -652,26 +668,16 @@ def case_hold(history: Dataset, *, as_of: str) -> Dataset:
 
     opened = frame.loc[on_hold & ~was_on_hold].assign(
         _hold=hold,
-        _started=placed.where(placed.notna(), frame["_modified"]),
+        _started=started.mask(reopened.gt(started), reopened),
         _reviewer=reviewer,
     )
     released = pd.Series(
         frame["_modified"].loc[~on_hold & was_on_hold].array,
         index=hold.loc[~on_hold & was_on_hold].to_numpy(),
     )
-    trailing = pd.Series(
-        closed_at.loc[last & on_hold].array,
-        index=hold.loc[last & on_hold].to_numpy(),
-    )
-    ends = pd.DataFrame(
-        {
-            "released": released.reindex(opened["_hold"]).array,
-            "closed": trailing.reindex(opened["_hold"]).array,
-        },
-        index=opened.index,
-    )
-    still_open = ends["released"].isna() & ends["closed"].isna()
-    ended = ends["released"].fillna(ends["closed"]).fillna(pd.Timestamp(as_of))
+    ended = pd.Series(released.reindex(opened["_hold"]).array, index=opened.index)
+    still_open = ended.isna()
+    ended = ended.fillna(pd.Timestamp(as_of))
     held = pd.DataFrame(
         {
             "case_type": opened["case_type"],
@@ -760,7 +766,7 @@ def case_backlog(history: Dataset, *, as_of: str) -> Dataset:
     """Open Cases at each day's close, by status, rebuilt from the ordered
     history."""
     as_of_day = pd.Timestamp(local_date(as_of))
-    spans = _open_spans(history.to_pandas(), as_of_day)
+    spans = _open_spans(_history_frame(history), as_of_day)
 
     grids = []
     for case_type, group in spans.groupby("case_type", sort=True):
@@ -1221,7 +1227,7 @@ def remediation_overdue(
 def _in_progress_since(history: Dataset) -> pd.DataFrame:
     """When each Case whose latest observation is ``In-progress`` last entered
     it -- after a reopen, the reopen, not the original claim."""
-    frame = history.to_pandas()
+    frame = _history_frame(history)
     first = _case_starts(frame)
     last = first.shift(-1, fill_value=True)
     _, began = _stays(frame, first)
@@ -1674,7 +1680,9 @@ def case_duration_percentiles(
 ) -> Dataset:
     """Trailing-window duration percentiles. **Grain: as_of_date x window_days
     x case_type x measure.** Every as-of date from the first completion, so the
-    table is its own backfill."""
+    table is its own backfill. The first as-of date is the local day of the
+    earliest completion, not of the earliest measurement: until something
+    completes there are no rows, even for legs already measured."""
     measured = _with_all_case_types(
         _durations(current, calendar or WorkingDayCalendar())
     )

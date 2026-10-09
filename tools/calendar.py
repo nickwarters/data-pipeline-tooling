@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterable
@@ -18,21 +19,25 @@ _WEEKDAY_NAMES = (
 
 _CALENDAR_KEYS = ("holidays", "weekend")
 
+_ISO_DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
+
 
 class WorkingDayCalendar:
     """Working-day arithmetic over a weekend rule + a set of holidays.
 
     ``weekend`` is the set of weekday ordinals that are non-working
     (``date.weekday()``: Monday=0 … Sunday=6), defaulting to Saturday/Sunday.
-    ``holidays`` are individual non-working dates layered on top.
+    ``holidays`` are individual non-working dates layered on top: each a
+    ``date``, a ``datetime`` (its own date is taken) or a ``YYYY-MM-DD`` string,
+    held as dates so every reading of the set compares like with like.
     """
 
     def __init__(
         self,
-        holidays: Iterable[date] = (),
+        holidays: Iterable[date | datetime | str] = (),
         weekend: Iterable[int] = (5, 6),
     ) -> None:
-        self._holidays = frozenset(holidays)
+        self._holidays = frozenset(_as_holiday(value) for value in holidays)
         self._weekend = frozenset(weekend)
 
     @classmethod
@@ -107,6 +112,31 @@ class WorkingDayCalendar:
                 days.append(day)
             day -= timedelta(days=1)
         return days
+
+
+def _as_holiday(value: object) -> date:
+    """One constructor holiday as a ``date``.
+
+    A ``datetime`` and a ``date`` never compare equal, so a ``datetime`` (or an
+    ISO string) left as given would never match the ``date`` a caller asks
+    about, while ``numpy.busday_count`` would honour it: the two readings of
+    the one calendar would disagree.
+    """
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        if _ISO_DATE.fullmatch(value):
+            try:
+                return date.fromisoformat(value)
+            except ValueError:
+                pass
+        raise ValueError(f"holiday {value!r} is not a YYYY-MM-DD date")
+    raise TypeError(
+        f"holiday {value!r} must be a date, a datetime or a YYYY-MM-DD string, "
+        f"not {type(value).__name__}"
+    )
 
 
 def _parse_holidays(value: Any, path: Path) -> list[date]:

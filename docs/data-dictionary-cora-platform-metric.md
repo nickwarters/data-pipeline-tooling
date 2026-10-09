@@ -5,7 +5,7 @@ operating, reduced from the Sync subject's published current state and its
 observation history. They belong to the `cora_platform_metric` Reporting
 subject. All but two are rebuilt whole (`Refresh()`) on every run, so a re-run
 over the same Sync snapshot produces the same numbers; `case_open_age_daily`
-and `reviewer_workload_daily` keep a row set per day (`AccumulateByRun`),
+and `reviewer_workload_daily` keep a row set per snapshot day (`AccumulateByRun`),
 because what was open on a past day cannot be rebuilt from the current state.
 Every table carries the Sync snapshot's `as_of_utc`; no table carries a Case.
 
@@ -56,8 +56,9 @@ a Case from it is reopened. The tables built from the observation history
 (item 1) keep the interval the Case spent in each status, so a reopened Case
 adds a second `In-progress` interval rather than rewriting the first; the spell
 it spent `Completed` before the reopen is not a stage and is not published as
-one. `reviewer_workload_current` ages a reopened `In-progress` Case from the
-reopen, read off the same history, not from its original `assigned_at`.
+one, nor counted as held time in `case_hold_current`.
+`reviewer_workload_current` ages a reopened `In-progress` Case from the reopen,
+read off the same history, not from its original `assigned_at`.
 
 ## Part A — Subject overview
 
@@ -68,7 +69,7 @@ reopen, read off the same history, not from its original `assigned_at`.
 | **Is this a Case Type?** | No — Reporting aggregates |
 | **Source system** | Sync gold `case_current`, `answer`, `answer_action`, `appeal`, `conversation_message`; Sync silver `case_version` (the observation history) |
 | **Readers** | `readers.sharepoint_cases.CurrentCasesReader`, `AnswersReader`, `AnswerActionsReader`, `AppealsReader`, `ConversationMessagesReader`, `CaseObservationHistoryReader` — the Shared Readers over the Sync subject ([ADR-0026](adr/0026-shared-readers-declare-cross-subject-reads.md)). This pipeline names no layer and no table for data it does not own; the physical sources above are facts about the data, not couplings in the code |
-| **Load strategy** | `Refresh()`, every table but `case_open_age_daily` and `reviewer_workload_daily`, which are `AccumulateByRun` |
+| **Load strategy** | `Refresh()`, every table but `case_open_age_daily` and `reviewer_workload_daily`, which are `AccumulateByRun` keyed on the Sync snapshot's local date (`cora_platform_metric:<as_of_date>`), not the run date |
 | **Upstream dependencies** | `sharepoint_cases` Sync pipeline (`UPSTREAMS`) |
 | **Schedule / freshness** | Daily, in the `case_management` set after `reviewer_activity`, with the Sync freshness check |
 | **Run parameters** | `calendar` — path to a YAML working-day calendar (`holidays` + `weekend`, the same file `orchestrate --calendar` takes) for `case_sla_attainment_monthly` and the `sla_margin_review` measure; omitted, weekends-only |
@@ -120,13 +121,26 @@ it been waiting".
 Reduced from the observation history. Grain: `brand` × `case_type` ×
 `assigned_reviewer_name`.
 
-A hold opens at the first observation carrying `on_hold` — from the source's
-`placed_on_hold_at` where it has one, else that observation's `Modified` — and
-closes at the first later observation without it. A hold still open at the
-Case's last observation is measured to `as_of_utc` and counted in
-`open_hold_count` — unless the Case is by then `Completed` or `Void`, when the
-hold ends where the Case entered that status and counts as closed. Holds are attributed to the Reviewer the Case's *latest*
-observation names, so a reassigned Case's holds follow the Case.
+A hold opens at the first observation carrying `on_hold` while the Case is in
+an open status — from the source's `placed_on_hold_at` where it has one, else
+that observation's `Modified` — and closes at the first later observation
+without it. A spell in `Completed` or `Void` is not held time, by the same rule
+that keeps it out of `case_stage_dwell_current` (item 4):
+
+- A hold ends no later than the observation where the Case entered `Completed`
+  or `Void`, even if the flag is still set there and is cleared on a later
+  observation; it counts as closed.
+- A flag first seen on a `Completed` or `Void` observation opens no hold, so a
+  closed Case never adds a zero-length hold.
+- When a Case is reopened with the flag still set, a new hold opens at the
+  reopening observation's `Modified` — never earlier, even if
+  `placed_on_hold_at` still carries the stamp from before the Case closed — so
+  the Case counts two holds with the terminal spell between them in neither.
+
+A hold still open at the Case's last observation (so the Case is itself in an
+open status) is measured to `as_of_utc` and counted in `open_hold_count`. Holds
+are attributed to the Reviewer the Case's *latest* observation names, so a
+reassigned Case's holds follow the Case.
 
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
@@ -687,7 +701,12 @@ Reduced from `case_current` over the **non-void** Cases. Grain: `as_of_date` ×
 `case_type` × `measure`. **Accumulated one day at a time**
 (`AccumulateByRun`), not rebuilt: what was open on a past day cannot be read
 back off the current state, so each run adds the rows for its snapshot's local
-date, and a re-run under the same logical run replaces them.
+date. The rows are keyed on that date, not on the run date
+(`logical_run_id` is `cora_platform_metric:<as_of_date>`), so any run over the
+same Sync snapshot replaces that day's rows — including a re-drive under an
+earlier `--run-date` after a later Sync has published — and the table holds
+one row set per `as_of_date`. A run over a later snapshot adds a new day and
+leaves the earlier ones as they were.
 
 | `measure` | Over | Age from |
 |---|---|---|
@@ -714,7 +733,7 @@ measured. Small-`n` nulling and the `(all)` row are as for
 | `p50` / `max` | `float` | No | In decimal days. |
 | `p90` | `float` | Yes | NULL where `n` < 10. |
 | `p95` | `float` | Yes | NULL where `n` < 20. |
-| `logical_run_id` / `load_date` | `str` | No | The run that added the rows (`AccumulateByRun`'s columns, stamped by the Writer, not declared in `schema.py`). |
+| `logical_run_id` / `load_date` | `str` | No | The day's replace key, `cora_platform_metric:<as_of_date>`, and that `as_of_date` (`AccumulateByRun`'s columns, stamped by the Writer, not declared in `schema.py`). Which run attempt wrote them is `pipeline_run_id`. |
 
 ### `case_first_time_right_monthly` — Reportable Cases nobody had to correct
 
@@ -771,7 +790,8 @@ NULL where `active_reviewer_count` is under 10.
 
 `reviewer_workload_current`'s rows under `as_of_date`, `as_of_utc`'s local
 date, **accumulated one day at a time** (`AccumulateByRun`) so the work in hand
-can be trended; a re-run under the same logical run replaces that day's rows.
+can be trended. Keyed on `as_of_date` as `case_open_age_daily` is: any run over
+the same Sync snapshot replaces that day's rows, whatever its run date.
 Every column means what it does in `reviewer_workload_current`.
 
 | Field | Type | Nullable | Description |
@@ -805,7 +825,10 @@ the rates) before it is written.
 - An instant that does not parse (`errors="coerce"`) drops that row from the
   measure it feeds — a Completed Case with an unparseable `completed_at` is not
   in the SLA table; an Appeal with an unparseable `resolution_at` is in
-  `appeal_count` but not `resolved_count`.
+  `appeal_count` but not `resolved_count`. Where a reduction takes an
+  instant's local date, month or hour, an instant the system zone cannot place
+  (one before 1970, which Windows refuses) is treated the same way rather than
+  failing the table.
 - An observation whose `source_modified_at` does not parse has no place in a
   Case's order, so it is dropped from every reduction of the history alike
   (silver declares the column non-null, so this guards rather than expects).
