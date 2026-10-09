@@ -478,6 +478,86 @@ def test_a_hold_still_flagged_on_a_completed_case_closes_at_its_completion():
     assert (row["open_hold_count"], row["held_days_total"]) == (0, 3.0)
 
 
+def _hold_counts(history) -> tuple[int, int, int, float]:
+    """(case_count, hold_count, open_hold_count, held_days_total) of one row."""
+    [row] = _rows(metrics.case_hold(given_rows(history).read(), as_of=AS_OF))
+    return (
+        row["case_count"],
+        row["hold_count"],
+        row["open_hold_count"],
+        row["held_days_total"],
+    )
+
+
+HELD_THEN_COMPLETED = [
+    _observation("1", "a", "2026-07-02T09:00:00+00:00", "In-progress", on_hold=1),
+    _observation("1", "b", "2026-07-04T09:00:00+00:00", "Completed", on_hold=1),
+]
+
+
+def test_a_hold_cleared_after_completion_still_ends_at_the_completion():
+    # The flag is tidied four days after the Case completed: the hold is the
+    # two days to the completion, not six to the tidy-up.
+    history = [
+        *HELD_THEN_COMPLETED,
+        _observation("1", "c", "2026-07-08T09:00:00+00:00", "Completed", on_hold=0),
+    ]
+
+    assert _hold_counts(history) == (1, 1, 0, 2.0)
+
+
+def test_a_hold_does_not_count_the_spell_the_case_spent_completed():
+    # Completed on 4 Jul still flagged, reopened on 10 Jul with the flag clear:
+    # one hold of two days, not eight running through the Completed spell.
+    history = [
+        *HELD_THEN_COMPLETED,
+        _observation("1", "c", "2026-07-10T09:00:00+00:00", "In-progress", on_hold=0),
+    ]
+
+    assert _hold_counts(history) == (1, 1, 0, 2.0)
+
+
+def test_a_hold_flag_first_seen_on_a_terminal_case_opens_no_hold():
+    history = [
+        _observation("1", "a", "2026-07-02T09:00:00+00:00", "In-progress"),
+        _observation("1", "b", "2026-07-04T09:00:00+00:00", "Completed"),
+        _observation("1", "c", "2026-07-08T09:00:00+00:00", "Completed", on_hold=1),
+        _observation("1", "d", "2026-07-09T09:00:00+00:00", "Void", on_hold=1),
+    ]
+
+    assert len(metrics.case_hold(given_rows(history).read(), as_of=AS_OF)) == 0
+
+
+def test_a_flag_still_set_at_a_reopen_opens_a_new_hold_from_the_reopen():
+    # The reopened observation still carries the original placed_on_hold_at
+    # (2 Jul): the new hold runs from the reopen (10 Jul 09:00) to as_of
+    # (20 Aug 06:00), 40.875 days, beside the closed two-day hold before it.
+    stale = "2026-07-02T09:00:00+00:00"
+    history = [
+        _observation(
+            "1", "a", stale, "In-progress", on_hold=1, placed_on_hold_at=stale
+        ),
+        _observation(
+            "1",
+            "b",
+            "2026-07-04T09:00:00+00:00",
+            "Completed",
+            on_hold=1,
+            placed_on_hold_at=stale,
+        ),
+        _observation(
+            "1",
+            "c",
+            "2026-07-10T09:00:00+00:00",
+            "In-progress",
+            on_hold=1,
+            placed_on_hold_at=stale,
+        ),
+    ]
+
+    assert _hold_counts(history) == (1, 2, 1, 42.875)
+
+
 def test_a_history_with_no_holds_lands_the_declared_shape_and_no_rows():
     history = [_observation("1", "o1", "2026-07-02T09:00:00+00:00", "To-allocate")]
     result = metrics.case_hold(given_rows(history).read(), as_of=AS_OF)

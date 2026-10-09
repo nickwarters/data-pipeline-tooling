@@ -448,13 +448,17 @@ def case_hold(history: Dataset, *, as_of: str) -> Dataset:
     """How often and how long Cases are held. **Grain: brand x case_type x
     assigned_reviewer_name.**
 
-    A hold opens at the first observation carrying ``on_hold`` (from the
-    source's ``placed_on_hold_at`` where it has one, else that observation's
-    ``Modified``) and closes at the first later observation without it. A hold
-    still open at the last observation is measured to ``as_of`` and counted in
-    ``open_hold_count`` -- unless the Case has since closed, when it ends where
-    the Case entered its terminal status. Attributed to the Reviewer the Case's
-    latest observation names, so a reassigned Case's holds follow the Case.
+    A hold opens at the first open-status observation carrying ``on_hold``
+    (from the source's ``placed_on_hold_at`` where it has one, else that
+    observation's ``Modified``) and closes at the first later observation
+    without it, or at the observation where the Case entered ``Completed`` or
+    ``Void`` if that comes first. Terminal spells are not held time, as they are
+    not a stage in ``case_stage_dwell``: a flag first seen on a terminal
+    observation opens nothing, and a flag still set when the Case is reopened
+    opens a new hold from the reopen (never from a ``placed_on_hold_at`` before
+    it). A hold still open at the last observation is measured to ``as_of`` and
+    counted in ``open_hold_count``. Attributed to the Reviewer the Case's latest
+    observation names, so a reassigned Case's holds follow the Case.
     """
     as_of_instant = pd.Timestamp(as_of)
     holds = []  # one per hold: (case_type, source_item_id, reviewer, days, open)
@@ -464,28 +468,33 @@ def case_hold(history: Dataset, *, as_of: str) -> Dataset:
         reviewer = observations.iloc[-1]["assigned_reviewer_name"]
         if pd.isna(reviewer) or not reviewer:
             reviewer = UNASSIGNED
-        started = pd.NaT
-        terminal_since = pd.NaT
+        started = pd.NaT  # the open hold's start, if one is open
+        terminal = False
+        reopened = pd.NaT  # the latest return from a terminal status
         for _, observation in observations.iterrows():
-            if observation["status"] not in TERMINAL_STATUSES:
-                terminal_since = pd.NaT
-            elif pd.isna(terminal_since):
-                terminal_since = observation["_modified"]
+            modified = observation["_modified"]
+            if observation["status"] in TERMINAL_STATUSES:
+                if pd.notna(started):  # entering a terminal status ends the hold
+                    holds.append(
+                        (case_type, item, reviewer, _days(started, modified), False)
+                    )
+                    started = pd.NaT
+                terminal = True
+                continue
+            if terminal:
+                terminal, reopened = False, modified
             on_hold = pd.notna(observation["on_hold"]) and bool(observation["on_hold"])
             if on_hold and pd.isna(started):
                 stamped = _instants(observation["placed_on_hold_at"])
-                started = stamped if pd.notna(stamped) else observation["_modified"]
+                started = stamped if pd.notna(stamped) else modified
+                if pd.notna(reopened) and started < reopened:
+                    started = reopened
             elif not on_hold and pd.notna(started):
-                released = observation["_modified"]
                 holds.append(
-                    (case_type, item, reviewer, _days(started, released), False)
+                    (case_type, item, reviewer, _days(started, modified), False)
                 )
                 started = pd.NaT
-        if pd.notna(started) and pd.notna(terminal_since):
-            holds.append(
-                (case_type, item, reviewer, _days(started, terminal_since), False)
-            )
-        elif pd.notna(started):
+        if pd.notna(started):
             holds.append(
                 (case_type, item, reviewer, _days(started, as_of_instant), True)
             )
