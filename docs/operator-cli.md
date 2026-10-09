@@ -894,8 +894,9 @@ against 28 days earlier, the failure and retry rates, and the median time spent
 waiting on other services. A pipeline whose p90 is more than `--threshold`
 slower than 28 days earlier is flagged `SLOWER`; one that has not run for over
 a week says when it last did. Above the table, one line says when the latest
-scheduled batch finished against its 28-day p50 and p90, and the longest any
-item queued behind the others.
+scheduled batch finished against its 28-day p50 and p90, how many items ran,
+failed and were blocked (each item once, by how it ended, however many polls
+of an `--loop` decided it), and the longest any item queued behind the others.
 
 ```console
 $ python -m cli perf --base-dir /data --limit 3
@@ -911,10 +912,20 @@ complaints_a      27  48.2s   55.0s   1m01s   1m20s      +1%      -1%    4%     
 It shows what `pipelines/pipeline_run_metric` last published
 ([data dictionary](data-dictionary-pipeline-run-metric.md)), read through
 `readers/pipeline_run_metric.py`, so schedule that pipeline (it runs last in
-the day) or run it first; before it has run, `perf` says so and exits 1. A p90
-needs 10 runs in the window and a p95 needs 20, so a new or weekly pipeline
-shows `-` until it has them. `--as-of` shows the figures as they stood on an
-earlier date.
+the day) or run it first; before it has run, `perf` says so and exits 1. A gold
+database that is behind its migrations (one migrated before the percentile
+tables existed) is different: the metric pipeline would fail at the write, so
+`perf` says to run `migrate` first, then the pipeline. `--limit` takes 1 or
+more. A p90 needs 10 runs in the window and a p95 needs 20, so a new or weekly
+pipeline shows `-` until it has them. `--as-of` shows the figures as they stood
+on an earlier date.
+
+The percentile days are **execution dates**: the local date each run started,
+not the business run date it was for. A re-drive of 5 Jan run on 27 Aug is a
+27 Aug sample, so it moves the windows it ran in and leaves January's alone.
+The batch line is the exception: it is about one business run date's
+scheduled batch, so `--as-of` picks the latest batch *for* that date or
+earlier.
 
 ## `prune-runs` — keep the run registry to a size
 

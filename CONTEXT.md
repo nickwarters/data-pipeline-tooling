@@ -384,13 +384,17 @@ block; a **retry wait** is a failed attempt a `RetryPolicy` retried plus the
 backoff after it. _Here_: both are counted per step and per run on the run
 record (`external_calls` / `external_wait_seconds`, `retry_attempts` /
 `retry_wait_seconds`) by `tools/observability/waits.py`, so a slow step can be
-told apart from a step slowed by a slow service. _Avoid_: "latency" for these;
-a wait is measured from the caller's side and includes failed calls.
+told apart from a step slowed by a slow service. The two are **not additive**:
+a retried attempt that was itself an external call is counted in both, so a
+step's own work is its duration less the external wait alone. _Avoid_:
+"latency" for these; a wait is measured from the caller's side and includes
+failed calls.
 
 **Duration percentiles** (p50 / p90 / p95):
 How long a pipeline or step usually takes (p50) and in its slow runs (p90,
 p95), over a rolling window of calendar days ending on a date — 28 and 90 —
-counting successful executions only. _Here_: `pipeline_run_metric` publishes
+counting successful executions only, each on the date it executed (a re-drive
+of an old date counts on the day it ran). _Here_: `pipeline_run_metric` publishes
 one row per date in `duration_percentiles_daily`, so the table is their history
 and a trend is a plot of it; `python -m cli perf` shows the latest. A daily job
 has one execution a day, so a percentile "per day" is meaningless for it; the

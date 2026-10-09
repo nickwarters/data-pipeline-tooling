@@ -8,6 +8,7 @@ migrated write path from a real run log.
 from __future__ import annotations
 
 import datetime as dt
+import sqlite3
 
 import pandas as pd
 import pytest
@@ -18,6 +19,11 @@ from pipelines.pipeline_run_metric.pipeline import GOLD_TABLES, main
 from tests.framework_testing import build_databases, given_rows, read_rows
 from tools.medallion import medallion
 from tools.observability import timestamps
+from tools.observability.record_schema import (
+    RUN_RECORD_COLUMNS,
+    RUN_RECORD_PRIMARY_KEY,
+    create_table_sql,
+)
 from tools.observability.run_log import RunLog
 from tools.observability.run_store import RunStore
 from tools.orchestration import OrchestrationDecision, OrchestrationStore
@@ -260,7 +266,7 @@ def test_run_summary_dates_a_run_on_when_it_started_not_when_it_ended(monkeypatc
     monkeypatch.setattr(
         timestamps, "local_timezone", lambda: dt.timezone(dt.timedelta(hours=1))
     )
-    # Ends 00:10 local on the 27th, but began 22:50 local on the 26th.
+    # Ends 00:10 local on the 27th, but began 23:50 local (22:50 UTC) on the 26th.
     records = [_record("r9", "run", at="2026-08-26T23:10:00+00:00", duration=1200.0)]
     [row] = _rows(metrics.run_summary(given_rows(records).read(), as_of=AS_OF))
 
@@ -326,6 +332,78 @@ def test_step_duration_trend_looks_back_over_a_bounded_number_of_days():
 
     # Day 5's baseline is the median of days 3 and 4 only.
     assert result[-1]["trailing_p50_median"] == 3.5
+
+
+def test_a_re_drive_is_filed_on_its_business_date_but_timed_on_its_execution_date(
+    monkeypatch,
+):
+    # 5 Jan ran on 5 Jan; an operator re-drove it at 00:30 local on 27 Aug
+    # (23:30 UTC on the 26th, at UTC+1), and its summary recorded 5 Jan.
+    monkeypatch.setattr(
+        timestamps, "local_timezone", lambda: dt.timezone(dt.timedelta(hours=1))
+    )
+    jan = "ingest:2026-01-05"
+
+    def run(run_id: str, at: str, duration: float) -> list[dict[str, object]]:
+        return [
+            _record(
+                run_id,
+                "read",
+                at=at,
+                step_address="ingest.read",
+                rows_out=5,
+                duration=duration,
+                logical_run_id=jan,
+            ),
+            _record(
+                run_id,
+                "run",
+                at=at,
+                duration=duration,
+                logical_run_id=jan,
+                run_date="2026-01-05",
+            ),
+        ]
+
+    records = given_rows(
+        run("original", "2026-01-05T07:00:00+00:00", 2.0)
+        + run("redrive", "2026-08-26T23:30:00+00:00", 10.0)
+    )
+
+    # The summary and the row flow file the re-drive under the business date,
+    # beside the attempt it replaces.
+    summary = _rows(metrics.run_summary(records.read(), as_of=AS_OF))
+    assert [(r["run_id"], r["run_date"], r["attempt_number"]) for r in summary] == [
+        ("original", "2026-01-05", 1),
+        ("redrive", "2026-01-05", 2),
+    ]
+    flow = _rows(metrics.step_row_flow(records.read(), as_of=AS_OF))
+    assert [(r["run_id"], r["run_date"]) for r in flow] == [
+        ("original", "2026-01-05"),
+        ("redrive", "2026-01-05"),
+    ]
+
+    # The trend times it on the local day it executed: January's row keeps
+    # only January's execution, and the re-drive appears on 27 Aug.
+    trend = _rows(metrics.step_duration_trend(records.read(), as_of=AS_OF))
+    assert [
+        (r["run_date"], r["execution_count"], r["duration_p50"]) for r in trend
+    ] == [
+        ("2026-01-05", 1, 2.0),
+        ("2026-08-27", 1, 10.0),
+    ]
+
+    # So do the rolling percentiles: the re-drive is a sample on 27 Aug, and
+    # the January window still holds only January's run.
+    percentiles = _rows(metrics.duration_percentiles(records.read(), as_of=AS_OF))
+    assert [
+        (r["as_of_date"], r["ok_count"], r["duration_p50"])
+        for r in percentiles
+        if r["level"] == "pipeline" and r["window_days"] == 28
+    ] == [
+        ("2026-01-05", 1, 2.0),
+        ("2026-08-27", 1, 10.0),
+    ]
 
 
 def test_step_row_flow_keeps_unreported_counts_null_and_ratios_against_rows_in():
@@ -526,6 +604,31 @@ def test_percentiles_are_taken_across_the_days_of_the_window():
     assert row["p50_change_ratio_28d"] == 10.0
 
 
+def test_the_change_falls_back_to_the_latest_row_in_the_week_before():
+    # A job that did not run 28 days before 5 Feb (8 Jan) is compared with
+    # its latest row in the week before that: 2 Jan, when its p50 was 4. A
+    # different pipeline that did run on 8 Jan is not its baseline.
+    jan2 = dt.date(2026, 1, 2)
+    records = (
+        _daily_runs([4.0], start=jan2)
+        + _daily_runs([100.0], pipeline="other", start=dt.date(2026, 1, 8))
+        + _daily_runs([8.0], start=dt.date(2026, 2, 5))
+    )
+    row = _row(_percentiles(records), date="2026-02-05")
+    assert (row["pipeline"], row["duration_p50"]) == ("ingest", 8.0)
+    assert row["p50_change_ratio_28d"] == 1.0
+
+
+def test_the_change_is_null_when_no_row_is_within_the_week_before():
+    # 12 Feb looks back to 15 Jan; 2 Jan is 13 days before that, too far.
+    records = _daily_runs([4.0], start=dt.date(2026, 1, 2)) + _daily_runs(
+        [8.0], start=dt.date(2026, 2, 12)
+    )
+    row = _row(_percentiles(records), date="2026-02-12")
+    assert row["duration_p50"] == 8.0
+    assert row["p50_change_ratio_28d"] is None
+
+
 def test_a_percentile_needs_enough_samples_to_mean_anything():
     rows = _percentiles(_daily_runs(range(1, 31)))
 
@@ -593,7 +696,12 @@ def test_rolling_percentiles_match_a_direct_computation():
         )
     rows = _percentiles(records)
     runs = pd.DataFrame(records)
-    runs["day"] = pd.to_datetime(runs["run_date"])
+    # Bucketed on the execution date: the local (here UTC) date the run
+    # started, its stamp less its duration -- which for a long run stamped
+    # early in the day is the day before.
+    started = pd.to_datetime(runs["timestamp"])
+    started = started - pd.to_timedelta(runs["duration"].astype(float), unit="s")
+    runs["day"] = started.dt.tz_convert(None).dt.normalize()
 
     checked = 0
     for row in rows:
@@ -618,10 +726,11 @@ def test_rolling_percentiles_match_a_direct_computation():
 # --- the scheduled batch ----------------------------------------------------
 
 
-def _decision(run_date, status, *, at, pass_started_at=None, started_at=None):
+def _decision(run_date, status, *, at, item="a", pass_started_at=None, started_at=None):
     return {
         "timestamp": at,
         "orchestration_run_id": f"o-{run_date}",
+        "item_key": f"nightly/{item}/{run_date}",
         "run_date": run_date,
         "status": status,
         "pass_started_at": pass_started_at,
@@ -642,6 +751,7 @@ def test_batch_finish_is_the_last_item_to_run_measured_from_local_midnight():
             "2026-08-27",
             "failed",
             at="2026-08-27T06:30:00+00:00",
+            item="b",
             pass_started_at="2026-08-27T05:00:00+00:00",
             started_at="2026-08-27T05:10:00+00:00",
         ),
@@ -650,6 +760,7 @@ def test_batch_finish_is_the_last_item_to_run_measured_from_local_midnight():
             "2026-08-27",
             "skipped",
             at="2026-08-27T07:00:00+00:00",
+            item="c",
             pass_started_at="2026-08-27T05:00:00+00:00",
         ),
         # A day where nothing ran has no batch to finish.
@@ -666,6 +777,42 @@ def test_batch_finish_is_the_last_item_to_run_measured_from_local_midnight():
     assert row["queue_wait_max_seconds"] == 600
     assert row["finish_p50_28d"] == 6.5 * 3600
     assert row["finish_p90_28d"] is None  # one run date is not enough
+
+
+def test_batch_finish_counts_items_not_the_decisions_a_loop_re_records():
+    # orchestrate --loop decides every item on each poll of one orchestration
+    # run: "late" is blocked on its upstream twice, then runs; "early" runs on
+    # the first poll and is recorded skipped (already ran) on the next two.
+    def poll(n: int, item: str, status: str, *, ran: bool = True):
+        at = f"2026-08-27T0{n}:00:00+00:00"
+        return _decision(
+            "2026-08-27",
+            status,
+            at=at,
+            item=item,
+            pass_started_at=at,
+            started_at=at if ran else None,
+        )
+
+    decisions = [
+        poll(1, "early", "succeeded"),
+        poll(1, "late", "blocked"),
+        poll(2, "early", "skipped", ran=False),
+        poll(2, "late", "blocked"),
+        poll(3, "early", "skipped", ran=False),
+        poll(3, "late", "succeeded"),
+    ]
+    data = given_rows(decisions).read()
+    [row] = _rows(metrics.batch_finish(data, as_of=AS_OF))
+
+    assert row["pass_count"] == 1
+    assert (
+        row["items_run"],
+        row["items_succeeded"],
+        row["items_failed"],
+        row["items_blocked"],
+    ) == (2, 2, 0, 0)
+    assert row["finished_at"] == "2026-08-27T03:00:00+00:00"
 
 
 def test_batch_finish_reads_decisions_written_before_the_start_columns():
@@ -758,6 +905,29 @@ def test_main_on_a_base_dir_nothing_has_run_in_lands_empty_tables(base_dir):
     gold = medallion(StoreRegistry(base_dir), "pipeline_run_metric").gold
     for table, _ in GOLD_TABLES:
         assert read_rows(gold, table) == []
+
+
+def test_main_reads_a_registry_older_than_run_date_whose_logs_are_gone(base_dir):
+    # A registry written before ``run_date`` joined the record, with ``_runs/``
+    # emptied by rotation: no ingest opens it, so the read itself must still
+    # find the column rather than fail the first run and heal on the second.
+    registry_path = RunStore(base_dir).registry_path
+    registry_path.parent.mkdir(parents=True)
+    older = [f for f in RUN_RECORD_COLUMNS if f.name != "run_date"]
+    with sqlite3.connect(registry_path) as con:
+        con.execute(create_table_sql("run_records", older, RUN_RECORD_PRIMARY_KEY))
+        con.execute(
+            "INSERT INTO run_records (timestamp, pipeline_run_id, pipeline, step, "
+            "step_ordinal, status, duration) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("2026-08-27T07:00:00+00:00", "r1", "ingest", "run", 0, "ok", 1.0),
+        )
+    con.close()
+
+    assert main(["prog", "--base-dir", str(base_dir)]) == 0
+
+    gold = medallion(StoreRegistry(base_dir), "pipeline_run_metric").gold
+    [summary] = read_rows(gold, "pipeline_run_summary")
+    assert (summary["run_id"], summary["run_date"]) == ("r1", "2026-08-27")
 
 
 def test_main_writes_no_table_when_a_later_table_fails_to_build(base_dir, monkeypatch):

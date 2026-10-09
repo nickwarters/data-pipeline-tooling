@@ -63,9 +63,14 @@ class StepDurationTrendDaily:
     """``step_duration_trend_daily`` -- how long each step takes, per day,
     against its recent past.
 
-    Grain: ``pipeline`` x ``step_address`` x ``run_date``. The trailing
-    baseline is the median of the step's daily p50 over the previous
-    ``TRAILING_DAYS`` run dates that have data; NULL on a step's first day.
+    Grain: ``pipeline`` x ``step_address`` x ``run_date``. Here ``run_date``
+    is the *execution* date -- the local date the run started -- not the
+    business date the run summary and row flow carry under the same name, so a
+    re-drive of an old date is measured on the day it ran. The column keeps the
+    name its baseline migration gave it, since renaming it would be a
+    migration of its own. The trailing baseline is the median of
+    the step's daily p50 over the previous ``TRAILING_DAYS`` execution dates
+    that have data; NULL on a step's first day.
     """
 
     pipeline: Annotated[str, NonNull()]
@@ -111,10 +116,12 @@ class DurationPercentilesDaily:
     per step, one snapshot per date, so the table is their history.
 
     Grain: ``level`` x ``pipeline`` x ``step_address`` x ``window_days`` x
-    ``as_of_date``. A row exists for each date the subject ran and covers the
-    ``window_days`` calendar days ending on it. Durations and waits are over
-    ``ok`` executions (``ok_count``); p90 is NULL below 10 of them and p95
-    below 20. The change ratios compare with the row 28 days earlier.
+    ``as_of_date``. A row exists for each *execution* date the subject ran on
+    (the local date a run started, not the business ``run_date`` it was for)
+    and covers the ``window_days`` calendar days ending on it. Durations and
+    waits are over ``ok`` executions (``ok_count``); p90 is NULL below 10 of
+    them and p95 below 20. The change ratios compare with the row 28 days
+    earlier.
     """
 
     as_of_date: Annotated[str, NonNull()]
@@ -146,7 +153,8 @@ class BatchFinishDaily:
     orchestration decision store, not the run registry. The finish is
     measured from the start of the run date on the local calendar; its p50 and
     p90 are over the run dates in the 28 days ending on this one, p90 NULL
-    below 10 of them.
+    below 10 of them. The ``items_*`` counts are of items, each by its last
+    decision that was not a skip, not of the decisions a ``--loop`` re-records.
     """
 
     run_date: Annotated[str, NonNull()]

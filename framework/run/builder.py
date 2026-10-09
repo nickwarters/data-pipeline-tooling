@@ -145,7 +145,7 @@ class Node:
                 errors=[str(exc)],
                 error_category=getattr(exc, "category", None),
                 # Retry notes gathered before the failure are the evidence for it.
-                warn_hits=self.warn_hits or None,
+                warn_hits=self.warn_hits,
                 step_address=self.address.label if self.address is not None else None,
                 **waits.fields(),
             )

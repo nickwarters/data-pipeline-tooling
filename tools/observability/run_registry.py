@@ -51,6 +51,19 @@ _CREATE_LATEST_RUN_INDEX = """
     ON run_records (step, pipeline, timestamp)
 """
 
+# The clause ``latest_run_per_pipeline`` selects with. It is a constant so the
+# index test can plan this exact text rather than a copy that could drift from
+# it while the method is rewritten into a shape the index cannot serve.
+_LATEST_RUN_PER_PIPELINE = """
+    WHERE step = 'run' AND rowid = (
+        SELECT rowid FROM run_records inner_r
+        WHERE inner_r.step = 'run'
+          AND inner_r.pipeline = run_records.pipeline
+        ORDER BY timestamp DESC, rowid DESC LIMIT 1
+    )
+    ORDER BY pipeline
+"""
+
 _CREATE_INGEST_PROGRESS = """
     CREATE TABLE IF NOT EXISTS ingest_progress (
         log_path    TEXT PRIMARY KEY,
@@ -114,6 +127,16 @@ class RunRegistry:
             self._migrate(con)
             self._migrated = True
         return con
+
+    def migrate(self) -> None:
+        """Bring the file up to the declared shape now, rather than on first use.
+
+        For a caller about to read the table by some other route than this
+        class (a ``SqliteReader`` over it): every declared column is then
+        present. A no-op once this instance has migrated the file.
+        """
+        if not self._migrated:
+            self._connect().close()
 
     def _migrate(self, con) -> None:
         """Bring the file up to the declared shape; write only if it is behind.
@@ -442,15 +465,7 @@ class RunRegistry:
         per X.
         """
         return self._select(
-            """
-            WHERE step = 'run' AND rowid = (
-                SELECT rowid FROM run_records inner_r
-                WHERE inner_r.step = 'run'
-                  AND inner_r.pipeline = run_records.pipeline
-                ORDER BY timestamp DESC, rowid DESC LIMIT 1
-            )
-            ORDER BY pipeline
-            """,
+            _LATEST_RUN_PER_PIPELINE,
             (),
         )
 

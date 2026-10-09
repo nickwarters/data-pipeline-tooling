@@ -20,7 +20,7 @@ from framework.run import RunAddress
 from framework.run.builder import Pipeline
 from framework.run.run_context import RunContext
 from tools.observability.run_log import RunLog
-from tools.observability.run_registry import RunRegistry
+from tools.observability.run_registry import _LATEST_RUN_PER_PIPELINE, RunRegistry
 
 
 class RecordingReader:
@@ -150,19 +150,31 @@ def test_latest_run_per_pipeline_returns_the_most_recent_summary_each(tmp_path):
 def test_latest_run_per_pipeline_seeks_an_index_rather_than_scanning(tmp_path):
     # Without it the correlated lookup rescans every record once per run
     # summary, and ``cli status`` grows quadratically with history.
+    # It plans the method's own clause, so rewriting that query into a shape
+    # the index cannot serve fails here rather than going quiet.
     registry = RunRegistry(tmp_path / "registry.db")
     registry.query_runs()  # opening the file creates the table and its index
     con = sqlite3.connect(tmp_path / "registry.db")
-    plan = " ".join(
+    plan = [
         str(row[-1])
         for row in con.execute(
-            "EXPLAIN QUERY PLAN SELECT rowid FROM run_records i "
-            "WHERE i.step = 'run' AND i.pipeline = 'x' "
-            "ORDER BY timestamp DESC, rowid DESC LIMIT 1"
+            f"EXPLAIN QUERY PLAN SELECT * FROM run_records {_LATEST_RUN_PER_PIPELINE}"
         )
-    )
+    ]
     con.close()
-    assert "run_records_by_pipeline_time" in plan
+
+    # The outer walk over the summaries, and the correlated "latest of this
+    # pipeline" lookup inside it, each seek the index.
+    def seeks_index(table: str) -> bool:
+        return any(
+            s.startswith("SEARCH")
+            and f" {table} " in s
+            and "run_records_by_pipeline_time" in s
+            for s in plan
+        )
+
+    assert seeks_index("run_records"), plan
+    assert seeks_index("inner_r"), plan
 
 
 def _run(run_id, pipeline, day, status="ok", step_status=None):
