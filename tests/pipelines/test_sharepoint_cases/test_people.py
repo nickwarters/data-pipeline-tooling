@@ -20,6 +20,7 @@ import pytest
 from framework.core import Dataset
 from framework.io import DatasetReader
 from framework.run import RunContext
+from pipelines.sharepoint_cases.gold import PERSON_CURRENT_TABLE
 from pipelines.sharepoint_cases.pipeline import (
     FEED_NAME,
     PERSON_NAME_COLUMNS,
@@ -319,6 +320,19 @@ def test_polls_keep_one_row_per_person_and_the_case_row_holds_the_account(base_d
         "e.novak@contoso.com",
     )
     assert people["e.novak"]["display_name"] == "Eva N"
+
+    # Gold republishes the same people, as they stand after the second poll.
+    published = {
+        row["account"]: row for row in read_rows(med.gold, PERSON_CURRENT_TABLE)
+    }
+    assert {
+        account: {column: row[column] for column in PERSON_COLUMNS}
+        for account, row in published.items()
+    } == {
+        account: {column: row[column] for column in PERSON_COLUMNS}
+        for account, row in people.items()
+    }
+    assert len({row["as_of_utc"] for row in published.values()}) == 1
 
 
 # --- the backfill ------------------------------------------------------------

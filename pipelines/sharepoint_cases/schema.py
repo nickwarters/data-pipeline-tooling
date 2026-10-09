@@ -397,6 +397,11 @@ class CaseDetailRow:
     value_text: str
 
 
+# The silver table of everyone the feed has seen named, one row per person; gold
+# republishes it as ``person_current``.
+PERSON_TABLE = "person"
+
+
 @dataclass
 class PersonRow:
     """One row per person this feed has seen named: user details only.

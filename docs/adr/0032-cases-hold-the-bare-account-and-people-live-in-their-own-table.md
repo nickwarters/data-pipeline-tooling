@@ -42,6 +42,10 @@ Case polled before the change and one polled after spell a person alike.
 
 ## Consequences
 
+- Gold republishes the table whole on every poll as `person_current`, stamped
+  `as_of_utc` like every other gold table, so a consumer reading gold finds a
+  Case's people beside it without reaching back into silver. It adds nothing
+  to the silver rows: silver is already one row per person.
 - The table is named `person`, not "users": the `users` reference feed
   (`readers/users.py`) is a different table with a different source.
 - There is no per-sighting history, so which Case named a person, and when a

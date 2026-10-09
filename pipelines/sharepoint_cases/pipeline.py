@@ -104,6 +104,7 @@ from .schema import (
     CASE_LISTS,
     DETAIL_ID_VARS,
     FEED_NAME,
+    PERSON_TABLE,
     PERSON_VALUE_KIND,
     TEXT_VALUE_KIND,
     UNSUPPORTED_CAPTURE_VALUE_KIND,
@@ -893,7 +894,6 @@ _DETAIL_TABLES = (
 
 # --- person ----------------------------------------------------------------
 
-PERSON_TABLE = "person"
 _PERSON_DETAILS = ("domain", "display_name", "email")
 _PERSON_COLUMNS = ("account", *_PERSON_DETAILS, "first_seen_at", "last_seen_at")
 
