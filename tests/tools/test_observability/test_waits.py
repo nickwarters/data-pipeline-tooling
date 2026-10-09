@@ -229,6 +229,44 @@ def test_eager_steps_record_their_waits(tmp_path):
     assert by_step["run"]["external_calls"] == 3
 
 
+def test_the_runner_records_the_waits_of_a_handler_that_failed(tmp_path):
+    log_path = tmp_path / "run.log"
+    clock = Clock()
+
+    def handler(context):
+        with external_call(clock):
+            clock.now += 6
+        raise RuntimeError("handler failed after calling the service")
+
+    with pytest.raises(RuntimeError):
+        run_pipeline(handler, "feed", tmp_path, run_log=RunLog(log_path))
+
+    [summary] = _records(log_path)
+    assert (summary["step"], summary["status"]) == ("run", "error")
+    assert _waits(summary) == (0, 0, 1, 6)
+
+
+def test_an_eager_step_that_failed_records_its_waits(tmp_path):
+    log_path = tmp_path / "run.log"
+    clock = Clock()
+
+    class TimingOutReader:
+        def read(self) -> Dataset:
+            with external_call(clock):
+                clock.now += 30
+                raise TimeoutError("service did not answer")
+
+    def handler(context):
+        return read(TimingOutReader())
+
+    with pytest.raises(TimeoutError):
+        run_pipeline(handler, "feed", tmp_path, run_log=RunLog(log_path))
+
+    by_step = {r["step"]: r for r in _records(log_path)}
+    assert by_step["read"]["status"] == "error"
+    assert _waits(by_step["read"]) == (0, 0, 1, 30)
+
+
 def test_a_record_written_outside_any_step_carries_no_waits(tmp_path):
     log_path = tmp_path / "run.log"
     RunLog(log_path).record("run-1", "feed", "note", "ok")
