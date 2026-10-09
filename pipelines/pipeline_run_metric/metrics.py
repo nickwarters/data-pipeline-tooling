@@ -80,13 +80,20 @@ def latest_instant(records: Dataset) -> str | None:
 
 
 def _prepared(records: Dataset) -> pd.DataFrame:
-    """Records with parsed instants, a ``run_date`` per run, and a step address
-    for every row (derived from pipeline + step where the record predates the
+    """Records with parsed instants, two dates per run, and a step address for
+    every row (derived from pipeline + step where the record predates the
     column, as the registry's own backfill does).
 
     A record is stamped when its step *ends*, so its start is ``_at`` less its
-    duration. ``run_date`` is the date the run summary recorded, else the local
-    date the run started.
+    duration. The two dates answer different questions and differ only for a
+    re-drive of an earlier date:
+
+    - ``_execution_date`` is *when the run executed*: the local calendar date it
+      started. The duration trend buckets on it, so a re-drive's durations land
+      on the day they were measured.
+    - ``run_date`` is the *business* date: the one the run summary recorded,
+      else the execution date. The run summary and row flow file a run under
+      it, beside its ``logical_run_id``.
     """
     frame = records.to_pandas().copy()
     frame["_at"] = pd.to_datetime(frame["timestamp"], utc=True, format="ISO8601")
@@ -106,7 +113,8 @@ def _prepared(records: Dataset) -> pd.DataFrame:
     dates = {at: local_date(at).isoformat() for at in run_start.unique()}
     recorded = frame["run_date"].where(frame["_is_summary"])
     recorded = recorded.groupby(frame["pipeline_run_id"]).transform("last")
-    frame["run_date"] = recorded.fillna(run_start.map(dates))
+    frame["_execution_date"] = run_start.map(dates)
+    frame["run_date"] = recorded.fillna(frame["_execution_date"])
     return frame
 
 
@@ -245,12 +253,17 @@ def step_duration_trend(
     records: Dataset, *, as_of: str, trailing_days: int = TRAILING_DAYS
 ) -> Dataset:
     """Step duration per day against its recent past. **Grain: pipeline x
-    step_address x run_date.**
+    step_address x run_date**, where ``run_date`` is the *execution* date: the
+    local date the run started, not the business date it recorded.
+
+    "Is this step slower than its recent past?" is a question about when it
+    ran, so a re-drive of an old date lands on the day it executed and leaves
+    that old date's row, and the baselines after it, as they were.
 
     ``trailing_p50_median`` is the median of the step's daily p50 over its
-    previous ``trailing_days`` run dates *with data* (a step that ran three
-    times last fortnight has a three-day baseline), NULL on its first day.
-    ``delta_ratio`` is NULL where the baseline is NULL or zero.
+    previous ``trailing_days`` execution dates *with data* (a step that ran
+    three times last fortnight has a three-day baseline), NULL on its first
+    day. ``delta_ratio`` is NULL where the baseline is NULL or zero.
     """
     frame = _prepared(records)
     # A failed step's duration says how long it took to fail, not to run.
@@ -258,6 +271,8 @@ def step_duration_trend(
     steps = frame.loc[~frame["_is_summary"] & ran].copy()
     steps["duration"] = pd.to_numeric(steps["duration"])
 
+    # The table's ``run_date`` column carries the execution date (see above).
+    steps["run_date"] = steps["_execution_date"]
     by_day = steps.groupby(["pipeline", "step_address", "run_date"], sort=True)
     durations = by_day["duration"]
     daily = durations.agg(
