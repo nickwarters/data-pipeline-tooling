@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import datetime as dt
+import shutil
 
 import pandas as pd
+import pytest
 
 import cli
 from cli.perf import _clock, _seconds, batch_line, perf_table
 from pipelines.pipeline_run_metric.pipeline import main as build_metrics
 from tests.framework_testing import build_databases
+from tools.migrations import MigrationRunner, migrations_directory
 from tools.observability.run_log import RunLog
+from tools.store import StoreRegistry
 
 
 def _row(pipeline, date, **values):
@@ -123,3 +127,32 @@ def test_perf_before_the_metric_pipeline_has_run_says_what_to_do(tmp_path, capsy
     assert cli.main(["perf", "--base-dir", str(tmp_path)]) == 1
 
     assert "pipelines/pipeline_run_metric" in capsys.readouterr().err
+
+
+def test_perf_on_a_gold_database_behind_its_migrations_points_at_migrate(
+    tmp_path, capsys
+):
+    # Migrated to the baseline only: the percentile table is not there yet,
+    # and running the metric pipeline would fail at the write.
+    baseline = tmp_path / "baseline"
+    baseline.mkdir()
+    source = migrations_directory("pipeline_run_metric", "gold")
+    shutil.copy(source / "0001_create_initial_tables.sql", baseline)
+    db = StoreRegistry(tmp_path).db_file("pipeline_run_metric/gold")
+    db.parent.mkdir(parents=True, exist_ok=True)
+    MigrationRunner(db, baseline).apply()
+
+    assert cli.main(["perf", "--base-dir", str(tmp_path)]) == 1
+
+    err = capsys.readouterr().err
+    assert "behind their migrations" in err
+    assert f"python -m cli migrate --base-dir {tmp_path}" in err
+
+
+@pytest.mark.parametrize("limit", ["0", "-3", "two"])
+def test_perf_rejects_a_limit_below_one(tmp_path, capsys, limit):
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(["perf", "--base-dir", str(tmp_path), "--limit", limit])
+
+    assert exit_info.value.code == 2
+    assert "--limit" in capsys.readouterr().err

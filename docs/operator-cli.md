@@ -912,9 +912,12 @@ complaints_a      27  48.2s   55.0s   1m01s   1m20s      +1%      -1%    4%     
 It shows what `pipelines/pipeline_run_metric` last published
 ([data dictionary](data-dictionary-pipeline-run-metric.md)), read through
 `readers/pipeline_run_metric.py`, so schedule that pipeline (it runs last in
-the day) or run it first; before it has run, `perf` says so and exits 1. A p90
-needs 10 runs in the window and a p95 needs 20, so a new or weekly pipeline
-shows `-` until it has them. `--as-of` shows the figures as they stood on an
+the day) or run it first; before it has run, `perf` says so and exits 1. A gold
+database that is behind its migrations (one migrated before the percentile
+tables existed) is different: the metric pipeline would fail at the write, so
+`perf` says to run `migrate` first, then the pipeline. `--limit` takes 1 or
+more. A p90 needs 10 runs in the window and a p95 needs 20, so a new or weekly
+pipeline shows `-` until it has them. `--as-of` shows the figures as they stood on an
 earlier date.
 
 The percentile days are **execution dates**: the local date each run started,

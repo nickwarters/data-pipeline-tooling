@@ -102,7 +102,7 @@ def _resolve_app(name: str):
     return module
 
 
-def _base_dir_or_report(args: argparse.Namespace) -> Path | None:
+def base_dir_or_report(args: argparse.Namespace) -> Path | None:
     """Resolve ``base_dir`` from ``--base-dir`` or ``--env``.
 
     An explicit ``--base-dir`` always wins; when omitted it is resolved from
@@ -136,7 +136,7 @@ def _calendar_or_report(args: argparse.Namespace) -> WorkingDayCalendar | None:
         return None
 
 
-def _add_base_dir_args(parser: argparse.ArgumentParser) -> None:
+def add_base_dir_args(parser: argparse.ArgumentParser) -> None:
     """Add the shared ``--base-dir`` and ``--env`` options to a command."""
     parser.add_argument(
         "--base-dir",
@@ -191,7 +191,7 @@ def _run(args: argparse.Namespace) -> int:
     except UnknownPipelineError as exc:
         print(str(exc), file=sys.stderr)
         return 1
-    base_dir = _base_dir_or_report(args)
+    base_dir = base_dir_or_report(args)
     if base_dir is None:
         return 1
     params = dict(args.params)
@@ -228,7 +228,7 @@ def _run(args: argparse.Namespace) -> int:
 
 
 def _orchestrate(args: argparse.Namespace) -> int:
-    base_dir = _base_dir_or_report(args)
+    base_dir = base_dir_or_report(args)
     if base_dir is None:
         return 1
     calendar = _calendar_or_report(args)
@@ -303,7 +303,7 @@ def _migrate(args: argparse.Namespace) -> int:
     ``python -m pipelines.<name>``, which would bypass such a check anyway, and
     a run against an unmigrated database already fails at the write.
     """
-    base_dir = _base_dir_or_report(args)
+    base_dir = base_dir_or_report(args)
     if base_dir is None:
         return 1
     root = Path(args.migrations_root) if args.migrations_root else MIGRATIONS_ROOT
@@ -424,7 +424,7 @@ def _select_targets(
 
 
 def _runs(args: argparse.Namespace) -> int:
-    base_dir = _base_dir_or_report(args)
+    base_dir = base_dir_or_report(args)
     if base_dir is None:
         return 1
     registry = _load_registry_or_report(base_dir)
@@ -496,7 +496,7 @@ def _format_record(record: dict) -> str:
 
 
 def _log(args: argparse.Namespace) -> int:
-    base_dir = _base_dir_or_report(args)
+    base_dir = base_dir_or_report(args)
     if base_dir is None:
         return 1
     path = RunStore(base_dir).log_path_for(args.subject)
@@ -534,7 +534,7 @@ def _log(args: argparse.Namespace) -> int:
 
 
 def _status(args: argparse.Namespace) -> int:
-    base_dir = _base_dir_or_report(args)
+    base_dir = base_dir_or_report(args)
     if base_dir is None:
         return 1
     registry = _load_registry_or_report(base_dir)
@@ -564,8 +564,8 @@ def register(sub) -> None:
         "pipeline",
         help="the pipeline's location under pipelines/, e.g. pipelines/orders",
     )
-    _add_base_dir_args(run)
-    run.add_argument("--run-date", type=_date, default=dt.date.today())
+    add_base_dir_args(run)
+    run.add_argument("--run-date", type=date, default=dt.date.today())
     run.add_argument(
         "--logical-run-id",
         help="re-drive this business run: a re-run with the same id replaces its "
@@ -595,8 +595,8 @@ def register(sub) -> None:
     run.set_defaults(func=_run)
 
     orchestrate = sub.add_parser("orchestrate", help="run scheduled due work")
-    _add_base_dir_args(orchestrate)
-    orchestrate.add_argument("--run-date", type=_date, default=dt.date.today())
+    add_base_dir_args(orchestrate)
+    orchestrate.add_argument("--run-date", type=date, default=dt.date.today())
     mode = orchestrate.add_mutually_exclusive_group()
     mode.add_argument("--once", action="store_true", help="run one due-work pass")
     mode.add_argument("--loop", action="store_true", help="poll until due work settles")
@@ -639,7 +639,7 @@ def register(sub) -> None:
     migrate = sub.add_parser(
         "migrate", help="apply SQL migrations to every database the tree names"
     )
-    _add_base_dir_args(migrate)
+    add_base_dir_args(migrate)
     migrate.add_argument(
         "--check",
         action="store_true",
@@ -675,7 +675,7 @@ def register(sub) -> None:
     migrate.set_defaults(func=_migrate)
 
     runs = sub.add_parser("runs", help="list recent runs from the run registry")
-    _add_base_dir_args(runs)
+    add_base_dir_args(runs)
     runs.add_argument(
         "--pipeline", help="narrow to one pipeline label, e.g. cases/ingest"
     )
@@ -705,13 +705,13 @@ def register(sub) -> None:
     runs.set_defaults(func=_runs)
 
     status = sub.add_parser("status", help="show the latest run status per pipeline")
-    _add_base_dir_args(status)
+    add_base_dir_args(status)
     status.add_argument("--pipeline", help="one pipeline label, e.g. cases/ingest")
     status.add_argument("--subject", help="narrow to a subject's pipelines, e.g. cases")
     status.set_defaults(func=_status)
 
     log = sub.add_parser("log", help="inspect/summarize a run log file")
-    _add_base_dir_args(log)
+    add_base_dir_args(log)
     log.add_argument("subject", help="the subject whose _runs/<subject>.log to read")
     log.add_argument(
         "--pipeline-run-id",
@@ -732,7 +732,8 @@ def main(argv: list[str] | None = None) -> int:
     return args.func(args)
 
 
-def _date(value: str) -> dt.date:
+def date(value: str) -> dt.date:
+    """An argparse ``type``: a ``YYYY-MM-DD`` date."""
     try:
         return dt.date.fromisoformat(value)
     except ValueError as exc:

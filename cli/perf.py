@@ -16,7 +16,9 @@ import sys
 
 import pandas as pd
 
-from cli.operator import _add_base_dir_args, _base_dir_or_report, _date
+from cli.operator import add_base_dir_args, base_dir_or_report, date
+from tools.migrations import MigrationError, MigrationRunner, migrations_directory
+from tools.store import StoreRegistry
 
 # A p90 this much slower than 28 days earlier is flagged (0.2 = 20%).
 DEFAULT_THRESHOLD = 0.2
@@ -24,10 +26,50 @@ DEFAULT_THRESHOLD = 0.2
 # it last ran: its percentiles are from then, not now.
 STALE_DAYS = 7
 
+_SUBJECT = "pipeline_run_metric"
+_GOLD = "gold"
+
 _NOT_BUILT = (
     "no performance tables under {base}; run "
     "`python -m cli run pipelines/pipeline_run_metric --base-dir {base}` first"
 )
+_BEHIND = (
+    "the performance tables in {db} are behind their migrations; run "
+    "`python -m cli migrate --base-dir {base}`, then "
+    "`python -m cli run pipelines/pipeline_run_metric --base-dir {base}`"
+)
+
+
+def _not_built_message(base_dir) -> str:
+    """Why the tables could not be read, and what to run about it.
+
+    A gold database that exists but has migrations pending (a table or column
+    this command reads is not there yet) needs ``migrate``: running the metric
+    pipeline against it would itself fail at the write.
+    """
+    db = StoreRegistry(base_dir).db_file(f"{_SUBJECT}/{_GOLD}")
+    if db.exists():
+        runner = MigrationRunner(db, migrations_directory(_SUBJECT, _GOLD))
+        try:
+            behind = bool(runner.pending())
+        except MigrationError:
+            behind = True
+        if behind:
+            return _BEHIND.format(db=db, base=base_dir)
+    return _NOT_BUILT.format(base=base_dir)
+
+
+def _at_least_one(value: str) -> int:
+    """An argparse ``type``: a whole number of 1 or more."""
+    try:
+        number = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"expected a whole number, got {value!r}"
+        ) from exc
+    if number < 1:
+        raise argparse.ArgumentTypeError(f"expected 1 or more, got {number}")
+    return number
 
 
 def _seconds(value: object) -> str:
@@ -199,12 +241,12 @@ def perf_table(
 def _perf(args: argparse.Namespace) -> int:
     from readers.pipeline_run_metric import BatchFinishReader, DurationPercentilesReader
 
-    base_dir = _base_dir_or_report(args)
+    base_dir = base_dir_or_report(args)
     if base_dir is None:
         return 1
     percentiles = _read(DurationPercentilesReader(base_dir))
     if percentiles is None:
-        print(_NOT_BUILT.format(base=base_dir), file=sys.stderr)
+        print(_not_built_message(base_dir), file=sys.stderr)
         return 1
     batches = _read(BatchFinishReader(base_dir))
     if batches is not None:
@@ -232,7 +274,7 @@ def register(sub) -> None:
         description="Show p50/p90/p95 durations per pipeline (or per step), "
         "slowest first, from the pipeline_run_metric tables.",
     )
-    _add_base_dir_args(perf)
+    add_base_dir_args(perf)
     perf.add_argument(
         "--steps", action="store_true", help="one line per step, not per pipeline"
     )
@@ -247,7 +289,7 @@ def register(sub) -> None:
     perf.add_argument(
         "--as-of",
         dest="as_of",
-        type=_date,
+        type=date,
         default=None,
         help="show the figures as they stood on this date (YYYY-MM-DD)",
     )
@@ -257,5 +299,7 @@ def register(sub) -> None:
         default=DEFAULT_THRESHOLD,
         help="flag a p90 this much slower than 28 days earlier (default 0.2)",
     )
-    perf.add_argument("--limit", type=int, default=None, help="show at most N lines")
+    perf.add_argument(
+        "--limit", type=_at_least_one, default=None, help="show at most N lines"
+    )
     perf.set_defaults(func=_perf)
