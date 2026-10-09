@@ -1,12 +1,12 @@
 # Data dictionary — `sharepoint_cases`
 
 The filled-in entry for the `sharepoint_cases` feed, following
-[`data-dictionary-template.md`](data-dictionary-template.md). Twenty-four
+[`data-dictionary-template.md`](data-dictionary-template.md). Twenty-five
 tables: the faithful raw observation, the typed Case version and its silver
 `answer`, `answer_capture`, `answer_action`, `general_answer`,
 `conversation_message`, `appeal` and `case_detail` Detail Tables, the silver
-`person` table of everyone the feed has seen named, and the fourteen gold
-tables — the current Case, those same seven Detail Tables, and six aggregates, two of which reduce from a Detail Table rather than from
+`person` table of everyone the feed has seen named, and the fifteen gold
+tables — the current Case, the current details of every person, those same seven Detail Tables, and six aggregates, two of which reduce from a Detail Table rather than from
 the current Case. Every declared Case list
 lands in the same tables and is told apart by
 `case_type`. The
@@ -226,7 +226,7 @@ lower-cased **bare account** (`a.khan`) — see *Person columns* below.
 | `assigned_reviewer_name` | `AssignedReviewer/Name` | `str` | Yes | — | The Reviewer the Case is assigned to, as a bare account. | `a.khan` | PII | See *Person columns* below. |
 | `assigned_at` | `AssignedAt` | `datetime` | Yes | — | When the Case was last handed to its Reviewer. | `2026-07-01T09:15:00+00:00` | None | The operational predeploy gate establishes the conditional invariant: an outstanding row with `AssignedReviewer` must have `AssignedAt`; unassigned rows carry null. It remains nullable in the landed schema because the rule is conditional, not global over completed or void rows. The Action Centre filter only defensively excludes legacy gaps, which would otherwise fail silently by disappearing from the worklist and count. The SharePoint source column is indexed for Action Centre age/order, with no `Created` fallback. |
 | `responsible_party_name` | `ResponsibleParty/Name` | `str` | Yes | — | The Responsible Party, as a bare account. | `b.okafor` | PII | |
-| `responsible_party_title` | `ResponsibleParty/Title` | `str` | Yes | — | The Responsible Party's directory display name. | `Bola Okafor` | PII | Kept for the views that already read it. Every person's display name, this one's included, is in the silver `person` table. |
+| `responsible_party_title` | `ResponsibleParty/Title` | `str` | Yes | — | The Responsible Party's directory display name. | `Bola Okafor` | PII | Kept for the views that already read it. Every person's display name, this one's included, is in the silver `person` table and gold `person_current`. |
 | `assigned_reviewer_manager_name` | `AssignedReviewerManager/Name` | `str` | Yes | — | The Reviewer's manager. | `d.reid` | PII | |
 | `responsible_party_manager_name` | `ResponsiblePartyManager/Name` | `str` | Yes | — | The Responsible Party's manager, as the directory gave it when the Responsible Party was last saved. Empty on Cases saved before the platform recorded it, and when the lookup found nobody. | `e.novak` | PII | |
 | `due_date` | `DueDate` | `datetime` | Yes | — | Working-day SLA due date. | `2026-08-14T00:00:00+00:00` | None | |
@@ -285,8 +285,8 @@ the spelling the platform stamps into its JSON blobs, the Staff Hierarchy keys
 on, and every other person column in this feed holds — so a Case row joins
 to all of them without a translation. Nobody holding the role is a null. The
 domain the reduction drops is not lost: raw keeps the login, and
-the silver `person` table records the domain, display name and email beside the
-account, which is where every other detail of a person goes too. Only
+the silver `person` table (republished to gold as `person_current`) records the
+domain, display name and email beside the account, which is where every other detail of a person goes too. Only
 `responsible_party_title` stays on the Case row, because views already read it.
 
 The numeric `…Id` twin SharePoint also offers is a transport detail of one site
@@ -901,6 +901,7 @@ else as they were.
 | **Load strategy** | `UpsertStrategy("account")` |
 | **Upstream dependencies** | none declared — the batch is in memory |
 | **Schedule / freshness** | with the poll |
+| **Downstream** | gold `person_current`, republished whole on every poll |
 | **Owner / data steward** | *<team>* |
 | **Source of truth doc** | `pipelines/sharepoint_cases/schema.py` (`PersonRow`) |
 | **Last reviewed** | 2026-10-08 |
@@ -945,7 +946,8 @@ column, which silver reduces from the claims login the list gives. The two
 join directly. Each blob value lands verbatim; a consumer reading an older
 copy of a table, from before the reduction, still reduces both sides through
 `shared/account_names.py`, which leaves a bare account unchanged. The domain,
-display name and email of everyone here are in the silver `person` table.
+display name and email of everyone here are in the silver `person` table, and
+gold `person_current`.
 
 **Blob timestamps stay text on purpose.** `posted_at`, `raised_at` and
 `resolution_at` are declared `str`, not `datetime`. `SchemaCoercion` now
@@ -960,7 +962,7 @@ the blobs are clean enough to re-type. (`source_modified_at` stays
 `datetime` because it comes from OData, is uniform, and is already typed
 upstream — it is not one of these blob fields.)
 
-## Gold — the current Case, its Detail Tables, and six aggregates
+## Gold — the current Case, its people, its Detail Tables, and six aggregates
 
 Silver accumulates *observations*; gold answers *what is true now*. Every
 table is rebuilt whole with `Refresh()` on every poll from the entire silver
@@ -973,6 +975,7 @@ everything.
 | Table | Declared grain | Measure |
 |-------|----------------|---------|
 | `case_current` | one row per `case_id` | the Case, as it currently stands |
+| `person_current` | one row per `account` | the current details of every person the feed has seen named |
 | `answer` | `case_id` × `question_id` | the winning observation's answer rows |
 | `answer_capture` | `case_id` × `question_id` × `field_key` | the winning observation's Issue Capture rows |
 | `answer_action` | `case_id` × `question_id` × `action_id` | the winning observation's Remediation Action rows |
@@ -987,7 +990,8 @@ everything.
 | `answer_remediation_current` | `case_type` × `question_id` × `remediation_required` × `remediation_status` | `answer_count` |
 | `appeal_outcomes_current` | `case_type` × `state` × `resolution_verdict` | `appeal_count` |
 
-Only `case_current` carries a live grain gate (`UniqueValidator("case_id")`);
+`case_current` carries a live grain gate (`UniqueValidator("case_id")`), and
+so does `person_current` (`UniqueValidator("account")`);
 each Detail Table carries one too (e.g. `UniqueValidator(("case_id",
 "question_id", "field_key"))` for `answer_capture`, via
 `to_gold_detail`'s generic `grain=`); the six aggregates get none,
@@ -1257,6 +1261,25 @@ Two things to know about what this table holds:
   Case we have ever seen, at its latest observed version", which is the same
   thing only while nothing is deleted.
 
+### `person_current`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | one row per `account` |
+| **Load strategy** | `Refresh()` |
+| **Source** | silver `person`, read whole |
+| **Columns** | every silver `person` column, plus `as_of_utc` |
+
+A straight republish: silver `person` is already one row per person — the poll
+upserts it on `account` after merging each detail to the latest any sighting
+gave — so there is nothing to reduce, only `as_of_utc` to stamp. It is here so
+a consumer reading gold finds the people every `…_name` column names beside the
+tables that name them, and joins on `account` exactly as the silver table
+describes. `UniqueValidator("account")` is a tripwire, the same role it plays
+below `case_current`: the upsert already guarantees the grain. Published right
+after `case_current`, from the silver table as this poll left it, so a person
+the batch just named is in gold in the same run.
+
 ### `case_counts_current`
 
 | Attribute | Value |
@@ -1269,7 +1292,7 @@ question it answers is who is holding what, split by that Case's current
 status. Manager rollups join the Staff Hierarchy at report time.
 
 `assigned_reviewer_name` is the **bare account**, as silver holds it — not a
-display name; the silver `person` table has the display name. There is no team column on the provisioned list; what the
+display name; the silver `person` table, and gold `person_current`, have the display name. There is no team column on the provisioned list; what the
 review platform calls "my team" is exactly the set of Cases whose
 `AssignedReviewerManagerId` is the signed-in user, which this table does not
 carry.

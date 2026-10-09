@@ -1,5 +1,5 @@
 """Gold for the ``sharepoint_cases`` feed: the current Case, its Detail Tables,
-and six aggregates.
+six aggregates, and the current details of every person the feed has seen.
 
 Silver is an append-only history of *observations* across every declared Case
 list. Gold reduces that three ways. Every table is rebuilt whole with
@@ -52,16 +52,21 @@ from framework.transform import (
 from tools.medallion import Medallion
 from tools.observability.timestamps import local_date
 
-from .schema import FEED_NAME, NATURAL_KEY
+from .schema import FEED_NAME, NATURAL_KEY, PERSON_TABLE
 
 # The silver table gold reduces, and the current-state table every aggregate is
 # then reduced from.
 SILVER_TABLE = "case_version"
 CURRENT_TABLE = "case_current"
 
+# Silver's one row per person, republished whole as the gold table consumers
+# read people from.
+PERSON_CURRENT_TABLE = "person_current"
+
 # Every gold table, in publication order.
 GOLD_TABLES = (
     CURRENT_TABLE,
+    PERSON_CURRENT_TABLE,
     "answer",
     "answer_capture",
     "answer_action",
@@ -589,6 +594,24 @@ def to_gold_detail(
     return write(writer, data, name=f"{at}:write")
 
 
+def to_gold_person_current(
+    reader: Reader, writer: Writer, *, as_of: dt.datetime
+) -> Dataset:
+    """Silver ``person`` -> gold ``person_current``. **Grain: ``account``.**
+
+    Silver already holds one row per person, each detail merged as the polls
+    saw it, so gold republishes it as it stands -- stamped, and with its grain
+    checked rather than assumed.
+    """
+    at = f"gold:{PERSON_CURRENT_TABLE}"
+    data = read(reader, name=f"{at}:read")
+    data = transform(
+        Stamp(AS_OF_COLUMN, as_of.isoformat()), data, name=f"{at}:stamp-as-of"
+    )
+    validate(UniqueValidator("account"), data, name=f"{at}:unique-validate")
+    return write(writer, data, name=f"{at}:write")
+
+
 # --- publication ------------------------------------------------------------
 
 
@@ -597,9 +620,10 @@ def publish_gold(med: Medallion, *, as_of: dt.datetime) -> None:
 
     ``case_current`` is published first and its dataset feeds the Detail
     Tables and the six aggregates, so silver is read once and each of them
-    reduces exactly the current table's own rows. They commit independently,
-    in order; a failure part-way leaves the earlier ones refreshed, which is
-    safe because the caller has not advanced any watermark and the next run
+    reduces exactly the current table's own rows. ``person_current`` follows
+    it, republished from silver ``person``. They commit independently, in
+    order; a failure part-way leaves the earlier ones refreshed, which is safe
+    because the caller has not advanced any watermark and the next run
     rebuilds everything. See ``docs/gold-accumulation.md`` for why each source
     is read from memory rather than re-read from disk.
 
@@ -612,13 +636,18 @@ def publish_gold(med: Medallion, *, as_of: dt.datetime) -> None:
     # make gold silently under-publish.
     if any(
         med.silver.columns_of(table).columns() is None
-        for table in (SILVER_TABLE, *DETAIL_TABLES)
+        for table in (SILVER_TABLE, *DETAIL_TABLES, PERSON_TABLE)
     ):
         return
 
     current = to_gold_case_current(
         med.silver.reader(SILVER_TABLE),
         med.gold.writer(CURRENT_TABLE, Refresh()),
+        as_of=as_of,
+    )
+    to_gold_person_current(
+        med.silver.reader(PERSON_TABLE),
+        med.gold.writer(PERSON_CURRENT_TABLE, Refresh()),
         as_of=as_of,
     )
 

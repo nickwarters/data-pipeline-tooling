@@ -22,6 +22,7 @@ from pipelines.sharepoint_cases.gold import (
     DETAIL_AGGREGATES,
     DETAIL_TABLES,
     GOLD_TABLES,
+    PERSON_CURRENT_TABLE,
 )
 from pipelines.sharepoint_cases.pipeline import FEED_NAME, PERSON_TABLE
 from tests._sharepoint_cases_fixtures import COMPLAINTS, FakeListClient, run
@@ -34,7 +35,12 @@ SILVER_PERSON = f"{SILVER}:{PERSON_TABLE}"
 GOLD = tuple(f"gold:{table}" for table in GOLD_TABLES)
 # The gold tables reduced on a declared grain -- the ones that validate it.
 GOLD_KEYED = tuple(f"gold:{table}" for table in (CURRENT_TABLE, *DETAIL_TABLES))
-GOLD_AGGREGATES = tuple(prefix for prefix in GOLD if prefix not in GOLD_KEYED)
+# Republished from a silver table already one row per person: nothing to
+# reduce, but its grain is still checked.
+GOLD_PERSON = f"gold:{PERSON_CURRENT_TABLE}"
+GOLD_AGGREGATES = tuple(
+    prefix for prefix in GOLD if prefix not in (*GOLD_KEYED, GOLD_PERSON)
+)
 
 # ``enforce``'s three steps, in the order it promises: coerce first, so the
 # rules judge typed values; quarantine next, so a breach is routed aside rather
@@ -173,3 +179,14 @@ def test_every_gold_table_reduces_to_one_observation_or_one_count(recorded):
 def test_the_detail_aggregates_are_named_to_a_published_detail_table():
     assert set(DETAIL_AGGREGATES.values()) <= set(DETAIL_TABLES)
     assert set(DETAIL_AGGREGATES) <= set(GOLD_TABLES)
+
+
+def test_the_person_table_is_republished_with_its_grain_checked(recorded):
+    # Silver already merged each person to one row, so gold stamps and checks
+    # it rather than reducing it again.
+    assert steps_of(recorded, GOLD_PERSON) == [
+        "read",
+        "stamp-as-of",
+        "unique-validate",
+        "write",
+    ]
