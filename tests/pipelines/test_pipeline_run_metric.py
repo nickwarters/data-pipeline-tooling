@@ -393,6 +393,18 @@ def test_a_re_drive_is_filed_on_its_business_date_but_timed_on_its_execution_dat
         ("2026-08-27", 1, 10.0),
     ]
 
+    # So do the rolling percentiles: the re-drive is a sample on 27 Aug, and
+    # the January window still holds only January's run.
+    percentiles = _rows(metrics.duration_percentiles(records.read(), as_of=AS_OF))
+    assert [
+        (r["as_of_date"], r["ok_count"], r["duration_p50"])
+        for r in percentiles
+        if r["level"] == "pipeline" and r["window_days"] == 28
+    ] == [
+        ("2026-01-05", 1, 2.0),
+        ("2026-08-27", 1, 10.0),
+    ]
+
 
 def test_step_row_flow_keeps_unreported_counts_null_and_ratios_against_rows_in():
     result = _rows(metrics.step_row_flow(given_rows(RECORDS).read(), as_of=AS_OF))
@@ -646,7 +658,12 @@ def test_rolling_percentiles_match_a_direct_computation():
         )
     rows = _percentiles(records)
     runs = pd.DataFrame(records)
-    runs["day"] = pd.to_datetime(runs["run_date"])
+    # Bucketed on the execution date: the local (here UTC) date the run
+    # started, its stamp less its duration -- which for a long run stamped
+    # early in the day is the day before.
+    started = pd.to_datetime(runs["timestamp"])
+    started = started - pd.to_timedelta(runs["duration"].astype(float), unit="s")
+    runs["day"] = started.dt.tz_convert(None).dt.normalize()
 
     checked = 0
     for row in rows:

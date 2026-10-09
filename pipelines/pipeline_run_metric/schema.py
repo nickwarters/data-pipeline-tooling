@@ -120,10 +120,12 @@ class DurationPercentilesDaily:
     per step, one snapshot per date, so the table is their history.
 
     Grain: ``level`` x ``pipeline`` x ``step_address`` x ``window_days`` x
-    ``as_of_date``. A row exists for each date the subject ran and covers the
-    ``window_days`` calendar days ending on it. Durations and waits are over
-    ``ok`` executions (``ok_count``); p90 is NULL below 10 of them and p95
-    below 20. The change ratios compare with the row 28 days earlier.
+    ``as_of_date``. A row exists for each *execution* date the subject ran on
+    (the local date a run started, not the business ``run_date`` it was for)
+    and covers the ``window_days`` calendar days ending on it. Durations and
+    waits are over ``ok`` executions (``ok_count``); p90 is NULL below 10 of
+    them and p95 below 20. The change ratios compare with the row 28 days
+    earlier.
     """
 
     as_of_date: Annotated[str, NonNull()]

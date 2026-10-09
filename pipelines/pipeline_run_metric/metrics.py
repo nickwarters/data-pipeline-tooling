@@ -229,6 +229,7 @@ def _runs(frame: pd.DataFrame) -> pd.DataFrame:
     runs = runs.join(
         by_run.agg(
             run_date=("run_date", "first"),
+            _execution_date=("_execution_date", "first"),
             started=("_start", "min"),
             finished=("_at", "max"),
             step_duration_seconds=("_step_duration", "sum"),
@@ -397,8 +398,11 @@ SUBJECT_KEYS = ["level", "pipeline", "step_address"]
 
 
 def _executions(frame: pd.DataFrame) -> pd.DataFrame:
-    """One row per execution of a run (``level`` pipeline) or of a step.
+    """One row per execution of a run (``level`` pipeline) or of a step,
+    dated by its *execution* date: the local date its run started.
 
+    "Is this getting slower?" is a question about when it ran, so a re-drive
+    of an old date lands on the day it executed, as in the duration trend.
     Durations, external waits and throughput are kept for ``ok`` executions
     only: a failure's duration says how long it took to fail.
     """
@@ -409,7 +413,7 @@ def _executions(frame: pd.DataFrame) -> pd.DataFrame:
             "level": PIPELINE_LEVEL,
             "pipeline": runs["pipeline"],
             "step_address": runs["pipeline"],
-            "run_date": runs["run_date"],
+            "execution_date": runs["_execution_date"],
             "finished": runs["status"].isin([OK_STATUS, ERROR_STATUS]),
             "failed": runs["status"].eq(ERROR_STATUS),
             "duration": runs["wall_clock_seconds"].where(run_ok),
@@ -428,7 +432,7 @@ def _executions(frame: pd.DataFrame) -> pd.DataFrame:
             "level": STEP_LEVEL,
             "pipeline": steps["pipeline"],
             "step_address": steps["step_address"],
-            "run_date": steps["run_date"],
+            "execution_date": steps["_execution_date"],
             "finished": steps["status"].isin([OK_STATUS, ERROR_STATUS]),
             "failed": steps["status"].eq(ERROR_STATUS),
             "duration": took,
@@ -446,7 +450,8 @@ def _executions(frame: pd.DataFrame) -> pd.DataFrame:
     executions["retried"] = executions["retried"].where(
         executions["retry_attempts"].notna()
     )
-    known = executions[["pipeline", "step_address", "run_date"]].notna().all(axis=1)
+    subject = ["pipeline", "step_address", "execution_date"]
+    known = executions[subject].notna().all(axis=1)
     return executions.loc[known]
 
 
@@ -457,7 +462,7 @@ def _over_window(executions: pd.DataFrame, window_days: int) -> pd.DataFrame:
     Every measure is a grouped time-based rolling aggregate, so all subjects
     are computed in one pass rather than a Python call per subject per day.
     """
-    days = pd.to_datetime(executions["run_date"])
+    days = pd.to_datetime(executions["execution_date"])
     ordered = executions.assign(_day=days).sort_values(
         [*SUBJECT_KEYS, "_day"], kind="stable"
     )
@@ -550,7 +555,11 @@ def duration_percentiles(
     pipeline x step_address x window_days x as_of_date.**
 
     One row for each date a subject ran, over the ``window_days`` calendar
-    days ending on it, so the table is the history of each percentile. A
+    days ending on it, so the table is the history of each percentile. The
+    dates are *execution* dates, the local date each run started, not the
+    business ``run_date`` it recorded: ``as_of_date`` is the last execution
+    date in the window, and a re-drive of an old date counts on the day it
+    ran. A
     pipeline-level row measures the run's wall clock and has the pipeline as
     its ``step_address``. Durations count ``ok`` executions only (``ok_count``);
     ``failure_rate`` is over every finished one. p90 is NULL below

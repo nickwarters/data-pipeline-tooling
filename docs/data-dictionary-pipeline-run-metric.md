@@ -74,23 +74,26 @@ none, and the run's own clock stands in.
 Every table also carries `as_of_utc` and the reserved `pipeline_run_id`
 provenance column (see *1.* above). Neither is repeated below.
 
-Every table has a `run_date` column, and it is **not the same date in all
-three**. A run has two dates, which differ only for a re-drive of an earlier
-date:
+Every table is dated, and **not by the same date in all five**. A run has two
+dates, which differ only for a re-drive of an earlier date:
 
 - its **business date** — the `run_date` its run summary recorded, else the
   local calendar date the run started. `pipeline_run_summary` and
-  `step_row_flow` carry this: they file a run beside its `logical_run_id`.
+  `step_row_flow` carry this as `run_date`: they file a run beside its
+  `logical_run_id`. `batch_finish_daily`'s `run_date` is the orchestration's
+  business date too: the date the batch was for.
 - its **execution date** — the **local** calendar date the run started (*4.*
   above), whatever date it was run for. `step_duration_trend_daily` carries
-  this: "is this step slower than its recent past?" is a question about when
-  it ran, on that day's machine and data.
+  this as `run_date`, and `duration_percentiles_daily` as `as_of_date`: "is
+  this getting slower?" is a question about when it ran, on that day's machine
+  and data.
 
 So when an operator re-drives `ingest` on 27 Aug for 5 Jan
 (`cli run pipelines/ingest --run-date 2026-01-05`), the run's summary and row
 flow rows land under `run_date = 2026-01-05`, beside the attempt it replaces;
-its step durations land in the trend's **27 Aug** row, and the 5 Jan row and
-the baselines of the January days after it are left as they were.
+its durations land in the trend's **27 Aug** row and in the percentile windows
+ending on and after **27 Aug**, and the 5 Jan rows, and the baselines and
+windows of the January days after it, are left as they were.
 
 ### `pipeline_run_summary` — one row per pipeline run
 
@@ -156,8 +159,10 @@ one row count. A step executed more than once in a run is summed.
 ### `duration_percentiles_daily` — percentiles you can watch over time
 
 Grain: `level` × `pipeline` × `step_address` × `window_days` × `as_of_date`.
-One row for each date a pipeline (or step) ran, covering the `window_days`
-calendar days ending on that date, for windows of 28 and 90 days. Because each
+One row for each **execution date** on which a pipeline (or step) ran — the
+local date a run started, not the business date it was for (Part B) —
+covering the `window_days` calendar days ending on that date, for windows of 28
+and 90 days. Because each
 date has its own row, the table is the history of each percentile: plot
 `duration_p90` against `as_of_date` to see whether a pipeline is heading the
 right way. A 28-day window gives a daily job about 20 samples; 90 days shows
@@ -165,7 +170,7 @@ the slow tail.
 
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
-| `as_of_date` | `str` | No | `YYYY-MM-DD`, the last day of the window (a run date). |
+| `as_of_date` | `str` | No | `YYYY-MM-DD`, the last day of the window: an **execution date**, the local date on which a run in the window started. Not a business run date, so a re-drive of 5 Jan run on 27 Aug is a sample in the windows ending on and after 27 Aug. |
 | `level` | `str` | No | `pipeline` (a run's wall clock) or `step`. |
 | `pipeline` / `step_address` | `str` | No | What is measured; for `level = pipeline`, `step_address` is the pipeline. |
 | `window_days` | `int` | No | 28 or 90. |

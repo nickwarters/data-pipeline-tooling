@@ -916,6 +916,13 @@ needs 10 runs in the window and a p95 needs 20, so a new or weekly pipeline
 shows `-` until it has them. `--as-of` shows the figures as they stood on an
 earlier date.
 
+The percentile days are **execution dates**: the local date each run started,
+not the business run date it was for. A re-drive of 5 Jan run on 27 Aug is a
+27 Aug sample, so it moves the windows it ran in and leaves January's alone.
+The batch line is the exception: it is about one business run date's
+scheduled batch, so `--as-of` picks the latest batch *for* that date or
+earlier.
+
 ## Errors
 
 The CLI turns the expected failure modes into a clear message on `stderr` and a
