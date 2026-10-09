@@ -98,7 +98,7 @@ export function RemediationSection(props) {
  * reads back as plain text, because the person named is who the sent actions
  * are already addressed to. The picker stays visible even once a Party is
  * chosen, so a wrong choice is corrected by choosing again; the clear button
- * beside the name is the only way back to nobody, since choosing again can only
+ * inside the name's pill is the only way back to nobody, since choosing again can only
  * swap one person for another. Clearing leaves the field asking for a Party,
  * because the remediation that needs one is still required.
  *
@@ -135,17 +135,21 @@ export function ResponsiblePartyField(props) {
       h(
         'span',
         { className: 'cora-responsible-party-current' },
-        current.displayName
-      ),
-      h(
-        'button',
-        {
-          className: 'cora-responsible-party-clear',
-          type: 'button',
-          'aria-label': 'Clear Responsible Party',
-          onclick: () => props.dispatchResponsiblePartyClear(),
-        },
-        '✕'
+        h(
+          'span',
+          { className: 'cora-responsible-party-name' },
+          current.displayName
+        ),
+        h(
+          'button',
+          {
+            className: 'cora-responsible-party-clear',
+            type: 'button',
+            'aria-label': 'Clear Responsible Party',
+            onclick: () => props.dispatchResponsiblePartyClear(),
+          },
+          '✕'
+        )
       )
     );
   }
