@@ -564,6 +564,37 @@ def test_a_flag_still_set_at_a_reopen_opens_a_new_hold_from_the_reopen():
     assert _hold_counts(history) == (1, 2, 1, 42.875)
 
 
+def test_a_nullable_boolean_hold_flag_reads_as_the_flag_it_carries():
+    # SchemaCoercion lands a bool column as pandas' nullable "boolean"; NA
+    # reads as not set, as NULL does.
+    assert metrics._flagged(
+        pd.Series([True, False, pd.NA], dtype="boolean")
+    ).tolist() == [True, False, False]
+    frame = _history(HISTORY).to_pandas()
+    flags = frame.assign(on_hold=frame["on_hold"].astype(bool).astype("boolean"))
+
+    assert _rows(metrics.case_hold(Dataset.from_pandas(flags), as_of=AS_OF)) == _rows(
+        metrics.case_hold(_history(HISTORY), as_of=AS_OF)
+    )
+
+
+@pytest.mark.parametrize(
+    "reduce",
+    [
+        lambda history: metrics.case_stage_dwell(history, as_of=AS_OF),
+        lambda history: metrics.case_hold(history, as_of=AS_OF),
+        lambda history: metrics.case_backlog(history, as_of=AS_OF),
+        lambda history: metrics.reviewer_workload(_current(), history, as_of=AS_OF),
+    ],
+    ids=["stage_dwell", "hold", "backlog", "reviewer_workload"],
+)
+def test_a_history_reduction_names_ordered_history_when_handed_an_unordered_one(
+    reduce,
+):
+    with pytest.raises(ValueError, match=r"ordered_history\(\)"):
+        reduce(given_rows(HISTORY).read())
+
+
 def test_a_history_with_no_holds_lands_the_declared_shape_and_no_rows():
     history = [_observation("1", "o1", "2026-07-02T09:00:00+00:00", "To-allocate")]
     result = metrics.case_hold(_history(history), as_of=AS_OF)

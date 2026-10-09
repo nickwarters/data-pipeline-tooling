@@ -401,7 +401,7 @@ def _finish(
 
 def _flagged(values: pd.Series) -> pd.Series:
     """A source flag as True/False, NULL reading as not set."""
-    return values.notna() & values.fillna(0).astype(bool)
+    return values.notna() & values.astype("object").fillna(0).astype(bool)
 
 
 def _local_days(instants: pd.Series) -> pd.Series:
@@ -477,6 +477,17 @@ def ordered_history(history: Dataset) -> Dataset:
     return Dataset.from_pandas(ordered.reset_index(drop=True))
 
 
+def _history_frame(history: Dataset) -> pd.DataFrame:
+    """The frame of a history that has been through ``ordered_history``."""
+    frame = history.to_pandas()
+    if "_case" not in frame.columns:
+        raise ValueError(
+            "a history reduction takes the ordered history: pass the observation "
+            "history through ordered_history() first"
+        )
+    return frame
+
+
 def _case_starts(frame: pd.DataFrame) -> pd.Series:
     """True on each Case's first row of an ordered history."""
     return frame["_case"].ne(frame["_case"].shift())
@@ -521,7 +532,7 @@ def case_stage_dwell(history: Dataset, *, as_of: str) -> Dataset:
     different questions (the Sync subject's age-bucket aggregates already
     answer "how long has it been waiting").
     """
-    frame = history.to_pandas()
+    frame = _history_frame(history)
     first = _case_starts(frame)
     last = first.shift(-1, fill_value=True)
     changed, began = _stays(frame, first)
@@ -575,7 +586,7 @@ def case_hold(history: Dataset, *, as_of: str) -> Dataset:
     ``open_hold_count``. Attributed to the Reviewer the Case's latest
     observation names, so a reassigned Case's holds follow the Case.
     """
-    frame = history.to_pandas()
+    frame = _history_frame(history)
     first = _case_starts(frame)
     last = first.shift(-1, fill_value=True)
     terminal = frame["status"].isin(TERMINAL_STATUSES)
@@ -699,7 +710,7 @@ def case_backlog(history: Dataset, *, as_of: str) -> Dataset:
     """Open Cases at each day's close, by status, rebuilt from the ordered
     history."""
     as_of_day = pd.Timestamp(local_date(as_of))
-    spans = _open_spans(history.to_pandas(), as_of_day)
+    spans = _open_spans(_history_frame(history), as_of_day)
 
     grids = []
     for case_type, group in spans.groupby("case_type", sort=True):
@@ -1153,7 +1164,7 @@ def remediation_overdue(
 def _in_progress_since(history: Dataset) -> pd.DataFrame:
     """When each Case whose latest observation is ``In-progress`` last entered
     it -- after a reopen, the reopen, not the original claim."""
-    frame = history.to_pandas()
+    frame = _history_frame(history)
     first = _case_starts(frame)
     last = first.shift(-1, fill_value=True)
     _, began = _stays(frame, first)

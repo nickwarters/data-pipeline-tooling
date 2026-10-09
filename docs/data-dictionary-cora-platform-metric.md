@@ -660,7 +660,10 @@ gated by its `SchemaValidator` (columns, types, nullability, `OneOf` on
 - An instant that does not parse (`errors="coerce"`) drops that row from the
   measure it feeds — a Completed Case with an unparseable `completed_at` is not
   in the SLA table; an Appeal with an unparseable `resolution_at` is in
-  `appeal_count` but not `resolved_count`.
+  `appeal_count` but not `resolved_count`. Where a reduction takes an
+  instant's local date, month or hour, an instant the system zone cannot place
+  (one before 1970, which Windows refuses) is treated the same way rather than
+  failing the table.
 - An observation whose `source_modified_at` does not parse has no place in a
   Case's order, so it is dropped from every reduction of the history alike
   (silver declares the column non-null, so this guards rather than expects).
