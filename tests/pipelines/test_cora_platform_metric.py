@@ -42,10 +42,16 @@ from pipelines.cora_platform_metric.schema import (
     CaseDurationPercentilesDaily,
 )
 from pipelines.sharepoint_cases.schema import FEED_NAME as SYNC_SUBJECT
-from tests.framework_testing import build_databases, given_rows, read_rows
+from tests.framework_testing import (
+    build_databases,
+    given_rows,
+    read_rows,
+    read_run_log,
+)
 from tools.calendar import WorkingDayCalendar
 from tools.medallion import medallion
 from tools.observability import timestamps
+from tools.observability.run_store import RunStore
 from tools.store import StoreRegistry
 
 AS_OF = "2026-08-20T06:00:00+00:00"
@@ -2202,9 +2208,17 @@ def test_a_source_missing_a_column_a_metric_needs_fails_the_read(tmp_path, capsy
 
     assert main(["prog", "--base-dir", str(tmp_path)]) == 1
 
+    missing = "conversation_message is missing required column(s): posted_at"
     err = capsys.readouterr().err
-    assert "conversation_message is missing required column(s): posted_at" in err
-    # Each source is read narrowed to what its steps need, so the read fails
-    # before any table is written.
-    gold = medallion(StoreRegistry(tmp_path), "cora_platform_metric").gold
-    assert all(gold.columns_of(table).columns() is None for table, _ in GOLD_TABLES)
+    assert "[ValidationError, data]" in err
+    assert missing in err
+    # Each source is read narrowed to what its steps need, so the run's own
+    # record shows the read failing on the column, and no step writing.
+    records = read_run_log(RunStore(tmp_path).log_path_for(PIPELINE_NAME))
+    [failed] = [r for r in records if r["status"] == "error" and r["step"] != "run"]
+    assert (failed["step"], failed["errors"], failed["error_category"]) == (
+        "messages:read",
+        [missing],
+        "data",
+    )
+    assert [r["step"] for r in records if r["step"].endswith(":write")] == []
