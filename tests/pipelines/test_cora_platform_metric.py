@@ -605,6 +605,7 @@ def test_working_days_late_counts_working_days_after_the_due_date(
     [
         WorkingDayCalendar(),
         WorkingDayCalendar(holidays=[dt.date(2026, 7, 9), dt.date(2026, 7, 13)]),
+        WorkingDayCalendar(holidays=["2026-07-09", dt.datetime(2026, 7, 13, 9)]),
         WorkingDayCalendar(weekend=[4]),
         WorkingDayCalendar(weekend=range(7)),
     ],
@@ -622,6 +623,18 @@ def test_the_column_form_of_working_days_late_agrees_with_the_day_walk(calendar)
         metrics.working_days_late(calendar, due, done) for due, done in pairs
     ]
     assert pd.isna(late.iloc[-1])
+
+
+def test_a_holiday_given_as_text_is_honoured_by_both_forms_of_lateness():
+    # Due Wed 8 Jul, completed Fri 10 Jul, Thu 9 Jul a holiday given as text:
+    # one working day late by the day walk and by the column form alike.
+    calendar = WorkingDayCalendar(holidays=["2026-07-09"])
+    due, done = dt.date(2026, 7, 8), dt.date(2026, 7, 10)
+
+    assert metrics.working_days_late(calendar, due, done) == 1
+    assert metrics._working_days_late(
+        calendar, pd.Series([pd.Timestamp(due)]), pd.Series([pd.Timestamp(done)])
+    ).tolist() == [1.0]
 
 
 def test_grouped_statistics_match_each_groups_own_series_bit_for_bit():

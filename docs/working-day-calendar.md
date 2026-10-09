@@ -28,8 +28,15 @@ cal = WorkingDayCalendar(
   `(5, 6)` (Saturday/Sunday). A region with a Friday/Saturday weekend passes
   `(4, 5)`.
 - **`holidays`** — individual non-working dates layered on top of the weekend
-  rule. Any iterable of `datetime.date`; held as a set, so duplicates and order
-  don't matter.
+  rule. Any iterable of `datetime.date`, `datetime.datetime` (its own date is
+  taken, with no zone conversion) or `YYYY-MM-DD` strings; each is normalised
+  to a `datetime.date` on the way in and held as a set, so duplicates and order
+  don't matter. Anything else is refused there and then: a string that is not
+  a `YYYY-MM-DD` date raises `ValueError`, any other type `TypeError`, both
+  naming the offending value. Normalising once is what keeps the calendar's two
+  readings in step — `is_working_day` tests a `date` against the set, and a
+  `datetime` or a string in it would never match, while `numpy.busday_count`
+  (below) would honour it.
 
 Seeding comes from a **YAML calendar file** via
 [`WorkingDayCalendar.from_yaml(path)`](#from-a-calendar-file--workingdaycalendarfrom_yamlpath)
@@ -64,8 +71,9 @@ passing a calendar file means you intended to seed something. (A document of
 **On dates.** `yaml.safe_load` parses an unquoted `2026-01-01` into a real
 `datetime.date`, which is what the calendar wants. Quoted strings
 (`"2026-01-01"`) are accepted too. A date-*time* (`2026-01-01 09:00:00`) is
-**rejected**: `date(2026, 1, 1) == datetime(2026, 1, 1)` is `False` and the two
-hash differently, so a `datetime` in the holiday set would silently never match.
+**rejected** here, unlike in the constructor: a time in an operator's holiday
+list is more likely a typo than an intent, so the file says so rather than
+quietly dropping the time.
 
 Every problem raises `ValueError` naming the path, so a caller never has to
 interpret a parser exception:
