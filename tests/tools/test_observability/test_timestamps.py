@@ -12,7 +12,9 @@ and macOS.
 """
 
 import datetime as dt
+import time
 
+import pandas as pd
 import pytest
 
 from tools.observability import timestamps
@@ -53,6 +55,28 @@ def test_a_trailing_z_parses_as_utc():
 def test_local_date_of_a_late_evening_utc_stamp_is_the_next_day(uk_summer):
     # 23:10 UTC on the 27th is 00:10 local on the 28th: the run happened today.
     assert local_date("2026-07-27T23:10:00+00:00") == dt.date(2026, 7, 28)
+
+
+@pytest.fixture
+def system_zone_utc_plus_one(monkeypatch):
+    """Make the *system* zone UTC+1 and leave the seam on its default (None)."""
+    if not hasattr(time, "tzset"):
+        pytest.skip("time.tzset is POSIX-only")
+    monkeypatch.setattr(timestamps, "local_timezone", lambda: None)
+    monkeypatch.setenv("TZ", "XXX-1")
+    time.tzset()
+    yield
+    monkeypatch.undo()
+    time.tzset()
+
+
+def test_local_date_of_a_pandas_timestamp_uses_the_system_zone(
+    system_zone_utc_plus_one,
+):
+    # pandas' own astimezone(None) means "drop to UTC"; the rule is the local date.
+    stamp = pd.Timestamp("2026-07-27T23:10:00+00:00")
+    assert local_date(stamp) == dt.date(2026, 7, 28)
+    assert local_date(stamp) == local_date(stamp.isoformat())
 
 
 def test_local_date_of_a_daytime_stamp_is_unchanged(uk_summer):
