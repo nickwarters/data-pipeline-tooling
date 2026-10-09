@@ -423,7 +423,9 @@ components over the tables in its file:
   strategy — by asking that strategy to realise itself (`writer_for`), so the
   store branches on nothing and any `LoadStrategy` works. Context-driven
   accumulation uses `AccumulateByRun.from_context(context)`.
-- `store.reader(table)` — a `SqliteReader` over the same file.
+- `store.reader(table, columns=None)` — a `SqliteReader` over the same file;
+  `columns` narrows the `SELECT` to those columns, and one the table lacks
+  raises `ValidationError` naming it.
 
 The strategy lives on the Writer the store mints, not on the store. The
 namespace's file (and its parent directories) is created on first write.

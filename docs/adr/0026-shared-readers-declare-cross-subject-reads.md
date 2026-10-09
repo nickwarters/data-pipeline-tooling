@@ -4,6 +4,13 @@ status: accepted
 
 # Shared Readers declare a cross-subject read once
 
+> **Amended by
+> [ADR-0033](0033-a-shared-reader-may-narrow-the-columns-it-fetches.md).**
+> A table-backed Shared Reader may take an optional `columns` list at
+> construction and fetch only those columns; omitted, it reads every column. G5's
+> "no projection" below now means no projection the reader chooses for its
+> consumers. Narrowing which *rows* a reader fetches is still not decided.
+
 > **Owned by the pipeline → the medallion store. Not owned by the pipeline → a
 > Shared Reader.**
 

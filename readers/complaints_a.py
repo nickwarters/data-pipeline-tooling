@@ -1,11 +1,13 @@
 """Shared Reader over ``complaints_a``'s published silver.
 
-Pass-through only; consumers own validation and freshness policy.
+Pass-through only, narrowed to the ``columns`` a consumer names; consumers own
+validation and freshness policy.
 """
 
 from __future__ import annotations
 
 import os
+from collections.abc import Sequence
 
 from framework.core import Dataset
 from tools.medallion import medallion
@@ -18,9 +20,14 @@ _TABLE = "complaints_a"
 class ComplaintsACasesReader:
     """Every Complaints A Case as currently ingested — one row per ``record_id``."""
 
-    def __init__(self, base_dir: str | os.PathLike[str]) -> None:
+    def __init__(
+        self,
+        base_dir: str | os.PathLike[str],
+        *,
+        columns: Sequence[str] | None = None,
+    ) -> None:
         self._reader = medallion(StoreRegistry(base_dir), _SUBJECT).silver.reader(
-            _TABLE
+            _TABLE, columns
         )
 
     @property

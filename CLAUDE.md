@@ -91,7 +91,9 @@ toolchain, a domain language, or a release. Two rules follow:
   is declared beside the feeds it schedules), `readers/` (the **Shared Readers**: a read that
   crosses a subject boundary goes through `readers/<subject>.py`, which declares
   that dataset's location once and hands a consumer a `Reader` it constructs
-  with a `base_dir` and nothing else — a pipeline resolves the subject it
+  with a `base_dir` and, optionally, the `columns` it needs
+  ([ADR-0033](docs/adr/0033-a-shared-reader-may-narrow-the-columns-it-fetches.md))
+  — a pipeline resolves the subject it
   *writes* through the medallion and never the one it merely reads
   ([ADR-0026](docs/adr/0026-shared-readers-declare-cross-subject-reads.md),
   [`docs/shared-readers.md`](docs/shared-readers.md)); read-only by

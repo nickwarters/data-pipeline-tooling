@@ -1,8 +1,10 @@
 import sqlite3
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
+from framework.core import ValidationError
 from framework.io.readers import SqliteReader
 
 
@@ -50,6 +52,30 @@ def test_sqlite_reader_projects_only_requested_columns(fixture_db):
 
     assert dataset.columns == ["name"]
     assert len(dataset) == 3
+
+
+def test_sqlite_reader_returns_requested_columns_in_the_order_named(fixture_db):
+    dataset = SqliteReader(
+        fixture_db, "advisers", columns=["name", "adviser_id"]
+    ).read()
+
+    assert dataset.columns == ["name", "adviser_id"]
+
+
+def test_requested_columns_the_table_lacks_fail_naming_every_one(fixture_db):
+    reader = SqliteReader(fixture_db, "advisers", columns=["name", "email", "team"])
+
+    with pytest.raises(
+        ValidationError, match=r"advisers is missing required column\(s\): email, team"
+    ):
+        reader.read()
+
+
+def test_requested_columns_on_a_missing_table_fail_as_a_missing_table(fixture_db):
+    # No table means no columns to compare against: the read reports the
+    # missing table, not every requested column as missing.
+    with pytest.raises(pd.errors.DatabaseError, match="no such table"):
+        SqliteReader(fixture_db, "nowhere", columns=["name"]).read()
 
 
 def test_sqlite_reader_without_columns_reads_all_columns(fixture_db):

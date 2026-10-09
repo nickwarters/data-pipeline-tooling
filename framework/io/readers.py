@@ -17,6 +17,7 @@ from framework._internal.locations import file_location, table_location
 from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError
 from framework.core.protocols import Reader
+from framework.core.validators import ValidationError
 from framework.io.sql import quote_identifier
 
 # ``Reader`` is imported only to be re-exported through ``framework.io``.
@@ -384,7 +385,13 @@ class ExcelReader:
 
 
 class SqliteReader:
-    """Read one table from a SQLite database into a Dataset."""
+    """Read one table from a SQLite database into a Dataset.
+
+    ``columns`` narrows the read to those columns, in that order; a named
+    column the table lacks raises :class:`~framework.core.ValidationError`
+    listing every one missing, as a ``ColumnValidator`` over the whole table
+    would.
+    """
 
     def __init__(
         self,
@@ -409,10 +416,26 @@ class SqliteReader:
             query = f"SELECT * FROM {table}"
         con = connect(self._db_path, self._busy_timeout_ms)
         try:
+            if self._columns is not None:
+                self._require_columns(con)
             frame = pd.read_sql(query, con)
         finally:
             con.close()
         return Dataset.from_pandas(frame)
+
+    def _require_columns(self, con) -> None:
+        present = {
+            row[1]
+            for row in con.execute(
+                f"PRAGMA table_info({quote_identifier(self._table)})"
+            )
+        }
+        # No columns at all means no table: let the SELECT say so.
+        missing = [c for c in self._columns if c not in present]
+        if present and missing:
+            raise ValidationError(
+                f"{self._table} is missing required column(s): {', '.join(missing)}"
+            )
 
     def describe(self) -> str:
         return render(
