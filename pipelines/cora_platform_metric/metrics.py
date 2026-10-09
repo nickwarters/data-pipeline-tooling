@@ -23,7 +23,6 @@ import pandas as pd
 
 from framework.core import Dataset
 from tools.calendar import WorkingDayCalendar
-from tools.integrations.sharepoint_rest import version_order
 from tools.observability import timestamps
 from tools.observability.timestamps import local_date
 
@@ -334,31 +333,36 @@ def _finish(
 def _ordered_history(dataset: Dataset) -> pd.DataFrame:
     """The observation history in the order things happened, per Case.
 
-    Ordered by the source's own ``Modified`` instant, then -- as Sync's
-    current-state rule does -- the parsed ``source_version``, since two versions
-    can share a ``Modified`` and the later status must come last; then the
-    observation id, a digest, as a deterministic last resort. An observation
+    Ordered by the source's own ``Modified`` instant, then ``source_version``
+    as a number, since two versions can share a ``Modified`` and the later
+    status must come last; then the observation id, a digest, as a
+    deterministic last resort. An observation
     whose ``Modified`` does not parse has no place in that order and is dropped.
     """
     frame = dataset.to_pandas().copy()
     frame["_modified"] = _instants(frame["source_modified_at"])
-    versions = [version_order(value) for value in frame["source_version"]]
-    frame["_version_major"] = pd.Series(
-        [major for major, _ in versions], index=frame.index, dtype="int64"
-    )
-    frame["_version_minor"] = pd.Series(
-        [minor for _, minor in versions], index=frame.index, dtype="int64"
-    )
+    frame["_version"] = _version_number(frame["source_version"])
     return frame.loc[frame["_modified"].notna()].sort_values(
         [
             *HISTORY_KEY,
             "_modified",
-            "_version_major",
-            "_version_minor",
+            "_version",
             "source_observation_id",
         ],
         kind="stable",
     )
+
+
+def _version_number(versions: pd.Series) -> pd.Series:
+    """Each ``source_version`` -- a whole number in double quotes, ``'"10"'`` --
+    as the number it sorts on.
+
+    As text ``"10"`` sorts before ``"9"``. A version that is not a number (the
+    digest the Reader stamps when the item carried none) sorts first, at -1,
+    rather than as NA, which pandas would sort last.
+    """
+    number = pd.to_numeric(versions.astype("string").str.strip('"'), errors="coerce")
+    return number.fillna(-1)
 
 
 def _entry_instant(
