@@ -1680,7 +1680,9 @@ def case_duration_percentiles(
 ) -> Dataset:
     """Trailing-window duration percentiles. **Grain: as_of_date x window_days
     x case_type x measure.** Every as-of date from the first completion, so the
-    table is its own backfill."""
+    table is its own backfill. The first as-of date is the local day of the
+    earliest completion, not of the earliest measurement: until something
+    completes there are no rows, even for legs already measured."""
     measured = _with_all_case_types(
         _durations(current, calendar or WorkingDayCalendar())
     )
