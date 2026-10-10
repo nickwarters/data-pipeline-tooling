@@ -19,6 +19,11 @@ recorded-versus-live manager split from
 and the descriptor rule from
 [ADR-0035](./0035-case-type-descriptors-express-variation-behaviour-stays-in-code.md).
 
+Amended on
+[#1052](https://github.com/nickwarters/data-pipeline-tooling/issues/1052): the
+application also owns `ClosedDate`, stamped by the lifecycle buttons, and the
+list indexes it in place of `Modified` (sections 1, 4 and 7).
+
 ## Context
 
 The site gains a separately gated **Forms** area where an employee and their
@@ -65,9 +70,9 @@ Each Form Type has **one SharePoint list**, named by the definition and given
 the environment prefix centrally (ADR-0033), like every other list the app
 reads.
 
-The application owns the fields access depends on: `Employee`,
-`CurrentFirstLineManager`, `CurrentSecondLineManager`, `Status` and `DueDate`. A
-definition may place them on the page. It cannot rename them, leave them out,
+The application owns the fields access and the lifecycle depend on: `Employee`,
+`CurrentFirstLineManager`, `CurrentSecondLineManager`, `Status`, `DueDate` and
+`ClosedDate`. A definition may place them on the page. It cannot rename them, leave them out,
 or make them editable after creation. The verify gate refuses a definition that
 tries.
 
@@ -136,7 +141,11 @@ read-only for everyone including its editors, once its Status is **Completed**,
 is never handed an edit.
 
 Status changes only through the Form's own lifecycle buttons (Mark complete,
-Void, Cancel), never through a field. The defaults below are recorded as
+Void, Cancel), never through a field. The same write stamps **`ClosedDate`**,
+the day the Form closed, which the Forms archive windows and sorts on. It is its
+own column rather than `Modified`, because `Modified` moves whenever anything
+touches the item, including the outside process that keeps the current
+managers up to date, so a Form closed a year ago would read as closed today. The defaults below are recorded as
 defaults, not settled rules:
 
 - **Who may Void or Cancel:** the two editors, the Employee and the current first
@@ -204,7 +213,7 @@ Each Form list is provisioned by hand in each environment, with:
 - **list auditing** on, so a bulk read is at least recorded. Whether REST item
   reads are audited on this farm is still to be checked;
 - indexes on `Employee`, `CurrentFirstLineManager`, `CurrentSecondLineManager`,
-  `Status`, `DueDate` and `Modified`, created while the list is empty
+  `Status`, `DueDate` and `ClosedDate`, created while the list is empty
   (ADR-0031);
 - versioning if wanted, remembering that version history keeps every earlier
   encoded value.

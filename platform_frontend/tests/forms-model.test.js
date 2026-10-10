@@ -7,7 +7,7 @@ import {
   formLanes,
   formRouteFor,
   formRows,
-} from '../src/pages/forms/outstanding-model.js';
+} from '../src/pages/forms/forms-model.js';
 import { oneToOne } from '../form-types/one-to-one.js';
 import { makePermissions } from './helpers/fixtures.js';
 
@@ -120,6 +120,13 @@ test('a Form past its due date counts the whole days it is over, and one due tod
     [over.overdueDays, dueToday.overdueDays, undated.overdueDays],
     [2, 0, 0]
   );
+});
+
+test('a closed Form past its due date is never overdue', () => {
+  for (const Status of ['Completed', 'Void', 'Cancelled']) {
+    const [row] = rows([item('1', { Status, DueDate: '2026-10-01' })], 'sam');
+    assert.equal(row.overdueDays, 0, Status);
+  }
 });
 
 test('rows are listed soonest due first, with undated Forms last', () => {

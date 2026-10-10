@@ -15,94 +15,21 @@ installDom();
 /** @type {any} */ (globalThis).location = { hash: '' };
 
 const { createRouteSlice } = await import('../src/pages/cora-forms.js');
-const { MockSharePointClient } =
+const { MockSharePointClient, storedFormFields } =
   await import('../src/services/mock-sharepoint-client.js');
 const { resolveCapabilities } = await import('../src/services/permissions.js');
 const { personas } = await import('../dev/fixtures/personas.js');
 const { formLists } = await import('../dev/fixtures/forms.js');
 const { oneToOne } = await import('../form-types/one-to-one.js');
-const { storedFormFields } =
-  await import('../src/services/mock-sharepoint-client.js');
+const {
+  NOW,
+  bodyRows,
+  mountFormsPage: mount,
+} = await import('./helpers/forms-page.js');
 
 // Capability: the Forms dashboard shows each person the open Forms they are
 // on, in the role they hold, with Open for an editor and View for a reader,
 // and lets the Forms control group page through every open Form.
-
-/** The dev fixtures are written against this day. */
-const NOW = () => new Date(2026, 9, 10, 12, 0, 0);
-
-/**
- * @param {string} persona a key of the dev personas
- * @param {{ client?: any, formTypes?: any[] }} [options]
- */
-async function mount(persona, { client, formTypes = [oneToOne] } = {}) {
-  const who = personas[persona];
-  const context = /** @type {any} */ ({
-    client: client ?? new MockSharePointClient({ personas: {}, formLists }),
-    chrome: makeChrome({
-      currentUser: { id: who.userId, displayName: who.displayName },
-      permissions: resolveCapabilities(who.groups),
-    }),
-    formTypes,
-  });
-  const slice = createRouteSlice({}, context, { now: NOW });
-  let state = slice.initialState;
-  /** @type {Set<() => void>} */
-  const waiting = new Set();
-  /** @type {any[]} */
-  const actions = [];
-  const tools = {
-    dispatch: (/** @type {any} */ action) => {
-      actions.push(action);
-      state = slice.reducer(state, action);
-      for (const check of [...waiting]) check();
-    },
-    isActive: () => true,
-    signal: new AbortController().signal,
-    context,
-  };
-  /**
-   * Resolves once the page's state satisfies `predicate`, checked after every
-   * action the page dispatches.
-   *
-   * @param {(route: any) => boolean} predicate
-   * @returns {Promise<void>}
-   */
-  const until = (predicate) =>
-    new Promise((resolve) => {
-      const check = () => {
-        if (!predicate(state.routes.forms)) return;
-        waiting.delete(check);
-        resolve();
-      };
-      waiting.add(check);
-      check();
-    });
-  slice.start?.(tools);
-  await until((route) => route.mine.status !== 'loading');
-  return {
-    actions,
-    until,
-    get state() {
-      return state;
-    },
-    render: () => /** @type {HTMLElement} */ (slice.view(state, tools)),
-  };
-}
-
-/**
- * Each body row as the cells a reader sees: Form, Employee, Your role, Due
- * date, Status and the action button's text.
- *
- * @param {HTMLElement} view
- */
-function bodyRows(view) {
-  const body = queryAllByTag(view, 'tbody')[0];
-  if (!body) return [];
-  return queryAllByTag(body, 'tr').map((row) =>
-    queryAllByTag(row, 'td').map((cell) => cell.textContent)
-  );
-}
 
 test('the table has the six columns of the dashboard, the action unsortable', async () => {
   const page = await mount('forms-employee');

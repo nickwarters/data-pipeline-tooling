@@ -378,6 +378,11 @@
   color: var(--cora-color-danger);
 }
 
+.cora-badge-muted {
+  background: var(--cora-color-surface-2);
+  color: var(--cora-color-text-muted);
+}
+
 /* ── Banner — reconnecting & conflict surfaces ───────────────────────────── */
 
 .cora-banner {
@@ -4040,12 +4045,63 @@
 
 /* ── Forms dashboard ─────────────────────────────────────────────────────── */
 
-.cora-forms-header {
+.cora-forms-tabbar {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: var(--cora-space-3);
   flex-wrap: wrap;
+  margin-bottom: var(--cora-space-4);
+  border-bottom: 1px solid var(--cora-color-border);
+}
+
+.cora-forms-tabbar .cora-tabs-list {
+  border-bottom: 0;
+}
+
+.cora-forms-tabbar > button {
+  margin-bottom: var(--cora-space-2);
+}
+
+.cora-forms-hint {
+  margin: 0 0 var(--cora-space-3);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+/* A grid of fixed-height fields, so the archive's filters line up rather than
+   wrapping unevenly as a flex row does. */
+.cora-forms-toolbar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--cora-space-3);
+  align-items: end;
+  margin-bottom: var(--cora-space-3);
+}
+
+.cora-forms-toolbar .cora-capture-input {
+  height: 2.5rem;
+}
+
+.cora-forms-field {
+  display: grid;
+  gap: var(--cora-space-1);
+  min-width: 0;
+}
+
+.cora-forms-field > span:first-child {
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-semibold);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-forms-tablefoot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: var(--cora-space-3);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
 }
 
 .cora-forms-type {
@@ -4077,4 +4133,8 @@
 
 [data-cora-root] .cora-forms-load-more {
   margin-top: var(--cora-space-3);
+}
+
+[data-cora-root] .cora-forms-tablefoot .cora-forms-load-more {
+  margin-top: 0;
 }

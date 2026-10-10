@@ -1,8 +1,9 @@
 // @ts-check
 /**
- * What the Forms dashboard shows, worked out from the Forms it read: one row
- * per Form the viewer may read, and the "As employee" and "As manager" lanes
- * above the table. Pure, so every rule here is tested without a page.
+ * What the Forms pages show, worked out from the Forms they read: one row per
+ * Form the viewer may read, the "As employee" and "As manager" lanes above the
+ * outstanding table, and the archive's date window. Pure, so every rule here
+ * is tested without a page.
  *
  * Who may read a Form, and in which role, is `form-access.js`'s answer; this
  * module only asks it.
@@ -34,8 +35,11 @@ import {
  * One row of the Forms table: the Form, what the viewer may do with it, and the
  * values its cells show, worked out once so the view only draws them.
  *
- * `overdueDays` is how many days past its due date the Form is, and `0` when it
- * is not overdue or has no due date.
+ * `overdueDays` is how many days past its due date an open Form is, and `0`
+ * when it is not overdue, has no due date or is closed: a closed Form has
+ * nothing left to be late for. `closedDate` is empty while the Form is open.
+ * `managersAtCompletion` names the first and second line managers recorded on
+ * the Form, the audit record that grants nothing.
  *
  * @typedef {{
  *   key: string,
@@ -45,13 +49,24 @@ import {
  *   employeeName: string,
  *   dueDate: string,
  *   overdueDays: number,
+ *   closedDate: string,
+ *   managersAtCompletion: string[],
  *   status: string,
  *   href: string
  * }} FormRow
  */
 
+/**
+ * The closed-date window an archive read always carries, both ends inclusive.
+ *
+ * @typedef {{ from: string, to: string }} ArchiveWindow
+ */
+
 /** The days a "Due this week" tile looks ahead, today included. */
 const WEEK_DAYS = 7;
+
+/** How far back the archive looks unless asked otherwise, in days. */
+const DEFAULT_ARCHIVE_DAYS = 365;
 
 /** The Form Action status still waiting on someone. */
 const PENDING_ACTION = 'Pending';
@@ -107,7 +122,14 @@ export function formRows(loaded, me, caps, today) {
         employeeName: personName(item.fields.Employee),
         dueDate,
         overdueDays:
-          dueDate === '' ? 0 : Math.max(0, daysBetweenDateKeys(dueDate, today)),
+          dueDate === '' || access.locked
+            ? 0
+            : Math.max(0, daysBetweenDateKeys(dueDate, today)),
+        closedDate: dateKeyOf(item.fields.ClosedDate),
+        managersAtCompletion: [
+          personName(item.fields.FirstLineManager),
+          personName(item.fields.SecondLineManager),
+        ].filter((name) => name !== ''),
         status:
           typeof item.fields.Status === 'string' ? item.fields.Status : '',
         href: formRouteFor(formType, item.id),
@@ -115,6 +137,41 @@ export function formRows(loaded, me, caps, today) {
     }
   }
   return rows.sort(bySoonestDue);
+}
+
+/**
+ * The same rows, most recently closed first, for the archive.
+ *
+ * @param {FormRow[]} rows
+ * @returns {FormRow[]}
+ */
+export function latestClosedFirst(rows) {
+  return [...rows].sort((a, b) =>
+    a.closedDate === b.closedDate
+      ? bySoonestDue(a, b)
+      : a.closedDate < b.closedDate
+        ? 1
+        : -1
+  );
+}
+
+/**
+ * The archive's closed-date window, with an empty or unreadable end replaced
+ * by its default: the last twelve months up to today. Every archive read
+ * carries both ends, whatever the viewer clears, because an unbounded read of
+ * every closed Form is what would grow past the list view threshold.
+ *
+ * @param {Partial<ArchiveWindow>} window
+ * @param {string} today `YYYY-MM-DD`
+ * @returns {ArchiveWindow}
+ */
+export function archiveWindow(window, today) {
+  return {
+    from: isDateKey(window.from)
+      ? /** @type {string} */ (window.from)
+      : shiftDateKey(today, -DEFAULT_ARCHIVE_DAYS),
+    to: isDateKey(window.to) ? /** @type {string} */ (window.to) : today,
+  };
 }
 
 /**
@@ -164,21 +221,25 @@ export function formLanes(rows, today) {
 }
 
 /**
- * The rows a person filter, a Form Type filter and a role filter leave. Each
- * filter is off when empty. The person filter matches the Employee's name,
- * ignoring case.
+ * The rows a person filter, a Form Type filter, a role filter and a Status
+ * filter leave. Each is off when empty or absent. The person filter matches the
+ * Employee's name, ignoring case.
  *
  * @param {FormRow[]} rows
- * @param {{ text: string, formType: string, role: string }} filters
+ * @param {{ text: string, formType: string, role?: string, status?: string }} filters
  * @returns {FormRow[]}
  */
-export function filterFormRows(rows, { text, formType, role }) {
+export function filterFormRows(
+  rows,
+  { text, formType, role = '', status = '' }
+) {
   const needle = text.trim().toLowerCase();
   return rows.filter(
     (row) =>
       (needle === '' || row.employeeName.toLowerCase().includes(needle)) &&
       (formType === '' || row.formType.slug === formType) &&
-      (role === '' || row.access.role === role)
+      (role === '' || row.access.role === role) &&
+      (status === '' || row.status === status)
   );
 }
 

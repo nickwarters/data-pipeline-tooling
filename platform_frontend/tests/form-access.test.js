@@ -2,7 +2,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { canCreateForms, formAccess } from '../src/services/form-access.js';
-import { CLOSED_FORM_STATUSES, formFields } from '../form-types/contract.js';
+import {
+  CLOSED_FORM_STATUSES,
+  FORM_OWNED_FIELDS,
+  formFields,
+} from '../form-types/contract.js';
 import { APP_CONFIG } from '../src/app-config.js';
 import { makePermissions } from './helpers/fixtures.js';
 
@@ -224,13 +228,7 @@ for (const definition of APP_CONFIG.formTypes) {
 }
 
 test('the application’s own columns are never editable, even by an editor', () => {
-  for (const itemField of [
-    'Employee',
-    'CurrentFirstLineManager',
-    'CurrentSecondLineManager',
-    'Status',
-    'DueDate',
-  ]) {
+  for (const itemField of Object.keys(FORM_OWNED_FIELDS)) {
     for (const me of ['sam', 'ana']) {
       assert.equal(
         formAccess(form(), me, FORMS).canEditField({ itemField }),
