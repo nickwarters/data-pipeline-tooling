@@ -15,8 +15,9 @@ the terms are in [CONTEXT.md](../../CONTEXT.md#forms).
 2. Add it to `formTypes` in `src/app-config.js`.
 3. Run `npm run verify`. The gate checks the definition (below) before a browser
    sees it.
-4. Run `node scripts/form-type-columns.js <slug>` for the list's columns, types
-   and indexes, and create the list with them in each environment.
+4. Run `node scripts/form-type-columns.js <slug>` for the list's columns, types,
+   Choice values and indexes, and create the list with them in each
+   environment.
 
 `form-types/one-to-one.js` is the worked example.
 
@@ -64,7 +65,9 @@ it is not readable at a glance in the list. Encoding is not encryption: anyone
 who can read the list can decode it. People, dates and choices stay plain
 because the queries and the access rule read them. `formColumns(definition)` in
 `form-types/contract.js` is the one derivation of which columns are which; the
-provisioning script reads it, and so will the list client.
+provisioning script and both SharePoint clients read it, so a column cannot be
+encoded on the way out and read plain on the way back. How a Form is read and
+written is in [the client guide](./sharepoint-client.md#forms-listformitems-getformitem-createformitem-patchformitem).
 
 **`editableBy`** marks a field only one editor may change: `'employee'` for the
 Form's Employee, `'manager'` for its current first line manager. Every other field

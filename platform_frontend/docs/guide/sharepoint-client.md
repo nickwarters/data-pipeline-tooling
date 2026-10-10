@@ -21,6 +21,10 @@ just the function and the `client` it was handed.
 // listSupportLog({ caseType, caseId }) → Promise<SupportLogEntry[]>
 // addSupportLogEntry(entry) → Promise<string>
 // listGroupMembers(groupName) → Promise<PersonResult[]>
+// listFormItems(formType, { filter, orderBy, top, next }) → Promise<{ items: FormItem[], next }>
+// getFormItem(formType, id) → Promise<FormItem | null>
+// createFormItem(formType, fields) → Promise<FormItem>
+// patchFormItem(formType, id, fields, etag) → Promise<FormPatchResult>
 
 // Switch to mock mode: ?mock=1 in the URL
 // Add a new method: typedef → HttpSharePointClient → MockSharePointClient → fixture
@@ -169,6 +173,47 @@ entry and returns its id; as with the Support Log there is no update or delete.
 Each entry's `Changes` cell is JSON and is read the same forgiving way, and any
 `Outcome` other than `not-applied` or `partly-applied` reads as `recorded`. The
 mock keeps the log in memory, seeded from `dev/fixtures/access-log.js`.
+
+### Forms: `listFormItems`, `getFormItem`, `createFormItem`, `patchFormItem`
+
+An HR Form lives on its Form Type's own list (`OneToOne`, `uat_OneToOne` in
+UAT; the prefix is applied centrally as for every Case list). Every method takes
+the Form Type definition first, because the definition is what names the
+columns: a read selects exactly the columns `formColumnKinds()` in
+`src/services/form-items.js` derives from it, and a write naming any other
+column **throws** before anything is sent. A Case write drops an unknown key; a
+Form write refuses it, because a dropped field is an answer someone typed and
+nobody saved.
+
+Values cross the client as plain values and nothing else does. A Person column
+is `{ loginName, displayName }` (or `null`), written as its `<Column>Id` through
+EnsureUser and read with its `Name` and `Title` expanded. A date is a
+`YYYY-MM-DD` key, written as the instant that day begins locally and read back
+as the local day. Free text and the Form Actions are encoded on the way out and
+decoded on the way in by `src/services/form-encoding.js`; a view never sees an
+encoded value. A stored value that does not decode (a cell edited by hand in
+the list) comes back raw, or as no Actions, and is named in the item's
+`problems` rather than thrown, so one bad cell never blanks a Form. A fourth
+Form Action, or one missing a key, is refused at the write.
+
+`patchFormItem` is field-level and guarded by `If-Match`, and like `patchCase`
+it never throws for a failed request: it returns `{ ok: false, status }`, so a
+412 reaches the save queue's conflict handling unchanged. `createFormItem`
+reads the new item back, which is where its ETag and the people's display names
+come from.
+
+`listFormItems` filters on three things only, each on a plain column:
+`involving` (the account is the Employee or a current manager; an account that
+cannot be resolved rejects the read rather than widening it), `closed` (`true`
+for Completed, Void or Cancelled, `false` for anything else including no Status
+yet) and a `window` on a date column or `Created`/`Modified`, inclusive of both
+days. `orderBy` takes a plain column or a stamp and breaks ties on `Id`. An
+encoded column can be neither filtered nor ordered on, because its stored value
+means nothing to the server, and asking throws. With `top` the read returns one
+page and SharePoint's own continuation link as `next`; without it, every page.
+`listFormItems` is a signalled read, so `withAbortSignal` cancels it on
+navigation; writes are never cancelled. The mock seeds each Form list from
+`dev/fixtures/forms.js`, stored encoded exactly as the real list would hold it.
 
 ---
 

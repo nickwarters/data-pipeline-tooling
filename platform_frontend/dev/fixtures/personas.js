@@ -9,7 +9,9 @@
  * Maintainer, the audience for Case Support),
  * action-centre (multi-role Reviewer+Controls+Owner, for seeing
  * every Action Centre reason group at once), visitor (no groups —
- * exercises the Visitor explainer-only branch).
+ * exercises the Visitor explainer-only branch), and the Forms cast:
+ * forms-employee, forms-line-manager, forms-second-line-manager,
+ * forms-control and forms-unrelated.
  *
  * @type {Record<string, { userId: string, displayName: string, groups: string[] }>}
  */
@@ -78,6 +80,33 @@ export const personas = {
     userId: 'user-reviewer',
     displayName: 'Dana Multi-role',
     groups: ['Reviewers', 'Controls', 'CaseTypeOwner - Example Review'],
+  },
+  // The Forms cast (see forms.js). `Forms` and `Forms Control` are
+  // placeholder group names until the real ones are agreed.
+  'forms-employee': {
+    userId: 'user-forms-employee',
+    displayName: 'Sam Patel',
+    groups: ['Forms'],
+  },
+  'forms-line-manager': {
+    userId: 'user-forms-flm',
+    displayName: 'Ana Lopez',
+    groups: ['Forms'],
+  },
+  'forms-second-line-manager': {
+    userId: 'user-forms-slm',
+    displayName: 'Jo Reid',
+    groups: ['Forms'],
+  },
+  'forms-control': {
+    userId: 'user-forms-control',
+    displayName: 'Kim Shaw',
+    groups: ['Forms', 'Forms Control'],
+  },
+  'forms-unrelated': {
+    userId: 'user-forms-unrelated',
+    displayName: 'Ola Ben',
+    groups: [],
   },
   visitor: {
     userId: 'user-visitor',

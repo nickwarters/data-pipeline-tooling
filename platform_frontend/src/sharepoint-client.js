@@ -533,10 +533,84 @@
  */
 
 /**
+ * One **Form Action**: a follow-up on a Form. `dueDate` is a `YYYY-MM-DD`
+ * calendar date or empty. A Form holds at most three, stored together, encoded,
+ * in one column.
+ *
+ * @typedef {{ title: string, dueDate: string, status: string, details: string }} FormAction
+ */
+
+/**
+ * A plain value on a Form, as a caller reads and writes it — never encoded.
+ * A person is a `PersonResult` (a bare account and a display name) or `null`;
+ * a date is a `YYYY-MM-DD` calendar date or `null`; a choice is its text or
+ * `null`; free text is a string; Form Actions are a list.
+ *
+ * @typedef {string | null | PersonResult | FormAction[]} FormValue
+ */
+
+/**
+ * One **Form**, read from its Form Type's list. `fields` is keyed by column
+ * name exactly as the list spells it, and holds every column the Form Type's
+ * definition reads. `problems` names any encoded column that would not decode
+ * (a row edited by hand in the list, say): its raw value is in `fields` and the
+ * rest of the Form is unaffected.
+ *
+ * @typedef {{
+ *   id: string,
+ *   etag: string,
+ *   created: string | null,
+ *   modified: string | null,
+ *   fields: Record<string, FormValue>,
+ *   problems: import('./services/form-encoding.js').FormDecodeProblem[]
+ * }} FormItem
+ */
+
+/**
+ * Narrows a Form list read on the server. Every condition is optional and
+ * they combine with `and`.
+ *
+ * - `involving` — a bare account: the Forms where they are the Employee or a
+ *   current manager. Narrowing for efficiency, not access: the access rule
+ *   still decides what is shown.
+ * - `closed` — `true` for Forms whose Status locks them, `false` for the rest.
+ * - `window` — a plain date column (or `Created` / `Modified`) between two
+ *   `YYYY-MM-DD` calendar dates, both inclusive, either optional.
+ *
+ * @typedef {{
+ *   involving?: string,
+ *   closed?: boolean,
+ *   window?: { column: string, from?: string, to?: string }
+ * }} FormItemsFilter
+ */
+
+/**
+ * `next` is the continuation a previous page returned, and is opaque: pass it
+ * back as it came. Without `top` every matching Form is read.
+ *
+ * @typedef {{
+ *   filter?: FormItemsFilter,
+ *   orderBy?: { column: string, dir?: 'asc' | 'desc' },
+ *   top?: number,
+ *   next?: string | null,
+ *   signal?: AbortSignal
+ * }} ListFormItemsOptions
+ */
+
+/**
+ * The same shape as a Case write's result, so the save queue treats a Form's
+ * 412 exactly as a Case's.
+ *
+ * @typedef {{ ok: boolean, status: number, data?: FormItem }} FormPatchResult
+ */
+
+/**
  * The outcome of one membership write; an HTTP failure is a value here and never a throw.
  *
  * @typedef {{ ok: true } | { ok: false, status: number }} GroupMemberWrite
  */
+
+/** @typedef {import('../form-types/contract.js').FormTypeDefinition} FormTypeDefinition */
 
 /**
  * Every REST consumer codes against this interface. Both MockSharePointClient
@@ -565,7 +639,11 @@
  * resolveUsers: (accountNames: string[], opts?: { domains?: Record<string, string> }) => Promise<Record<string, string | null>>,
  * resolveManagers: (accountNames: string[]) => Promise<Record<string, string | null>>,
  * getBankVersion: (slug: string) => Promise<string | null>,
- * getVersionedExport: (slug: string, version: string) => Promise<VersionedExport | null>
+ * getVersionedExport: (slug: string, version: string) => Promise<VersionedExport | null>,
+ * listFormItems: (formType: FormTypeDefinition, opts?: ListFormItemsOptions) => Promise<{ items: FormItem[], next: string | null }>,
+ * getFormItem: (formType: FormTypeDefinition, id: string, opts?: { signal?: AbortSignal }) => Promise<FormItem | null>,
+ * createFormItem: (formType: FormTypeDefinition, fields: Record<string, FormValue>) => Promise<FormItem>,
+ * patchFormItem: (formType: FormTypeDefinition, id: string, fields: Record<string, FormValue>, etag: string) => Promise<FormPatchResult>
  * }} SharePointClient
  */
 

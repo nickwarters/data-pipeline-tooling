@@ -12,6 +12,21 @@
  * @type {Array<{ loginName: string, displayName: string, email?: string, manager?: string, groups?: string[] }>}
  */
 export const people = [
+  // The Forms cast, so a manager prefill and the people picker find them.
+  {
+    loginName: 'user-forms-employee',
+    displayName: 'Sam Patel',
+    manager: 'user-forms-flm',
+  },
+  {
+    loginName: 'user-forms-flm',
+    displayName: 'Ana Lopez',
+    manager: 'user-forms-slm',
+  },
+  { loginName: 'user-forms-slm', displayName: 'Jo Reid' },
+  { loginName: 'user-forms-former-flm', displayName: 'Lee Morgan' },
+  { loginName: 'user-forms-control', displayName: 'Kim Shaw' },
+  { loginName: 'user-forms-unrelated', displayName: 'Ola Ben' },
   {
     loginName: 'user-reviewer',
     displayName: 'Alex Reviewer',
