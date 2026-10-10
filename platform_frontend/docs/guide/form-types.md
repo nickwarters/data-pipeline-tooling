@@ -17,7 +17,8 @@ the terms are in [CONTEXT.md](../../CONTEXT.md#forms).
    sees it.
 4. Run `node scripts/form-type-columns.js <slug>` for the list's columns, types,
    Choice values and indexes, and create the list with them in each
-   environment.
+   environment, with the settings and checks in the runbook's
+   [HR Form Type lists](provisioning-runbook.md#8-hr-form-type-lists) section.
 
 `form-types/one-to-one.js` is the worked example.
 

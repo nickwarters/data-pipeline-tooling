@@ -2,7 +2,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { provisioningColumns } from '../scripts/form-type-columns.js';
+import { readFileSync } from 'node:fs';
+import {
+  columnsTable,
+  provisioningColumns,
+} from '../scripts/form-type-columns.js';
 import {
   CHOICE_FIELD_TYPES,
   CLOSED_FORM_STATUSES,
@@ -96,4 +100,31 @@ test('every Status that locks a Form is one a Form can hold', () => {
     FORM_STATUSES.some((status) => !CLOSED_FORM_STATUSES.includes(status)),
     'a new Form needs an open Status to start in'
   );
+});
+
+test('the provisioning runbook carries each Form Type’s column table as the definition gives it', () => {
+  const runbook = readFileSync(
+    new URL('../docs/guide/provisioning-runbook.md', import.meta.url),
+    'utf8'
+  );
+  /** @param {string} table */
+  const cells = (table) =>
+    table
+      .trim()
+      .split('\n')
+      .map((line) => line.split('|').map((cell) => cell.trim()));
+  const blocks = [
+    ...runbook.matchAll(
+      /<!-- form-type-columns: ([\w-]+) -->([\s\S]*?)<!-- \/form-type-columns -->/g
+    ),
+  ];
+  assert.ok(blocks.length > 0, 'the runbook carries a column table');
+  for (const [, slug, table] of blocks) {
+    const def = APP_CONFIG.formTypes.find((each) => each.slug === slug);
+    assert.ok(
+      def,
+      `the runbook names a Form Type "${slug}" that is not composed`
+    );
+    assert.deepEqual(cells(table), cells(columnsTable(def)), slug);
+  }
 });

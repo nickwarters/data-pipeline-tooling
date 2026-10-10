@@ -11,7 +11,7 @@
  * every Action Centre reason group at once), visitor (no groups —
  * exercises the Visitor explainer-only branch), and the Forms cast:
  * forms-employee, forms-line-manager, forms-second-line-manager,
- * forms-control and forms-unrelated.
+ * forms-former-manager, forms-control, forms-colleague and forms-unrelated.
  *
  * @type {Record<string, { userId: string, displayName: string, groups: string[] }>}
  */
@@ -102,6 +102,16 @@ export const personas = {
     userId: 'user-forms-control',
     displayName: 'Kim Shaw',
     groups: ['Forms', 'Forms Control'],
+  },
+  'forms-former-manager': {
+    userId: 'user-forms-former-flm',
+    displayName: 'Lee Morgan',
+    groups: ['Forms'],
+  },
+  'forms-colleague': {
+    userId: 'user-forms-colleague',
+    displayName: 'Ade Okafor',
+    groups: ['Forms'],
   },
   'forms-unrelated': {
     userId: 'user-forms-unrelated',

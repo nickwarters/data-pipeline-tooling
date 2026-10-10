@@ -3,7 +3,7 @@
  * 1-to-1 Forms for mock mode (?mock=1), stored as the real list would hold
  * them: people and dates plain, free text and Form Actions encoded.
  *
- * The cast is the five Forms personas in `personas.js`:
+ * The cast is the seven Forms personas in `personas.js`:
  *
  * - `forms-employee` (Sam Patel) is the Employee on five Forms: one open and
  *   overdue, one open and due later, one Completed, one Void and one
@@ -13,8 +13,11 @@
  * - `forms-second-line-manager` (Jo Reid) is Sam's current second line manager.
  * - The Completed Form records a different first line manager at completion
  *   (Lee Morgan), who is no longer current and so has no access to it.
- * - `forms-control` (Kim Shaw) is on none of them; `forms-unrelated` (Ola Ben)
- *   is on none of them and has no Forms access at all.
+ * - `forms-former-manager` (Lee Morgan) is that former manager, still in the
+ *   Forms group.
+ * - `forms-control` (Kim Shaw) is on none of them; `forms-colleague` (Ade
+ *   Okafor) is in the Forms group and on none of them; `forms-unrelated` (Ola
+ *   Ben) is on none of them and has no Forms access at all.
  */
 
 import { oneToOne } from '../../form-types/one-to-one.js';

@@ -4,8 +4,9 @@
  * Print the columns a Form Type's list needs, read from its definition, for
  * whoever provisions that list by hand.
  *
- *   node scripts/form-type-columns.js             # every composed Form Type
- *   node scripts/form-type-columns.js one-to-one  # one
+ *   node scripts/form-type-columns.js                        # every composed Form Type
+ *   node scripts/form-type-columns.js one-to-one             # one
+ *   node scripts/form-type-columns.js one-to-one --markdown  # as the runbook's table
  *
  * Every Form list is created by hand in each environment, so its columns are
  * typed in by a person. Deriving them from the definition rather than copying
@@ -65,11 +66,47 @@ export function provisioningColumns(definition) {
 }
 
 /**
+ * The columns as the Markdown table the provisioning runbook carries, so the
+ * runbook's copy can be checked against the definition rather than trusted.
+ *
+ * @param {FormTypeDefinition} definition
+ * @returns {string}
+ */
+export function columnsTable(definition) {
+  const rows = provisioningColumns(definition).map((row) => [
+    `\`${row.column}\``,
+    row.columnType,
+    row.indexed ? 'Yes' : '',
+    row.encoded ? 'Yes' : '',
+    row.choices.join('; '),
+  ]);
+  const head = [
+    'Internal name',
+    'SharePoint type',
+    'Indexed',
+    'Encoded',
+    'Choices',
+  ];
+  const widths = head.map((title, i) =>
+    Math.max(title.length, ...rows.map((row) => row[i].length))
+  );
+  /** @param {string[]} cells */
+  const line = (cells) =>
+    `| ${cells.map((cell, i) => cell.padEnd(widths[i])).join(' | ')} |`;
+  return [
+    line(head),
+    line(widths.map((width) => '-'.repeat(width))),
+    ...rows.map(line),
+  ].join('\n');
+}
+
+/**
  * @param {string[]} argv
  * @returns {number} the exit code
  */
 function main(argv) {
-  const [slug] = argv;
+  const markdown = argv.includes('--markdown');
+  const [slug] = argv.filter((arg) => arg !== '--markdown');
   const chosen = APP_CONFIG.formTypes.filter(
     (definition) => slug === undefined || definition.slug === slug
   );
@@ -78,6 +115,10 @@ function main(argv) {
     return 1;
   }
   for (const definition of chosen) {
+    if (markdown) {
+      console.log(columnsTable(definition));
+      continue;
+    }
     console.log(`${definition.formName} — list "${definition.listName}"`);
     for (const row of provisioningColumns(definition)) {
       const notes = [
