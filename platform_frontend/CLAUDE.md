@@ -511,11 +511,15 @@ src/
       kpi-view.js                 # pure renderer for kpi-strip-model output
       panel-descriptors.js        # code-owned panel registry and role visibility
     home.js                      # store-driven Home route slice and pure view
-    cora-forms.js                 # store-driven #/forms slice, Forms access only: open Forms across every
-                                  #   Form Type in the viewer's roles, the employee and manager lanes, and
-                                  #   the control group's paged "All open forms"
+    cora-forms.js                 # store-driven #/forms slice, Forms access only: the Outstanding and
+                                  #   Archive tabs, their reads across every Form Type, and the stale-reply
+                                  #   guard that drops a read the viewer has since replaced
     forms/
-      outstanding-model.js        # pure Form rows (read-gated by form-access), lanes and filters
+      forms-model.js              # pure Form rows (read-gated by form-access), lanes, filters, and the
+                                  #   archive's closed-date window
+      form-cells.js               # the columns, Open/View button, load state and Load more both tabs share
+      outstanding-view.js         # pure Outstanding tab: lanes, open Forms, the control group's "All open forms"
+      archive-view.js             # pure Archive tab: closed Forms in a closed-date window, read-only
     cora-journey-cases.js         # store-driven Journey Cases slice + generic descriptors (GRID-2)
     cora-my-team.js               # store-driven Team Workload slice + pure per-Reviewer workload view
     roadmap.js                    # store-driven Roadmap slice and pure view

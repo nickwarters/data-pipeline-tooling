@@ -76,12 +76,16 @@ code shared by every Form Type, never definition entries.
 
 ## The application's own columns
 
-`Employee`, `CurrentFirstLineManager`, `CurrentSecondLineManager`, `Status` and
-`DueDate` belong to the application, because access and the lock read them. Every
+`Employee`, `CurrentFirstLineManager`, `CurrentSecondLineManager`, `Status`,
+`DueDate` and `ClosedDate` belong to the application, because access, the lock
+and the archive read them. `ClosedDate` is the day a lifecycle button closed the
+Form and is empty while it is open; the archive reads it rather than `Modified`,
+which moves whenever anything touches the item. Every
 Form's list has them, and they are always read and written plain.
 
 - A definition **must place** `Employee` and `DueDate`. The page draws the Status
-  badge and the current managers itself, so a definition need not place those.
+  badge, the current managers and the closed date itself, so a definition need
+  not place those.
 - A definition may not give one of them another type, or mark one `editableBy`:
   nobody edits them after creation.
 
@@ -130,6 +134,17 @@ in it is not drawn. The Forms control group can switch the table to every open
 Form, read a hundred per Form Type at a time, ordered by due date. The route and
 its nav item are guarded by `canAccessForms`. Open and View go to
 `#/forms/<slug>/<id>`, and New form to `#/forms/new`.
+
+The **Archive** tab (`#/forms?tab=archive`) lists the closed Forms instead:
+Completed, Void or Cancelled, all read-only, latest closed first. It reads only
+the Forms the viewer is the Employee or a current manager on, or every closed
+Form for the Forms control group, and every read carries a `ClosedDate` window,
+the last year by default, because the control group's read would otherwise grow
+without bound. Changing a date reads again; clearing one puts its default back
+rather than widening the read. The Form type, Employee and Status filters narrow
+the rows already read, and Load more reads the next fifty per Form Type. Its
+"Managers at completion" column shows `FirstLineManager` and
+`SecondLineManager`, which grant nothing.
 
 ## What the gate checks
 

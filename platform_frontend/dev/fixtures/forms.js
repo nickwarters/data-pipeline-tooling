@@ -5,8 +5,9 @@
  *
  * The cast is the five Forms personas in `personas.js`:
  *
- * - `forms-employee` (Sam Patel) is the Employee on three Forms: one open and
- *   overdue, one open and due later, one Completed.
+ * - `forms-employee` (Sam Patel) is the Employee on five Forms: one open and
+ *   overdue, one open and due later, one Completed, one Void and one
+ *   Cancelled so long ago it falls outside the archive's default window.
  * - `forms-line-manager` (Ana Lopez) is Sam's current first line manager on all
  *   three, and the Employee on a fourth, managed by Jo Reid.
  * - `forms-second-line-manager` (Jo Reid) is Sam's current second line manager.
@@ -90,6 +91,7 @@ export const formLists = {
       SecondLineManager: JO,
       Status: 'Completed',
       DueDate: '2026-06-30',
+      ClosedDate: '2026-06-24',
       MeetingDate: '2026-06-24',
       CompetencyStage: 'Stage 1',
       Location: 'In person',
@@ -99,6 +101,26 @@ export const formLists = {
       IndividualComments: 'Thanks Lee.',
       LineManagerComments: 'A strong first quarter.',
       Actions: [],
+    }),
+    oneToOneItem('105', '2026-07-01T09:00:00Z', {
+      Employee: SAM,
+      CurrentFirstLineManager: ANA,
+      CurrentSecondLineManager: JO,
+      FirstLineManager: null,
+      SecondLineManager: null,
+      Status: 'Void',
+      DueDate: '2026-07-31',
+      ClosedDate: '2026-07-03',
+    }),
+    oneToOneItem('106', '2025-01-02T09:00:00Z', {
+      Employee: SAM,
+      CurrentFirstLineManager: ANA,
+      CurrentSecondLineManager: JO,
+      FirstLineManager: null,
+      SecondLineManager: null,
+      Status: 'Cancelled',
+      DueDate: '2025-01-31',
+      ClosedDate: '2025-01-10',
     }),
     oneToOneItem('104', '2026-09-15T09:00:00Z', {
       Employee: ANA,

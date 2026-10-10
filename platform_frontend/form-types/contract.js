@@ -165,12 +165,18 @@ export const CLOSED_FORM_STATUSES = Object.freeze([
 /**
  * The columns the application owns, with the field type each must have.
  *
- * Access reads `Employee` and the two current managers and nothing else, and
- * the lock reads `Status`, so a definition may place these on the page but
- * cannot store them anywhere else, give them another type or let anyone edit
- * them after creation. `placedBy` says who draws each one: the page draws the
- * Status badge and the current managers itself, so a definition has to place
- * only the two it would otherwise leave off the page.
+ * Access reads `Employee` and the two current managers and nothing else, the
+ * lock reads `Status`, and the archive's date window reads `ClosedDate`, so a
+ * definition may place these on the page but cannot store them anywhere else,
+ * give them another type or let anyone edit them after creation. `placedBy`
+ * says who draws each one: the page draws the Status badge, the current
+ * managers and the closed date itself, so a definition has to place only the
+ * two it would otherwise leave off the page.
+ *
+ * `ClosedDate` is the day a lifecycle button closed the Form, and empty while
+ * it is open. The archive windows on it rather than on `Modified`, which moves
+ * whenever anything touches the item, the current managers being kept up to
+ * date included, and would drag long-closed Forms back into a recent window.
  *
  * @type {Readonly<Record<string, { type: FormFieldType, placedBy: 'definition' | 'page' }>>}
  */
@@ -180,6 +186,7 @@ export const FORM_OWNED_FIELDS = Object.freeze({
   CurrentSecondLineManager: { type: 'person', placedBy: 'page' },
   Status: { type: 'status', placedBy: 'page' },
   DueDate: { type: 'date', placedBy: 'definition' },
+  ClosedDate: { type: 'date', placedBy: 'page' },
 });
 
 /**
