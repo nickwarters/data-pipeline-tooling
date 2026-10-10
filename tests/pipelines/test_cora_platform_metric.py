@@ -8,7 +8,6 @@ path from a seeded Sync subject.
 from __future__ import annotations
 
 import datetime as dt
-import time
 
 import pandas as pd
 import pytest
@@ -945,21 +944,12 @@ def test_conversation_posting_pattern_files_each_message_under_its_local_hour(
 
 
 @pytest.fixture
-def system_zone_uk(monkeypatch):
-    """The *system* zone is the UK's, summer time and all; the seam is None."""
-    if not hasattr(time, "tzset"):
-        pytest.skip("time.tzset is POSIX-only")
+def default_zone(monkeypatch):
+    """The seam on its default (None), as in production: UK time."""
     monkeypatch.setattr(timestamps, "local_timezone", lambda: None)
-    monkeypatch.setenv("TZ", "GMT0BST,M3.5.0/1,M10.5.0")
-    time.tzset()
-    yield
-    monkeypatch.undo()
-    time.tzset()
 
 
-def test_conversation_posting_pattern_reads_the_system_zone_per_message(
-    system_zone_uk,
-):
+def test_conversation_posting_pattern_reads_uk_time_per_message(default_zone):
     # Sunday 5 Jul 23:30 UTC is Monday 00:30 BST; Monday 7 Dec 23:30 UTC is
     # 23:30 GMT.
     messages = [
