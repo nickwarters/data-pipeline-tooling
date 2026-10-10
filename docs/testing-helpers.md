@@ -238,8 +238,9 @@ To exercise the *system* zone itself — the seam's `None` — set the seam to
 `None`, set `TZ` (a POSIX rule such as `GMT0BST,M3.5.0/1,M10.5.0` needs no zone
 database) and call `time.tzset()`, restoring both afterwards; `tzset` is
 POSIX-only, so such a test skips on Windows.
-`tests/tools/test_observability/test_timestamps.py` and
-`tests/pipelines/test_cora_platform_metric.py` have one.
+`tests/tools/test_observability/test_timestamps.py` has one. A test of
+`local_wall_clock` needs only the seam set to `None`: the column conversion
+names the UK zone rather than reading the system's.
 
 Keep such a fixture **function-scoped**. A module- or session-scoped one is set
 up *before* the autouse pin and would be silently overwritten by it.

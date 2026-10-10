@@ -165,12 +165,11 @@ from there:
   SQLite's text comparison compares like with like.
 - **A column converts the same way.** `local_wall_clock` turns a pandas
   column of UTC instants into local wall-clock times through the same zone
-  seam, resolving the system zone per instant (pandas' own `tz_convert(None)`
-  means UTC, not the system zone), so a reduction can take local dates, months
-  or hours of a million rows without a Python call per row. An instant the
-  system zone cannot place — one before 1970, which Windows' C runtime refuses —
-  becomes `NaT`, as an unparseable stamp does, rather than failing the column;
-  `local_date`, one value at a time, still raises for it.
+  seam, so a reduction can take local dates, months or hours of a million rows
+  without a Python call per row. With the seam on its default it names
+  `Europe/London`, because pandas cannot convert into "the system zone" (its
+  `tz_convert(None)` means UTC) and these machines are always in the UK; each
+  instant still takes the offset in force when it happened.
 
 The behavioural consequence, and the bug that motivated it: the deployment
 target is a UK box, at UTC+1 for roughly half the year. An upstream that
