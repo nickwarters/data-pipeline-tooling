@@ -60,6 +60,7 @@ test('home view: each role keeps its existing destination and order', () => {
       ownedCaseTypes: ['complaints'],
       ownedJourneyCaseTypes: ['complaints'],
       isMaintainer: true,
+      canAccessForms: true,
       isVisitor: true,
     })
   );
@@ -71,6 +72,7 @@ test('home view: each role keeps its existing destination and order', () => {
     'Case Type Owner',
     'Journey Owner',
     'Maintainer',
+    'Forms',
     'Visitor',
   ]);
   assert.deepEqual(links(view), [
@@ -80,7 +82,15 @@ test('home view: each role keeps its existing destination and order', () => {
     '#/question-bank',
     '#/journey-cases',
     '#/question-bank',
+    '#/forms',
   ]);
+});
+
+test('home view: a person whose only access is to Forms is offered the Forms area', () => {
+  const view = homeView(state({ canAccessForms: true }));
+
+  assert.deepEqual(headings(view), ['Forms']);
+  assert.deepEqual(links(view), ['#/forms']);
 });
 
 test('home view: a Controls-only user is offered search rather than an empty page', () => {

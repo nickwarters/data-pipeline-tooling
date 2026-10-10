@@ -58,6 +58,7 @@ import * as myTeamPage from './pages/cora-my-team.js';
 import * as caseSearchPage from './pages/cora-case-search.js';
 import * as caseSupportPage from './pages/cora-case-support.js';
 import * as accessPage from './pages/cora-access.js';
+import * as formsPage from './pages/cora-forms.js';
 
 /** @typedef {import('./setup/register-routes.js').AppContext} AppContext */
 /** @typedef {import('./setup/register-routes.js').PagePlugin} PagePlugin */
@@ -255,6 +256,16 @@ export const APP_CONFIG = {
       // SharePoint list ACLs, and hiding a link makes nothing safe.
       guard: (caps) => caps.isReviewerManager,
       nav: { label: 'My Team', order: 60 },
+    },
+    {
+      id: 'forms',
+      paths: ['#/forms'],
+      page: formsPage,
+      // The HR Forms area. Guarded as well as linked, and stated once: who
+      // may open a particular Form is the access rule's question, but whether
+      // the area is offered at all is a group membership.
+      guard: (caps) => caps.canAccessForms,
+      nav: { label: 'Forms', order: 65 },
     },
     {
       id: 'search',

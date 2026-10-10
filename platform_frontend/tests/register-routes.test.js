@@ -92,6 +92,7 @@ test('registerRoutes: registers the complete public route contract, in order', (
     '#/journey-cases',
     '#/roadmap',
     '#/my-team',
+    '#/forms',
     '#/search',
     '#/case-support',
     '#/case-support/:caseType/:id',
@@ -312,6 +313,7 @@ test('route table: only the eligibility-gated routes guard their mount', () => {
     'question-bank',
     'journey-cases',
     'my-team',
+    'forms',
     'search',
     'case-support',
     'access',
@@ -412,6 +414,43 @@ test('search guard: bounces a user without the capability, without mounting the 
   // does: Back must not return the user to the route that just bounced them.
   assert.deepEqual(replacedUrls, ['/SitePages/app.aspx#/']);
   assert.equal(location.hash, '', 'does not push a history entry');
+});
+
+test('forms guard: admits a user with Forms access, the control group included', () => {
+  for (const permissions of [
+    { canAccessForms: true },
+    { canAccessForms: true, isFormsControl: true },
+  ]) {
+    replacedUrls.length = 0;
+    const { guard } = routeTable(makeContext([], permissions))['forms'];
+    assert.equal(guard?.(), true);
+    assert.deepEqual(replacedUrls, []);
+  }
+});
+
+test('forms guard: bounces a user without Forms access, whatever Case roles they hold', () => {
+  replacedUrls.length = 0;
+  const { guard } = routeTable(
+    makeContext([], {
+      canAccessForms: false,
+      isReviewer: true,
+      isControls: true,
+      isMaintainer: true,
+    })
+  )['forms'];
+
+  assert.equal(guard?.(), false);
+  assert.deepEqual(replacedUrls, ['/SitePages/app.aspx#/']);
+});
+
+test('the Forms nav item is offered exactly to users with Forms access', () => {
+  const offered = (/** @type {any} */ permissions) =>
+    navItemsFor(makePermissions(permissions)).some(
+      (item) => item.href === '#/forms'
+    );
+  assert.equal(offered({ isReviewer: false, canAccessForms: true }), true);
+  assert.equal(offered({ isReviewer: true, canAccessForms: false }), false);
+  assert.equal(offered({ isReviewer: false, canAccessForms: false }), false);
 });
 
 // --- Where an unmatched user lands ---

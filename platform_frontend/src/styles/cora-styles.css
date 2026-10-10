@@ -4037,3 +4037,44 @@
   outline: var(--cora-focus-outline);
   outline-offset: var(--cora-focus-offset);
 }
+
+/* ── Forms dashboard ─────────────────────────────────────────────────────── */
+
+.cora-forms-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cora-space-3);
+  flex-wrap: wrap;
+}
+
+.cora-forms-type {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+}
+
+.cora-forms-type::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--cora-color-accent);
+}
+
+.cora-forms-due-overdue {
+  color: var(--cora-color-danger);
+  font-weight: var(--cora-font-weight-semibold);
+}
+
+[data-cora-root] .cora-forms-error {
+  margin: 0;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  color: var(--cora-color-danger);
+  background: var(--cora-color-danger-bg);
+  border-radius: var(--cora-radius-sm);
+}
+
+[data-cora-root] .cora-forms-load-more {
+  margin-top: var(--cora-space-3);
+}

@@ -40,6 +40,11 @@ export function homeView(state) {
   if (capabilities.isMaintainer) {
     sections.push(roleSection('Maintainer', '#/question-bank'));
   }
+  // HR Forms are not a Case Review role, but a person whose only access is to
+  // Forms is not a Visitor either, and this is the way in.
+  if (capabilities.canAccessForms) {
+    sections.push(roleSection('Forms', '#/forms'));
+  }
   if (capabilities.isVisitor) {
     sections.push(visitorSection());
   }

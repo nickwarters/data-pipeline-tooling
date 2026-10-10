@@ -33,7 +33,7 @@ function breakdownView(breakdown) {
 }
 
 /**
- * @param {'reviewer'|'controls'|'owner'} role
+ * @param {string} role
  * @param {KpiTile} tile
  * @param {boolean} expanded
  * @param {(role: string, key: string) => void} onToggleTile

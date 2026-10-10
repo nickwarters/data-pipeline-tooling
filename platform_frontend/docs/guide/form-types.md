@@ -89,6 +89,48 @@ Form's list has them, and they are always read and written plain.
 ordinary fields, the record of who the managers were at completion, and grant
 no access.
 
+## Who sees a Form
+
+`src/services/form-access.js` is the one place the access rule lives, and every
+Forms view asks it rather than re-deriving it. `formAccess(form, me, caps)`
+answers for one viewer and one Form: the roles they hold on it, the most
+permissive of them (`role`, for a "Your role" column), `canRead`, `locked`,
+`canEdit` and `canEditField(field)`. `canCreateForms(caps)` says whether they
+may start a Form at all.
+
+| Who                     | Read      | Edit while open | Create |
+| ----------------------- | --------- | --------------- | ------ |
+| Employee                | yes       | yes             | yes    |
+| Current first line mgr  | yes       | yes             | yes    |
+| Current second line mgr | yes       | no              | yes    |
+| Forms control group     | every one | no              | yes    |
+| Manager at completion   | no        | no              |        |
+
+Only `Employee`, `CurrentFirstLineManager` and `CurrentSecondLineManager` grant
+anything, compared as bare accounts without regard to case. A Status of
+Completed, Void or Cancelled locks the Form for everyone. Nobody edits the
+application's own columns after creation, whatever their role. Membership of
+the `Forms` group gives `canAccessForms`, and the `Forms Control` group gives
+`isFormsControl` and implies it; both names in `src/services/permissions.js` are
+placeholders until provisioning settles them.
+
+This is a JavaScript gate, not a permission boundary: anyone in a Form list's
+access group can read every row through REST (ADR-0059).
+
+## The Forms dashboard
+
+`#/forms` lists the open Forms the viewer is on, across every Form Type in
+`APP_CONFIG.formTypes`, which reaches the page as `AppContext.formTypes`. It
+reads each Form Type's list for open Forms involving the viewer and keeps only
+the rows `formAccess` lets them read. Above the table, the "As employee" lane
+counts their own Forms that are overdue or due within seven days and their
+pending Form Actions; the "As manager" lane counts the same for the Forms they
+are current first line manager on, plus all of them as Open. A tile with nothing
+in it is not drawn. The Forms control group can switch the table to every open
+Form, read a hundred per Form Type at a time, ordered by due date. The route and
+its nav item are guarded by `canAccessForms`. Open and View go to
+`#/forms/<slug>/<id>`, and New form to `#/forms/new`.
+
 ## What the gate checks
 
 `npm run verify` refuses a definition with:
