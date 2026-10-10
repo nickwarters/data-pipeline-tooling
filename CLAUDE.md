@@ -189,7 +189,6 @@ python3 -m venv .venv
 .venv/bin/python -m cli run pipelines/ingest --base-dir /tmp/demo  # operator CLI: run/orchestrate/migrate/status/runs/log (see docs/operator-cli.md)
 .venv/bin/python -m cli orchestrate --app pipelines.schedules --base-dir /tmp/demo --plan  # preview a scheduled pass without running it
 .venv/bin/python -m cli migrate --base-dir /tmp/demo --check       # report databases behind their migrations (exit 1 if any)
-.venv/bin/python -m cli perf --base-dir /tmp/demo                  # p50/p90/p95 per pipeline, slowest first (after pipeline_run_metric runs)
 .venv/bin/python -m cli prune-runs --base-dir /tmp/demo --older-than 400  # report old runs to delete from the registry; --apply deletes
 .venv/bin/pre-commit run --all-files             # lint + format the whole tree on demand
 
@@ -240,7 +239,7 @@ Run pipelines as **modules from the repo root** (`python -m pipelines.<name>`)
 so the import-only `framework` package resolves on `sys.path`. The framework
 itself is also runnable — `python -m cli <command>` (entry point in the
 top-level `cli/`) is the single surface for authoring (`scaffold`) and operating
-(`run`/`orchestrate`/`migrate`/`status`/`runs`/`log`/`perf`/`prune-runs`) pipelines. `run` addresses a pipeline
+(`run`/`orchestrate`/`migrate`/`status`/`runs`/`log`/`prune-runs`) pipelines. `run` addresses a pipeline
 by **its location on disk** — `python -m cli run pipelines/<name>` imports
 `pipelines.<name>.pipeline` and executes its `run(context)` callable (reading an
 optional `UPSTREAMS` freshness tuple), so the dependency stays one-way and the
