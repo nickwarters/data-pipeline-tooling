@@ -158,6 +158,26 @@ export const FORM_STATUSES = Object.freeze([
 /** The Form Status a new Form is created with, and keeps until it closes. */
 export const INITIAL_FORM_STATUS = 'Pending';
 
+/**
+ * Most Form Actions a Form may hold, the same for every Form Type: the editor
+ * stops offering another at this many, and a stored list holding more is
+ * refused on write and reported on read.
+ */
+export const MAX_FORM_ACTIONS = 3;
+
+/**
+ * Every Form Action Status. A Form Action has its own small lifecycle, apart
+ * from its Form's: it can be done or dropped while the Form stays open.
+ */
+export const FORM_ACTION_STATUSES = Object.freeze([
+  'Pending',
+  'Completed',
+  'Cancelled',
+]);
+
+/** The Status a Form Action is added with. */
+export const INITIAL_FORM_ACTION_STATUS = 'Pending';
+
 /** The Form Status values that lock a Form for everyone. */
 export const CLOSED_FORM_STATUSES = Object.freeze([
   'Completed',

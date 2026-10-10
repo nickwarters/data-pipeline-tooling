@@ -23,6 +23,7 @@ import {
 } from '../../evaluators/capture-values.js';
 import { MANAGER_RECORDS } from '../../../form-types/contract.js';
 import { editsWhileOpen, namesAccount } from '../../services/form-access.js';
+import { formActionsEditor } from './form-actions-view.js';
 
 /** @typedef {import('../../sharepoint-client.js').FormItem} FormItem */
 /** @typedef {import('../../sharepoint-client.js').FormValue} FormValue */
@@ -48,6 +49,12 @@ import { editsWhileOpen, namesAccount } from '../../services/form-access.js';
  * @property {Record<string, PeopleSearchState>} peopleSearch Keyed by column.
  * @property {(itemField: string, value: FormValue) => void} onField
  * @property {(itemField: string, query: string) => void} onPersonQuery
+ * @property {number | null} removingAction The Form Action whose removal
+ *   awaits a yes.
+ * @property {(itemField: string, actions: FormAction[]) => void} onActions
+ *   Every change to the Form Actions, as the whole new list.
+ * @property {(index: number) => void} onRemoveAction
+ * @property {() => void} onRemoveWithdrawn
  */
 
 /** What an empty field reads as, wherever it is shown as text. */
@@ -85,7 +92,7 @@ export function formSectionsView(definition, item, context) {
  */
 function sectionView(section, id, item, context) {
   if (section.sectionType === 'actions') {
-    return [actionsView(section, id, item)];
+    return [actionsView(section, id, item, context)];
   }
   if (section.sectionType === 'split-panel') {
     return [
@@ -486,16 +493,25 @@ const CLOSED_RECORD_HEADINGS = Object.freeze({
 });
 
 /**
- * The Form Actions, read-only.
+ * The Form Actions: an editor while the Form can be changed, and otherwise a
+ * card per Action as text. A stored list that would not read is said so in
+ * place of either, and nothing is offered that could write over it.
  *
  * @param {{ itemField: string, hint?: string }} section
  * @param {string} id
  * @param {FormItem} item
+ * @param {FormSectionsContext} context
  */
-function actionsView(section, id, item) {
+function actionsView(section, id, item, context) {
   const headingId = `${id}-heading`;
   const stored = item.fields[section.itemField];
-  const actions = Array.isArray(stored) ? stored : [];
+  const actions = /** @type {FormAction[]} */ (
+    Array.isArray(stored) ? stored : []
+  );
+  const unreadable = item.problems.find(
+    (problem) => problem.column === section.itemField
+  );
+  const editing = context.mode === 'edit' && !unreadable;
   return h(
     'section',
     {
@@ -505,34 +521,58 @@ function actionsView(section, id, item) {
     h(
       'header',
       { className: 'cora-form-panel-header' },
-      h('h2', { id: headingId }, 'Actions')
+      h('h2', { id: headingId }, 'Actions'),
+      editing && section.hint
+        ? h('p', { className: 'cora-form-panel-hint' }, section.hint)
+        : null
     ),
-    actions.length === 0
-      ? h('p', { className: 'cora-form-empty' }, 'No actions recorded.')
-      : h(
-          'ul',
-          { className: 'cora-form-action-list' },
-          ...actions.map((action) =>
-            h(
-              'li',
-              { className: 'cora-form-action-card' },
-              h('strong', {}, action.title || 'Untitled action'),
-              h(
-                'p',
-                { className: 'cora-form-action-meta' },
-                action.dueDate
-                  ? `Due ${formatDate(action.dueDate)}`
-                  : 'No due date',
-                action.status
-                  ? h('span', { className: 'cora-badge' }, action.status)
-                  : null
-              ),
-              action.details
-                ? h('p', { className: 'cora-form-value--long' }, action.details)
-                : null
-            )
-          )
+    unreadable
+      ? h(
+          'p',
+          { className: 'cora-forms-error', role: 'alert' },
+          `The actions stored on this form could not be read (${unreadable.problem}), so none are shown. They are left as stored, and none can be added or changed here until the list item is corrected.`
         )
+      : editing
+        ? formActionsEditor(id, actions, {
+            removing: context.removingAction,
+            onChange: (next) => context.onActions(section.itemField, next),
+            onRemoveAsked: context.onRemoveAction,
+            onRemoveWithdrawn: context.onRemoveWithdrawn,
+          })
+        : actionCardsView(actions)
+  );
+}
+
+/**
+ * The Form Actions as text.
+ *
+ * @param {readonly FormAction[]} actions
+ */
+function actionCardsView(actions) {
+  if (actions.length === 0) {
+    return h('p', { className: 'cora-form-empty' }, NOTHING_RECORDED);
+  }
+  return h(
+    'ul',
+    { className: 'cora-form-action-list' },
+    ...actions.map((action) =>
+      h(
+        'li',
+        { className: 'cora-form-action-card' },
+        h('strong', {}, action.title || 'Untitled action'),
+        h(
+          'p',
+          { className: 'cora-form-action-meta' },
+          action.dueDate ? `Due ${formatDate(action.dueDate)}` : 'No due date',
+          action.status
+            ? h('span', { className: 'cora-badge' }, action.status)
+            : null
+        ),
+        action.details
+          ? h('p', { className: 'cora-form-value--long' }, action.details)
+          : null
+      )
+    )
   );
 }
 

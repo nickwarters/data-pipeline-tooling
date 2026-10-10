@@ -179,7 +179,26 @@ the current manager column that grants access in its place. While the Form is
 open, a recorded manager in a strip says what its current holder may do, or
 names the current manager when the record says someone else.
 
-The Form Actions are listed read-only until the Actions editor arrives.
+## The Form Actions
+
+One editor, `src/pages/forms/form-actions-view.js`, draws the `actions` section
+of every Form Type. While the Form is open, both editors see a card per Form
+Action with its Title, Due date, Status and Details, a Remove button, and
+"+ Add action" with a count of how many are left. The cap is
+`MAX_FORM_ACTIONS` in `form-types/contract.js`; at the cap the button is
+disabled. A new Action starts as `INITIAL_FORM_ACTION_STATUS` (Pending), and a
+Status is chosen from `FORM_ACTION_STATUSES`; one stored outside them is offered
+too, so opening the Form never changes it. Removing an Action that has a title,
+due date or details asks first; an empty one goes at once.
+
+The Actions are one column, so every change hands the page the whole list and
+the save queue writes it as one value. In view and locked modes each Action is a
+card of text, and none reads "Nothing recorded".
+
+A stored list that does not decode (not JSON, more than the cap, or the wrong
+shape) comes back from the client as no Actions plus a reported problem. The
+section says so in an alert and offers nothing that could write over the stored
+value; every other field of the Form still works and saves.
 
 ## New form
 

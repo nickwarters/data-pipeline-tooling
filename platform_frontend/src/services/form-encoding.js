@@ -22,13 +22,10 @@
  * means migrating every stored value.
  */
 
-import { formColumns } from '../../form-types/contract.js';
+import { formColumns, MAX_FORM_ACTIONS } from '../../form-types/contract.js';
 
 /** @typedef {import('../../form-types/contract.js').FormTypeDefinition} FormTypeDefinition */
 /** @typedef {import('../sharepoint-client.js').FormAction} FormAction */
-
-/** Most Form Actions a Form may hold, the same for every Form Type. */
-export const MAX_FORM_ACTIONS = 3;
 
 /** The keys every Form Action carries, each a string. */
 const FORM_ACTION_KEYS = ['title', 'dueDate', 'status', 'details'];
