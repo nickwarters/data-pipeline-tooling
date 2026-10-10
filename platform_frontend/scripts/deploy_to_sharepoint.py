@@ -80,7 +80,7 @@ ENV_TARGET_FOLDERS = {env: target_folder_for(env) for env in ENVIRONMENT_NAMES}
 # JS. These roots deliberately exclude dev/, tests/, docs/,
 # node_modules/, and config/dotfiles — they simply live outside the roots.
 # `host/` holds the production Content Editor host page (host/index.html).
-DEFAULT_INCLUDE_ROOTS = ("src", "case-types", "host")
+DEFAULT_INCLUDE_ROOTS = ("src", "case-types", "form-types", "host")
 
 # Only ship browser-loadable assets. A stray tool artefact under an include root
 # (e.g. a generated .map or an editor backup) is not deployed.
@@ -678,7 +678,7 @@ class DeployOptions:
 def parse_args(argv: list[str]) -> DeployOptions:
     parser = argparse.ArgumentParser(
         description=(
-            "Sync the deployable runtime tree (src/, case-types/) to "
+            "Sync the deployable runtime tree (src/, case-types/, form-types/) to "
             "SharePoint under Style Library/CODE/CORA."
         )
     )

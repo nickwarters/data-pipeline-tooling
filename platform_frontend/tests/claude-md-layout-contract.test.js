@@ -50,6 +50,7 @@ test('CLAUDE.md layout mentions every production module', () => {
   const missing = [
     ...productionFiles('src/'),
     ...productionFiles('case-types/'),
+    ...productionFiles('form-types/'),
   ]
     .filter((file) => !layout.includes(file.split('/').pop() ?? ''))
     .sort();

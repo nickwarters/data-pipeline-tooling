@@ -27,7 +27,7 @@ Run these, in this order, from the repository root:
 ```bash
 npm run check          # tsc --noEmit --checkJs
 npm run verify         # parses every module, resolves every reference, evaluates the config
-npm run test:coverage  # the JS suite plus the 95% floor over src/ and case-types/
+npm run test:coverage  # the JS suite plus the 95% floor over src/, case-types/ and form-types/
 npm run test:deploy    # the Python suite for this script
 ```
 

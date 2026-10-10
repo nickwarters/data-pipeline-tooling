@@ -81,7 +81,9 @@ export function buildCaptureControl(
 
   return h('input', {
     className,
-    type: 'text',
+    // The browser's own date picker, which also writes the YYYY-MM-DD form a
+    // date field stores, whatever the reader's locale shows them.
+    type: fieldConfig.type === 'date' ? 'date' : 'text',
     value: currentValue,
     placeholder: fieldConfig.placeholder,
     disabled,

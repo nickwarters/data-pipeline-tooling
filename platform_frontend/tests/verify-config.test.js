@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import {
   checkBankArtifacts,
   checkCaseTypes,
+  checkFormTypes,
   checkRouteTable,
   literalPathOf,
 } from '../scripts/verify-config.js';
@@ -1393,12 +1394,12 @@ test('checkCaseTypes fails an Issue Capture Field key used twice', async () => {
 
 test('checkCaseTypes fails an Issue Capture Field the engine cannot render', async () => {
   const failures = await captureFailures([
-    { key: 'when', label: 'When', type: 'date' },
+    { key: 'shade', label: 'Shade', type: 'colour' },
   ]);
 
   assert.equal(failures.length, 1);
-  assert.match(failures[0].message, /when/);
-  assert.match(failures[0].message, /date/);
+  assert.match(failures[0].message, /shade/);
+  assert.match(failures[0].message, /colour/);
 });
 
 test('checkCaseTypes fails a choice field with no options and a person with them', async () => {
@@ -1561,4 +1562,293 @@ test('checkCaptureGroups accepts a well-formed intra-group showWhen', async () =
     },
   ]);
   assert.deepEqual(failures, [], joined(failures));
+});
+
+// --- Form Types ---
+
+/**
+ * A Form Type definition the gate accepts, so each test below breaks exactly
+ * one thing about it.
+ *
+ * @param {(sections: any[]) => any[]} [mutate]
+ * @param {Partial<Record<string, unknown>>} [overrides]
+ * @returns {any}
+ */
+function demoFormType(mutate = (sections) => sections, overrides = {}) {
+  const sections = [
+    {
+      sectionType: 'panel',
+      panelName: 'Details',
+      layout: 'strip',
+      fields: [
+        { type: 'person', label: 'Employee', itemField: 'Employee' },
+        { type: 'date', label: 'Due date', itemField: 'DueDate' },
+        {
+          type: 'select',
+          label: 'Stage',
+          itemField: 'Stage',
+          choices: ['One', 'Two'],
+        },
+      ],
+    },
+    { sectionType: 'actions', itemField: 'Actions' },
+    {
+      sectionType: 'split-panel',
+      panels: [
+        {
+          panelName: 'Mine',
+          fields: [
+            {
+              type: 'textarea',
+              label: 'Mine',
+              itemField: 'Mine',
+              editableBy: 'employee',
+            },
+          ],
+        },
+        {
+          panelName: 'Theirs',
+          fields: [
+            {
+              type: 'textarea',
+              label: 'Theirs',
+              itemField: 'Theirs',
+              editableBy: 'manager',
+            },
+          ],
+        },
+      ],
+    },
+  ];
+  return {
+    slug: 'demo-form',
+    formName: 'Demo form',
+    description: 'A demo.',
+    listName: 'DemoForm',
+    sections: mutate(sections),
+    ...overrides,
+  };
+}
+
+/**
+ * @param {any} definition
+ * @returns {string}
+ */
+function formFailures(definition) {
+  return joined(checkFormTypes({ formTypes: [definition] }));
+}
+
+test('checkFormTypes accepts a well-formed definition and the composed ones', () => {
+  assert.deepEqual(checkFormTypes({ formTypes: [demoFormType()] }), []);
+  assert.deepEqual(checkFormTypes(), []);
+});
+
+test('checkFormTypes fails an unknown section type', () => {
+  const text = formFailures(
+    demoFormType((sections) => [
+      ...sections,
+      { sectionType: 'tabs', panels: [] },
+    ])
+  );
+  assert.match(text, /form-types\/demo-form\.js Form Type "demo-form"/);
+  assert.match(text, /section 4 has the unknown section type "tabs"/);
+});
+
+test('checkFormTypes fails an unknown panel layout', () => {
+  const text = formFailures(
+    demoFormType((sections) => [
+      { ...sections[0], layout: 'grid' },
+      ...sections.slice(1),
+    ])
+  );
+  assert.match(text, /\("Details"\) has the unknown layout "grid"/);
+});
+
+test('checkFormTypes fails an unknown field type', () => {
+  const text = formFailures(
+    demoFormType((sections) => [
+      {
+        ...sections[0],
+        fields: [
+          ...sections[0].fields,
+          { type: 'rich-text', label: 'Odd', itemField: 'Odd' },
+        ],
+      },
+      ...sections.slice(1),
+    ])
+  );
+  assert.match(text, /field "Odd" has the unknown field type "rich-text"/);
+});
+
+test('checkFormTypes fails two fields writing one column, the Actions column included', () => {
+  const twice = formFailures(
+    demoFormType((sections) => [
+      {
+        ...sections[0],
+        fields: [
+          ...sections[0].fields,
+          { type: 'text', label: 'Stage again', itemField: 'Stage' },
+        ],
+      },
+      ...sections.slice(1),
+    ])
+  );
+  assert.match(twice, /more than one field writes the column "Stage"/);
+
+  const actions = formFailures(
+    demoFormType((sections) => [
+      {
+        ...sections[0],
+        fields: [
+          ...sections[0].fields,
+          { type: 'textarea', label: 'Actions', itemField: 'Actions' },
+        ],
+      },
+      ...sections.slice(1),
+    ])
+  );
+  assert.match(actions, /more than one field writes the column "Actions"/);
+});
+
+test('checkFormTypes fails a definition that leaves out a column the page does not draw itself', () => {
+  const text = formFailures(
+    demoFormType((sections) => [
+      {
+        ...sections[0],
+        fields: sections[0].fields.filter(
+          (/** @type {any} */ field) => field.itemField !== 'DueDate'
+        ),
+      },
+      ...sections.slice(1),
+    ])
+  );
+  assert.match(text, /does not place the application's column "DueDate"/);
+  // The Status badge and the current managers are drawn by the page, so a
+  // definition leaving them out is the normal case, not a failure.
+  assert.doesNotMatch(text, /"Status"|"CurrentFirstLineManager"/);
+});
+
+test('checkFormTypes refuses a definition retyping or opening up a column the application owns', () => {
+  const text = formFailures(
+    demoFormType((sections) => [
+      {
+        ...sections[0],
+        fields: [
+          { type: 'text', label: 'Employee', itemField: 'Employee' },
+          {
+            type: 'date',
+            label: 'Due date',
+            itemField: 'DueDate',
+            editableBy: 'manager',
+          },
+          ...sections[0].fields.slice(2),
+        ],
+      },
+      ...sections.slice(1),
+    ])
+  );
+  assert.match(text, /column "Employee" as text — it is always person/);
+  assert.match(text, /`editableBy` on the application's column "DueDate"/);
+});
+
+test('checkFormTypes fails a choice field offering nothing', () => {
+  for (const choices of [[], undefined]) {
+    const text = formFailures(
+      demoFormType((sections) => [
+        {
+          ...sections[0],
+          fields: [
+            ...sections[0].fields.slice(0, 2),
+            { type: 'radio', label: 'Stage', itemField: 'Stage', choices },
+          ],
+        },
+        ...sections.slice(1),
+      ])
+    );
+    assert.match(text, /field "Stage" is a radio offering no `choices`/);
+  }
+});
+
+test('checkFormTypes fails an editableBy naming neither editor', () => {
+  const text = formFailures(
+    demoFormType((sections) => [
+      ...sections.slice(0, 2),
+      {
+        ...sections[2],
+        panels: [
+          {
+            panelName: 'Mine',
+            fields: [
+              {
+                type: 'textarea',
+                label: 'Mine',
+                itemField: 'Mine',
+                editableBy: 'controls',
+              },
+            ],
+          },
+          sections[2].panels[1],
+        ],
+      },
+    ])
+  );
+  assert.match(text, /field "Mine" has the unknown `editableBy` "controls"/);
+});
+
+test('checkFormTypes fails more than one Actions section, and one naming no column', () => {
+  const two = formFailures(
+    demoFormType((sections) => [
+      ...sections,
+      { sectionType: 'actions', itemField: 'MoreActions' },
+    ])
+  );
+  assert.match(two, /declares 2 Actions sections/);
+
+  const unnamed = formFailures(
+    demoFormType((sections) => [
+      sections[0],
+      { sectionType: 'actions' },
+      sections[2],
+    ])
+  );
+  assert.match(
+    unnamed,
+    /section 2 is an Actions section naming no `itemField`/
+  );
+});
+
+test('checkFormTypes fails a missing name, list or section, and a field naming no column', () => {
+  const text = formFailures(
+    demoFormType(() => [], { formName: '', listName: '  ' })
+  );
+  assert.match(text, /declares no `formName`/);
+  assert.match(text, /declares no `listName`/);
+  assert.match(text, /declares no `sections`/);
+
+  const noColumn = formFailures(
+    demoFormType((sections) => [
+      {
+        ...sections[0],
+        fields: [...sections[0].fields, { type: 'text', label: 'Loose' }],
+      },
+      ...sections.slice(1),
+    ])
+  );
+  assert.match(noColumn, /field "Loose" names no `itemField`/);
+});
+
+test('checkFormTypes fails two Form Types sharing a slug or a list, against the composition root', () => {
+  const failures = checkFormTypes({
+    formTypes: [
+      demoFormType(),
+      demoFormType(undefined, { slug: 'other-form' }),
+      demoFormType(undefined, { listName: 'Elsewhere' }),
+    ],
+  });
+  const text = joined(failures);
+  assert.match(
+    text,
+    /src\/app-config\.js Form Types "demo-form" and "other-form" share the listName "DemoForm"/
+  );
+  assert.match(text, /share the slug "demo-form"/);
 });

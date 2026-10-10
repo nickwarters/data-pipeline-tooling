@@ -78,7 +78,7 @@ const GRAPH_VERSION = 2;
  * Recorded in the artifact so the deploy can assert the two agree.
  */
 const DEPLOYABLE = Object.freeze({
-  includeRoots: ['src', 'case-types', 'host'],
+  includeRoots: ['src', 'case-types', 'form-types', 'host'],
   includeSuffixes: ['.js', '.css', '.html', '.aspx'],
   // Question Bank artifacts are JSON in .txt files, and only in this one
   // directory — a stray .txt elsewhere is a tool artefact, not runtime content.
@@ -102,8 +102,8 @@ const HTML_SCRIPT_SRC = /<script\b[^>]*?\ssrc\s*=\s*(['"])([^'"\n]+)\1/g;
 
 /**
  * @typedef {{
- *   kind: 'syntax' | 'unresolved' | 'case-type' | 'bank' | 'route'
- *     | 'unreachable' | 'unused-export',
+ *   kind: 'syntax' | 'unresolved' | 'case-type' | 'form-type' | 'bank'
+ *     | 'route' | 'unreachable' | 'unused-export',
  *   file: string,
  *   specifier?: string,
  *   line?: number,
@@ -574,7 +574,7 @@ async function main() {
     `verify: ${files.length} deployable files, ${edges} edges, ${graph.external.length} external — graph written to ${GRAPH_PATH}`
   );
   console.log(
-    `verify: config clean — ${counts.caseTypes} Case Type(s), ${counts.banks} bank artifact(s), ${counts.routes} route(s) checked`
+    `verify: config clean — ${counts.caseTypes} Case Type(s), ${counts.formTypes} Form Type(s), ${counts.banks} bank artifact(s), ${counts.routes} route(s) checked`
   );
   console.log(
     `verify: no dead code — ${deadCode.reachable} module(s) reachable, ${deadCode.exports} export(s) declared on them checked, ${deadCode.exempt} exempt`

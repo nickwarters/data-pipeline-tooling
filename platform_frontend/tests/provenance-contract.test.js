@@ -51,6 +51,7 @@ const ROOT = new URL('../', import.meta.url);
 const SCANNED_DIRS = [
   'case-types/',
   'dev/',
+  'form-types/',
   'docs/',
   'host/',
   'scripts/',
