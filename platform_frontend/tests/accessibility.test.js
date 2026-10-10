@@ -234,6 +234,10 @@ test('Forms: every field caption names its control, in every panel layout', asyn
         peopleSearch: {},
         onField() {},
         onPersonQuery() {},
+        removingAction: null,
+        onActions() {},
+        onRemoveAction() {},
+        onRemoveWithdrawn() {},
       }
     )
   );

@@ -4366,6 +4366,63 @@
   color: var(--cora-color-text-muted);
 }
 
+/* The Actions editor: a card per Action, its fields on one row where there is
+   room, then the way to add another. */
+.cora-form-actions {
+  display: grid;
+  gap: var(--cora-space-3);
+}
+
+.cora-form-actions > .cora-form-panel-header {
+  margin-bottom: 0;
+}
+
+.cora-form-action-card--edit {
+  gap: var(--cora-space-3);
+  border: 1px solid var(--cora-color-border);
+}
+
+.cora-form-action-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--cora-space-2);
+}
+
+.cora-form-action-head h3 {
+  margin: 0;
+  font-size: var(--cora-font-size-xs);
+  font-weight: var(--cora-font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+[data-cora-root] .cora-form-action-remove {
+  padding: var(--cora-space-1) var(--cora-space-2);
+  font-size: var(--cora-font-size-xs);
+}
+
+.cora-form-action-fields {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: var(--cora-space-3);
+}
+
+.cora-form-action-details {
+  grid-column: 1 / -1;
+}
+
+.cora-form-action-add {
+  display: flex;
+  align-items: center;
+  gap: var(--cora-space-3);
+}
+
+.cora-form-action-left {
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
 .cora-form-footer {
   display: grid;
   gap: var(--cora-space-3);
@@ -4423,7 +4480,8 @@
 }
 
 @media (max-width: 40rem) {
-  .cora-form-qa-row {
+  .cora-form-qa-row,
+  .cora-form-action-fields {
     grid-template-columns: 1fr;
   }
 }

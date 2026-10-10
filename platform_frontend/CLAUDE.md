@@ -527,6 +527,9 @@ src/
                                   #   editor), the banners, and the lifecycle buttons that close it
       new-form.js                 # New form's route slice: Form Type, Employee, directory-prefilled
                                   #   managers and due date, then the one create write
+      form-actions-view.js        # the Form Actions editor every Form Type shares: a card per Action,
+                                  #   add up to MAX_FORM_ACTIONS, remove (asking first when it says
+                                  #   something), each change handed back as the whole list
       people-search-state.js      # the keyed people-picker search state both Form routes share
     cora-form.js                  # the #/forms/new and #/forms/<slug>/<id> page module: mounts New form
                                   #   or one Form, by whether the path names a Form
@@ -745,8 +748,8 @@ form-types/                     # one data module per HR Form Type, named in APP
                                 #   (ADR-0059); deployed like case-types/
   contract.js                   # THE FormTypeDefinition shape and its closed vocabulary (section
                                 #   types, panel layouts, field types, editableBy), the columns the
-                                #   application owns, the Form Statuses that close a Form, and
-                                #   formColumns(): which columns a Form is read
+                                #   application owns, the Form Statuses that close a Form, the
+                                #   Form Action cap and Statuses, and formColumns(): which columns a Form is read
                                 #   and written through, and which are encoded. Encoding follows the
                                 #   field type, never a per-field flag
   one-to-one.js                 # the 1-to-1: meeting details, discussion, Form Actions, comments

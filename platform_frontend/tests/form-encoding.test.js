@@ -2,14 +2,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  MAX_FORM_ACTIONS,
   decodeFields,
   decodeText,
   encodeFields,
   encodeText,
   formActionsProblem,
 } from '../src/services/form-encoding.js';
-import { formColumns } from '../form-types/contract.js';
+import { formColumns, MAX_FORM_ACTIONS } from '../form-types/contract.js';
 import { APP_CONFIG } from '../src/app-config.js';
 
 // Capability: a Form's free text is stored unreadable at a glance and read

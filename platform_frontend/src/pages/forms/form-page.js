@@ -36,6 +36,7 @@ import { reducePeopleSearches } from './people-search-state.js';
 
 /** @typedef {import('../../sharepoint-client.js').FormItem} FormItem */
 /** @typedef {import('../../sharepoint-client.js').FormValue} FormValue */
+/** @typedef {import('../../sharepoint-client.js').FormAction} FormAction */
 /** @typedef {import('../../services/save-queue.js').SaveStatus} SaveStatus */
 /** @typedef {import('../../services/form-access.js').FormAccess} FormAccess */
 /** @typedef {import('../../core/chrome-state.js').ChromeState} ChromeState */
@@ -57,6 +58,8 @@ import { reducePeopleSearches } from './people-search-state.js';
  * @property {string | null} confirming The closing Status awaiting confirmation.
  * @property {boolean} closing
  * @property {string | null} closeError
+ * @property {number | null} removingAction The Form Action whose removal
+ *   awaits a yes.
  */
 
 /** @typedef {{ chrome: ChromeState, routes: { form: FormPageRoute } }} FormPageState */
@@ -144,6 +147,7 @@ export function createFormPageSlice(
         confirming: null,
         closing: false,
         closeError: null,
+        removingAction: null,
       },
     },
   };
@@ -167,6 +171,19 @@ export function createFormPageSlice(
       dispatch({ type: 'forms/person-cleared', key: itemField });
     }
     writing.enqueue(id, itemField, stored);
+  }
+
+  /**
+   * Save the Form Actions. They are one column, so every change writes the
+   * whole list.
+   *
+   * @param {string} itemField
+   * @param {FormAction[]} actions
+   */
+  function editActions(itemField, actions) {
+    const writing = /** @type {SaveQueue} */ (queue);
+    dispatch({ type: 'form/field-edited', itemField, value: actions });
+    writing.enqueue(id, itemField, actions);
   }
 
   /**
@@ -213,7 +230,14 @@ export function createFormPageSlice(
             item: withFields(/** @type {FormItem} */ (route.item), {
               [action.itemField]: action.value,
             }),
+            // A removal asked about before the list changed would point at
+            // whichever Action has since moved into its place.
+            removingAction: null,
           });
+        case 'form/action-remove-asked':
+          return patchRoute(state, 'form', { removingAction: action.index });
+        case 'form/action-remove-withdrawn':
+          return patchRoute(state, 'form', { removingAction: null });
         case 'form/save-status-changed': {
           const lastSavedAt = action.lastSavedAt ?? route.lastSavedAt;
           if (
@@ -264,6 +288,7 @@ export function createFormPageSlice(
           tools.dispatch({ type: 'forms/person-query', key, query });
           peopleSearch.request(key, query);
         },
+        onActions: editActions,
         onClose: (status) => void close(route, status),
       });
     },
@@ -336,6 +361,7 @@ function withFields(item, fields) {
  * @property {(action: any) => any} dispatch
  * @property {(itemField: string, value: FormValue, type: FormFieldType) => void} onField
  * @property {(key: string, query: string) => void} onPersonQuery
+ * @property {(itemField: string, actions: FormAction[]) => void} onActions
  * @property {(status: string) => void} onClose
  */
 
@@ -423,6 +449,12 @@ export function formPageView(state, tools) {
       onField: (itemField, value) =>
         tools.onField(itemField, value, fieldType(formType, itemField)),
       onPersonQuery: tools.onPersonQuery,
+      removingAction: route.removingAction,
+      onActions: tools.onActions,
+      onRemoveAction: (index) =>
+        tools.dispatch({ type: 'form/action-remove-asked', index }),
+      onRemoveWithdrawn: () =>
+        tools.dispatch({ type: 'form/action-remove-withdrawn' }),
     }),
     mode === 'edit' ? footerView(route, formType, tools) : null
   );

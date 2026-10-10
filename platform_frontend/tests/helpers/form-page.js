@@ -18,12 +18,16 @@ import { oneToOne } from '../../form-types/one-to-one.js';
 /** The dev fixtures are written against this day. */
 export const FORM_NOW = () => new Date(2026, 9, 10, 15, 32, 0);
 
-/** A mock client over a fresh copy of the dev Forms and directory. */
-export function formsClient() {
+/**
+ * A mock client over a fresh copy of the dev Forms and directory.
+ *
+ * @param {typeof formLists} [lists] Stored Form rows to read instead.
+ */
+export function formsClient(lists = formLists) {
   return new MockSharePointClient({
     personas: {},
     people,
-    formLists: structuredClone(formLists),
+    formLists: structuredClone(lists),
     now: FORM_NOW,
   });
 }

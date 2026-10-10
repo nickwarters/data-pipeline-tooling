@@ -83,9 +83,11 @@ test('the current first line manager edits their own comments and reads the Empl
 
 test('nobody edits the application’s own columns, whatever their role', async () => {
   const page = await openForm('forms-employee', '101');
-  const view = page.render();
-  assert.equal(queryByRole(view, 'textbox', { name: 'Due date' }), null);
-  assert.match(textOf(view, 'cora-form-strip') ?? '', /Due date30\/09\/2026/);
+  const strip = /** @type {HTMLElement} */ (
+    page.render().querySelector('.cora-form-strip')
+  );
+  assert.equal(queryByRole(strip, 'textbox', { name: 'Due date' }), null);
+  assert.match(strip.textContent ?? '', /Due date30\/09\/2026/);
 });
 
 for (const [persona, why] of [
@@ -142,7 +144,8 @@ test('an empty field reads "Nothing recorded" to someone who cannot edit it', as
         'DueDate',
       ].includes(field.itemField)
   );
-  assert.equal(empty.length, unfilled.length);
+  // The Form Actions, none recorded, read the same.
+  assert.equal(empty.length, unfilled.length + 1);
 });
 
 test('an edit is saved after the pause and the header says when', async (t) => {
@@ -401,19 +404,16 @@ test('a locked Form is reached from the archive, and an open one from the dashbo
   assert.deepEqual(await links('103'), ['#/forms', '#/forms?tab=archive']);
 });
 
-test('the Form Actions are listed as they were recorded', async () => {
-  const view = (await openForm('forms-employee', '101')).render();
+test('to someone who cannot change them, the Form Actions are listed as they were recorded', async () => {
+  const view = (await openForm('forms-second-line-manager', '101')).render();
   const actions = view.querySelector('.cora-form-actions');
   assert.ok(actions);
   assert.match(
     actions.textContent ?? '',
     /Book the SQL courseDue 15\/10\/2026Pending/
   );
-  const none = (await openForm('forms-employee', '102')).render();
-  assert.match(
-    textOf(none, 'cora-form-actions') ?? '',
-    /No actions recorded\./
-  );
+  const none = (await openForm('forms-second-line-manager', '102')).render();
+  assert.match(textOf(none, 'cora-form-actions') ?? '', /Nothing recorded/);
 });
 
 test('someone the Form does not name is told they cannot open it', async () => {
@@ -526,10 +526,7 @@ test('a Form missing its Employee, Status and second line manager still opens fo
     ),
     ['You']
   );
-  assert.match(
-    textOf(view, 'cora-form-actions') ?? '',
-    /No actions recorded\./
-  );
+  assert.match(textOf(view, 'cora-form-actions') ?? '', /3 of 3 left/);
 });
 
 test('a Form closed by hand, with no closed date or closer, is locked without either being made up', async () => {
@@ -732,7 +729,9 @@ test('an action recorded with only some of its details shows what it has and say
   const client = await clientWith('101', {
     Actions: [{ id: 'a1', title: '', dueDate: '', status: '', details: '' }],
   });
-  const view = (await openForm('forms-employee', '101', { client })).render();
+  const view = (
+    await openForm('forms-second-line-manager', '101', { client })
+  ).render();
   const card = textOf(view, 'cora-form-action-card') ?? '';
   assert.match(card, /Untitled action/);
   assert.match(card, /No due date/);
