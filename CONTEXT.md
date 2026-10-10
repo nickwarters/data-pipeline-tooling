@@ -391,7 +391,7 @@ p95), over a rolling window of calendar days ending on a date — 28 and 90 —
 counting successful executions only, each on the date it executed (a re-drive
 of an old date counts on the day it ran). _Here_: `pipeline_run_metric` publishes
 one row per date in `duration_percentiles_daily`, so the table is their history
-and a trend is a plot of it; `python -m cli perf` shows the latest. A daily job
+and a trend is a plot of it. A daily job
 has one execution a day, so a percentile "per day" is meaningless for it; the
 window is what gives it samples. p90 needs 10 and p95 needs 20, NULL below.
 
