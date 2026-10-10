@@ -731,11 +731,12 @@ department, not a group)
 
 **Form Status**:
 Where a **Form** is in its life, held in the plain `Status` Choice column and changed
-only by the Form's lifecycle buttons, never by a field. Three values are terminal:
-**Complete**, **Void** and **Cancelled**. The values before those are still open.
-Spelled `Complete`, not the Case's `Completed`, and a Form's **Void** is not a **Void
-Case**: it carries no **Void Reason**.
-_Avoid_: Case status values (`Completed`, `Void` with a reason) when talking about a Form
+only by the Form's lifecycle buttons, never by a field. A Form is **Pending** until
+it closes; three values are terminal: **Completed**, **Void** and **Cancelled**. The
+words match a Case's `Completed` and `Void` but not their meaning: a Form's **Void**
+is not a **Void Case** and carries no **Void Reason**.
+_Avoid_: Case status values (`In-progress`, `Void` with a reason) when talking about
+a Form
 
 **Locked Form**:
 A **Form** whose **Form Status** is terminal. Read-only for everyone, its editors
@@ -744,7 +745,9 @@ _Avoid_: Completed Form (Void and Cancelled lock it too), closed (fine in the ar
 copy, but **Locked** is the rule)
 
 **Form Action**:
-One of up to three follow-ups on a **Form** (title, due date, status, details). Every
+One of up to three follow-ups on a **Form** (title, due date, status, details). Its
+status is **Pending**, **Completed** or **Cancelled**, and is the Action's own, not
+the Form's. Every
 **Form Type** may carry them; the limit of three is the app's, not the Form Type's. All
 of a Form's Actions are stored together, encoded, in one column.
 _Avoid_: Action (unqualified), Remediation Action (the Case's corrective action), Send

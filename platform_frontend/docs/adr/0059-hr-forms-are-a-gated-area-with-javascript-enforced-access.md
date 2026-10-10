@@ -128,9 +128,10 @@ they completed, and the Form still shows that they were its manager.
 
 ### 4. A closed Form is locked for everyone
 
-A Form's **Status** is a plain Choice column. A Form is locked, read-only for
-everyone including its editors, once its Status is **Complete**, **Void** or
-**Cancelled**. The lock is one rule in the access module: a terminal Status makes
+A Form's **Status** is a plain Choice column holding **Pending**, **Completed**,
+**Void** or **Cancelled**. A Form is **Pending** until it closes, and is locked,
+read-only for everyone including its editors, once its Status is **Completed**,
+**Void** or **Cancelled**. The lock is one rule in the access module: a terminal Status makes
 "may edit" false for everybody, so the Form renders read-only and the save queue
 is never handed an edit.
 
@@ -252,14 +253,17 @@ pointer to this decision in the root `CONTEXT.md`.
 Settled during the build, before any real data goes in. Each is open, not
 guessed:
 
-1. **Choice values** for a 1-to-1's Competency stage and Location, the Form
-   Status values beyond the three terminal ones, and an Action's status.
-2. **Who may Void or Cancel.** The default in 4 is the two editors.
-3. **Reopening.** The default in 4 is never.
-4. **Group names**, and whether there is one access group for every Form list or
+1. **Who may Void or Cancel.** The default in 4 is the two editors.
+2. **Reopening.** The default in 4 is never.
+3. **Group names**, and whether there is one access group for every Form list or
    one per list.
-5. **Retention:** how long Forms are kept, and who may delete one.
-6. **Auditing:** whether REST item reads are audited on this farm.
+4. **Retention:** how long Forms are kept, and who may delete one.
+5. **Auditing:** whether REST item reads are audited on this farm.
+
+The choice values were settled during review: a 1-to-1's Competency stage is
+Stage 1, Stage 2 or Stage 3 and its Location In person or Zoom, a Form's Status
+is as in 4, and a Form Action's status is Pending, Completed or Cancelled. The
+stages are a first set and may grow.
 
 ## Considered and rejected
 
