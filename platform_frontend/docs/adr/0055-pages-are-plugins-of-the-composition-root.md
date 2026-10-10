@@ -163,3 +163,15 @@ across every Case Type and had no link to the editor at all.
 - **`register-routes.js` kept its name.** It now does more than its name says,
   and its header comment says what it is instead. A rename was weighed against
   churning documentation that had just been brought into step, and lost.
+
+### Amendment: the Home card
+
+An entry now also carries its `home` card, or `null`. Home was the last place
+that listed pages by hand: one section per role, each with its own links, kept
+in step with the nav by memory. The card moves that list onto the entry, beside
+the route and nav item it describes, and `homeCardsFor()` derives what a person
+sees by the same rule as the nav: the card's own `isVisible`, else the nav
+item's, else the guard. The key is required rather than optional, so a new page
+is either on Home or says why not, and `tsc` refuses an entry that does neither.
+The three Case-list pages above still have no nav item; Home offers
+`#/my-cases` and `#/journey-cases` as cards, as its role sections did before.

@@ -138,7 +138,7 @@ Import the page at the top of the composition root and add one entry for it.
 import * as greeting from './pages/greeting.js';
 
 // inside APP_CONFIG.pagePlugins
-{ id: 'greeting', paths: ['#/greeting'], page: greeting },
+{ id: 'greeting', paths: ['#/greeting'], page: greeting, home: null },
 ```
 
 `registerRoutes()` builds the `createStoreRoute()` adapter for each entry and
@@ -150,6 +150,16 @@ audience defaults to that same guard, so most pages say who they are for once.
 Add `defaultFor` with a `defaultForOrder` only if this page is where some user
 should land when they have asked for nothing in particular.
 
+Every entry names its `home` card, and `null` is an answer, so leaving a page off
+Home is a decision rather than an omission. A card says which `area` it sits in
+(`case-review`, `people` or `admin`), its `order` there, a `title`, a
+`description`, the words of its link (`action`) and an `icon` Home draws. It is
+shown to the same people as the nav item, or the guard when there is no nav
+item; give it its own `isVisible` only when the route is open more widely than
+the page is useful. A card can also name dashboard `counts`: the KPI lanes
+whose figures it shows once they are read, and the noun they count, which is
+what puts them in Home's "Needs your attention" row.
+
 `src/app-config.js` is the one place that may name a page module — nothing
 outside `src/pages/` may reach a page any other way, and the contract test
 enforces it. That entry is irreducible, not leftover coupling: ADR-0041 bans a
@@ -159,7 +169,7 @@ whole of the cost.
 `#/question-bank` is the single entry that still fetches its page on demand with
 a `load` thunk; ADR-0042 records why, and a new page does not need one.
 
-Nav and landing both come from that one entry, so there is no second file to
+Nav, landing and the Home card all come from that one entry, so there is no second file to
 edit and no hand-written link to keep in step.
 
 ## 6. Prove the public behaviour

@@ -35,10 +35,44 @@ import { APP_CONFIG } from '../app-config.js';
  * @property {readonly import('../../form-types/contract.js').FormTypeDefinition[]} [formTypes]
  *   The Form Types the Forms pages list, from `APP_CONFIG.formTypes`. A page
  *   cannot import the composition root, which imports it.
+ * @property {readonly HomeCardItem[]} [homeCards]
+ *   The Home cards this user may see, derived once at boot from
+ *   `APP_CONFIG.pagePlugins` by `homeCardsFor`. Handed over on the context
+ *   because Home is a page, and a page cannot import the composition root.
  * @property {Element} appEl
  * @property {() => Promise<unknown>} [loadQuestionBankEditor]
  * @property {() => Promise<unknown>} [loadQuestionBankSamples]
  * @property {(artifacts: ReturnType<import('../pages/question-bank/question-bank-compile.js').buildPublishArtifacts>) => Promise<void>} [writeQuestionBankArtifacts]
+ */
+
+/**
+ * The three groups Home lays its cards out in.
+ *
+ * @typedef {'case-review' | 'people' | 'admin'} HomeArea
+ */
+
+/**
+ * A page's card on Home: the way in to it for the people it is for.
+ *
+ * @typedef {Object} HomeCard
+ * @property {HomeArea} area
+ * @property {number} order Sorts the cards within their area.
+ * @property {string} title
+ * @property {string} description What the person will find there.
+ * @property {string} action The words of the card's link.
+ * @property {string} icon A name Home draws an icon for.
+ * @property {(capabilities: Capabilities) => boolean} [isVisible]
+ *   Defaults to the nav item's `isVisible`, then to the route's `guard`, so
+ *   the card is shown to whoever may open the page.
+ * @property {{ lanes: readonly string[], noun: readonly [string, string] }} [counts]
+ *   The dashboard lanes whose figures the card shows once they are read, and
+ *   what they count, singular and plural, for the "Needs your attention" row.
+ */
+
+/**
+ * A Home card resolved for one user.
+ *
+ * @typedef {Omit<HomeCard, 'isVisible'> & { id: string, href: string }} HomeCardItem
  */
 
 /**
@@ -92,6 +126,10 @@ import { APP_CONFIG } from '../app-config.js';
  * @property {number} [defaultForOrder]
  *   Required wherever `defaultFor` is present: the rank that settles a user
  *   two rules both match. Two rules at the same rank throw rather than pick.
+ * @property {HomeCard | null} home
+ *   This page's card on Home, or `null` for a page Home does not offer.
+ *   Required, so a new page cannot be left off Home by forgetting it: leaving
+ *   it off is a decision written beside the page, not an absence.
  */
 
 /**
@@ -139,6 +177,29 @@ export function navItemsFor(capabilities) {
   return items
     .sort((a, b) => a.order - b.order)
     .map(({ id, label, href }) => ({ id, label, href }));
+}
+
+/**
+ * The Home cards for this user, in the order each area draws them.
+ *
+ * Visibility follows the same rule the nav does, one step further: a card's
+ * own `isVisible`, else the nav item's, else the route's `guard`. A page with
+ * none of them is open to everyone, so its card is too.
+ *
+ * @param {Capabilities} capabilities
+ * @returns {HomeCardItem[]}
+ */
+export function homeCardsFor(capabilities) {
+  /** @type {HomeCardItem[]} */
+  const cards = [];
+  for (const plugin of APP_CONFIG.pagePlugins) {
+    if (!plugin.home) continue;
+    const { isVisible: own, ...card } = plugin.home;
+    const isVisible = own ?? plugin.nav?.isVisible ?? plugin.guard;
+    if (isVisible && !isVisible(capabilities)) continue;
+    cards.push({ ...card, id: plugin.id, href: plugin.paths[0] });
+  }
+  return cards.sort((a, b) => a.order - b.order);
 }
 
 /**

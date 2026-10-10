@@ -218,7 +218,7 @@ Every Forms page, the dashboard and archive as well as New form and the Form
 page, is styled by one `cora-form-*` set in the Forms block of
 `src/styles/cora-styles.css`. No page carries a set of its own. The set takes
 every colour from a design token, so dark mode follows the tokens, and each
-two-column layout stacks below 40rem. `tests/forms-styles.test.js` holds those
+two-column layout stacks below 40rem. `tests/page-styles.test.js` holds those
 three rules and refuses a page-specific `cora-forms-*` class.
 
 ## What the gate checks

@@ -20,6 +20,10 @@ function implicitRole(element) {
   if (element.tagName === 'TD') return 'cell';
   if (element.tagName === 'HEADER') return 'banner';
   if (element.tagName === 'FIELDSET') return 'group';
+  if (element.tagName === 'ARTICLE') return 'article';
+  if (element.tagName === 'SECTION') return 'region';
+  if (element.tagName === 'A' && element.getAttribute?.('href') != null)
+    return 'link';
   if (element.tagName !== 'INPUT') return null;
 
   const type = String(element.type || 'text').toLowerCase();

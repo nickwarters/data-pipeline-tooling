@@ -4496,3 +4496,202 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Home ───────────────────────────────────────────────────────────────────
+   The greeting, the "Needs your attention" row and a card per page, grouped
+   by area. Each area names its tone once, as --cora-home-tone, and its cards
+   take their top border, icon and link colour from it. Built on the design
+   tokens alone, so dark mode follows them. */
+
+.cora-home {
+  display: grid;
+  gap: var(--cora-space-8);
+  padding-block: var(--cora-space-6);
+}
+
+.cora-home-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--cora-space-2) var(--cora-space-6);
+  flex-wrap: wrap;
+}
+
+.cora-home-header h1 {
+  margin: 0;
+}
+
+.cora-home-lead {
+  margin: var(--cora-space-1) 0 0;
+  color: var(--cora-color-text-muted);
+}
+
+.cora-home-date {
+  margin: 0;
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-home-attention {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: var(--cora-space-4);
+}
+
+[data-cora-root] .cora-home-attention-item {
+  --cora-home-tone: var(--cora-color-danger);
+  display: flex;
+  align-items: baseline;
+  gap: var(--cora-space-3);
+  padding: var(--cora-space-4) var(--cora-space-5);
+  color: var(--cora-color-text);
+  text-decoration: none;
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-left: 4px solid var(--cora-home-tone);
+  border-radius: var(--cora-radius-sm);
+}
+
+[data-cora-root] .cora-home-attention-item--soon {
+  --cora-home-tone: var(--cora-color-warning);
+}
+
+[data-cora-root] .cora-home-attention-item:hover {
+  color: var(--cora-color-text);
+  text-decoration: none;
+  border-color: var(--cora-color-border-strong);
+  border-left-color: var(--cora-home-tone);
+}
+
+.cora-home-attention-item:focus-visible,
+.cora-home-card-link:focus-visible {
+  outline: var(--cora-focus-outline);
+  outline-offset: var(--cora-focus-offset);
+}
+
+.cora-home-attention-count {
+  font-family: var(--cora-font-display);
+  font-size: var(--cora-font-size-2xl);
+  font-weight: var(--cora-font-weight-bold);
+  line-height: var(--cora-line-height-tight);
+}
+
+.cora-home-attention-text {
+  display: grid;
+  gap: var(--cora-space-1);
+}
+
+.cora-home-attention-where,
+.cora-home-clear {
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-home-clear {
+  margin: 0;
+}
+
+.cora-home-area {
+  --cora-home-tone: var(--cora-color-text-muted);
+  --cora-home-tone-bg: var(--cora-color-surface-2);
+  display: grid;
+  gap: var(--cora-space-4);
+}
+
+.cora-home-area--case-review {
+  --cora-home-tone: var(--cora-color-accent);
+  --cora-home-tone-bg: var(--cora-color-accent-muted);
+}
+
+.cora-home-area--people {
+  --cora-home-tone: var(--cora-color-info);
+  --cora-home-tone-bg: var(--cora-color-info-bg);
+}
+
+.cora-home-area-header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--cora-space-3);
+  flex-wrap: wrap;
+}
+
+.cora-home-area-header h2 {
+  margin: 0;
+}
+
+.cora-home-area-hint {
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-home-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: var(--cora-space-4);
+}
+
+.cora-home-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cora-space-3);
+  padding: var(--cora-space-4) var(--cora-space-5);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-top: 3px solid var(--cora-home-tone);
+  border-radius: var(--cora-radius-md);
+  box-shadow: var(--cora-shadow-sm);
+}
+
+[data-cora-root] .cora-home-card h3 {
+  margin: 0;
+  font-family: var(--cora-font-display);
+  font-size: var(--cora-font-size-lg);
+  font-weight: var(--cora-font-weight-bold);
+  letter-spacing: var(--cora-tracking-tight);
+}
+
+.cora-home-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  color: var(--cora-home-tone);
+  background: var(--cora-home-tone-bg);
+  border-radius: var(--cora-radius-sm);
+}
+
+.cora-home-card-text {
+  margin: 0;
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-home-card-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cora-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Pushed to the foot, so a row of cards lines its links up whatever each says. */
+[data-cora-root] .cora-home-card-link {
+  display: flex;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: var(--cora-space-3);
+  font-weight: var(--cora-font-weight-semibold);
+  color: var(--cora-home-tone);
+  text-decoration: none;
+  border-top: 1px solid var(--cora-color-border);
+}
+
+[data-cora-root] .cora-home-card-link:hover {
+  text-decoration: underline;
+}
+
+.cora-home-visitor h2 {
+  margin-top: 0;
+}
