@@ -162,7 +162,8 @@ export const APP_CONFIG = {
     // viewer already reaches, and home branches on `isVisitor` to render the
     // guidance written for exactly that person. A rule here would make the
     // same page reachable two ways with two different precedences.
-    { id: 'root', paths: ['#/'], page: homePage },
+    // Home itself.
+    { id: 'root', paths: ['#/'], page: homePage, home: null },
     {
       id: 'dashboard',
       paths: ['#/dashboard'],
@@ -175,6 +176,16 @@ export const APP_CONFIG = {
       // here to review.
       defaultFor: (caps) => caps.isReviewer,
       defaultForOrder: 10,
+      home: {
+        area: 'case-review',
+        order: 10,
+        title: 'Dashboard',
+        description:
+          'Your allocated Cases, the Action Centre and anything awaiting the frontline.',
+        action: 'Open dashboard',
+        icon: 'list',
+        counts: { lanes: ['reviewer', 'owner'], noun: ['Case', 'Cases'] },
+      },
     },
     {
       id: 'my-stats',
@@ -184,6 +195,9 @@ export const APP_CONFIG = {
       // isVisible omitted: the audience for the link is the audience for the
       // route, and saying it twice is two declarations of one fact.
       nav: { label: 'My Stats', order: 30 },
+      // A Reviewer's own figures, beside the Dashboard in the nav. Home offers
+      // areas of work, not every page in them.
+      home: null,
     },
     {
       id: 'team-stats',
@@ -191,6 +205,8 @@ export const APP_CONFIG = {
       page: teamStatsPage,
       guard: (caps) => caps.isReviewerManager,
       nav: { label: 'Team Stats', order: 40 },
+      // Part of what the My team card offers.
+      home: null,
     },
     {
       id: 'question-bank',
@@ -206,13 +222,30 @@ export const APP_CONFIG = {
       // across every Case Type and had no link to the editor at all.
       guard: (caps) => caps.ownedCaseTypes.length > 0 || caps.isMaintainer,
       nav: { label: 'Question Bank', order: 50 },
+      home: {
+        area: 'case-review',
+        order: 50,
+        title: 'Question Bank',
+        description:
+          'The questions each Case Type asks, and publishing a new version of them.',
+        action: 'Open Question Bank',
+        icon: 'book',
+      },
     },
     {
       id: 'case',
       paths: ['#/case/:caseType/:id', '#/case/:id'],
       page: caseReviewPage,
+      // One Case, opened from a list.
+      home: null,
     },
-    { id: 'team-cases', paths: ['#/team-cases'], page: teamCasesPage },
+    {
+      id: 'team-cases',
+      paths: ['#/team-cases'],
+      page: teamCasesPage,
+      // Reached from the My team card.
+      home: null,
+    },
     {
       id: 'my-cases',
       paths: ['#/my-cases'],
@@ -223,6 +256,18 @@ export const APP_CONFIG = {
       // negate another one to express it.
       defaultFor: (caps) => caps.isAdviser,
       defaultForOrder: 20,
+      home: {
+        area: 'case-review',
+        order: 20,
+        title: 'My Cases',
+        description:
+          'Cases where you are the Responsible Party, and the actions waiting on you.',
+        action: 'Open my Cases',
+        icon: 'inbox',
+        // The route is open to anyone with the link, and lists nothing for
+        // someone who is not a Responsible Party.
+        isVisible: (caps) => caps.isAdviser,
+      },
     },
     {
       id: 'journey-cases',
@@ -235,6 +280,14 @@ export const APP_CONFIG = {
       // unavailable-Case-Type banner already names, and one where an empty
       // list beside that banner reads better than a bounce with no reason.
       guard: (caps) => caps.ownedJourneyCaseTypes.length > 0,
+      home: {
+        area: 'case-review',
+        order: 40,
+        title: 'Journey Cases',
+        description: 'Cases across the journeys you own, wherever they are.',
+        action: 'Open Journey Cases',
+        icon: 'route',
+      },
     },
     {
       id: 'roadmap',
@@ -245,6 +298,8 @@ export const APP_CONFIG = {
       // for people with a job here, so `isVisible` is written out rather than
       // defaulted from a guard this page does not want.
       nav: { label: 'Roadmap', order: 20, isVisible: hasAnyRole },
+      // What is coming to the application, not an area of work.
+      home: null,
     },
     {
       id: 'my-team',
@@ -257,6 +312,14 @@ export const APP_CONFIG = {
       // SharePoint list ACLs, and hiding a link makes nothing safe.
       guard: (caps) => caps.isReviewerManager,
       nav: { label: 'My Team', order: 60 },
+      home: {
+        area: 'case-review',
+        order: 30,
+        title: 'My team',
+        description: 'Workload per Reviewer, Team Cases and your team’s stats.',
+        action: 'Open team view',
+        icon: 'team',
+      },
     },
     {
       id: 'forms',
@@ -267,6 +330,16 @@ export const APP_CONFIG = {
       // the area is offered at all is a group membership.
       guard: (caps) => caps.canAccessForms,
       nav: { label: 'Forms', order: 65 },
+      home: {
+        area: 'people',
+        order: 10,
+        title: 'My forms',
+        description:
+          'Forms you’re part of as an employee or a manager, and everything closed.',
+        action: 'Open forms',
+        icon: 'form',
+        counts: { lanes: ['employee', 'manager'], noun: ['Form', 'Forms'] },
+      },
     },
     {
       id: 'form',
@@ -276,6 +349,14 @@ export const APP_CONFIG = {
       // no link of its own: the nav's Forms item stays lit beneath it. Who may
       // read or edit the Form it opens is the access rule's question.
       guard: (caps) => caps.canAccessForms,
+      home: {
+        area: 'people',
+        order: 20,
+        title: 'Start a form',
+        description: 'Begin a form for yourself or for someone you manage.',
+        action: 'New form',
+        icon: 'plus',
+      },
     },
     {
       id: 'search',
@@ -291,6 +372,16 @@ export const APP_CONFIG = {
       // Adviser has a queue, and that is the more specific answer.
       defaultFor: (caps) => caps.isControls,
       defaultForOrder: 30,
+      home: {
+        area: 'case-review',
+        order: 60,
+        title: 'Search Cases',
+        description:
+          'Find any Case across every Case Type by reference, person or status.',
+        action: 'Search Cases',
+        icon: 'search',
+        counts: { lanes: ['controls'], noun: ['Case', 'Cases'] },
+      },
     },
     {
       id: 'case-support',
@@ -299,6 +390,15 @@ export const APP_CONFIG = {
       // Maintainers only, on the route as well as the link: these actions change Cases.
       guard: (caps) => caps.isMaintainer,
       nav: { label: 'Case Support', order: 80 },
+      home: {
+        area: 'admin',
+        order: 10,
+        title: 'Case Support',
+        description:
+          'Find any Case and reassign, un-assign or reopen it, with a logged reason.',
+        action: 'Open Case Support',
+        icon: 'tools',
+      },
     },
     {
       id: 'access',
@@ -307,6 +407,15 @@ export const APP_CONFIG = {
       // Maintainers only, on the route as well as the link: these changes decide who may open what.
       guard: (caps) => caps.isMaintainer,
       nav: { label: 'Access', order: 90 },
+      home: {
+        area: 'admin',
+        order: 20,
+        title: 'Access',
+        description:
+          'Give or remove someone’s roles, and read who holds each one.',
+        action: 'Open Access',
+        icon: 'key',
+      },
     },
   ],
 };

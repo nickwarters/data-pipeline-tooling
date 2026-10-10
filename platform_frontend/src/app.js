@@ -29,7 +29,7 @@ import {
 import { mountUatBanner } from './setup/uat-banner.js';
 import { mountAppChrome } from './setup/app-chrome.js';
 import { mountCaseTypeUnavailableBanner } from './setup/case-type-unavailable-banner.js';
-import { registerRoutes } from './setup/register-routes.js';
+import { homeCardsFor, registerRoutes } from './setup/register-routes.js';
 
 /** @returns {Promise<void>} */
 async function boot() {
@@ -93,6 +93,7 @@ async function boot() {
     journeyCaseSources,
     allocationSources,
     formTypes: APP_CONFIG.formTypes,
+    homeCards: homeCardsFor(capabilities),
     appEl,
   });
 

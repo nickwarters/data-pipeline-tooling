@@ -40,6 +40,7 @@ const {
   routeTable,
   registerRoutes,
   navItemsFor,
+  homeCardsFor,
   resolveDefaultLandingPath,
   FALLBACK_LANDING_PATH,
 } = await import('../src/setup/register-routes.js');
@@ -884,5 +885,54 @@ test('case review is not a destination: no nav item and no landing rule', () => 
     !navItemsFor(makePermissions({ isReviewer: true })).some(
       (item) => item.id === 'case'
     )
+  );
+});
+
+test('a page in the nav is offered on Home to the same people, unless its card names its own rule', () => {
+  for (const groups of [
+    [],
+    ['Forms'],
+    ['Reviewers'],
+    ['Controls'],
+    ['CORA Owner Delegates'],
+    ['Frontline'],
+  ]) {
+    const capabilities = resolveCapabilities(groups);
+    const cards = new Set(homeCardsFor(capabilities).map((card) => card.id));
+    for (const item of navItemsFor(capabilities)) {
+      const entry = APP_CONFIG.pagePlugins.find(
+        (plugin) => plugin.id === item.id
+      );
+      if (!entry?.home || entry.home.isVisible) continue;
+      assert.ok(cards.has(item.id), `${groups.join()}: ${item.id}`);
+    }
+    for (const id of cards) {
+      const entry = APP_CONFIG.pagePlugins.find((plugin) => plugin.id === id);
+      if (entry?.home?.isVisible || !entry?.nav) continue;
+      assert.ok(
+        navItemsFor(capabilities).some((item) => item.id === id),
+        `${groups.join()}: ${id}`
+      );
+    }
+  }
+});
+
+test('a card with its own rule is offered by that rule, whatever the route lets in', () => {
+  const ids = (/** @type {any} */ permissions) =>
+    homeCardsFor(makePermissions({ isReviewer: false, ...permissions })).map(
+      (card) => card.id
+    );
+  assert.ok(ids({ isAdviser: true }).includes('my-cases'));
+  assert.ok(!ids({ isReviewer: true }).includes('my-cases'));
+  assert.deepEqual(ids({}), []);
+});
+
+test('Home cards are in their declared order', () => {
+  const orders = homeCardsFor(
+    makePermissions({ isMaintainer: true, canAccessForms: true })
+  ).map((card) => card.order);
+  assert.deepEqual(
+    orders,
+    [...orders].sort((a, b) => a - b)
   );
 });
