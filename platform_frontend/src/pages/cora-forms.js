@@ -110,7 +110,7 @@ export function formsView(state, tools) {
     h('h1', {}, 'Forms'),
     h(
       'div',
-      { className: 'cora-forms-tabbar' },
+      { className: 'cora-form-tabbar' },
       h(
         'div',
         { className: 'cora-tabs-list', role: 'tablist', 'aria-label': 'Forms' },

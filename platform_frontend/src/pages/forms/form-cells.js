@@ -31,7 +31,7 @@ export const formTypeColumn = () => ({
   label: 'Form',
   value: (row) => row.formType.formName,
   sortable: true,
-  format: (value) => h('span', { className: 'cora-forms-type' }, String(value)),
+  format: (value) => h('span', { className: 'cora-form-type' }, String(value)),
 });
 
 /** @returns {FormColumn} */
@@ -107,7 +107,7 @@ export function readStateView(status) {
   if (status === 'failed') {
     return h(
       'p',
-      { className: 'cora-forms-error', role: 'alert' },
+      { className: 'cora-form-error', role: 'alert' },
       'Forms could not be loaded. Try again shortly.'
     );
   }
@@ -128,7 +128,7 @@ export function loadMoreView(next, onLoadMore) {
     'button',
     {
       type: 'button',
-      className: 'cora-btn-secondary cora-forms-load-more',
+      className: 'cora-btn-secondary cora-form-load-more',
       onclick: onLoadMore,
     },
     'Load more'

@@ -4046,9 +4046,14 @@
   outline-offset: var(--cora-focus-offset);
 }
 
-/* ── Forms dashboard ─────────────────────────────────────────────────────── */
+/* ── Forms ──────────────────────────────────────────────────────────────────
+   One cora-form-* set for every Forms page — the dashboard, New form and the
+   Form page — built on the design tokens alone, so dark mode follows them.
+   No Forms page carries styles of its own. */
 
-.cora-forms-tabbar {
+/* The dashboard: tabs, the archive's filters and the table's foot. */
+
+.cora-form-tabbar {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -4058,15 +4063,15 @@
   border-bottom: 1px solid var(--cora-color-border);
 }
 
-.cora-forms-tabbar .cora-tabs-list {
+.cora-form-tabbar .cora-tabs-list {
   border-bottom: 0;
 }
 
-.cora-forms-tabbar > button {
+.cora-form-tabbar > button {
   margin-bottom: var(--cora-space-2);
 }
 
-.cora-forms-hint {
+.cora-form-intro {
   margin: 0 0 var(--cora-space-3);
   font-size: var(--cora-font-size-sm);
   color: var(--cora-color-text-muted);
@@ -4074,7 +4079,7 @@
 
 /* A grid of fixed-height fields, so the archive's filters line up rather than
    wrapping unevenly as a flex row does. */
-.cora-forms-toolbar {
+.cora-form-filters {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
   gap: var(--cora-space-3);
@@ -4082,23 +4087,23 @@
   margin-bottom: var(--cora-space-3);
 }
 
-.cora-forms-toolbar .cora-capture-input {
+.cora-form-filters .cora-capture-input {
   height: 2.5rem;
 }
 
-.cora-forms-field {
+.cora-form-filter {
   display: grid;
   gap: var(--cora-space-1);
   min-width: 0;
 }
 
-.cora-forms-field > span:first-child {
+.cora-form-filter > span:first-child {
   font-size: var(--cora-font-size-sm);
   font-weight: var(--cora-font-weight-semibold);
   color: var(--cora-color-text-muted);
 }
 
-.cora-forms-tablefoot {
+.cora-form-tablefoot {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -4107,13 +4112,13 @@
   color: var(--cora-color-text-muted);
 }
 
-.cora-forms-type {
+.cora-form-type {
   display: inline-flex;
   align-items: center;
   gap: var(--cora-space-2);
 }
 
-.cora-forms-type::before {
+.cora-form-type::before {
   content: '';
   width: 8px;
   height: 8px;
@@ -4121,12 +4126,12 @@
   background: var(--cora-color-accent);
 }
 
-.cora-forms-due-overdue {
+.cora-form-due-overdue {
   color: var(--cora-color-danger);
   font-weight: var(--cora-font-weight-semibold);
 }
 
-[data-cora-root] .cora-forms-error {
+[data-cora-root] .cora-form-error {
   margin: 0;
   padding: var(--cora-space-2) var(--cora-space-3);
   color: var(--cora-color-danger);
@@ -4134,15 +4139,15 @@
   border-radius: var(--cora-radius-sm);
 }
 
-[data-cora-root] .cora-forms-load-more {
+[data-cora-root] .cora-form-load-more {
   margin-top: var(--cora-space-3);
 }
 
-[data-cora-root] .cora-forms-tablefoot .cora-forms-load-more {
+[data-cora-root] .cora-form-tablefoot .cora-form-load-more {
   margin-top: 0;
 }
 
-/* ── A Form: New form and the Form page ─────────────────────────────────── */
+/* A Form: New form and the Form page. */
 
 .cora-form-page {
   display: grid;
@@ -4187,6 +4192,11 @@
   border: 1px solid var(--cora-color-border);
   border-radius: var(--cora-radius-md);
   background: var(--cora-color-info-bg);
+}
+
+.cora-form-banner--view {
+  color: var(--cora-color-info);
+  border-color: var(--cora-color-info);
 }
 
 .cora-form-banner--locked {
@@ -4481,7 +4491,8 @@
 
 @media (max-width: 40rem) {
   .cora-form-qa-row,
-  .cora-form-action-fields {
+  .cora-form-action-fields,
+  .cora-form-recorded-list {
     grid-template-columns: 1fr;
   }
 }

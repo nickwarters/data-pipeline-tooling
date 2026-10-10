@@ -355,7 +355,7 @@ export function newFormView(state, tools) {
       ),
       h('p', { className: 'cora-form-audience' }, audience(route)),
       route.error
-        ? h('p', { className: 'cora-forms-error', role: 'alert' }, route.error)
+        ? h('p', { className: 'cora-form-error', role: 'alert' }, route.error)
         : null,
       h(
         'div',
