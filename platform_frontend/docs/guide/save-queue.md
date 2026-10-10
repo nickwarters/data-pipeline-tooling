@@ -57,9 +57,10 @@ real conflict. `new SaveQueue(client)` uses the Case target
 (`src/services/case-save-target.js`), whose rule is the Answers comparison
 above, so every Case caller is unchanged. `new SaveQueue(client, { target })`
 saves something else through the same debounce, retries and status. The HR
-Form target arrives with the Form page that first saves one; its rule is that a
-412 conflicts only when a field being saved changed remotely, because an
-Employee and their manager each write their own fields of the same Form.
+Form target is `src/services/form-save-target.js`; its rule is that a 412
+conflicts only when a field being saved changed remotely, because an Employee
+and their manager each write their own fields of the same Form. The Form page
+builds one queue per Form it opens, and only for a viewer who may edit it.
 `loadCase(item)` loads any target's item (it needs only `id` and `etag`).
 
 `loadCase(item, { readOnly: true })` marks an item the viewer may not edit, and
@@ -77,12 +78,14 @@ The queue reports `reconnecting` during retries.
 `subscribeStatus(listener)` immediately reports the current status and then
 each transition: `saved`, `saving`, `reconnecting`, or `conflict`. Bind it in a
 route effect and dispatch the value into page state. The view renders that
-state like any other value. On Case Review that renderer is
+state like any other value. On Case Review and the Form page that renderer is
 `src/components/base/cora-status-banner.js` — the saving/reconnecting indicators,
 the conflict banner with its Reload button, and once anything has saved, a quiet
 "Last saved 15:32" in the reader's local 24-hour time. `lastSavedAt` is the ISO
 instant of the last successful write, set before `saved` is announced, so a
-listener reading it on `saved` sees the save that settled.
+listener reading it on `saved` sees the save that settled. The conflict banner's
+words are a `conflictMessage` prop: a Case is usually changed in the viewer's
+own other tab, a Form usually by its other editor.
 
 ## Loading and list context
 

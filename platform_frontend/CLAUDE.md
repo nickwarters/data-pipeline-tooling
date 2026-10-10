@@ -520,6 +520,16 @@ src/
       form-cells.js               # the columns, Open/View button, load state and Load more both tabs share
       outstanding-view.js         # pure Outstanding tab: lanes, open Forms, the control group's "All open forms"
       archive-view.js             # pure Archive tab: closed Forms in a closed-date window, read-only
+      form-sections-view.js       # THE Form renderer: walks a Form Type's sections, panels and fields and
+                                  #   draws each as a capture-field control or as text, in edit, view or
+                                  #   locked mode, from the access rule
+      form-page.js                # one Form's route slice: the read, the save queue (built only for an
+                                  #   editor), the banners, and the lifecycle buttons that close it
+      new-form.js                 # New form's route slice: Form Type, Employee, directory-prefilled
+                                  #   managers and due date, then the one create write
+      people-search-state.js      # the keyed people-picker search state both Form routes share
+    cora-form.js                  # the #/forms/new and #/forms/<slug>/<id> page module: mounts New form
+                                  #   or one Form, by whether the path names a Form
     cora-journey-cases.js         # store-driven Journey Cases slice + generic descriptors (GRID-2)
     cora-my-team.js               # store-driven Team Workload slice + pure per-Reviewer workload view
     roadmap.js                    # store-driven Roadmap slice and pure view
@@ -628,6 +638,8 @@ src/
     form-encoding.js              # THE stored encoding of a Form's free text and Form Actions: UTF-8
                                   #   base64, decoded forgivingly (a hand-edited cell is reported, not
                                   #   thrown). Not encryption. Only the clients call it
+    form-save-target.js           # the SaveQueue target for a Form: patchFormItem/getFormItem, and a 412
+                                  #   that conflicts only when a field being saved changed remotely
     form-access.js                # THE Forms access rule: who may read, edit and create a Form, and edit
                                   #   which field, from its current people columns and the Forms groups;
                                   #   a JavaScript gate, not a permission boundary (ADR-0059)

@@ -68,12 +68,39 @@ function accessibleName(element) {
   );
   return (
     element.getAttribute?.('aria-label') ||
+    labelledByText(element) ||
     labelText ||
     (legend ? textContent(legend) : '') ||
     textContent(element) ||
     element.getAttribute?.('title') ||
     ''
   );
+}
+
+/**
+ * The text of the elements `aria-labelledby` names, looked up from the top of
+ * the tree the element is in, as a browser looks them up in its document.
+ *
+ * @param {any} element
+ * @returns {string}
+ */
+function labelledByText(element) {
+  const ids = String(element.getAttribute?.('aria-labelledby') ?? '')
+    .split(/\s+/)
+    .filter(Boolean);
+  if (ids.length === 0) return '';
+  let top = element;
+  while (top.parentNode) top = top.parentNode;
+  /** @type {string[]} */
+  const parts = [];
+  for (const id of ids) {
+    walk(top, (candidate) => {
+      if (candidate.id === id || candidate.getAttribute?.('id') === id) {
+        parts.push(textContent(candidate));
+      }
+    });
+  }
+  return parts.join(' ');
 }
 
 /** @param {string} actual @param {NameMatcher | undefined} expected */

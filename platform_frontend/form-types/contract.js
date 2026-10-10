@@ -155,12 +155,29 @@ export const FORM_STATUSES = Object.freeze([
   'Cancelled',
 ]);
 
+/** The Form Status a new Form is created with, and keeps until it closes. */
+export const INITIAL_FORM_STATUS = 'Pending';
+
 /** The Form Status values that lock a Form for everyone. */
 export const CLOSED_FORM_STATUSES = Object.freeze([
   'Completed',
   'Void',
   'Cancelled',
 ]);
+
+/**
+ * Each manager a Form records, against the current manager column that grants
+ * access in its place. Both pairs are written with the chosen managers when a
+ * Form is created; afterwards the editors change only the record, and only a
+ * process outside the application changes the current managers, so the page
+ * shows both whenever they differ.
+ *
+ * @type {Readonly<Record<string, string>>}
+ */
+export const MANAGER_RECORDS = Object.freeze({
+  FirstLineManager: 'CurrentFirstLineManager',
+  SecondLineManager: 'CurrentSecondLineManager',
+});
 
 /**
  * The columns the application owns, with the field type each must have.
@@ -170,13 +187,17 @@ export const CLOSED_FORM_STATUSES = Object.freeze([
  * definition may place these on the page but cannot store them anywhere else,
  * give them another type or let anyone edit them after creation. `placedBy`
  * says who draws each one: the page draws the Status badge, the current
- * managers and the closed date itself, so a definition has to place only the
+ * managers and who closed the Form and when itself, so a definition has to place only the
  * two it would otherwise leave off the page.
  *
- * `ClosedDate` is the day a lifecycle button closed the Form, and empty while
- * it is open. The archive windows on it rather than on `Modified`, which moves
- * whenever anything touches the item, the current managers being kept up to
- * date included, and would drag long-closed Forms back into a recent window.
+ * `ClosedDate` is the day a lifecycle button closed the Form, and `ClosedBy`
+ * the person who pressed it; both are empty while it is open. The archive
+ * windows on `ClosedDate` rather than on `Modified`, which moves whenever
+ * anything touches the item, the current managers being kept up to date
+ * included, and would drag long-closed Forms back into a recent window. They
+ * are columns of their own rather than a reading of the version history, which
+ * a list may not keep and which records the account that wrote last, not the
+ * person who closed the Form.
  *
  * @type {Readonly<Record<string, { type: FormFieldType, placedBy: 'definition' | 'page' }>>}
  */
@@ -187,6 +208,7 @@ export const FORM_OWNED_FIELDS = Object.freeze({
   Status: { type: 'status', placedBy: 'page' },
   DueDate: { type: 'date', placedBy: 'definition' },
   ClosedDate: { type: 'date', placedBy: 'page' },
+  ClosedBy: { type: 'person', placedBy: 'page' },
 });
 
 /**

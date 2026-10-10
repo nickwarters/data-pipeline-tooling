@@ -171,3 +171,83 @@ test('StatusBanner: saving banner announces polite status', () => {
   assert.equal(node._attrs.role, 'status');
   assert.equal(node._attrs['aria-live'], 'polite');
 });
+
+test('StatusBanner: the conflict banner says what was changed elsewhere', () => {
+  const node = /** @type {any} */ (
+    StatusBanner({ status: 'conflict', conflictMessage: 'This form changed.' })
+  );
+  assert.equal(node._attrs.role, 'alert');
+  assert.match(node.textContent, /This form changed\./);
+});
+
+test('Forms: every field caption names its control, in every panel layout', async () => {
+  const { formSectionsView } =
+    await import('../src/pages/forms/form-sections-view.js');
+  const { FORM_PANEL_LAYOUTS } = await import('../form-types/contract.js');
+  const { captureFieldTypeNames } =
+    await import('../src/capture-fields/registry.js');
+  /** The role each drawable field type's control takes, and how it is named. */
+  const expected = {
+    text: { role: 'textbox', name: (/** @type {string} */ l) => l },
+    textarea: { role: 'textbox', name: (/** @type {string} */ l) => l },
+    date: { role: 'textbox', name: (/** @type {string} */ l) => l },
+    select: { role: 'combobox', name: (/** @type {string} */ l) => l },
+    radio: { role: 'group', name: (/** @type {string} */ l) => l },
+    person: {
+      role: 'combobox',
+      name: (/** @type {string} */ l) => `Search people for ${l}`,
+    },
+  };
+  assert.deepEqual(
+    Object.keys(expected).sort(),
+    captureFieldTypeNames().sort(),
+    'every type a Form can draw is checked'
+  );
+  const types = /** @type {Array<keyof typeof expected>} */ (
+    Object.keys(expected)
+  );
+  const definition = /** @type {any} */ ({
+    slug: 'all-fields',
+    formName: 'All fields',
+    description: '',
+    listName: 'AllFields',
+    sections: FORM_PANEL_LAYOUTS.map((layout) => ({
+      sectionType: 'panel',
+      panelName: layout,
+      layout,
+      fields: types.map((type) => ({
+        type,
+        label: `${layout} ${type}`,
+        itemField: `${layout}-${type}`,
+        choices: ['One'],
+      })),
+    })),
+  });
+  const root = rootOf(
+    formSectionsView(
+      definition,
+      /** @type {any} */ ({ id: '1', etag: '', fields: {}, problems: [] }),
+      {
+        mode: 'edit',
+        access: /** @type {any} */ ({ canEditField: () => true }),
+        me: 'me',
+        peopleSearch: {},
+        onField() {},
+        onPersonQuery() {},
+      }
+    )
+  );
+  for (const layout of FORM_PANEL_LAYOUTS) {
+    for (const type of types) {
+      const label = `${layout} ${type}`;
+      const { role, name } = expected[type];
+      // A set of radio buttons placed apart from its question is a radiogroup.
+      const actualRole =
+        type === 'radio' && layout === 'question-answer' ? 'radiogroup' : role;
+      assert.ok(
+        getByRole(root, actualRole, { name: name(label) }),
+        `${label} is a ${actualRole} named "${name(label)}"`
+      );
+    }
+  }
+});
