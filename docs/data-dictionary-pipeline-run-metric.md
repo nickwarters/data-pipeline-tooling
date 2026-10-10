@@ -6,6 +6,10 @@ once in `record_schema.py`) — and one over the **orchestration decision
 store**. They belong to the `pipeline_run_metric` Reporting subject and are
 rebuilt whole (`Refresh()`) on every run from the stores as they stand.
 
+For the at-a-glance view, `python -m cli perf` reads
+`duration_percentiles_daily` and `batch_finish_daily` (see
+[operator-cli.md](operator-cli.md#perf--durations-at-a-glance)).
+
 The Python contracts are
 [`pipelines/pipeline_run_metric/schema.py`](../pipelines/pipeline_run_metric/schema.py);
 the reductions are
@@ -55,6 +59,7 @@ never shows up as a pipeline of its own; its steps keep their stage in
 | **Source system** | The base directory's run registry, `run_records`, and its orchestration decisions, `orchestration_records`, both located by `RunStore` (`tools/observability/run_store.py`) — the one place that says where run metadata lives, as `tools.store` says where data lives. The decisions are read through `OrchestrationStore`, so a store from before a column existed is brought up to date first. Not Shared Readers: both are run metadata owned by the framework's observability, not another subject's published dataset |
 | **Load strategy** | `Refresh()`, every table |
 | **Upstream dependencies** | None declared; a base directory nothing has run in yet lands empty tables |
+| **Shared Readers** | `readers/pipeline_run_metric.py` serves `duration_percentiles_daily` and `batch_finish_daily` (to `cli perf`) |
 | **Schedule / freshness** | Daily, in its own `operations` set after every other set |
 | **Migrations** | `migrations/pipeline_run_metric/gold/` |
 | **Owner / data steward** | *<team>* |
