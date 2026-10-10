@@ -10,6 +10,14 @@ import {
 } from '../lib/bank-artifacts.js';
 import { declaredBankVersion } from '../lib/bank-version.js';
 import { loadBank } from '../../case-types/load-bank.js';
+import { toLocalDateKey } from '../lib/local-calendar.js';
+import { decodeFields, encodeFields } from './form-encoding.js';
+import {
+  assertFormColumns,
+  assertQueryColumn,
+  formColumnKinds,
+} from './form-items.js';
+import { CLOSED_FORM_STATUSES } from '../../form-types/contract.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').ListCasesFilter} ListCasesFilter */
@@ -24,6 +32,19 @@ import { loadBank } from '../../case-types/load-bank.js';
 /** @typedef {import('../sharepoint-client.js').NewAccessLogEntry} NewAccessLogEntry */
 
 /** @typedef {import('../sharepoint-client.js').VersionedExport} VersionedExport */
+/** @typedef {import('../sharepoint-client.js').FormItem} FormItem */
+/** @typedef {import('../sharepoint-client.js').FormValue} FormValue */
+/** @typedef {import('../sharepoint-client.js').FormItemsFilter} FormItemsFilter */
+/** @typedef {import('../sharepoint-client.js').ListFormItemsOptions} ListFormItemsOptions */
+/** @typedef {import('../sharepoint-client.js').FormPatchResult} FormPatchResult */
+/** @typedef {import('../../form-types/contract.js').FormTypeDefinition} FormTypeDefinition */
+/**
+ * One Form as the mock's list holds it: people and dates as a caller writes
+ * them, free text **encoded**, exactly as the real list would hold it, so the
+ * mock proves the encoding rather than skipping it.
+ *
+ * @typedef {{ id: string, etag: string, created: string, modified: string, fields: Record<string, unknown> }} StoredFormItem
+ */
 /** @typedef {PersonResult & { manager?: string, groups?: string[] }} DirectoryPerson */
 
 export class MockSharePointClient {
@@ -38,6 +59,7 @@ export class MockSharePointClient {
    * roadmapItems?: RoadmapItem[],
    * supportLog?: SupportLogEntry[],
    * accessLog?: AccessLogEntry[],
+   * formLists?: Record<string, StoredFormItem[]>,
    * readOnlyGroups?: string[],
    * missingGroups?: string[],
    * now?: () => Date
@@ -53,6 +75,7 @@ export class MockSharePointClient {
     roadmapItems = [],
     supportLog = [],
     accessLog = [],
+    formLists = /** @type {Record<string, StoredFormItem[]>} */ ({}),
     readOnlyGroups = [],
     missingGroups = [],
     now = () => new Date(),
@@ -82,6 +105,15 @@ export class MockSharePointClient {
     this._supportLogCounter = 5000;
     this._accessLog = accessLog.map((entry) => structuredClone(entry));
     this._accessLogCounter = 7000;
+    // One store per Form Type list, keyed by its unprefixed name: the mock has
+    // no environments.
+    this._formLists = Object.fromEntries(
+      Object.entries(formLists).map(([listName, items]) => [
+        listName,
+        items.map((item) => structuredClone(item)),
+      ])
+    );
+    this._formItemCounter = 9000;
     this._etagCounter = 1000;
     this._injectNext412 = false;
   }
@@ -641,6 +673,132 @@ export class MockSharePointClient {
     }
   }
 
+  // --- Forms ---------------------------------------------------------------
+
+  /**
+   * @param {FormTypeDefinition} formType
+   * @param {ListFormItemsOptions} [opts]
+   * @returns {Promise<{ items: FormItem[], next: string | null }>}
+   */
+  async listFormItems(formType, opts = {}) {
+    const filter = opts.filter ?? {};
+    if (filter.window) {
+      assertQueryColumn(formType, filter.window.column, ['date']);
+    }
+    let rows = this._formStore(formType).filter((row) =>
+      formMatches(row, filter)
+    );
+    if (opts.orderBy) {
+      const { column, dir } = opts.orderBy;
+      assertQueryColumn(formType, column, ['person', 'date', 'choice']);
+      const sign = dir === 'desc' ? -1 : 1;
+      rows = rows.slice().sort((a, b) => {
+        const left = orderKey(a, column);
+        const right = orderKey(b, column);
+        if (left !== right) return left < right ? -sign : sign;
+        return (Number(a.id) - Number(b.id)) * sign;
+      });
+    }
+    const start = opts.next ? Number(opts.next) : 0;
+    const end = opts.top === undefined ? rows.length : start + opts.top;
+    const items = rows
+      .slice(start, end)
+      .map((row) => this._formItemFromStore(formType, row));
+    return settle(opts.signal, {
+      items,
+      next: end < rows.length ? String(end) : null,
+    });
+  }
+
+  /**
+   * @param {FormTypeDefinition} formType
+   * @param {string} id
+   * @param {{ signal?: AbortSignal }} [opts]
+   * @returns {Promise<FormItem | null>}
+   */
+  async getFormItem(formType, id, opts = {}) {
+    const row = this._formStore(formType).find((item) => item.id === id);
+    return settle(
+      opts.signal,
+      row ? this._formItemFromStore(formType, row) : null
+    );
+  }
+
+  /**
+   * @param {FormTypeDefinition} formType
+   * @param {Record<string, FormValue>} fields
+   * @returns {Promise<FormItem>}
+   */
+  async createFormItem(formType, fields) {
+    assertFormColumns(formType, fields);
+    const now = this._now().toISOString();
+    /** @type {StoredFormItem} */
+    const row = {
+      id: String(++this._formItemCounter),
+      etag: `"${++this._etagCounter}"`,
+      created: now,
+      modified: now,
+      fields: storedFormFields(formType, fields),
+    };
+    this._formStore(formType).push(row);
+    return this._formItemFromStore(formType, row);
+  }
+
+  /**
+   * @param {FormTypeDefinition} formType
+   * @param {string} id
+   * @param {Record<string, FormValue>} fields
+   * @param {string} etag
+   * @returns {Promise<FormPatchResult>}
+   */
+  async patchFormItem(formType, id, fields, etag) {
+    assertFormColumns(formType, fields);
+    const row = this._formStore(formType).find((item) => item.id === id);
+    if (!row) return { ok: false, status: 404 };
+    if (row.etag !== etag) return { ok: false, status: 412 };
+    Object.assign(row.fields, storedFormFields(formType, fields));
+    row.etag = `"${++this._etagCounter}"`;
+    row.modified = this._now().toISOString();
+    return {
+      ok: true,
+      status: 200,
+      data: this._formItemFromStore(formType, row),
+    };
+  }
+
+  /**
+   * @param {FormTypeDefinition} formType
+   * @returns {StoredFormItem[]}
+   */
+  _formStore(formType) {
+    return (this._formLists[formType.listName] ??= []);
+  }
+
+  /**
+   * A read of a stored Form: every column the definition reads, decoded, and
+   * nothing it does not.
+   *
+   * @param {FormTypeDefinition} formType
+   * @param {StoredFormItem} row
+   * @returns {FormItem}
+   */
+  _formItemFromStore(formType, row) {
+    /** @type {Record<string, unknown>} */
+    const stored = {};
+    for (const column of formColumnKinds(formType).keys()) {
+      stored[column] = structuredClone(row.fields[column] ?? null);
+    }
+    const { fields, problems } = decodeFields(formType, stored);
+    return {
+      id: row.id,
+      etag: row.etag,
+      created: row.created,
+      modified: row.modified,
+      fields: /** @type {Record<string, FormValue>} */ (fields),
+      problems,
+    };
+  }
+
   /**
    * @param {string} filename
    * @returns {Promise<any>}
@@ -682,6 +840,92 @@ async function settle(signal, value) {
   await Promise.resolve();
   signal.throwIfAborted();
   return value;
+}
+
+/**
+ * What the list would hold for a write: free text encoded, and an empty choice
+ * or date cleared to `null` as SharePoint clears it.
+ *
+ * @param {FormTypeDefinition} formType
+ * @param {Record<string, FormValue>} fields
+ * @returns {Record<string, unknown>}
+ */
+export function storedFormFields(formType, fields) {
+  const encoded = encodeFields(formType, fields);
+  return Object.fromEntries(
+    Object.entries(encoded).map(([column, value]) => [
+      column,
+      value === '' || value === undefined ? null : structuredClone(value),
+    ])
+  );
+}
+
+/**
+ * @param {StoredFormItem} row
+ * @param {FormItemsFilter} filter
+ * @returns {boolean}
+ */
+function formMatches(row, filter) {
+  if (filter.involving) {
+    const me = filter.involving.toLowerCase();
+    const involved = [
+      'Employee',
+      'CurrentFirstLineManager',
+      'CurrentSecondLineManager',
+    ].some(
+      (column) =>
+        String(
+          /** @type {any} */ (row.fields[column])?.loginName ?? ''
+        ).toLowerCase() === me
+    );
+    if (!involved) return false;
+  }
+  if (filter.closed !== undefined) {
+    const closed = CLOSED_FORM_STATUSES.includes(
+      String(row.fields.Status ?? '')
+    );
+    if (closed !== filter.closed) return false;
+  }
+  if (filter.window) {
+    const { column, from, to } = filter.window;
+    const day = dayOf(row, column);
+    if (day === null) return false;
+    if (from && day < from) return false;
+    if (to && day > to) return false;
+  }
+  return true;
+}
+
+/**
+ * The calendar day a date column, or a stamp, falls on.
+ *
+ * @param {StoredFormItem} row
+ * @param {string} column
+ * @returns {string | null}
+ */
+function dayOf(row, column) {
+  if (column === 'Created') return toLocalDateKey(row.created);
+  if (column === 'Modified') return toLocalDateKey(row.modified);
+  const value = row.fields[column];
+  return typeof value === 'string' && value !== '' ? value : null;
+}
+
+/**
+ * What a row sorts by on a column: a person by display name, anything else by
+ * its text, and nothing before something, as SharePoint orders a null.
+ *
+ * @param {StoredFormItem} row
+ * @param {string} column
+ * @returns {string}
+ */
+function orderKey(row, column) {
+  if (column === 'Created') return row.created;
+  if (column === 'Modified') return row.modified;
+  const value = /** @type {any} */ (row.fields[column]);
+  if (value === null || value === undefined) return '';
+  return typeof value === 'object'
+    ? String(value.displayName ?? '')
+    : String(value);
 }
 
 /** @param {CaseRow} row */

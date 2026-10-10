@@ -144,6 +144,25 @@ export const FORM_FIELD_STORAGE = Object.freeze({
 });
 
 /**
+ * Every Form Status, whatever the Form's type. A Form is Pending until it
+ * closes. These are a Form's vocabulary and share nothing with a Case's
+ * lifecycle statuses, two of which happen to be spelt the same.
+ */
+export const FORM_STATUSES = Object.freeze([
+  'Pending',
+  'Completed',
+  'Void',
+  'Cancelled',
+]);
+
+/** The Form Status values that lock a Form for everyone. */
+export const CLOSED_FORM_STATUSES = Object.freeze([
+  'Completed',
+  'Void',
+  'Cancelled',
+]);
+
+/**
  * The columns the application owns, with the field type each must have.
  *
  * Access reads `Employee` and the two current managers and nothing else, and

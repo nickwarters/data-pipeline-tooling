@@ -32,6 +32,7 @@ export async function createSharePointClient(
       { roadmapItems },
       { supportLog },
       { accessLog },
+      { formLists },
     ] = await Promise.all([
       import('./mock-sharepoint-client.js'),
       import('../../case-types/manifest.js'),
@@ -41,6 +42,7 @@ export async function createSharePointClient(
       import('../../dev/fixtures/roadmap.js'),
       import('../../dev/fixtures/support-log.js'),
       import('../../dev/fixtures/access-log.js'),
+      import('../../dev/fixtures/forms.js'),
     ]);
 
     // Every Case Type declares its own SharePoint list via `listName`; its
@@ -64,6 +66,7 @@ export async function createSharePointClient(
       roadmapItems,
       supportLog,
       accessLog,
+      formLists,
     });
   }
 

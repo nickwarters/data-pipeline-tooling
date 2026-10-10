@@ -16,72 +16,52 @@
 import { APP_CONFIG } from '../src/app-config.js';
 import {
   FORM_OWNED_FIELDS,
-  formColumns,
+  FORM_STATUSES,
   formFields,
 } from '../form-types/contract.js';
+import { formColumnKinds } from '../src/services/form-items.js';
 
 /** @typedef {import('../form-types/contract.js').FormTypeDefinition} FormTypeDefinition */
-/** @typedef {import('../form-types/contract.js').FormFieldType} FormFieldType */
+/** @typedef {import('../src/services/form-items.js').FormColumnKind} FormColumnKind */
 
 /**
- * The SharePoint column type each plain field type is created as. An encoded
+ * The SharePoint column type each kind of column is created as. An encoded
  * column is always multi-line plain text, whatever it holds: the encoded form
  * is about a third longer than the text, which outgrows a single-line column,
  * and rich text would rewrite it.
  *
- * @type {Readonly<Record<FormFieldType, string>>}
+ * @type {Readonly<Record<FormColumnKind, string>>}
  */
 const SHAREPOINT_COLUMN_TYPES = Object.freeze({
   person: 'Person or Group',
   date: 'Date and Time (date only)',
-  select: 'Choice',
-  radio: 'Choice',
-  status: 'Choice',
-  text: 'Multiple lines of text (plain text)',
-  textarea: 'Multiple lines of text (plain text)',
+  choice: 'Choice',
+  encoded: 'Multiple lines of text (plain text)',
 });
 
-const ENCODED_COLUMN_TYPE = 'Multiple lines of text (plain text)';
-
 /**
- * One row per column: its name, the type to create it as, whether it holds
- * encoded text, and whether it is indexed. The application's own columns are
- * the indexed ones, because every query and the access rule filter on them, and
- * an index must be added while the list is still empty.
+ * One row per column: its name, the type to create it as, the values a Choice
+ * column offers, whether it holds encoded text, and whether it is indexed. The
+ * application's own columns are the indexed ones, because every query and the
+ * access rule filter on them, and an index must be added while the list is
+ * still empty.
  *
  * @param {FormTypeDefinition} definition
- * @returns {{ column: string, columnType: string, encoded: boolean, indexed: boolean }[]}
+ * @returns {{ column: string, columnType: string, choices: readonly string[], encoded: boolean, indexed: boolean }[]}
  */
 export function provisioningColumns(definition) {
-  /** @type {Map<string, FormFieldType>} */
-  const types = new Map(
-    Object.entries(FORM_OWNED_FIELDS).map(([column, owned]) => [
-      column,
-      owned.type,
-    ])
-  );
+  /** @type {Map<string, readonly string[]>} */
+  const choices = new Map([['Status', FORM_STATUSES]]);
   for (const field of formFields(definition)) {
-    if (!types.has(field.itemField)) types.set(field.itemField, field.type);
+    if (field.choices) choices.set(field.itemField, field.choices);
   }
-
-  const { plain, encoded } = formColumns(definition);
-  return [
-    ...plain.map((column) => ({
-      column,
-      columnType:
-        SHAREPOINT_COLUMN_TYPES[
-          /** @type {FormFieldType} */ (types.get(column))
-        ],
-      encoded: false,
-      indexed: Object.hasOwn(FORM_OWNED_FIELDS, column),
-    })),
-    ...encoded.map((column) => ({
-      column,
-      columnType: ENCODED_COLUMN_TYPE,
-      encoded: true,
-      indexed: false,
-    })),
-  ];
+  return [...formColumnKinds(definition)].map(([column, kind]) => ({
+    column,
+    columnType: SHAREPOINT_COLUMN_TYPES[kind],
+    choices: kind === 'choice' ? (choices.get(column) ?? []) : [],
+    encoded: kind === 'encoded',
+    indexed: Object.hasOwn(FORM_OWNED_FIELDS, column),
+  }));
 }
 
 /**
@@ -107,6 +87,9 @@ function main(argv) {
       console.log(
         `  ${row.column}: ${row.columnType}${notes.length ? ` (${notes.join(', ')})` : ''}`
       );
+      if (row.choices.length > 0) {
+        console.log(`    choices: ${row.choices.join('; ')}`);
+      }
     }
   }
   return 0;

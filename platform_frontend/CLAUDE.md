@@ -612,6 +612,11 @@ src/
     assignment-stamp.js           # the write-path rule pairing assignedAt with assignedReviewer, so
                                   #   no caller can set a Reviewer without stamping when (#633)
     create-sharepoint-client.js
+    form-encoding.js              # THE stored encoding of a Form's free text and Form Actions: UTF-8
+                                  #   base64, decoded forgivingly (a hand-edited cell is reported, not
+                                  #   thrown). Not encryption. Only the clients call it
+    form-items.js                 # what both clients agree a Form column is (person, date, choice or
+                                  #   encoded), and which columns a write and a query may name
     reviewer-manager.js           # a Reviewer's current manager for an assignment write, shared by
                                   #   the allocation claim and Case Support's Reassign
     responsible-party-manager.js  # the write-path rule pairing responsibleParty with that person's
@@ -712,7 +717,8 @@ form-types/                     # one data module per HR Form Type, named in APP
                                 #   (ADR-0059); deployed like case-types/
   contract.js                   # THE FormTypeDefinition shape and its closed vocabulary (section
                                 #   types, panel layouts, field types, editableBy), the columns the
-                                #   application owns, and formColumns(): which columns a Form is read
+                                #   application owns, the Form Statuses that close a Form, and
+                                #   formColumns(): which columns a Form is read
                                 #   and written through, and which are encoded. Encoding follows the
                                 #   field type, never a per-field flag
   one-to-one.js                 # the 1-to-1: meeting details, discussion, Form Actions, comments
@@ -727,7 +733,7 @@ scripts/
                                 #   publishes it through publish-bank.js so the version and history
                                 #   advance by the one rule. Needs openpyxl from the root venv
   scaffold_case_type.py         # scaffolds a new Case Type module + bank artifact (ADR-0028)
-  form-type-columns.js          # prints the columns, SharePoint types and indexes a Form Type's
+  form-type-columns.js          # prints the columns, SharePoint types, choices and indexes a Form Type's
                                 #   list needs, derived from its definition, for hand provisioning
   deploy_to_sharepoint.py       # the diff sync, plus its pre-flight verify gate, graph-derived
                                 #   leaf-first upload order and post-upload hash verification
@@ -754,6 +760,7 @@ dev/                            # local dev loop; not deployed
     cases.js
     people.js                   # directory people backing searchPeople, and the groups they hold
     access-log.js               # Access Log entries about the fully provisioned fixture person
+    forms.js                    # 1-to-1 Forms for the Forms personas, stored encoded as the list holds them
     personas.js                 # ?asUser= personas (default: reviewer)
     roadmap.js
 

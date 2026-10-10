@@ -17,6 +17,14 @@ import {
   versionedExportName,
 } from '../lib/bank-artifacts.js';
 import { declaredBankVersion } from '../lib/bank-version.js';
+import { startOfLocalDay, toLocalDateKey } from '../lib/local-calendar.js';
+import { decodeFields, encodeFields } from './form-encoding.js';
+import {
+  assertFormColumns,
+  assertQueryColumn,
+  formColumnKinds,
+} from './form-items.js';
+import { CLOSED_FORM_STATUSES } from '../../form-types/contract.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
@@ -30,6 +38,12 @@ import { declaredBankVersion } from '../lib/bank-version.js';
 /** @typedef {import('../sharepoint-client.js').RoadmapItem} RoadmapItem */
 /** @typedef {import('../sharepoint-client.js').SupportLogEntry} SupportLogEntry */
 /** @typedef {import('../sharepoint-client.js').NewSupportLogEntry} NewSupportLogEntry */
+/** @typedef {import('../sharepoint-client.js').FormItem} FormItem */
+/** @typedef {import('../sharepoint-client.js').FormValue} FormValue */
+/** @typedef {import('../sharepoint-client.js').FormItemsFilter} FormItemsFilter */
+/** @typedef {import('../sharepoint-client.js').ListFormItemsOptions} ListFormItemsOptions */
+/** @typedef {import('../sharepoint-client.js').FormPatchResult} FormPatchResult */
+/** @typedef {import('../../form-types/contract.js').FormTypeDefinition} FormTypeDefinition */
 
 /**
  * @typedef {(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>} FetchImpl
@@ -908,6 +922,270 @@ export class HttpSharePointClient {
     }
   }
 
+  // --- Forms ---------------------------------------------------------------
+
+  /**
+   * Read a page of Forms from a Form Type's list, decoded.
+   *
+   * The read names its columns from the definition, so a column the Form Type
+   * does not declare never crosses the wire, and each Person column comes back
+   * with its login and display name. `next` is SharePoint's own continuation
+   * link, which already carries the filter, order and page size.
+   *
+   * @param {FormTypeDefinition} formType
+   * @param {ListFormItemsOptions} [opts]
+   * @returns {Promise<{ items: FormItem[], next: string | null }>}
+   */
+  async listFormItems(formType, opts = {}) {
+    let url;
+    if (opts.next) {
+      url = this._absolute(opts.next);
+    } else {
+      const query = formItemQuery(formType);
+      const expr = await this._formFilterExpr(formType, opts.filter ?? {});
+      if (expr) query.push(`$filter=${encodeURIComponent(expr)}`);
+      if (opts.orderBy) {
+        assertQueryColumn(formType, opts.orderBy.column, [
+          'person',
+          'date',
+          'choice',
+        ]);
+        const dir = opts.orderBy.dir === 'desc' ? ' desc' : '';
+        // Id breaks ties, so a page boundary between two Forms due the same
+        // day cannot show one twice or skip one.
+        query.push(
+          `$orderby=${encodeURIComponent(`${opts.orderBy.column}${dir},Id${dir}`)}`
+        );
+      }
+      if (opts.top !== undefined) query.push(`$top=${opts.top}`);
+      url = `${this._listItemsUrl(formType.listName)}?${query.join('&')}`;
+    }
+
+    if (opts.top === undefined && !opts.next) {
+      const all = await this._getAllPages(url, opts.signal);
+      return {
+        items: all.map((raw) => this._formItemFromWire(formType, raw)),
+        next: null,
+      };
+    }
+    const body = await this._read(url, opts.signal);
+    const page = Array.isArray(body?.value) ? body.value : [];
+    const next =
+      /** @type {string | undefined} */ (body?.['odata.nextLink']) ?? null;
+    return {
+      items: page.map((/** @type {unknown} */ raw) =>
+        this._formItemFromWire(formType, raw)
+      ),
+      next,
+    };
+  }
+
+  /**
+   * One Form, decoded, or `null` when there is no such item.
+   *
+   * @param {FormTypeDefinition} formType
+   * @param {string} id
+   * @param {{ signal?: AbortSignal }} [opts]
+   * @returns {Promise<FormItem | null>}
+   */
+  async getFormItem(formType, id, opts = {}) {
+    const url =
+      this._listItemUrl(formType.listName, id) +
+      `?${formItemQuery(formType).join('&')}`;
+    try {
+      const body = await this._read(url, opts.signal);
+      return this._formItemFromWire(formType, body);
+    } catch (err) {
+      if (/** @type {any} */ (err).status === 404) return null;
+      throw err;
+    }
+  }
+
+  /**
+   * Create a Form and return it as a read sees it.
+   *
+   * A create's response carries no expanded people, so the new item is read
+   * back once: that is what gives the caller the display names it just chose
+   * and the ETag its first save will need.
+   *
+   * @param {FormTypeDefinition} formType
+   * @param {Record<string, FormValue>} fields
+   * @returns {Promise<FormItem>}
+   */
+  async createFormItem(formType, fields) {
+    assertFormColumns(formType, fields);
+    const body = await this._write(
+      this._listItemsUrl(formType.listName),
+      'POST',
+      {},
+      JSON.stringify(
+        await this._formItemToWire(formType, encodeFields(formType, fields))
+      )
+    );
+    const id = body?.Id ?? /** @type {any} */ (body?.d)?.Id;
+    if (id === undefined || id === null || id === '') {
+      throw new Error(`The ${formType.formName} list returned no id`);
+    }
+    const item = await this.getFormItem(formType, String(id));
+    if (!item) {
+      throw new Error(`The new ${formType.formName} could not be read back`);
+    }
+    return item;
+  }
+
+  /**
+   * Field-level write to one Form, guarded by its ETag.
+   *
+   * Failure is a value, never a throw, in the same shape as a Case write, so
+   * a 412 reaches the save queue's conflict handling unchanged. A write naming
+   * a column the definition does not read is a bug in the caller and does
+   * throw, before anything is sent.
+   *
+   * @param {FormTypeDefinition} formType
+   * @param {string} id
+   * @param {Record<string, FormValue>} fields
+   * @param {string} etag
+   * @returns {Promise<FormPatchResult>}
+   */
+  async patchFormItem(formType, id, fields, etag) {
+    assertFormColumns(formType, fields);
+    // Outside the try: a fourth Form Action is the caller's bug, not a
+    // failed save the queue should retry.
+    const encoded = encodeFields(formType, fields);
+    try {
+      const item = await this._formItemToWire(formType, encoded);
+      await this._write(
+        this._listItemUrl(formType.listName, id),
+        'PATCH',
+        { 'If-Match': etag },
+        JSON.stringify(item)
+      );
+      // Re-read for the new ETag and the people's display names, scoped to
+      // nothing a caller could cancel, so a write is never half reported.
+      const fresh = await this.getFormItem(formType, id);
+      if (!fresh) return { ok: false, status: 404 };
+      return { ok: true, status: 200, data: fresh };
+    } catch (err) {
+      const status = /** @type {any} */ (err).status || 500;
+      return { ok: false, status };
+    }
+  }
+
+  /**
+   * A Form item from the wire: people reduced to a bare account and a display
+   * name, dates to the calendar date they fall on here, and every encoded
+   * column decoded.
+   *
+   * @param {FormTypeDefinition} formType
+   * @param {unknown} raw
+   * @returns {FormItem}
+   */
+  _formItemFromWire(formType, raw) {
+    const wire = /** @type {Record<string, any>} */ (raw ?? {});
+    /** @type {Record<string, unknown>} */
+    const stored = {};
+    for (const [column, kind] of formColumnKinds(formType)) {
+      const value = wire[column];
+      if (kind === 'person') {
+        this._learnLogin(value?.Name);
+        stored[column] = value?.Name
+          ? {
+              loginName: toBareAccount(String(value.Name)),
+              displayName: String(value.Title ?? ''),
+            }
+          : null;
+      } else if (kind === 'date') {
+        stored[column] =
+          typeof value === 'string' ? toLocalDateKey(value) : null;
+      } else {
+        stored[column] = value ?? null;
+      }
+    }
+    const { fields, problems } = decodeFields(formType, stored);
+    return {
+      id: String(wire.Id ?? ''),
+      etag: readEtag(wire),
+      created: typeof wire.Created === 'string' ? wire.Created : null,
+      modified: typeof wire.Modified === 'string' ? wire.Modified : null,
+      fields: /** @type {Record<string, FormValue>} */ (fields),
+      problems,
+    };
+  }
+
+  /**
+   * The body SharePoint takes for a Form write. A Person column is written by
+   * its `<Column>Id`, resolved from the account, and cleared with `null`; a
+   * date is written as the instant its calendar day begins here, which is the
+   * day a read in the same zone gives back. Free text arrives already encoded.
+   *
+   * @param {FormTypeDefinition} formType
+   * @param {Record<string, unknown>} encoded the write, through `encodeFields`
+   * @returns {Promise<Record<string, unknown>>}
+   */
+  async _formItemToWire(formType, encoded) {
+    const kinds = formColumnKinds(formType);
+    /** @type {Record<string, unknown>} */
+    const out = {};
+    for (const [column, value] of Object.entries(encoded)) {
+      const kind = kinds.get(column);
+      if (kind === 'person') {
+        const account = /** @type {any} */ (value)?.loginName ?? '';
+        out[`${column}Id`] = await this._ensureUserId(String(account));
+      } else if (kind === 'date') {
+        out[column] = value
+          ? startOfLocalDay(String(value)).toISOString()
+          : null;
+      } else {
+        out[column] = value === '' ? null : value;
+      }
+    }
+    return out;
+  }
+
+  /**
+   * The `$filter` for a Form list read, with the person resolved to the id
+   * the Person columns hold. An account that cannot be resolved rejects the
+   * read: dropping the condition would widen "my Forms" to every Form.
+   *
+   * @param {FormTypeDefinition} formType
+   * @param {FormItemsFilter} filter
+   * @returns {Promise<string>}
+   */
+  async _formFilterExpr(formType, filter) {
+    /** @type {string[]} */
+    const conds = [];
+    if (filter.involving) {
+      const id = await this._resolveUserId(filter.involving);
+      conds.push(
+        `(EmployeeId eq ${id} or CurrentFirstLineManagerId eq ${id} or ` +
+          `CurrentSecondLineManagerId eq ${id})`
+      );
+    }
+    if (filter.closed === true) {
+      conds.push(
+        `(${CLOSED_FORM_STATUSES.map((s) => `Status eq '${escapeOData(s)}'`).join(' or ')})`
+      );
+    } else if (filter.closed === false) {
+      // A Form with no Status yet is open, and `ne` alone would not return it.
+      conds.push(
+        `(Status eq null or (${CLOSED_FORM_STATUSES.map((s) => `Status ne '${escapeOData(s)}'`).join(' and ')}))`
+      );
+    }
+    if (filter.window) {
+      const { column, from, to } = filter.window;
+      assertQueryColumn(formType, column, ['date']);
+      if (from) {
+        conds.push(`${column} ge '${startOfLocalDay(from).toISOString()}'`);
+      }
+      if (to) {
+        const end = startOfLocalDay(to);
+        end.setDate(end.getDate() + 1);
+        conds.push(`${column} lt '${end.toISOString()}'`);
+      }
+    }
+    return conds.join(' and ');
+  }
+
   // --- internals -----------------------------------------------------------
 
   /**
@@ -1562,6 +1840,28 @@ function personFromEntity(e) {
   const email = e?.EntityData?.Email;
   if (email) out.email = String(email);
   return out;
+}
+
+/**
+ * The `$select` and `$expand` for a Form list read, from the definition: every
+ * column it reads, each Person column's login and display name, and the stamps.
+ *
+ * @param {FormTypeDefinition} formType
+ * @returns {string[]}
+ */
+function formItemQuery(formType) {
+  const select = ['Id', 'Created', 'Modified'];
+  /** @type {string[]} */
+  const expand = [];
+  for (const [column, kind] of formColumnKinds(formType)) {
+    if (kind === 'person') {
+      select.push(`${column}/Name`, `${column}/Title`);
+      expand.push(column);
+    } else {
+      select.push(column);
+    }
+  }
+  return [`$select=${select.join(',')}`, `$expand=${expand.join(',')}`];
 }
 
 /** @param {Record<string, unknown>} item */
