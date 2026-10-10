@@ -6,6 +6,7 @@ import {
   NO_VALUE,
   formatDate,
   formatDateLike,
+  formatTimeOfDay,
   formatTimestamp,
 } from '../src/lib/format-datetime.js';
 
@@ -103,4 +104,14 @@ test('a reference number that merely starts with digits is left exactly as store
 test('a non-string value of unknown meaning is shown as its own text', () => {
   assert.equal(formatDateLike(42), '42');
   assert.equal(formatDateLike(true), 'true');
+});
+
+test('a time of day is the 24-hour clock where the reader is', () => {
+  inZone('Europe/London', () => {
+    assert.equal(formatTimeOfDay('2026-06-18T14:32:00Z'), '15:32');
+    assert.equal(formatTimeOfDay(new Date('2026-12-01T08:05:00Z')), '08:05');
+  });
+  for (const value of [null, '', 'not a date']) {
+    assert.equal(formatTimeOfDay(value), NO_VALUE, String(value));
+  }
 });

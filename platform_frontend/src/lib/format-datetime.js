@@ -124,6 +124,21 @@ export function formatTimestamp(value, fallback = NO_VALUE) {
 }
 
 /**
+ * The time of day of an instant, as `15:32` on the 24-hour clock in the
+ * viewer's own zone. For a surface that only ever describes today, such as
+ * when a page last saved.
+ *
+ * @param {unknown} value An ISO instant or a `Date`.
+ * @param {string} [fallback] Shown when there is no readable instant.
+ * @returns {string}
+ */
+export function formatTimeOfDay(value, fallback = NO_VALUE) {
+  const instant = instantOf(value);
+  if (instant === null) return fallback;
+  return `${twoDigits(instant.getHours())}:${twoDigits(instant.getMinutes())}`;
+}
+
+/**
  * The named-month day on its own — `18 Jun 2026`. Used where a timestamp is
  * asked for and only a calendar date exists.
  *

@@ -1237,6 +1237,27 @@
             >(<span class="str">'conflict'</span>);
           </div>
         </div>
+        <div class="concept-card c-etag">
+          <span class="concept-icon">⇄</span>
+          <div class="concept-name">Save target</div>
+          <p class="concept-desc">
+            The queue never names a Case. Its two requests and its conflict rule
+            sit behind a target: <code>patch</code>, <code>get</code>,
+            <code>baseline</code> and <code>isConflict</code>. The Case target
+            is the default and conflicts only when Answers moved; a Form's
+            target will conflict only when a field being saved moved. The scenes
+            below walk the Case target. Each successful save also stamps
+            <code>lastSavedAt</code>, shown as "Last saved 15:32".
+          </p>
+          <div class="concept-api">
+            <span class="kw">new</span> SaveQueue(client);
+            <span class="cmt">// Cases</span><br />
+            <span class="kw">new</span> SaveQueue(client, { target });<br />
+            <span class="cmt">// 412 → target.isConflict(baseline, fresh,</span
+            ><br />
+            <span class="cmt">// fieldsBeingSaved)</span>
+          </div>
+        </div>
       </section>
 
       <!-- ══ DEBOUNCE DEMO ══════════════════════════════════════════ -->
