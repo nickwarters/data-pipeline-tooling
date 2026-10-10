@@ -16,6 +16,8 @@ from readers.sharepoint_cases import (
     CaseObservationHistoryReader,
     ConversationMessagesReader,
     CurrentCasesReader,
+    current_cases_with_brand,
+    stand_in_brand,
 )
 from tests.framework_testing import rows_of
 from tools.medallion import medallion
@@ -182,6 +184,7 @@ def test_describe_and_data_locations_delegate_to_the_reader_underneath(
         AnswerActionsReader,
         AppealsReader,
         CaseObservationHistoryReader,
+        current_cases_with_brand,
     ],
 )
 def test_an_empty_base_dir_fails_the_way_the_underlying_reader_already_fails(
@@ -196,3 +199,89 @@ def test_an_empty_base_dir_fails_the_way_the_underlying_reader_already_fails(
     # from the same message they would have seen before.
     with pytest.raises(sqlite3.OperationalError, match="unable to open database file"):
         reader.read()
+
+
+# --- the stand-in brand -------------------------------------------------------
+
+MANY_CASES = [{"case_id": f"case-{n}", "status": "Open"} for n in range(30)]
+
+
+def test_the_stand_in_brand_is_one_of_three_and_stable_for_a_case(tmp_path):
+    _seed(tmp_path, "case_current", MANY_CASES)
+
+    first = rows_of(current_cases_with_brand(tmp_path).read())
+    again = rows_of(current_cases_with_brand(tmp_path).read())
+
+    assert first == again
+    assert first == [
+        {**case, "brand": stand_in_brand(case["case_id"])} for case in MANY_CASES
+    ]
+    # Spread over all three, not one value for everyone.
+    assert {row["brand"] for row in first} == {"brand 1", "brand 2", "brand 3"}
+
+
+def test_the_stand_in_brand_depends_on_the_case_id_alone():
+    # Pinned: a hash of the id, so a Case keeps its brand from run to run and
+    # on every machine, and the accumulated tables do not reshuffle.
+    assert [stand_in_brand(c) for c in ("case-0", "case-1", "c-2")] == [
+        "brand 3",
+        "brand 2",
+        "brand 1",
+    ]
+
+
+def test_named_columns_may_name_brand_and_come_back_in_that_order(tmp_path):
+    _seed(tmp_path, "case_current", CASES)
+
+    narrowed = current_cases_with_brand(tmp_path, columns=["brand", "status"]).read()
+
+    # case_id is fetched to derive the brand, but not returned unasked.
+    assert list(narrowed.columns) == ["brand", "status"]
+    assert rows_of(narrowed) == [
+        {"brand": stand_in_brand("c-1"), "status": "Open"},
+        {"brand": stand_in_brand("c-2"), "status": "Completed"},
+    ]
+    named = current_cases_with_brand(tmp_path, columns=["case_id", "brand"]).read()
+    assert list(named.columns) == ["case_id", "brand"]
+
+
+def test_named_columns_without_brand_narrow_as_the_plain_reader_does(tmp_path):
+    _seed(tmp_path, "case_current", CASES)
+
+    narrowed = current_cases_with_brand(tmp_path, columns=["status"]).read()
+
+    assert rows_of(narrowed) == [{"status": "Open"}, {"status": "Completed"}]
+
+
+def test_the_stand_in_replaces_a_brand_the_table_carries(tmp_path):
+    _seed(tmp_path, "case_current", [{**CASES[0], "brand": "landed"}])
+
+    [row] = rows_of(current_cases_with_brand(tmp_path).read())
+
+    assert row["brand"] == stand_in_brand("c-1")
+    assert list(row) == ["case_id", "status", "assigned_reviewer_name", "brand"]
+
+
+def test_a_current_table_without_case_id_fails_the_read_naming_it(tmp_path):
+    _seed(tmp_path, "case_current", [{"status": "Open"}])
+
+    with pytest.raises(ValidationError, match="missing required column.*case_id"):
+        current_cases_with_brand(tmp_path).read()
+    with pytest.raises(ValidationError, match="missing required column.*case_id"):
+        current_cases_with_brand(tmp_path, columns=["status", "brand"]).read()
+
+
+def test_the_branded_reader_says_it_is_a_stand_in_and_delegates_locations(tmp_path):
+    _seed(tmp_path, "case_current", CASES)
+    reader = current_cases_with_brand(tmp_path)
+
+    described = reader.describe()
+    assert "stand-in brand" in described
+    assert "case_current" in described
+    assert str(tmp_path / "sharepoint_cases" / "gold.db") in described
+    assert reader.data_locations == []
+    reader.read()
+    gold_db = (tmp_path / "sharepoint_cases" / "gold.db").as_posix()
+    assert reader.data_locations == [
+        {"namespace": f"sqlite:{gold_db}", "name": "case_current"}
+    ]

@@ -1,15 +1,19 @@
 """Shared Readers for the ``sharepoint_cases`` published datasets.
 
 They pass through rows without validation or freshness policy, narrowed to the
-``columns`` a consumer names.
+``columns`` a consumer names. The one exception is ``current_cases_with_brand``,
+a deliberate, temporary stand-in that attaches a ``brand`` no source carries yet.
 """
 
 from __future__ import annotations
 
+import hashlib
 import os
 from collections.abc import Sequence
 
-from framework.core import Dataset, Reader
+import pandas as pd
+
+from framework.core import Dataset, Reader, ValidationError
 from tools.medallion import medallion
 from tools.store import StoreRegistry
 
@@ -22,6 +26,11 @@ _ANSWER_TABLE = "answer"
 _ANSWER_ACTION_TABLE = "answer_action"
 _APPEAL_TABLE = "appeal"
 _CASE_HISTORY_TABLE = "case_version"
+_CASE_ID_COLUMN = "case_id"
+_BRAND_COLUMN = "brand"
+
+# The values the stand-in brand takes.
+STAND_IN_BRANDS = ("brand 1", "brand 2", "brand 3")
 
 
 def _gold_reader(
@@ -62,6 +71,92 @@ class CurrentCasesReader:
 
     def describe(self) -> str:
         return self._reader.describe()
+
+
+def stand_in_brand(case_id: str) -> str:
+    """The stand-in brand of the Case ``case_id``: one of ``STAND_IN_BRANDS``.
+
+    Picked by a hash of the Case id rather than at random, so a Case keeps its
+    brand from read to read and from run to run, on every machine.
+    """
+    digest = hashlib.sha256(str(case_id).encode("utf-8")).hexdigest()
+    return STAND_IN_BRANDS[int(digest, 16) % len(STAND_IN_BRANDS)]
+
+
+def current_cases_with_brand(
+    base_dir: str | os.PathLike[str],
+    *,
+    columns: Sequence[str] | None = None,
+) -> Reader:
+    """The current Cases, each with a stand-in ``brand`` attached.
+
+    **A stand-in, and a deliberate breach of G5** (a Shared Reader does no
+    shaping, ``docs/shared-readers.md``): no source reachable from Sync carries
+    Brand yet, so this attaches one of ``STAND_IN_BRANDS`` to each Case, picked
+    by ``stand_in_brand`` from its ``case_id``, so that what reads it can group
+    by brand now. It replaces any ``brand`` the table carries. The day a real
+    source carries Brand, this goes and its consumers read ``CurrentCasesReader``
+    again.
+
+    ``columns`` narrows the read as it does on ``CurrentCasesReader``, and may
+    name ``brand``: the rest is fetched (with ``case_id``, which the brand is
+    derived from, whether named or not) and the result comes back in the order
+    named.
+    """
+    return _CurrentCasesWithBrandReader(base_dir, columns=columns)
+
+
+class _CurrentCasesWithBrandReader:
+    """``CurrentCasesReader`` plus a stand-in ``brand``; see
+    ``current_cases_with_brand``."""
+
+    def __init__(
+        self,
+        base_dir: str | os.PathLike[str],
+        *,
+        columns: Sequence[str] | None,
+    ) -> None:
+        self._columns = None if columns is None else list(columns)
+        fetched = None
+        if columns is not None:
+            # Names match as the read matches them, ignoring ASCII case.
+            fetched = [c for c in columns if c.lower() != _BRAND_COLUMN]
+            if not any(c.lower() == _CASE_ID_COLUMN for c in fetched):
+                fetched.append(_CASE_ID_COLUMN)
+        self._reader = CurrentCasesReader(base_dir, columns=fetched)
+
+    @property
+    def data_locations(self) -> list[dict[str, str]]:
+        return self._reader.data_locations
+
+    def read(self) -> Dataset:
+        frame = self._reader.read().to_pandas()
+        case_id = next((c for c in frame.columns if c.lower() == _CASE_ID_COLUMN), None)
+        if case_id is None:
+            raise ValidationError(
+                f"{_CASE_CURRENT_TABLE} is missing required column(s): "
+                f"{_CASE_ID_COLUMN} (the stand-in brand is derived from it)"
+            )
+        brand = next(
+            (c for c in self._columns or () if c.lower() == _BRAND_COLUMN),
+            _BRAND_COLUMN,
+        )
+        frame = frame.drop(
+            columns=[c for c in frame.columns if c.lower() == _BRAND_COLUMN]
+        )
+        frame[brand] = [
+            None if pd.isna(value) else stand_in_brand(value)
+            for value in frame[case_id]
+        ]
+        if self._columns is not None:
+            frame = frame[self._columns]
+        return Dataset.from_pandas(frame)
+
+    def describe(self) -> str:
+        return (
+            "the current Cases with a stand-in brand, picked from each case_id: "
+            + self._reader.describe()
+        )
 
 
 class ConversationMessagesReader:
