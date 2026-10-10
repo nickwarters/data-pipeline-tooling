@@ -223,7 +223,11 @@ None. Each group-by produces its declared grain. Every table is gated by its
 - Cost grows with the history kept. On a year of registry history for 100
   pipelines of 10 daily steps (398k records) the whole run takes about 34 s,
   of which the percentile table is about 16 s to build and write (797k rows).
-  Pruning the registry keeps it bounded.
+  Pruning the registry (`python -m cli prune-runs`) keeps it bounded; the
+  tables then cover only the history the registry still holds.
+- A registry record with no `timestamp` cannot be placed in time and is left
+  out. A run whose records name no pipeline is filed under `(unknown)` rather
+  than dropped.
 - The reductions read the registry's *stored* forms (`warn_hits` as JSON text,
   `committed` as 0/1) directly rather than through `RunRegistry`'s decode; a
   `warn_hits` value that is not a JSON list counts as no hits.

@@ -1,4 +1,4 @@
-# The operator CLI — run, orchestrate, migrate, status, runs, log
+# The operator CLI — run, orchestrate, migrate, status, runs, log, prune-runs
 
 The framework is import-only, but it is also runnable as a tool:
 `python -m cli <command>` is the single entry point for both authoring
@@ -7,7 +7,8 @@ operator side is a small command surface for the everyday tasks that would
 otherwise need a hand-written wrapper script: **run** a
 pipeline by its path, **orchestrate** scheduled due work, **migrate** the
 databases they write into, check its **status**,
-list recent **runs**, and inspect a run **log**. It is a thin shell
+list recent **runs**, inspect a run **log**, and keep the run registry to a
+size with **prune-runs**. It is a thin shell
 over the public `framework.run` execution surface (`run_pipeline`),
 `tools.orchestration` scheduling (`Orchestrator`), and the `RunLog` /
 `RunRegistry` observability seam — everything stays local SQLite + JSONL, with
@@ -49,7 +50,11 @@ back, so one orchestration pass joins to every pipeline execution it triggered
 records remain in `RunLog` / `RunRegistry` only.
 
 The read-only commands (`status`, `runs`, `log`) are **safe to run while
-pipelines are running**. Opening a registry and migrating it are separate
+pipelines are running**. `prune-runs` without `--apply` deletes nothing, but it
+is not read-only: it first catches the registry up from the run logs, which
+inserts any records still waiting there and takes the same brief write lock
+every ingest takes. It is safe beside running pipelines for the reason ingest
+is, not because it writes nothing. Opening a registry and migrating it are separate
 steps: against an up-to-date file a query opens a connection and reads
 without executing a single write statement, so it takes no write lock and cannot
 collide with a running pipeline's commit. The exception is the *first* open of a
@@ -879,6 +884,56 @@ The `data_locations` field — the file(s) or table(s) a read or write step
 actually touched — is in the JSONL but is deliberately not rendered on these
 lines: a glob read carries one entry per matched file. Read the log file itself,
 or the run registry, to answer "which file produced this run?".
+
+## `prune-runs` — keep the run registry to a size
+
+```sh
+python -m cli prune-runs [--base-dir DIR] [--env ENV] --older-than DAYS [--apply]
+```
+
+Nothing prunes the run registry on its own, and everything that reads it —
+`status`, freshness checks, `pipelines/pipeline_run_metric` — gets slower as it
+grows. `prune-runs` deletes the records of runs that ended more than `DAYS`
+days ago. Without `--apply` it deletes nothing and says what it would delete;
+run it once without, read the line, then again with `--apply`. It never runs
+by itself. `DAYS` is 0 or more: `--older-than 0` means every run that ended
+before today began. A negative number is refused, because it would put the
+cutoff in the future and reach today's runs, including any still running.
+
+```console
+$ python -m cli prune-runs --base-dir /data --older-than 400
+would delete 181188 record(s) of 16600 run(s) that ended before 2025-09-04; kept 3 older run(s) that are a pipeline's latest run, or a step's latest success or write
+nothing was deleted; add --apply to delete them
+```
+
+However old they are, it keeps each pipeline's latest run (what `status`
+shows), each pipeline's and step's latest success (what a freshness check looks
+for), and each step's latest committed write (what `runs --table` looks for; a
+step can succeed without writing, like a quarantine with nothing to reject), so
+a yearly pipeline is not mistaken for one that never ran. It catches the
+registry up from the run logs first, so nothing waiting in a log arrives after
+the prune; that ingest is a write even when nothing is deleted.
+
+Keep at least the longest window you report on, plus the lag its change is
+measured against: `pipeline_run_metric`'s tables only cover what the registry
+still holds, and the 90-day percentiles' 28-day change compares with a 90-day
+window ending 28 days earlier (or up to a week before that), so a full set of
+figures needs 90 + 28 + 7 = 125 days. About 400 days keeps a year-on-year view.
+
+A pruned success no longer counts as "already ran this date". An item held to
+one run per run date
+([ADR-0031](adr/0031-a-scheduled-item-runs-once-per-run-date-by-default.md)) is
+run again by `orchestrate --run-date` for a
+date whose successful run was pruned; dates inside the retention window are
+unaffected.
+
+The run logs under `_runs/` are left alone: they are the record the registry is
+built from, and rewriting a file a running pipeline may be appending to could
+lose its lines. They cost disk, not time, because ingest reads only what was
+appended since last time. If a log is ever truncated or replaced, though,
+ingest re-reads it whole and the pruned runs in it come back; prune again
+afterwards. The registry file does not shrink when rows are deleted (SQLite
+reuses the space); it stops growing.
 
 ## Errors
 

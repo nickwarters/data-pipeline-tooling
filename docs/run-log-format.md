@@ -406,6 +406,16 @@ idempotency — no record is double-counted even if earlier content is revisited
 **Idempotent.** A second call on the same unchanged file returns 0 and costs
 only a stat + DB lookup.
 
+**Retention.** Nothing deletes from the registry on its own. `RunRegistry.prune`
+(`python -m cli prune-runs`, see
+[operator-cli.md](operator-cli.md#prune-runs--keep-the-run-registry-to-a-size))
+deletes the records of runs that ended before a date, keeping each pipeline's
+latest run and each address's latest success and latest committed write. It
+does not touch the logs, so a log that is later truncated or replaced is
+re-read whole and its pruned runs come back. A pruned success also leaves
+`succeeded_logical_run_ids`, so re-orchestrating that run date runs its
+once-per-date items again.
+
 **Schema migration.** Registry databases on the share are long-lived, so opening
 one is also how it catches up with the declaration: `ensure_columns` adds any
 declared column the table lacks (nullable, in place — never a re-create) and

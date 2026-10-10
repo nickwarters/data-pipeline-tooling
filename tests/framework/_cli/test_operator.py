@@ -10,12 +10,18 @@ lives in ``tests/integration/test_operator_cli_e2e.py``. Everything runs on loca
 SQLite only, with no external services.
 """
 
+import datetime as dt
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
+
+import cli
+from tools.observability.timestamps import local_now, utc_now_iso
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURES = ROOT / "tests" / "fixtures"
@@ -573,6 +579,87 @@ def test_status_without_a_registry_reports_clear_error(tmp_path):
     assert "Traceback" not in result.stderr
 
 
+def test_prune_runs_reports_first_and_deletes_only_with_apply(tmp_path):
+    log = tmp_path / "_runs" / "cases.log"
+    log.parent.mkdir()
+    lines = []
+    for run_id, day in (("old", "2020-01-01"), ("older", "2019-01-01")):
+        for step in ("read", "run"):
+            lines.append(
+                {
+                    "timestamp": f"{day}T07:00:00+00:00",
+                    "pipeline_run_id": run_id,
+                    "pipeline": "cases",
+                    "step": step,
+                    "status": "ok",
+                }
+            )
+    log.write_text("".join(json.dumps(line) + "\n" for line in lines))
+    # Nothing has ingested the log yet: prune catches the registry up first.
+    args = ("prune-runs", "--base-dir", str(tmp_path), "--older-than", "365")
+
+    reported = _cli(*args)
+    assert reported.returncode == 0, reported.stderr
+    # The newer run is the pipeline's latest, so only the older one goes.
+    assert "would delete 2 record(s) of 1 run(s)" in reported.stdout
+    assert "--apply" in reported.stdout
+
+    applied = _cli(*args, "--apply")
+    assert applied.returncode == 0, applied.stderr
+    assert "deleted 2 record(s) of 1 run(s)" in applied.stdout
+    assert "would delete 0 record(s)" in _cli(*args).stdout
+
+
+def _cases_log(tmp_path, *runs):
+    """A ``cases`` run log of one read and summary per ``(run_id, timestamp)``."""
+    log = tmp_path / "_runs" / "cases.log"
+    log.parent.mkdir()
+    lines = [
+        {
+            "timestamp": at,
+            "pipeline_run_id": run_id,
+            "pipeline": "cases",
+            "step": step,
+            "status": "ok",
+        }
+        for run_id, at in runs
+        for step in ("read", "run")
+    ]
+    log.write_text("".join(json.dumps(line) + "\n" for line in lines))
+
+
+@pytest.mark.parametrize("days", ["-5", "-400", "a year"])
+def test_prune_runs_refuses_a_negative_age(tmp_path, capsys, days):
+    # A negative age puts the cutoff in the future, where it reaches today's
+    # runs, including any still being written.
+    _cases_log(tmp_path, ("today", utc_now_iso()))
+    args = ["prune-runs", "--base-dir", str(tmp_path), "--older-than", days]
+
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main([*args, "--apply"])
+
+    assert exit_info.value.code == 2
+    assert "--older-than" in capsys.readouterr().err
+    assert not (tmp_path / "_registry").exists()
+
+
+def test_prune_runs_older_than_zero_prunes_everything_before_today(tmp_path, capsys):
+    # In process, so the suite's pinned calendar zone sets "today".
+    today = local_now().date()
+    _cases_log(
+        tmp_path,
+        ("two-days-ago", f"{today - dt.timedelta(days=2)}T12:00:00+00:00"),
+        ("yesterday", f"{today - dt.timedelta(days=1)}T12:00:00+00:00"),
+        ("today", utc_now_iso()),
+    )
+    args = ["prune-runs", "--base-dir", str(tmp_path), "--older-than", "0"]
+
+    assert cli.main([*args, "--apply"]) == 0
+
+    out = capsys.readouterr().out
+    assert f"deleted 4 record(s) of 2 run(s) that ended before {today}" in out
+
+
 def test_log_without_a_log_file_reports_clear_error(tmp_path):
     result = _cli("log", "_source", "--base-dir", str(tmp_path))
 
@@ -876,7 +963,7 @@ def test_every_usage_example_in_the_module_docstring_parses():
     import cli.operator as operator
 
     examples = re.findall(r"^    python -m cli (.+)$", operator.__doc__, re.MULTILINE)
-    assert len(examples) == 7, examples
+    assert len(examples) == 8, examples
     parser = operator.build_parser()
     for example in examples:
         args = shlex.split(example.replace("<", "_").replace(">", "_"))

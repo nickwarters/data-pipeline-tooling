@@ -15,6 +15,7 @@ Run from the repository root so the import-only ``framework`` package resolves::
     python -m cli runs --base-dir /data --table case_current
     python -m cli log cases --base-dir /data --pipeline-run-id <pipeline-run-id>
     python -m cli migrate --base-dir /data --check
+    python -m cli prune-runs --base-dir /data --older-than 400 --apply
 
 The base directory is the option ``--base-dir`` (or ``--env <name>``, which
 resolves one), never a positional argument.
@@ -73,6 +74,7 @@ from tools.migrations import (
     discover_targets,
 )
 from tools.observability.run_store import RunStore
+from tools.observability.timestamps import local_now
 from tools.orchestration import Orchestrator
 from tools.store import StoreRegistry
 
@@ -557,6 +559,30 @@ def _status(args: argparse.Namespace) -> int:
     return 0
 
 
+def _prune_runs(args: argparse.Namespace) -> int:
+    base_dir = _base_dir_or_report(args)
+    if base_dir is None:
+        return 1
+    store = RunStore(base_dir)
+    if not store.registry_path.exists() and not store.runs_dir.exists():
+        _load_registry_or_report(base_dir)  # says there is none
+        return 1
+    # Ingest first: a record still waiting in a log would otherwise arrive
+    # after the prune and outlive it.
+    registry = store.catch_up()
+    before = local_now().date() - dt.timedelta(days=args.older_than)
+    result = registry.prune(before, apply=args.apply)
+    verb = "deleted" if result.applied else "would delete"
+    print(
+        f"{verb} {result.records} record(s) of {result.runs} run(s) that ended "
+        f"before {result.before.isoformat()}; kept {result.kept_runs} older run(s) "
+        "that are a pipeline's latest run, or a step's latest success or write"
+    )
+    if not result.applied and result.runs:
+        print("nothing was deleted; add --apply to delete them")
+    return 0
+
+
 def register(sub) -> None:
     """Add the operator commands to the unified ``python -m cli`` CLI."""
     run = sub.add_parser("run", help="run a pipeline by its pipelines/ path")
@@ -710,6 +736,24 @@ def register(sub) -> None:
     status.add_argument("--subject", help="narrow to a subject's pipelines, e.g. cases")
     status.set_defaults(func=_status)
 
+    prune = sub.add_parser(
+        "prune-runs",
+        help="delete old runs from the run registry (reports only, without --apply)",
+    )
+    _add_base_dir_args(prune)
+    prune.add_argument(
+        "--older-than",
+        dest="older_than",
+        type=_days,
+        required=True,
+        metavar="DAYS",
+        help="runs that ended more than DAYS days ago (0: before today)",
+    )
+    prune.add_argument(
+        "--apply", action="store_true", help="delete them; without it, only report"
+    )
+    prune.set_defaults(func=_prune_runs)
+
     log = sub.add_parser("log", help="inspect/summarize a run log file")
     _add_base_dir_args(log)
     log.add_argument("subject", help="the subject whose _runs/<subject>.log to read")
@@ -739,6 +783,24 @@ def _date(value: str) -> dt.date:
         raise argparse.ArgumentTypeError(
             f"expected YYYY-MM-DD date, got {value!r}"
         ) from exc
+
+
+def _days(value: str) -> int:
+    """An argparse ``type`` for ``prune-runs --older-than``: 0 or more days.
+
+    0 is allowed and means every run that ended before today began. A negative
+    number is refused: it would put the cutoff in the future, where it reaches
+    today's runs, including any still being written.
+    """
+    try:
+        days = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"expected a whole number of days, got {value!r}"
+        ) from exc
+    if days < 0:
+        raise argparse.ArgumentTypeError(f"expected 0 or more days, got {days}")
+    return days
 
 
 def _param(value: str) -> tuple[str, str]:

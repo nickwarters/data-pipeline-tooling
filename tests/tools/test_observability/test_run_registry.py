@@ -177,6 +177,117 @@ def test_latest_run_per_pipeline_seeks_an_index_rather_than_scanning(tmp_path):
     assert seeks_index("inner_r"), plan
 
 
+def _run(run_id, pipeline, day, status="ok", step_status=None):
+    """A run of one ``read`` step and its summary, on ``day`` at 07:00 UTC."""
+    at = f"{day}T07:00:00+00:00"
+    return [
+        _record(run_id, pipeline, "read", step_status or status, at),
+        _record(run_id, pipeline, "run", status, at),
+    ]
+
+
+def _pruned_registry(tmp_path, *runs):
+    registry = RunRegistry(tmp_path / "registry.db")
+    log_path = tmp_path / "runs.log"
+    _write_records(log_path, [record for run in runs for record in run])
+    registry.ingest(log_path)
+    return registry
+
+
+def _run_ids(registry):
+    return {r["pipeline_run_id"] for r in registry.query_runs()}
+
+
+def test_prune_deletes_old_runs_and_keeps_recent_ones(tmp_path):
+    registry = _pruned_registry(
+        tmp_path,
+        _run("old-1", "cases", "2025-01-01"),
+        _run("old-2", "cases", "2025-01-02"),
+        _run("new-1", "cases", "2026-06-01"),
+        _run("new-2", "orders", "2026-06-02"),
+    )
+
+    result = registry.prune(date(2026, 1, 1), apply=True)
+
+    assert (result.runs, result.records, result.kept_runs) == (2, 4, 0)
+    assert _run_ids(registry) == {"new-1", "new-2"}
+    # Asking again finds nothing more: what it keeps is stable.
+    assert registry.prune(date(2026, 1, 1), apply=True).runs == 0
+
+
+def test_prune_reports_without_apply_and_deletes_nothing(tmp_path):
+    registry = _pruned_registry(
+        tmp_path,
+        _run("old", "cases", "2025-01-01"),
+        _run("new", "cases", "2026-06-01"),
+    )
+
+    result = registry.prune(date(2026, 1, 1))
+
+    assert (result.runs, result.records, result.applied) == (1, 2, False)
+    assert _run_ids(registry) == {"old", "new"}
+
+
+def test_prune_keeps_what_status_and_freshness_look_up_however_old(tmp_path):
+    registry = _pruned_registry(
+        tmp_path,
+        # A yearly pipeline: its only run is old, and it is its latest.
+        _run("yearly", "annual", "2025-01-01"),
+        # Its last success was long ago; every run since failed.
+        _run("last-good", "cases", "2025-01-01"),
+        _run("old-failure", "cases", "2025-01-02", status="error"),
+        _run("failing", "cases", "2026-06-01", status="error"),
+    )
+
+    result = registry.prune(date(2026, 1, 1), apply=True)
+
+    assert _run_ids(registry) == {"yearly", "last-good", "failing"}
+    assert result.kept_runs == 2
+    assert registry.latest_success("cases")["pipeline_run_id"] == "last-good"
+    assert registry.latest_success("cases.read")["pipeline_run_id"] == "last-good"
+    latest = {r["pipeline"]: r for r in registry.latest_run_per_pipeline()}
+    assert latest["annual"]["pipeline_run_id"] == "yearly"
+
+
+def test_prune_keeps_the_run_that_last_committed_each_steps_write(tmp_path):
+    # A feed quarantined rows once, long ago; every quarantine step since was
+    # ok with nothing to reject, so committed nothing. The old run is the one
+    # ``runs --table rejects`` names, though it is neither the latest run nor
+    # the step's latest success.
+    rejects = {"namespace": "sqlite:/data/feed/quarantine.db", "name": "rejects"}
+
+    def quarantined(run_id, day, *, committed):
+        at = f"{day}T07:00:00+00:00"
+        step = _record(run_id, "feed", "quarantine", "ok", at)
+        step["committed"] = committed
+        step["data_locations"] = [rejects] if committed else []
+        return [step, _record(run_id, "feed", "run", "ok", at)]
+
+    registry = _pruned_registry(
+        tmp_path,
+        quarantined("wrote-rejects", "2025-01-01", committed=True),
+        quarantined("nothing-rejected", "2026-06-01", committed=False),
+    )
+    assert registry.last_write_of("rejects")["pipeline_run_id"] == "wrote-rejects"
+
+    result = registry.prune(date(2026, 1, 1), apply=True)
+
+    assert (result.runs, result.kept_runs) == (0, 1)
+    assert registry.last_write_of("rejects")["pipeline_run_id"] == "wrote-rejects"
+
+
+def test_prune_dates_a_run_by_its_last_record(tmp_path):
+    # A run that began before the cutoff and finished after it is not old.
+    records = [
+        _record("spans", "cases", "read", "ok", "2025-12-31T23:00:00+00:00"),
+        _record("spans", "cases", "run", "ok", "2026-01-01T01:00:00+00:00"),
+        *_run("newer", "cases", "2026-06-01"),
+    ]
+    registry = _pruned_registry(tmp_path, records)
+
+    assert registry.prune(date(2026, 1, 1)).runs == 0
+
+
 def _run_failing_pipeline(log_path, name="cases"):
     """Run a failing pre-validation and return its run ID."""
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
