@@ -4,7 +4,9 @@ Each function takes the Sync datasets as read and returns one Aggregate table;
 nothing here reads or writes. ``case_stage_dwell``, ``case_hold`` and
 ``case_backlog`` reduce the observation history -- put in order once, by
 ``ordered_history`` -- and so measure what the polls saw: a change reversed
-between two polls was never observed. Every table is
+between two polls was never observed. Every table with a ``brand`` groups by
+the brand of each Case in the current Cases, a stand-in until a source carries
+Brand; a history Case no longer current is ``(unknown)``. Every table is
 stamped with Sync's own ``as_of_utc`` and open intervals are measured to it, so
 a re-run over the same snapshot gives the same numbers.
 
@@ -62,6 +64,7 @@ from .schema import (
 
 AS_OF_COLUMN = "as_of_utc"
 CASE_ID_COLUMN = "case_id"
+BRAND_COLUMN = "brand"
 
 # The Sync subject's Case identity, as its history carries it. The history is
 # read below the layer that derives ``case_id``, so the natural key stands in.
@@ -69,7 +72,8 @@ HISTORY_KEY = ("case_type", "source_item_id")
 
 # Reporting fills, not source values -- literal keys rather than NULL so an
 # aggregate's grain has no hole a reader may silently drop. The same spellings
-# the Sync subject's own aggregates use.
+# the Sync subject's own aggregates use. ``(unknown)`` is now only the brand of a
+# Case the current Cases do not hold.
 UNKNOWN_BRAND = "(unknown)"
 UNASSIGNED = "(unassigned)"
 UNDECIDED = "(undecided)"
@@ -186,9 +190,13 @@ HISTORY_COLUMNS = (
     "placed_on_hold_at",
 )
 BACKLOG_COLUMNS = (*HISTORY_COLUMNS, "reportable_at", "completed_at", "voided_at")
+# What the history reductions take from the current Cases: each Case's brand,
+# by the identity the history carries.
+CASE_BRAND_COLUMNS = (*HISTORY_KEY, BRAND_COLUMN)
 CURRENT_COLUMNS = (
     CASE_ID_COLUMN,
     "case_type",
+    BRAND_COLUMN,
     "status",
     "assigned_reviewer_manager_name",
     "responsible_party_manager_name",
@@ -203,6 +211,7 @@ CURRENT_COLUMNS = (
 )
 LIFECYCLE_COLUMNS = (
     "case_type",
+    BRAND_COLUMN,
     "status",
     "assigned_reviewer_name",
     "created",
@@ -213,6 +222,7 @@ LIFECYCLE_COLUMNS = (
 )
 OUTCOME_COLUMNS = (
     "case_type",
+    BRAND_COLUMN,
     "status",
     "assigned_reviewer_name",
     "reportable_at",
@@ -222,6 +232,7 @@ OUTCOME_COLUMNS = (
 )
 DUE_COLUMNS = (
     "case_type",
+    BRAND_COLUMN,
     "status",
     "assigned_reviewer_name",
     "on_hold",
@@ -231,6 +242,7 @@ DUE_COLUMNS = (
 REMEDIATION_OVERDUE_COLUMNS = (
     CASE_ID_COLUMN,
     "case_type",
+    BRAND_COLUMN,
     "status",
     "assigned_reviewer_name",
     "responsible_party_name",
@@ -238,6 +250,7 @@ REMEDIATION_OVERDUE_COLUMNS = (
 )
 WORKLOAD_COLUMNS = (
     *HISTORY_KEY,
+    BRAND_COLUMN,
     "status",
     "assigned_reviewer_name",
     "on_hold",
@@ -247,6 +260,7 @@ WORKLOAD_COLUMNS = (
 APPEAL_RATE_COLUMNS = (
     CASE_ID_COLUMN,
     "case_type",
+    BRAND_COLUMN,
     "status",
     "assigned_reviewer_name",
     "reportable_at",
@@ -296,6 +310,7 @@ OPEN_AGE_COLUMNS = (
 FIRST_TIME_RIGHT_COLUMNS = (
     CASE_ID_COLUMN,
     "case_type",
+    BRAND_COLUMN,
     "status",
     "assigned_reviewer_name",
     "reportable_at",
@@ -303,7 +318,13 @@ FIRST_TIME_RIGHT_COLUMNS = (
     "amended_outcome_id",
     "amended_at",
 )
-THROUGHPUT_COLUMNS = ("case_type", "status", "assigned_reviewer_name", "reportable_at")
+THROUGHPUT_COLUMNS = (
+    "case_type",
+    BRAND_COLUMN,
+    "status",
+    "assigned_reviewer_name",
+    "reportable_at",
+)
 CONVERSATION_COLUMNS = (
     CASE_ID_COLUMN,
     "case_type",
@@ -569,6 +590,25 @@ def _history_frame(history: Dataset) -> pd.DataFrame:
     return frame
 
 
+def _branded(frame: pd.DataFrame) -> pd.DataFrame:
+    """A current-Case frame with a missing brand read as ``(unknown)``."""
+    return _filled(frame, {BRAND_COLUMN: UNKNOWN_BRAND})
+
+
+def _with_case_brand(frame: pd.DataFrame, current: Dataset) -> pd.DataFrame:
+    """An ordered history's rows, each carrying its Case's brand from the
+    current Cases; ``(unknown)`` for a Case they do not hold.
+
+    Matched on the history's Case identity, which is what ``case_id`` is derived
+    from, since the history carries no ``case_id``.
+    """
+    brands = current.to_pandas()[list(CASE_BRAND_COLUMNS)].drop_duplicates(
+        list(HISTORY_KEY)
+    )
+    keyed = frame[list(HISTORY_KEY)].merge(brands, on=list(HISTORY_KEY), how="left")
+    return frame.assign(**{BRAND_COLUMN: keyed[BRAND_COLUMN].to_numpy()}).pipe(_branded)
+
+
 def _case_starts(frame: pd.DataFrame) -> pd.Series:
     """True on each Case's first row of an ordered history."""
     return frame["_case"].ne(frame["_case"].shift())
@@ -600,32 +640,35 @@ def _elapsed_days(started: pd.Series, ended: pd.Series) -> pd.Series:
     return ((ended - started).dt.total_seconds() / SECONDS_PER_DAY).clip(lower=0.0)
 
 
-def case_stage_dwell(history: Dataset, *, as_of: str) -> Dataset:
+def case_stage_dwell(history: Dataset, current: Dataset, *, as_of: str) -> Dataset:
     """How long Cases dwell in each status. **Grain: brand x case_type x
-    status.** Statistics are over closed intervals; a terminal status closes
-    none, even when a reopen leaves it."""
-    frame = _history_frame(history)
+    status**, the brand each Case has in ``current``. Statistics are over
+    closed intervals; a terminal status closes none, even when a reopen leaves
+    it."""
+    frame = _with_case_brand(_history_frame(history), current)
     first = _case_starts(frame)
     last = first.shift(-1, fill_value=True)
     changed, began = _stays(frame, first)
     left = frame["status"].shift()
     closed = pd.DataFrame(
         {
+            "brand": frame["brand"],
             "case_type": frame["case_type"],
             "status": left,
             "days": _elapsed_days(began.shift(), frame["_modified"]),
         }
     ).loc[changed & ~left.isin(TERMINAL_STATUSES)]
     still_open = frame.loc[
-        last & ~frame["status"].isin(TERMINAL_STATUSES), ["case_type", "status"]
+        last & ~frame["status"].isin(TERMINAL_STATUSES),
+        ["brand", "case_type", "status"],
     ]
     stays = pd.concat([closed, still_open.assign(days=np.nan)], ignore_index=True)
 
-    stats = _summaries(stays, ["case_type", "status"], "days")
+    stats = _summaries(stays, ["brand", "case_type", "status"], "days")
     keys = stats.index.to_frame(index=False)
     rows = pd.DataFrame(
         {
-            "brand": UNKNOWN_BRAND,
+            "brand": keys["brand"],
             "case_type": keys["case_type"],
             "status": keys["status"],
             "interval_count": stats["count"].to_numpy(),
@@ -641,13 +684,14 @@ def case_stage_dwell(history: Dataset, *, as_of: str) -> Dataset:
     )
 
 
-def case_hold(history: Dataset, *, as_of: str) -> Dataset:
+def case_hold(history: Dataset, current: Dataset, *, as_of: str) -> Dataset:
     """How often and how long Cases are held. **Grain: brand x case_type x
-    assigned_reviewer_name.** A hold ends at its release, or where the Case
-    entered a terminal status if that comes first; a terminal spell is never
-    held, so a reopen still flagged opens a new hold from the reopen. One open
-    at the last observation runs to ``as_of``."""
-    frame = _history_frame(history)
+    assigned_reviewer_name**, the brand each Case has in ``current``. A hold
+    ends at its release, or where the Case entered a terminal status if that
+    comes first; a terminal spell is never held, so a reopen still flagged
+    opens a new hold from the reopen. One open at the last observation runs to
+    ``as_of``."""
+    frame = _with_case_brand(_history_frame(history), current)
     first = _case_starts(frame)
     last = first.shift(-1, fill_value=True)
     terminal = frame["status"].isin(TERMINAL_STATUSES)
@@ -685,6 +729,7 @@ def case_hold(history: Dataset, *, as_of: str) -> Dataset:
     ended = ended.fillna(pd.Timestamp(as_of))
     held = pd.DataFrame(
         {
+            "brand": opened["brand"],
             "case_type": opened["case_type"],
             "source_item_id": opened["source_item_id"],
             "assigned_reviewer_name": opened["_reviewer"]
@@ -697,7 +742,7 @@ def case_hold(history: Dataset, *, as_of: str) -> Dataset:
         }
     )
 
-    dims = ["case_type", "assigned_reviewer_name"]
+    dims = ["brand", "case_type", "assigned_reviewer_name"]
     stats = _summaries(held, dims, "days")
     counted = held.groupby(dims, sort=True).agg(
         case_count=("source_item_id", "nunique"), open_hold_count=("open", "sum")
@@ -705,7 +750,7 @@ def case_hold(history: Dataset, *, as_of: str) -> Dataset:
     keys = stats.index.to_frame(index=False)
     rows = pd.DataFrame(
         {
-            "brand": UNKNOWN_BRAND,
+            "brand": keys["brand"],
             "case_type": keys["case_type"],
             "assigned_reviewer_name": keys["assigned_reviewer_name"],
             "case_count": counted["case_count"].to_numpy(),
@@ -724,8 +769,9 @@ def case_hold(history: Dataset, *, as_of: str) -> Dataset:
 
 
 def _open_spans(frame: pd.DataFrame, as_of_day: pd.Timestamp) -> pd.DataFrame:
-    """Every Case's open time as ``(case_type, status, start, end)`` local-day
-    spans, end exclusive: on each local day, the status the Case closed it in."""
+    """Every Case's open time as ``(brand, case_type, status, start, end)``
+    local-day spans, end exclusive: on each local day, the status the Case
+    closed it in."""
     first = _case_starts(frame)
     changed = frame["status"].ne(frame["status"].shift()) & ~first
     heads = frame.loc[first]
@@ -738,6 +784,7 @@ def _open_spans(frame: pd.DataFrame, as_of_day: pd.Timestamp) -> pd.DataFrame:
                     "_case": heads["_case"],
                     "_row": heads.index,
                     "_order": 0,
+                    "brand": heads["brand"],
                     "case_type": heads["case_type"],
                     "status": UNOBSERVED,
                     "_at": opened,
@@ -748,6 +795,7 @@ def _open_spans(frame: pd.DataFrame, as_of_day: pd.Timestamp) -> pd.DataFrame:
                     "_case": frame["_case"],
                     "_row": frame.index,
                     "_order": 1,
+                    "brand": frame["brand"],
                     "case_type": frame["case_type"],
                     "status": frame["status"],
                     "_at": frame["_modified"].where(~first, entered),
@@ -764,17 +812,17 @@ def _open_spans(frame: pd.DataFrame, as_of_day: pd.Timestamp) -> pd.DataFrame:
         .fillna(as_of_day + pd.Timedelta(days=1))
     )
     spans = events.loc[~events["status"].isin(TERMINAL_STATUSES)]
-    return spans[["case_type", "status", "start", "end"]]
+    return spans[["brand", "case_type", "status", "start", "end"]]
 
 
-def case_backlog(history: Dataset, *, as_of: str) -> Dataset:
+def case_backlog(history: Dataset, current: Dataset, *, as_of: str) -> Dataset:
     """Open Cases at each day's close, by status, rebuilt from the ordered
-    history."""
+    history; a grid per brand (each Case's in ``current``) and Case Type."""
     as_of_day = pd.Timestamp(local_date(as_of))
-    spans = _open_spans(_history_frame(history), as_of_day)
+    spans = _open_spans(_with_case_brand(_history_frame(history), current), as_of_day)
 
     grids = []
-    for case_type, group in spans.groupby("case_type", sort=True):
+    for (brand, case_type), group in spans.groupby(["brand", "case_type"], sort=True):
         first_day = group["start"].min()
         length = (as_of_day - first_day).days + 1
         days = pd.date_range(first_day, periods=length, freq="D")
@@ -790,7 +838,7 @@ def case_backlog(history: Dataset, *, as_of: str) -> Dataset:
                 pd.DataFrame(
                     {
                         "backlog_date": days.strftime("%Y-%m-%d"),
-                        "brand": UNKNOWN_BRAND,
+                        "brand": brand,
                         "case_type": case_type,
                         "status": status,
                         "case_count": np.cumsum(entered - left)[:length],
@@ -869,9 +917,12 @@ def sla_attainment(
     completed["_completed"] = _instants(completed["completed_at"])
     completed = completed.loc[completed["_completed"].notna()]
     completed["completed_month"] = _month(completed["_completed"])
-    completed = _filled(completed, {"assigned_reviewer_manager_name": UNASSIGNED})
+    completed = _filled(
+        completed,
+        {"assigned_reviewer_manager_name": UNASSIGNED, BRAND_COLUMN: UNKNOWN_BRAND},
+    )
 
-    dims = ["completed_month", "case_type", "assigned_reviewer_manager_name"]
+    dims = ["completed_month", "brand", "case_type", "assigned_reviewer_manager_name"]
     parts = []
     for sla_kind, due_column in SLA_DUE_DATES:
         judged = completed.assign(_due=_instants(completed[due_column]))
@@ -897,7 +948,7 @@ def sla_attainment(
                 {
                     "sla_kind": sla_kind,
                     "completed_month": keys["completed_month"],
-                    "brand": UNKNOWN_BRAND,
+                    "brand": keys["brand"],
                     "case_type": keys["case_type"],
                     "assigned_reviewer_manager_name": keys[
                         "assigned_reviewer_manager_name"
@@ -944,13 +995,20 @@ def void_monthly(current: Dataset, *, as_of: str) -> Dataset:
         (voided["_voided"] - _instants(voided["created"])).dt.total_seconds()
         / SECONDS_PER_DAY
     ).clip(lower=0.0)
-    voided = _filled(voided, {"void_reason": UNSTATED, "voided_by_name": UNASSIGNED})
+    voided = _filled(
+        voided,
+        {
+            "void_reason": UNSTATED,
+            "voided_by_name": UNASSIGNED,
+            BRAND_COLUMN: UNKNOWN_BRAND,
+        },
+    )
 
-    dims = ["void_month", "case_type", "void_reason", "voided_by_name"]
+    dims = ["void_month", "brand", "case_type", "void_reason", "voided_by_name"]
     rows = [
         {
             "void_month": month,
-            "brand": UNKNOWN_BRAND,
+            "brand": brand,
             "case_type": case_type,
             "void_reason": reason,
             "voided_by_name": by,
@@ -958,7 +1016,9 @@ def void_monthly(current: Dataset, *, as_of: str) -> Dataset:
             "age_at_void_days_mean": _mean(group["_age"]),
             "age_at_void_days_max": _maximum(group["_age"]),
         }
-        for (month, case_type, reason, by), group in voided.groupby(dims, sort=True)
+        for (month, brand, case_type, reason, by), group in voided.groupby(
+            dims, sort=True
+        )
     ]
     return _finish(
         rows,
@@ -970,10 +1030,8 @@ def void_monthly(current: Dataset, *, as_of: str) -> Dataset:
 
 def case_intake(current: Dataset, *, as_of: str) -> Dataset:
     """How many Cases arrive each day, by the status they hold now."""
-    frame = current.to_pandas()
-    frame = frame.assign(
-        intake_date=_local_day(_instants(frame["created"])), brand=UNKNOWN_BRAND
-    )
+    frame = _branded(current.to_pandas())
+    frame = frame.assign(intake_date=_local_day(_instants(frame["created"])))
     dims = ["intake_date", "brand", "case_type", "status"]
     rows = frame.groupby(dims, sort=True).size().reset_index(name="case_count")
     return _finish(rows, CaseIntakeDaily, as_of=as_of, sort_by=tuple(dims))
@@ -984,9 +1042,10 @@ def case_lifecycle_duration(current: Dataset, *, as_of: str) -> Dataset:
     counted, not measured."""
     frame = current.to_pandas()
     frame = _filled(
-        frame.loc[frame["status"].ne("Void")], {"assigned_reviewer_name": UNASSIGNED}
+        frame.loc[frame["status"].ne("Void")],
+        {"assigned_reviewer_name": UNASSIGNED, BRAND_COLUMN: UNKNOWN_BRAND},
     )
-    dims = ["ended_month", "case_type", "assigned_reviewer_name"]
+    dims = ["ended_month", "brand", "case_type", "assigned_reviewer_name"]
     parts = []
     for order, (leg, started, ended, actions_path_only) in enumerate(
         LIFECYCLE_LEGS, start=1
@@ -1010,7 +1069,7 @@ def case_lifecycle_duration(current: Dataset, *, as_of: str) -> Dataset:
                     "leg": leg,
                     "leg_order": order,
                     "ended_month": keys["ended_month"],
-                    "brand": UNKNOWN_BRAND,
+                    "brand": keys["brand"],
                     "case_type": keys["case_type"],
                     "assigned_reviewer_name": keys["assigned_reviewer_name"],
                     "case_count": stats["count"].to_numpy(),
@@ -1044,7 +1103,10 @@ def _reportable_cases(current: Dataset) -> pd.DataFrame:
     reportable["_reportable"] = _instants(reportable["reportable_at"])
     reportable = reportable.loc[reportable["_reportable"].notna()]
     reportable["reportable_month"] = _month(reportable["_reportable"])
-    return _filled(reportable, {"assigned_reviewer_name": UNASSIGNED})
+    return _filled(
+        reportable,
+        {"assigned_reviewer_name": UNASSIGNED, BRAND_COLUMN: UNKNOWN_BRAND},
+    )
 
 
 def case_outcome(current: Dataset, *, as_of: str) -> Dataset:
@@ -1052,6 +1114,7 @@ def case_outcome(current: Dataset, *, as_of: str) -> Dataset:
     reportable = _filled(_reportable_cases(current), {"effective_outcome": UNSTATED})
     dims = [
         "reportable_month",
+        "brand",
         "case_type",
         "assigned_reviewer_name",
         "effective_outcome",
@@ -1068,7 +1131,6 @@ def case_outcome(current: Dataset, *, as_of: str) -> Dataset:
             overridden_count=("_overridden", "sum"),
         )
         .reset_index()
-        .assign(brand=UNKNOWN_BRAND)
     )
     return _finish(
         rows,
@@ -1102,7 +1164,10 @@ def _due_bucket(days_until: int | None) -> tuple[str, int]:
 def case_due_profile(current: Dataset, *, as_of: str) -> Dataset:
     """Open Cases by how far they are from their due date, per SLA clock."""
     today = local_date(as_of)
-    frame = _filled(current.to_pandas(), {"assigned_reviewer_name": UNASSIGNED})
+    frame = _filled(
+        current.to_pandas(),
+        {"assigned_reviewer_name": UNASSIGNED, BRAND_COLUMN: UNKNOWN_BRAND},
+    )
     rows = []
     for sla_kind, status, due_column in DUE_CLOCKS:
         on_clock = frame.loc[frame["status"].eq(status)]
@@ -1114,14 +1179,20 @@ def case_due_profile(current: Dataset, *, as_of: str) -> Dataset:
             due_bucket=[name for name, _ in buckets],
             due_bucket_order=[order for _, order in buckets],
         )
-        dims = ["case_type", "assigned_reviewer_name", "due_bucket_order", "due_bucket"]
-        for (case_type, reviewer, order, bucket), group in on_clock.groupby(
+        dims = [
+            "brand",
+            "case_type",
+            "assigned_reviewer_name",
+            "due_bucket_order",
+            "due_bucket",
+        ]
+        for (brand, case_type, reviewer, order, bucket), group in on_clock.groupby(
             dims, sort=True
         ):
             rows.append(
                 {
                     "sla_kind": sla_kind,
-                    "brand": UNKNOWN_BRAND,
+                    "brand": brand,
                     "case_type": case_type,
                     "assigned_reviewer_name": reviewer,
                     "due_bucket": bucket,
@@ -1166,7 +1237,11 @@ def remediation_overdue(
     cases = cases.loc[cases["_days_over"].notna() & cases["_days_over"].gt(0)]
     cases = _filled(
         cases,
-        {"assigned_reviewer_name": UNASSIGNED, "responsible_party_name": UNASSIGNED},
+        {
+            "assigned_reviewer_name": UNASSIGNED,
+            "responsible_party_name": UNASSIGNED,
+            BRAND_COLUMN: UNKNOWN_BRAND,
+        },
     )
     buckets = [_days_over_bucket(int(days)) for days in cases["_days_over"]]
     cases = cases.assign(
@@ -1192,6 +1267,7 @@ def remediation_overdue(
     )
 
     dims = [
+        "brand",
         "case_type",
         "assigned_reviewer_name",
         "responsible_party_name",
@@ -1200,7 +1276,7 @@ def remediation_overdue(
     ]
     rows = [
         {
-            "brand": UNKNOWN_BRAND,
+            "brand": brand,
             "case_type": case_type,
             "assigned_reviewer_name": reviewer,
             "responsible_party_name": party,
@@ -1211,9 +1287,14 @@ def remediation_overdue(
             "outstanding_action_count": int(group["_actions"].sum()),
             "days_over_max": int(group["_days_over"].max()),
         }
-        for (case_type, reviewer, party, order, bucket), group in cases.groupby(
-            dims, sort=True
-        )
+        for (
+            brand,
+            case_type,
+            reviewer,
+            party,
+            order,
+            bucket,
+        ), group in cases.groupby(dims, sort=True)
     ]
     return _finish(
         rows,
@@ -1245,7 +1326,10 @@ def reviewer_workload(current: Dataset, history: Dataset, *, as_of: str) -> Data
     ``In-progress`` Case ages from its latest entry into that status, else
     from ``assigned_at``."""
     today = local_date(as_of)
-    frame = _filled(current.to_pandas(), {"assigned_reviewer_name": UNASSIGNED})
+    frame = _filled(
+        current.to_pandas(),
+        {"assigned_reviewer_name": UNASSIGNED, BRAND_COLUMN: UNKNOWN_BRAND},
+    )
     frame = frame.merge(_in_progress_since(history), on=list(HISTORY_KEY), how="left")
     started = frame["_since"].where(
         frame["_since"].notna(), _instants(frame["assigned_at"])
@@ -1263,15 +1347,15 @@ def reviewer_workload(current: Dataset, history: Dataset, *, as_of: str) -> Data
     frame = frame.loc[frame["_in_progress"] | frame["_actions"] | frame["_recent"]]
 
     rows = []
-    for (case_type, reviewer), group in frame.groupby(
-        ["case_type", "assigned_reviewer_name"], sort=True
+    for (brand, case_type, reviewer), group in frame.groupby(
+        ["brand", "case_type", "assigned_reviewer_name"], sort=True
     ):
         held = int(group["_in_progress"].sum())
         output = int(group["_recent"].sum())
         weekly = output / (WORKLOAD_WINDOW_DAYS / 7)
         rows.append(
             {
-                "brand": UNKNOWN_BRAND,
+                "brand": brand,
                 "case_type": case_type,
                 "assigned_reviewer_name": reviewer,
                 "in_progress_count": held,
@@ -1314,7 +1398,7 @@ def appeal_rate_by_reviewer(
     counts = ["_appeals", "_open", "_agreed", "_rejected"]
     cases[counts] = cases[counts].fillna(0)
 
-    dims = ["reportable_month", "case_type", "assigned_reviewer_name"]
+    dims = ["reportable_month", "brand", "case_type", "assigned_reviewer_name"]
     rows = (
         cases.assign(_appealed=cases["_appeals"].gt(0))
         .groupby(dims, sort=True)
@@ -1327,7 +1411,6 @@ def appeal_rate_by_reviewer(
             rejected_appeal_count=("_rejected", "sum"),
         )
         .reset_index()
-        .assign(brand=UNKNOWN_BRAND)
     )
     return _finish(
         rows,
@@ -1487,7 +1570,7 @@ def conversation_response_time(
 ) -> Dataset:
     """How quickly Conversations on live Cases are replied to; a reply is a
     Message by a different author from the one before it. **Grain: brand x
-    case_type.**"""
+    case_type**, the brand of the Message's Case."""
     frame = _live_rows(messages, _live_cases(current)).copy()
     frame["_posted"] = _instants(frame["posted_at"])
     frame = frame.sort_values([CASE_ID_COLUMN, "seq"], kind="stable")
@@ -1507,7 +1590,7 @@ def conversation_response_time(
 
     rows = [
         {
-            "brand": UNKNOWN_BRAND,
+            "brand": brand,
             "case_type": case_type,
             "thread_count": group[CASE_ID_COLUMN].nunique(),
             "reply_count": len(group),
@@ -1516,7 +1599,9 @@ def conversation_response_time(
             "reply_hours_p90": _quantile(group["hours"], 0.9),
             "reply_hours_max": _maximum(group["hours"]),
         }
-        for case_type, group in replies.groupby("case_type", sort=True)
+        for (brand, case_type), group in replies.groupby(
+            ["brand", "case_type"], sort=True
+        )
     ]
     return _finish(
         rows, ConversationResponseTime, as_of=as_of, sort_by=("brand", "case_type")
@@ -1525,8 +1610,10 @@ def conversation_response_time(
 
 def _live_cases(current: Dataset) -> pd.DataFrame:
     """The current non-void Cases: the population a Conversation belongs to."""
-    cases = current.to_pandas()
-    return cases.loc[cases["status"].ne("Void"), [CASE_ID_COLUMN, "case_type"]]
+    cases = _branded(current.to_pandas())
+    return cases.loc[
+        cases["status"].ne("Void"), [CASE_ID_COLUMN, "case_type", BRAND_COLUMN]
+    ]
 
 
 def conversation_volume(messages: Dataset, current: Dataset, *, as_of: str) -> Dataset:
@@ -1539,12 +1626,12 @@ def conversation_volume(messages: Dataset, current: Dataset, *, as_of: str) -> D
     counted = live.join(per_thread, on=CASE_ID_COLUMN)
 
     rows = []
-    for case_type, group in counted.groupby("case_type", sort=True):
+    for (brand, case_type), group in counted.groupby(["brand", "case_type"], sort=True):
         lengths = group["messages"].dropna()
         without = len(group) - len(lengths)
         rows.append(
             {
-                "brand": UNKNOWN_BRAND,
+                "brand": brand,
                 "case_type": case_type,
                 "case_count": len(group),
                 "thread_count": len(lengths),
@@ -1563,9 +1650,12 @@ def conversation_volume(messages: Dataset, current: Dataset, *, as_of: str) -> D
 
 
 def _live_rows(rows: Dataset, live: pd.DataFrame) -> pd.DataFrame:
-    """The Detail rows (Messages, Actions) whose Case is one of the live Cases."""
+    """The Detail rows (Messages, Actions) whose Case is one of the live Cases,
+    each carrying that Case's brand."""
     frame = rows.to_pandas()
-    return frame.loc[frame[CASE_ID_COLUMN].isin(live[CASE_ID_COLUMN])]
+    frame = frame.loc[frame[CASE_ID_COLUMN].isin(live[CASE_ID_COLUMN])]
+    brands = live.set_index(CASE_ID_COLUMN)[BRAND_COLUMN]
+    return frame.assign(**{BRAND_COLUMN: frame[CASE_ID_COLUMN].map(brands)})
 
 
 def conversation_posting_pattern(
@@ -1573,7 +1663,7 @@ def conversation_posting_pattern(
 ) -> Dataset:
     """When Messages on live Cases get posted, on the local clock instant by
     instant. **Grain: brand x case_type x weekday_order x hour_of_day**, the
-    full 7 x 24 grid for each Case Type with a Message."""
+    full 7 x 24 grid for each brand and Case Type with a Message."""
     posted = _live_rows(messages, _live_cases(current)).copy()
     posted["_posted"] = _instants(posted["posted_at"])
     posted = posted.loc[posted["_posted"].notna()]
@@ -1581,18 +1671,20 @@ def conversation_posting_pattern(
     local = timestamps.local_wall_clock(posted["_posted"])
     posted["weekday_order"] = local.dt.dayofweek + 1  # ISO: 1 = Monday
     posted["hour_of_day"] = local.dt.hour
-    counts = posted.groupby(["case_type", "weekday_order", "hour_of_day"]).size()
+    counts = posted.groupby(
+        ["brand", "case_type", "weekday_order", "hour_of_day"]
+    ).size()
 
     rows = [
         {
-            "brand": UNKNOWN_BRAND,
+            "brand": brand,
             "case_type": case_type,
             "weekday_order": order,
             "weekday": WEEKDAY_NAMES[order - 1],
             "hour_of_day": hour,
-            "message_count": int(counts.get((case_type, order, hour), 0)),
+            "message_count": int(counts.get((brand, case_type, order, hour), 0)),
         }
-        for case_type in sorted(posted["case_type"].unique())
+        for brand, case_type in sorted(set(zip(posted["brand"], posted["case_type"])))
         for order in range(1, len(WEEKDAY_NAMES) + 1)
         for hour in range(24)
     ]
@@ -1809,7 +1901,7 @@ def first_time_right(current: Dataset, appeals: Dataset, *, as_of: str) -> Datas
     appealed = cases[CASE_ID_COLUMN].isin(appeals.to_pandas()[CASE_ID_COLUMN])
     amended = cases["amended_outcome_id"].notna() | cases["amended_at"].notna()
     right = ~appealed & ~amended & ~_flagged(cases["outcome_overridden"])
-    dims = ["reportable_month", "case_type", "assigned_reviewer_name"]
+    dims = ["reportable_month", "brand", "case_type", "assigned_reviewer_name"]
     rows = (
         cases.assign(_right=right)
         .groupby(dims, sort=True)
@@ -1820,7 +1912,6 @@ def first_time_right(current: Dataset, appeals: Dataset, *, as_of: str) -> Datas
         .reset_index()
     )
     rows = rows.assign(
-        brand=UNKNOWN_BRAND,
         first_time_right_rate=[
             round(right / total, 4)
             for right, total in zip(
@@ -1844,12 +1935,13 @@ def _iso_week(days: pd.Series) -> pd.Series:
 
 def reviewer_throughput(current: Dataset, *, as_of: str) -> Dataset:
     """Cases made Reportable per ISO week, and how they spread over the
-    Reviewers who made them. **Grain: iso_week x brand x case_type.**"""
+    Reviewers who made them. **Grain: iso_week x brand x case_type**, the
+    ``(all)`` row per brand."""
     cases = _reportable_cases(current)
     cases = _with_all_case_types(
         cases.assign(iso_week=_iso_week(_local_days(cases["_reportable"])))
     )
-    dims = ["iso_week", "case_type"]
+    dims = ["iso_week", "brand", "case_type"]
     totals = cases.groupby(dims, sort=True).size()
     per_reviewer = (
         cases.loc[cases["assigned_reviewer_name"].ne(UNASSIGNED)]
@@ -1862,7 +1954,6 @@ def reviewer_throughput(current: Dataset, *, as_of: str) -> Dataset:
     order = np.lexsort((values, codes))
     stats = _percentiles(codes[order], values[order], len(totals))
     rows = totals.index.to_frame(index=False).assign(
-        brand=UNKNOWN_BRAND,
         active_reviewer_count=stats["n"],
         completions_total=totals.to_numpy(),
         completions_per_reviewer_p50=_rounded_all(stats["p50"]),
