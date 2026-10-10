@@ -387,6 +387,11 @@
   border: 1px solid var(--cora-color-border);
 }
 
+.cora-banner-saved {
+  background: var(--cora-color-surface);
+  color: var(--cora-color-text-muted);
+}
+
 .cora-banner-saving,
 .cora-banner-reconnecting {
   background: var(--cora-color-warning-bg);

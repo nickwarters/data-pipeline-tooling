@@ -116,7 +116,9 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 - **Per-Case-Type `showWhen` graph + `outcome` function**. Applicability is data (declarative `showWhen`); outcome is code (exported function). Same module, one place to look. A Case Type may also declare `selectQuestions(questions, details)`, which narrows its bank per Case by that Case's own attributes before `showWhen` runs (ADR-0056). It is code, applied once by `CaseLoader`; Answers to the questions it drops are dropped on load.
 - **Case storage: everything on the Case row**. `Answers` and `Conversation` as JSON blobs on a per-Case-Type SharePoint list row. Notes as plain text. Field-level PATCH only.
 - **Auto-save: 1500ms debounce + ETag concurrency**. A single `SaveQueue`
-  primitive owns writes; views never call `fetch` directly.
+  primitive owns writes; views never call `fetch` directly. What it writes and
+  what counts as a conflict is a save target, so Cases (the default) and HR
+  Forms share one save path.
 - **Mock-first dev loop**. All REST goes through a `SharePointClient` interface. `?mock=1` URL param swaps in `MockSharePointClient` from `dev/fixtures/`; the Report Feed loader also fetches its canonical fixture under that flag. The mock client and its fixtures stay behind gated dynamic imports, and the loader's dev-only URL is never used outside mock mode — `dev/` is not deployed. `HttpSharePointClient` is a static import. `node --test` for unit tests.
 - **Auth: browser NTLM/Kerberos; security via SharePoint list permissions**. Client-side group checks are UX-only; the real boundary is SharePoint's list ACLs.
 - **Several live environments on one site: prod, UAT, training (ADR-0033)**. Same source tree, deployed once per environment: prod at `Style Library/CODE/CORA` + `SitePages/app.aspx` + unprefixed lists; every other environment `<name>` at `CODE/CORA-<NAME>` + `SitePages/<name>.app.aspx` + `<name>_`-prefixed lists (`deploy_to_sharepoint.py --env <name>`). The names live in `ENVIRONMENT_NAMES` in `src/config/environment.js` and `scripts/deploy_to_sharepoint.py` — a test holds the two equal — and everything else is derived by that one convention, so adding an environment is one entry in each plus the SharePoint work in `docs/guide/provisioning-an-environment.md`. The deployed host page declares its environment via the `{{CORA_ENV}}` token → `window.CORA_ENV`; `src/config/environment.js` is the only place that resolves it (an unknown name resolves to prod), and `HttpSharePointClient` applies the list prefix centrally. Never branch on the environment name elsewhere.
@@ -611,6 +613,8 @@ src/
     action-centre-model.js
     assignment-stamp.js           # the write-path rule pairing assignedAt with assignedReviewer, so
                                   #   no caller can set a Reviewer without stamping when (#633)
+    case-save-target.js           # the SaveQueue's default target: patchCase/getCase and the Answers-only
+                                  #   conflict rule, extracted unchanged so the queue names no Case
     create-sharepoint-client.js
     form-encoding.js              # THE stored encoding of a Form's free text and Form Actions: UTF-8
                                   #   base64, decoded forgivingly (a hand-edited cell is reported, not

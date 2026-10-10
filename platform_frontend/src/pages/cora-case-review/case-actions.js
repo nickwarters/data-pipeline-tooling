@@ -86,10 +86,11 @@ export function createCaseReviewSaveEffect({
 
 /**
  * Bridge SaveQueue status transitions into route-owned state. Views consume
- * only the dispatched status value and do not depend on the queue internals.
+ * only the dispatched status and the time of the last successful save, and do
+ * not depend on the queue internals.
  *
  * @param {SaveQueue} saveQueue
- * @param {(action: {type: 'case/save-status-changed', status: SaveStatus}) => unknown} dispatch
+ * @param {(action: {type: 'case/save-status-changed', status: SaveStatus, lastSavedAt: string | null}) => unknown} dispatch
  * @returns {() => void}
  */
 export function observeSaveStatus(saveQueue, dispatch) {
@@ -97,6 +98,7 @@ export function observeSaveStatus(saveQueue, dispatch) {
     dispatch({
       type: 'case/save-status-changed',
       status,
+      lastSavedAt: saveQueue.lastSavedAt,
     });
   });
 }

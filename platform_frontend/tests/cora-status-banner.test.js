@@ -17,6 +17,24 @@ test('StatusBanner: saved status renders no nodes', () => {
   assert.deepEqual(StatusBanner({ status: 'saved' }), []);
 });
 
+test('StatusBanner: once something has saved, saved shows when, quietly', () => {
+  const previous = process.env.TZ;
+  process.env.TZ = 'UTC';
+  try {
+    const node = /** @type {any} */ (
+      StatusBanner({ status: 'saved', lastSavedAt: '2026-10-10T15:32:40Z' })
+    );
+    assert.equal(node.textContent, 'Last saved 15:32');
+    // The "Saving…" before it was the announcement; this is only a record.
+    assert.equal(node.getAttribute('role'), null);
+    assert.equal(node.getAttribute('aria-live'), null);
+  } finally {
+    if (previous === undefined) delete process.env.TZ;
+    else process.env.TZ = previous;
+  }
+  assert.deepEqual(StatusBanner({ status: 'saved', lastSavedAt: null }), []);
+});
+
 test('StatusBanner: saving and reconnecting are polite live statuses', () => {
   for (const [status, message] of [
     ['saving', 'Saving…'],

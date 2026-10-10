@@ -3835,6 +3835,51 @@ test('On hold effect: queues the paired fields as one PATCH and clears the times
   ]);
 });
 
+test('save effect: the time of the last save reaches route state with the saved status', async () => {
+  const at = new Date('2026-10-10T15:32:00Z');
+  const queue = new SaveQueue(
+    /** @type {any} */ ({
+      async patchCase() {
+        return { ok: true, status: 200, data: { ...caseRow, etag: 'e2' } };
+      },
+    }),
+    { debounceMs: 0, now: () => at }
+  );
+  queue.loadCase(/** @type {any} */ (caseRow));
+  /** @type {any[]} */
+  const actions = [];
+  const dispose = observeSaveStatus(queue, (action) => actions.push(action));
+
+  queue.enqueue('c1', 'notes', 'n');
+  await queue.whenIdle();
+  dispose();
+
+  assert.deepEqual(actions.at(-1), {
+    type: 'case/save-status-changed',
+    status: 'saved',
+    lastSavedAt: at.toISOString(),
+  });
+  const loaded = caseReviewReducer(createInitialCaseReviewState(chrome), {
+    type: 'case/load-finished',
+    snapshot: snapshot(),
+  });
+  const saved = caseReviewReducer(loaded, actions.at(-1));
+  assert.equal(saved.routes.caseReview.lastSavedAt, at.toISOString());
+  assert.strictEqual(
+    caseReviewReducer(saved, actions.at(-1)),
+    saved,
+    'the same save re-reported must not re-render'
+  );
+  assert.equal(
+    caseReviewReducer(saved, {
+      type: 'case/save-status-changed',
+      status: 'saving',
+    }).routes.caseReview.lastSavedAt,
+    at.toISOString(),
+    'a status with no time keeps the last one'
+  );
+});
+
 test('save effect: conflict status re-enters route state through dispatch', async () => {
   const queue = new SaveQueue(
     /** @type {any} */ ({

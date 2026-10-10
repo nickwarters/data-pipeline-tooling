@@ -77,6 +77,8 @@ import { voidReasonText } from '../lib/void-reasons.js';
  * @typedef {Object} CaseReviewRouteState
  * @property {string} activeTab
  * @property {SaveStatus} saveStatus
+ * @property {string | null} [lastSavedAt] when a write last succeeded, an ISO
+ *   instant; absent until the first save
  * @property {boolean} conversationHidden
  * @property {boolean} completionPending
  * @property {boolean} voidPanelOpen
@@ -483,8 +485,15 @@ export function caseReviewReducer(state, action) {
   }
   if (action.type === 'case/save-status-changed') {
     // Identity guard: SaveQueue re-reports the status it last reported.
-    if (action.status === route.saveStatus) return state;
-    return patchRoute(state, 'caseReview', { saveStatus: action.status });
+    const held = route.lastSavedAt ?? null;
+    const lastSavedAt = action.lastSavedAt ?? held;
+    if (action.status === route.saveStatus && lastSavedAt === held) {
+      return state;
+    }
+    return patchRoute(state, 'caseReview', {
+      saveStatus: action.status,
+      lastSavedAt,
+    });
   }
   if (
     action.type === 'case/section-write' ||
@@ -1004,7 +1013,13 @@ export function createRouteSlice(params, context) {
     const parts = ensureShell(container);
     const route = state.routes.caseReview;
     const snapshot = route.snapshot;
-    tools.render(parts.status, StatusBanner({ status: route.saveStatus }));
+    tools.render(
+      parts.status,
+      StatusBanner({
+        status: route.saveStatus,
+        lastSavedAt: route.lastSavedAt,
+      })
+    );
 
     if (!snapshot) {
       tools.render(parts.header, LoadingState());
