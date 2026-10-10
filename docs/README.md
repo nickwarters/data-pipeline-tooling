@@ -171,6 +171,7 @@ review platform, Review Outcomes flow *back* for reporting.
   funnel per step per run, rolling p50/p90/p95 per pipeline and step over 28
   and 90 days, and when each day's scheduled batch finished
   ([`data-dictionary-pipeline-run-metric.md`](data-dictionary-pipeline-run-metric.md)).
+  `python -m cli perf` shows the percentiles at a glance.
 
 **Ingest** is **per Case Type** and **Selection** is **per Selection group**
 ([Selection plans per group](adr/0021-selection-plans-per-group-over-the-whole-eligible-pool.md));
@@ -653,10 +654,11 @@ review queue with plain-Python rules, and separately aggregates an
 `AccumulateByRun`, so rerunning the same `logical_run_id` replaces that run's
 rows without touching prior loads.
 
-### Operate pipelines from the CLI — run, status, runs, log
+### Operate pipelines from the CLI — run, status, runs, log, perf
 
 For the everyday operator tasks — running a pipeline, checking its status,
-listing recent runs, inspecting a run log — use `python -m cli` instead
+listing recent runs, inspecting a run log, seeing which pipelines are slowest
+and whether they are getting slower — use `python -m cli` instead
 of writing a wrapper script. It is a thin shell over the runner and the
 `RunRegistry` / `RunLog` seam; full reference with example output is
 [`operator-cli.md`](operator-cli.md).
@@ -755,7 +757,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`run-log-format.md`](run-log-format.md) | The JSONL record schema and the run registry. |
 | [`retry.md`](retry.md) | Targeted retry at the reader/writer edges — `RetryPolicy`, where to use it and where not. |
 | [`migrations.md`](migrations.md) | SQL migrations as the authority for a database's physical shape: the `migrations/<subject>/<database>/` layout, the per-database `schema_migrations` ledger whose presence is the opt-in, and the three rules (one transaction per file, an edited migration is an error, line endings are not an edit). |
-| [`operator-cli.md`](operator-cli.md) | The operator CLI (`run` / `orchestrate` / `status` / `runs` / `log` / `prune-runs` / `scaffold`) with example commands and output. |
+| [`operator-cli.md`](operator-cli.md) | The operator CLI (`run` / `orchestrate` / `status` / `runs` / `log` / `perf` / `prune-runs` / `scaffold`) with example commands and output. |
 | [`resolving-a-failed-run.md`](resolving-a-failed-run.md) | The operator loop from a failed run — investigate (`status`/`log`), diagnose, resolve, and re-drive idempotently. |
 | [`shared-readers.md`](shared-readers.md) | Reading data your pipeline does **not** own: the `readers/<subject>.py` Shared Readers that declare a cross-subject read once, how to add one (medallion-backed, backed by nothing, or a store over a family such as the review platform's **Question Bank** exports — including when a second grain in one artifact earns a second Reader, why the grain is the method and the scope is the arguments, and where a sweep silently double counts), the guardrails G1–G6, and why a Shared Reader is a pass-through and never a shaping layer. |
 | [`escape-hatch-store.md`](escape-hatch-store.md) | Iterating against a flat scratch db (and a pre-baked SQL query) outside the medallion / namespace Store, and migrating back. |

@@ -3,7 +3,7 @@
 The framework is import-only (on ``sys.path``, never installed), but it can also
 be *run* as a tool. ``python -m cli`` dispatches to the subcommands the
 framework owns -- ``scaffold`` (generate a feed) and the operator commands
-``run`` / ``orchestrate`` / ``runs`` / ``status`` / ``log`` /
+``run`` / ``orchestrate`` / ``runs`` / ``status`` / ``log`` / ``perf`` /
 ``prune-runs``. This is an entry
 point, not part of the importable public surface (the public facade modules);
 the modules behind it live in this private ``cli`` package.
@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import argparse
 
-from cli import operator, scaffold
+from cli import operator, perf, scaffold
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -24,6 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     scaffold.register(sub)
     operator.register(sub)
+    perf.register(sub)
     return parser
 
 
