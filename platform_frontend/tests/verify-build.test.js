@@ -351,7 +351,7 @@ test('buildGraph records the version and the include rules it scanned', () => {
 
   assert.equal(graph.version, 2);
   assert.deepEqual(graph.deployable, {
-    includeRoots: ['src', 'case-types', 'host'],
+    includeRoots: ['src', 'case-types', 'form-types', 'host'],
     includeSuffixes: ['.js', '.css', '.html', '.aspx'],
     bankDir: 'case-types/banks',
     bankSuffix: '.txt',

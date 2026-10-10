@@ -67,7 +67,7 @@ const IMPORT_CARRIERS = ['.js', '.html', '.aspx'];
 const HOST_SUFFIXES = IMPORT_CARRIERS.filter((suffix) => suffix !== '.js');
 
 /** Directories whose modules are checked for being dead. */
-const CHECKED_ROOTS = ['src/', 'case-types/'];
+const CHECKED_ROOTS = ['src/', 'case-types/', 'form-types/'];
 
 /**
  * Directories that are roots rather than checked subjects: tools and the dev

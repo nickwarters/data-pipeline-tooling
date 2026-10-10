@@ -43,6 +43,7 @@ import { AmendOutcomePlugin } from './sections/amend-outcome/amend-outcome-plugi
 import { SecondReviewPlugin } from './sections/second-review/second-review-plugin.js';
 
 import { CASE_TYPE_ENTRIES } from '../case-types/entries.js';
+import { oneToOne } from '../form-types/one-to-one.js';
 
 import * as homePage from './pages/home.js';
 import * as dashboardPage from './pages/cora-dashboard.js';
@@ -121,6 +122,17 @@ export const APP_CONFIG = {
    * @type {readonly import('../case-types/manifest.js').CaseTypeEntry[]}
    */
   caseTypes: CASE_TYPE_ENTRIES,
+
+  /**
+   * The Form Types this application has: the HR forms of the Forms area, each
+   * declared once as data and drawn by one renderer. Held as plain imports
+   * rather than thunks, unlike the Case Types above, because a definition is a
+   * few hundred bytes of literals with nothing to load and nothing at boot
+   * needs to read one without the other.
+   *
+   * @type {readonly import('../form-types/contract.js').FormTypeDefinition[]}
+   */
+  formTypes: [oneToOne],
 
   /**
    * Every hash this application answers, and the page behind it.

@@ -200,7 +200,7 @@ Workflow for all new code:
 
 Never merge a production behaviour change without a corresponding test. Run
 `npm run test:coverage` before committing. The command explicitly includes all
-JavaScript under `src/` and `case-types/` and enforces a consistent global floor
+JavaScript under `src/`, `case-types/` and `form-types/` and enforces a consistent global floor
 of 95% for line, branch, and function coverage.
 
 Run `npm run verify` alongside it. `npm run check` (tsc) already catches a
@@ -208,7 +208,7 @@ dangling specifier and a case-mismatched one, so what the gate adds is: the
 dependency-graph artifact at `.verify/import-graph.json` (gitignored, and
 written only when the run is clean); rejection of bare package specifiers, which
 tsc resolves through `node_modules` while the browser cannot; and Node's own
-parser over every `.js` under `src/` and `case-types/`. The graph covers **every
+parser over every `.js` under `src/`, `case-types/` and `form-types/`. The graph covers **every
 file the deploy uploads**, not only the modules — `.css` `@import`s, the host
 page's `{{CORA_BASE}}`-based `<link>`/`<script>` references (any other href is a
 SharePoint-owned asset and is ignored), and the Case-Type-to-`banks/*.txt` edge —
@@ -219,12 +219,16 @@ Case Type module is imported and its config checked (a `computeOutcome`
 function, an explicit `listName`, no duplicate Question Definition ids, no
 dangling or cyclic `showWhen` reference, no `showWhen` node whose siblings the
 evaluator would silently ignore, no unknown `sections` key, no empty
-`remediationStatuses` list and none omitting `complete`); every
+`remediationStatuses` list and none omitting `complete`); every Form Type
+definition is checked against its closed vocabulary (no unknown section type,
+layout, field type or `editableBy`, no two fields writing one column, no empty
+`choices`, at most one Actions section, and the application's own columns
+placed and left as declared); every
 `case-types/banks/*.txt` artifact is parsed and shape-checked, and every registry
 `bank` thunk must name one that exists; and the route table is checked for
 malformed or duplicated hash patterns. On the same clean graph it then reads the
-edges backwards (`scripts/verify-dead-code.js`): a module under `src/` or
-`case-types/` that no host page, tool or dev fixture can reach is a failure, and
+edges backwards (`scripts/verify-dead-code.js`): a module under `src/`,
+`case-types/` or `form-types/` that no host page, tool or dev fixture can reach is a failure, and
 so is an exported name nothing reads — with an explicit, reasoned exemption list
 in the script for the seams that must stay. Reachability counts JSDoc type
 references as edges, so a typedef-only module is not mistaken for dead, and the
@@ -540,13 +544,14 @@ src/
     contract.js                 # what a type knows about itself: what a write may hold, the control
                                 #   the Reviewer edits it with, and how a caption names that control.
                                 #   Reading a stored value is deliberately NOT here
-    primitive-types.js          # text/textarea/select/radio — one adapter, because they differ only
-                                #   in whether the value comes from the declared options and how the
-                                #   caption is attached
+    primitive-types.js          # text/textarea/select/radio/date — one adapter, because they differ
+                                #   only in whether the value comes from the declared options, whether
+                                #   it must be a YYYY-MM-DD date, and how the caption is attached
     person-type.js              # the `person` type: an object rather than a string, picked from the
                                 #   directory rather than typed, and two controls — a picker until
                                 #   someone is chosen, then their name plus a way back to nobody
-    registry.js                 # the type lookup. A FRAMEWORK vocabulary a Case Type selects from,
+    registry.js                 # the type lookup. A FRAMEWORK vocabulary a Case Type selects from
+                                #   (and a Form Type's controls reuse, `date` included),
                                 #   like Void Reasons — not an application composition, so it names
                                 #   its own built-ins rather than being handed a list by app-config
 
@@ -703,6 +708,15 @@ case-types/                     # one module per Case Type, lazy-loaded via mani
     complaints.<hex>.txt        #   one immutable published version, never overwritten — a Case
                                 #     stamped with that hash resolves its questions from this file
 
+form-types/                     # one data module per HR Form Type, named in APP_CONFIG.formTypes
+                                #   (ADR-0059); deployed like case-types/
+  contract.js                   # THE FormTypeDefinition shape and its closed vocabulary (section
+                                #   types, panel layouts, field types, editableBy), the columns the
+                                #   application owns, and formColumns(): which columns a Form is read
+                                #   and written through, and which are encoded. Encoding follows the
+                                #   field type, never a per-field flag
+  one-to-one.js                 # the 1-to-1: meeting details, discussion, Form Actions, comments
+
 scripts/
   publish-bank.js               # compiles a bank into its export envelope and writes it as an
                                 #   immutable version named by its own identity. Idempotent and
@@ -713,6 +727,8 @@ scripts/
                                 #   publishes it through publish-bank.js so the version and history
                                 #   advance by the one rule. Needs openpyxl from the root venv
   scaffold_case_type.py         # scaffolds a new Case Type module + bank artifact (ADR-0028)
+  form-type-columns.js          # prints the columns, SharePoint types and indexes a Form Type's
+                                #   list needs, derived from its definition, for hand provisioning
   deploy_to_sharepoint.py       # the diff sync, plus its pre-flight verify gate, graph-derived
                                 #   leaf-first upload order and post-upload hash verification
                                 #   (its runbook is docs/deploy-runbook.md — hand-written Markdown
@@ -720,8 +736,8 @@ scripts/
   module-graph.js               # shared import-specifier scanner: the one answer to "what does
                                 #   this file import?", used by the verify gate and the layering test
   verify-config.js              # the verify gate's configuration half: evaluates Case Type modules,
-                                #   bank artifacts and the route table in Node, so a broken Case Type
-                                #   is found before a browser loads it
+                                #   Form Type definitions, bank artifacts and the route table in Node,
+                                #   so a broken Case Type is found before a browser loads it
   verify-dead-code.js           # the verify gate's dead-code half: reads the graph backwards to find
                                 #   modules nothing reaches and exports nothing reads
   verify_build.js               # npm run verify: parses every src/ + case-types/ module, resolves every

@@ -72,7 +72,7 @@
  * `'actions'` is **not** declarable: per-action Remediation tracking moved to
  * `answer.remediationStatus`, and nothing renders or validates such a field.
  *
- * @typedef {{ key: string, label: string, type: 'text' | 'textarea' | 'select' | 'radio' | 'person', options?: string[], required?: boolean, role?: string, showWhen?: Record<string, unknown>, placeholder?: string }} CaptureField
+ * @typedef {{ key: string, label: string, type: 'text' | 'textarea' | 'select' | 'radio' | 'person' | 'date', options?: string[], required?: boolean, role?: string, showWhen?: Record<string, unknown>, placeholder?: string }} CaptureField
  */
 
 /**

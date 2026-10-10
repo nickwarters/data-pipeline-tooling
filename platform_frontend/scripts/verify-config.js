@@ -3,8 +3,8 @@
 /**
  * Configuration checks for the verify gate: evaluate the things the browser
  * would otherwise be the first to evaluate — Case Type modules, Question Bank
- * artifacts, and the route table — and report what is broken by slug, file and
- * route name.
+ * artifacts, Form Type definitions and the route table — and report what is
+ * broken by slug, file and route name.
  *
  * The point is where a defect is discovered, not whether it is survivable. A
  * Case Type that throws is still contained at boot and still named in the
@@ -37,6 +37,15 @@ import {
   isBankVersionIdentifier,
   publishedContent,
 } from '../src/lib/bank-version.js';
+import {
+  CHOICE_FIELD_TYPES,
+  FORM_FIELD_EDITORS,
+  FORM_FIELD_STORAGE,
+  FORM_OWNED_FIELDS,
+  FORM_PANEL_LAYOUTS,
+  FORM_SECTION_TYPES,
+  formFields,
+} from '../form-types/contract.js';
 import { resolveRelative } from './module-graph.js';
 
 /** @typedef {import('./verify_build.js').Failure} Failure */
@@ -46,6 +55,8 @@ const REPO_ROOT = new URL('../', import.meta.url);
 
 /** The module whose relative specifiers the registry thunks are written against. */
 const MANIFEST = 'case-types/manifest.js';
+/** Where the application names its Form Types, for a failure that is about the list. */
+const APP_CONFIG_FILE = 'src/app-config.js';
 /** The file every route failure is attributed to — the route table lives there. */
 const ROUTES = 'src/setup/register-routes.js';
 const BANKS_DIR = 'case-types/banks/';
@@ -69,7 +80,7 @@ const RESPONSE_TYPES = [
  * @returns {Promise<{
  *   failures: Failure[],
  *   bankEdges: BankEdge[],
- *   counts: { caseTypes: number, banks: number, routes: number }
+ *   counts: { caseTypes: number, formTypes: number, banks: number, routes: number }
  * }>}
  */
 export async function checkConfiguration() {
@@ -97,6 +108,7 @@ export async function checkConfiguration() {
 
   const failures = [
     ...(await checkCaseTypes()),
+    ...checkFormTypes(),
     ...checkBankArtifacts({ artifacts }),
     ...(table ? checkRouteTable({ table }) : routeFailures),
   ];
@@ -105,6 +117,7 @@ export async function checkConfiguration() {
     bankEdges: bankArtifactEdges(),
     counts: {
       caseTypes: CASE_TYPES.length,
+      formTypes: APP_CONFIG.formTypes.length,
       banks: artifacts.length,
       routes: Object.keys(table ?? {}).length,
     },
@@ -1399,6 +1412,201 @@ function publishedContentMatches(bank, published) {
       defaultOutcomeId: published.defaultOutcomeId ?? null,
     })
   );
+}
+
+/**
+ * Check every Form Type definition the application composes.
+ *
+ * `tsc` already refuses a misspelt key through each definition's
+ * `@satisfies`. What it cannot see is a value: a section type, layout, field
+ * type or `editableBy` outside the vocabulary, two fields writing one column,
+ * a choice field offering nothing, or a definition trying to take over a column
+ * the application owns. Each would reach a browser as a field that draws
+ * wrongly or a column written by two controls.
+ *
+ * @param {{ formTypes?: readonly import('../form-types/contract.js').FormTypeDefinition[] }} [options]
+ * @returns {Failure[]}
+ */
+export function checkFormTypes(options = {}) {
+  const formTypes = options.formTypes ?? APP_CONFIG.formTypes;
+
+  /** @type {Failure[]} */
+  const failures = [];
+  /** @type {Map<string, string>} */
+  const slugs = new Map();
+  /** @type {Map<string, string>} */
+  const listNames = new Map();
+
+  for (const definition of formTypes) {
+    /** @type {any} */
+    const def = definition;
+    const slug = String(def?.slug ?? '(no slug)');
+    const file = `form-types/${slug}.js`;
+    /** @param {string} message */
+    const fail = (message) =>
+      failures.push({
+        kind: 'form-type',
+        file,
+        message: `Form Type "${slug}": ${message}`,
+      });
+
+    for (const key of ['slug', 'formName', 'listName']) {
+      if (!isNonEmptyString(def?.[key])) fail(`declares no \`${key}\``);
+    }
+    for (const [key, seen] of [
+      ['slug', slugs],
+      ['listName', listNames],
+    ]) {
+      const value = /** @type {Map<string, string>} */ (seen);
+      const name = def?.[/** @type {string} */ (key)];
+      if (!isNonEmptyString(name)) continue;
+      const other = value.get(name);
+      if (other !== undefined) {
+        failures.push({
+          kind: 'form-type',
+          file: APP_CONFIG_FILE,
+          message: `Form Types "${other}" and "${slug}" share the ${key} "${name}"`,
+        });
+      }
+      value.set(name, slug);
+    }
+
+    const sections = Array.isArray(def?.sections) ? def.sections : [];
+    if (sections.length === 0) fail('declares no `sections`');
+    checkFormSections(sections, fail);
+    checkFormFieldDeclarations(def, sections, fail);
+  }
+  return failures;
+}
+
+/**
+ * The section-level rules: known section types and layouts, and at most one
+ * Actions section, because a Form has one Actions column. Every problem is
+ * reported through `fail`, so the caller's list stays the one place failures
+ * land.
+ *
+ * @param {any[]} sections
+ * @param {(message: string) => void} fail
+ */
+function checkFormSections(sections, fail) {
+  let actionsSections = 0;
+  sections.forEach((section, index) => {
+    const where = `section ${index + 1}`;
+    if (!FORM_SECTION_TYPES.includes(section?.sectionType)) {
+      fail(
+        `${where} has the unknown section type "${String(section?.sectionType)}" — expected one of ${FORM_SECTION_TYPES.join(', ')}`
+      );
+      return;
+    }
+    if (
+      section.sectionType === 'panel' &&
+      section.layout !== undefined &&
+      !FORM_PANEL_LAYOUTS.includes(section.layout)
+    ) {
+      fail(
+        `${where} ("${section.panelName}") has the unknown layout "${String(section.layout)}" — expected one of ${FORM_PANEL_LAYOUTS.join(', ')}`
+      );
+    }
+    if (section.sectionType === 'actions') {
+      actionsSections += 1;
+      if (!isNonEmptyString(section.itemField)) {
+        fail(`${where} is an Actions section naming no \`itemField\``);
+      }
+    }
+  });
+  if (actionsSections > 1) {
+    fail(
+      `declares ${actionsSections} Actions sections — a Form has one set of Form Actions, stored in one column`
+    );
+  }
+}
+
+/**
+ * The field-level rules: known field types, a column per field, a non-empty
+ * choice list, a known `editableBy`, and the application's own columns left
+ * as the application declares them.
+ *
+ * @param {any} def
+ * @param {any[]} sections
+ * @param {(message: string) => void} fail
+ */
+function checkFormFieldDeclarations(def, sections, fail) {
+  const known = sections.filter((section) =>
+    FORM_SECTION_TYPES.includes(section?.sectionType)
+  );
+  const fields = /** @type {any[]} */ (formFields({ ...def, sections: known }));
+
+  /** @type {Set<string>} */
+  const columns = new Set();
+  /** @param {string} column */
+  const claim = (column) => {
+    if (columns.has(column)) {
+      fail(
+        `more than one field writes the column "${column}" — each column belongs to one field`
+      );
+    }
+    columns.add(column);
+  };
+
+  for (const field of fields) {
+    const name = `field "${String(field?.label ?? field?.itemField)}"`;
+    if (!Object.hasOwn(FORM_FIELD_STORAGE, field?.type)) {
+      fail(
+        `${name} has the unknown field type "${String(field?.type)}" — expected one of ${Object.keys(FORM_FIELD_STORAGE).join(', ')}`
+      );
+    }
+    if (!isNonEmptyString(field?.itemField)) {
+      fail(`${name} names no \`itemField\``);
+      continue;
+    }
+    claim(field.itemField);
+
+    if (CHOICE_FIELD_TYPES.includes(field.type)) {
+      const choices = field.choices;
+      if (!Array.isArray(choices) || choices.length === 0) {
+        fail(`${name} is a ${field.type} offering no \`choices\``);
+      }
+    }
+    if (
+      field.editableBy !== undefined &&
+      !FORM_FIELD_EDITORS.includes(field.editableBy)
+    ) {
+      fail(
+        `${name} has the unknown \`editableBy\` "${String(field.editableBy)}" — expected one of ${FORM_FIELD_EDITORS.join(', ')}`
+      );
+    }
+
+    const owned = FORM_OWNED_FIELDS[field.itemField];
+    if (owned) {
+      if (field.type !== owned.type) {
+        fail(
+          `${name} declares the application's column "${field.itemField}" as ${String(field.type)} — it is always ${owned.type}`
+        );
+      }
+      if (field.editableBy !== undefined) {
+        fail(
+          `${name} declares \`editableBy\` on the application's column "${field.itemField}", which nobody edits after creation`
+        );
+      }
+    }
+  }
+
+  for (const section of sections) {
+    if (
+      section?.sectionType === 'actions' &&
+      isNonEmptyString(section.itemField)
+    ) {
+      claim(section.itemField);
+    }
+  }
+
+  for (const [column, owned] of Object.entries(FORM_OWNED_FIELDS)) {
+    if (owned.placedBy === 'definition' && !columns.has(column)) {
+      fail(
+        `does not place the application's column "${column}" — the page draws only the Status and the current managers itself`
+      );
+    }
+  }
 }
 
 /**

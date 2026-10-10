@@ -26,8 +26,9 @@ function field(overrides = {}) {
 
 // --- The four primitives ---
 
-test('the built-in types are the four that hold text, plus the one that holds a person', () => {
+test('the built-in types are the five that hold a string, plus the one that holds a person', () => {
   assert.deepEqual(captureFieldTypeNames().sort(), [
+    'date',
     'person',
     'radio',
     'select',
@@ -94,6 +95,49 @@ test('a type builds its own control, and reports edits under its field key', () 
   control.value = 'changed';
   control._listeners.change?.[0]({ target: control, currentTarget: control });
   assert.deepEqual(edits, [['rootCause', 'changed']]);
+});
+
+test('a date field takes a calendar date and refuses anything else', () => {
+  const date = /** @type {any} */ (getCaptureFieldType('date'));
+  const declared = field({ key: 'meetingDate', type: 'date' });
+
+  assert.doesNotThrow(() => date.validate(declared, '2026-10-10'));
+  for (const wrong of ['10/10/2026', '2026-10-10T09:00:00Z', 'soon']) {
+    // Stored as the calendar date alone, so a reader in another zone sees the
+    // same day and a list filter can compare it as written.
+    assert.throws(
+      () => date.validate(declared, wrong),
+      new RegExp(
+        `Invalid value "${wrong}" for date Issue Capture Field "meetingDate"`
+      ),
+      wrong
+    );
+  }
+  assert.throws(
+    () => date.validate(declared, { loginName: 'a', displayName: 'A' }),
+    /Invalid value for date Issue Capture Field "meetingDate" — expected text/
+  );
+});
+
+test('a date field is edited with the browser date picker', () => {
+  /** @type {any[]} */
+  const edits = [];
+  const control = /** @type {any} */ (
+    getCaptureFieldType('date')?.editControl(
+      /** @type {any} */ ({
+        field: field({ key: 'meetingDate', type: 'date' }),
+        value: '2026-10-10',
+        namePrefix: '',
+        onCapture: (/** @type {any} */ ...args) => edits.push(args),
+      })
+    )
+  );
+
+  assert.equal(control.type, 'date');
+  assert.equal(control.value, '2026-10-10');
+  control.value = '2026-10-11';
+  control._listeners.change?.[0]({ target: control, currentTarget: control });
+  assert.deepEqual(edits, [['meetingDate', '2026-10-11']]);
 });
 
 // --- Reading a stored value is not the type's business ---
