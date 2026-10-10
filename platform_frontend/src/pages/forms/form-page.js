@@ -386,7 +386,7 @@ export function formPageView(state, tools) {
     return pageShell(formType, [
       h(
         'p',
-        { className: 'cora-forms-error', role: 'alert' },
+        { className: 'cora-form-error', role: 'alert' },
         'This form could not be loaded. Try again shortly.'
       ),
     ]);
@@ -550,7 +550,7 @@ function footerView(route, formType, tools) {
     route.closeError
       ? h(
           'p',
-          { className: 'cora-forms-error', role: 'alert' },
+          { className: 'cora-form-error', role: 'alert' },
           route.closeError
         )
       : null,

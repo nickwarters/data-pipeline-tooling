@@ -66,7 +66,7 @@ export function archiveView(state, tools) {
   return [
     h(
       'p',
-      { className: 'cora-forms-hint' },
+      { className: 'cora-form-intro' },
       state.chrome.permissions.isFormsControl
         ? 'Every Form that is Completed, Void or Cancelled. These are read-only.'
         : 'Forms you’ve been part of that are Completed, Void or Cancelled. These are read-only.'
@@ -96,7 +96,7 @@ function toolbarView(route, tools) {
   const closed = route.archive.window;
   return h(
     'div',
-    { className: 'cora-forms-toolbar' },
+    { className: 'cora-form-filters' },
     route.formTypes.length > 1
       ? field(
           'Form type',
@@ -170,7 +170,7 @@ function toolbarView(route, tools) {
 function field(caption, control) {
   return h(
     'label',
-    { className: 'cora-forms-field' },
+    { className: 'cora-form-filter' },
     h('span', {}, caption),
     control
   );
@@ -210,7 +210,7 @@ function tableView(state, tools) {
     }),
     h(
       'div',
-      { className: 'cora-forms-tablefoot' },
+      { className: 'cora-form-tablefoot' },
       h('span', {}, `Showing ${rows.length}`),
       loadMoreView(route.archive.next, () => tools.onLoadMore('archive'))
     )

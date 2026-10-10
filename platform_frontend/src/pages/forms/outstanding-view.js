@@ -54,7 +54,7 @@ export function outstandingColumns() {
         row.overdueDays > 0
           ? h(
               'span',
-              { className: 'cora-forms-due-overdue' },
+              { className: 'cora-form-due-overdue' },
               `${formatDate(value)} · ${row.overdueDays} ${row.overdueDays === 1 ? 'day' : 'days'} over`
             )
           : formatDate(value),

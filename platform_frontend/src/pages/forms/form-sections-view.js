@@ -529,7 +529,7 @@ function actionsView(section, id, item, context) {
     unreadable
       ? h(
           'p',
-          { className: 'cora-forms-error', role: 'alert' },
+          { className: 'cora-form-error', role: 'alert' },
           `The actions stored on this form could not be read (${unreadable.problem}), so none are shown. They are left as stored, and none can be added or changed here until the list item is corrected.`
         )
       : editing

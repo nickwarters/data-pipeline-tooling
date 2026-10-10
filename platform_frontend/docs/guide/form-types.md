@@ -212,6 +212,15 @@ then opens the Form with auto-save on. The Employee, a first line manager and a
 due date are required; a second line manager is not, since someone at the top
 of the directory has none.
 
+## Styles
+
+Every Forms page, the dashboard and archive as well as New form and the Form
+page, is styled by one `cora-form-*` set in the Forms block of
+`src/styles/cora-styles.css`. No page carries a set of its own. The set takes
+every colour from a design token, so dark mode follows the tokens, and each
+two-column layout stacks below 40rem. `tests/forms-styles.test.js` holds those
+three rules and refuses a page-specific `cora-forms-*` class.
+
 ## What the gate checks
 
 `npm run verify` refuses a definition with:
