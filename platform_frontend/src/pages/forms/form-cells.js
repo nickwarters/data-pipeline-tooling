@@ -42,23 +42,27 @@ export const employeeColumn = () => ({
   sortable: true,
 });
 
+/**
+ * A Form Status as its badge, wherever a Form's Status is shown.
+ *
+ * @param {string} status
+ * @returns {HTMLElement}
+ */
+export function formStatusBadge(status) {
+  return h(
+    'span',
+    { className: `cora-badge ${STATUS_BADGES[status] ?? ''}`.trim() },
+    status
+  );
+}
+
 /** @returns {FormColumn} */
 export const formStatusColumn = () => ({
   key: 'status',
   label: 'Status',
   value: 'status',
   sortable: true,
-  format: (value) =>
-    value
-      ? h(
-          'span',
-          {
-            className:
-              `cora-badge ${STATUS_BADGES[String(value)] ?? ''}`.trim(),
-          },
-          String(value)
-        )
-      : '',
+  format: (value) => (value ? formStatusBadge(String(value)) : ''),
 });
 
 /**

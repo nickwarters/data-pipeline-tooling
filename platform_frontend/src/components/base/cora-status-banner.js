@@ -11,15 +11,22 @@ import { formatTimeOfDay } from '../../lib/format-datetime.js';
  * reconnecting -> gentle "Reconnecting…" indicator (auto-clears on saved)
  * conflict -> persistent assertive banner with a Reload button
  *
- * @param {{ status: SaveStatus, lastSavedAt?: string | null }} props
+ * `conflictMessage` says what was changed elsewhere; a Case is usually the
+ * viewer's own other tab, a Form usually its other editor.
+ *
+ * @param {{ status: SaveStatus, lastSavedAt?: string | null, conflictMessage?: string }} props
  * @returns {HTMLElement | HTMLElement[]}
  */
-export function StatusBanner({ status, lastSavedAt = null }) {
+export function StatusBanner({
+  status,
+  lastSavedAt = null,
+  conflictMessage = 'This Case was edited in another tab. Reload to continue.',
+}) {
   if (status === 'saved') {
     return lastSavedAt ? renderSaved(lastSavedAt) : [];
   }
   if (status === 'conflict') {
-    return renderConflict();
+    return renderConflict(conflictMessage);
   }
   return renderTransient(status);
 }
@@ -56,8 +63,11 @@ function renderSaved(lastSavedAt) {
   );
 }
 
-/** @returns {HTMLElement} */
-function renderConflict() {
+/**
+ * @param {string} message
+ * @returns {HTMLElement}
+ */
+function renderConflict(message) {
   return h(
     'div',
     {
@@ -66,11 +76,7 @@ function renderConflict() {
       'aria-live': 'assertive',
     },
     [
-      h(
-        'p',
-        { className: 'cora-banner-text' },
-        'This Case was edited in another tab. Reload to continue.'
-      ),
+      h('p', { className: 'cora-banner-text' }, message),
       h(
         'button',
         {

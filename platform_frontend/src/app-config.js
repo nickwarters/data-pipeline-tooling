@@ -59,6 +59,7 @@ import * as caseSearchPage from './pages/cora-case-search.js';
 import * as caseSupportPage from './pages/cora-case-support.js';
 import * as accessPage from './pages/cora-access.js';
 import * as formsPage from './pages/cora-forms.js';
+import * as formPage from './pages/cora-form.js';
 
 /** @typedef {import('./setup/register-routes.js').AppContext} AppContext */
 /** @typedef {import('./setup/register-routes.js').PagePlugin} PagePlugin */
@@ -266,6 +267,15 @@ export const APP_CONFIG = {
       // the area is offered at all is a group membership.
       guard: (caps) => caps.canAccessForms,
       nav: { label: 'Forms', order: 65 },
+    },
+    {
+      id: 'form',
+      paths: ['#/forms/new', '#/forms/:slug/:id'],
+      page: formPage,
+      // One Form, or starting one. The same area guard as the dashboard, and
+      // no link of its own: the nav's Forms item stays lit beneath it. Who may
+      // read or edit the Form it opens is the access rule's question.
+      guard: (caps) => caps.canAccessForms,
     },
     {
       id: 'search',

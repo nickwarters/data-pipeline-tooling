@@ -22,7 +22,10 @@ and the descriptor rule from
 Amended on
 [#1052](https://github.com/nickwarters/data-pipeline-tooling/issues/1052): the
 application also owns `ClosedDate`, stamped by the lifecycle buttons, and the
-list indexes it in place of `Modified` (sections 1, 4 and 7).
+list indexes it in place of `Modified` (sections 1, 4 and 7). Amended again on
+[#1053](https://github.com/nickwarters/data-pipeline-tooling/issues/1053): the
+same write stamps `ClosedBy`, which settles how the completion date and
+completed-by are stored (section 4).
 
 ## Context
 
@@ -71,8 +74,8 @@ the environment prefix centrally (ADR-0033), like every other list the app
 reads.
 
 The application owns the fields access and the lifecycle depend on: `Employee`,
-`CurrentFirstLineManager`, `CurrentSecondLineManager`, `Status`, `DueDate` and
-`ClosedDate`. A definition may place them on the page. It cannot rename them, leave them out,
+`CurrentFirstLineManager`, `CurrentSecondLineManager`, `Status`, `DueDate`,
+`ClosedDate` and `ClosedBy`. A definition may place them on the page. It cannot rename them, leave them out,
 or make them editable after creation. The verify gate refuses a definition that
 tries.
 
@@ -145,7 +148,13 @@ Void, Cancel), never through a field. The same write stamps **`ClosedDate`**,
 the day the Form closed, which the Forms archive windows and sorts on. It is its
 own column rather than `Modified`, because `Modified` moves whenever anything
 touches the item, including the outside process that keeps the current
-managers up to date, so a Form closed a year ago would read as closed today. The defaults below are recorded as
+managers up to date, so a Form closed a year ago would read as closed today.
+It also stamps **`ClosedBy`**, the person who pressed the button, which the
+locked page shows beside the managers recorded at completion. Both are columns
+of their own rather than a reading of the version history: versioning is
+optional on these lists (section 7), and the history names whoever wrote the
+item last, which after a close can be the outside process updating the current
+managers. The defaults below are recorded as
 defaults, not settled rules:
 
 - **Who may Void or Cancel:** the two editors, the Employee and the current first

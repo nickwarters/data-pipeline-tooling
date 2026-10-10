@@ -107,6 +107,35 @@ export function formAccess(form, me, caps) {
 }
 
 /**
+ * Whether a person may edit a Form while it is open, by the roles its people
+ * columns give them alone. The page uses it to say what a current manager may
+ * do, so it shows the rule above rather than restating it.
+ *
+ * @param {FormItem} form
+ * @param {string} account
+ * @returns {boolean}
+ */
+export function editsWhileOpen(form, account) {
+  const roles = rolesOn(form, account, {
+    canAccessForms: true,
+    isFormsControl: false,
+  });
+  return roles.some((role) => EDITORS.has(role));
+}
+
+/**
+ * Whether a Person value names the account, compared as the access rule
+ * compares them.
+ *
+ * @param {unknown} value
+ * @param {string} account
+ * @returns {boolean}
+ */
+export function namesAccount(value, account) {
+  return sameAccount(account)(value);
+}
+
+/**
  * Whether a person may start a new Form. Everyone the matrix names may, so it
  * is the Forms area itself that decides.
  *
@@ -120,7 +149,7 @@ export function canCreateForms(caps) {
 /**
  * @param {FormItem} form
  * @param {string} me
- * @param {Capabilities} caps
+ * @param {Pick<Capabilities, 'canAccessForms' | 'isFormsControl'>} caps
  * @returns {FormRole[]}
  */
 function rolesOn(form, me, caps) {

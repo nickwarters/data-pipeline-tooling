@@ -92,6 +92,7 @@ export const formLists = {
       Status: 'Completed',
       DueDate: '2026-06-30',
       ClosedDate: '2026-06-24',
+      ClosedBy: LEE,
       MeetingDate: '2026-06-24',
       CompetencyStage: 'Stage 1',
       Location: 'In person',
@@ -111,6 +112,7 @@ export const formLists = {
       Status: 'Void',
       DueDate: '2026-07-31',
       ClosedDate: '2026-07-03',
+      ClosedBy: SAM,
     }),
     oneToOneItem('106', '2025-01-02T09:00:00Z', {
       Employee: SAM,
@@ -121,6 +123,7 @@ export const formLists = {
       Status: 'Cancelled',
       DueDate: '2025-01-31',
       ClosedDate: '2025-01-10',
+      ClosedBy: ANA,
     }),
     oneToOneItem('104', '2026-09-15T09:00:00Z', {
       Employee: ANA,

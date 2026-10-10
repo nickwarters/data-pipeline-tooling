@@ -77,15 +77,18 @@ code shared by every Form Type, never definition entries.
 ## The application's own columns
 
 `Employee`, `CurrentFirstLineManager`, `CurrentSecondLineManager`, `Status`,
-`DueDate` and `ClosedDate` belong to the application, because access, the lock
-and the archive read them. `ClosedDate` is the day a lifecycle button closed the
-Form and is empty while it is open; the archive reads it rather than `Modified`,
-which moves whenever anything touches the item. Every
+`DueDate`, `ClosedDate` and `ClosedBy` belong to the application, because
+access, the lock, the archive and the locked page read them. `ClosedDate` is the
+day a lifecycle button closed the Form and `ClosedBy` the person who pressed it;
+both are empty while it is open. The archive reads `ClosedDate` rather than
+`Modified`, which moves whenever anything touches the item, and neither is read
+from the version history, which a list may not keep and which names whoever
+wrote last rather than who closed the Form. Every
 Form's list has them, and they are always read and written plain.
 
 - A definition **must place** `Employee` and `DueDate`. The page draws the Status
-  badge, the current managers and the closed date itself, so a definition need
-  not place those.
+  badge, the current managers and who closed the Form and when itself, so a
+  definition need not place those.
 - A definition may not give one of them another type, or mark one `editableBy`:
   nobody edits them after creation.
 
@@ -145,6 +148,50 @@ rather than widening the read. The Form type, Employee and Status filters narrow
 the rows already read, and Load more reads the next fifty per Form Type. Its
 "Managers at completion" column shows `FirstLineManager` and
 `SecondLineManager`, which grant nothing.
+
+## The Form page
+
+`#/forms/<slug>/<id>` opens one Form, and `src/pages/forms/form-sections-view.js`
+draws it from its definition: one renderer for every Form Type, walking
+`sections` → `panels` → `fields`. Each field's control comes from the
+capture-field registry, the same one a Case's Issue Capture Fields use. The
+mode comes from the access rule:
+
+- **edit**, for the Employee and the current first line manager while the Form
+  is open. A field the viewer may change is a control; a field they may not
+  (the other editor's comments, the application's own columns) is text in the
+  same place, and a panel holding one owner's field says who may write in it.
+  Edits save through a `SaveQueue` built for this Form with
+  `src/services/form-save-target.js`, and the header shows "Last saved". The
+  footer holds Void form, Cancel form and Mark complete, each confirmed first.
+  A button writes what is still waiting, then `Status`, `ClosedDate` and
+  `ClosedBy`, on the press rather than the debounce.
+- **view**, for the current second line manager and the Forms control group:
+  every value is text, an empty one reads "Nothing recorded", a banner says why,
+  and no save queue is ever built.
+- **locked**, for everyone once the Status is Completed, Void or Cancelled: a
+  banner gives the closing date, the strip shows the current managers, and a
+  "Recorded at completion" block shows the Form's own `FirstLineManager` and
+  `SecondLineManager` and who closed it.
+
+`MANAGER_RECORDS` in `form-types/contract.js` pairs each recorded manager with
+the current manager column that grants access in its place. While the Form is
+open, a recorded manager in a strip says what its current holder may do, or
+names the current manager when the record says someone else.
+
+The Form Actions are listed read-only until the Actions editor arrives.
+
+## New form
+
+`#/forms/new` asks for the Form Type, the Employee, both managers and the due
+date. Choosing the Employee fills the first line manager from their directory
+profile and the second from that manager's, and either can be changed. A line
+says who will be able to see the Form. Creating writes the chosen managers to
+both pairs (`CurrentFirstLineManager` and `FirstLineManager`,
+`CurrentSecondLineManager` and `SecondLineManager`) with the Status Pending,
+then opens the Form with auto-save on. The Employee, a first line manager and a
+due date are required; a second line manager is not, since someone at the top
+of the directory has none.
 
 ## What the gate checks
 

@@ -740,7 +740,8 @@ a Form
 
 **Locked Form**:
 A **Form** whose **Form Status** is terminal. Read-only for everyone, its editors
-included, and never reopened. Shown in the Forms archive.
+included, and never reopened. Shown in the Forms archive. The lifecycle button
+that locked it stamped the day in `ClosedDate` and the person in `ClosedBy`.
 _Avoid_: Completed Form (Void and Cancelled lock it too), closed (fine in the archive's
 copy, but **Locked** is the rule)
 

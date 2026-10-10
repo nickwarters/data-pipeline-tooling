@@ -93,6 +93,8 @@ test('registerRoutes: registers the complete public route contract, in order', (
     '#/roadmap',
     '#/my-team',
     '#/forms',
+    '#/forms/new',
+    '#/forms/:slug/:id',
     '#/search',
     '#/case-support',
     '#/case-support/:caseType/:id',
@@ -314,6 +316,7 @@ test('route table: only the eligibility-gated routes guard their mount', () => {
     'journey-cases',
     'my-team',
     'forms',
+    'form',
     'search',
     'case-support',
     'access',
@@ -416,31 +419,39 @@ test('search guard: bounces a user without the capability, without mounting the 
   assert.equal(location.hash, '', 'does not push a history entry');
 });
 
+// The dashboard and a single Form (or New form) are separate routes under one
+// guard, so each is held to it.
+const FORMS_ROUTES = ['forms', 'form'];
+
 test('forms guard: admits a user with Forms access, the control group included', () => {
-  for (const permissions of [
-    { canAccessForms: true },
-    { canAccessForms: true, isFormsControl: true },
-  ]) {
-    replacedUrls.length = 0;
-    const { guard } = routeTable(makeContext([], permissions))['forms'];
-    assert.equal(guard?.(), true);
-    assert.deepEqual(replacedUrls, []);
+  for (const route of FORMS_ROUTES) {
+    for (const permissions of [
+      { canAccessForms: true },
+      { canAccessForms: true, isFormsControl: true },
+    ]) {
+      replacedUrls.length = 0;
+      const { guard } = routeTable(makeContext([], permissions))[route];
+      assert.equal(guard?.(), true, route);
+      assert.deepEqual(replacedUrls, []);
+    }
   }
 });
 
 test('forms guard: bounces a user without Forms access, whatever Case roles they hold', () => {
-  replacedUrls.length = 0;
-  const { guard } = routeTable(
-    makeContext([], {
-      canAccessForms: false,
-      isReviewer: true,
-      isControls: true,
-      isMaintainer: true,
-    })
-  )['forms'];
+  for (const route of FORMS_ROUTES) {
+    replacedUrls.length = 0;
+    const { guard } = routeTable(
+      makeContext([], {
+        canAccessForms: false,
+        isReviewer: true,
+        isControls: true,
+        isMaintainer: true,
+      })
+    )[route];
 
-  assert.equal(guard?.(), false);
-  assert.deepEqual(replacedUrls, ['/SitePages/app.aspx#/']);
+    assert.equal(guard?.(), false, route);
+    assert.deepEqual(replacedUrls, ['/SitePages/app.aspx#/']);
+  }
 });
 
 test('the Forms nav item is offered exactly to users with Forms access', () => {

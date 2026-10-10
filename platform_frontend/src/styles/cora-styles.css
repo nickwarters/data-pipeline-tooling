@@ -1391,7 +1391,9 @@
   content: '\1F464'; /* 👤 */
 }
 
-.cora-capture-person-clear {
+/* Scoped to the root like the base button rule, which it overrides: without
+   that, every button's accent fill won and the clear read as a red block. */
+[data-cora-root] .cora-capture-person-clear {
   display: inline-flex;
   padding: var(--cora-space-1);
   font: inherit;
@@ -1404,9 +1406,10 @@
   cursor: pointer;
 }
 
-.cora-capture-person-clear:hover,
-.cora-capture-person-clear:focus-visible {
+[data-cora-root] .cora-capture-person-clear:hover,
+[data-cora-root] .cora-capture-person-clear:focus-visible {
   color: var(--cora-color-danger);
+  background: transparent;
   outline: none;
 }
 
@@ -4137,4 +4140,290 @@
 
 [data-cora-root] .cora-forms-tablefoot .cora-forms-load-more {
   margin-top: 0;
+}
+
+/* ── A Form: New form and the Form page ─────────────────────────────────── */
+
+.cora-form-page {
+  display: grid;
+  gap: var(--cora-space-4);
+  max-width: 72rem;
+}
+
+.cora-form-page--narrow {
+  max-width: 40rem;
+}
+
+.cora-form-page h1 {
+  margin: 0;
+}
+
+.cora-form-breadcrumbs {
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--cora-space-4);
+  flex-wrap: wrap;
+}
+
+.cora-form-description {
+  margin: var(--cora-space-1) 0 0;
+  color: var(--cora-color-text-muted);
+}
+
+.cora-form-header-status {
+  display: grid;
+  justify-items: end;
+  gap: var(--cora-space-2);
+}
+
+.cora-form-banner {
+  padding: var(--cora-space-3) var(--cora-space-4);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  background: var(--cora-color-info-bg);
+}
+
+.cora-form-banner--locked {
+  color: var(--cora-color-success);
+  background: var(--cora-color-success-bg);
+  border-color: var(--cora-color-success);
+}
+
+.cora-form-strip,
+.cora-form-panel,
+.cora-form-recorded {
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+}
+
+/* Label and value pairs across the page, four to a row when there is room. */
+.cora-form-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  overflow: hidden;
+}
+
+.cora-form-strip-cell {
+  display: grid;
+  align-content: start;
+  gap: var(--cora-space-1);
+  padding: var(--cora-space-3) var(--cora-space-4);
+  border-right: 1px solid var(--cora-color-border);
+  border-bottom: 1px solid var(--cora-color-border);
+  /* Each cell draws its own right and bottom rules; pulling it under the
+     strip's edge hides the ones that would double the strip's border. */
+  margin: 0 -1px -1px 0;
+  min-width: 0;
+}
+
+.cora-form-strip-label .cora-form-optional {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.cora-form-strip-label {
+  font-size: var(--cora-font-size-xs);
+  font-weight: var(--cora-font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cora-color-text-muted);
+}
+
+.cora-form-strip-note {
+  font-size: var(--cora-font-size-xs);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-form-panel {
+  padding: var(--cora-space-4);
+}
+
+.cora-form-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--cora-space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--cora-space-3);
+}
+
+.cora-form-panel-header h2,
+.cora-form-recorded h2 {
+  margin: 0;
+  font-size: var(--cora-font-size-lg);
+}
+
+.cora-form-panel-hint {
+  margin: 0;
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+/* One row per question: the question and its hint on the left, the answer on
+   the right, stacking when the page is narrow. */
+.cora-form-qa-row {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) 3fr;
+  gap: var(--cora-space-4);
+  padding: var(--cora-space-3) 0;
+  border-top: 1px solid var(--cora-color-border);
+}
+
+.cora-form-qa-question {
+  display: grid;
+  align-content: start;
+  gap: var(--cora-space-1);
+}
+
+.cora-form-field,
+.cora-form-control-group,
+.cora-form-value-group {
+  display: grid;
+  gap: var(--cora-space-1);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.cora-form-label {
+  font-weight: var(--cora-font-weight-semibold);
+}
+
+.cora-form-hint,
+.cora-form-optional {
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-regular);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-form-value--long {
+  white-space: pre-wrap;
+}
+
+.cora-form-empty {
+  color: var(--cora-color-text-subtle);
+}
+
+.cora-form-split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: var(--cora-space-4);
+}
+
+.cora-form-page textarea.cora-capture-input {
+  min-height: 5rem;
+}
+
+.cora-form-recorded {
+  padding: var(--cora-space-4);
+}
+
+.cora-form-recorded-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--cora-space-2) var(--cora-space-4);
+  margin: var(--cora-space-3) 0 0;
+}
+
+.cora-form-recorded-list dt {
+  color: var(--cora-color-text-muted);
+}
+
+.cora-form-recorded-list dd {
+  margin: 0;
+}
+
+.cora-form-action-list {
+  display: grid;
+  gap: var(--cora-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cora-form-action-card {
+  display: grid;
+  gap: var(--cora-space-1);
+  padding: var(--cora-space-3);
+  background: var(--cora-color-surface-2);
+  border-radius: var(--cora-radius-sm);
+}
+
+.cora-form-action-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+  margin: 0;
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-form-footer {
+  display: grid;
+  gap: var(--cora-space-3);
+  padding: var(--cora-space-3) var(--cora-space-4);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+}
+
+.cora-form-footer-row,
+.cora-form-confirm {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--cora-space-3);
+  flex-wrap: wrap;
+}
+
+.cora-form-footer-note,
+.cora-form-confirm p {
+  margin: 0;
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-form-footer-buttons {
+  display: flex;
+  gap: var(--cora-space-2);
+  flex-wrap: wrap;
+}
+
+.cora-form-new {
+  display: grid;
+  gap: var(--cora-space-4);
+}
+
+.cora-form-audience {
+  margin: 0;
+  padding: var(--cora-space-2) var(--cora-space-3);
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+  background: var(--cora-color-surface-2);
+  border-radius: var(--cora-radius-sm);
+}
+
+/* Read by a screen reader, not drawn: a caption the panel heading already
+   says on screen. */
+.cora-form-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 40rem) {
+  .cora-form-qa-row {
+    grid-template-columns: 1fr;
+  }
 }
