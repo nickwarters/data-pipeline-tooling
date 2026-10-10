@@ -16,6 +16,8 @@ const sampleConfig = {
   reviewerManager: 'Reviewer Managers',
   responsiblePartyManager: 'ResponsibleParty-Managers',
   maintainer: 'CORA Owner Delegates',
+  forms: 'Forms',
+  formsControl: 'Forms Control',
   caseTypes: [
     { slug: 'example-review', displayName: 'Example Review' },
     { slug: 'complaints', displayName: 'Complaints' },
@@ -260,4 +262,25 @@ test('permissions.caseTypes: group names still derive from the registry display 
     caseTypeOwner: 'CaseTypeOwner - Complaints',
     journeyOwner: 'JourneyOwner - Complaints',
   });
+});
+
+test('resolveCapabilities: the Forms group opens the Forms area and is not a Visitor', () => {
+  const caps = resolveCapabilities(['Forms'], sampleConfig);
+  assert.equal(caps.canAccessForms, true);
+  assert.equal(caps.isFormsControl, false);
+  assert.equal(caps.isVisitor, false);
+  assert.equal(caps.isReviewer, false);
+});
+
+test('resolveCapabilities: the Forms control group implies Forms access', () => {
+  const caps = resolveCapabilities(['Forms Control'], sampleConfig);
+  assert.equal(caps.isFormsControl, true);
+  assert.equal(caps.canAccessForms, true);
+  assert.equal(caps.isVisitor, false);
+});
+
+test('resolveCapabilities: a Case-only user gains no Forms access', () => {
+  const caps = resolveCapabilities(['Reviewers', 'Controls'], sampleConfig);
+  assert.equal(caps.canAccessForms, false);
+  assert.equal(caps.isFormsControl, false);
 });

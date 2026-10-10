@@ -15,6 +15,8 @@
  * reviewerManager: string,
  * responsiblePartyManager: string,
  * maintainer: string,
+ * forms: string,
+ * formsControl: string,
  * caseTypes: CaseTypeGroupSource[]
  * }} PermissionsConfig
  */
@@ -25,7 +27,12 @@ import { CASE_TYPES } from '../../case-types/manifest.js';
  * Resolved capabilities for the current user, derived from group membership.
  * `isReviewer` is implied by any `Reviewers - <type>` list-access group as well
  * as the standalone `Reviewers` functional group. `isVisitor` is DERIVED (not
- * config-driven): true iff the user holds no capability at all.
+ * config-driven): true iff the user holds no capability at all, so a person
+ * whose only access is to HR Forms is not a Visitor.
+ *
+ * `canAccessForms` opens the HR Forms area; the Forms control group implies it.
+ * Neither says anything about a particular Form: who may read or edit one is
+ * decided per Form by `form-access.js`, from the Form's own people columns.
  *
  * These are platform-wide and per-user. They are not the per-Case roles the
  * Case page's access matrix is keyed by, and only some of them ever become
@@ -44,6 +51,8 @@ import { CASE_TYPES } from '../../case-types/manifest.js';
  * isResponsiblePartyManager: boolean,
  * isMaintainer: boolean,
  * canSearchCases: boolean,
+ * canAccessForms: boolean,
+ * isFormsControl: boolean,
  * isVisitor: boolean
  * }} Capabilities
  */
@@ -91,6 +100,11 @@ export const permissions = {
   reviewerManager: 'Reviewer Managers',
   responsiblePartyManager: 'ResponsibleParty-Managers',
   maintainer: 'CORA Owner Delegates',
+  // The HR Forms groups. Both names are placeholders until provisioning
+  // settles them, and so is having one access group for every Form list
+  // rather than one per list. The control group is one for every Form Type.
+  forms: 'Forms',
+  formsControl: 'Forms Control',
   // Per-Case-Type group names derive from `displayName`: each entry
   // yields `Reviewers - X`, `CaseTypeOwner - X`, and `JourneyOwner - X`.
   // Projected from THE Case Type registry (case-types/manifest.js) so adding a
@@ -144,6 +158,8 @@ export function resolveCapabilities(userGroups, config = permissions) {
   const isMaintainer = has(config.maintainer);
   // Widening search to a second role is this one line and no call site.
   const canSearchCases = isControls;
+  const isFormsControl = has(config.formsControl);
+  const canAccessForms = isFormsControl || has(config.forms);
   const isVisitor =
     !isReviewer &&
     !isAdviser &&
@@ -151,6 +167,7 @@ export function resolveCapabilities(userGroups, config = permissions) {
     !isReviewerManager &&
     !isResponsiblePartyManager &&
     !isMaintainer &&
+    !canAccessForms &&
     ownedCaseTypes.length === 0 &&
     ownedJourneyCaseTypes.length === 0;
 
@@ -165,6 +182,8 @@ export function resolveCapabilities(userGroups, config = permissions) {
     isResponsiblePartyManager,
     isMaintainer,
     canSearchCases,
+    canAccessForms,
+    isFormsControl,
     isVisitor,
   };
 }

@@ -511,6 +511,11 @@ src/
       kpi-view.js                 # pure renderer for kpi-strip-model output
       panel-descriptors.js        # code-owned panel registry and role visibility
     home.js                      # store-driven Home route slice and pure view
+    cora-forms.js                 # store-driven #/forms slice, Forms access only: open Forms across every
+                                  #   Form Type in the viewer's roles, the employee and manager lanes, and
+                                  #   the control group's paged "All open forms"
+    forms/
+      outstanding-model.js        # pure Form rows (read-gated by form-access), lanes and filters
     cora-journey-cases.js         # store-driven Journey Cases slice + generic descriptors (GRID-2)
     cora-my-team.js               # store-driven Team Workload slice + pure per-Reviewer workload view
     roadmap.js                    # store-driven Roadmap slice and pure view
@@ -619,6 +624,9 @@ src/
     form-encoding.js              # THE stored encoding of a Form's free text and Form Actions: UTF-8
                                   #   base64, decoded forgivingly (a hand-edited cell is reported, not
                                   #   thrown). Not encryption. Only the clients call it
+    form-access.js                # THE Forms access rule: who may read, edit and create a Form, and edit
+                                  #   which field, from its current people columns and the Forms groups;
+                                  #   a JavaScript gate, not a permission boundary (ADR-0059)
     form-items.js                 # what both clients agree a Form column is (person, date, choice or
                                   #   encoded), and which columns a write and a query may name
     reviewer-manager.js           # a Reviewer's current manager for an assignment write, shared by

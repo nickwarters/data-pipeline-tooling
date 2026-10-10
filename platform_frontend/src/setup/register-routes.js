@@ -32,6 +32,9 @@ import { APP_CONFIG } from '../app-config.js';
  * @property {import('./resolve-eligible-case-types.js').CaseSource[]} caseSources
  * @property {import('./resolve-eligible-case-types.js').CaseSource[]} journeyCaseSources
  * @property {import('./resolve-eligible-case-types.js').AllocationSource[]} allocationSources
+ * @property {readonly import('../../form-types/contract.js').FormTypeDefinition[]} [formTypes]
+ *   The Form Types the Forms pages list, from `APP_CONFIG.formTypes`. A page
+ *   cannot import the composition root, which imports it.
  * @property {Element} appEl
  * @property {() => Promise<unknown>} [loadQuestionBankEditor]
  * @property {() => Promise<unknown>} [loadQuestionBankSamples]

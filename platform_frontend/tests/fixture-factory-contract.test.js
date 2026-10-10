@@ -50,6 +50,8 @@ const CAPABILITY_KEYS = [
   'isResponsiblePartyManager',
   'isMaintainer',
   'canSearchCases',
+  'canAccessForms',
+  'isFormsControl',
   'isVisitor',
 ];
 

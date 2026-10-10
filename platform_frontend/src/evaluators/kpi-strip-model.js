@@ -40,8 +40,12 @@ export const DEFAULT_BREACH_WINDOW_HOURS = 24;
  * breakdown: Breakdown | null
  * }} KpiTile
  *
+ * `role` names the lane, and is the key its open state and its tiles' expanded
+ * state are stored under. The Case dashboard's lanes are `reviewer`,
+ * `controls` and `owner`; the Forms dashboard's are `employee` and `manager`.
+ *
  * @typedef {{
- * role: 'reviewer' | 'controls' | 'owner',
+ * role: string,
  * label: string,
  * scopeLabel: string,
  * isPrimary: boolean,

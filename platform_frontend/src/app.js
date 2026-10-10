@@ -92,6 +92,7 @@ async function boot() {
     caseSources,
     journeyCaseSources,
     allocationSources,
+    formTypes: APP_CONFIG.formTypes,
     appEl,
   });
 
