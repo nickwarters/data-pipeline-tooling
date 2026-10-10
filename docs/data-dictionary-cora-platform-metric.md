@@ -31,10 +31,21 @@ polls had seen by its close. Sync polls hourly
 ([ADR-0023](adr/0023-sync-polls-hourly-publishes-gold-daily.md)), which bounds
 what can be missed to changes reversed within an hour.
 
-**2. Brand is a placeholder.** Every Case-counting table carries `brand`,
-filled with the literal `(unknown)` for the same reason the Sync subject's own
-aggregates do: no source reachable from these pipelines carries Brand yet, and
-carrying the column now means the shape does not change the day a source lands.
+**2. Brand is a stand-in.** No source reachable from these pipelines carries
+Brand yet, so the current Cases are read through
+`readers.sharepoint_cases.current_cases_with_brand`, which attaches one of
+`brand 1` / `brand 2` / `brand 3` to each Case, picked by a hash of its
+`case_id` so a Case keeps its brand from run to run. It is not a real Brand:
+a number split by brand is real Cases under made-up labels. Every
+Case-counting table groups by it: a table reduced from the current Cases takes
+each Case's own, and one reduced from the observation history or a Detail
+Table takes the brand its Case has in the current Cases, so a Case's rows land
+under one brand everywhere. A history Case the current Cases no longer hold has
+no brand to take and is counted under `(unknown)`. The day a real Brand source
+lands, only where the value comes from changes, never a table's shape. Reading
+a brand off a Shared Reader breaks the rule that a Shared Reader does no
+shaping ([`shared-readers.md`](shared-readers.md), G5), deliberately and only
+until then.
 
 **3. Every statistic is over what could be measured.** A mean, percentile or
 maximum column is NULL where the group had nothing to summarise — a status
@@ -68,7 +79,7 @@ read off the same history, not from its original `assigned_at`.
 | **Medallion layer** | gold only |
 | **Is this a Case Type?** | No — Reporting aggregates |
 | **Source system** | Sync gold `case_current`, `answer`, `answer_action`, `appeal`, `conversation_message`; Sync silver `case_version` (the observation history) |
-| **Readers** | `readers.sharepoint_cases.CurrentCasesReader`, `AnswersReader`, `AnswerActionsReader`, `AppealsReader`, `ConversationMessagesReader`, `CaseObservationHistoryReader` — the Shared Readers over the Sync subject ([ADR-0026](adr/0026-shared-readers-declare-cross-subject-reads.md)). This pipeline names no layer and no table for data it does not own; the physical sources above are facts about the data, not couplings in the code |
+| **Readers** | `readers.sharepoint_cases.current_cases_with_brand` (`CurrentCasesReader` with the stand-in brand, item 2), `AnswersReader`, `AnswerActionsReader`, `AppealsReader`, `ConversationMessagesReader`, `CaseObservationHistoryReader` — the Shared Readers over the Sync subject ([ADR-0026](adr/0026-shared-readers-declare-cross-subject-reads.md)). This pipeline names no layer and no table for data it does not own; the physical sources above are facts about the data, not couplings in the code |
 | **Load strategy** | `Refresh()`, every table but `case_open_age_daily` and `reviewer_workload_daily`, which are `AccumulateByRun` keyed on the Sync snapshot's local date (`cora_platform_metric:<as_of_date>`), not the run date |
 | **Upstream dependencies** | `sharepoint_cases` Sync pipeline (`UPSTREAMS`) |
 | **Schedule / freshness** | Daily, in the `case_management` set after `reviewer_activity`, with the Sync freshness check |
@@ -109,7 +120,7 @@ it been waiting".
 
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
-| `brand` | `str` | No | `(unknown)` — see above. |
+| `brand` | `str` | No | The stand-in brand its Case has in the current Cases; `(unknown)` for a Case no longer current (item 2). |
 | `case_type` | `str` | No | Case Type slug. |
 | `status` | `str` | No | The open status dwelt in, as the source spells it; never `Completed` or `Void`. |
 | `interval_count` | `int` | No | Closed intervals: times a Case was observed leaving this status. |
@@ -144,7 +155,7 @@ reassigned Case's holds follow the Case.
 
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
-| `brand` | `str` | No | `(unknown)`. |
+| `brand` | `str` | No | The stand-in brand its Case has in the current Cases; `(unknown)` for a Case no longer current (item 2). |
 | `case_type` | `str` | No | Case Type slug. |
 | `assigned_reviewer_name` | `str` | No | The Reviewer's bare account, as the source holds it; `(unassigned)` where the latest observation names nobody. |
 | `case_count` | `int` | No | Cases with at least one observed hold. |
@@ -173,7 +184,7 @@ non-working days — the Saturday after a Friday due date — is on time.
 |-------|------|----------|-------------|
 | `sla_kind` | `str` | No | `review` or `remediation`. |
 | `completed_month` | `str` | No | `YYYY-MM` of `completed_at`'s local date. |
-| `brand` | `str` | No | `(unknown)`. |
+| `brand` | `str` | No | The Case's stand-in brand (item 2). |
 | `case_type` | `str` | No | Case Type slug. |
 | `assigned_reviewer_manager_name` | `str` | No | The Reviewer Manager's bare account; `(unassigned)` where absent. |
 | `case_count` | `int` | No | Completed Cases in the group. |
@@ -191,7 +202,7 @@ Reduced from `case_current` over `status = Void` with a `voided_at`. Grain:
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
 | `void_month` | `str` | No | `YYYY-MM` of `voided_at`'s local date. |
-| `brand` | `str` | No | `(unknown)`. |
+| `brand` | `str` | No | The Case's stand-in brand (item 2). |
 | `case_type` | `str` | No | Case Type slug. |
 | `void_reason` | `str` | No | The Void Reason key as the source holds it; `(unstated)` where absent. |
 | `voided_by_name` | `str` | No | Who voided it, as the source holds it; `(unassigned)` where absent. |
@@ -287,7 +298,7 @@ answers the other question: across a Case Type, how long does a reply take.
 
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
-| `brand` | `str` | No | `(unknown)`. |
+| `brand` | `str` | No | The stand-in brand of the Message's Case (item 2). |
 | `case_type` | `str` | No | Case Type slug. |
 | `thread_count` | `int` | No | Cases with at least one reply. |
 | `reply_count` | `int` | No | Replies across them. |
@@ -300,12 +311,12 @@ Grain: `brand` × `case_type`, over the **current non-void Cases** of the Case
 Type — Completed Cases included, since their Conversation is what they carried;
 a Message on a void Case, or on a Case no longer current, is not counted. So
 `message_count` is the volume on the live population, not a row count of the
-Detail Table, and a Case Type row exists whenever the Type has a live Case,
+Detail Table, and a brand × Case Type row exists whenever it has a live Case,
 Messages or not.
 
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
-| `brand` | `str` | No | `(unknown)`. |
+| `brand` | `str` | No | The stand-in brand of the Message's Case (item 2). |
 | `case_type` | `str` | No | Case Type slug. |
 | `case_count` | `int` | No | Current non-void Cases of the Type. |
 | `thread_count` | `int` | No | Of those, with at least one Message. |
@@ -317,8 +328,8 @@ Messages or not.
 ### `conversation_posting_pattern_current` — when Messages get posted
 
 Reduced from the same join. Grain: `brand` × `case_type` × `weekday_order` ×
-`hour_of_day` — the **full 7 × 24 grid** for every Case Type with at least one
-counted Message, so a quiet cell is a row holding `0` rather than a hole a
+`hour_of_day` — the **full 7 × 24 grid** for every brand × Case Type with at
+least one counted Message, so a quiet cell is a row holding `0` rather than a hole a
 heat-map would have to infer. Weekday and hour are on the **local clock**, the
 same zone every calendar date in the system is expressed in
 (`tools.observability.timestamps.local_timezone`), converted per instant so a
@@ -329,7 +340,7 @@ not parse is not counted.
 
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
-| `brand` | `str` | No | `(unknown)`. |
+| `brand` | `str` | No | The stand-in brand of the Message's Case (item 2). |
 | `case_type` | `str` | No | Case Type slug. |
 | `weekday_order` | `int` | No | ISO weekday, `1` Monday … `7` Sunday; sort on this. |
 | `weekday` | `str` | No | Its English name; read this. |
@@ -357,7 +368,7 @@ its floor for that reason, rather than by omission.
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
 | `intake_date` | `str` | No | `YYYY-MM-DD` of `created`'s local date; `(unstamped)` where `created` is missing or unparseable. |
-| `brand` | `str` | No | `(unknown)`. |
+| `brand` | `str` | No | The Case's stand-in brand (item 2). |
 | `case_type` | `str` | No | Case Type slug. |
 | `status` | `str` | No | The Case's status at `as_of_utc`, as the source spells it. |
 | `case_count` | `int` | No | Cases created that day now in that status. |
@@ -373,7 +384,8 @@ status twice in one day is counted that day only under the second. It is
 **rebuilt from the history on every run** rather than accumulated one snapshot
 per day, so it has no gap for a day the pipeline did not run, it reaches back
 before the table existed, and it stays a `Refresh()` like every other table
-here. The grid is **dense**: every day from the Case Type's first open day to
+here. The grid is **dense**: every day from the brand × Case Type's first open
+day to
 `as_of_utc`'s local date, for each of `To-allocate`, `In-progress` and
 `Actions In Progress` (and any other open status observed), so a status nobody
 was in that day is a `0`, not a missing row. The last day is as at
@@ -400,7 +412,7 @@ Sync subject.
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
 | `backlog_date` | `str` | No | `YYYY-MM-DD`, local. |
-| `brand` | `str` | No | `(unknown)`. |
+| `brand` | `str` | No | The stand-in brand its Case has in the current Cases; `(unknown)` for a Case no longer current (item 2). |
 | `case_type` | `str` | No | Case Type slug. |
 | `status` | `str` | No | An open status as the source spells it, or `(unobserved)`. |
 | `case_count` | `int` | No | Cases open at the close of that day in that status; `0` where none. |
@@ -447,7 +459,7 @@ percentiles do **not** roll up: a median of medians is not a median. Read
 | `leg` | `str` | No | One of the five legs above. |
 | `leg_order` | `int` | No | `1`–`5`, lifecycle order; sort on this. |
 | `ended_month` | `str` | No | `YYYY-MM` of the closing stamp's local date. |
-| `brand` | `str` | No | `(unknown)`. |
+| `brand` | `str` | No | The Case's stand-in brand (item 2). |
 | `case_type` | `str` | No | Case Type slug. |
 | `assigned_reviewer_name` | `str` | No | The Reviewer's bare account, as the source holds it; `(unassigned)` where absent. |
 | `case_count` | `int` | No | Legs measured — `0` where every leg in the group was out of order. |
@@ -473,7 +485,7 @@ every dimension.
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
 | `reportable_month` | `str` | No | `YYYY-MM` of `reportable_at`'s local date. |
-| `brand` | `str` | No | `(unknown)`. |
+| `brand` | `str` | No | The Case's stand-in brand (item 2). |
 | `case_type` | `str` | No | Case Type slug. |
 | `assigned_reviewer_name` | `str` | No | The Reviewer's bare account; `(unassigned)` where absent. |
 | `effective_outcome` | `str` | No | As the source holds it, in the Case Type's own vocabulary; `(unstated)` where absent. |
@@ -513,7 +525,7 @@ are held.
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
 | `sla_kind` | `str` | No | `review` or `remediation`. |
-| `brand` | `str` | No | `(unknown)`. |
+| `brand` | `str` | No | The Case's stand-in brand (item 2). |
 | `case_type` | `str` | No | Case Type slug. |
 | `assigned_reviewer_name` | `str` | No | The Reviewer's bare account; `(unassigned)` where absent. |
 | `due_bucket` | `str` | No | One of the six above. |
@@ -557,7 +569,7 @@ was asked for, and the clock is stated here.
 
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
-| `brand` | `str` | No | `(unknown)`. |
+| `brand` | `str` | No | The Case's stand-in brand (item 2). |
 | `case_type` | `str` | No | Case Type slug. |
 | `assigned_reviewer_name` | `str` | No | The Reviewer's bare account; `(unassigned)` where absent. |
 | `responsible_party_name` | `str` | No | The Responsible Party's bare account, as the source holds it; `(unassigned)` where absent. |
@@ -598,7 +610,7 @@ A Reviewer with no work in hand and no output in the window has no row.
 
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
-| `brand` | `str` | No | `(unknown)`. |
+| `brand` | `str` | No | The Case's stand-in brand (item 2). |
 | `case_type` | `str` | No | Case Type slug. |
 | `assigned_reviewer_name` | `str` | No | The Reviewer's bare account; `(unassigned)` where absent. |
 | `in_progress_count` | `int` | No | `In-progress` Cases held. |
@@ -631,7 +643,7 @@ counted.
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
 | `reportable_month` | `str` | No | `YYYY-MM` of the Case's `reportable_at` local date. |
-| `brand` | `str` | No | `(unknown)`. |
+| `brand` | `str` | No | The Case's stand-in brand (item 2). |
 | `case_type` | `str` | No | Case Type slug. |
 | `assigned_reviewer_name` | `str` | No | The Reviewer's bare account; `(unassigned)` where absent. |
 | `reportable_count` | `int` | No | Reportable Cases in the group. |
@@ -680,9 +692,10 @@ A percentile over too few Cases is one Case's value, not a tail, so `p90` is
 NULL where `n` is under 10 and `p95` where it is under 20. Percentiles do not
 roll up, so each `as_of_date` × window × measure also carries a `case_type`
 of `(all)`, the same distribution taken over every Case Type together. There
-is no `brand` column: it would be `(unknown)` on every row, and a placeholder
-cannot be rolled up from here the day a Brand source lands, so that day it is
-a new dimension. A group with no measurement in the window has no row.
+is no `brand` column: the table was built while Brand was `(unknown)` on every
+row, and a percentile cannot be rolled up to a brand from here, so a brand is a
+new dimension of this table, a change to its shape (a migration), which the
+stand-in brand (item 2) deliberately did not make. A group with no measurement in the window has no row.
 
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
@@ -754,7 +767,7 @@ bounds.
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
 | `reportable_month` | `str` | No | `YYYY-MM` of the Case's `reportable_at` local date. |
-| `brand` | `str` | No | `(unknown)`. |
+| `brand` | `str` | No | The Case's stand-in brand (item 2). |
 | `case_type` | `str` | No | Case Type slug. |
 | `assigned_reviewer_name` | `str` | No | The Reviewer's bare account; `(unassigned)` where absent. |
 | `reportable_count` | `int` | No | Reportable Cases in the group. |
@@ -764,7 +777,7 @@ bounds.
 ### `reviewer_throughput_weekly` — how much the Reviewers get through each week
 
 Reduced from `case_current`. Grain: `iso_week` × `brand` × `case_type`, plus a
-`case_type` of `(all)`.
+`case_type` of `(all)` for each brand.
 
 A **completion** here is a Reviewer making a Case Reportable — their output, as
 `reviewer_workload_current` counts it — over the same Reportable population as
@@ -772,14 +785,14 @@ A **completion** here is a Reviewer making a Case Reportable — their output, a
 date. `completions_total` counts every one; the per-Reviewer figures are over
 the Reviewers who made at least one that week (`active_reviewer_count`), so a
 Case with no Reviewer named is in the total but credited to nobody. The
-`(all)` row counts a Reviewer's completions across every Case Type together,
-which is why its percentiles are not those of the Case Type rows. `..._p90` is
+`(all)` row counts a Reviewer's completions across every Case Type of the brand
+together, which is why its percentiles are not those of the Case Type rows. `..._p90` is
 NULL where `active_reviewer_count` is under 10.
 
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
 | `iso_week` | `str` | No | `YYYY-Www`, ISO year and week of the local date. |
-| `brand` | `str` | No | `(unknown)`. |
+| `brand` | `str` | No | The Case's stand-in brand (item 2). |
 | `case_type` | `str` | No | Case Type slug, or `(all)`. |
 | `active_reviewer_count` | `int` | No | Reviewers with a completion that week. |
 | `completions_total` | `int` | No | Cases made Reportable that week. |
