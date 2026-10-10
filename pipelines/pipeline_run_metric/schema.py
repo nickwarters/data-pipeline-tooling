@@ -1,9 +1,9 @@
 """Declared gold schemas for the ``pipeline_run_metric`` Reporting subject.
 
-Three tables, each reduced from the run registry's ``run_records`` -- the
-step-level records every pipeline run emits (``tools.observability``). The
-registry stores one row per step execution; none of these tables is at that
-grain, and each states its own below.
+Four tables reduced from the run registry's ``run_records`` -- the step-level
+records every pipeline run emits (``tools.observability``) -- and one from the
+orchestration decision store. Neither store is at any of these grains; each
+table states its own below.
 
 Durations are seconds, as the registry records them. Statistics over an empty
 set are NULL, never zero.
@@ -21,6 +21,9 @@ SUBJECT = "pipeline_run_metric"
 # A run's overall outcome: the summary record's status where one was written,
 # else ``error`` if a step failed, else ``incomplete`` (killed or still running).
 RUN_STATUSES = ("ok", "error", "incomplete")
+
+# What a ``duration_percentiles_daily`` row measures: a whole run, or one step.
+PERCENTILE_LEVELS = ("pipeline", "step")
 
 
 @dataclass
@@ -51,6 +54,10 @@ class PipelineRunSummary:
     attempt_number: Annotated[int, NonNull(), Range(minimum=1)]
     is_latest_attempt: Annotated[bool, NonNull()]
     as_of_utc: Annotated[str, NonNull()]
+    orchestration_run_id: str
+    overhead_seconds: Annotated[float, NonNull(), Range(minimum=0)]
+    retry_attempts: float
+    retry_wait_seconds: float
 
 
 @dataclass
@@ -73,7 +80,6 @@ class StepDurationTrendDaily:
     run_date: Annotated[str, NonNull()]
     execution_count: Annotated[int, NonNull(), Range(minimum=1)]
     duration_p50: Annotated[float, NonNull(), Range(minimum=0)]
-    duration_p95: Annotated[float, NonNull(), Range(minimum=0)]
     duration_max: Annotated[float, NonNull(), Range(minimum=0)]
     trailing_p50_median: float
     delta_seconds: float
@@ -101,4 +107,66 @@ class StepRowFlow:
     rows_excluded: float
     out_ratio: float
     quarantine_ratio: float
+    as_of_utc: Annotated[str, NonNull()]
+    duration_seconds: float
+    rows_per_second: float
+
+
+@dataclass
+class DurationPercentilesDaily:
+    """``duration_percentiles_daily`` -- rolling percentiles per pipeline and
+    per step, one snapshot per date, so the table is their history.
+
+    Grain: ``level`` x ``pipeline`` x ``step_address`` x ``window_days`` x
+    ``as_of_date``. A row exists for each *execution* date the subject ran on
+    (the local date a run started, not the business ``run_date`` it was for)
+    and covers the ``window_days`` calendar days ending on it. Durations and
+    waits are over ``ok`` executions (``ok_count``); p90 is NULL below 10 of
+    them and p95 below 20. The change ratios compare with the row 28 days
+    earlier.
+    """
+
+    as_of_date: Annotated[str, NonNull()]
+    level: Annotated[str, NonNull(), OneOf(*PERCENTILE_LEVELS)]
+    pipeline: Annotated[str, NonNull()]
+    step_address: Annotated[str, NonNull()]
+    window_days: Annotated[int, NonNull(), Range(minimum=1)]
+    execution_count: Annotated[int, NonNull(), Range(minimum=0)]
+    ok_count: Annotated[int, NonNull(), Range(minimum=0)]
+    duration_p50: Annotated[float, Range(minimum=0)]
+    duration_p90: Annotated[float, Range(minimum=0)]
+    duration_p95: Annotated[float, Range(minimum=0)]
+    duration_max: Annotated[float, Range(minimum=0)]
+    failure_rate: Annotated[float, Range(minimum=0, maximum=1)]
+    retry_rate: Annotated[float, Range(minimum=0, maximum=1)]
+    rows_per_second_p50: Annotated[float, Range(minimum=0)]
+    p50_change_ratio_28d: float
+    p90_change_ratio_28d: float
+    as_of_utc: Annotated[str, NonNull()]
+
+
+@dataclass
+class BatchFinishDaily:
+    """``batch_finish_daily`` -- when each run date's scheduled work finished.
+
+    Grain: ``run_date`` (the orchestration's business date). From the
+    orchestration decision store, not the run registry. The finish is
+    measured from the start of the run date on the local calendar; its p50 and
+    p90 are over the run dates in the 28 days ending on this one, p90 NULL
+    below 10 of them. The ``items_*`` counts are of items, each by its last
+    decision that was not a skip, not of the decisions a ``--loop`` re-records.
+    """
+
+    run_date: Annotated[str, NonNull()]
+    pass_count: Annotated[int, NonNull(), Range(minimum=1)]
+    started_at: Annotated[str, NonNull()]
+    finished_at: Annotated[str, NonNull()]
+    finished_after_midnight_seconds: Annotated[float, NonNull()]
+    finish_p50_28d: Annotated[float, NonNull()]
+    finish_p90_28d: float
+    items_run: Annotated[int, NonNull(), Range(minimum=1)]
+    items_succeeded: Annotated[int, NonNull(), Range(minimum=0)]
+    items_failed: Annotated[int, NonNull(), Range(minimum=0)]
+    items_blocked: Annotated[int, NonNull(), Range(minimum=0)]
+    queue_wait_max_seconds: Annotated[float, Range(minimum=0)]
     as_of_utc: Annotated[str, NonNull()]
