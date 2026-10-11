@@ -9,7 +9,7 @@
  * reach a write.
  */
 
-import { h } from '../../lib/html.js';
+import { h, svg } from '../../lib/html.js';
 import { navigateTo } from '../../lib/navigate.js';
 import { formatDate } from '../../lib/format-datetime.js';
 import { toLocalDateKey } from '../../lib/local-calendar.js';
@@ -68,6 +68,8 @@ import { reducePeopleSearches } from './people-search-state.js';
  * @property {string | null} closeError
  * @property {number | null} removingAction The Form Action whose removal
  *   awaits a yes.
+ * @property {string | null} titleDraft The title as an editor is retyping it,
+ *   or `null` while it is shown as text.
  */
 
 /**
@@ -188,6 +190,7 @@ export function createFormPageSlice(
         closing: false,
         closeError: null,
         removingAction: null,
+        titleDraft: null,
       },
     },
   };
@@ -224,6 +227,20 @@ export function createFormPageSlice(
     const writing = /** @type {SaveQueue} */ (queue);
     dispatch({ type: 'form/field-edited', itemField, value: actions });
     writing.enqueue(id, itemField, actions);
+  }
+
+  /**
+   * Save a retyped title, trimmed, unless it is what is already stored, and
+   * show it as text again.
+   *
+   * @param {FormPageRoute} route
+   * @param {string} draft
+   */
+  function saveTitle(route, draft) {
+    const title = draft.trim();
+    const item = /** @type {FormItem} */ (route.item);
+    if (title !== formTitle(item)) editField(FORM_TITLE_FIELD, title, 'text');
+    dispatch({ type: 'form/title-edit-ended' });
   }
 
   /**
@@ -309,6 +326,14 @@ export function createFormPageSlice(
           });
         case 'form/close-started':
           return patchRoute(state, 'form', { closing: true });
+        case 'form/title-edit-started':
+          return patchRoute(state, 'form', {
+            titleDraft: formTitle(/** @type {FormItem} */ (route.item)),
+          });
+        case 'form/title-draft-changed':
+          return patchRoute(state, 'form', { titleDraft: action.title });
+        case 'form/title-edit-ended':
+          return patchRoute(state, 'form', { titleDraft: null });
         case 'form/closed':
           return patchRoute(state, 'form', {
             item: withFields(
@@ -317,6 +342,8 @@ export function createFormPageSlice(
             ),
             confirming: null,
             closing: false,
+            // A closed Form's title is locked with everything else.
+            titleDraft: null,
           });
         case 'form/close-failed':
           return patchRoute(state, 'form', {
@@ -339,6 +366,7 @@ export function createFormPageSlice(
         },
         onActions: editActions,
         onClose: (status) => void close(route, status),
+        onTitle: (draft) => saveTitle(route, draft),
       });
     },
     start(/** @type {any} */ tools) {
@@ -412,6 +440,7 @@ function withFields(item, fields) {
  * @property {(key: string, query: string) => void} onPersonQuery
  * @property {(itemField: string, actions: FormAction[]) => void} onActions
  * @property {(status: string) => void} onClose
+ * @property {(title: string) => void} onTitle Save the retyped title.
  */
 
 /**
@@ -456,7 +485,6 @@ export function formPageView(state, tools) {
   }
   const mode = formMode(access);
   const status = String(item.fields.Status ?? '');
-  const title = formTitle(item);
   const formLabel = [formType.formName, personName(item.fields.Employee)]
     .filter(Boolean)
     .join(' · ');
@@ -469,9 +497,8 @@ export function formPageView(state, tools) {
       { className: 'cora-form-header' },
       h(
         'div',
-        {},
-        title ? h('p', { className: 'cora-form-kicker' }, formLabel) : null,
-        h('h1', {}, title || formLabel),
+        { className: 'cora-form-header-text' },
+        ...headingView(route, item, formLabel, access, tools),
         h('p', { className: 'cora-form-description' }, formType.description)
       ),
       h(
@@ -489,9 +516,6 @@ export function formPageView(state, tools) {
     ),
     mode === 'locked' ? lockedBanner(item) : null,
     mode === 'view' ? viewOnlyBanner(item, access) : null,
-    access.canEditField({ itemField: FORM_TITLE_FIELD })
-      ? titleField(item, tools)
-      : null,
     ...formSectionsView(formType, item, {
       mode,
       access,
@@ -694,31 +718,135 @@ function footerView(route, formType, tools) {
 }
 
 /**
- * The Form's title, for an editor while the Form is open. Everyone else reads
- * it as the page heading.
+ * The page heading: the Form's title when it has one, under the Form Type and
+ * Employee, and otherwise those alone. An editor of an open Form gets a pencil
+ * beside it that swaps the heading for a box to retype the title in, saved on
+ * Enter or Save and put back on Escape or Cancel.
  *
+ * @param {FormPageRoute} route
  * @param {FormItem} item
+ * @param {string} formLabel
+ * @param {FormAccess} access
  * @param {FormPageTools} tools
+ * @returns {Array<Node | null>}
  */
-function titleField(item, tools) {
-  const stored = item.fields[FORM_TITLE_FIELD];
-  return h(
-    'label',
-    { className: 'cora-form-control-group cora-form-title-field' },
-    h('span', { className: 'cora-form-label' }, 'Title (optional)'),
-    h('input', {
-      className: 'cora-capture-input',
-      type: 'text',
-      value: typeof stored === 'string' ? stored : '',
-      maxLength: FORM_TITLE_MAX_LENGTH,
-      placeholder: 'e.g. Return to work after leave',
-      onchange: (/** @type {Event} */ event) =>
-        tools.onField(
-          FORM_TITLE_FIELD,
-          /** @type {HTMLInputElement} */ (event.target).value,
-          'text'
-        ),
-    })
+function headingView(route, item, formLabel, access, tools) {
+  const title = formTitle(item);
+  const kicker = title
+    ? h('p', { className: 'cora-form-kicker' }, formLabel)
+    : null;
+  if (!access.canEditField({ itemField: FORM_TITLE_FIELD })) {
+    return [kicker, h('h1', {}, title || formLabel)];
+  }
+  if (route.titleDraft === null) {
+    return [
+      kicker,
+      h(
+        'div',
+        { className: 'cora-form-heading' },
+        h('h1', {}, title || formLabel),
+        h(
+          'button',
+          {
+            type: 'button',
+            className: 'cora-form-title-edit',
+            'aria-label': title ? 'Edit title' : 'Add a title',
+            title: title ? 'Edit title' : 'Add a title',
+            onclick: (/** @type {Event} */ event) =>
+              afterDraw(event, '.cora-form-title-input', () =>
+                tools.dispatch({ type: 'form/title-edit-started' })
+              ),
+          },
+          pencilIcon()
+        )
+      ),
+    ];
+  }
+  const draft = route.titleDraft;
+  /** @param {Event} event */
+  const save = (event) =>
+    afterDraw(event, '.cora-form-title-edit', () => tools.onTitle(draft));
+  /** @param {Event} event */
+  const cancel = (event) =>
+    afterDraw(event, '.cora-form-title-edit', () =>
+      tools.dispatch({ type: 'form/title-edit-ended' })
+    );
+  return [
+    h('p', { className: 'cora-form-kicker' }, formLabel),
+    h(
+      'div',
+      { className: 'cora-form-heading cora-form-heading--editing' },
+      h('input', {
+        className: 'cora-capture-input cora-form-title-input',
+        type: 'text',
+        'aria-label': 'Title',
+        value: draft,
+        maxLength: FORM_TITLE_MAX_LENGTH,
+        placeholder: 'e.g. Return to work after leave',
+        oninput: (/** @type {Event} */ event) =>
+          tools.dispatch({
+            type: 'form/title-draft-changed',
+            title: /** @type {HTMLInputElement} */ (event.target).value,
+          }),
+        onkeydown: (/** @type {KeyboardEvent} */ event) => {
+          if (event.key !== 'Enter' && event.key !== 'Escape') return;
+          // Otherwise the key's own press lands on the pencil that focus has
+          // moved to, and opens the box again.
+          event.preventDefault();
+          if (event.key === 'Enter') save(event);
+          else cancel(event);
+        },
+      }),
+      h('button', { type: 'button', onclick: save }, 'Save'),
+      h(
+        'button',
+        { type: 'button', className: 'cora-btn-secondary', onclick: cancel },
+        'Cancel'
+      )
+    ),
+  ];
+}
+
+/**
+ * Change the heading, then move focus to what replaces the control that was
+ * used, once the change is drawn, so a keyboard user is not left on nothing.
+ *
+ * @param {Event} event
+ * @param {string} selector what to focus within the header afterwards
+ * @param {() => void} change
+ */
+function afterDraw(event, selector, change) {
+  const header = /** @type {HTMLElement | null} */ (event.target)?.closest?.(
+    '.cora-form-header'
+  );
+  change();
+  // The store draws on a microtask queued by the dispatch above, so this one
+  // runs after it.
+  queueMicrotask(() =>
+    /** @type {HTMLElement | null | undefined} */ (
+      header?.querySelector(selector)
+    )?.focus?.()
+  );
+}
+
+/** A pencil, drawn in the text colour at the size of the text beside it. */
+function pencilIcon() {
+  return svg(
+    'svg',
+    {
+      viewBox: '0 0 24 24',
+      width: '18',
+      height: '18',
+      fill: 'none',
+      stroke: 'currentColor',
+      'stroke-width': '1.8',
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+      focusable: 'false',
+      'aria-hidden': 'true',
+    },
+    svg('path', { d: 'M4 20h4L19 9l-4-4L4 16v4z' }),
+    svg('path', { d: 'M13.5 6.5l4 4' })
   );
 }
 

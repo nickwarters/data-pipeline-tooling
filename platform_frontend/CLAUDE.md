@@ -526,7 +526,7 @@ src/
                                   #   draws each as a capture-field control or as text, in edit, view or
                                   #   locked mode, from the access rule
       form-page.js                # one Form's route slice: the read, the save queue (built only for an
-                                  #   editor), the title as heading and an editor's field, the banners,
+                                  #   editor), the title as heading with an editor's pencil, the banners,
                                   #   and the lifecycle buttons that close it, Void asking why
       new-form.js                 # New form's route slice: Form Type, Employee, directory-prefilled
                                   #   managers, due date and optional title, then the one create write

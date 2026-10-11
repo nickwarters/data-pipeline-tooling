@@ -425,52 +425,154 @@ test('a Form voided before reasons were asked for says nothing about why', async
   assert.doesNotMatch(textOf(view, 'cora-form-banner--locked') ?? '', /Reason/);
 });
 
-test('an editor gives the open Form a title, which is saved and becomes its heading', async (t) => {
+/** @param {HTMLElement} view */
+const heading = (view) => view.querySelector('h1')?.textContent;
+
+test('an untitled open Form shows its Form Type and Employee as plain text, with a pencil to add a title', async () => {
+  const view = (await openForm('forms-employee', '102')).render();
+  assert.equal(heading(view), '1-to-1 · Sam Patel');
+  assert.ok(getByRole(view, 'button', { name: 'Add a title' }));
+  assert.equal(queryByRole(view, 'textbox', { name: 'Title' }), null);
+});
+
+test('an editor gives the open Form a title with the pencil, saved as the heading', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   for (const persona of ['forms-employee', 'forms-line-manager']) {
     const page = await openForm(persona, '102');
     fireEvent(
-      getByRole(page.render(), 'textbox', { name: 'Title (optional)' }),
-      'change',
-      { target: { value: 'Sickness absence review' } }
+      getByRole(page.render(), 'button', { name: 'Add a title' }),
+      'click'
     );
+    fireEvent(getByRole(page.render(), 'textbox', { name: 'Title' }), 'input', {
+      target: { value: '  Sickness absence review ' },
+    });
+    fireEvent(getByRole(page.render(), 'button', { name: 'Save' }), 'click');
     t.mock.timers.tick(5000);
     await saved(page);
 
     const stored = await page.client.getFormItem(oneToOne, '102');
     assert.equal(stored?.fields.FormTitle, 'Sickness absence review', persona);
     const view = page.render();
-    assert.equal(
-      view.querySelector('h1')?.textContent,
-      'Sickness absence review'
-    );
+    assert.equal(heading(view), 'Sickness absence review');
     assert.equal(textOf(view, 'cora-form-kicker'), '1-to-1 · Sam Patel');
+    assert.equal(queryByRole(view, 'textbox', { name: 'Title' }), null);
+    assert.ok(getByRole(view, 'button', { name: 'Edit title' }));
   }
 });
 
-test('someone who may only read the Form sees its title as the heading, with nothing to change it', async () => {
-  for (const [persona, id] of [
-    ['forms-second-line-manager', '103'],
-    ['forms-control', '103'],
-    ['forms-employee', '103'],
+test('Enter saves the retyped title and Escape puts the old one back', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const page = await openForm('forms-employee', '102');
+  const retype = (/** @type {string} */ title, /** @type {string} */ key) => {
+    fireEvent(getByRole(page.render(), 'button', { name: /title/ }), 'click');
+    const box = getByRole(page.render(), 'textbox', { name: 'Title' });
+    fireEvent(box, 'input', { target: { value: title } });
+    const pressed = fireEvent(
+      getByRole(page.render(), 'textbox', { name: 'Title' }),
+      'keydown',
+      { key }
+    );
+    // Held back, or the same key would land on the pencil and reopen the box.
+    assert.equal(pressed.defaultPrevented, true, key);
+  };
+
+  retype('Kept', 'Enter');
+  t.mock.timers.tick(5000);
+  await saved(page);
+  retype('Thrown away', 'Escape');
+  fireEvent(
+    getByRole(page.render(), 'button', { name: 'Edit title' }),
+    'click'
+  );
+  assert.equal(
+    /** @type {HTMLInputElement} */ (
+      getByRole(page.render(), 'textbox', { name: 'Title' })
+    ).value,
+    'Kept'
+  );
+  fireEvent(getByRole(page.render(), 'button', { name: 'Cancel' }), 'click');
+
+  assert.equal(heading(page.render()), 'Kept');
+  assert.equal(
+    (await page.client.getFormItem(oneToOne, '102'))?.fields.FormTitle,
+    'Kept'
+  );
+});
+
+test('saving a title unchanged writes nothing', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const page = await openForm('forms-employee', '102');
+  /** @type {unknown[]} */
+  const writes = [];
+  const patch = page.client.patchFormItem.bind(page.client);
+  page.client.patchFormItem = (/** @type {any[]} */ ...args) => {
+    writes.push(args[2]);
+    return patch(...args);
+  };
+  fireEvent(
+    getByRole(page.render(), 'button', { name: 'Add a title' }),
+    'click'
+  );
+  fireEvent(getByRole(page.render(), 'button', { name: 'Save' }), 'click');
+  t.mock.timers.tick(5000);
+
+  assert.deepEqual(writes, []);
+  assert.ok(getByRole(page.render(), 'button', { name: 'Add a title' }));
+});
+
+test('the pencil hands focus to the title box, and saving hands it back to the pencil', async () => {
+  const { render } = await import('../src/core/render.js');
+  const page = await openForm('forms-employee', '102');
+  const container = document.createElement('div');
+  const draw = () => render(container, page.render());
+  draw();
+
+  fireEvent(getByRole(container, 'button', { name: 'Add a title' }), 'click');
+  draw();
+  await Promise.resolve();
+  assert.equal(
+    document.activeElement,
+    getByRole(container, 'textbox', { name: 'Title' })
+  );
+
+  fireEvent(getByRole(container, 'button', { name: 'Cancel' }), 'click');
+  draw();
+  await Promise.resolve();
+  assert.equal(
+    document.activeElement,
+    getByRole(container, 'button', { name: 'Add a title' })
+  );
+});
+
+test('a Form closed while its title is being retyped shows the title as text, with no pencil', async () => {
+  const page = await openForm('forms-employee', '102');
+  fireEvent(
+    getByRole(page.render(), 'button', { name: 'Add a title' }),
+    'click'
+  );
+  await close(page, 'Mark complete', 'Yes, mark complete');
+
+  const view = page.render();
+  assert.equal(heading(view), '1-to-1 · Sam Patel');
+  assert.equal(queryByRole(view, 'textbox', { name: 'Title' }), null);
+  assert.equal(queryByRole(view, 'button', { name: /title/ }), null);
+});
+
+test('someone who may only read the Form, or reads it locked, sees its title as plain text with no pencil', async () => {
+  for (const [persona, id, expected] of [
+    ['forms-second-line-manager', '103', 'First quarter check-in'],
+    ['forms-control', '103', 'First quarter check-in'],
+    ['forms-employee', '103', 'First quarter check-in'],
+    ['forms-second-line-manager', '102', '1-to-1 · Sam Patel'],
   ]) {
     const view = (await openForm(persona, id)).render();
+    assert.equal(heading(view), expected, `${persona} ${id}`);
     assert.equal(
-      view.querySelector('h1')?.textContent,
-      'First quarter check-in',
-      persona
-    );
-    assert.equal(
-      queryByRole(view, 'textbox', { name: 'Title (optional)' }),
+      queryByRole(view, 'button', { name: /title/ }),
       null,
-      persona
+      `${persona} ${id}`
     );
   }
-  const open = (await openForm('forms-second-line-manager', '102')).render();
-  assert.equal(
-    queryByRole(open, 'textbox', { name: 'Title (optional)' }),
-    null
-  );
 });
 
 test('the closing Statuses the buttons write are exactly the ones that lock a Form', async () => {
@@ -869,10 +971,7 @@ test('a field of a type no control is drawn for, such as a status, is shown as w
   const view = (
     await openForm('forms-employee', '101', { formTypes: [withOutcome] })
   ).render();
-  assert.deepEqual(
-    controls(view).map((control) => control.closest('label')?.textContent),
-    ['Title (optional)']
-  );
+  assert.equal(controls(view).length, 0);
   assert.match(view.textContent ?? '', /OutcomeIn person/);
 });
 

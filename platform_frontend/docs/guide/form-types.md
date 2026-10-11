@@ -104,8 +104,11 @@ encoded. All but those and `VoidReason` are indexed.
 `FormTitle` is the Form's own title, so it can be found again by what it was
 about. It can be typed on New form, and is the one application column edited
 afterwards: either editor changes it on the Form page until the Form closes,
-when the lock stops it like every other field. It becomes the page heading, with
-the Form Type and Employee above it, sits under the Form Type in both Forms
+when the lock stops it like every other field. It becomes the page heading, as
+plain text with the Form Type and Employee above it; an editor of an open Form
+gets a pencil beside it that swaps the heading for a box (Enter or Save keeps
+the change, Escape or Cancel drops it). This is the same on every Form Type and
+is not configured. The title also sits under the Form Type in both Forms
 tables, and the tables' text filter matches it as well as the Employee. Being
 encoded, it is matched in the browser, never queried.
 
