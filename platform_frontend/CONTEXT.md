@@ -724,8 +724,8 @@ _Avoid_: Current manager (the access-granting pair), previous manager
 **Forms Control group**:
 One SharePoint group, shared by every **Form Type**, whose members may read every
 **Form** and create Forms but never edit one. A member who is also a Form's
-**Employee** or **Current manager** has that role's rights on it as well. The group's
-name is still open.
+**Employee** or **Current manager** has that role's rights on it as well. In SharePoint it
+is the `EPF Controls` group.
 _Avoid_: Controls (the Case-side group that resolves Appeals; unrelated), HR (a
 department, not a group)
 

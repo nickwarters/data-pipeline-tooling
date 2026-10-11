@@ -81,37 +81,36 @@ export const personas = {
     displayName: 'Dana Multi-role',
     groups: ['Reviewers', 'Controls', 'CaseTypeOwner - Example Review'],
   },
-  // The Forms cast (see forms.js). `Forms` and `Forms Control` are
-  // placeholder group names until the real ones are agreed.
+  // The Forms cast (see forms.js).
   'forms-employee': {
     userId: 'user-forms-employee',
     displayName: 'Sam Patel',
-    groups: ['Forms'],
+    groups: ['EPF Users'],
   },
   'forms-line-manager': {
     userId: 'user-forms-flm',
     displayName: 'Ana Lopez',
-    groups: ['Forms'],
+    groups: ['EPF Users'],
   },
   'forms-second-line-manager': {
     userId: 'user-forms-slm',
     displayName: 'Jo Reid',
-    groups: ['Forms'],
+    groups: ['EPF Users'],
   },
   'forms-control': {
     userId: 'user-forms-control',
     displayName: 'Kim Shaw',
-    groups: ['Forms', 'Forms Control'],
+    groups: ['EPF Users', 'EPF Controls'],
   },
   'forms-former-manager': {
     userId: 'user-forms-former-flm',
     displayName: 'Lee Morgan',
-    groups: ['Forms'],
+    groups: ['EPF Users'],
   },
   'forms-colleague': {
     userId: 'user-forms-colleague',
     displayName: 'Ade Okafor',
-    groups: ['Forms'],
+    groups: ['EPF Users'],
   },
   'forms-unrelated': {
     userId: 'user-forms-unrelated',

@@ -348,16 +348,16 @@ definition so it cannot drift:
 
 ### Settings
 
-| Setting                | Value                                                                                                                                                                                                    |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Permissions            | Break inheritance. Site owner group: Full Control. The `Forms` and `Forms Control` groups: one custom level with **View Items**, **Add Items** and **Edit Items** but not **Delete Items**. Nobody else. |
-| Item-level permissions | None. Every grant is on the list; no item ever has its own.                                                                                                                                              |
-| Hidden                 | Set the list's `Hidden` property (PowerShell or REST), and leave it out of the site navigation, so it is not in Site Contents. Site owners still reach it by its URL.                                    |
-| Search                 | Advanced settings: "Allow items from this list to appear in search results?" **No**.                                                                                                                     |
-| Auditing               | List settings, Information management policy settings: enable auditing of **viewing items** and **editing items**.                                                                                       |
-| Versioning             | **Off** unless decided otherwise. Version history keeps every earlier encoded value, readable by anyone who can read the item.                                                                           |
-| Attachments            | Off. A Form stores nothing outside its columns.                                                                                                                                                          |
-| Fill-in choices        | Off on every Choice column.                                                                                                                                                                              |
+| Setting                | Value                                                                                                                                                                                                       |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Permissions            | Break inheritance. Site owner group: Full Control. The `EPF Users` and `EPF Controls` groups: one custom level with **View Items**, **Add Items** and **Edit Items** but not **Delete Items**. Nobody else. |
+| Item-level permissions | None. Every grant is on the list; no item ever has its own.                                                                                                                                                 |
+| Hidden                 | Set the list's `Hidden` property (PowerShell or REST), and leave it out of the site navigation, so it is not in Site Contents. Site owners still reach it by its URL.                                       |
+| Search                 | Advanced settings: "Allow items from this list to appear in search results?" **No**.                                                                                                                        |
+| Auditing               | List settings, Information management policy settings: enable auditing of **viewing items** and **editing items**.                                                                                          |
+| Versioning             | **On**. Version history keeps every earlier encoded value, readable by anyone who can read the item.                                                                                                        |
+| Attachments            | Off. A Form stores nothing outside its columns.                                                                                                                                                             |
+| Fill-in choices        | Off on every Choice column.                                                                                                                                                                                 |
 
 **Hiding the list is not a permission boundary, and neither is encoding.**
 Every member of the Forms access group can read every Form on the list through
@@ -368,19 +368,19 @@ risk; ADR-0059 section 6 states it in full.
 
 ### Groups
 
-| Group           | Who is in it                                                                          | What it gives                                                                                          |
-| --------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `Forms`         | Everyone who takes part in Forms: employees and their first and second line managers. | The Forms area in the app, and read and write on every Form list.                                      |
-| `Forms Control` | The people who oversee Forms. Members need not also be in `Forms`.                    | Every Form, read-only, in the app, and starting a Form for someone; read and write on every Form list. |
+| Group          | Who is in it                                                                          | What it gives                                                                                          |
+| -------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `EPF Users`    | Everyone who takes part in Forms: employees and their first and second line managers. | The Forms area in the app, and read and write on every Form list.                                      |
+| `EPF Controls` | The people who oversee Forms. Members need not also be in `EPF Users`.                | Every Form, read-only, in the app, and starting a Form for someone; read and write on every Form list. |
 
 The control group gets write on the list, not Read, because its members start
 Forms for others and may be the employee or a current manager on a Form of
 their own. The app keeps them read-only on every other Form; that is the same
 JavaScript boundary as everything else on these lists, not a weaker one.
 
-Both names are **placeholders** in `src/services/permissions.js` until the real
-ones are agreed; change them there and here together. One access group serves
-every Form list until a Form Type needs a narrower audience.
+The names are declared in `src/services/permissions.js`; a rename changes them
+there and here together. One access group serves every Form list until a Form
+Type needs a narrower audience.
 
 ### Proving it on UAT
 
@@ -399,12 +399,12 @@ the app, before real Forms go in:
    and compares what the dashboard lists and which Forms open and are editable
    against the matrix. `npm run test:security:uat:forms -- <config.json>`.
    The personas are an employee, their first and second line managers, a
-   manager who is no longer current, a Forms Control member, a `Forms` member on
+   manager who is no longer current, an `EPF Controls` member, an `EPF Users` member on
    none of the Forms, and someone in neither group.
 3. **Search.** Search the site for a word written in one of the test Forms.
    Nothing should come back. Encoded text is not searchable as words anyway, so
    also search for the test employee's name, which is stored plain.
-4. **Auditing.** Read a test Form's item through REST as a `Forms` member, then
+4. **Auditing.** Read a test Form's item through REST as an `EPF Users` member, then
    look for that read in the site collection's audit log report. Record in the
    issue whether REST item reads are audited on this farm; ADR-0059 leaves it
    open until someone has looked.

@@ -420,7 +420,7 @@ test('someone the Form does not name is told they cannot open it', async () => {
   const page = await openForm('forms-employee', '101', {
     chrome: makeChrome({
       currentUser: { id: 'user-forms-former-flm', displayName: 'Lee Morgan' },
-      permissions: resolveCapabilities(['Forms']),
+      permissions: resolveCapabilities(['EPF Users']),
     }),
   });
   const view = page.render();

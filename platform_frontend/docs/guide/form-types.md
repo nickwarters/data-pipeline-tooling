@@ -118,9 +118,9 @@ Only `Employee`, `CurrentFirstLineManager` and `CurrentSecondLineManager` grant
 anything, compared as bare accounts without regard to case. A Status of
 Completed, Void or Cancelled locks the Form for everyone. Nobody edits the
 application's own columns after creation, whatever their role. Membership of
-the `Forms` group gives `canAccessForms`, and the `Forms Control` group gives
-`isFormsControl` and implies it; both names in `src/services/permissions.js` are
-placeholders until provisioning settles them.
+the `EPF Users` group gives `canAccessForms`, and the `EPF Controls` group (the
+Forms Control group) gives `isFormsControl` and implies it; both names are
+declared in `src/services/permissions.js`.
 
 This is a JavaScript gate, not a permission boundary: anyone in a Form list's
 access group can read every row through REST (ADR-0059).
