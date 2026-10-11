@@ -252,7 +252,13 @@ export const MANAGER_RECORDS = Object.freeze({
  * are empty otherwise. The note is free text, so it is encoded like any other.
  * Neither is indexed, because nothing filters on them.
  *
- * @type {Readonly<Record<string, { type: FormFieldType, placedBy: 'definition' | 'page', indexed: boolean }>>}
+ * `FormTitle` is the Form's own title, so it can be found again by what it was
+ * about. It is the one column of the application's that is edited after
+ * creation (`editableWhileOpen`): either editor may change it until the Form
+ * closes, and the lock stops it like everything else. It is free text, so it is
+ * encoded, which is also why it is searched in the browser rather than queried.
+ *
+ * @type {Readonly<Record<string, { type: FormFieldType, placedBy: 'definition' | 'page', indexed: boolean, editableWhileOpen?: boolean }>>}
  */
 export const FORM_OWNED_FIELDS = Object.freeze({
   Employee: { type: 'person', placedBy: 'definition', indexed: true },
@@ -264,7 +270,19 @@ export const FORM_OWNED_FIELDS = Object.freeze({
   ClosedBy: { type: 'person', placedBy: 'page', indexed: true },
   VoidReason: { type: 'select', placedBy: 'page', indexed: false },
   VoidReasonNote: { type: 'textarea', placedBy: 'page', indexed: false },
+  FormTitle: {
+    type: 'text',
+    placedBy: 'page',
+    indexed: false,
+    editableWhileOpen: true,
+  },
 });
+
+/** The column a Form's title is stored in. */
+export const FORM_TITLE_FIELD = 'FormTitle';
+
+/** The longest title a Form is given, so it still reads as a title in a table. */
+export const FORM_TITLE_MAX_LENGTH = 120;
 
 /**
  * Every field a definition declares, in page order, whichever section or panel

@@ -87,9 +87,9 @@ code shared by every Form Type, never definition entries.
 ## The application's own columns
 
 `Employee`, `CurrentFirstLineManager`, `CurrentSecondLineManager`, `Status`,
-`DueDate`, `ClosedDate`, `ClosedBy`, `VoidReason` and `VoidReasonNote` belong to
-the application, because access, the lock, the archive and the locked page read
-them. `ClosedDate` is the
+`DueDate`, `ClosedDate`, `ClosedBy`, `VoidReason`, `VoidReasonNote` and
+`FormTitle` belong to the application, because access, the lock, the archive,
+the Forms tables and the locked page read them. `ClosedDate` is the
 day a lifecycle button closed the Form and `ClosedBy` the person who pressed it;
 both are empty while it is open. The archive reads `ClosedDate` rather than
 `Modified`, which moves whenever anything touches the item, and neither is read
@@ -98,14 +98,22 @@ wrote last rather than who closed the Form. `VoidReason` is the reason picked
 when the Form was voided, a Choice column offering the Form Type's
 `voidReasons` (and Other), and `VoidReasonNote` the voider's own words under
 Other; both are empty otherwise. Every Form's list has them, stored by their
-type: all plain but `VoidReasonNote`, which is free text and encoded. All but
-the two Void columns are indexed.
+type: all plain but `VoidReasonNote` and `FormTitle`, which are free text and
+encoded. All but those and `VoidReason` are indexed.
+
+`FormTitle` is the Form's own title, so it can be found again by what it was
+about. It can be typed on New form, and is the one application column edited
+afterwards: either editor changes it on the Form page until the Form closes,
+when the lock stops it like every other field. It becomes the page heading, with
+the Form Type and Employee above it, sits under the Form Type in both Forms
+tables, and the tables' text filter matches it as well as the Employee. Being
+encoded, it is matched in the browser, never queried.
 
 - A definition **must place** `Employee` and `DueDate`. The page draws the Status
   badge, the current managers and who closed the Form and when itself, so a
   definition need not place those.
 - A definition may not give one of them another type, or mark one `editableBy`:
-  nobody edits them after creation.
+  nobody edits them after creation, the title aside.
 
 `FirstLineManager` and `SecondLineManager` are not the application's: they are
 ordinary fields, the record of who the managers were at completion, and grant
@@ -218,8 +226,8 @@ value; every other field of the Form still works and saves.
 
 ## New form
 
-`#/forms/new` asks for the Form Type, the Employee, both managers and the due
-date. Choosing the Employee fills the first line manager from their directory
+`#/forms/new` asks for the Form Type, the Employee, both managers, the due
+date and an optional title, written only when one is typed. Choosing the Employee fills the first line manager from their directory
 profile and the second from that manager's, and either can be changed. A line
 says who will be able to see the Form. Creating writes the chosen managers to
 both pairs (`CurrentFirstLineManager` and `FirstLineManager`,

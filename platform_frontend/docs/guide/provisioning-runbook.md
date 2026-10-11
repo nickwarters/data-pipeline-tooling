@@ -321,6 +321,7 @@ definition so it cannot drift:
 | `CompetencyStage`          | Choice                              |         |         | Stage 1; Stage 2; Stage 3                                       |
 | `Location`                 | Choice                              |         |         | In person; Zoom                                                 |
 | `VoidReasonNote`           | Multiple lines of text (plain text) |         | Yes     |                                                                 |
+| `FormTitle`                | Multiple lines of text (plain text) |         | Yes     |                                                                 |
 | `Tags`                     | Multiple lines of text (plain text) |         | Yes     |                                                                 |
 | `Agenda`                   | Multiple lines of text (plain text) |         | Yes     |                                                                 |
 | `Wellbeing`                | Multiple lines of text (plain text) |         | Yes     |                                                                 |
@@ -346,7 +347,8 @@ definition so it cannot drift:
   the Forms pages send and the access rule filter on them.
 - `Title`, `Created` and `Modified` are SharePoint's own. **Set `Title` to not
   required**: the app never writes it, and a required `Title` refuses every new
-  Form with a 400.
+  Form with a 400. A Form's own title is `FormTitle`, encoded like any free
+  text, which a single-line `Title` is too short to hold.
 
 ### Settings
 

@@ -5,6 +5,7 @@ import { canCreateForms, formAccess } from '../src/services/form-access.js';
 import {
   CLOSED_FORM_STATUSES,
   FORM_OWNED_FIELDS,
+  FORM_TITLE_FIELD,
   formFields,
 } from '../form-types/contract.js';
 import { APP_CONFIG } from '../src/app-config.js';
@@ -227,13 +228,27 @@ for (const definition of APP_CONFIG.formTypes) {
   });
 }
 
-test('the application’s own columns are never editable, even by an editor', () => {
-  for (const itemField of Object.keys(FORM_OWNED_FIELDS)) {
+test('an editor changes none of the application’s own columns but those it marks editable while open', () => {
+  for (const [itemField, owned] of Object.entries(FORM_OWNED_FIELDS)) {
     for (const me of ['sam', 'ana']) {
       assert.equal(
         formAccess(form(), me, FORMS).canEditField({ itemField }),
-        false,
+        owned.editableWhileOpen === true,
         `${me} ${itemField}`
+      );
+    }
+  }
+});
+
+test('the title can be changed by either editor while the Form is open, and by nobody once it closes', () => {
+  const title = { itemField: FORM_TITLE_FIELD };
+  for (const me of ['sam', 'ana']) {
+    assert.equal(formAccess(form(), me, FORMS).canEditField(title), true, me);
+    for (const Status of CLOSED_FORM_STATUSES) {
+      assert.equal(
+        formAccess(form({ Status }), me, FORMS).canEditField(title),
+        false,
+        `${me} ${Status}`
       );
     }
   }

@@ -171,6 +171,13 @@ framework-owned Void Reason vocabulary: what makes a 1-to-1 void has nothing to
 do with why a Case is abandoned, and Form Types will not agree with each other
 either. A Form voided before reasons were asked for has none and says nothing.
 
+**A Form has a title.** `FormTitle` is an application column every Form list
+has, set on New form or later, so a Form can be found again by what it was
+about. It is the one application column edited after creation: either editor may
+change it while the Form is open, and the lock above stops it with everything
+else. It is free text, so it is encoded (6), which means the Forms tables match
+it in the browser rather than in a query.
+
 ### 5. Two fields are editable only by their owner
 
 Every field on a Form is editable by both editors except two, which a

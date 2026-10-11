@@ -24,6 +24,8 @@ import { formSaveTarget } from '../../services/form-save-target.js';
 import { formAccess } from '../../services/form-access.js';
 import {
   FORM_FIELD_STORAGE,
+  FORM_TITLE_FIELD,
+  FORM_TITLE_MAX_LENGTH,
   OTHER_VOID_REASON,
   VOID_FORM_STATUS,
   formFields,
@@ -35,6 +37,7 @@ import {
   formSectionsView,
 } from './form-sections-view.js';
 import { formStatusBadge } from './form-cells.js';
+import { formTitle } from './forms-model.js';
 import { reducePeopleSearches } from './people-search-state.js';
 
 /** @typedef {import('../../sharepoint-client.js').FormItem} FormItem */
@@ -453,6 +456,10 @@ export function formPageView(state, tools) {
   }
   const mode = formMode(access);
   const status = String(item.fields.Status ?? '');
+  const title = formTitle(item);
+  const formLabel = [formType.formName, personName(item.fields.Employee)]
+    .filter(Boolean)
+    .join(' · ');
   return h(
     'div',
     { className: 'cora-form-page' },
@@ -463,13 +470,8 @@ export function formPageView(state, tools) {
       h(
         'div',
         {},
-        h(
-          'h1',
-          {},
-          [formType.formName, personName(item.fields.Employee)]
-            .filter(Boolean)
-            .join(' · ')
-        ),
+        title ? h('p', { className: 'cora-form-kicker' }, formLabel) : null,
+        h('h1', {}, title || formLabel),
         h('p', { className: 'cora-form-description' }, formType.description)
       ),
       h(
@@ -487,6 +489,9 @@ export function formPageView(state, tools) {
     ),
     mode === 'locked' ? lockedBanner(item) : null,
     mode === 'view' ? viewOnlyBanner(item, access) : null,
+    access.canEditField({ itemField: FORM_TITLE_FIELD })
+      ? titleField(item, tools)
+      : null,
     ...formSectionsView(formType, item, {
       mode,
       access,
@@ -689,6 +694,35 @@ function footerView(route, formType, tools) {
 }
 
 /**
+ * The Form's title, for an editor while the Form is open. Everyone else reads
+ * it as the page heading.
+ *
+ * @param {FormItem} item
+ * @param {FormPageTools} tools
+ */
+function titleField(item, tools) {
+  const stored = item.fields[FORM_TITLE_FIELD];
+  return h(
+    'label',
+    { className: 'cora-form-control-group cora-form-title-field' },
+    h('span', { className: 'cora-form-label' }, 'Title (optional)'),
+    h('input', {
+      className: 'cora-capture-input',
+      type: 'text',
+      value: typeof stored === 'string' ? stored : '',
+      maxLength: FORM_TITLE_MAX_LENGTH,
+      placeholder: 'e.g. Return to work after leave',
+      onchange: (/** @type {Event} */ event) =>
+        tools.onField(
+          FORM_TITLE_FIELD,
+          /** @type {HTMLInputElement} */ (event.target).value,
+          'text'
+        ),
+    })
+  );
+}
+
+/**
  * The Void Reason picker, and the box for the voider's own words once they
  * pick `Other`. Voiding waits until both say something.
  *
@@ -711,6 +745,7 @@ function voidReasonView(route, formType, tools) {
       h(
         'select',
         {
+          className: 'cora-capture-input',
           required: true,
           value: reason,
           disabled: route.closing,
@@ -731,6 +766,7 @@ function voidReasonView(route, formType, tools) {
           { className: 'cora-form-control-group' },
           h('span', { className: 'cora-form-label' }, 'Describe the reason'),
           h('textarea', {
+            className: 'cora-capture-input',
             required: true,
             rows: 3,
             value: note,

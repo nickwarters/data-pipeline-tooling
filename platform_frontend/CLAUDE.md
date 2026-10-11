@@ -526,9 +526,10 @@ src/
                                   #   draws each as a capture-field control or as text, in edit, view or
                                   #   locked mode, from the access rule
       form-page.js                # one Form's route slice: the read, the save queue (built only for an
-                                  #   editor), the banners, and the lifecycle buttons that close it
+                                  #   editor), the title as heading and an editor's field, the banners,
+                                  #   and the lifecycle buttons that close it, Void asking why
       new-form.js                 # New form's route slice: Form Type, Employee, directory-prefilled
-                                  #   managers and due date, then the one create write
+                                  #   managers, due date and optional title, then the one create write
       form-actions-view.js        # the Form Actions editor every Form Type shares: a card per Action,
                                   #   add up to MAX_FORM_ACTIONS, remove (asking first when it says
                                   #   something), each change handed back as the whole list

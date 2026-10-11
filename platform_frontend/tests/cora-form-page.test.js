@@ -425,6 +425,54 @@ test('a Form voided before reasons were asked for says nothing about why', async
   assert.doesNotMatch(textOf(view, 'cora-form-banner--locked') ?? '', /Reason/);
 });
 
+test('an editor gives the open Form a title, which is saved and becomes its heading', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  for (const persona of ['forms-employee', 'forms-line-manager']) {
+    const page = await openForm(persona, '102');
+    fireEvent(
+      getByRole(page.render(), 'textbox', { name: 'Title (optional)' }),
+      'change',
+      { target: { value: 'Sickness absence review' } }
+    );
+    t.mock.timers.tick(5000);
+    await saved(page);
+
+    const stored = await page.client.getFormItem(oneToOne, '102');
+    assert.equal(stored?.fields.FormTitle, 'Sickness absence review', persona);
+    const view = page.render();
+    assert.equal(
+      view.querySelector('h1')?.textContent,
+      'Sickness absence review'
+    );
+    assert.equal(textOf(view, 'cora-form-kicker'), '1-to-1 · Sam Patel');
+  }
+});
+
+test('someone who may only read the Form sees its title as the heading, with nothing to change it', async () => {
+  for (const [persona, id] of [
+    ['forms-second-line-manager', '103'],
+    ['forms-control', '103'],
+    ['forms-employee', '103'],
+  ]) {
+    const view = (await openForm(persona, id)).render();
+    assert.equal(
+      view.querySelector('h1')?.textContent,
+      'First quarter check-in',
+      persona
+    );
+    assert.equal(
+      queryByRole(view, 'textbox', { name: 'Title (optional)' }),
+      null,
+      persona
+    );
+  }
+  const open = (await openForm('forms-second-line-manager', '102')).render();
+  assert.equal(
+    queryByRole(open, 'textbox', { name: 'Title (optional)' }),
+    null
+  );
+});
+
 test('the closing Statuses the buttons write are exactly the ones that lock a Form', async () => {
   /** @type {string[]} */
   const written = [];
@@ -821,7 +869,10 @@ test('a field of a type no control is drawn for, such as a status, is shown as w
   const view = (
     await openForm('forms-employee', '101', { formTypes: [withOutcome] })
   ).render();
-  assert.equal(controls(view).length, 0);
+  assert.deepEqual(
+    controls(view).map((control) => control.closest('label')?.textContent),
+    ['Title (optional)']
+  );
   assert.match(view.textContent ?? '', /OutcomeIn person/);
 });
 

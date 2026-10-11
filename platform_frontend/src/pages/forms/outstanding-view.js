@@ -119,8 +119,8 @@ function toolbarView(route, isFormsControl, tools) {
       className: 'cora-case-table-filter',
       type: 'text',
       value: route.filters.text,
-      placeholder: 'Filter by person…',
-      'aria-label': 'Filter by person',
+      placeholder: 'Filter by person or title…',
+      'aria-label': 'Filter by person or title',
       oninput: onChange('text'),
     }),
     route.formTypes.length > 1

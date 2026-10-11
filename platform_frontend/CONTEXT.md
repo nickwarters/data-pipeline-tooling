@@ -738,6 +738,14 @@ is not a **Void Case**, and carries a **Form Void Reason** rather than a **Void 
 _Avoid_: Case status values (`In-progress`, `Void` with a reason) when talking about
 a Form
 
+**Form title**:
+A **Form**'s own short name for what it was about ("Return to work after leave"), held
+encoded in `FormTitle`. Optional, set when the Form is created or afterwards by either
+editor until it is a **Locked Form**. The page heading and the Forms tables show it, and
+their text filter finds a Form by it.
+_Avoid_: Title (SharePoint's own column on the list, which the app never writes), Form
+name (the **Form Type**'s `formName`, e.g. "1-to-1")
+
 **Form Void Reason**:
 Why a **Form** was voided, picked from its **Form Type**'s own `voidReasons` when the
 Void is confirmed and held in the plain `VoidReason` Choice column. A Form Type that sets
@@ -764,7 +772,8 @@ Actions (a Case button)
 
 **Encoded field**:
 A **Form** value stored as UTF-8-safe base64 so it is not readable at a glance in the
-list: every `text` and `textarea` field and the **Form Actions**. People, dates, choices
+list: every `text` and `textarea` field, the **Form title**, a **Form Void Reason**'s own
+words and the **Form Actions**. People, dates, choices
 and **Form Status** stay plain because queries and the access rule read them.
 Encoding is **not** encryption and **not** a permission boundary: anyone who can read
 the list can decode it.

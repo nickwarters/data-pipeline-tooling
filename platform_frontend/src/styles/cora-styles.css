@@ -4118,6 +4118,16 @@
   gap: var(--cora-space-2);
 }
 
+.cora-form-cell {
+  display: grid;
+  gap: var(--cora-space-1);
+}
+
+.cora-form-title {
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
 .cora-form-type::before {
   content: '';
   width: 8px;
@@ -4179,6 +4189,19 @@
 .cora-form-description {
   margin: var(--cora-space-1) 0 0;
   color: var(--cora-color-text-muted);
+}
+
+.cora-form-kicker {
+  margin: 0 0 var(--cora-space-1);
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-semibold);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-form-title-field {
+  display: grid;
+  gap: var(--cora-space-2);
+  max-width: 40rem;
 }
 
 .cora-form-header-status {

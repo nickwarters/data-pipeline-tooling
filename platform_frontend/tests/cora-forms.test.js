@@ -256,7 +256,7 @@ test('the table shows a loading state until the first read returns', () => {
 test('the person filter narrows the table by employee name', async () => {
   const page = await mount('forms-line-manager');
   fireEvent(
-    getByRole(page.render(), 'textbox', { name: 'Filter by person' }),
+    getByRole(page.render(), 'textbox', { name: 'Filter by person or title' }),
     'input',
     { target: { value: 'lopez' } }
   );
