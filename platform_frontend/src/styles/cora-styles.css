@@ -4384,12 +4384,18 @@
   color: var(--cora-color-text-subtle);
 }
 
-/* Side by side only when each panel has room for a comfortable comment box;
-   stacked otherwise. Measured against the page, not the window. */
+/* Side by side on a wide window; stacked below about 890px, where each
+   comment box would be too narrow to write in comfortably. */
 .cora-form-split {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(28rem, 100%), 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--cora-space-4);
+}
+
+@media (max-width: 55.625rem) {
+  .cora-form-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .cora-form-page textarea.cora-capture-input {

@@ -46,7 +46,7 @@ export const oneToOne = /** @satisfies {FormTypeDefinition} */ ({
 | `sectionType` | What it draws                                                                                                                                                                                |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `panel`       | One full-width panel. `layout` is `strip` (label and value pairs, no heading drawn), `question-answer` (label and hint left, answer right) or `stacked` (the default).                       |
-| `split-panel` | Two panels side by side, stacking when the page is narrow.                                                                                                                                   |
+| `split-panel` | Two panels side by side, stacking when the window is narrower than about 890px.                                                                                                              |
 | `actions`     | The shared Form Actions editor, stored as one column named by `itemField`. A Form holds at most three Form Actions whatever its type, so a definition cannot set a limit. One per Form Type. |
 
 **Fields** carry `type`, `label` and `itemField` (the list column, exactly as the
