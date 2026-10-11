@@ -64,8 +64,12 @@ async function boot() {
   // manifest. RP surfaces retain their assigned-party query filters.
   // A Case Type module that throws is contained the same way a broken page is:
   // that Case Type is dropped and named in a banner; the app boots.
-  const { caseSources, journeyCaseSources, unavailableCaseTypes } =
-    await resolveAppCaseSources(userGroups, capabilities.ownedJourneyCaseTypes);
+  const {
+    caseSources,
+    journeyCaseSources,
+    frontlineCaseSources,
+    unavailableCaseTypes,
+  } = await resolveAppCaseSources(userGroups, capabilities);
   const allocationSources = allocationSourcesFromCaseSources(
     caseSources,
     capabilities.listAccessCaseTypes
@@ -91,6 +95,7 @@ async function boot() {
     chrome,
     caseSources,
     journeyCaseSources,
+    frontlineCaseSources,
     allocationSources,
     appEl,
   });

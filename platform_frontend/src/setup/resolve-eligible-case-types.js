@@ -9,7 +9,7 @@ import {
 /**
  * `displayName` is required and comes from THE Case Type registry
  * (`CASE_TYPES`), never from the Case Type config module — one string
- * composes this type's three SharePoint group names, and the capability side
+ * composes this type's four SharePoint group names, and the capability side
  * (`permissions.caseTypes`) reads the same copy.
  *
  * @typedef {{
@@ -217,9 +217,10 @@ async function loadCaseTypeSources(slugs, importers) {
  * - `Reviewers - <displayName>`
  * - `CaseTypeOwner - <displayName>`
  * - `JourneyOwner - <displayName>`
+ * - `FrontlineTeam - <displayName>`
  *
  * where `displayName` is the registry's, and a registered Case Type always has
- * one — so the three derived group names are always contributed.
+ * one — so the four derived group names are always contributed.
  *
  * Controls, Reviewer Managers, Frontline, ResponsibleParty-Managers and
  * Maintainers span
@@ -257,7 +258,12 @@ export function resolveCaseSourcesFromCaseTypes(userGroups, caseTypes) {
           ...(config.eligibleGroups ?? []),
           ...(reviewerGroup ? [reviewerGroup] : []),
           ...(derived
-            ? [derived.listAccess, derived.caseTypeOwner, derived.journeyOwner]
+            ? [
+                derived.listAccess,
+                derived.caseTypeOwner,
+                derived.journeyOwner,
+                derived.frontlineTeam,
+              ]
             : []),
         ];
         return groups.some((g) => userGroups.includes(g));
@@ -323,27 +329,32 @@ async function resolveAvailableCaseSources(userGroups, options) {
  * Case Type whose module fails to load is dropped, so a user whose only
  * eligible Case Type is broken gets an empty list rather than a broken app.
  *
+ * `journeyCaseSources` and `frontlineCaseSources` are the two list-scoped
+ * projections of it: every Case of the types the user owns as a Journey Owner,
+ * and every Case of the types whose frontline team they are in. Each is read
+ * off the user's capabilities, so a type contributes to one only when it is
+ * both eligible and loaded.
+ *
  * @param {string[]} userGroups
- * @param {string[]} ownedJourneyCaseTypes
+ * @param {Pick<import('../services/permissions.js').Capabilities, 'ownedJourneyCaseTypes' | 'frontlineTeamCaseTypes'>} scopes
  * @param {ResolveOptions} [options]
  * @returns {Promise<{
  *   caseSources: CaseSource[],
  *   journeyCaseSources: CaseSource[],
+ *   frontlineCaseSources: CaseSource[],
  *   unavailableCaseTypes: UnavailableCaseType[]
  * }>}
  */
-export async function resolveAppCaseSources(
-  userGroups,
-  ownedJourneyCaseTypes,
-  options = {}
-) {
+export async function resolveAppCaseSources(userGroups, scopes, options = {}) {
   const { caseSources, unavailableCaseTypes } =
     await resolveAvailableCaseSources(userGroups, options);
+  /** @param {string[]} slugs */
+  const scopedTo = (slugs) =>
+    caseSources.filter((source) => slugs.includes(source.slug));
   return {
     caseSources,
-    journeyCaseSources: caseSources.filter((source) =>
-      ownedJourneyCaseTypes.includes(source.slug)
-    ),
+    journeyCaseSources: scopedTo(scopes.ownedJourneyCaseTypes),
+    frontlineCaseSources: scopedTo(scopes.frontlineTeamCaseTypes),
     unavailableCaseTypes,
   };
 }

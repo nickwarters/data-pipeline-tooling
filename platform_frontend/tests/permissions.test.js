@@ -22,11 +22,12 @@ const sampleConfig = {
   ],
 };
 
-test('caseTypeGroupNames: composes all three group names from the display name', () => {
+test('caseTypeGroupNames: composes every group name the app reads from the display name', () => {
   assert.deepEqual(caseTypeGroupNames('Example Review'), {
     listAccess: 'Reviewers - Example Review',
     caseTypeOwner: 'CaseTypeOwner - Example Review',
     journeyOwner: 'JourneyOwner - Example Review',
+    frontlineTeam: 'FrontlineTeam - Example Review',
   });
 });
 
@@ -38,6 +39,7 @@ test('resolveCapabilities: empty groups → visitor with no capabilities', () =>
   assert.deepEqual(caps.listAccessCaseTypes, []);
   assert.deepEqual(caps.ownedCaseTypes, []);
   assert.deepEqual(caps.ownedJourneyCaseTypes, []);
+  assert.deepEqual(caps.frontlineTeamCaseTypes, []);
   assert.equal(caps.isVisitor, true);
 });
 
@@ -162,6 +164,29 @@ test('resolveCapabilities: JourneyOwner - <type> → journey slug, NOT a Case Ty
   assert.equal(caps.isVisitor, false);
 });
 
+test('resolveCapabilities: FrontlineTeam - <type> → frontline team slug and nothing else', () => {
+  const caps = resolveCapabilities(
+    ['FrontlineTeam - Complaints'],
+    sampleConfig
+  );
+  assert.deepEqual(caps.frontlineTeamCaseTypes, ['complaints']);
+  assert.deepEqual(caps.ownedJourneyCaseTypes, []);
+  assert.deepEqual(caps.ownedCaseTypes, []);
+  assert.deepEqual(caps.listAccessCaseTypes, []);
+  assert.equal(caps.isReviewer, false);
+  assert.equal(caps.isAdviser, false);
+  assert.equal(caps.isVisitor, false);
+});
+
+test('resolveCapabilities: the frontline list-access group is not a frontline team', () => {
+  // Every notified Responsible Party is put in `Frontline - <type>` so they can
+  // open their own Cases; reading it as team membership would hand each of
+  // them every Case of the type.
+  const caps = resolveCapabilities(['Frontline - Complaints'], sampleConfig);
+  assert.deepEqual(caps.frontlineTeamCaseTypes, []);
+  assert.equal(caps.isVisitor, true);
+});
+
 test('resolveCapabilities: admin (Reviewers + owner) → reviewer + owned types', () => {
   const caps = resolveCapabilities(
     ['Reviewers', 'CaseTypeOwner - Example Review'],
@@ -259,5 +284,6 @@ test('permissions.caseTypes: group names still derive from the registry display 
     listAccess: 'Reviewers - Complaints',
     caseTypeOwner: 'CaseTypeOwner - Complaints',
     journeyOwner: 'JourneyOwner - Complaints',
+    frontlineTeam: 'FrontlineTeam - Complaints',
   });
 });

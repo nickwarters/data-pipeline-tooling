@@ -213,6 +213,24 @@ test('resolveRoles: journey owner of a different case type does not get the role
   assert.deepEqual(roles, ['none']);
 });
 
+test('resolveRoles: frontline team member (from frontlineTeamCaseTypes), with nobody named on the Case', () => {
+  const roles = resolveRoles(
+    makeCase({ responsibleParty: '', responsiblePartyManager: '' }),
+    'user-team',
+    caps({ frontlineTeamCaseTypes: ['example-review'] })
+  );
+  assert.deepEqual(roles, ['frontlineTeam']);
+});
+
+test('resolveRoles: a frontline team of a different case type does not get the role', () => {
+  const roles = resolveRoles(
+    makeCase(),
+    'user-team',
+    caps({ frontlineTeamCaseTypes: ['other-type'] })
+  );
+  assert.deepEqual(roles, ['none']);
+});
+
 test('resolveRoles: none', () => {
   const roles = resolveRoles(makeCase(), 'stranger', caps());
   assert.deepEqual(roles, ['none']);
@@ -353,12 +371,14 @@ test('every role in the vocabulary is one resolveRoles can actually produce', ()
       isControls: true,
       ownedCaseTypes: ['example-review'],
       ownedJourneyCaseTypes: ['example-review'],
+      frontlineTeamCaseTypes: ['example-review'],
     })
   );
   assert.deepEqual(everyRoleAtOnce.sort(), [
     'assignedReviewer',
     'caseTypeOwner',
     'controls',
+    'frontlineTeam',
     'journeyOwner',
     'responsibleParty',
     'responsiblePartyManager',

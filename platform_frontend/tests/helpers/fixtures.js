@@ -75,6 +75,7 @@ export function makePermissions(overrides = {}) {
     isAdviser: false,
     ownedCaseTypes: [],
     ownedJourneyCaseTypes: [],
+    frontlineTeamCaseTypes: [],
     isControls: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,

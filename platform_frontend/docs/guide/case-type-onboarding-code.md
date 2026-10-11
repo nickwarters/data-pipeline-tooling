@@ -392,6 +392,16 @@ What each field does, and how to choose its value:
 - **`appeal`** — who may raise an Appeal (`journeyOwner` for
   Complaints-style journeys, otherwise `responsiblePartyManager`) and who
   resolves it (always `controls` today, kept explicit).
+- **`frontlineTeam`** — optional, `{ name: 'Payments Operations' }`. Declare it
+  when the Case Type sends its Remediation Actions to a **frontline team**
+  rather than a named Responsible Party. The Reviewer is then never asked for a
+  Responsible Party, the Issues tab shows "Frontline team: _name_" instead, and
+  members of `FrontlineTeam - <display>` get the Responsible Party's view of
+  every Case of the type, plus the `#/frontline-cases` queue. Omit it to keep
+  the Responsible Party journey. A Case Type with a team has no Responsible
+  Party's Manager to raise Appeals, so if it enables them it must say
+  `appeal: { raisedBy: 'journeyOwner' }`
+  ([ADR-0059](../adr/0059-a-case-type-may-send-its-actions-to-a-frontline-team.md)).
 - **`outcomeOptions` / `defaultOutcomeId` / `questions` / `labels`** — pulled
   from the bank, not duplicated. The `?? []` / `?? ''` coercions are
   deliberate: an absent bank field becomes an _invalid_ config that the
@@ -509,14 +519,18 @@ from it via `caseTypeGroupNames()`:
 | `Reviewers - Widget Review`     | List access as a Reviewer of this type                        |
 | `CaseTypeOwner - Widget Review` | Case Type Owner capability for this type (owner dashboards)   |
 | `JourneyOwner - Widget Review`  | Journey Owner capability (journey cases page, raises appeals) |
+| `FrontlineTeam - Widget Review` | Frontline team role on every Case of the type (see below)     |
 
 Groups sit on two orthogonal axes: **functional capability** (what you can do
 anywhere — `Controls`, `Reviewer Managers`, `Frontline`,
 `ResponsibleParty-Managers`, `CORA Owner Delegates`) and **per-Case-Type list
-access** (which type's Cases you can open — the three derived groups above, plus
+access** (which type's Cases you can open — the four derived groups above, plus
 `Frontline - Widget Review`, which no frontend code reads: it is the frontline
 side's SharePoint ACL on the list, so it is not in `caseTypeGroupNames()` and
-you do not declare it anywhere in code). Two rules worth internalising:
+you do not declare it anywhere in code). Create `FrontlineTeam - Widget Review`
+only when the type declares `frontlineTeam`: the app reads the group for every
+Case Type, so on a type that names Responsible Parties it would hand its members
+every Case. Two rules worth internalising:
 
 - The five functional roles above span **every** Case source automatically —
   a Controls user sees your new type with no extra group.

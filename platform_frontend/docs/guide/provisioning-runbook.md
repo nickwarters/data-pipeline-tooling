@@ -198,7 +198,17 @@ user may see and do on a Case is decided by the per-Case roles in
 `section-access.js`, which resolve from the Case row's people fields, not from
 group membership. The group exists so those roles have a list to read the Case
 from at all. It is therefore not in `caseTypeGroupNames()` — that function
-composes the three groups the app _reads_.
+composes the four groups the app _reads_.
+
+**`FrontlineTeam - X` is the exception, and only for Case Types that declare
+`frontlineTeam`.** Those Case Types send their Remediation Actions to a team
+rather than a named Responsible Party, so there is no people field for a role to
+resolve from. Membership of `FrontlineTeam - X` grants the frontline team role
+on every Case of the type instead. It is a separate group from `Frontline - X`
+precisely because the pipeline grants `Frontline - X` to every notified
+Responsible Party. Its members still need read access to the list, directly or
+through `Frontline - X`
+([ADR-0059](../adr/0059-a-case-type-may-send-its-actions-to-a-frontline-team.md)).
 
 **Membership is maintained by hand today; the data pipeline now asks for it.**
 The `notifications` pipeline emits an `add_user_group_priviledges_<stamp>.json`

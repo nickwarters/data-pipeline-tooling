@@ -13,6 +13,12 @@ import { CASE_TYPE_IMPORTERS } from '../case-types/manifest.js';
 import { captureConsoleError } from './_console.js';
 import { caseSourcesFor } from './_case-sources-for.js';
 
+/** A user who owns no Journey Case Type and is in no frontline team. */
+const NO_SCOPES = Object.freeze({
+  ownedJourneyCaseTypes: [],
+  frontlineTeamCaseTypes: [],
+});
+
 /** @param {Partial<import('../src/sharepoint-client.js').CaseTypeConfig>} overrides */
 function minimalConfig(overrides = {}) {
   return {
@@ -573,7 +579,7 @@ test('resolveAppCaseSources: returns no sources when the user holds no matching 
 test('resolveAppCaseSources: threads only a Case Type Owner eligible source to app surfaces', async () => {
   const context = await quietlyResolveAppCaseSources(
     ['CaseTypeOwner - Complaints'],
-    []
+    NO_SCOPES
   );
 
   assert.deepEqual(
@@ -582,6 +588,28 @@ test('resolveAppCaseSources: threads only a Case Type Owner eligible source to a
   );
   assert.deepEqual(context.journeyCaseSources, []);
   assert.deepEqual(context.unavailableCaseTypes, []);
+});
+
+test('resolveAppCaseSources: a frontline team member reads their own Case Type and lists every Case of it', async () => {
+  const context = await quietlyResolveAppCaseSources(
+    ['FrontlineTeam - Complaints'],
+    { ownedJourneyCaseTypes: [], frontlineTeamCaseTypes: ['complaints'] }
+  );
+
+  assert.deepEqual(
+    context.caseSources.map((source) => source.slug),
+    ['complaints']
+  );
+  assert.deepEqual(
+    context.frontlineCaseSources.map((source) => source.slug),
+    ['complaints']
+  );
+  assert.deepEqual(context.journeyCaseSources, []);
+});
+
+test('resolveAppCaseSources: the frontline list-access group alone grants no Case source', async () => {
+  const sources = await caseSourcesFor(['Frontline - Complaints']);
+  assert.deepEqual(sources, []);
 });
 
 // ===== per-Case-Type containment at boot =====
@@ -606,17 +634,13 @@ const brokenImporter = () => {
  * logged calls the real function through `captureConsoleError` instead.
  *
  * @param {Parameters<typeof resolveAppCaseSources>[0]} userGroups
- * @param {Parameters<typeof resolveAppCaseSources>[1]} ownedJourneyCaseTypes
+ * @param {Parameters<typeof resolveAppCaseSources>[1]} scopes
  * @param {Parameters<typeof resolveAppCaseSources>[2]} [options]
  * @returns {ReturnType<typeof resolveAppCaseSources>}
  */
-async function quietlyResolveAppCaseSources(
-  userGroups,
-  ownedJourneyCaseTypes,
-  options
-) {
+async function quietlyResolveAppCaseSources(userGroups, scopes, options) {
   const { result } = await captureConsoleError(() =>
-    resolveAppCaseSources(userGroups, ownedJourneyCaseTypes, options)
+    resolveAppCaseSources(userGroups, scopes, options)
   );
   return result;
 }
@@ -643,7 +667,7 @@ function importersWithBrokenExampleReview(overrides = {}) {
 
 test('containment: drops the Case Type whose module throws and keeps the rest', async () => {
   const { result, logged } = await captureConsoleError(() =>
-    resolveAppCaseSources(['Reviewer Managers'], [], {
+    resolveAppCaseSources(['Reviewer Managers'], NO_SCOPES, {
       importers: importersWithBrokenExampleReview(),
     })
   );
@@ -692,9 +716,13 @@ test('containment: logs the failing slug and its error by default', async () => 
 });
 
 test('containment: falls back to the slug when the failure has no registered display name', async () => {
-  const { unavailableCaseTypes } = await quietlyResolveAppCaseSources([], [], {
-    importers: /** @type {any} */ ({ 'not-registered': brokenImporter }),
-  });
+  const { unavailableCaseTypes } = await quietlyResolveAppCaseSources(
+    [],
+    NO_SCOPES,
+    {
+      importers: /** @type {any} */ ({ 'not-registered': brokenImporter }),
+    }
+  );
 
   assert.deepEqual(
     unavailableCaseTypes.map(({ slug, displayName }) => ({
@@ -707,7 +735,7 @@ test('containment: falls back to the slug when the failure has no registered dis
 
 test('containment: an unregistered slug is dropped, never resolved namelessly', async () => {
   const { caseSources, unavailableCaseTypes } =
-    await quietlyResolveAppCaseSources(['Reviewer Managers'], [], {
+    await quietlyResolveAppCaseSources(['Reviewer Managers'], NO_SCOPES, {
       importers: /** @type {any} */ ({
         'not-registered': async () => ({
           default: minimalConfig({ listName: 'Cases-NotRegistered' }),
@@ -731,7 +759,7 @@ test('containment: a config that loads but declares no listName is contained and
   // built a request against `undefined`.
   for (const listName of [undefined, '', '   ']) {
     const { caseSources, unavailableCaseTypes } =
-      await quietlyResolveAppCaseSources(['Reviewer Managers'], [], {
+      await quietlyResolveAppCaseSources(['Reviewer Managers'], NO_SCOPES, {
         importers: /** @type {any} */ ({
           'example-review': async () => ({
             default: minimalConfig({ listName }),
@@ -766,7 +794,7 @@ test('containment: an invalid outcome config is contained and named', async () =
   // `caseSources` and detonated later on the Case Review page. Routing through
   // `loadCaseTypeConfig` makes the documented claim true.
   const { caseSources, unavailableCaseTypes } =
-    await quietlyResolveAppCaseSources(['Reviewer Managers'], [], {
+    await quietlyResolveAppCaseSources(['Reviewer Managers'], NO_SCOPES, {
       importers: /** @type {any} */ ({
         'example-review': async () => ({
           default: minimalConfig({
@@ -823,7 +851,10 @@ test('loadCaseTypeSources is not exported: options.importers is the one seam', a
 test('resolveAppCaseSources: a broken Case Type cannot leak into any resolved source set', async () => {
   const context = await quietlyResolveAppCaseSources(
     ['Reviewer Managers', 'Reviewers - Example Review'],
-    ['example-review', 'complaints'],
+    {
+      ownedJourneyCaseTypes: ['example-review', 'complaints'],
+      frontlineTeamCaseTypes: ['example-review', 'complaints'],
+    },
     {
       importers: importersWithBrokenExampleReview(),
     }
@@ -832,6 +863,7 @@ test('resolveAppCaseSources: a broken Case Type cannot leak into any resolved so
   for (const [name, sources] of [
     ['caseSources', context.caseSources],
     ['journeyCaseSources', context.journeyCaseSources],
+    ['frontlineCaseSources', context.frontlineCaseSources],
   ]) {
     assert.equal(
       /** @type {any[]} */ (sources).some(

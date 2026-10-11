@@ -679,6 +679,7 @@ test('remediationAudience: every Role in the matrix is classified deliberately',
     responsibleParty: 'responsibleParty',
     responsiblePartyManager: 'responsibleParty',
     journeyOwner: 'responsibleParty',
+    frontlineTeam: 'responsibleParty',
     none: 'responsibleParty',
   };
 

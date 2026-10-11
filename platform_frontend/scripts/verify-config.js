@@ -205,7 +205,7 @@ export async function checkCaseTypes(options = {}) {
     }
     if (!isNonEmptyString(entry.displayName)) {
       fail(
-        'has no registry `displayName`, which composes its three SharePoint group names'
+        'has no registry `displayName`, which composes its four SharePoint group names'
       );
     }
 
@@ -216,8 +216,32 @@ export async function checkCaseTypes(options = {}) {
     failures.push(...checkRemediationStatuses(entry.slug, file, config));
     failures.push(...checkVoidReasons(entry.slug, file, config));
     failures.push(...checkThresholds(entry.slug, file, config));
+    failures.push(...checkFrontlineTeam(entry.slug, file, config));
   }
   return failures;
+}
+
+/**
+ * A declared `frontlineTeam` must name the team. The name is the only thing a
+ * Reviewer sees in place of the Responsible Party picker, so a blank one would
+ * replace a control with an empty line and leave nobody shown as the recipient.
+ *
+ * @param {string} slug
+ * @param {string} file
+ * @param {any} config
+ * @returns {Failure[]}
+ */
+function checkFrontlineTeam(slug, file, config) {
+  const declared = config?.frontlineTeam;
+  if (declared === undefined) return [];
+  if (isNonEmptyString(declared?.name)) return [];
+  return [
+    {
+      kind: /** @type {const} */ ('case-type'),
+      file,
+      message: `Case Type "${slug}": declares a \`frontlineTeam\` with no \`name\` — name the team its Remediation Actions go to, or omit the key to ask for a Responsible Party`,
+    },
+  ];
 }
 
 /**

@@ -11,6 +11,14 @@ the directory rather than from the denormalised Case row field, while
 `reviewerManager` keeps resolving from the row). The global, code-owned
 access-policy decision remains current.
 
+Amended 2026-10-11 by
+[ADR-0059](./0059-a-case-type-may-send-its-actions-to-a-frontline-team.md): on a
+Case Type that sends its actions to a frontline team, membership of that team's
+group grants the `frontlineTeam` Role, which is a Conversation participant. The
+rejection of group-membership roles below still holds for every other Role. It
+does not apply to this one, because on such a Case Type the team _is_ the
+Responsible Party of every Case.
+
 The case page renders five sections — **Questions**, **Conversation**, **Notes**, **Remediation**, **Outcome** — and a user's access to each is resolved by a global evaluator `(section, role, case) → 'edit' | 'read-only' | 'hidden'`. Roles are derived from the user's relationship to _this specific_ Case — **Assigned Reviewer**, **Other Reviewer** (in the Reviewers group but not assigned), **Responsible Party**, **Case Type Owner**, or **None** — not from group membership alone. The default access matrix is a single platform-level constant; Case Type modules opt sections out via an optional `sections` allow-list, but do not override individual cells. Multi-role users get the most-permissive mode across their roles (`edit > read-only > hidden`); a user with no applicable role renders a dedicated access-denied panel rather than an empty section layout.
 
 ## Considered alternatives

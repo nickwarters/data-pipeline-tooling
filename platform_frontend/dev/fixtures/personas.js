@@ -4,7 +4,8 @@
  * Activate via the ?asUser= URL param, e.g. ?asUser=reviewer (default).
  * Available keys: reviewer, owner, journey-owner-complaints,
  * case-type-owner-complaints, admin,
- * responsible-party, responsible-party-manager, reviewer-manager,
+ * responsible-party, responsible-party-manager, frontline-team-complaints,
+ * reviewer-manager,
  * controls (a standalone Controls user), maintainer (a standalone
  * Maintainer, the audience for Case Support),
  * action-centre (multi-role Reviewer+Controls+Owner, for seeing
@@ -47,6 +48,15 @@ export const personas = {
     userId: 'user-rp',
     displayName: 'Jordan RP',
     groups: ['Frontline'],
+  },
+  // A member of the Complaints frontline team. Complaints still names a
+  // Responsible Party, so this persona exercises the team role and its queue
+  // against the existing fixtures rather than a Case Type built for it: every
+  // Complaints Case reads as theirs.
+  'frontline-team-complaints': {
+    userId: 'user-frontline-team-complaints',
+    displayName: 'Toni Frontline Team',
+    groups: ['FrontlineTeam - Complaints'],
   },
   'reviewer-manager': {
     userId: 'user-rm',

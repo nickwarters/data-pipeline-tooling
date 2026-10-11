@@ -6,6 +6,13 @@ Date: 2026-07-01
 
 Accepted (amends [ADR-0010], [ADR-0011]; supersedes the QA Reviewer role — see [ADR-0026])
 
+**Amended 2026-10-11 by [ADR-0059](./0059-a-case-type-may-send-its-actions-to-a-frontline-team.md).**
+A fourth per-Case-Type group, `FrontlineTeam - <type>`, is read as the
+`frontlineTeamCaseTypes` capability for Case Types that send their Remediation
+Actions to a frontline team rather than a named Responsible Party.
+`caseTypeGroupNames()` now composes four groups. `Frontline - <type>` is unchanged
+and still implies no capability.
+
 **Amended 2026-08-21, on tenant evidence.** Two corrections, both to Axis 1's
 frontline row. The provisioned site-wide frontline group is **`Frontline`**, not
 `Advisers` — `permissions.adviser` now reads `'Frontline'`, while the capability

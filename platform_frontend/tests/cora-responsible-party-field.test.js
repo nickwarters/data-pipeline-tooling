@@ -231,3 +231,39 @@ test('a Responsible Party search that failed names the failure and offers nothin
     'Directory search is unavailable'
   );
 });
+
+test('a Case Type with a frontline team names the team where the picker would be', () => {
+  for (const canEditIssues of [true, false]) {
+    const root = host(
+      RemediationSection(
+        props({ canEditIssues, frontlineTeam: 'Payments Operations' })
+      )
+    );
+    assert.equal(
+      queryByRole(root, 'combobox', { name: PICKER_NAME }),
+      null,
+      'there is nobody to choose, so no picker is offered'
+    );
+    assert.equal(findByClass(root, 'cora-responsible-party-field'), null);
+    assert.ok(
+      getByText(root, 'Frontline team: Payments Operations'),
+      'editor and reader alike see who the actions go to'
+    );
+  }
+});
+
+test('the frontline team line follows the remediation decision like the picker does', () => {
+  /** @param {any} q1 */
+  const line = (q1) =>
+    ResponsiblePartyField(
+      props({
+        answers: { q1 },
+        canEditIssues: true,
+        frontlineTeam: 'Payments Operations',
+      })
+    );
+
+  assert.equal(line({ value: 'No' }), null, 'nothing is being sent yet');
+  assert.equal(line({ value: 'No', remediationRequired: 'no' }), null);
+  assert.ok(line({ value: 'No', remediationRequired: 'yes' }));
+});

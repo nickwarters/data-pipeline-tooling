@@ -31,6 +31,9 @@ export function homeView(state) {
   if (capabilities.isAdviser) {
     sections.push(roleSection('Responsible Party', '#/my-cases'));
   }
+  if (capabilities.frontlineTeamCaseTypes.length > 0) {
+    sections.push(roleSection('Frontline Team', '#/frontline-cases'));
+  }
   if (capabilities.ownedCaseTypes.length > 0) {
     sections.push(roleSection('Case Type Owner', '#/question-bank'));
   }

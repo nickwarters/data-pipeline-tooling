@@ -56,10 +56,12 @@ import {
  * - `responsiblePartyManager`: Current user is the manager of the responsible party.
  * - `caseTypeOwner`: Current user is an owner of this case type.
  * - `journeyOwner`: Current user is the owner of the end-to-end journey.
+ * - `frontlineTeam`: Current user is in the frontline team that receives this
+ *   Case Type's Remediation Actions in place of a named Responsible Party.
  * - `controls`: Current user is in the Controls group (QA/compliance).
  * - `none`: Current user holds none of the recognized roles for this case.
  *
- * @typedef {'assignedReviewer' | 'otherReviewer' | 'reviewerManager' | 'responsibleParty' | 'responsiblePartyManager' | 'caseTypeOwner' | 'journeyOwner' | 'controls' | 'none'} Role
+ * @typedef {'assignedReviewer' | 'otherReviewer' | 'reviewerManager' | 'responsibleParty' | 'responsiblePartyManager' | 'caseTypeOwner' | 'journeyOwner' | 'frontlineTeam' | 'controls' | 'none'} Role
  */
 
 /**
@@ -76,6 +78,7 @@ export const ROLES = Object.freeze([
   'responsiblePartyManager',
   'caseTypeOwner',
   'journeyOwner',
+  'frontlineTeam',
   'controls',
   'none',
 ]);
@@ -124,6 +127,12 @@ export function resolveRoles(caseRow, userId, capabilities) {
   }
   if (capabilities?.ownedJourneyCaseTypes?.includes(caseRow.caseType)) {
     roles.push('journeyOwner');
+  }
+  // The team stands where a named Responsible Party would, for every Case of
+  // the type at once: membership of the type's team group is the whole test,
+  // because these Case Types record no person on the Case to match against.
+  if (capabilities?.frontlineTeamCaseTypes?.includes(caseRow.caseType)) {
+    roles.push('frontlineTeam');
   }
   if (capabilities?.isControls) {
     roles.push('controls');

@@ -606,6 +606,17 @@
  */
 
 /**
+ * Declares that a Case Type sends its Remediation Actions to a frontline
+ * **team** rather than to a named Responsible Party. `name` is the team as a
+ * Reviewer knows it, shown where the Responsible Party picker would otherwise
+ * be. The team's members are the type's `FrontlineTeam - <displayName>` group,
+ * composed in `permissions.js`; what membership lets them do is decided in code,
+ * never here.
+ *
+ * @typedef {{ name: string }} FrontlineTeamConfig
+ */
+
+/**
  * Per-Case-Type placeholder text for the framework's fixed free-text fields,
  * mirroring the `sectionLabels` override pattern: absent keys keep the
  * framework default; an explicit `''` blanks the hint. (Config-declared Issue
@@ -680,6 +691,11 @@
  * `selectQuestions` optionally narrows the bank for one Case by its `details`,
  * returning the questions to keep.
  *
+ * `frontlineTeam`, when present, means the Case Type names no Responsible Party:
+ * the Reviewer is never asked for one, Send Actions does not wait for one, and
+ * the type's frontline team group stands in that role on every Case. Absent is
+ * the Responsible Party journey every Case Type had before the key existed.
+ *
  * @typedef {{
  * questions: QuestionDefinition[],
  * computeOutcome: (answers: Record<string, Answer>) => OutcomeResult,
@@ -696,6 +712,7 @@
  * allowBulkOutcome?: boolean,
  * questionGroups?: Record<string, QuestionGroupConfig>,
  * appeal?: AppealConfig,
+ * frontlineTeam?: FrontlineTeamConfig,
  * actionCentreSlaDays?: ActionCentreSlaDays,
  * breachWindowHours?: number,
  * reviewSlaWorkingDays?: number,

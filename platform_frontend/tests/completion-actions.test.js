@@ -907,6 +907,48 @@ test('completionControl: one failure needing remediation still asks, whatever th
   );
 });
 
+test('completionControl: a Case Type with a frontline team sends actions with no Responsible Party', () => {
+  // The team is the recipient for every Case of the type, so there is nobody
+  // to name and no field to fill; asking would leave the button disabled
+  // against a control the page never shows.
+  const answers = {
+    q1: {
+      value: 'No',
+      remediationRequired: /** @type {const} */ ('yes'),
+      remediationActions: [{ id: 'a1', text: 'Fix' }],
+    },
+  };
+  const input = {
+    machine: machine(),
+    caseRow: { ...CASE_ROW, responsibleParty: '' },
+    config: { ...CONFIG, frontlineTeam: { name: 'Payments Operations' } },
+    catalogue: CATALOGUE,
+    answers,
+    allAnswered: true,
+    captureGroups: [],
+    generalQuestions: [],
+  };
+
+  const control = completionControl(input);
+  assert.equal(control.visible, true);
+  assert.equal(control.disabled, false);
+  assert.equal(control.label, 'Send Actions');
+  assert.equal(control.reason, null);
+
+  const patch = completionPatch({
+    ...input,
+    computeOutcome: () => ({ outcome: 'fail' }),
+    bankVersion: null,
+  });
+  assert.equal(patch?.status, CASE_STATUS.ACTIONS_IN_PROGRESS);
+  assert.equal(patch?.hadRemediation, true);
+  assert.equal(
+    patch?.awaitingResponsibleParty,
+    true,
+    'the actions wait on the frontline team exactly as they would on a person'
+  );
+});
+
 test('completionPatch: a Case needing no remediation completes with no Responsible Party', () => {
   const patch = completionPatch({
     ...preSend({ q1: { value: 'No', remediationRequired: 'no' } }),
