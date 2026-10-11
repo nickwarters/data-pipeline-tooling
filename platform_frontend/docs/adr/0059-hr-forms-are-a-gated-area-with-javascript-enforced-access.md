@@ -161,6 +161,16 @@ defaults, not settled rules:
   line manager.
 - **Reopening:** a locked Form is never reopened.
 
+**Voiding asks why.** A Form Type declares its own **`voidReasons`**, and with
+**`allowOtherVoidReason`** also offers **Other**, which asks for the reason in
+the voider's own words before the Form can be voided. The Void write stamps the
+reason in the plain Choice column **`VoidReason`** and, for Other only, the
+words in **`VoidReasonNote`**, encoded like all free text; the locked page shows
+whichever says more. These are a Form Type's own list, not the Case's
+framework-owned Void Reason vocabulary: what makes a 1-to-1 void has nothing to
+do with why a Case is abandoned, and Form Types will not agree with each other
+either. A Form voided before reasons were asked for has none and says nothing.
+
 ### 5. Two fields are editable only by their owner
 
 Every field on a Form is editable by both editors except two, which a

@@ -10,10 +10,12 @@ import {
 import {
   CHOICE_FIELD_TYPES,
   CLOSED_FORM_STATUSES,
+  FORM_FIELD_STORAGE,
   FORM_OWNED_FIELDS,
   FORM_STATUSES,
   formColumns,
   formFields,
+  voidReasonChoices,
 } from '../form-types/contract.js';
 import { APP_CONFIG } from '../src/app-config.js';
 
@@ -47,15 +49,27 @@ test('an encoded column is multi-line plain text, so neither its length nor rich
   }
 });
 
-test("the application's own columns are indexed with the types access and the lock read", () => {
+test("the application's own columns are indexed as declared, with the types access and the lock read", () => {
   for (const def of APP_CONFIG.formTypes) {
     const rows = new Map(
       provisioningColumns(def).map((row) => [row.column, row])
     );
-    for (const column of Object.keys(FORM_OWNED_FIELDS)) {
-      assert.equal(rows.get(column)?.indexed, true, `${def.slug} ${column}`);
-      assert.equal(rows.get(column)?.encoded, false, `${def.slug} ${column}`);
+    for (const [column, owned] of Object.entries(FORM_OWNED_FIELDS)) {
+      const where = `${def.slug} ${column}`;
+      assert.equal(rows.get(column)?.indexed, owned.indexed, where);
+      assert.equal(
+        rows.get(column)?.encoded,
+        FORM_FIELD_STORAGE[owned.type] === 'encoded',
+        where
+      );
+      // A column is indexed only if the server can filter on what it holds.
+      if (owned.indexed) assert.equal(rows.get(column)?.encoded, false, where);
     }
+    assert.deepEqual(
+      rows.get('VoidReason')?.choices,
+      voidReasonChoices(def),
+      def.slug
+    );
     assert.equal(rows.get('Employee')?.columnType, 'Person or Group');
     assert.equal(rows.get('DueDate')?.columnType, 'Date and Time (date only)');
     assert.equal(rows.get('Status')?.columnType, 'Choice');

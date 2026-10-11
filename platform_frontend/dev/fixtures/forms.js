@@ -116,6 +116,8 @@ export const formLists = {
       DueDate: '2026-07-31',
       ClosedDate: '2026-07-03',
       ClosedBy: SAM,
+      VoidReason: 'Other',
+      VoidReasonNote: 'Booked for the wrong week.',
     }),
     oneToOneItem('106', '2025-01-02T09:00:00Z', {
       Employee: SAM,

@@ -19,6 +19,7 @@ import {
   FORM_OWNED_FIELDS,
   FORM_STATUSES,
   formFields,
+  voidReasonChoices,
 } from '../form-types/contract.js';
 import { formColumnKinds } from '../src/services/form-items.js';
 
@@ -43,16 +44,19 @@ const SHAREPOINT_COLUMN_TYPES = Object.freeze({
 /**
  * One row per column: its name, the type to create it as, the values a Choice
  * column offers, whether it holds encoded text, and whether it is indexed. The
- * application's own columns are the indexed ones, because every query and the
- * access rule filter on them, and an index must be added while the list is
- * still empty.
+ * application's own columns are the indexed ones, bar the two that record why
+ * a Form was voided, because every query and the access rule filter on them,
+ * and an index must be added while the list is still empty.
  *
  * @param {FormTypeDefinition} definition
  * @returns {{ column: string, columnType: string, choices: readonly string[], encoded: boolean, indexed: boolean }[]}
  */
 export function provisioningColumns(definition) {
   /** @type {Map<string, readonly string[]>} */
-  const choices = new Map([['Status', FORM_STATUSES]]);
+  const choices = new Map([
+    ['Status', FORM_STATUSES],
+    ['VoidReason', voidReasonChoices(definition)],
+  ]);
   for (const field of formFields(definition)) {
     if (field.choices) choices.set(field.itemField, field.choices);
   }
@@ -61,7 +65,7 @@ export function provisioningColumns(definition) {
     columnType: SHAREPOINT_COLUMN_TYPES[kind],
     choices: kind === 'choice' ? (choices.get(column) ?? []) : [],
     encoded: kind === 'encoded',
-    indexed: Object.hasOwn(FORM_OWNED_FIELDS, column),
+    indexed: FORM_OWNED_FIELDS[column]?.indexed ?? false,
   }));
 }
 

@@ -236,6 +236,7 @@ test('each current manager is shown with what they may do', async () => {
  */
 async function close(page, button, confirm) {
   fireEvent(getByRole(page.render(), 'button', { name: button }), 'click');
+  if (button === 'Void form') pickVoidReason(page, 'Duplicate form');
   const before = page.actions.length;
   fireEvent(getByRole(page.render(), 'button', { name: confirm }), 'click');
   await page.until(() =>
@@ -272,6 +273,157 @@ for (const [button, confirm, status, verb] of [
     assert.equal(queryByRole(view, 'button', { name: button }), null);
   });
 }
+
+/**
+ * @param {any} page
+ * @param {string} reason
+ * @param {string} [note] typed once the reason asks for words
+ */
+function pickVoidReason(page, reason, note) {
+  fireEvent(
+    getByRole(page.render(), 'combobox', { name: 'Reason for voiding' }),
+    'change',
+    { target: { value: reason } }
+  );
+  if (note === undefined) return;
+  fireEvent(
+    getByRole(page.render(), 'textbox', { name: 'Describe the reason' }),
+    'input',
+    { target: { value: note } }
+  );
+}
+
+/** @param {any} page */
+const voidConfirm = (page) =>
+  /** @type {HTMLButtonElement} */ (
+    getByRole(page.render(), 'button', { name: 'Yes, void form' })
+  );
+
+test('voiding asks why, offering the Form Type’s Void Reasons and then Other', async () => {
+  const page = await openForm('forms-employee', '101');
+  fireEvent(getByRole(page.render(), 'button', { name: 'Void form' }), 'click');
+  const picker = getByRole(page.render(), 'combobox', {
+    name: 'Reason for voiding',
+  });
+
+  assert.deepEqual(
+    [...picker.querySelectorAll('option')].slice(1).map((o) => o.textContent),
+    [...oneToOne.voidReasons, 'Other']
+  );
+  assert.equal(voidConfirm(page).disabled, true);
+  pickVoidReason(page, oneToOne.voidReasons[0]);
+  assert.equal(voidConfirm(page).disabled, false);
+  assert.equal(
+    queryByRole(page.render(), 'textbox', { name: 'Describe the reason' }),
+    null
+  );
+});
+
+test('a Form Type that does not allow Other offers only its own Void Reasons', async () => {
+  const strict = { ...oneToOne, allowOtherVoidReason: false };
+  const page = await openForm('forms-employee', '101', { formTypes: [strict] });
+  fireEvent(getByRole(page.render(), 'button', { name: 'Void form' }), 'click');
+  const picker = getByRole(page.render(), 'combobox', {
+    name: 'Reason for voiding',
+  });
+  assert.deepEqual(
+    [...picker.querySelectorAll('option')].slice(1).map((o) => o.textContent),
+    [...oneToOne.voidReasons]
+  );
+});
+
+test('Other cannot void the Form until the reason is written, and blank words do not count', async () => {
+  const page = await openForm('forms-employee', '101');
+  fireEvent(getByRole(page.render(), 'button', { name: 'Void form' }), 'click');
+
+  pickVoidReason(page, 'Other');
+  assert.equal(voidConfirm(page).disabled, true);
+  pickVoidReason(page, 'Other', '   ');
+  assert.equal(voidConfirm(page).disabled, true);
+  pickVoidReason(page, 'Other', '  Booked twice by HR  ');
+  assert.equal(voidConfirm(page).disabled, false);
+
+  const before = page.actions.length;
+  fireEvent(voidConfirm(page), 'click');
+  await page.until(() =>
+    page.actions
+      .slice(before)
+      .some((/** @type {any} */ action) => action.type === 'form/closed')
+  );
+  const stored = await page.client.getFormItem(oneToOne, '101');
+  assert.equal(stored?.fields.VoidReason, 'Other');
+  assert.equal(stored?.fields.VoidReasonNote, 'Booked twice by HR');
+  assert.match(
+    textOf(page.render(), 'cora-form-banner--locked') ?? '',
+    /Reason: Booked twice by HR$/
+  );
+});
+
+test('a listed Void Reason is recorded on its own and shown on the locked Form', async () => {
+  const page = await openForm('forms-employee', '101');
+  await close(page, 'Void form', 'Yes, void form');
+
+  const stored = await page.client.getFormItem(oneToOne, '101');
+  assert.equal(stored?.fields.VoidReason, 'Duplicate form');
+  assert.ok(!stored?.fields.VoidReasonNote);
+  assert.match(
+    textOf(page.render(), 'cora-form-banner--locked') ?? '',
+    /Reason: Duplicate form$/
+  );
+});
+
+test('withdrawing a Void forgets the reason picked', async () => {
+  const page = await openForm('forms-employee', '101');
+  fireEvent(getByRole(page.render(), 'button', { name: 'Void form' }), 'click');
+  pickVoidReason(page, 'Other', 'Not needed');
+  fireEvent(
+    getByRole(page.render(), 'button', { name: 'Keep editing' }),
+    'click'
+  );
+  fireEvent(getByRole(page.render(), 'button', { name: 'Void form' }), 'click');
+
+  assert.equal(
+    /** @type {HTMLSelectElement} */ (
+      getByRole(page.render(), 'combobox', { name: 'Reason for voiding' })
+    ).value,
+    ''
+  );
+  assert.equal(voidConfirm(page).disabled, true);
+});
+
+test('completing or cancelling asks for no reason and records none', async () => {
+  for (const [button, confirm] of [
+    ['Mark complete', 'Yes, mark complete'],
+    ['Cancel form', 'Yes, cancel form'],
+  ]) {
+    const page = await openForm('forms-employee', '101');
+    fireEvent(getByRole(page.render(), 'button', { name: button }), 'click');
+    assert.equal(
+      queryByRole(page.render(), 'combobox', { name: 'Reason for voiding' }),
+      null
+    );
+    fireEvent(
+      getByRole(page.render(), 'button', { name: 'Keep editing' }),
+      'click'
+    );
+    await close(page, button, confirm);
+    const stored = await page.client.getFormItem(oneToOne, '101');
+    assert.ok(!stored?.fields.VoidReason, button);
+  }
+});
+
+test('a Form voided before reasons were asked for says nothing about why', async () => {
+  const client = formsClient();
+  const voided = await client.getFormItem(oneToOne, '105');
+  await client.patchFormItem(
+    oneToOne,
+    '105',
+    { VoidReason: null, VoidReasonNote: null },
+    /** @type {any} */ (voided).etag
+  );
+  const view = (await openForm('forms-employee', '105', { client })).render();
+  assert.doesNotMatch(textOf(view, 'cora-form-banner--locked') ?? '', /Reason/);
+});
 
 test('the closing Statuses the buttons write are exactly the ones that lock a Form', async () => {
   /** @type {string[]} */
@@ -392,6 +544,10 @@ test('a Void Form records it was voided, and an empty record reads as nothing', 
     /First line managerNothing recorded/
   );
   assert.match(recorded.textContent ?? '', /Voided bySam Patel, 03\/07\/2026/);
+  assert.match(
+    textOf(view, 'cora-form-banner--locked') ?? '',
+    /Reason: Booked for the wrong week\.$/
+  );
 });
 
 test('a locked Form is reached from the archive, and an open one from the dashboard', async () => {

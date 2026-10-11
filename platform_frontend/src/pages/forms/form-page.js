@@ -24,7 +24,10 @@ import { formSaveTarget } from '../../services/form-save-target.js';
 import { formAccess } from '../../services/form-access.js';
 import {
   FORM_FIELD_STORAGE,
+  OTHER_VOID_REASON,
+  VOID_FORM_STATUS,
   formFields,
+  voidReasonChoices,
 } from '../../../form-types/contract.js';
 import {
   closedVerb,
@@ -56,13 +59,24 @@ import { reducePeopleSearches } from './people-search-state.js';
  * @property {string | null} lastSavedAt
  * @property {PeopleSearches} peopleSearch
  * @property {string | null} confirming The closing Status awaiting confirmation.
+ * @property {VoidReasonDraft} voidReason What the voider has picked and typed
+ *   so far, while a Void awaits confirmation.
  * @property {boolean} closing
  * @property {string | null} closeError
  * @property {number | null} removingAction The Form Action whose removal
  *   awaits a yes.
  */
 
+/**
+ * @typedef {Object} VoidReasonDraft
+ * @property {string} reason The Void Reason picked, or empty.
+ * @property {string} note The voider's own words, asked for when the reason is `Other`.
+ */
+
 /** @typedef {{ chrome: ChromeState, routes: { form: FormPageRoute } }} FormPageState */
+
+/** @type {VoidReasonDraft} */
+const NO_VOID_REASON = Object.freeze({ reason: '', note: '' });
 
 /**
  * What each lifecycle button is called and what it asks before it closes the
@@ -93,14 +107,36 @@ const CONFLICT_MESSAGE =
 /**
  * The columns a lifecycle button writes: the closing Status, and the day and
  * the person that closed the Form, which the archive and the locked page read.
+ * A Void also records its reason, and the voider's own words only when that
+ * reason is `Other`.
  *
  * @param {string} status
  * @param {{ loginName: string, displayName: string }} me
  * @param {string} today
+ * @param {VoidReasonDraft} [voidReason]
  * @returns {Record<string, FormValue>}
  */
-export function closingFields(status, me, today) {
-  return { Status: status, ClosedDate: today, ClosedBy: me };
+export function closingFields(status, me, today, voidReason = NO_VOID_REASON) {
+  const fields = { Status: status, ClosedDate: today, ClosedBy: me };
+  if (status !== VOID_FORM_STATUS) return fields;
+  const other = voidReason.reason === OTHER_VOID_REASON;
+  return {
+    ...fields,
+    VoidReason: voidReason.reason,
+    VoidReasonNote: other ? voidReason.note.trim() : null,
+  };
+}
+
+/**
+ * Whether the Void Reason picked so far is enough to void the Form: a reason
+ * from the Form Type's list, and words to go with `Other`.
+ *
+ * @param {FormTypeDefinition} formType
+ * @param {VoidReasonDraft} draft
+ */
+function isVoidReasonComplete(formType, draft) {
+  if (!voidReasonChoices(formType).includes(draft.reason)) return false;
+  return draft.reason !== OTHER_VOID_REASON || draft.note.trim() !== '';
 }
 
 /**
@@ -145,6 +181,7 @@ export function createFormPageSlice(
         lastSavedAt: null,
         peopleSearch: {},
         confirming: null,
+        voidReason: NO_VOID_REASON,
         closing: false,
         closeError: null,
         removingAction: null,
@@ -199,7 +236,8 @@ export function createFormPageSlice(
     const fields = closingFields(
       status,
       { loginName: currentUser.id, displayName: currentUser.displayName },
-      route.today
+      route.today,
+      route.voidReason
     );
     writing.enqueueFields(id, fields);
     const saved = await writing.flushCase(id);
@@ -254,10 +292,18 @@ export function createFormPageSlice(
         case 'form/close-requested':
           return patchRoute(state, 'form', {
             confirming: action.status,
+            voidReason: NO_VOID_REASON,
             closeError: null,
           });
+        case 'form/void-reason-edited':
+          return patchRoute(state, 'form', {
+            voidReason: { ...route.voidReason, ...action.draft },
+          });
         case 'form/close-withdrawn':
-          return patchRoute(state, 'form', { confirming: null });
+          return patchRoute(state, 'form', {
+            confirming: null,
+            voidReason: NO_VOID_REASON,
+          });
         case 'form/close-started':
           return patchRoute(state, 'form', { closing: true });
         case 'form/closed':
@@ -511,8 +557,24 @@ function lockedBanner(item) {
     'div',
     { className: 'cora-form-banner cora-form-banner--locked', role: 'status' },
     h('strong', {}, `${closedVerb(status)}${closed}.`),
-    ' This form is locked and can no longer be changed.'
+    ' This form is locked and can no longer be changed.',
+    status === VOID_FORM_STATUS ? voidReasonLine(item) : null
   );
+}
+
+/**
+ * Why a voided Form was voided: the reason picked, or the voider's own words
+ * when they picked `Other`. A Form voided before reasons were asked for has
+ * none, and says nothing.
+ *
+ * @param {FormItem} item
+ */
+function voidReasonLine(item) {
+  const reason = String(item.fields.VoidReason ?? '');
+  if (!reason) return null;
+  const note = String(item.fields.VoidReasonNote ?? '').trim();
+  const said = reason === OTHER_VOID_REASON && note ? note : reason;
+  return h('p', { className: 'cora-form-banner-detail' }, `Reason: ${said}`);
 }
 
 /**
@@ -568,6 +630,9 @@ function footerView(route, formType, tools) {
             h('strong', {}, pending.ask(formType.formName)),
             ' Nobody will be able to change it afterwards.'
           ),
+          pending.status === VOID_FORM_STATUS
+            ? voidReasonView(route, formType, tools)
+            : null,
           h(
             'div',
             { className: 'cora-form-footer-buttons' },
@@ -585,7 +650,10 @@ function footerView(route, formType, tools) {
               'button',
               {
                 type: 'button',
-                disabled: route.closing,
+                disabled:
+                  route.closing ||
+                  (pending.status === VOID_FORM_STATUS &&
+                    !isVoidReasonComplete(formType, route.voidReason)),
                 onclick: () => tools.onClose(pending.status),
               },
               route.closing ? 'Saving…' : `Yes, ${lowerFirst(pending.label)}`
@@ -617,6 +685,63 @@ function footerView(route, formType, tools) {
             )
           )
         )
+  );
+}
+
+/**
+ * The Void Reason picker, and the box for the voider's own words once they
+ * pick `Other`. Voiding waits until both say something.
+ *
+ * @param {FormPageRoute} route
+ * @param {FormTypeDefinition} formType
+ * @param {FormPageTools} tools
+ */
+function voidReasonView(route, formType, tools) {
+  const { reason, note } = route.voidReason;
+  /** @param {Partial<VoidReasonDraft>} draft */
+  const edit = (draft) =>
+    tools.dispatch({ type: 'form/void-reason-edited', draft });
+  return h(
+    'div',
+    { className: 'cora-form-void-reason' },
+    h(
+      'label',
+      { className: 'cora-form-control-group' },
+      h('span', { className: 'cora-form-label' }, 'Reason for voiding'),
+      h(
+        'select',
+        {
+          required: true,
+          value: reason,
+          disabled: route.closing,
+          onchange: (/** @type {Event} */ event) =>
+            edit({
+              reason: /** @type {HTMLSelectElement} */ (event.target).value,
+            }),
+        },
+        h('option', { value: '' }, 'Choose a reason'),
+        ...voidReasonChoices(formType).map((choice) =>
+          h('option', { value: choice }, choice)
+        )
+      )
+    ),
+    reason === OTHER_VOID_REASON
+      ? h(
+          'label',
+          { className: 'cora-form-control-group' },
+          h('span', { className: 'cora-form-label' }, 'Describe the reason'),
+          h('textarea', {
+            required: true,
+            rows: 3,
+            value: note,
+            disabled: route.closing,
+            oninput: (/** @type {Event} */ event) =>
+              edit({
+                note: /** @type {HTMLTextAreaElement} */ (event.target).value,
+              }),
+          })
+        )
+      : null
   );
 }
 

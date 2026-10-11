@@ -752,7 +752,8 @@ form-types/                     # one data module per HR Form Type, named in APP
                                 #   (ADR-0059); deployed like case-types/
   contract.js                   # THE FormTypeDefinition shape and its closed vocabulary (section
                                 #   types, panel layouts, field types, editableBy), the columns the
-                                #   application owns, the Form Statuses that close a Form, the
+                                #   application owns, the Form Statuses that close a Form, the Form Void
+                                #   Reasons a Form Type offers (and Other, when it allows it), the
                                 #   Form Action cap and Statuses, and formColumns(): which columns a Form is read
                                 #   and written through, and which are encoded. Encoding follows the
                                 #   field type, never a per-field flag

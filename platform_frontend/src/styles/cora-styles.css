@@ -4458,6 +4458,16 @@
   color: var(--cora-color-text-muted);
 }
 
+.cora-form-void-reason {
+  display: grid;
+  gap: var(--cora-space-2);
+  flex-basis: 100%;
+}
+
+.cora-form-banner-detail {
+  margin: var(--cora-space-1) 0 0;
+}
+
 .cora-form-footer-buttons {
   display: flex;
   gap: var(--cora-space-2);
