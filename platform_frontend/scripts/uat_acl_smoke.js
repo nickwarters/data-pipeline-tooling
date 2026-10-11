@@ -215,7 +215,7 @@ function parseHeaders(raw) {
 }
 
 /** @param {string} envName @param {NodeJS.ProcessEnv} env */
-async function loadPersonaHeaders(envName, env) {
+export async function loadPersonaHeaders(envName, env) {
   const path = env[envName];
   if (!path) {
     throw new Error(

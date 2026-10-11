@@ -151,8 +151,8 @@ touches the item, including the outside process that keeps the current
 managers up to date, so a Form closed a year ago would read as closed today.
 It also stamps **`ClosedBy`**, the person who pressed the button, which the
 locked page shows beside the managers recorded at completion. Both are columns
-of their own rather than a reading of the version history: versioning is
-optional on these lists (section 7), and the history names whoever wrote the
+of their own rather than a reading of the version history: versioning is a
+provisioning setting on these lists (section 7), and the history names whoever wrote the
 item last, which after a close can be the outside process updating the current
 managers. The defaults below are recorded as
 defaults, not settled rules:
@@ -224,8 +224,8 @@ Each Form list is provisioned by hand in each environment, with:
 - indexes on `Employee`, `CurrentFirstLineManager`, `CurrentSecondLineManager`,
   `Status`, `DueDate` and `ClosedDate`, created while the list is empty
   (ADR-0031);
-- versioning if wanted, remembering that version history keeps every earlier
-  encoded value.
+- versioning on, remembering that version history keeps every earlier
+  encoded value, readable by anyone who can read the item.
 
 The provisioning runbook carries the per-list detail.
 
@@ -273,8 +273,9 @@ guessed:
 
 1. **Who may Void or Cancel.** The default in 4 is the two editors.
 2. **Reopening.** The default in 4 is never.
-3. **Group names**, and whether there is one access group for every Form list or
-   one per list.
+3. **Group names.** Settled: the access group is `EPF Users` and the Forms
+   Control group `EPF Controls`. One access group serves every Form list until a
+   Form Type needs a narrower audience.
 4. **Retention:** how long Forms are kept, and who may delete one.
 5. **Auditing:** whether REST item reads are audited on this farm.
 

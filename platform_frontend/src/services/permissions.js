@@ -100,11 +100,10 @@ export const permissions = {
   reviewerManager: 'Reviewer Managers',
   responsiblePartyManager: 'ResponsibleParty-Managers',
   maintainer: 'CORA Owner Delegates',
-  // The HR Forms groups. Both names are placeholders until provisioning
-  // settles them, and so is having one access group for every Form list
-  // rather than one per list. The control group is one for every Form Type.
-  forms: 'Forms',
-  formsControl: 'Forms Control',
+  // The HR Forms groups: one access group for every Form list, until a Form
+  // Type needs a narrower audience, and one control group for every Form Type.
+  forms: 'EPF Users',
+  formsControl: 'EPF Controls',
   // Per-Case-Type group names derive from `displayName`: each entry
   // yields `Reviewers - X`, `CaseTypeOwner - X`, and `JourneyOwner - X`.
   // Projected from THE Case Type registry (case-types/manifest.js) so adding a

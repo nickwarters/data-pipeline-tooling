@@ -91,6 +91,20 @@ the real list-items endpoint and write denial through the list's
 `EffectiveBasePermissions`; it never creates, updates, or deletes UAT data. It
 also refuses list names without the configured `uat_` prefix.
 
+The HR Form lists need a second check, because on them SharePoint serves every
+Form to every member of the access group and the JavaScript access rule is what
+narrows it. `scripts/uat_forms_access_check.js`
+(`npm run test:security:uat:forms -- <config.json>`) signs in as each persona
+from the same kind of headers file, reads through the app's own client and
+access rule, and compares which Forms the dashboard lists for them and which
+open and are editable against the matrix in its config. It reads only, refuses
+a config without a non-production `listPrefix`, and requires every Form in the
+matrix to be opened by one persona and refused to another. Its example config is
+the dev cast's matrix, and `tests/uat-forms-access-check.test.js` runs it against
+the mock so the example cannot drift from the rule. The runbook's
+[HR Form Type lists](provisioning-runbook.md#8-hr-form-type-lists) section says
+when to run it.
+
 ## Deterministic Async Tests
 
 Tests should await the operation promise returned by the API they called or use

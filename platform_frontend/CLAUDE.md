@@ -769,7 +769,8 @@ scripts/
                                 #   advance by the one rule. Needs openpyxl from the root venv
   scaffold_case_type.py         # scaffolds a new Case Type module + bank artifact (ADR-0028)
   form-type-columns.js          # prints the columns, SharePoint types, choices and indexes a Form Type's
-                                #   list needs, derived from its definition, for hand provisioning
+                                #   list needs, derived from its definition, for hand provisioning;
+                                #   --markdown gives the runbook's table, which a test holds to it
   deploy_to_sharepoint.py       # the diff sync, plus its pre-flight verify gate, graph-derived
                                 #   leaf-first upload order and post-upload hash verification
                                 #   (its runbook is docs/deploy-runbook.md — hand-written Markdown
@@ -787,6 +788,10 @@ scripts/
   run_in_memory_flow.js
   uat_acl_smoke.js              # UAT list-ACL smoke check (npm run test:security:uat)
   uat-acl-smoke.example.json    # sample config for the ACL smoke check
+  uat_forms_access_check.js     # UAT check of what each persona is offered on a Form list: listed, opened,
+                                #   editable, through the app's own client and access rule; read-only
+                                #   (npm run test:security:uat:forms)
+  uat-forms-access.example.json # sample matrix for it: the dev Forms cast, which a test runs on the mock
 
 dev/                            # local dev loop; not deployed
   index.html                    # dev host page for the mock-first loop (?mock=1)

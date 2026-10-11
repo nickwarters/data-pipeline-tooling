@@ -11,7 +11,7 @@
  * every Action Centre reason group at once), visitor (no groups —
  * exercises the Visitor explainer-only branch), and the Forms cast:
  * forms-employee, forms-line-manager, forms-second-line-manager,
- * forms-control and forms-unrelated.
+ * forms-former-manager, forms-control, forms-colleague and forms-unrelated.
  *
  * @type {Record<string, { userId: string, displayName: string, groups: string[] }>}
  */
@@ -81,27 +81,36 @@ export const personas = {
     displayName: 'Dana Multi-role',
     groups: ['Reviewers', 'Controls', 'CaseTypeOwner - Example Review'],
   },
-  // The Forms cast (see forms.js). `Forms` and `Forms Control` are
-  // placeholder group names until the real ones are agreed.
+  // The Forms cast (see forms.js).
   'forms-employee': {
     userId: 'user-forms-employee',
     displayName: 'Sam Patel',
-    groups: ['Forms'],
+    groups: ['EPF Users'],
   },
   'forms-line-manager': {
     userId: 'user-forms-flm',
     displayName: 'Ana Lopez',
-    groups: ['Forms'],
+    groups: ['EPF Users'],
   },
   'forms-second-line-manager': {
     userId: 'user-forms-slm',
     displayName: 'Jo Reid',
-    groups: ['Forms'],
+    groups: ['EPF Users'],
   },
   'forms-control': {
     userId: 'user-forms-control',
     displayName: 'Kim Shaw',
-    groups: ['Forms', 'Forms Control'],
+    groups: ['EPF Users', 'EPF Controls'],
+  },
+  'forms-former-manager': {
+    userId: 'user-forms-former-flm',
+    displayName: 'Lee Morgan',
+    groups: ['EPF Users'],
+  },
+  'forms-colleague': {
+    userId: 'user-forms-colleague',
+    displayName: 'Ade Okafor',
+    groups: ['EPF Users'],
   },
   'forms-unrelated': {
     userId: 'user-forms-unrelated',

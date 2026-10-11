@@ -16,8 +16,8 @@ const sampleConfig = {
   reviewerManager: 'Reviewer Managers',
   responsiblePartyManager: 'ResponsibleParty-Managers',
   maintainer: 'CORA Owner Delegates',
-  forms: 'Forms',
-  formsControl: 'Forms Control',
+  forms: 'EPF Users',
+  formsControl: 'EPF Controls',
   caseTypes: [
     { slug: 'example-review', displayName: 'Example Review' },
     { slug: 'complaints', displayName: 'Complaints' },
@@ -265,7 +265,7 @@ test('permissions.caseTypes: group names still derive from the registry display 
 });
 
 test('resolveCapabilities: the Forms group opens the Forms area and is not a Visitor', () => {
-  const caps = resolveCapabilities(['Forms'], sampleConfig);
+  const caps = resolveCapabilities(['EPF Users'], sampleConfig);
   assert.equal(caps.canAccessForms, true);
   assert.equal(caps.isFormsControl, false);
   assert.equal(caps.isVisitor, false);
@@ -273,7 +273,7 @@ test('resolveCapabilities: the Forms group opens the Forms area and is not a Vis
 });
 
 test('resolveCapabilities: the Forms control group implies Forms access', () => {
-  const caps = resolveCapabilities(['Forms Control'], sampleConfig);
+  const caps = resolveCapabilities(['EPF Controls'], sampleConfig);
   assert.equal(caps.isFormsControl, true);
   assert.equal(caps.canAccessForms, true);
   assert.equal(caps.isVisitor, false);

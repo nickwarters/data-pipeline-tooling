@@ -891,7 +891,7 @@ test('case review is not a destination: no nav item and no landing rule', () => 
 test('a page in the nav is offered on Home to the same people, unless its card names its own rule', () => {
   for (const groups of [
     [],
-    ['Forms'],
+    ['EPF Users'],
     ['Reviewers'],
     ['Controls'],
     ['CORA Owner Delegates'],

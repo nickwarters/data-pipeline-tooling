@@ -1,0 +1,57 @@
+{
+  "siteUrl": "https://sharepoint.example/sites/cora",
+  "listPrefix": "uat_",
+  "formType": "one-to-one",
+  "forms": ["101", "102", "103", "104"],
+  "personas": [
+    {
+      "name": "employee",
+      "headersFileEnv": "CORA_UAT_FORMS_EMPLOYEE_HEADERS_FILE",
+      "lists": ["101", "102"],
+      "opens": ["101", "102", "103"],
+      "edits": ["101", "102"]
+    },
+    {
+      "name": "first line manager",
+      "headersFileEnv": "CORA_UAT_FORMS_FLM_HEADERS_FILE",
+      "lists": ["101", "102", "104"],
+      "opens": ["101", "102", "103", "104"],
+      "edits": ["101", "102", "104"]
+    },
+    {
+      "name": "second line manager",
+      "headersFileEnv": "CORA_UAT_FORMS_SLM_HEADERS_FILE",
+      "lists": ["101", "102", "104"],
+      "opens": ["101", "102", "103", "104"],
+      "edits": ["104"]
+    },
+    {
+      "name": "former manager",
+      "headersFileEnv": "CORA_UAT_FORMS_FORMER_MANAGER_HEADERS_FILE",
+      "lists": [],
+      "opens": [],
+      "edits": []
+    },
+    {
+      "name": "control group member",
+      "headersFileEnv": "CORA_UAT_FORMS_CONTROL_HEADERS_FILE",
+      "lists": [],
+      "opens": ["101", "102", "103", "104"],
+      "edits": []
+    },
+    {
+      "name": "unrelated access-group member",
+      "headersFileEnv": "CORA_UAT_FORMS_COLLEAGUE_HEADERS_FILE",
+      "lists": [],
+      "opens": [],
+      "edits": []
+    },
+    {
+      "name": "outside the Forms groups",
+      "headersFileEnv": "CORA_UAT_FORMS_OUTSIDER_HEADERS_FILE",
+      "lists": [],
+      "opens": [],
+      "edits": []
+    }
+  ]
+}
