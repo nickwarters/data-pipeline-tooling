@@ -4161,6 +4161,10 @@
 
 .cora-form-page {
   display: grid;
+  /* One column that is never wider than the page, so a control that will
+     not shrink cannot push the header and panels past the window's edge,
+     where the app root clips them. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--cora-space-4);
   max-width: 72rem;
 }
@@ -4201,6 +4205,7 @@
 .cora-form-header-text {
   flex: 1 1 24rem;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .cora-form-heading {
@@ -4238,6 +4243,7 @@
 }
 
 .cora-form-header-status {
+  flex: 0 0 auto;
   display: grid;
   justify-items: end;
   gap: var(--cora-space-2);
@@ -4378,9 +4384,11 @@
   color: var(--cora-color-text-subtle);
 }
 
+/* Side by side only when each panel has room for a comfortable comment box;
+   stacked otherwise. Measured against the page, not the window. */
 .cora-form-split {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(28rem, 100%), 1fr));
   gap: var(--cora-space-4);
 }
 

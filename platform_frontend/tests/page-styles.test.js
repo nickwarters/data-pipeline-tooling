@@ -81,7 +81,11 @@ for (const { name, prefix } of SETS) {
     const narrow = styles.slice(styles.indexOf('@media (max-width: 40rem)'));
     for (const { selector, body } of rulesFor(prefix)) {
       const columns = body.match(/grid-template-columns:\s*([^;]+);/);
-      if (!columns || /auto-fit|auto-fill|^1fr$/.test(columns[1].trim()))
+      // A grid that wraps its own tracks, or has only one, is already narrow.
+      if (
+        !columns ||
+        /auto-fit|auto-fill|^1fr$|^minmax\(0,\s*1fr\)$/.test(columns[1].trim())
+      )
         continue;
       for (const part of selector.split(',').map((each) => each.trim())) {
         assert.match(
