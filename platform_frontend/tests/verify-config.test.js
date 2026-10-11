@@ -1625,6 +1625,7 @@ function demoFormType(mutate = (sections) => sections, overrides = {}) {
     formName: 'Demo form',
     description: 'A demo.',
     listName: 'DemoForm',
+    voidReasons: ['Created in error', 'Duplicate form'],
     sections: mutate(sections),
     ...overrides,
   };
@@ -1637,6 +1638,43 @@ function demoFormType(mutate = (sections) => sections, overrides = {}) {
 function formFailures(definition) {
   return joined(checkFormTypes({ formTypes: [definition] }));
 }
+
+test('checkFormTypes asks every Form Type for something to pick when a Form is voided', () => {
+  for (const voidReasons of [undefined, []]) {
+    assert.match(
+      formFailures(demoFormType(undefined, { voidReasons })),
+      /declares no `voidReasons`/
+    );
+  }
+});
+
+test('checkFormTypes refuses a Void Reason list that names one twice, names a blank, or names Other itself', () => {
+  assert.match(
+    formFailures(
+      demoFormType(undefined, { voidReasons: ['Duplicate', 'Duplicate'] })
+    ),
+    /lists the Void Reason "Duplicate" twice/
+  );
+  assert.match(
+    formFailures(demoFormType(undefined, { voidReasons: ['  '] })),
+    /lists a Void Reason that is not a name/
+  );
+  assert.match(
+    formFailures(demoFormType(undefined, { voidReasons: [' other '] })),
+    /lists " other " as a Void Reason — set `allowOtherVoidReason` instead/
+  );
+});
+
+test('checkFormTypes refuses an allowOtherVoidReason that is not a yes or a no', () => {
+  assert.match(
+    formFailures(demoFormType(undefined, { allowOtherVoidReason: 'yes' })),
+    /sets `allowOtherVoidReason` to something other than true or false/
+  );
+  assert.equal(
+    formFailures(demoFormType(undefined, { allowOtherVoidReason: true })),
+    ''
+  );
+});
 
 test('checkFormTypes accepts a well-formed definition and the composed ones', () => {
   assert.deepEqual(checkFormTypes({ formTypes: [demoFormType()] }), []);

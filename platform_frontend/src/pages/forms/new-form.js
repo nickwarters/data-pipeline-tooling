@@ -20,7 +20,11 @@ import { createDebouncedPeopleSearch } from '../../lib/people-search.js';
 import { patchRoute } from '../../core/route-state.js';
 import { getCaptureFieldType } from '../../capture-fields/registry.js';
 import { canCreateForms } from '../../services/form-access.js';
-import { INITIAL_FORM_STATUS } from '../../../form-types/contract.js';
+import {
+  FORM_TITLE_FIELD,
+  FORM_TITLE_MAX_LENGTH,
+  INITIAL_FORM_STATUS,
+} from '../../../form-types/contract.js';
 import { formRouteFor } from './forms-model.js';
 import { reducePeopleSearches } from './people-search-state.js';
 
@@ -46,6 +50,7 @@ import { reducePeopleSearches } from './people-search-state.js';
  * @property {Partial<Record<NewFormPerson, string>>} filledFrom Whose
  *   directory profile a prefilled manager came from.
  * @property {string} dueDate
+ * @property {string} title What the creator has typed as the Form's title.
  * @property {PeopleSearches} peopleSearch
  * @property {number} prefill The latest directory lookup; an older answer is
  *   dropped.
@@ -65,13 +70,16 @@ const PEOPLE = Object.freeze([
 /**
  * The columns a new Form is created with. The chosen managers go into both
  * pairs: the current managers, which grant access, and the Form's own record.
+ * A title is written only when one was typed.
  *
  * @param {Record<NewFormPerson, Person | null>} people
  * @param {string} dueDate
+ * @param {string} [title]
  * @returns {Record<string, import('../../sharepoint-client.js').FormValue>}
  */
-export function newFormFields(people, dueDate) {
+export function newFormFields(people, dueDate, title = '') {
   return {
+    ...(title.trim() ? { [FORM_TITLE_FIELD]: title.trim() } : {}),
     Employee: people.employee,
     CurrentFirstLineManager: people.firstLineManager,
     CurrentSecondLineManager: people.secondLineManager,
@@ -115,6 +123,7 @@ export function createNewFormSlice(_params, context) {
         },
         filledFrom: {},
         dueDate: '',
+        title: '',
         peopleSearch: {},
         prefill: 0,
         creating: false,
@@ -175,7 +184,10 @@ export function createNewFormSlice(_params, context) {
     );
     dispatch({ type: 'new-form/create-started' });
     client
-      .createFormItem(formType, newFormFields(route.people, route.dueDate))
+      .createFormItem(
+        formType,
+        newFormFields(route.people, route.dueDate, route.title)
+      )
       .then(
         (item) => {
           if (isActive()) navigateTo(formRouteFor(formType, item.id));
@@ -240,6 +252,8 @@ export function createNewFormSlice(_params, context) {
         }
         case 'new-form/due-date-changed':
           return patchRoute(state, 'newForm', { dueDate: action.dueDate });
+        case 'new-form/title-changed':
+          return patchRoute(state, 'newForm', { title: action.title });
         case 'new-form/create-started':
           return patchRoute(state, 'newForm', { creating: true, error: null });
         case 'new-form/create-failed':
@@ -350,6 +364,23 @@ export function newFormView(state, tools) {
             tools.dispatch({
               type: 'new-form/due-date-changed',
               dueDate: event.target.value,
+            }),
+        })
+      ),
+      h(
+        'label',
+        { className: 'cora-form-control-group' },
+        h('span', { className: 'cora-form-label' }, 'Title (optional)'),
+        h('input', {
+          className: 'cora-capture-input',
+          type: 'text',
+          value: route.title,
+          maxLength: FORM_TITLE_MAX_LENGTH,
+          placeholder: 'e.g. Return to work after leave',
+          oninput: (/** @type {any} */ event) =>
+            tools.dispatch({
+              type: 'new-form/title-changed',
+              title: event.target.value,
             }),
         })
       ),

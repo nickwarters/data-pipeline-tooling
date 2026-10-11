@@ -83,7 +83,7 @@ test('the Employee sees their closed Forms in the window, latest closed first, e
   assert.deepEqual(bodyRows(page.render()), [
     ['1-to-1', 'Sam Patel', '03/07/2026', 'Void', '—', 'View'],
     [
-      '1-to-1',
+      '1-to-1First quarter check-in',
       'Sam Patel',
       '24/06/2026',
       'Completed',
@@ -263,7 +263,7 @@ test('the Employee filter narrows by name', async () => {
     }),
   });
   fireEvent(
-    getByRole(page.render(), 'textbox', { name: 'Employee' }),
+    getByRole(page.render(), 'textbox', { name: 'Employee or title' }),
     'input',
     { target: { value: 'person 1' } }
   );

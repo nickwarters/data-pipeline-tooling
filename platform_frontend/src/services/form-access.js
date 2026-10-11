@@ -93,10 +93,11 @@ export function formAccess(form, me, caps) {
     canEdit,
     canEditField(field) {
       if (!canEdit) return false;
-      // Nobody edits the application's own columns after creation: the
-      // current managers are kept by a process outside the app, and Status
-      // moves only through the lifecycle buttons.
-      if (Object.hasOwn(FORM_OWNED_FIELDS, field.itemField)) return false;
+      // Nobody edits the application's own columns after creation, bar the
+      // title: the current managers are kept by a process outside the app,
+      // and Status moves only through the lifecycle buttons.
+      const owned = FORM_OWNED_FIELDS[field.itemField];
+      if (owned) return owned.editableWhileOpen === true;
       if (field.editableBy === 'employee') return roles.includes('employee');
       if (field.editableBy === 'manager') {
         return roles.includes('firstLineManager');

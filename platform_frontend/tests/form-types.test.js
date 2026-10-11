@@ -26,9 +26,15 @@ function definition(sections) {
     formName: 'Demo',
     description: 'A demo form.',
     listName: 'Demo',
+    voidReasons: ['Created in error'],
     sections,
   };
 }
+
+/** The application's own columns that hold free text, and so are encoded. */
+const OWNED_ENCODED = Object.entries(FORM_OWNED_FIELDS)
+  .filter(([, owned]) => FORM_FIELD_STORAGE[owned.type] === 'encoded')
+  .map(([column]) => column);
 
 const STRIP = {
   sectionType: 'panel',
@@ -91,7 +97,10 @@ test('free text and the Form Actions are encoded; people, dates and choices are 
     ])
   );
 
-  assert.deepEqual(columns.encoded.sort(), ['Actions', 'Notes', 'Tags']);
+  assert.deepEqual(
+    columns.encoded.sort(),
+    ['Actions', 'Notes', 'Tags', ...OWNED_ENCODED].sort()
+  );
   assert.ok(columns.plain.includes('Stage'));
   assert.equal(
     columns.plain.some((column) => columns.encoded.includes(column)),
@@ -99,14 +108,16 @@ test('free text and the Form Actions are encoded; people, dates and choices are 
   );
 });
 
-test("the application's own columns are always read and written plain, placed on the page or not", () => {
+test("the application's own columns are always read and written, placed on the page or not, stored by their type", () => {
   // Access and the lock read them on every Form, so a definition that leaves
   // the current managers to the page still selects them.
   const { plain, encoded } = formColumns(definition([STRIP]));
 
-  for (const column of Object.keys(FORM_OWNED_FIELDS)) {
-    assert.ok(plain.includes(column), column);
-    assert.equal(encoded.includes(column), false, column);
+  for (const [column, owned] of Object.entries(FORM_OWNED_FIELDS)) {
+    const stored = FORM_FIELD_STORAGE[owned.type] === 'plain' ? plain : encoded;
+    const other = stored === plain ? encoded : plain;
+    assert.ok(stored.includes(column), column);
+    assert.equal(other.includes(column), false, column);
   }
 });
 
@@ -121,7 +132,7 @@ test('a field type the storage table does not know is encoded rather than left r
     ])
   );
 
-  assert.deepEqual(encoded, ['Odd']);
+  assert.deepEqual(encoded.sort(), ['Odd', ...OWNED_ENCODED].sort());
 });
 
 // --- Over every Form Type the application composes ---
@@ -130,7 +141,7 @@ test('every composed Form Type passes the verify gate', () => {
   assert.deepEqual(checkFormTypes({ formTypes: APP_CONFIG.formTypes }), []);
 });
 
-test('every composed Form Type encodes exactly its free text and its Form Actions', () => {
+test('every composed Form Type encodes exactly its free text, its Form Actions and the application’s own free text', () => {
   for (const def of APP_CONFIG.formTypes) {
     const { encoded } = formColumns(def);
     const freeText = formFields(def)
@@ -142,7 +153,7 @@ test('every composed Form Type encodes exactly its free text and its Form Action
 
     assert.deepEqual(
       encoded.sort(),
-      [...freeText, ...actions].sort(),
+      [...freeText, ...actions, ...OWNED_ENCODED].sort(),
       def.slug
     );
   }

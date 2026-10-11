@@ -10,6 +10,7 @@
  */
 
 import { formAccess } from '../../services/form-access.js';
+import { FORM_TITLE_FIELD } from '../../../form-types/contract.js';
 import {
   daysBetweenDateKeys,
   isDateKey,
@@ -39,7 +40,8 @@ import {
  * when it is not overdue, has no due date or is closed: a closed Form has
  * nothing left to be late for. `closedDate` is empty while the Form is open.
  * `managersAtCompletion` names the first and second line managers recorded on
- * the Form, the audit record that grants nothing.
+ * the Form, the audit record that grants nothing. `title` is the Form's own
+ * title, trimmed, or empty when it has none.
  *
  * @typedef {{
  *   key: string,
@@ -47,6 +49,7 @@ import {
  *   item: FormItem,
  *   access: FormAccess,
  *   employeeName: string,
+ *   title: string,
  *   dueDate: string,
  *   overdueDays: number,
  *   closedDate: string,
@@ -120,6 +123,7 @@ export function formRows(loaded, me, caps, today) {
         item,
         access,
         employeeName: personName(item.fields.Employee),
+        title: formTitle(item),
         dueDate,
         overdueDays:
           dueDate === '' || access.locked
@@ -222,8 +226,8 @@ export function formLanes(rows, today) {
 
 /**
  * The rows a person filter, a Form Type filter, a role filter and a Status
- * filter leave. Each is off when empty or absent. The person filter matches the
- * Employee's name, ignoring case.
+ * filter leave. Each is off when empty or absent. The text filter matches the
+ * Employee's name or the Form's title, ignoring case.
  *
  * @param {FormRow[]} rows
  * @param {{ text: string, formType: string, role?: string, status?: string }} filters
@@ -236,7 +240,9 @@ export function filterFormRows(
   const needle = text.trim().toLowerCase();
   return rows.filter(
     (row) =>
-      (needle === '' || row.employeeName.toLowerCase().includes(needle)) &&
+      (needle === '' ||
+        row.employeeName.toLowerCase().includes(needle) ||
+        row.title.toLowerCase().includes(needle)) &&
       (formType === '' || row.formType.slug === formType) &&
       (role === '' || row.access.role === role) &&
       (status === '' || row.status === status)
@@ -358,4 +364,15 @@ function personName(value) {
     return person.displayName;
   }
   return typeof person?.loginName === 'string' ? person.loginName : '';
+}
+
+/**
+ * A Form's title, trimmed, or empty when it has none.
+ *
+ * @param {FormItem} item
+ * @returns {string}
+ */
+export function formTitle(item) {
+  const title = item.fields[FORM_TITLE_FIELD];
+  return typeof title === 'string' ? title.trim() : '';
 }

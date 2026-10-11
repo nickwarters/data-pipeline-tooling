@@ -9,7 +9,7 @@
  * reach a write.
  */
 
-import { h } from '../../lib/html.js';
+import { h, svg } from '../../lib/html.js';
 import { navigateTo } from '../../lib/navigate.js';
 import { formatDate } from '../../lib/format-datetime.js';
 import { toLocalDateKey } from '../../lib/local-calendar.js';
@@ -24,7 +24,12 @@ import { formSaveTarget } from '../../services/form-save-target.js';
 import { formAccess } from '../../services/form-access.js';
 import {
   FORM_FIELD_STORAGE,
+  FORM_TITLE_FIELD,
+  FORM_TITLE_MAX_LENGTH,
+  OTHER_VOID_REASON,
+  VOID_FORM_STATUS,
   formFields,
+  voidReasonChoices,
 } from '../../../form-types/contract.js';
 import {
   closedVerb,
@@ -32,6 +37,7 @@ import {
   formSectionsView,
 } from './form-sections-view.js';
 import { formStatusBadge } from './form-cells.js';
+import { formTitle } from './forms-model.js';
 import { reducePeopleSearches } from './people-search-state.js';
 
 /** @typedef {import('../../sharepoint-client.js').FormItem} FormItem */
@@ -56,13 +62,26 @@ import { reducePeopleSearches } from './people-search-state.js';
  * @property {string | null} lastSavedAt
  * @property {PeopleSearches} peopleSearch
  * @property {string | null} confirming The closing Status awaiting confirmation.
+ * @property {VoidReasonDraft} voidReason What the voider has picked and typed
+ *   so far, while a Void awaits confirmation.
  * @property {boolean} closing
  * @property {string | null} closeError
  * @property {number | null} removingAction The Form Action whose removal
  *   awaits a yes.
+ * @property {string | null} titleDraft The title as an editor is retyping it,
+ *   or `null` while it is shown as text.
+ */
+
+/**
+ * @typedef {Object} VoidReasonDraft
+ * @property {string} reason The Void Reason picked, or empty.
+ * @property {string} note The voider's own words, asked for when the reason is `Other`.
  */
 
 /** @typedef {{ chrome: ChromeState, routes: { form: FormPageRoute } }} FormPageState */
+
+/** @type {VoidReasonDraft} */
+const NO_VOID_REASON = Object.freeze({ reason: '', note: '' });
 
 /**
  * What each lifecycle button is called and what it asks before it closes the
@@ -93,14 +112,36 @@ const CONFLICT_MESSAGE =
 /**
  * The columns a lifecycle button writes: the closing Status, and the day and
  * the person that closed the Form, which the archive and the locked page read.
+ * A Void also records its reason, and the voider's own words only when that
+ * reason is `Other`.
  *
  * @param {string} status
  * @param {{ loginName: string, displayName: string }} me
  * @param {string} today
+ * @param {VoidReasonDraft} [voidReason]
  * @returns {Record<string, FormValue>}
  */
-export function closingFields(status, me, today) {
-  return { Status: status, ClosedDate: today, ClosedBy: me };
+export function closingFields(status, me, today, voidReason = NO_VOID_REASON) {
+  const fields = { Status: status, ClosedDate: today, ClosedBy: me };
+  if (status !== VOID_FORM_STATUS) return fields;
+  const other = voidReason.reason === OTHER_VOID_REASON;
+  return {
+    ...fields,
+    VoidReason: voidReason.reason,
+    VoidReasonNote: other ? voidReason.note.trim() : null,
+  };
+}
+
+/**
+ * Whether the Void Reason picked so far is enough to void the Form: a reason
+ * from the Form Type's list, and words to go with `Other`.
+ *
+ * @param {FormTypeDefinition} formType
+ * @param {VoidReasonDraft} draft
+ */
+function isVoidReasonComplete(formType, draft) {
+  if (!voidReasonChoices(formType).includes(draft.reason)) return false;
+  return draft.reason !== OTHER_VOID_REASON || draft.note.trim() !== '';
 }
 
 /**
@@ -145,9 +186,11 @@ export function createFormPageSlice(
         lastSavedAt: null,
         peopleSearch: {},
         confirming: null,
+        voidReason: NO_VOID_REASON,
         closing: false,
         closeError: null,
         removingAction: null,
+        titleDraft: null,
       },
     },
   };
@@ -187,6 +230,20 @@ export function createFormPageSlice(
   }
 
   /**
+   * Save a retyped title, trimmed, unless it is what is already stored, and
+   * show it as text again.
+   *
+   * @param {FormPageRoute} route
+   * @param {string} draft
+   */
+  function saveTitle(route, draft) {
+    const title = draft.trim();
+    const item = /** @type {FormItem} */ (route.item);
+    if (title !== formTitle(item)) editField(FORM_TITLE_FIELD, title, 'text');
+    dispatch({ type: 'form/title-edit-ended' });
+  }
+
+  /**
    * Close the Form: write what is still waiting, then the closing columns, on
    * the button press rather than the debounce.
    *
@@ -199,7 +256,8 @@ export function createFormPageSlice(
     const fields = closingFields(
       status,
       { loginName: currentUser.id, displayName: currentUser.displayName },
-      route.today
+      route.today,
+      route.voidReason
     );
     writing.enqueueFields(id, fields);
     const saved = await writing.flushCase(id);
@@ -254,12 +312,28 @@ export function createFormPageSlice(
         case 'form/close-requested':
           return patchRoute(state, 'form', {
             confirming: action.status,
+            voidReason: NO_VOID_REASON,
             closeError: null,
           });
+        case 'form/void-reason-edited':
+          return patchRoute(state, 'form', {
+            voidReason: { ...route.voidReason, ...action.draft },
+          });
         case 'form/close-withdrawn':
-          return patchRoute(state, 'form', { confirming: null });
+          return patchRoute(state, 'form', {
+            confirming: null,
+            voidReason: NO_VOID_REASON,
+          });
         case 'form/close-started':
           return patchRoute(state, 'form', { closing: true });
+        case 'form/title-edit-started':
+          return patchRoute(state, 'form', {
+            titleDraft: formTitle(/** @type {FormItem} */ (route.item)),
+          });
+        case 'form/title-draft-changed':
+          return patchRoute(state, 'form', { titleDraft: action.title });
+        case 'form/title-edit-ended':
+          return patchRoute(state, 'form', { titleDraft: null });
         case 'form/closed':
           return patchRoute(state, 'form', {
             item: withFields(
@@ -268,6 +342,8 @@ export function createFormPageSlice(
             ),
             confirming: null,
             closing: false,
+            // A closed Form's title is locked with everything else.
+            titleDraft: null,
           });
         case 'form/close-failed':
           return patchRoute(state, 'form', {
@@ -290,6 +366,7 @@ export function createFormPageSlice(
         },
         onActions: editActions,
         onClose: (status) => void close(route, status),
+        onTitle: (draft) => saveTitle(route, draft),
       });
     },
     start(/** @type {any} */ tools) {
@@ -363,6 +440,7 @@ function withFields(item, fields) {
  * @property {(key: string, query: string) => void} onPersonQuery
  * @property {(itemField: string, actions: FormAction[]) => void} onActions
  * @property {(status: string) => void} onClose
+ * @property {(title: string) => void} onTitle Save the retyped title.
  */
 
 /**
@@ -407,6 +485,9 @@ export function formPageView(state, tools) {
   }
   const mode = formMode(access);
   const status = String(item.fields.Status ?? '');
+  const formLabel = [formType.formName, personName(item.fields.Employee)]
+    .filter(Boolean)
+    .join(' · ');
   return h(
     'div',
     { className: 'cora-form-page' },
@@ -416,14 +497,8 @@ export function formPageView(state, tools) {
       { className: 'cora-form-header' },
       h(
         'div',
-        {},
-        h(
-          'h1',
-          {},
-          [formType.formName, personName(item.fields.Employee)]
-            .filter(Boolean)
-            .join(' · ')
-        ),
+        { className: 'cora-form-header-text' },
+        ...headingView(route, item, formLabel, access, tools),
         h('p', { className: 'cora-form-description' }, formType.description)
       ),
       h(
@@ -511,8 +586,24 @@ function lockedBanner(item) {
     'div',
     { className: 'cora-form-banner cora-form-banner--locked', role: 'status' },
     h('strong', {}, `${closedVerb(status)}${closed}.`),
-    ' This form is locked and can no longer be changed.'
+    ' This form is locked and can no longer be changed.',
+    status === VOID_FORM_STATUS ? voidReasonLine(item) : null
   );
+}
+
+/**
+ * Why a voided Form was voided: the reason picked, or the voider's own words
+ * when they picked `Other`. A Form voided before reasons were asked for has
+ * none, and says nothing.
+ *
+ * @param {FormItem} item
+ */
+function voidReasonLine(item) {
+  const reason = String(item.fields.VoidReason ?? '');
+  if (!reason) return null;
+  const note = String(item.fields.VoidReasonNote ?? '').trim();
+  const said = reason === OTHER_VOID_REASON && note ? note : reason;
+  return h('p', { className: 'cora-form-banner-detail' }, `Reason: ${said}`);
 }
 
 /**
@@ -568,6 +659,9 @@ function footerView(route, formType, tools) {
             h('strong', {}, pending.ask(formType.formName)),
             ' Nobody will be able to change it afterwards.'
           ),
+          pending.status === VOID_FORM_STATUS
+            ? voidReasonView(route, formType, tools)
+            : null,
           h(
             'div',
             { className: 'cora-form-footer-buttons' },
@@ -585,7 +679,10 @@ function footerView(route, formType, tools) {
               'button',
               {
                 type: 'button',
-                disabled: route.closing,
+                disabled:
+                  route.closing ||
+                  (pending.status === VOID_FORM_STATUS &&
+                    !isVoidReasonComplete(formType, route.voidReason)),
                 onclick: () => tools.onClose(pending.status),
               },
               route.closing ? 'Saving…' : `Yes, ${lowerFirst(pending.label)}`
@@ -617,6 +714,198 @@ function footerView(route, formType, tools) {
             )
           )
         )
+  );
+}
+
+/**
+ * The page heading: the Form's title when it has one, under the Form Type and
+ * Employee, and otherwise those alone. An editor of an open Form gets a pencil
+ * beside it that swaps the heading for a box to retype the title in, saved on
+ * Enter or Save and put back on Escape or Cancel.
+ *
+ * @param {FormPageRoute} route
+ * @param {FormItem} item
+ * @param {string} formLabel
+ * @param {FormAccess} access
+ * @param {FormPageTools} tools
+ * @returns {Array<Node | null>}
+ */
+function headingView(route, item, formLabel, access, tools) {
+  const title = formTitle(item);
+  const kicker = title
+    ? h('p', { className: 'cora-form-kicker' }, formLabel)
+    : null;
+  if (!access.canEditField({ itemField: FORM_TITLE_FIELD })) {
+    return [kicker, h('h1', {}, title || formLabel)];
+  }
+  if (route.titleDraft === null) {
+    return [
+      kicker,
+      h(
+        'div',
+        { className: 'cora-form-heading' },
+        h('h1', {}, title || formLabel),
+        h(
+          'button',
+          {
+            type: 'button',
+            className: 'cora-form-title-edit',
+            'aria-label': title ? 'Edit title' : 'Add a title',
+            title: title ? 'Edit title' : 'Add a title',
+            onclick: (/** @type {Event} */ event) =>
+              afterDraw(event, '.cora-form-title-input', () =>
+                tools.dispatch({ type: 'form/title-edit-started' })
+              ),
+          },
+          pencilIcon()
+        )
+      ),
+    ];
+  }
+  const draft = route.titleDraft;
+  /** @param {Event} event */
+  const save = (event) =>
+    afterDraw(event, '.cora-form-title-edit', () => tools.onTitle(draft));
+  /** @param {Event} event */
+  const cancel = (event) =>
+    afterDraw(event, '.cora-form-title-edit', () =>
+      tools.dispatch({ type: 'form/title-edit-ended' })
+    );
+  return [
+    h('p', { className: 'cora-form-kicker' }, formLabel),
+    h(
+      'div',
+      { className: 'cora-form-heading cora-form-heading--editing' },
+      h('input', {
+        className: 'cora-capture-input cora-form-title-input',
+        type: 'text',
+        'aria-label': 'Title',
+        value: draft,
+        maxLength: FORM_TITLE_MAX_LENGTH,
+        placeholder: 'e.g. Return to work after leave',
+        oninput: (/** @type {Event} */ event) =>
+          tools.dispatch({
+            type: 'form/title-draft-changed',
+            title: /** @type {HTMLInputElement} */ (event.target).value,
+          }),
+        onkeydown: (/** @type {KeyboardEvent} */ event) => {
+          if (event.key !== 'Enter' && event.key !== 'Escape') return;
+          // Otherwise the key's own press lands on the pencil that focus has
+          // moved to, and opens the box again.
+          event.preventDefault();
+          if (event.key === 'Enter') save(event);
+          else cancel(event);
+        },
+      }),
+      h('button', { type: 'button', onclick: save }, 'Save'),
+      h(
+        'button',
+        { type: 'button', className: 'cora-btn-secondary', onclick: cancel },
+        'Cancel'
+      )
+    ),
+  ];
+}
+
+/**
+ * Change the heading, then move focus to what replaces the control that was
+ * used, once the change is drawn, so a keyboard user is not left on nothing.
+ *
+ * @param {Event} event
+ * @param {string} selector what to focus within the header afterwards
+ * @param {() => void} change
+ */
+function afterDraw(event, selector, change) {
+  const header = /** @type {HTMLElement | null} */ (event.target)?.closest?.(
+    '.cora-form-header'
+  );
+  change();
+  // The store draws on a microtask queued by the dispatch above, so this one
+  // runs after it.
+  queueMicrotask(() =>
+    /** @type {HTMLElement | null | undefined} */ (
+      header?.querySelector(selector)
+    )?.focus?.()
+  );
+}
+
+/** A pencil, drawn in the text colour at the size of the text beside it. */
+function pencilIcon() {
+  return svg(
+    'svg',
+    {
+      viewBox: '0 0 24 24',
+      width: '18',
+      height: '18',
+      fill: 'none',
+      stroke: 'currentColor',
+      'stroke-width': '1.8',
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+      focusable: 'false',
+      'aria-hidden': 'true',
+    },
+    svg('path', { d: 'M4 20h4L19 9l-4-4L4 16v4z' }),
+    svg('path', { d: 'M13.5 6.5l4 4' })
+  );
+}
+
+/**
+ * The Void Reason picker, and the box for the voider's own words once they
+ * pick `Other`. Voiding waits until both say something.
+ *
+ * @param {FormPageRoute} route
+ * @param {FormTypeDefinition} formType
+ * @param {FormPageTools} tools
+ */
+function voidReasonView(route, formType, tools) {
+  const { reason, note } = route.voidReason;
+  /** @param {Partial<VoidReasonDraft>} draft */
+  const edit = (draft) =>
+    tools.dispatch({ type: 'form/void-reason-edited', draft });
+  return h(
+    'div',
+    { className: 'cora-form-void-reason' },
+    h(
+      'label',
+      { className: 'cora-form-control-group' },
+      h('span', { className: 'cora-form-label' }, 'Reason for voiding'),
+      h(
+        'select',
+        {
+          className: 'cora-capture-input',
+          required: true,
+          value: reason,
+          disabled: route.closing,
+          onchange: (/** @type {Event} */ event) =>
+            edit({
+              reason: /** @type {HTMLSelectElement} */ (event.target).value,
+            }),
+        },
+        h('option', { value: '' }, 'Choose a reason'),
+        ...voidReasonChoices(formType).map((choice) =>
+          h('option', { value: choice }, choice)
+        )
+      )
+    ),
+    reason === OTHER_VOID_REASON
+      ? h(
+          'label',
+          { className: 'cora-form-control-group' },
+          h('span', { className: 'cora-form-label' }, 'Describe the reason'),
+          h('textarea', {
+            className: 'cora-capture-input',
+            required: true,
+            rows: 3,
+            value: note,
+            disabled: route.closing,
+            oninput: (/** @type {Event} */ event) =>
+              edit({
+                note: /** @type {HTMLTextAreaElement} */ (event.target).value,
+              }),
+          })
+        )
+      : null
   );
 }
 

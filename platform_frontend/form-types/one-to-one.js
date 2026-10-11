@@ -14,6 +14,8 @@ export const oneToOne = /** @satisfies {FormTypeDefinition} */ ({
   formName: '1-to-1',
   description: 'Capture meeting details, notes and actions.',
   listName: 'OneToOne',
+  voidReasons: ['Created in error', 'Duplicate form', 'Meeting did not happen'],
+  allowOtherVoidReason: true,
   sections: [
     {
       sectionType: 'panel',

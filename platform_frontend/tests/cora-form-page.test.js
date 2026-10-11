@@ -236,6 +236,7 @@ test('each current manager is shown with what they may do', async () => {
  */
 async function close(page, button, confirm) {
   fireEvent(getByRole(page.render(), 'button', { name: button }), 'click');
+  if (button === 'Void form') pickVoidReason(page, 'Duplicate form');
   const before = page.actions.length;
   fireEvent(getByRole(page.render(), 'button', { name: confirm }), 'click');
   await page.until(() =>
@@ -272,6 +273,307 @@ for (const [button, confirm, status, verb] of [
     assert.equal(queryByRole(view, 'button', { name: button }), null);
   });
 }
+
+/**
+ * @param {any} page
+ * @param {string} reason
+ * @param {string} [note] typed once the reason asks for words
+ */
+function pickVoidReason(page, reason, note) {
+  fireEvent(
+    getByRole(page.render(), 'combobox', { name: 'Reason for voiding' }),
+    'change',
+    { target: { value: reason } }
+  );
+  if (note === undefined) return;
+  fireEvent(
+    getByRole(page.render(), 'textbox', { name: 'Describe the reason' }),
+    'input',
+    { target: { value: note } }
+  );
+}
+
+/** @param {any} page */
+const voidConfirm = (page) =>
+  /** @type {HTMLButtonElement} */ (
+    getByRole(page.render(), 'button', { name: 'Yes, void form' })
+  );
+
+test('voiding asks why, offering the Form Type’s Void Reasons and then Other', async () => {
+  const page = await openForm('forms-employee', '101');
+  fireEvent(getByRole(page.render(), 'button', { name: 'Void form' }), 'click');
+  const picker = getByRole(page.render(), 'combobox', {
+    name: 'Reason for voiding',
+  });
+
+  assert.deepEqual(
+    [...picker.querySelectorAll('option')].slice(1).map((o) => o.textContent),
+    [...oneToOne.voidReasons, 'Other']
+  );
+  assert.equal(voidConfirm(page).disabled, true);
+  pickVoidReason(page, oneToOne.voidReasons[0]);
+  assert.equal(voidConfirm(page).disabled, false);
+  assert.equal(
+    queryByRole(page.render(), 'textbox', { name: 'Describe the reason' }),
+    null
+  );
+});
+
+test('a Form Type that does not allow Other offers only its own Void Reasons', async () => {
+  const strict = { ...oneToOne, allowOtherVoidReason: false };
+  const page = await openForm('forms-employee', '101', { formTypes: [strict] });
+  fireEvent(getByRole(page.render(), 'button', { name: 'Void form' }), 'click');
+  const picker = getByRole(page.render(), 'combobox', {
+    name: 'Reason for voiding',
+  });
+  assert.deepEqual(
+    [...picker.querySelectorAll('option')].slice(1).map((o) => o.textContent),
+    [...oneToOne.voidReasons]
+  );
+});
+
+test('Other cannot void the Form until the reason is written, and blank words do not count', async () => {
+  const page = await openForm('forms-employee', '101');
+  fireEvent(getByRole(page.render(), 'button', { name: 'Void form' }), 'click');
+
+  pickVoidReason(page, 'Other');
+  assert.equal(voidConfirm(page).disabled, true);
+  pickVoidReason(page, 'Other', '   ');
+  assert.equal(voidConfirm(page).disabled, true);
+  pickVoidReason(page, 'Other', '  Booked twice by HR  ');
+  assert.equal(voidConfirm(page).disabled, false);
+
+  const before = page.actions.length;
+  fireEvent(voidConfirm(page), 'click');
+  await page.until(() =>
+    page.actions
+      .slice(before)
+      .some((/** @type {any} */ action) => action.type === 'form/closed')
+  );
+  const stored = await page.client.getFormItem(oneToOne, '101');
+  assert.equal(stored?.fields.VoidReason, 'Other');
+  assert.equal(stored?.fields.VoidReasonNote, 'Booked twice by HR');
+  assert.match(
+    textOf(page.render(), 'cora-form-banner--locked') ?? '',
+    /Reason: Booked twice by HR$/
+  );
+});
+
+test('a listed Void Reason is recorded on its own and shown on the locked Form', async () => {
+  const page = await openForm('forms-employee', '101');
+  await close(page, 'Void form', 'Yes, void form');
+
+  const stored = await page.client.getFormItem(oneToOne, '101');
+  assert.equal(stored?.fields.VoidReason, 'Duplicate form');
+  assert.ok(!stored?.fields.VoidReasonNote);
+  assert.match(
+    textOf(page.render(), 'cora-form-banner--locked') ?? '',
+    /Reason: Duplicate form$/
+  );
+});
+
+test('withdrawing a Void forgets the reason picked', async () => {
+  const page = await openForm('forms-employee', '101');
+  fireEvent(getByRole(page.render(), 'button', { name: 'Void form' }), 'click');
+  pickVoidReason(page, 'Other', 'Not needed');
+  fireEvent(
+    getByRole(page.render(), 'button', { name: 'Keep editing' }),
+    'click'
+  );
+  fireEvent(getByRole(page.render(), 'button', { name: 'Void form' }), 'click');
+
+  assert.equal(
+    /** @type {HTMLSelectElement} */ (
+      getByRole(page.render(), 'combobox', { name: 'Reason for voiding' })
+    ).value,
+    ''
+  );
+  assert.equal(voidConfirm(page).disabled, true);
+});
+
+test('completing or cancelling asks for no reason and records none', async () => {
+  for (const [button, confirm] of [
+    ['Mark complete', 'Yes, mark complete'],
+    ['Cancel form', 'Yes, cancel form'],
+  ]) {
+    const page = await openForm('forms-employee', '101');
+    fireEvent(getByRole(page.render(), 'button', { name: button }), 'click');
+    assert.equal(
+      queryByRole(page.render(), 'combobox', { name: 'Reason for voiding' }),
+      null
+    );
+    fireEvent(
+      getByRole(page.render(), 'button', { name: 'Keep editing' }),
+      'click'
+    );
+    await close(page, button, confirm);
+    const stored = await page.client.getFormItem(oneToOne, '101');
+    assert.ok(!stored?.fields.VoidReason, button);
+  }
+});
+
+test('a Form voided before reasons were asked for says nothing about why', async () => {
+  const client = formsClient();
+  const voided = await client.getFormItem(oneToOne, '105');
+  await client.patchFormItem(
+    oneToOne,
+    '105',
+    { VoidReason: null, VoidReasonNote: null },
+    /** @type {any} */ (voided).etag
+  );
+  const view = (await openForm('forms-employee', '105', { client })).render();
+  assert.doesNotMatch(textOf(view, 'cora-form-banner--locked') ?? '', /Reason/);
+});
+
+/** @param {HTMLElement} view */
+const heading = (view) => view.querySelector('h1')?.textContent;
+
+test('an untitled open Form shows its Form Type and Employee as plain text, with a pencil to add a title', async () => {
+  const view = (await openForm('forms-employee', '102')).render();
+  assert.equal(heading(view), '1-to-1 · Sam Patel');
+  assert.ok(getByRole(view, 'button', { name: 'Add a title' }));
+  assert.equal(queryByRole(view, 'textbox', { name: 'Title' }), null);
+});
+
+test('an editor gives the open Form a title with the pencil, saved as the heading', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  for (const persona of ['forms-employee', 'forms-line-manager']) {
+    const page = await openForm(persona, '102');
+    fireEvent(
+      getByRole(page.render(), 'button', { name: 'Add a title' }),
+      'click'
+    );
+    fireEvent(getByRole(page.render(), 'textbox', { name: 'Title' }), 'input', {
+      target: { value: '  Sickness absence review ' },
+    });
+    fireEvent(getByRole(page.render(), 'button', { name: 'Save' }), 'click');
+    t.mock.timers.tick(5000);
+    await saved(page);
+
+    const stored = await page.client.getFormItem(oneToOne, '102');
+    assert.equal(stored?.fields.FormTitle, 'Sickness absence review', persona);
+    const view = page.render();
+    assert.equal(heading(view), 'Sickness absence review');
+    assert.equal(textOf(view, 'cora-form-kicker'), '1-to-1 · Sam Patel');
+    assert.equal(queryByRole(view, 'textbox', { name: 'Title' }), null);
+    assert.ok(getByRole(view, 'button', { name: 'Edit title' }));
+  }
+});
+
+test('Enter saves the retyped title and Escape puts the old one back', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const page = await openForm('forms-employee', '102');
+  const retype = (/** @type {string} */ title, /** @type {string} */ key) => {
+    fireEvent(getByRole(page.render(), 'button', { name: /title/ }), 'click');
+    const box = getByRole(page.render(), 'textbox', { name: 'Title' });
+    fireEvent(box, 'input', { target: { value: title } });
+    const pressed = fireEvent(
+      getByRole(page.render(), 'textbox', { name: 'Title' }),
+      'keydown',
+      { key }
+    );
+    // Held back, or the same key would land on the pencil and reopen the box.
+    assert.equal(pressed.defaultPrevented, true, key);
+  };
+
+  retype('Kept', 'Enter');
+  t.mock.timers.tick(5000);
+  await saved(page);
+  retype('Thrown away', 'Escape');
+  fireEvent(
+    getByRole(page.render(), 'button', { name: 'Edit title' }),
+    'click'
+  );
+  assert.equal(
+    /** @type {HTMLInputElement} */ (
+      getByRole(page.render(), 'textbox', { name: 'Title' })
+    ).value,
+    'Kept'
+  );
+  fireEvent(getByRole(page.render(), 'button', { name: 'Cancel' }), 'click');
+
+  assert.equal(heading(page.render()), 'Kept');
+  assert.equal(
+    (await page.client.getFormItem(oneToOne, '102'))?.fields.FormTitle,
+    'Kept'
+  );
+});
+
+test('saving a title unchanged writes nothing', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const page = await openForm('forms-employee', '102');
+  /** @type {unknown[]} */
+  const writes = [];
+  const patch = page.client.patchFormItem.bind(page.client);
+  page.client.patchFormItem = (/** @type {any[]} */ ...args) => {
+    writes.push(args[2]);
+    return patch(...args);
+  };
+  fireEvent(
+    getByRole(page.render(), 'button', { name: 'Add a title' }),
+    'click'
+  );
+  fireEvent(getByRole(page.render(), 'button', { name: 'Save' }), 'click');
+  t.mock.timers.tick(5000);
+
+  assert.deepEqual(writes, []);
+  assert.ok(getByRole(page.render(), 'button', { name: 'Add a title' }));
+});
+
+test('the pencil hands focus to the title box, and saving hands it back to the pencil', async () => {
+  const { render } = await import('../src/core/render.js');
+  const page = await openForm('forms-employee', '102');
+  const container = document.createElement('div');
+  const draw = () => render(container, page.render());
+  draw();
+
+  fireEvent(getByRole(container, 'button', { name: 'Add a title' }), 'click');
+  draw();
+  await Promise.resolve();
+  assert.equal(
+    document.activeElement,
+    getByRole(container, 'textbox', { name: 'Title' })
+  );
+
+  fireEvent(getByRole(container, 'button', { name: 'Cancel' }), 'click');
+  draw();
+  await Promise.resolve();
+  assert.equal(
+    document.activeElement,
+    getByRole(container, 'button', { name: 'Add a title' })
+  );
+});
+
+test('a Form closed while its title is being retyped shows the title as text, with no pencil', async () => {
+  const page = await openForm('forms-employee', '102');
+  fireEvent(
+    getByRole(page.render(), 'button', { name: 'Add a title' }),
+    'click'
+  );
+  await close(page, 'Mark complete', 'Yes, mark complete');
+
+  const view = page.render();
+  assert.equal(heading(view), '1-to-1 · Sam Patel');
+  assert.equal(queryByRole(view, 'textbox', { name: 'Title' }), null);
+  assert.equal(queryByRole(view, 'button', { name: /title/ }), null);
+});
+
+test('someone who may only read the Form, or reads it locked, sees its title as plain text with no pencil', async () => {
+  for (const [persona, id, expected] of [
+    ['forms-second-line-manager', '103', 'First quarter check-in'],
+    ['forms-control', '103', 'First quarter check-in'],
+    ['forms-employee', '103', 'First quarter check-in'],
+    ['forms-second-line-manager', '102', '1-to-1 · Sam Patel'],
+  ]) {
+    const view = (await openForm(persona, id)).render();
+    assert.equal(heading(view), expected, `${persona} ${id}`);
+    assert.equal(
+      queryByRole(view, 'button', { name: /title/ }),
+      null,
+      `${persona} ${id}`
+    );
+  }
+});
 
 test('the closing Statuses the buttons write are exactly the ones that lock a Form', async () => {
   /** @type {string[]} */
@@ -392,6 +694,10 @@ test('a Void Form records it was voided, and an empty record reads as nothing', 
     /First line managerNothing recorded/
   );
   assert.match(recorded.textContent ?? '', /Voided bySam Patel, 03\/07\/2026/);
+  assert.match(
+    textOf(view, 'cora-form-banner--locked') ?? '',
+    /Reason: Booked for the wrong week\.$/
+  );
 });
 
 test('a locked Form is reached from the archive, and an open one from the dashboard', async () => {

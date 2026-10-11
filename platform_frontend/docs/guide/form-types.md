@@ -30,6 +30,8 @@ export const oneToOne = /** @satisfies {FormTypeDefinition} */ ({
   formName: '1-to-1',
   description: 'Capture meeting details, notes and actions.',
   listName: 'OneToOne', // the environment prefix is added centrally
+  voidReasons: ['Created in error', 'Duplicate form', 'Meeting did not happen'],
+  allowOtherVoidReason: true, // also offer Other, which asks for the reason
   sections: [
     { sectionType: 'panel', panelName: 'Meeting details', layout: 'strip', fields: [ … ] },
     { sectionType: 'panel', panelName: 'Discussion', layout: 'question-answer', fields: [ … ] },
@@ -44,7 +46,7 @@ export const oneToOne = /** @satisfies {FormTypeDefinition} */ ({
 | `sectionType` | What it draws                                                                                                                                                                                |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `panel`       | One full-width panel. `layout` is `strip` (label and value pairs, no heading drawn), `question-answer` (label and hint left, answer right) or `stacked` (the default).                       |
-| `split-panel` | Two panels side by side, stacking when the page is narrow.                                                                                                                                   |
+| `split-panel` | Two panels side by side, stacking when the window is narrower than about 890px.                                                                                                              |
 | `actions`     | The shared Form Actions editor, stored as one column named by `itemField`. A Form holds at most three Form Actions whatever its type, so a definition cannot set a limit. One per Form Type. |
 
 **Fields** carry `type`, `label` and `itemField` (the list column, exactly as the
@@ -70,6 +72,13 @@ provisioning script and both SharePoint clients read it, so a column cannot be
 encoded on the way out and read plain on the way back. How a Form is read and
 written is in [the client guide](./sharepoint-client.md#forms-listformitems-getformitem-createformitem-patchformitem).
 
+**`voidReasons`** is what the person voiding a Form picks from to say why, and
+it must name at least one. **`allowOtherVoidReason: true`** adds **Other** after
+them, which asks for the reason in the voider's own words and holds the Void
+until there are some. Other is only ever offered this way, so the gate refuses a
+definition that lists it among its own reasons. The reasons are the Form Type's
+own; they are not the Case Void Reasons.
+
 **`editableBy`** marks a field only one editor may change: `'employee'` for the
 Form's Employee, `'manager'` for its current first line manager. Every other field
 is editable by both. Who may edit at all, the lock and the lifecycle buttons are
@@ -78,20 +87,36 @@ code shared by every Form Type, never definition entries.
 ## The application's own columns
 
 `Employee`, `CurrentFirstLineManager`, `CurrentSecondLineManager`, `Status`,
-`DueDate`, `ClosedDate` and `ClosedBy` belong to the application, because
-access, the lock, the archive and the locked page read them. `ClosedDate` is the
+`DueDate`, `ClosedDate`, `ClosedBy`, `VoidReason`, `VoidReasonNote` and
+`FormTitle` belong to the application, because access, the lock, the archive,
+the Forms tables and the locked page read them. `ClosedDate` is the
 day a lifecycle button closed the Form and `ClosedBy` the person who pressed it;
 both are empty while it is open. The archive reads `ClosedDate` rather than
 `Modified`, which moves whenever anything touches the item, and neither is read
 from the version history, which a list may not keep and which names whoever
-wrote last rather than who closed the Form. Every
-Form's list has them, and they are always read and written plain.
+wrote last rather than who closed the Form. `VoidReason` is the reason picked
+when the Form was voided, a Choice column offering the Form Type's
+`voidReasons` (and Other), and `VoidReasonNote` the voider's own words under
+Other; both are empty otherwise. Every Form's list has them, stored by their
+type: all plain but `VoidReasonNote` and `FormTitle`, which are free text and
+encoded. All but those and `VoidReason` are indexed.
+
+`FormTitle` is the Form's own title, so it can be found again by what it was
+about. It can be typed on New form, and is the one application column edited
+afterwards: either editor changes it on the Form page until the Form closes,
+when the lock stops it like every other field. It becomes the page heading, as
+plain text with the Form Type and Employee above it; an editor of an open Form
+gets a pencil beside it that swaps the heading for a box (Enter or Save keeps
+the change, Escape or Cancel drops it). This is the same on every Form Type and
+is not configured. The title also sits under the Form Type in both Forms
+tables, and the tables' text filter matches it as well as the Employee. Being
+encoded, it is matched in the browser, never queried.
 
 - A definition **must place** `Employee` and `DueDate`. The page draws the Status
   badge, the current managers and who closed the Form and when itself, so a
   definition need not place those.
 - A definition may not give one of them another type, or mark one `editableBy`:
-  nobody edits them after creation.
+  nobody edits them after creation, the title aside.
 
 `FirstLineManager` and `SecondLineManager` are not the application's: they are
 ordinary fields, the record of who the managers were at completion, and grant
@@ -164,14 +189,15 @@ mode comes from the access rule:
   same place, and a panel holding one owner's field says who may write in it.
   Edits save through a `SaveQueue` built for this Form with
   `src/services/form-save-target.js`, and the header shows "Last saved". The
-  footer holds Void form, Cancel form and Mark complete, each confirmed first.
-  A button writes what is still waiting, then `Status`, `ClosedDate` and
-  `ClosedBy`, on the press rather than the debounce.
+  footer holds Void form, Cancel form and Mark complete, each confirmed first;
+  Void also asks for a reason, and under Other for the words. A button writes
+  what is still waiting, then `Status`, `ClosedDate` and `ClosedBy` (and for a
+  Void, `VoidReason` and `VoidReasonNote`), on the press rather than the debounce.
 - **view**, for the current second line manager and the Forms control group:
   every value is text, an empty one reads "Nothing recorded", a banner says why,
   and no save queue is ever built.
 - **locked**, for everyone once the Status is Completed, Void or Cancelled: a
-  banner gives the closing date, the strip shows the current managers, and a
+  banner gives the closing date, and for a Void its reason, the strip shows the current managers, and a
   "Recorded at completion" block shows the Form's own `FirstLineManager` and
   `SecondLineManager` and who closed it.
 
@@ -203,8 +229,8 @@ value; every other field of the Form still works and saves.
 
 ## New form
 
-`#/forms/new` asks for the Form Type, the Employee, both managers and the due
-date. Choosing the Employee fills the first line manager from their directory
+`#/forms/new` asks for the Form Type, the Employee, both managers, the due
+date and an optional title, written only when one is typed. Choosing the Employee fills the first line manager from their directory
 profile and the second from that manager's, and either can be changed. A line
 says who will be able to see the Form. Creating writes the chosen managers to
 both pairs (`CurrentFirstLineManager` and `FirstLineManager`,
@@ -233,4 +259,6 @@ three rules and refuses a page-specific `cora-forms-*` class.
 - a missing `Employee` or `DueDate`, or one of the application's columns retyped
   or marked `editableBy`;
 - no `slug`, `formName`, `listName` or sections, or a field naming no column;
+- no `voidReasons`, one named twice or blank, `Other` listed by hand, or an
+  `allowOtherVoidReason` that is not `true` or `false`;
 - two Form Types sharing a slug or a list.

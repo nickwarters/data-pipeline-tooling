@@ -734,9 +734,25 @@ Where a **Form** is in its life, held in the plain `Status` Choice column and ch
 only by the Form's lifecycle buttons, never by a field. A Form is **Pending** until
 it closes; three values are terminal: **Completed**, **Void** and **Cancelled**. The
 words match a Case's `Completed` and `Void` but not their meaning: a Form's **Void**
-is not a **Void Case** and carries no **Void Reason**.
+is not a **Void Case**, and carries a **Form Void Reason** rather than a **Void Reason**.
 _Avoid_: Case status values (`In-progress`, `Void` with a reason) when talking about
 a Form
+
+**Form title**:
+A **Form**'s own short name for what it was about ("Return to work after leave"), held
+encoded in `FormTitle`. Optional, set when the Form is created or afterwards by either
+editor until it is a **Locked Form**. The page heading and the Forms tables show it, and
+their text filter finds a Form by it.
+_Avoid_: Title (SharePoint's own column on the list, which the app never writes), Form
+name (the **Form Type**'s `formName`, e.g. "1-to-1")
+
+**Form Void Reason**:
+Why a **Form** was voided, picked from its **Form Type**'s own `voidReasons` when the
+Void is confirmed and held in the plain `VoidReason` Choice column. A Form Type that sets
+`allowOtherVoidReason` also offers _Other_, which holds the Void until the voider writes
+the reason, stored encoded in `VoidReasonNote`. Not the Case's framework-owned **Void
+Reason** vocabulary, which no Form Type selects from.
+_Avoid_: Void Reason (unqualified, on the Forms side), cancellation reason
 
 **Locked Form**:
 A **Form** whose **Form Status** is terminal. Read-only for everyone, its editors
@@ -756,7 +772,8 @@ Actions (a Case button)
 
 **Encoded field**:
 A **Form** value stored as UTF-8-safe base64 so it is not readable at a glance in the
-list: every `text` and `textarea` field and the **Form Actions**. People, dates, choices
+list: every `text` and `textarea` field, the **Form title**, a **Form Void Reason**'s own
+words and the **Form Actions**. People, dates, choices
 and **Form Status** stay plain because queries and the access rule read them.
 Encoding is **not** encryption and **not** a permission boundary: anyone who can read
 the list can decode it.
@@ -794,5 +811,5 @@ _Avoid_: encrypted, secure, protected, obfuscated (say **encoded**)
 - "Visitor" is _derived_ (absence of all named-group memberships), not a SharePoint group. Capability flags are UX-only and the real boundary is SharePoint list ACLs.
 - **Case Reference** uniqueness is assumed to be per **Case Type** (one list, one numbering sequence each) and needs confirming with the business. If References turn out to be globally unique, a Reference alone identifies a Case and search could resolve straight to it.
 - "Question Bank" vs "catalogue" — both name a Case Type's set of **Question Definitions**. Resolved: **Question Bank** is the _authoring_ form (edited in `#/question-bank`, compiled to a module + reporting export); _catalogue_ is the _runtime_ form (the same questions joined to **Answers** to compute applicability). One concept, two lifecycle stages.
-- "Form" and "Case" — a **Form** is not a kind of **Case**, and a **Form Type** is not a kind of **Case Type**. They share a site, auto-save and styling, nothing else. "Void" and "Controls" appear on both sides with different meanings: a Form's **Void** carries no reason, and the **Forms Control group** is not **Controls**.
+- "Form" and "Case" — a **Form** is not a kind of **Case**, and a **Form Type** is not a kind of **Case Type**. They share a site, auto-save and styling, nothing else. "Void" and "Controls" appear on both sides with different meanings: a Form's **Void** carries a **Form Void Reason** from its own Form Type, not a Case **Void Reason**, and the **Forms Control group** is not **Controls**.
 - "Manager" on a **Form** is ambiguous between the **Current manager**, who has access now, and the **Manager at completion**, who is the record. Always say which.

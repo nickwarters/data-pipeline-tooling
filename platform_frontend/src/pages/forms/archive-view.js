@@ -115,12 +115,12 @@ function toolbarView(route, tools) {
         )
       : null,
     field(
-      'Employee',
+      'Employee or title',
       h('input', {
         className: 'cora-capture-input',
         type: 'text',
         value: filters.text,
-        placeholder: 'Anyone',
+        placeholder: 'Anyone, any title',
         oninput: onFilter('text'),
       })
     ),

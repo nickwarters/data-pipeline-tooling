@@ -43,6 +43,29 @@ function rulesFor(prefix) {
     .filter((rule) => rule.selector.includes(`.${prefix}`));
 }
 
+/**
+ * The rules inside every max-width media block that still applies on a phone,
+ * which is any whose breakpoint is at least a phone's 40rem: a layout that
+ * stacks on a narrow laptop window stacks on a phone too.
+ */
+function narrowBlocks() {
+  const blocks = [];
+  for (const match of styles.matchAll(
+    /@media \(max-width: ([\d.]+)rem\)\s*\{/g
+  )) {
+    if (Number(match[1]) < 40) continue;
+    let depth = 1;
+    let end = (match.index ?? 0) + match[0].length;
+    while (depth > 0 && end < styles.length) {
+      if (styles[end] === '{') depth += 1;
+      if (styles[end] === '}') depth -= 1;
+      end += 1;
+    }
+    blocks.push(styles.slice(match.index, end));
+  }
+  return blocks.join('\n');
+}
+
 /** Every custom property the stylesheet itself sets, such as an area's tone. */
 const declaredHere = new Set(
   [...styles.matchAll(/(--cora-[\w-]+):/g)].map((match) => match[1])
@@ -78,10 +101,14 @@ for (const { name, prefix } of SETS) {
   });
 
   test(`every fixed multi-column ${name} layout collapses to one column on a phone`, () => {
-    const narrow = styles.slice(styles.indexOf('@media (max-width: 40rem)'));
+    const narrow = narrowBlocks();
     for (const { selector, body } of rulesFor(prefix)) {
       const columns = body.match(/grid-template-columns:\s*([^;]+);/);
-      if (!columns || /auto-fit|auto-fill|^1fr$/.test(columns[1].trim()))
+      // A grid that wraps its own tracks, or has only one, is already narrow.
+      if (
+        !columns ||
+        /auto-fit|auto-fill|^1fr$|^minmax\(0,\s*1fr\)$/.test(columns[1].trim())
+      )
         continue;
       for (const part of selector.split(',').map((each) => each.trim())) {
         assert.match(

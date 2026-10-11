@@ -353,7 +353,7 @@
   letter-spacing: var(--cora-tracking-wide);
   text-transform: uppercase;
   padding: 2px 7px;
-  border-radius: var(--cora-radius-sm);
+  border-radius: var(--cora-radius-md);
   line-height: 1.6;
   white-space: nowrap;
 }
@@ -905,7 +905,7 @@
 [data-cora-root] .cora-kpi-strip .cora-kpi-row__track {
   height: 0.4rem;
   background: var(--cora-color-surface-2, var(--cora-color-border));
-  border-radius: var(--cora-radius-sm);
+  border-radius: var(--cora-radius-md);
   overflow: hidden;
 }
 
@@ -1119,7 +1119,7 @@
   background: var(--cora-color-surface-2);
   color: var(--cora-color-text-muted);
   font-size: var(--cora-font-size-xs);
-  border-radius: var(--cora-radius-sm);
+  border-radius: var(--cora-radius-md);
   padding: var(--cora-space-0-5) var(--cora-space-2);
   white-space: nowrap;
 }
@@ -1321,7 +1321,7 @@
   padding: var(--cora-space-2) var(--cora-space-3);
   background: var(--cora-color-danger-bg);
   border-left: 3px solid var(--cora-color-danger);
-  border-radius: var(--cora-radius-sm);
+  border-radius: var(--cora-radius-md);
 }
 
 .cora-remediation-panel summary {
@@ -1402,7 +1402,7 @@
   color: var(--cora-color-text-muted);
   background: transparent;
   border: none;
-  border-radius: var(--cora-radius-sm);
+  border-radius: var(--cora-radius-md);
   cursor: pointer;
 }
 
@@ -2591,7 +2591,7 @@
   justify-content: space-between;
   align-items: center;
   padding: var(--cora-space-2) var(--cora-space-3);
-  border-radius: var(--cora-radius-sm);
+  border-radius: var(--cora-radius-md);
   cursor: pointer;
   font-size: var(--cora-font-size-sm);
   margin-bottom: var(--cora-space-1);
@@ -2739,7 +2739,7 @@
   color: var(--cora-color-text-on-accent);
   font-size: var(--cora-font-size-xs);
   font-weight: var(--cora-font-weight-black);
-  border-radius: var(--cora-radius-sm);
+  border-radius: var(--cora-radius-md);
   flex-shrink: 0;
 }
 
@@ -2954,7 +2954,7 @@
 
 .cora-people-picker-option {
   padding: var(--cora-space-2) var(--cora-space-3);
-  border-radius: var(--cora-radius-sm);
+  border-radius: var(--cora-radius-md);
   cursor: pointer;
   color: var(--cora-color-on-surface);
 }
@@ -3020,7 +3020,7 @@
 [data-cora-root] .cora-case-review__hold-toggle {
   appearance: none;
   border: 1px solid var(--cora-color-border);
-  border-radius: var(--cora-radius-sm);
+  border-radius: var(--cora-radius-md);
   background: transparent;
   color: var(--cora-color-text-muted);
   padding: var(--cora-space-1) var(--cora-space-3);
@@ -3078,7 +3078,7 @@
 [data-cora-root] .cora-tabs-tab:focus-visible {
   outline: var(--cora-focus-outline);
   outline-offset: calc(-1 * var(--cora-focus-offset));
-  border-radius: var(--cora-radius-sm);
+  border-radius: var(--cora-radius-md);
   box-shadow: none;
 }
 
@@ -3297,7 +3297,7 @@
   font-size: var(--cora-font-size-sm);
   color: var(--cora-color-warning);
   background: var(--cora-color-warning-bg);
-  border-radius: var(--cora-radius-sm);
+  border-radius: var(--cora-radius-md);
 }
 
 .cora-case-search-error {
@@ -3306,7 +3306,7 @@
   font-size: var(--cora-font-size-sm);
   color: var(--cora-color-danger);
   background: var(--cora-color-danger-bg);
-  border-radius: var(--cora-radius-sm);
+  border-radius: var(--cora-radius-md);
 }
 
 /* Case Support — the Maintainer's lookup, the selected Case's facts, and the
@@ -3353,7 +3353,7 @@
   margin: 0 0 var(--cora-space-3);
   padding: var(--cora-space-2) var(--cora-space-3);
   font-size: var(--cora-font-size-sm);
-  border-radius: var(--cora-radius-sm);
+  border-radius: var(--cora-radius-md);
 }
 
 .cora-case-support-cap {
@@ -3494,7 +3494,7 @@
   font-size: var(--cora-font-size-sm);
   color: var(--cora-color-warning);
   background: var(--cora-color-warning-bg);
-  border-radius: var(--cora-radius-sm);
+  border-radius: var(--cora-radius-md);
 }
 
 .cora-case-support-log-changes {
@@ -3575,7 +3575,7 @@
   font-size: var(--cora-font-size-sm);
   color: var(--cora-color-success);
   background: var(--cora-color-success-bg);
-  border-radius: var(--cora-radius-sm);
+  border-radius: var(--cora-radius-md);
 }
 
 .cora-case-support-action .cora-case-support-action-blocked {
@@ -3679,7 +3679,7 @@
 .cora-access-error,
 .cora-access-notice {
   padding: var(--cora-space-2) var(--cora-space-3);
-  border-radius: var(--cora-radius-sm);
+  border-radius: var(--cora-radius-md);
 }
 
 .cora-access-error {
@@ -3755,7 +3755,7 @@
   font-size: var(--cora-font-size-sm);
   color: var(--cora-color-warning);
   background: var(--cora-color-warning-bg);
-  border-radius: var(--cora-radius-sm);
+  border-radius: var(--cora-radius-md);
 }
 
 .cora-access-log-entry {
@@ -3953,7 +3953,7 @@
   padding: var(--cora-space-2) var(--cora-space-3);
   color: var(--cora-color-danger);
   background: var(--cora-color-danger-bg);
-  border-radius: var(--cora-radius-sm);
+  border-radius: var(--cora-radius-md);
 }
 
 @media (max-width: 52rem) {
@@ -4118,6 +4118,16 @@
   gap: var(--cora-space-2);
 }
 
+.cora-form-cell {
+  display: grid;
+  gap: var(--cora-space-1);
+}
+
+.cora-form-title {
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+}
+
 .cora-form-type::before {
   content: '';
   width: 8px;
@@ -4136,7 +4146,7 @@
   padding: var(--cora-space-2) var(--cora-space-3);
   color: var(--cora-color-danger);
   background: var(--cora-color-danger-bg);
-  border-radius: var(--cora-radius-sm);
+  border-radius: var(--cora-radius-md);
 }
 
 [data-cora-root] .cora-form-load-more {
@@ -4151,6 +4161,10 @@
 
 .cora-form-page {
   display: grid;
+  /* One column that is never wider than the page, so a control that will
+     not shrink cannot push the header and panels past the window's edge,
+     where the app root clips them. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--cora-space-4);
   max-width: 72rem;
 }
@@ -4181,7 +4195,55 @@
   color: var(--cora-color-text-muted);
 }
 
+.cora-form-kicker {
+  margin: 0 0 var(--cora-space-1);
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-semibold);
+  color: var(--cora-color-text-muted);
+}
+
+.cora-form-header-text {
+  flex: 1 1 24rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.cora-form-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+  flex-wrap: wrap;
+}
+
+.cora-form-heading h1 {
+  margin: 0;
+}
+
+.cora-form-heading--editing .cora-form-title-input {
+  flex: 1 1 20rem;
+  max-width: 40rem;
+}
+
+[data-cora-root] .cora-form-title-edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--cora-space-1);
+  border: 1px solid transparent;
+  border-radius: var(--cora-radius-md);
+  background: transparent;
+  color: var(--cora-color-text-muted);
+  cursor: pointer;
+}
+
+[data-cora-root] .cora-form-title-edit:hover,
+[data-cora-root] .cora-form-title-edit:focus-visible {
+  border-color: var(--cora-color-border);
+  color: var(--cora-color-on-surface);
+}
+
 .cora-form-header-status {
+  flex: 0 0 auto;
   display: grid;
   justify-items: end;
   gap: var(--cora-space-2);
@@ -4322,10 +4384,18 @@
   color: var(--cora-color-text-subtle);
 }
 
+/* Side by side on a wide window; stacked below about 890px, where each
+   comment box would be too narrow to write in comfortably. */
 .cora-form-split {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--cora-space-4);
+}
+
+@media (max-width: 55.625rem) {
+  .cora-form-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .cora-form-page textarea.cora-capture-input {
@@ -4364,7 +4434,7 @@
   gap: var(--cora-space-1);
   padding: var(--cora-space-3);
   background: var(--cora-color-surface-2);
-  border-radius: var(--cora-radius-sm);
+  border-radius: var(--cora-radius-md);
 }
 
 .cora-form-action-meta {
@@ -4458,6 +4528,16 @@
   color: var(--cora-color-text-muted);
 }
 
+.cora-form-void-reason {
+  display: grid;
+  gap: var(--cora-space-2);
+  flex-basis: 100%;
+}
+
+.cora-form-banner-detail {
+  margin: var(--cora-space-1) 0 0;
+}
+
 .cora-form-footer-buttons {
   display: flex;
   gap: var(--cora-space-2);
@@ -4475,7 +4555,7 @@
   font-size: var(--cora-font-size-sm);
   color: var(--cora-color-text-muted);
   background: var(--cora-color-surface-2);
-  border-radius: var(--cora-radius-sm);
+  border-radius: var(--cora-radius-md);
 }
 
 /* Read by a screen reader, not drawn: a caption the panel heading already
@@ -4549,7 +4629,7 @@
   background: var(--cora-color-surface);
   border: 1px solid var(--cora-color-border);
   border-left: 4px solid var(--cora-home-tone);
-  border-radius: var(--cora-radius-sm);
+  border-radius: var(--cora-radius-md);
 }
 
 [data-cora-root] .cora-home-attention-item--soon {
@@ -4658,7 +4738,7 @@
   height: 2.5rem;
   color: var(--cora-home-tone);
   background: var(--cora-home-tone-bg);
-  border-radius: var(--cora-radius-sm);
+  border-radius: var(--cora-radius-md);
 }
 
 .cora-home-card-text {

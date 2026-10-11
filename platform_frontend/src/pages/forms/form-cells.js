@@ -31,7 +31,13 @@ export const formTypeColumn = () => ({
   label: 'Form',
   value: (row) => row.formType.formName,
   sortable: true,
-  format: (value) => h('span', { className: 'cora-form-type' }, String(value)),
+  format: (value, row) =>
+    h(
+      'span',
+      { className: 'cora-form-cell' },
+      h('span', { className: 'cora-form-type' }, String(value)),
+      row.title ? h('span', { className: 'cora-form-title' }, row.title) : null
+    ),
 });
 
 /** @returns {FormColumn} */

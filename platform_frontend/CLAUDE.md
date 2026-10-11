@@ -526,9 +526,10 @@ src/
                                   #   draws each as a capture-field control or as text, in edit, view or
                                   #   locked mode, from the access rule
       form-page.js                # one Form's route slice: the read, the save queue (built only for an
-                                  #   editor), the banners, and the lifecycle buttons that close it
+                                  #   editor), the title as heading with an editor's pencil, the banners,
+                                  #   and the lifecycle buttons that close it, Void asking why
       new-form.js                 # New form's route slice: Form Type, Employee, directory-prefilled
-                                  #   managers and due date, then the one create write
+                                  #   managers, due date and optional title, then the one create write
       form-actions-view.js        # the Form Actions editor every Form Type shares: a card per Action,
                                   #   add up to MAX_FORM_ACTIONS, remove (asking first when it says
                                   #   something), each change handed back as the whole list
@@ -752,7 +753,8 @@ form-types/                     # one data module per HR Form Type, named in APP
                                 #   (ADR-0059); deployed like case-types/
   contract.js                   # THE FormTypeDefinition shape and its closed vocabulary (section
                                 #   types, panel layouts, field types, editableBy), the columns the
-                                #   application owns, the Form Statuses that close a Form, the
+                                #   application owns, the Form Statuses that close a Form, the Form Void
+                                #   Reasons a Form Type offers (and Other, when it allows it), the
                                 #   Form Action cap and Statuses, and formColumns(): which columns a Form is read
                                 #   and written through, and which are encoded. Encoding follows the
                                 #   field type, never a per-field flag

@@ -96,6 +96,7 @@ export const formLists = {
       DueDate: '2026-06-30',
       ClosedDate: '2026-06-24',
       ClosedBy: LEE,
+      FormTitle: 'First quarter check-in',
       MeetingDate: '2026-06-24',
       CompetencyStage: 'Stage 1',
       Location: 'In person',
@@ -116,6 +117,8 @@ export const formLists = {
       DueDate: '2026-07-31',
       ClosedDate: '2026-07-03',
       ClosedBy: SAM,
+      VoidReason: 'Other',
+      VoidReasonNote: 'Booked for the wrong week.',
     }),
     oneToOneItem('106', '2025-01-02T09:00:00Z', {
       Employee: SAM,

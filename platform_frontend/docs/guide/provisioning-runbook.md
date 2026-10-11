@@ -305,29 +305,32 @@ definition so it cannot drift:
 
 <!-- form-type-columns: one-to-one -->
 
-| Internal name              | SharePoint type                     | Indexed | Encoded | Choices                             |
-| -------------------------- | ----------------------------------- | ------- | ------- | ----------------------------------- |
-| `Employee`                 | Person or Group                     | Yes     |         |                                     |
-| `CurrentFirstLineManager`  | Person or Group                     | Yes     |         |                                     |
-| `CurrentSecondLineManager` | Person or Group                     | Yes     |         |                                     |
-| `Status`                   | Choice                              | Yes     |         | Pending; Completed; Void; Cancelled |
-| `DueDate`                  | Date and Time (date only)           | Yes     |         |                                     |
-| `ClosedDate`               | Date and Time (date only)           | Yes     |         |                                     |
-| `ClosedBy`                 | Person or Group                     | Yes     |         |                                     |
-| `FirstLineManager`         | Person or Group                     |         |         |                                     |
-| `SecondLineManager`        | Person or Group                     |         |         |                                     |
-| `MeetingDate`              | Date and Time (date only)           |         |         |                                     |
-| `CompetencyStage`          | Choice                              |         |         | Stage 1; Stage 2; Stage 3           |
-| `Location`                 | Choice                              |         |         | In person; Zoom                     |
-| `Tags`                     | Multiple lines of text (plain text) |         | Yes     |                                     |
-| `Agenda`                   | Multiple lines of text (plain text) |         | Yes     |                                     |
-| `Wellbeing`                | Multiple lines of text (plain text) |         | Yes     |                                     |
-| `Performance`              | Multiple lines of text (plain text) |         | Yes     |                                     |
-| `DevelopmentGrowth`        | Multiple lines of text (plain text) |         | Yes     |                                     |
-| `OtherNotes`               | Multiple lines of text (plain text) |         | Yes     |                                     |
-| `IndividualComments`       | Multiple lines of text (plain text) |         | Yes     |                                     |
-| `LineManagerComments`      | Multiple lines of text (plain text) |         | Yes     |                                     |
-| `Actions`                  | Multiple lines of text (plain text) |         | Yes     |                                     |
+| Internal name              | SharePoint type                     | Indexed | Encoded | Choices                                                         |
+| -------------------------- | ----------------------------------- | ------- | ------- | --------------------------------------------------------------- |
+| `Employee`                 | Person or Group                     | Yes     |         |                                                                 |
+| `CurrentFirstLineManager`  | Person or Group                     | Yes     |         |                                                                 |
+| `CurrentSecondLineManager` | Person or Group                     | Yes     |         |                                                                 |
+| `Status`                   | Choice                              | Yes     |         | Pending; Completed; Void; Cancelled                             |
+| `DueDate`                  | Date and Time (date only)           | Yes     |         |                                                                 |
+| `ClosedDate`               | Date and Time (date only)           | Yes     |         |                                                                 |
+| `ClosedBy`                 | Person or Group                     | Yes     |         |                                                                 |
+| `VoidReason`               | Choice                              |         |         | Created in error; Duplicate form; Meeting did not happen; Other |
+| `FirstLineManager`         | Person or Group                     |         |         |                                                                 |
+| `SecondLineManager`        | Person or Group                     |         |         |                                                                 |
+| `MeetingDate`              | Date and Time (date only)           |         |         |                                                                 |
+| `CompetencyStage`          | Choice                              |         |         | Stage 1; Stage 2; Stage 3                                       |
+| `Location`                 | Choice                              |         |         | In person; Zoom                                                 |
+| `VoidReasonNote`           | Multiple lines of text (plain text) |         | Yes     |                                                                 |
+| `FormTitle`                | Multiple lines of text (plain text) |         | Yes     |                                                                 |
+| `Tags`                     | Multiple lines of text (plain text) |         | Yes     |                                                                 |
+| `Agenda`                   | Multiple lines of text (plain text) |         | Yes     |                                                                 |
+| `Wellbeing`                | Multiple lines of text (plain text) |         | Yes     |                                                                 |
+| `Performance`              | Multiple lines of text (plain text) |         | Yes     |                                                                 |
+| `DevelopmentGrowth`        | Multiple lines of text (plain text) |         | Yes     |                                                                 |
+| `OtherNotes`               | Multiple lines of text (plain text) |         | Yes     |                                                                 |
+| `IndividualComments`       | Multiple lines of text (plain text) |         | Yes     |                                                                 |
+| `LineManagerComments`      | Multiple lines of text (plain text) |         | Yes     |                                                                 |
+| `Actions`                  | Multiple lines of text (plain text) |         | Yes     |                                                                 |
 
 <!-- /form-type-columns -->
 
@@ -344,7 +347,8 @@ definition so it cannot drift:
   the Forms pages send and the access rule filter on them.
 - `Title`, `Created` and `Modified` are SharePoint's own. **Set `Title` to not
   required**: the app never writes it, and a required `Title` refuses every new
-  Form with a 400.
+  Form with a 400. A Form's own title is `FormTitle`, encoded like any free
+  text, which a single-line `Title` is too short to hold.
 
 ### Settings
 

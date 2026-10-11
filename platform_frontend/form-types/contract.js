@@ -98,6 +98,10 @@
  * @property {string} listName The list's name before the environment prefix,
  *   which is added centrally like every other list's.
  * @property {readonly FormSection[]} sections
+ * @property {readonly string[]} voidReasons What the person voiding a Form
+ *   picks from to say why.
+ * @property {boolean} [allowOtherVoidReason] Also offer `Other`, which asks
+ *   for the reason in their own words before the Form can be voided.
  */
 
 /** The section types a definition may use. */
@@ -178,6 +182,30 @@ export const FORM_ACTION_STATUSES = Object.freeze([
 /** The Status a Form Action is added with. */
 export const INITIAL_FORM_ACTION_STATUS = 'Pending';
 
+/**
+ * The extra Void Reason a definition's `allowOtherVoidReason` offers. Picking
+ * it asks for the reason in the voider's own words, so a definition may not
+ * list it among its own `voidReasons`, where it would ask for nothing.
+ */
+export const OTHER_VOID_REASON = 'Other';
+
+/**
+ * Every Void Reason a Form of this type offers, in the order offered: the
+ * definition's own, then `Other` when it allows one.
+ *
+ * @param {FormTypeDefinition} definition
+ * @returns {string[]}
+ */
+export function voidReasonChoices(definition) {
+  return [
+    ...definition.voidReasons,
+    ...(definition.allowOtherVoidReason ? [OTHER_VOID_REASON] : []),
+  ];
+}
+
+/** The Form Status a voided Form holds, the one closing Status that asks why. */
+export const VOID_FORM_STATUS = 'Void';
+
 /** The Form Status values that lock a Form for everyone. */
 export const CLOSED_FORM_STATUSES = Object.freeze([
   'Completed',
@@ -219,17 +247,42 @@ export const MANAGER_RECORDS = Object.freeze({
  * a list may not keep and which records the account that wrote last, not the
  * person who closed the Form.
  *
- * @type {Readonly<Record<string, { type: FormFieldType, placedBy: 'definition' | 'page' }>>}
+ * `VoidReason` is the Void Reason picked when a Form is voided, and
+ * `VoidReasonNote` the voider's own words when that reason is `Other`; both
+ * are empty otherwise. The note is free text, so it is encoded like any other.
+ * Neither is indexed, because nothing filters on them.
+ *
+ * `FormTitle` is the Form's own title, so it can be found again by what it was
+ * about. It is the one column of the application's that is edited after
+ * creation (`editableWhileOpen`): either editor may change it until the Form
+ * closes, and the lock stops it like everything else. It is free text, so it is
+ * encoded, which is also why it is searched in the browser rather than queried.
+ *
+ * @type {Readonly<Record<string, { type: FormFieldType, placedBy: 'definition' | 'page', indexed: boolean, editableWhileOpen?: boolean }>>}
  */
 export const FORM_OWNED_FIELDS = Object.freeze({
-  Employee: { type: 'person', placedBy: 'definition' },
-  CurrentFirstLineManager: { type: 'person', placedBy: 'page' },
-  CurrentSecondLineManager: { type: 'person', placedBy: 'page' },
-  Status: { type: 'status', placedBy: 'page' },
-  DueDate: { type: 'date', placedBy: 'definition' },
-  ClosedDate: { type: 'date', placedBy: 'page' },
-  ClosedBy: { type: 'person', placedBy: 'page' },
+  Employee: { type: 'person', placedBy: 'definition', indexed: true },
+  CurrentFirstLineManager: { type: 'person', placedBy: 'page', indexed: true },
+  CurrentSecondLineManager: { type: 'person', placedBy: 'page', indexed: true },
+  Status: { type: 'status', placedBy: 'page', indexed: true },
+  DueDate: { type: 'date', placedBy: 'definition', indexed: true },
+  ClosedDate: { type: 'date', placedBy: 'page', indexed: true },
+  ClosedBy: { type: 'person', placedBy: 'page', indexed: true },
+  VoidReason: { type: 'select', placedBy: 'page', indexed: false },
+  VoidReasonNote: { type: 'textarea', placedBy: 'page', indexed: false },
+  FormTitle: {
+    type: 'text',
+    placedBy: 'page',
+    indexed: false,
+    editableWhileOpen: true,
+  },
 });
+
+/** The column a Form's title is stored in. */
+export const FORM_TITLE_FIELD = 'FormTitle';
+
+/** The longest title a Form is given, so it still reads as a title in a table. */
+export const FORM_TITLE_MAX_LENGTH = 120;
 
 /**
  * Every field a definition declares, in page order, whichever section or panel
@@ -263,11 +316,14 @@ export function formFields(definition) {
  */
 export function formColumns(definition) {
   /** @type {Set<string>} */
-  const plain = new Set(Object.keys(FORM_OWNED_FIELDS));
+  const plain = new Set();
   /** @type {Set<string>} */
   const encoded = new Set();
+  for (const [column, owned] of Object.entries(FORM_OWNED_FIELDS)) {
+    (FORM_FIELD_STORAGE[owned.type] === 'plain' ? plain : encoded).add(column);
+  }
   for (const field of formFields(definition)) {
-    if (plain.has(field.itemField)) continue;
+    if (Object.hasOwn(FORM_OWNED_FIELDS, field.itemField)) continue;
     // A type this table does not know is encoded rather than left readable:
     // the gate refuses one, and if it ever slips past, the cost of the wrong
     // answer is a column nobody can filter on rather than text in the clear.

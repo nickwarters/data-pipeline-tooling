@@ -44,6 +44,7 @@ import {
   FORM_OWNED_FIELDS,
   FORM_PANEL_LAYOUTS,
   FORM_SECTION_TYPES,
+  OTHER_VOID_REASON,
   formFields,
 } from '../form-types/contract.js';
 import { resolveRelative } from './module-graph.js';
@@ -1475,8 +1476,47 @@ export function checkFormTypes(options = {}) {
     if (sections.length === 0) fail('declares no `sections`');
     checkFormSections(sections, fail);
     checkFormFieldDeclarations(def, sections, fail);
+    checkFormVoidReasons(def, fail);
   }
   return failures;
+}
+
+/**
+ * The Void Reason rules: at least one reason to pick, each named once, and
+ * `Other` left to `allowOtherVoidReason`, which is a yes or a no. A Form with
+ * nothing to pick could never be voided, and an `Other` listed by hand would
+ * be offered without the box that asks what it means.
+ *
+ * @param {any} def
+ * @param {(message: string) => void} fail
+ */
+function checkFormVoidReasons(def, fail) {
+  const reasons = def?.voidReasons;
+  if (!Array.isArray(reasons) || reasons.length === 0) {
+    fail('declares no `voidReasons` — voiding a Form asks for one');
+    return;
+  }
+  /** @type {Set<string>} */
+  const seen = new Set();
+  for (const reason of reasons) {
+    if (!isNonEmptyString(reason)) {
+      fail('lists a Void Reason that is not a name');
+      continue;
+    }
+    if (seen.has(reason)) fail(`lists the Void Reason "${reason}" twice`);
+    seen.add(reason);
+    if (reason.trim().toLowerCase() === OTHER_VOID_REASON.toLowerCase()) {
+      fail(
+        `lists "${reason}" as a Void Reason — set \`allowOtherVoidReason\` instead, which asks what it means`
+      );
+    }
+  }
+  if (
+    def.allowOtherVoidReason !== undefined &&
+    typeof def.allowOtherVoidReason !== 'boolean'
+  ) {
+    fail('sets `allowOtherVoidReason` to something other than true or false');
+  }
 }
 
 /**

@@ -229,10 +229,10 @@ test('the employee lane leads when the viewer has Forms of their own, and the ma
   assert.equal(managerOnly[0].isPrimary, true);
 });
 
-test('the filters narrow by employee name, Form Type and role, and each is off when empty', () => {
+test('the filters narrow by employee name or title, Form Type and role, and each is off when empty', () => {
   const listed = rows(
     [
-      item('1'),
+      item('1', { FormTitle: '  Return to work ' }),
       item('2', {
         Employee: { loginName: 'kim', displayName: 'Kim Shaw' },
         CurrentSecondLineManager: ANA,
@@ -250,6 +250,11 @@ test('the filters narrow by employee name, Form Type and role, and each is off w
     }).map((row) => row.item.id);
   assert.deepEqual(ids({}), ['1', '2']);
   assert.deepEqual(ids({ text: '  sHAw ' }), ['2']);
+  assert.deepEqual(ids({ text: 'RETURN to' }), ['1']);
+  assert.deepEqual(
+    listed.map((row) => row.title),
+    ['Return to work', '']
+  );
   assert.deepEqual(ids({ role: 'firstLineManager' }), ['1']);
   assert.deepEqual(ids({ formType: 'one-to-one' }), ['1', '2']);
   assert.deepEqual(ids({ formType: 'coaching' }), []);

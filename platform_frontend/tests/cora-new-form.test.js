@@ -121,6 +121,27 @@ test('creating writes the chosen managers as both the current managers and the r
   page.leave();
 });
 
+test('a title typed at creation is written with the Form, trimmed, and none is written when left blank', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  for (const [typed, stored] of [
+    ['  Return to work after leave ', 'Return to work after leave'],
+    ['   ', undefined],
+  ]) {
+    const page = mountFormRoute('forms-control');
+    await chooseSam(t, page);
+    setDueDate(page, '2026-10-31');
+    fireEvent(
+      getByRole(page.render(), 'textbox', { name: 'Title (optional)' }),
+      'input',
+      { target: { value: typed } }
+    );
+    const item = await create(page);
+    const created = await page.client.getFormItem(oneToOne, item.id);
+    assert.equal(created?.fields.FormTitle || undefined, stored, typed);
+    page.leave();
+  }
+});
+
 test('a filled-in manager can be changed before creating, and the change is what is written', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const page = mountFormRoute('forms-employee');
