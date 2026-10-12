@@ -750,6 +750,22 @@ no run has ever committed. **A read never writes**: an unseen source brings no
 file into existence, and an absent file, an absent table and an absent row all
 mean the same thing.
 
+`list_checkpoints(source_key=None)` returns the five persisted fields —
+`source_key`, `watermark_utc`, `committed_at_utc`, `batch_id`, `pipeline_run_id` —
+as dictionaries in source-key order. Supply a key for exact equality filtering.
+It opens read-only, creates or migrates nothing, and returns `[]` for an absent
+file, table or matching row. Read errors propagate rather than masquerading as
+an unseen source. The operator CLI exposes this local inspection directly:
+
+```sh
+python -m cli checkpoints show --base-dir /data
+python -m cli checkpoints show --base-dir /data --source claims.dbo.Complaint --json
+```
+
+Both timestamps are shown as stored ISO UTC strings; the commit time is the
+local commit, while the watermark is the source-time boundary. See the full
+[`checkpoints show` reference](operator-cli.md#checkpoints-show--persisted-source-watermarks-and-provenance).
+
 The window rule, in three lines:
 
 ```text

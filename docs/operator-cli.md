@@ -1,4 +1,4 @@
-# The operator CLI — run, orchestrate, migrate, status, runs, log
+# The operator CLI — run, orchestrate, migrate, status, runs, log, checkpoints
 
 The framework is import-only, but it is also runnable as a tool:
 `python -m cli <command>` is the single entry point for both authoring
@@ -7,10 +7,12 @@ operator side is a small command surface for the everyday tasks that would
 otherwise need a hand-written wrapper script: **run** a
 pipeline by its path, **orchestrate** scheduled due work, **migrate** the
 databases they write into, check its **status**,
-list recent **runs**, and inspect a run **log**. It is a thin shell
+list recent **runs**, inspect a run **log**, and show source **checkpoints**.
+It is a thin shell
 over the public `framework.run` execution surface (`run_pipeline`),
 `tools.orchestration` scheduling (`Orchestrator`), and the `RunLog` /
-`RunRegistry` observability seam — everything stays local SQLite + JSONL, with
+`RunRegistry` observability seam and `tools.source_checkpoint` control state —
+everything stays local SQLite + JSONL, with
 no external services
 ([the SQLite per-subject medallion store](adr/0001-sqlite-per-subject-medallion-store.md),
 [structured JSONL observability](adr/0005-fail-fast-atomic-runs-and-observability.md)).
@@ -47,6 +49,11 @@ carries the `logical_run_id` the pass assigned and the `pipeline_run_id` it read
 back, so one orchestration pass joins to every pipeline execution it triggered
 (`pipeline_run_id` is the key into the run registry). Actual pipeline execution
 records remain in `RunLog` / `RunRegistry` only.
+
+`checkpoints show` reads `_checkpoints/sources.db` directly in SQLite read-only
+mode, without creating or migrating it, or opening the run registry or logs.
+It takes no write lock; an exclusive writer lock can still delay its read up to
+the shared busy timeout and then produce a clear error.
 
 The read-only commands (`status`, `runs`, `log`) are **safe to run while
 pipelines are running**. Opening a registry and migrating it are separate
@@ -86,7 +93,7 @@ fallback, the resolver writes a one-line warning to stderr; configure
 `PIPELINE_DATA_DIR_PROD` for a machine-specific production root. An unknown
 environment exits non-zero with an actionable message rather than a traceback.
 The same `--base-dir` / `--env` choice applies to every command (`run`,
-`orchestrate`, `runs`, `status`, `log`).
+`orchestrate`, `migrate`, `runs`, `status`, `log`, `checkpoints show`).
 
 `run` addresses a pipeline by **its location on disk**: `pipelines/orders` maps
 to the module `pipelines.orders.pipeline`, imported *at runtime*, whose
@@ -782,6 +789,40 @@ round: the write fails on the column SQLite does not have, reported as a
 
 `--migrations-root` points the command at a different tree; it defaults to the
 `migrations/` directory of the checkout the `tools` package was imported from.
+
+## `checkpoints show` — persisted source watermarks and provenance
+
+```sh
+python -m cli checkpoints show [--base-dir DIR] [--env ENV] \
+    [--source SOURCE_KEY] [--json]
+```
+
+Lists every committed source checkpoint in source-key order. `--source` selects
+one exact stable key, including its full site/list identity for a SharePoint
+source; it does not infer a subject or match prefixes. The human output labels
+all five persisted fields and prints full source keys and IDs:
+
+```console
+source_key: claims.dbo.Complaint
+watermark_utc: 2026-08-05T08:30:00+00:00
+committed_at_utc: 2026-08-05T08:31:00+00:00
+batch_id: batch-1
+pipeline_run_id: run-1
+```
+
+`watermark_utc` is the source-time boundary covered by the published data;
+`committed_at_utc` records when the local commit happened. Both are shown as
+stored ISO UTC timestamps. A run's time is never a source's watermark. Use the
+full `pipeline_run_id` with `runs --run` or `log --pipeline-run-id` to inspect
+the execution that committed it.
+
+`--json` emits an array of objects with those same fields, including `[]` when
+there is no checkpoint file, table or matching source. Human output then says
+`no matching source checkpoints`; either format exits successfully. An
+unreadable, corrupt, malformed or locked database instead gives a non-zero exit
+and a stderr message containing its path and the error. Inspection never
+creates checkpoint state, migrates it, changes a watermark or contacts a remote
+source. It does not calculate the next polling window.
 
 ## `status` — the latest run per pipeline
 
