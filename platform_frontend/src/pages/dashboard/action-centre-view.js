@@ -28,6 +28,7 @@ export const COPY = Object.freeze({
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../../services/action-centre-model.js').Reason} Reason */
+/** @typedef {import('../../setup/resolve-eligible-case-types.js').CaseSource} CaseSource */
 
 export const PAGE_SIZE = 4;
 
@@ -60,15 +61,25 @@ export function initialActionCentreState(
 }
 
 /**
+ * The lists a reason reads: a Reviewer reason only the user's own `Reviewers - <type>` lists, any other reason every eligible list.
+ *
+ * @param {Reason} reason @param {CaseSource[]} sources @param {CaseSource[]} reviewerSources
+ */
+function sourcesFor(reason, sources, reviewerSources) {
+  return reason.reviewerScoped ? reviewerSources : sources;
+}
+
+/**
  * @param {{
  *   client: import('../../sharepoint-client.js').SharePointClient,
- *   sources: import('../../setup/resolve-eligible-case-types.js').CaseSource[],
+ *   sources: CaseSource[], reviewerSources: CaseSource[],
  *   reasons: Reason[], currentUserId: string,
  * }} input
  */
 export async function loadActionCentreCounts({
   client,
   sources,
+  reviewerSources,
   reasons,
   currentUserId,
 }) {
@@ -79,15 +90,18 @@ export async function loadActionCentreCounts({
   await Promise.all(
     reasons.map(async (reason) => {
       const filter = activeFilter(reason, currentUserId);
+      const reasonSources = sourcesFor(reason, sources, reviewerSources);
       counts[reason.id] = await countCasesAcrossSources(
         client,
-        sources,
+        reasonSources,
         filter
       );
-      const perSource = await listCasesPerSource(client, sources, filter, {
-        ...worstFirstOrder(reason),
-        top: 1,
-      });
+      const perSource = await listCasesPerSource(
+        client,
+        reasonSources,
+        filter,
+        { ...worstFirstOrder(reason), top: 1 }
+      );
       peeks[reason.id] = pickGlobalWorst(
         perSource.map(({ rows }) => rows[0] ?? null),
         reason
@@ -98,33 +112,47 @@ export async function loadActionCentreCounts({
   // of every visible reason's filter, and an OR of no branches matches no Case.
   // Saved round trip, not a correction — the clients answer that query the same
   // way whether or not it is sent.
-  const headline = reasons.length
-    ? await countCasesAcrossSources(
-        client,
-        sources,
-        headlineFilter(reasons, currentUserId)
-      )
-    : 0;
+  // Every reason reads the Reviewer lists, so they are counted once against all of them; the other lists only answer the non-Reviewer reasons.
+  const broadReasons = reasons.filter((reason) => !reason.reviewerScoped);
+  const otherSources = sources.filter(
+    (source) => !reviewerSources.some((r) => r.listName === source.listName)
+  );
+  const headline =
+    (reasons.length
+      ? await countCasesAcrossSources(
+          client,
+          reviewerSources,
+          headlineFilter(reasons, currentUserId)
+        )
+      : 0) +
+    (broadReasons.length
+      ? await countCasesAcrossSources(
+          client,
+          otherSources,
+          headlineFilter(broadReasons, currentUserId)
+        )
+      : 0);
   return { counts, peeks, headline };
 }
 
 /**
  * @param {{
  *   client: import('../../sharepoint-client.js').SharePointClient,
- *   sources: import('../../setup/resolve-eligible-case-types.js').CaseSource[],
+ *   sources: CaseSource[], reviewerSources: CaseSource[],
  *   reason: Reason, currentUserId: string, skip: number,
  * }} input
  */
 export async function loadActionCentrePage({
   client,
   sources,
+  reviewerSources,
   reason,
   currentUserId,
   skip,
 }) {
   const perSource = await listCasesPerSource(
     client,
-    sources,
+    sourcesFor(reason, sources, reviewerSources),
     activeFilter(reason, currentUserId),
     { ...worstFirstOrder(reason), top: skip + PAGE_SIZE }
   );

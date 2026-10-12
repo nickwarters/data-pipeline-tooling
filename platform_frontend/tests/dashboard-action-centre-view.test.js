@@ -6,6 +6,8 @@ import { makeCaseRow, makePermissions } from './helpers/fixtures.js';
 
 installDom();
 
+const { ACTION_CENTRE_REASONS } =
+  await import('../src/services/action-centre-model.js');
 const {
   ActionCentreView,
   COPY,
@@ -87,12 +89,14 @@ test('Action Centre actions sum counts and merge a bounded worst-first page acro
   const counts = await loadActionCentreCounts({
     client,
     sources,
+    reviewerSources: sources,
     reasons: [reason],
     currentUserId: 'me',
   });
   const page = await loadActionCentrePage({
     client,
     sources,
+    reviewerSources: sources,
     reason,
     currentUserId: 'me',
     skip: 0,
@@ -106,12 +110,109 @@ test('Action Centre actions sum counts and merge a bounded worst-first page acro
   const tail = await loadActionCentrePage({
     client,
     sources,
+    reviewerSources: sources,
     reason,
     currentUserId: 'me',
     skip: PAGE_SIZE,
   });
   assert.equal(tail.rows.length, 1);
   assert.equal(tail.exhausted, true);
+});
+
+/**
+ * A client that filters like the real ones on the flags these tests use, so a count reflects which lists were asked.
+ * @param {Record<string, any[]>} lists
+ */
+function filteringClient(lists) {
+  /** @param {any} c @param {any} filter @returns {boolean} */
+  const matches = (c, filter) =>
+    Object.entries(filter).every(([key, value]) =>
+      key === 'anyOf'
+        ? value.some((/** @type {any} */ branch) => matches(c, branch))
+        : Boolean(c[key]) === value || c[key] === value
+    );
+  return /** @type {any} */ ({
+    async countCases(/** @type {any} */ filter, /** @type {any} */ options) {
+      return lists[options.listName].filter((c) => matches(c, filter)).length;
+    },
+    async listCases(/** @type {any} */ filter, /** @type {any} */ options) {
+      return lists[options.listName]
+        .filter((c) => matches(c, filter))
+        .slice(0, options.top);
+    },
+  });
+}
+
+test("Action Centre Reviewer groups read only the lists of the user's own reviewer groups", async () => {
+  const reason = initialActionCentreState(
+    capabilities({ isReviewer: true }),
+    []
+  ).reasons[0];
+  const client = filteringClient({
+    A: [row('a1'), row('a2')],
+    // A list the user can read but is not a Reviewer on, holding a Case assigned to them anyway.
+    B: [row('b1')],
+  });
+  const sources = [
+    { slug: 'a', listName: 'A', displayName: 'A' },
+    { slug: 'b', listName: 'B', displayName: 'B' },
+  ];
+  const reviewerSources = [sources[0]];
+
+  const counts = await loadActionCentreCounts({
+    client,
+    sources,
+    reviewerSources,
+    reasons: [reason],
+    currentUserId: 'me',
+  });
+  const page = await loadActionCentrePage({
+    client,
+    sources,
+    reviewerSources,
+    reason,
+    currentUserId: 'me',
+    skip: 0,
+  });
+
+  assert.equal(counts.counts.overdue, 2);
+  assert.equal(counts.headline, 2);
+  assert.equal(counts.peeks.overdue?.id.startsWith('a'), true);
+  assert.deepEqual(page.rows.map((r) => r.id).sort(), ['a1', 'a2']);
+});
+
+test('Action Centre headline counts a non-Reviewer group across every list without counting a Case twice', async () => {
+  const [overdue] = initialActionCentreState(
+    capabilities({ isReviewer: true }),
+    []
+  ).reasons;
+  // Read off the model so the test holds whichever groups the feature switches leave visible.
+  const broad = ACTION_CENTRE_REASONS.find((reason) => !reason.reviewerScoped);
+  assert.ok(broad);
+  const flag = /** @type {string} */ (broad.flagField);
+  const other = (/** @type {string} */ id) =>
+    makeCaseRow({ id, assignedReviewer: 'someone-else', [flag]: true });
+  const client = filteringClient({
+    A: [{ ...row('a1'), [flag]: true }, row('a2'), other('a3')],
+    B: [row('b1'), other('b2')],
+  });
+  const sources = [
+    { slug: 'a', listName: 'A', displayName: 'A' },
+    { slug: 'b', listName: 'B', displayName: 'B' },
+  ];
+
+  const counts = await loadActionCentreCounts({
+    client,
+    sources,
+    reviewerSources: [sources[0]],
+    reasons: [overdue, broad],
+    currentUserId: 'me',
+  });
+
+  assert.equal(counts.counts.overdue, 2);
+  assert.equal(counts.counts[broad.id], 3);
+  // a1 is in both groups and counted once; b1 is on a list the user does not review, so it is in neither.
+  assert.equal(counts.headline, 4);
 });
 
 test('Action Centre pure view renders descriptor rows and exposes store callbacks', () => {
@@ -277,6 +378,7 @@ test('Action Centre asks nothing at all for a viewer with no reasons', async () 
         listName: 'Cases-Complaints',
       },
     ],
+    reviewerSources: [],
     reasons: state.reasons,
     currentUserId: 'owner-1',
   });

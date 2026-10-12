@@ -169,7 +169,11 @@ async function runSingleCandidateAllocation({
 // switch goes, restore `appeals/loaded` to the expected list, take the barrier
 // back to three actions, and put "and Controls appeals" back in this name.
 test('dashboard slice: effects load reviewer rows and KPI lanes through actions', async () => {
-  const caps = capabilities({ isReviewer: true, isControls: true });
+  const caps = capabilities({
+    isReviewer: true,
+    isControls: true,
+    listAccessCaseTypes: ['complaints'],
+  });
   const ctx = context(caps);
   // Overdue is derived from the status as well as the date, so the row carries
   // the status a Case still under review has.
@@ -250,6 +254,76 @@ test('dashboard slice: effects load reviewer rows and KPI lanes through actions'
     true
   );
   assert.deepEqual(reviewerSources, ctx.caseSources);
+});
+
+test('dashboard slice: a Maintainer sees Reviewer work only from the lists of their own reviewer groups', async () => {
+  const ctx = context(
+    capabilities({
+      isReviewer: true,
+      isMaintainer: true,
+      listAccessCaseTypes: ['complaints'],
+    })
+  );
+  // A Maintainer can read every list, including one they assigned themselves a Case on without being its Reviewer.
+  ctx.caseSources = [
+    ...ctx.caseSources,
+    { slug: 'lending', listName: 'Cases-Lending', displayName: 'Lending' },
+  ];
+  ctx.client = { countCases() {} };
+  /** @type {Record<string, string[]>} */
+  const read = {};
+  /** @param {{ listName: string }[]} sources */
+  const lists = (sources) => sources.map((source) => source.listName);
+  /** @type {() => void} */
+  let markLoaded = () => {};
+  /** @type {Promise<void>} */
+  const loaded = new Promise((resolve) => {
+    markLoaded = resolve;
+  });
+  const slice = createRouteSlice(
+    {},
+    ctx,
+    /** @type {any} */ ({
+      listAcrossSources: async (
+        /** @type {any} */ _client,
+        /** @type {any[]} */ sources
+      ) => {
+        read.outstanding = lists(sources);
+        return [];
+      },
+      loadKpis: async (/** @type {any} */ { caseSources, allCaseSources }) => {
+        read.kpiReviewer = lists(caseSources);
+        read.kpiAll = lists(allCaseSources);
+        return [];
+      },
+      loadOwnerSummary: async () => [],
+      loadActionCounts: async (
+        /** @type {any} */ { sources, reviewerSources, reasons }
+      ) => {
+        read.actionAll = lists(sources);
+        read.actionReviewer = lists(reviewerSources);
+        markLoaded();
+        return { counts: {}, peeks: {}, headline: 0, reasons };
+      },
+      loadActionPage: async () => ({ rows: [], exhausted: true }),
+    })
+  );
+  slice.start({
+    context: ctx,
+    params: {},
+    dispatch: () => {},
+    listen: () => {},
+    isActive: () => true,
+  });
+  await loaded;
+  for (let i = 0; i < 5; i += 1) await Promise.resolve();
+
+  assert.deepEqual(read.outstanding, ['Cases-Complaints']);
+  assert.deepEqual(read.kpiReviewer, ['Cases-Complaints']);
+  assert.deepEqual(read.actionReviewer, ['Cases-Complaints']);
+  // Lanes and reasons that are not Reviewer work still span every list the user can read.
+  assert.deepEqual(read.kpiAll, ['Cases-Complaints', 'Cases-Lending']);
+  assert.deepEqual(read.actionAll, ['Cases-Complaints', 'Cases-Lending']);
 });
 
 test('dashboard reducer owns KPI disclosure and table sort state', () => {
@@ -2257,7 +2331,9 @@ test('dashboard slice: Appeals state loads and re-sorts, default oldest-raised f
 });
 
 test('dashboard slice: navigating away aborts the fan-out reads with no error UI', async () => {
-  const ctx = context(capabilities({ isReviewer: true }));
+  const ctx = context(
+    capabilities({ isReviewer: true, listAccessCaseTypes: ['complaints'] })
+  );
   const controller = new AbortController();
   let aborted = false;
   // A request still in flight: it settles only when the caller aborts.

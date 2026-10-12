@@ -195,16 +195,10 @@ function assembleLane({ role, label, scopeLabel, specs, expandTiles }) {
 }
 
 /**
- * @param {{ client: SharePointClient, currentUserId: string, capabilities: Capabilities, caseSources: CaseSource[], now: Date }} ctx
+ * @param {{ client: SharePointClient, currentUserId: string, caseSources: CaseSource[], now: Date }} ctx
  * @returns {Promise<KpiLane>}
  */
-async function buildReviewerLane({
-  client,
-  currentUserId,
-  capabilities,
-  caseSources,
-  now,
-}) {
+async function buildReviewerLane({ client, currentUserId, caseSources, now }) {
   // Each source is a distinct list, already scoped by eligibility; fan out and
   // flatten rather than fetching unscoped and filtering in JS (issue: no
   // default Case list — every read carries an explicit `listName`, and a Case
@@ -247,19 +241,10 @@ async function buildReviewerLane({
     else inProgress.push(c);
   }
 
-  // Broad roles such as Maintainer read every list, so the label names only the Case Types the user reviews or holds a Case in.
-  const held = new Set(pool.map((c) => c.caseType));
-  const scopeSlugs = caseSources
-    .map((s) => s.slug)
-    .filter(
-      (slug) =>
-        capabilities.listAccessCaseTypes.includes(slug) || held.has(slug)
-    );
-
   return assembleLane({
     role: 'reviewer',
     label: 'As Reviewer',
-    scopeLabel: scopeLabelOf(scopeSlugs),
+    scopeLabel: scopeLabelOf(caseSources.map((s) => s.slug)),
     expandTiles: false,
     specs: [
       { key: 'overdue', label: 'Overdue', tone: 'overdue', matched: overdue },
@@ -403,7 +388,9 @@ async function buildOwnerLane({ client, capabilities, allCaseSources, now }) {
  * everything visible (access). The first lane the user holds is the
  * primary and opens by default; other lanes open too, except a secondary Owner
  * lane which folds to a headline (owners think per Case Type, so their split is
- * tall). All data flows through the `SharePointClient`.
+ * tall). All data flows through the `SharePointClient`. `caseSources` is the
+ * user's Reviewer lists only, which names the Reviewer lane's scope;
+ * `allCaseSources` is every list their roles may read.
  *
  * @param {{
  * client: SharePointClient | null,
@@ -432,7 +419,6 @@ export async function loadKpiModel({
       await buildReviewerLane({
         client,
         currentUserId,
-        capabilities,
         caseSources,
         now,
       })

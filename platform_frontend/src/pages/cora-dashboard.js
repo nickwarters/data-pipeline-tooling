@@ -44,6 +44,7 @@ import {
 } from '../views/case-columns.js';
 import { visibleDashboardPanels } from './dashboard/panel-descriptors.js';
 import { resolveReviewerManager } from '../services/reviewer-manager.js';
+import { reviewerCaseSources } from '../setup/resolve-eligible-case-types.js';
 import { kpiStripView } from './dashboard/kpi-view.js';
 import {
   controlsAppealsView,
@@ -93,6 +94,18 @@ function reviewSlaWorkingDaysFor(caseSources, candidate) {
     (s) => s.listName === candidate._listOptions.listName
   );
   return source?.reviewSlaWorkingDays ?? REVIEW_SLA_WORKING_DAYS;
+}
+
+/**
+ * The lists the dashboard shows the user's own Reviewer work from, never every list a broad role can read.
+ *
+ * @param {{ caseSources: import('../setup/resolve-eligible-case-types.js').CaseSource[], chrome: { permissions: import('../services/permissions.js').Capabilities } }} context
+ */
+function reviewerSourcesOf(context) {
+  return reviewerCaseSources(
+    context.caseSources,
+    context.chrome.permissions.listAccessCaseTypes
+  );
 }
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
@@ -361,10 +374,14 @@ export function createRouteSlice(
     /** @type {import('../sharepoint-client.js').CaseRow[]} */
     let rows;
     try {
-      rows = await listAcrossSources(client, effectTools.context.caseSources, {
-        anyOf: OUTSTANDING_STATUSES.map((status) => ({ status })),
-        assignedReviewer: effectTools.context.chrome.currentUser.id,
-      });
+      rows = await listAcrossSources(
+        client,
+        reviewerSourcesOf(effectTools.context),
+        {
+          anyOf: OUTSTANDING_STATUSES.map((status) => ({ status })),
+          assignedReviewer: effectTools.context.chrome.currentUser.id,
+        }
+      );
     } catch (error) {
       // Navigation cancelled the fan-out. That is not a dashboard failure:
       // nothing is dispatched, nothing is rendered, nothing is toasted.
@@ -389,6 +406,7 @@ export function createRouteSlice(
       loaded = await loadActionCounts({
         client,
         sources: effectTools.context.caseSources,
+        reviewerSources: reviewerSourcesOf(effectTools.context),
         reasons: actionState.reasons,
         currentUserId: effectTools.context.chrome.currentUser.id,
       });
@@ -415,6 +433,7 @@ export function createRouteSlice(
       loaded = await loadActionPage({
         client,
         sources: effectTools.context.caseSources,
+        reviewerSources: reviewerSourcesOf(effectTools.context),
         reason,
         currentUserId: effectTools.context.chrome.currentUser.id,
         skip,
@@ -717,7 +736,7 @@ export function createRouteSlice(
           client,
           currentUserId: currentUser.id,
           capabilities,
-          caseSources: tools.context.caseSources,
+          caseSources: reviewerSourcesOf(tools.context),
           allCaseSources: tools.context.caseSources,
         })
           .then((lanes) => {

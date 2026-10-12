@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 
 import {
   allocationSourcesFromCaseSources,
+  reviewerCaseSources,
   resolveCaseSourcesFromCaseTypes,
   resolveAppCaseSources,
 } from '../src/setup/resolve-eligible-case-types.js';
@@ -155,6 +156,32 @@ test('allocationSourcesFromCaseSources: projects only allocation list identity',
     { slug: 'complaints', listName: 'Cases-Complaints' },
     { slug: 'example-review', listName: 'Cases-ExampleReview' },
   ]);
+});
+
+test('reviewerCaseSources: a Maintainer in one reviewer group reviews only that Case Type, though they can read every list', () => {
+  const caseSources = resolveCaseSourcesFromCaseTypes(
+    ['CORA Owner Delegates', 'Reviewers - Complaints'],
+    [
+      {
+        slug: 'complaints',
+        listName: 'Cases-Complaints',
+        displayName: 'Complaints',
+        config: minimalConfig(),
+      },
+      {
+        slug: 'example-review',
+        listName: 'Cases-ExampleReview',
+        displayName: 'Example Review',
+        config: minimalConfig(),
+      },
+    ]
+  );
+  assert.equal(caseSources.length, 2);
+
+  assert.deepEqual(
+    reviewerCaseSources(caseSources, ['complaints']).map((s) => s.slug),
+    ['complaints']
+  );
 });
 
 test('allocationSourcesFromCaseSources: a Maintainer in one reviewer group draws only from that Case Type', () => {

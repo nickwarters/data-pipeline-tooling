@@ -178,12 +178,16 @@ Each Case Type declares its own `listName`; the resolver has no naming fallback.
 Every surface fans out its reads over the sources it is entitled to and merges, passing
 an explicit `{ listName }` on every `getCase`/`patchCase`/`listCases`/`countCases`:
 
-- **Reviewer-scoped** reads (dashboard outstanding, KPI reviewer lane, team cases,
-  reports) use the eligible `caseSources`. Those reads are narrowed
-  by `assignedReviewer`, but the KPI reviewer lane's scope label is not a read:
-  it names only the types in `listAccessCaseTypes` plus any type the Reviewer
-  holds a Case in, so a Maintainer or other broad role who reviews one type is
-  not labelled as reviewing every list they can read.
+- **The dashboard's Reviewer work** (outstanding Cases, the KPI reviewer lane
+  and its scope label, and the Action Centre's Reviewer groups) reads only the
+  eligible `caseSources` cut down to `listAccessCaseTypes`
+  (`reviewerCaseSources`). Filtering by `assignedReviewer` is not enough: a
+  Maintainer can read every list and can assign themselves a Case on one they
+  do not review, and that Case is not Reviewer work. The Action Centre's
+  non-Reviewer groups still read every eligible list, and its headline counts a
+  Case in both once.
+- **Other Reviewer-scoped** reads (team cases, reports) use the eligible
+  `caseSources`, narrowed by `assignedReviewer`.
 - **Allocation** reads the unclaimed pot, which no `assignedReviewer` filter
   narrows, so its `allocationSources` are the eligible `caseSources` cut down
   to `listAccessCaseTypes`. A Maintainer, Controls user or Case Type Owner who
