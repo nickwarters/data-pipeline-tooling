@@ -204,7 +204,8 @@ composes the four groups the app _reads_.
 `frontlineTeam`.** Those Case Types send their Remediation Actions to a team
 rather than a named Responsible Party, so there is no people field for a role to
 resolve from. Membership of `FrontlineTeam - X` grants the frontline team role
-on every Case of the type instead. It is a separate group from `Frontline - X`
+on every Case of the type instead. On a Case Type that does not declare
+`frontlineTeam` the group grants nothing, so do not create it there. It is a separate group from `Frontline - X`
 precisely because the pipeline grants `Frontline - X` to every notified
 Responsible Party. Its members still need read access to the list, directly or
 through `Frontline - X`

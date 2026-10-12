@@ -519,7 +519,7 @@ from it via `caseTypeGroupNames()`:
 | `Reviewers - Widget Review`     | List access as a Reviewer of this type                        |
 | `CaseTypeOwner - Widget Review` | Case Type Owner capability for this type (owner dashboards)   |
 | `JourneyOwner - Widget Review`  | Journey Owner capability (journey cases page, raises appeals) |
-| `FrontlineTeam - Widget Review` | Frontline team role on every Case of the type (see below)     |
+| `FrontlineTeam - Widget Review` | Frontline team role on every Case, if the type declares one   |
 
 Groups sit on two orthogonal axes: **functional capability** (what you can do
 anywhere — `Controls`, `Reviewer Managers`, `Frontline`,
@@ -528,9 +528,9 @@ access** (which type's Cases you can open — the four derived groups above, plu
 `Frontline - Widget Review`, which no frontend code reads: it is the frontline
 side's SharePoint ACL on the list, so it is not in `caseTypeGroupNames()` and
 you do not declare it anywhere in code). Create `FrontlineTeam - Widget Review`
-only when the type declares `frontlineTeam`: the app reads the group for every
-Case Type, so on a type that names Responsible Parties it would hand its members
-every Case. Two rules worth internalising:
+only when the type declares `frontlineTeam`. On a type that does not, the group
+grants no Role and no Case source, but its members would still be shown an empty
+Frontline Cases queue. Two rules worth internalising:
 
 - The five functional roles above span **every** Case source automatically —
   a Controls user sees your new type with no extra group.

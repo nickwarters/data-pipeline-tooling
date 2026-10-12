@@ -102,8 +102,23 @@ test('the team group grants the role on its own Case Type only', () => {
   const caseRow = makeCase({ responsibleParty: '' });
   const member = caps({ frontlineTeamCaseTypes: [caseRow.caseType] });
   const otherTeam = caps({ frontlineTeamCaseTypes: ['some-other-type'] });
-  assert.deepEqual(resolveRoles(caseRow, 'team-member', member), [
+  assert.deepEqual(resolveRoles(caseRow, 'team-member', member, TEAM_CONFIG), [
     'frontlineTeam',
   ]);
-  assert.deepEqual(resolveRoles(caseRow, 'team-member', otherTeam), ['none']);
+  assert.deepEqual(
+    resolveRoles(caseRow, 'team-member', otherTeam, TEAM_CONFIG),
+    ['none']
+  );
+});
+
+test('the team group grants nothing on a Case Type that declares no frontline team', () => {
+  // The group is read for every Case Type at boot, before any config loads, so
+  // a stray `FrontlineTeam - <type>` group on a Responsible Party Case Type
+  // reaches the capabilities. The Case Type's own declaration is what stops it
+  // opening every Case of that type.
+  const caseRow = makeCase({ responsibleParty: '' });
+  const member = caps({ frontlineTeamCaseTypes: [caseRow.caseType] });
+  assert.deepEqual(resolveRoles(caseRow, 'team-member', member, makeConfig()), [
+    'none',
+  ]);
 });

@@ -405,7 +405,8 @@ The team that receives a **Case Type**'s **Remediation Actions** in place of a n
 one team per Case Type, and its members are the SharePoint group
 `FrontlineTeam - <type>`, which a permissions workflow outside this application
 manages. Membership grants the `frontlineTeam` Section-access Role on _every_ Case of
-the type, and that Role sees and posts exactly as a Responsible Party would:
+the type, and only on a Case Type that declares the team; elsewhere the group grants
+nothing. That Role sees and posts exactly as a Responsible Party would:
 `read-only` **Summary** from **Reportable**, `read-only` **Remediation**, and the
 frontline side of the **Conversation**, so a team reply clears Awaiting Frontline. The
 Issues tab shows "Frontline team: _name_" where the Responsible Party picker would be.

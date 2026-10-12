@@ -49,7 +49,13 @@ team per Case Type**, so the Case Type alone says which team a Case belongs to.
    `caseTypeGroupNames()` gains `frontlineTeam: 'FrontlineTeam - <displayName>'`,
    `resolveCapabilities` turns membership into `frontlineTeamCaseTypes`, and
    `resolveRoles` grants the new **`frontlineTeam`** Role on every Case of those
-   types. It is the Journey Owner pattern applied to the frontline.
+   types. It is the Journey Owner pattern applied to the frontline, with one
+   difference: the group counts only on a Case Type that declares
+   `frontlineTeam`. Capabilities resolve at boot, before any Case Type module is
+   loaded, so they hold the group for every Case Type. The declaration is
+   checked later, where the config is in hand: `resolveRoles` takes the Case
+   Type config, and the Case-source resolver ignores the group (for list access
+   and for Frontline Cases) on a type that declares no team.
 3. **The team stands where a Responsible Party would, no wider.** It gets the
    Responsible Party's access in every Section: the Summary from Reportable,
    Remediation read-only, and it is a Conversation participant on the frontline
@@ -91,11 +97,11 @@ records its author's own login.
   group whose members can read `Cases-<slug>`, either directly or through
   `Frontline - <displayName>`. The permissions workflow owns that membership. The
   Maintainer **Access** page does not grant it, as it does not grant any frontline
-  group. The app reads the group for every Case Type, whether or not it declares
-  `frontlineTeam`, because capabilities resolve at boot before any Case Type
-  module is loaded. So the group must be created only for Case Types that declare
-  a team: on a Case Type that names Responsible Parties it would hand its members
-  every Case.
+  group. Only Case Types that declare a team need the group. A stray one on a
+  Case Type that names Responsible Parties grants no Role and no Case source. It
+  still reaches the boot-time capabilities, so its members would see the
+  Frontline Cases link and land on an empty queue, which is why it is still not
+  worth creating.
 - **No new Case data.** No list column, JSON field or pipeline changes.
   `ResponsibleParty` and `ResponsiblePartyManager` stay on the list and are left
   blank, which the pipelines already accept. Reports group these Cases under

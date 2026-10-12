@@ -1,5 +1,6 @@
 // @ts-check
 import { caseTypeGroupNames, permissions } from '../services/permissions.js';
+import { frontlineTeamOf } from '../evaluators/case-lifecycle.js';
 import {
   CASE_TYPE_IMPORTERS,
   displayNameFor,
@@ -262,7 +263,11 @@ export function resolveCaseSourcesFromCaseTypes(userGroups, caseTypes) {
                 derived.listAccess,
                 derived.caseTypeOwner,
                 derived.journeyOwner,
-                derived.frontlineTeam,
+                // Only a Case Type that declares a team has one: on any other
+                // the group is a stray and grants nothing.
+                ...(frontlineTeamOf(config) !== null
+                  ? [derived.frontlineTeam]
+                  : []),
               ]
             : []),
         ];
@@ -301,7 +306,7 @@ export function resolveCaseSourcesFromCaseTypes(userGroups, caseTypes) {
  *
  * @param {string[]} userGroups
  * @param {ResolveOptions} options
- * @returns {Promise<{ caseSources: CaseSource[], unavailableCaseTypes: UnavailableCaseType[] }>}
+ * @returns {Promise<{ caseSources: CaseSource[], frontlineTeamSlugs: string[], unavailableCaseTypes: UnavailableCaseType[] }>}
  */
 async function resolveAvailableCaseSources(userGroups, options) {
   const importers = options.importers ?? CASE_TYPE_IMPORTERS;
@@ -313,6 +318,9 @@ async function resolveAvailableCaseSources(userGroups, options) {
 
   return {
     caseSources: resolveCaseSourcesFromCaseTypes(userGroups, sources),
+    frontlineTeamSlugs: sources
+      .filter(({ config }) => frontlineTeamOf(config) !== null)
+      .map(({ slug }) => slug),
     unavailableCaseTypes: unavailable,
   };
 }
@@ -333,7 +341,10 @@ async function resolveAvailableCaseSources(userGroups, options) {
  * projections of it: every Case of the types the user owns as a Journey Owner,
  * and every Case of the types whose frontline team they are in. Each is read
  * off the user's capabilities, so a type contributes to one only when it is
- * both eligible and loaded.
+ * both eligible and loaded. A type contributes to `frontlineCaseSources` only
+ * when it also declares a `frontlineTeam`: the capability is read for every
+ * Case Type at boot, before any config loads, and a team group on a Case Type
+ * that names its Responsible Parties must not list every Case of it.
  *
  * @param {string[]} userGroups
  * @param {Pick<import('../services/permissions.js').Capabilities, 'ownedJourneyCaseTypes' | 'frontlineTeamCaseTypes'>} scopes
@@ -346,7 +357,7 @@ async function resolveAvailableCaseSources(userGroups, options) {
  * }>}
  */
 export async function resolveAppCaseSources(userGroups, scopes, options = {}) {
-  const { caseSources, unavailableCaseTypes } =
+  const { caseSources, frontlineTeamSlugs, unavailableCaseTypes } =
     await resolveAvailableCaseSources(userGroups, options);
   /** @param {string[]} slugs */
   const scopedTo = (slugs) =>
@@ -354,7 +365,11 @@ export async function resolveAppCaseSources(userGroups, scopes, options = {}) {
   return {
     caseSources,
     journeyCaseSources: scopedTo(scopes.ownedJourneyCaseTypes),
-    frontlineCaseSources: scopedTo(scopes.frontlineTeamCaseTypes),
+    frontlineCaseSources: scopedTo(
+      scopes.frontlineTeamCaseTypes.filter((slug) =>
+        frontlineTeamSlugs.includes(slug)
+      )
+    ),
     unavailableCaseTypes,
   };
 }

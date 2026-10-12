@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   makeCase,
+  makeConfig,
   caps,
   resolveRoles,
   ROLES,
@@ -11,6 +12,11 @@ import { HttpSharePointClient } from '../src/services/http-sharepoint-client.js'
 import { WEB_URL, makeFetch } from './helpers/http-sharepoint-client.js';
 
 // Capability: viewer role resolution.
+
+/** A Case Type that sends its Remediation Actions to a frontline team. */
+const TEAM_CONFIG = makeConfig({
+  frontlineTeam: { name: 'Payments Operations' },
+});
 
 // --- resolveRoles ---
 
@@ -217,9 +223,28 @@ test('resolveRoles: frontline team member (from frontlineTeamCaseTypes), with no
   const roles = resolveRoles(
     makeCase({ responsibleParty: '', responsiblePartyManager: '' }),
     'user-team',
-    caps({ frontlineTeamCaseTypes: ['example-review'] })
+    caps({ frontlineTeamCaseTypes: ['example-review'] }),
+    TEAM_CONFIG
   );
   assert.deepEqual(roles, ['frontlineTeam']);
+});
+
+test('resolveRoles: the team group grants nothing on a Case Type that declares no frontline team', () => {
+  const team = caps({ frontlineTeamCaseTypes: ['example-review'] });
+  const caseRow = makeCase({
+    responsibleParty: '',
+    responsiblePartyManager: '',
+  });
+  assert.deepEqual(
+    resolveRoles(caseRow, 'user-team', team, makeConfig()),
+    ['none'],
+    'a stray team group on a Responsible Party Case Type must not open every Case'
+  );
+  assert.deepEqual(
+    resolveRoles(caseRow, 'user-team', team),
+    ['none'],
+    'with no Case Type in hand, no team membership counts'
+  );
 });
 
 test('resolveRoles: a frontline team of a different case type does not get the role', () => {
@@ -372,7 +397,8 @@ test('every role in the vocabulary is one resolveRoles can actually produce', ()
       ownedCaseTypes: ['example-review'],
       ownedJourneyCaseTypes: ['example-review'],
       frontlineTeamCaseTypes: ['example-review'],
-    })
+    }),
+    TEAM_CONFIG
   );
   assert.deepEqual(everyRoleAtOnce.sort(), [
     'assignedReviewer',

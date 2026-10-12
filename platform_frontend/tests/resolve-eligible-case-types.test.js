@@ -590,10 +590,26 @@ test('resolveAppCaseSources: threads only a Case Type Owner eligible source to a
   assert.deepEqual(context.unavailableCaseTypes, []);
 });
 
+/** The real Complaints Case Type, declaring a frontline team. */
+function importersWithComplaintsTeam() {
+  return /** @type {any} */ ({
+    complaints: async () => {
+      const module = await CASE_TYPE_IMPORTERS['complaints']();
+      return {
+        default: {
+          ...module.default,
+          frontlineTeam: { name: 'Complaints Ops' },
+        },
+      };
+    },
+  });
+}
+
 test('resolveAppCaseSources: a frontline team member reads their own Case Type and lists every Case of it', async () => {
   const context = await quietlyResolveAppCaseSources(
     ['FrontlineTeam - Complaints'],
-    { ownedJourneyCaseTypes: [], frontlineTeamCaseTypes: ['complaints'] }
+    { ownedJourneyCaseTypes: [], frontlineTeamCaseTypes: ['complaints'] },
+    { importers: importersWithComplaintsTeam() }
   );
 
   assert.deepEqual(
@@ -605,6 +621,18 @@ test('resolveAppCaseSources: a frontline team member reads their own Case Type a
     ['complaints']
   );
   assert.deepEqual(context.journeyCaseSources, []);
+});
+
+test('resolveAppCaseSources: a team group on a Case Type that declares no team grants nothing', async () => {
+  // Complaints names its Responsible Parties. The capability is read for every
+  // Case Type at boot, so it arrives here; the Case Type's config stops it.
+  const context = await quietlyResolveAppCaseSources(
+    ['FrontlineTeam - Complaints'],
+    { ownedJourneyCaseTypes: [], frontlineTeamCaseTypes: ['complaints'] }
+  );
+
+  assert.deepEqual(context.caseSources, []);
+  assert.deepEqual(context.frontlineCaseSources, []);
 });
 
 test('resolveAppCaseSources: the frontline list-access group alone grants no Case source', async () => {

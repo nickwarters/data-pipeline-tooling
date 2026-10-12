@@ -10,6 +10,7 @@
 
 import {
   conversationSideOf,
+  frontlineTeamOf,
   isFrozen,
   isReportable,
   reachedReportable,
@@ -103,9 +104,12 @@ export { summaryBlockIds };
  * @param {import('../sharepoint-client.js').CaseRow} caseRow
  * @param {string} userId
  * @param {import('./permissions.js').Capabilities} capabilities
+ * @param {import('../sharepoint-client.js').CaseTypeConfig} [config] The Case's
+ *   Case Type. Only a Case Type that declares a frontline team grants the
+ *   `frontlineTeam` Role; without it, no team membership counts.
  * @returns {Role[]}
  */
-export function resolveRoles(caseRow, userId, capabilities) {
+export function resolveRoles(caseRow, userId, capabilities, config) {
   /** @type {Role[]} */
   const roles = [];
   if (caseRow.assignedReviewer === userId) {
@@ -129,9 +133,15 @@ export function resolveRoles(caseRow, userId, capabilities) {
     roles.push('journeyOwner');
   }
   // The team stands where a named Responsible Party would, for every Case of
-  // the type at once: membership of the type's team group is the whole test,
-  // because these Case Types record no person on the Case to match against.
-  if (capabilities?.frontlineTeamCaseTypes?.includes(caseRow.caseType)) {
+  // the type at once: these Case Types record no person on the Case to match
+  // against, so membership of the type's team group is the test. The group is
+  // read for every Case Type at boot, before any config loads, so the Case
+  // Type's own declaration is checked here: on a Case Type that names its
+  // Responsible Parties the group grants nothing.
+  if (
+    frontlineTeamOf(config) !== null &&
+    capabilities?.frontlineTeamCaseTypes?.includes(caseRow.caseType)
+  ) {
     roles.push('frontlineTeam');
   }
   if (capabilities?.isControls) {
