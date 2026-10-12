@@ -127,11 +127,12 @@ appears in the log; `params` is logged but has no column.
 | `duration`  | float \| null       | Wall-clock seconds for the step/run. |
 | `errors`    | string[]            | Error messages when `status` is `error`; `[]` otherwise. |
 | `error_category` | string \| null | The triage category of an expected failure (`data` / `operational` / `config`) so an operator can route it without reading every message. `null` for a bug (a non-`PipelineError`) — the absence is the signal. |
-| `warn_hits` | string[]            | Warn-severity validator messages tolerated at this step; `[]` otherwise. |
+| `warn_hits` | string[]            | Warn-severity validator messages tolerated at this step, and the retry notes of a retried read or write (kept on the error record too when the step finally fails); `[]` otherwise. |
 | `committed` | bool                | `true` on a step that durably wrote an artifact (`write`, `quarantine` with rejects, `explain`, `checkpoint`) — independently committed evidence that **survives a later step's failure**. Set only on the success record; `false` everywhere else. |
 | `params`    | object              | The run's parameters, recorded only after caller-side redaction; `{}` when none. Logged for traceability but **not** stored by the registry — it has no column for them. |
 | `profile`   | object \| null      | The per-column statistical profile a `profile` step recorded: a `DatasetProfile` record (`row_count` + per-column `null_rate`, `distinct_count`, `min`/`max`, bounded top-N distribution). `null` on every non-profile step. The registry stores it in a queryable `profile` column and trends it across runs via `recent_profiles(address)`. |
 | `data_locations` | object[]     | The file(s) or table(s) this step actually touched, one `{"namespace", "name"}` entry each (OpenLineage's dataset identity): `{"namespace": "file", "name": "/data/orders.csv"}` for a file, `{"namespace": "sqlite:/data/raw.db", "name": "orders"}` for a table. `[]` on every step that is not a read or a write — and on a few that are, see below. A `GlobCsvReader` over three files carries three entries. Stored by the registry; never shown on the console line. |
+| `run_date` | string \| null   | The business date the run was for (`RunContext.run_date`, `YYYY-MM-DD`), written on the `run` summary only and `null` on every other record. A re-drive of an old date carries that date, not the day it ran, so reporting can file it with its `logical_run_id`. Stored by the registry; never shown on the console line. |
 
 Known-empty cases for `data_locations`, all of them deliberate:
 
@@ -259,12 +260,21 @@ is the right-hand side of the correct catch-up — discovered artifacts minus
 artifacts already successfully processed; the watermark form remains the
 older idiom for the common case where nothing arrives late.
 
-Neither method is backed by an index: the repository has zero indexes today,
-the hotter `step_address`/`pipeline` read keys are unindexed too, and the
-write path is a shared-drive SQLite file that inserts row-by-row under an
-exclusive lock with WAL unavailable — a real cost for an index to add. The
-existing `registry_migrations` ledger keeps that cheap to revisit: an index
-added later is DDL applied once, with no on-disk format change.
+Neither method is backed by an index of its own. The registry has one index,
+`run_records_by_pipeline_time` on `(step, pipeline, timestamp)`, for "latest
+run of each pipeline" (`latest_run_per_pipeline`, behind `cli status`). Without
+it that correlated lookup rescanned the table once per run summary: on a
+synthetic year of 100 daily pipelines it ran for over 15 minutes, and 0.04 s
+with the index. The write path is a shared-drive SQLite file that inserts
+row-by-row under an exclusive lock with WAL unavailable, so an index has a cost
+there: about 8 µs more per inserted record, measured, against a day's ~1,200.
+`CREATE INDEX IF NOT EXISTS` runs on every open; once the index exists it is a
+no-op that takes no write lock, so a current file still opens without one. The
+**first** open after deploying it is the exception: it scans the whole table
+and builds the index under the exclusive write lock, and any concurrent writer
+waits on the 5 s busy timeout and can fail with "database is locked" if the
+build runs longer on a slow share — so deploy it with the orchestrator idle.
+It changes no on-disk record format.
 
 The runner adds one domain-level opt-in step before a handler executes:
 `freshness`. It is emitted for a downstream Pipeline that declares an upstream
@@ -371,8 +381,13 @@ only a stat + DB lookup.
 one is also how it catches up with the declaration: `ensure_columns` adds any
 declared column the table lacks (nullable, in place — never a re-create) and
 returns the names it added. A database written before `committed`, `step_address`,
-`logical_run_id`, `profile` or `data_locations` existed therefore keeps ingesting, and its older
-rows read back with those fields empty. `tools.orchestration`'s decision store
+`logical_run_id`, `profile`, `data_locations` or `run_date` existed therefore keeps ingesting, and its older
+rows read back with those fields empty. `RunStore.catch_up()` opens an existing
+registry for this even when there is no log left to ingest, so a reader that
+goes straight to `run_records` (the `pipeline_run_metric` pipeline's
+`SqliteReader`) finds every declared column on an older file whose logs were
+rotated away; it does not create a registry where none exists.
+`tools.orchestration`'s decision store
 uses the same helper over its own separate declaration — shared machinery, two
 distinct contracts.
 

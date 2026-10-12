@@ -61,6 +61,26 @@ _CREATE_RUN_RECORDS = create_table_sql(
 )
 _INSERT_RUN_RECORD = insert_sql(_TABLE, RUN_RECORD_COLUMNS, or_ignore=True)
 
+# "Latest run of each pipeline" walks this backwards instead of scanning the
+# whole table once per run (``latest_run_per_pipeline``, ``cli status``).
+_CREATE_LATEST_RUN_INDEX = """
+    CREATE INDEX IF NOT EXISTS run_records_by_pipeline_time
+    ON run_records (step, pipeline, timestamp)
+"""
+
+# The clause ``latest_run_per_pipeline`` selects with. It is a constant so the
+# index test can plan this exact text rather than a copy that could drift from
+# it while the method is rewritten into a shape the index cannot serve.
+_LATEST_RUN_PER_PIPELINE = """
+    WHERE step = 'run' AND rowid = (
+        SELECT rowid FROM run_records inner_r
+        WHERE inner_r.step = 'run'
+          AND inner_r.pipeline = run_records.pipeline
+        ORDER BY timestamp DESC, rowid DESC LIMIT 1
+    )
+    ORDER BY pipeline
+"""
+
 _CREATE_INGEST_PROGRESS = """
     CREATE TABLE IF NOT EXISTS ingest_progress (
         log_path    TEXT PRIMARY KEY,
@@ -125,6 +145,16 @@ class RunRegistry:
             self._migrated = True
         return con
 
+    def migrate(self) -> None:
+        """Bring the file up to the declared shape now, rather than on first use.
+
+        For a caller about to read the table by some other route than this
+        class (a ``SqliteReader`` over it): every declared column is then
+        present. A no-op once this instance has migrated the file.
+        """
+        if not self._migrated:
+            self._connect().close()
+
     def _migrate(self, con) -> None:
         """Bring the file up to the declared shape; write only if it is behind.
 
@@ -144,6 +174,7 @@ class RunRegistry:
         and a file that still has rows awaiting an address gets them.
         """
         con.execute(_CREATE_RUN_RECORDS)
+        con.execute(_CREATE_LATEST_RUN_INDEX)
         con.execute(_CREATE_INGEST_PROGRESS)
         con.execute(_CREATE_MIGRATIONS)
         added = ensure_columns(con, _TABLE, RUN_RECORD_COLUMNS)
@@ -480,15 +511,7 @@ class RunRegistry:
         per X.
         """
         return self._select(
-            """
-            WHERE step = 'run' AND rowid = (
-                SELECT rowid FROM run_records inner_r
-                WHERE inner_r.step = 'run'
-                  AND inner_r.pipeline = run_records.pipeline
-                ORDER BY timestamp DESC, rowid DESC LIMIT 1
-            )
-            ORDER BY pipeline
-            """,
+            _LATEST_RUN_PER_PIPELINE,
             (),
         )
 

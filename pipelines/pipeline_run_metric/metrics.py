@@ -40,6 +40,8 @@ RUN_SUMMARY_STEP = "run"
 # A step record's outcomes, as the run log writes them.
 ERROR_STATUS = "error"
 OK_STATUS = "ok"
+# A run with no summary record and no failed step: killed, or still running.
+INCOMPLETE_STATUS = "incomplete"
 
 # How many prior run dates the duration trend's baseline looks back over.
 TRAILING_DAYS = 7
@@ -62,6 +64,7 @@ RECORD_COLUMNS = (
     "error_category",
     "warn_hits",
     "committed",
+    "run_date",
 )
 
 
@@ -77,11 +80,25 @@ def latest_instant(records: Dataset) -> str | None:
 
 
 def _prepared(records: Dataset) -> pd.DataFrame:
-    """Records with parsed instants, a local ``run_date`` per run, and a step
-    address for every row (derived from pipeline + step where the record
-    predates the column, as the registry's own backfill does)."""
+    """Records with parsed instants, two dates per run, and a step address for
+    every row (derived from pipeline + step where the record predates the
+    column, as the registry's own backfill does).
+
+    A record is stamped when its step *ends*, so its start is ``_at`` less its
+    duration. The two dates answer different questions and differ only for a
+    re-drive of an earlier date:
+
+    - ``_execution_date`` is *when the run executed*: the local calendar date it
+      started. The duration trend buckets on it, so a re-drive's durations land
+      on the day they were measured.
+    - ``run_date`` is the *business* date: the one the run summary recorded,
+      else the execution date. The run summary and row flow file a run under
+      it, beside its ``logical_run_id``.
+    """
     frame = records.to_pandas().copy()
     frame["_at"] = pd.to_datetime(frame["timestamp"], utc=True, format="ISO8601")
+    took = pd.to_timedelta(pd.to_numeric(frame["duration"]).clip(lower=0), unit="s")
+    frame["_start"] = (frame["_at"] - took.fillna(pd.Timedelta(0))).dt.round("us")
     frame["_is_summary"] = frame["step"].eq(RUN_SUMMARY_STEP)
 
     pipeline = frame["pipeline"].astype("string")
@@ -90,8 +107,14 @@ def _prepared(records: Dataset) -> pd.DataFrame:
     derived = derived.mask(frame["_is_summary"], pipeline)
     frame["step_address"] = address.mask(address.isna() | address.eq(""), derived)
 
-    run_start = frame.groupby("pipeline_run_id")["_at"].transform("min")
-    frame["run_date"] = run_start.map(lambda at: local_date(at).isoformat())
+    by_run = frame.groupby("pipeline_run_id")
+    run_start = by_run["_start"].transform("min")
+    # One local-date conversion per run, not per record.
+    dates = {at: local_date(at).isoformat() for at in run_start.unique()}
+    recorded = frame["run_date"].where(frame["_is_summary"])
+    recorded = recorded.groupby(frame["pipeline_run_id"]).transform("last")
+    frame["_execution_date"] = run_start.map(dates)
+    frame["run_date"] = recorded.fillna(frame["_execution_date"])
     return frame
 
 
@@ -145,54 +168,68 @@ def run_summary(records: Dataset, *, as_of: str) -> Dataset:
     """One row per pipeline run. **Grain: run_id.**
 
     Wall clock is the summary record's ``duration`` where one was written,
-    else first-to-last record; ``status`` is the summary's, else ``error`` if
-    any step errored. ``attempt_number`` ranks a run among those sharing its
-    ``logical_run_id`` by start, so a re-drive is the second attempt and the
-    run it replaced is no longer the latest.
+    else first start to last end; ``status`` is the summary's, else ``error``
+    if any step errored, else ``incomplete``. ``attempt_number`` ranks a run
+    among those sharing its ``logical_run_id`` by start, so a re-drive is the
+    second attempt and the run it replaced is no longer the latest.
     """
     frame = _prepared(records).sort_values("_at", kind="stable")
-    rows = []
-    for run_id, run in frame.groupby("pipeline_run_id", sort=False):
-        steps = run.loc[~run["_is_summary"]]
-        summaries = run.loc[run["_is_summary"]]
-        summary = summaries.iloc[-1] if not summaries.empty else None
-        started, finished = run["_at"].min(), run["_at"].max()
+    is_step = ~frame["_is_summary"]
+    failed = is_step & frame["status"].eq(ERROR_STATUS)
+    committed = pd.to_numeric(frame["committed"]).fillna(0).astype(bool)
+    frame = frame.assign(
+        _step=is_step,
+        _failed=failed,
+        _committed=is_step & committed,
+        _step_duration=pd.to_numeric(frame["duration"]).where(is_step),
+        # Builder pipelines repeat every step's warns on the run summary.
+        _warns=frame["warn_hits"].map(_warn_count).where(is_step, 0),
+    )
 
-        wall = (finished - started).total_seconds()
-        status = ERROR_STATUS if steps["status"].eq(ERROR_STATUS).any() else OK_STATUS
-        if summary is not None:
-            if pd.notna(summary["duration"]):
-                wall = float(summary["duration"])
-            if pd.notna(summary["status"]):
-                status = str(summary["status"])
-
-        categories = run["error_category"].dropna()
-        rows.append(
-            {
-                RUN_ID_COLUMN: run_id,
-                "pipeline": run["pipeline"].iloc[0],
-                "logical_run_id": run["logical_run_id"].iloc[0],
-                "run_date": run["run_date"].iloc[0],
-                "started_at": started.isoformat(),
-                "finished_at": finished.isoformat(),
-                "wall_clock_seconds": round(max(wall, 0.0), 6),
-                "step_duration_seconds": round(
-                    float(pd.to_numeric(steps["duration"]).fillna(0).sum()), 6
-                ),
-                "step_count": len(steps),
-                "failed_step_count": int(steps["status"].eq(ERROR_STATUS).sum()),
-                "committed_step_count": int(
-                    pd.to_numeric(steps["committed"]).fillna(0).astype(bool).sum()
-                ),
-                "warn_hit_count": int(run["warn_hits"].map(_warn_count).sum()),
-                "status": status,
-                "error_category": categories.iloc[0] if not categories.empty else None,
-            }
+    by_run = frame.groupby("pipeline_run_id", sort=False)
+    # A run is labelled by its first record, even where that field is NULL.
+    runs = by_run[["pipeline", "logical_run_id"]].first(skipna=False)
+    runs = runs.join(
+        by_run.agg(
+            run_date=("run_date", "first"),
+            started=("_start", "min"),
+            finished=("_at", "max"),
+            step_duration_seconds=("_step_duration", "sum"),
+            step_count=("_step", "sum"),
+            failed_step_count=("_failed", "sum"),
+            committed_step_count=("_committed", "sum"),
+            warn_hit_count=("_warns", "sum"),
+            error_category=("error_category", "first"),
         )
+    )
 
-    summarised = pd.DataFrame(
-        rows, columns=list(_columns(PipelineRunSummary))
-    ).sort_values(["started_at", RUN_ID_COLUMN], kind="stable")
+    # The run's own summary record, where one was written; the last one wins.
+    summary = (
+        frame.loc[frame["_is_summary"], ["pipeline_run_id", "duration", "status"]]
+        .drop_duplicates("pipeline_run_id", keep="last")
+        .set_index("pipeline_run_id")
+        .reindex(runs.index)
+    )
+    span = (runs["finished"] - runs["started"]).dt.total_seconds()
+    wall = pd.to_numeric(summary["duration"]).fillna(span)
+    derived = (
+        runs["failed_step_count"]
+        .gt(0)
+        .map({True: ERROR_STATUS, False: INCOMPLETE_STATUS})
+    )
+
+    summarised = (
+        runs.assign(
+            started_at=runs["started"].map(pd.Timestamp.isoformat),
+            finished_at=runs["finished"].map(pd.Timestamp.isoformat),
+            wall_clock_seconds=wall.clip(lower=0).round(6),
+            step_duration_seconds=runs["step_duration_seconds"].round(6),
+            status=summary["status"].fillna(derived),
+        )
+        .rename_axis(RUN_ID_COLUMN)
+        .reset_index()
+        .sort_values(["started_at", RUN_ID_COLUMN], kind="stable")
+    )
     # A run with no logical run id is its own attempt series. The rows are in
     # start order, so a key's last row is its latest attempt.
     attempt_key = summarised["logical_run_id"].fillna(summarised[RUN_ID_COLUMN])
@@ -216,30 +253,43 @@ def step_duration_trend(
     records: Dataset, *, as_of: str, trailing_days: int = TRAILING_DAYS
 ) -> Dataset:
     """Step duration per day against its recent past. **Grain: pipeline x
-    step_address x run_date.**
+    step_address x run_date**, where ``run_date`` is the *execution* date: the
+    local date the run started, not the business date it recorded.
+
+    "Is this step slower than its recent past?" is a question about when it
+    ran, so a re-drive of an old date lands on the day it executed and leaves
+    that old date's row, and the baselines after it, as they were.
 
     ``trailing_p50_median`` is the median of the step's daily p50 over its
-    previous ``trailing_days`` run dates *with data* (a step that ran three
-    times last fortnight has a three-day baseline), NULL on its first day.
-    ``delta_ratio`` is NULL where the baseline is NULL or zero.
+    previous ``trailing_days`` execution dates *with data* (a step that ran
+    three times last fortnight has a three-day baseline), NULL on its first
+    day. ``delta_ratio`` is NULL where the baseline is NULL or zero.
     """
     frame = _prepared(records)
-    steps = frame.loc[~frame["_is_summary"] & frame["duration"].notna()].copy()
+    # A failed step's duration says how long it took to fail, not to run.
+    ran = frame["status"].eq(OK_STATUS) & frame["duration"].notna()
+    steps = frame.loc[~frame["_is_summary"] & ran].copy()
     steps["duration"] = pd.to_numeric(steps["duration"])
 
-    daily = (
-        steps.groupby(["pipeline", "step_address", "run_date"], sort=True)["duration"]
-        .agg(
-            execution_count="size",
-            duration_p50=lambda durations: durations.quantile(0.5),
-            duration_p95=lambda durations: durations.quantile(0.95),
-            duration_max="max",
-        )
-        .reset_index()
+    # The table's ``run_date`` column carries the execution date (see above).
+    steps["run_date"] = steps["_execution_date"]
+    by_day = steps.groupby(["pipeline", "step_address", "run_date"], sort=True)
+    durations = by_day["duration"]
+    daily = durations.agg(
+        execution_count="size", duration_p50="median", duration_max="max"
     )
-    per_step = daily.groupby(["pipeline", "step_address"], sort=False)["duration_p50"]
-    daily["trailing_p50_median"] = per_step.transform(
-        lambda p50: p50.shift(1).rolling(trailing_days, min_periods=1).median()
+    daily["duration_p95"] = durations.quantile(0.95)
+    daily = daily.reset_index()
+
+    # Shift each step's daily p50 back a day, then take a rolling median within
+    # the step; both run per step in compiled code, not per step in Python.
+    step_keys = [daily["pipeline"], daily["step_address"]]
+    previous = daily["duration_p50"].groupby(step_keys, sort=False).shift(1)
+    daily["trailing_p50_median"] = (
+        previous.groupby(step_keys, sort=False)
+        .rolling(trailing_days, min_periods=1)
+        .median()
+        .droplevel([0, 1])
     )
     baseline = daily["trailing_p50_median"]
     daily["delta_seconds"] = daily["duration_p50"] - baseline
@@ -253,11 +303,6 @@ def step_duration_trend(
 COUNT_COLUMNS = ("rows_in", "rows_out", "rows_quarantined", "rows_excluded")
 
 
-def _sum(counts: pd.Series) -> float:
-    """Sum that stays NULL when no execution reported the count at all."""
-    return counts.sum(min_count=1)
-
-
 def step_row_flow(records: Dataset, *, as_of: str) -> Dataset:
     """The row funnel through each step of each run. **Grain: run_id x
     step_address.** Only steps that reported a row count appear; a count no
@@ -268,20 +313,13 @@ def step_row_flow(records: Dataset, *, as_of: str) -> Dataset:
     reported = frame[list(COUNT_COLUMNS)].notna().any(axis=1)
     steps = frame.loc[~frame["_is_summary"] & reported]
 
-    flow = (
-        steps.groupby(
-            ["pipeline_run_id", "pipeline", "step_address", "run_date"], sort=True
-        )
-        .agg(
-            execution_count=("step", "size"),
-            rows_in=("rows_in", _sum),
-            rows_out=("rows_out", _sum),
-            rows_quarantined=("rows_quarantined", _sum),
-            rows_excluded=("rows_excluded", _sum),
-        )
-        .reset_index()
-        .rename(columns={"pipeline_run_id": RUN_ID_COLUMN})
+    by_step = steps.groupby(
+        ["pipeline_run_id", "pipeline", "step_address", "run_date"], sort=True
     )
+    # ``min_count=1`` keeps a count no execution reported NULL, not zero.
+    flow = by_step[list(COUNT_COLUMNS)].sum(min_count=1)
+    flow.insert(0, "execution_count", by_step.size())
+    flow = flow.reset_index().rename(columns={"pipeline_run_id": RUN_ID_COLUMN})
     rows_in = flow["rows_in"].where(flow["rows_in"] > 0)
     flow["out_ratio"] = (flow["rows_out"] / rows_in).round(6)
     flow["quarantine_ratio"] = (flow["rows_quarantined"] / rows_in).round(6)

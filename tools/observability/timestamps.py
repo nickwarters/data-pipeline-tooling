@@ -83,6 +83,9 @@ def local_date(value: str | dt.datetime) -> dt.date:
     read as local wall time.
     """
     moment = parse_timestamp(value) if isinstance(value, str) else value
+    if hasattr(moment, "to_pydatetime"):
+        # A pandas Timestamp: its astimezone(None) drops to UTC, not the system zone.
+        moment = moment.to_pydatetime()
     return moment.astimezone(local_timezone()).date()
 
 

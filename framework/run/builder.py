@@ -141,6 +141,8 @@ class Node:
                 duration=time.perf_counter() - started,
                 errors=[str(exc)],
                 error_category=getattr(exc, "category", None),
+                # Retry notes gathered before the failure are the evidence for it.
+                warn_hits=self.warn_hits,
                 step_address=self.address.label if self.address is not None else None,
             )
             # A dry run still surfaces the failing step so the preview shows the
@@ -645,6 +647,7 @@ class Pipeline:
                 rows_in=rows_in,
                 rows_out=rows_out,
                 step_address=self._pipeline_address().label,
+                run_date=context.run_date.isoformat(),
             )
 
             if len(results) == 1:
@@ -658,6 +661,7 @@ class Pipeline:
                 errors=[str(exc)],
                 error_category=getattr(exc, "category", None),
                 step_address=self._pipeline_address().label,
+                run_date=context.run_date.isoformat(),
             )
             raise
         finally:

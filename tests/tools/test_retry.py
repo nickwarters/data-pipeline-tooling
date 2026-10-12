@@ -164,6 +164,24 @@ def test_run_log_records_a_non_retryable_abort(tmp_path):
     assert inner.calls == 1
 
 
+def test_run_log_keeps_the_retries_of_a_read_that_finally_failed(tmp_path):
+    # The attempts that preceded a failure are the evidence for it, so the
+    # error record carries them just as an ok record would.
+    log_path = tmp_path / "run.log"
+    inner = FlakyReader(ConnectionError("still down"), fails=99)
+    policy = RetryPolicy(attempts=3, retry_on=(ConnectionError,), sleep=lambda _: None)
+
+    p = Pipeline("flaky-feed", run_log=RunLog(log_path))
+    p.read(RetryingReader(inner, policy), name="read")
+
+    with pytest.raises(ConnectionError):
+        p.run()
+
+    [read_record] = [r for r in _read_log(log_path) if r["step"] == "read"]
+    assert read_record["status"] == "error"
+    assert len(read_record["warn_hits"]) == 2  # two retries before the last try
+
+
 def test_policy_wraps_a_bare_remote_client_call():
     # A RetryPolicy is a standalone collaborator: a remote client (SharePoint/SAS
     # fetch) can call through it directly, without a Reader/Writer wrapper, and

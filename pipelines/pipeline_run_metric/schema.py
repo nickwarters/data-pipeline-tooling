@@ -19,8 +19,8 @@ from framework.core import NonNull, OneOf, Range
 SUBJECT = "pipeline_run_metric"
 
 # A run's overall outcome: the summary record's status where one was written,
-# else derived from its steps.
-RUN_STATUSES = ("ok", "error")
+# else ``error`` if a step failed, else ``incomplete`` (killed or still running).
+RUN_STATUSES = ("ok", "error", "incomplete")
 
 
 @dataclass
@@ -58,9 +58,14 @@ class StepDurationTrendDaily:
     """``step_duration_trend_daily`` -- how long each step takes, per day,
     against its recent past.
 
-    Grain: ``pipeline`` x ``step_address`` x ``run_date``. The trailing
-    baseline is the median of the step's daily p50 over the previous
-    ``TRAILING_DAYS`` run dates that have data; NULL on a step's first day.
+    Grain: ``pipeline`` x ``step_address`` x ``run_date``. Here ``run_date``
+    is the *execution* date -- the local date the run started -- not the
+    business date the run summary and row flow carry under the same name, so a
+    re-drive of an old date is measured on the day it ran. The column keeps the
+    name its baseline migration gave it, since renaming it would be a
+    migration of its own. The trailing baseline is the median of
+    the step's daily p50 over the previous ``TRAILING_DAYS`` execution dates
+    that have data; NULL on a step's first day.
     """
 
     pipeline: Annotated[str, NonNull()]
