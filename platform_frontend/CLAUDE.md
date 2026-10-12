@@ -86,6 +86,22 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
   `sections` entry, since the descriptor is an allow-list, and
   `scripts/scaffold_case_type.py` carries the template new Case Types are
   scaffolded from.
+- **Reports are plugins over Report Feed files (ADR-0058).** A report is a
+  `ReportPlugin` in `APP_CONFIG.reportPlugins`: its audience (`access`, roles
+  from a fixed vocabulary), its scope kind, the file(s) it reads from the
+  report-feed library, its filters, its layout (`stacked` or `rail`) and one
+  pure `view({ feeds, viewer, filters })` returning headline tiles, snapshot
+  panels and sections. `src/reports/report-engine.js` is the route slice behind
+  `#/reports/:report/:scope` and does everything else: scope resolution, loading
+  with the mount's signal, the missing/forbidden/failed/stale states, filters,
+  each panel's table toggle and sort, page width, tooltips. `access` is read
+  twice — by the browser to decide what to offer, and by
+  `scripts/report-folder-access.js` to print the SharePoint groups each scope
+  folder must allow, which is the real boundary. Charts come from
+  `src/components/charts/`, coloured by role through the validated
+  `--cora-viz-*` tokens; red in a chart means danger, never a series. Placeholder
+  feeds live under `dev/fixtures/reports/` until a pipeline publishes them. See
+  [`docs/guide/add-a-report.md`](./docs/guide/add-a-report.md).
 - **One authoring model.** Views are synchronous and side-effect free. They do
   not import clients or persistence services. Start with
   [`docs/guide/add-a-page.md`](./docs/guide/add-a-page.md); use
@@ -417,6 +433,18 @@ src/
       cora-status-banner.js       # the save-status surface (saving/reconnecting/failed/conflict),
                                   #   rendered in the Case Review page chrome
       cora-toast.js
+    charts/                     # the report chart kit: pure (data, config) => SVG, coloured by role
+      chart-kit.js                # colour roles -> --cora-viz-* / status tokens, scales, axes,
+                                  #   tooltip mark attributes, number formats
+      line-chart.js               # lines over shared x positions: end labels, target line, hover columns
+      bar-list.js                 # horizontal bars per row, with status markers for status rows
+      stack-bar.js                # one bar split into up to six parts of a whole
+      sparkline.js                # decorative trend for a stat tile
+    report/                     # the report page frame (ADR-0058)
+      report-frame.js             # the two layouts (stacked, rail), header, sections, filter
+                                  #   controls and panel width arithmetic
+      report-panel.js             # one panel: title, subtitle, chips, chart/table toggle, note
+      stat-tile.js                # headline tiles: value, delta, sparkline, meter
     sections/                   # domain-feature units: take config, wire base components together
       cora-allocation.js          # pure allocation view and candidate loader
       cora-app-nav.js           # the nav bar as a pure view: draws the items chrome hands it and
@@ -502,6 +530,8 @@ src/
       stats-chart-view.js         # pure report -> grouped bar chart, on-surface published vs red-accent live
       stats-breakdown-table-view.js # pure report -> grain-matched Case Type count/percentage table
     cora-team-stats.js             # store-driven Reviewer Manager-only empty shell
+    cora-reports.js               # #/reports: the reports this viewer can open, one card each
+    cora-report.js                # #/reports/:report/:scope: finds the plugin, hands it to the engine
     dashboard/
       action-centre-view.js       # pure reason-descriptor view + bounded load actions (ADR-0030 flags unchanged)
       controls-view.js            # pure generic-table Appeals panel + paged load action
@@ -552,6 +582,17 @@ src/
     registry.js                 # the type lookup. A FRAMEWORK vocabulary a Case Type selects from,
                                 #   like Void Reasons — not an application composition, so it names
                                 #   its own built-ins rather than being handed a list by app-config
+
+  reports/                      # report plugins and the engine they run on (ADR-0058)
+    contract.js                 # THE ReportPlugin contract and the content a view returns (types only)
+    report-access.js            # a report's audience: roles -> capabilities (what the page offers)
+                                #   and roles -> SharePoint groups (what each folder must allow)
+    report-engine.js            # the route slice every report runs on: scope, loading, page
+                                #   states, filters, table toggles, width, tooltips
+    case-type/                  # the Case Type report: backlog, timeliness and flow per Case Type
+      case-type-report-plugin.js  # configuration: audience, feed path, range filter, view
+      case-type-report-model.js   # feed -> figures for a range; every dataset optional
+      case-type-report-view.js    # figures -> tiles and panels, one function per panel
 
   sections/                     # self-declaring Case Review Sections
     contract.js                 # the SectionPlugin contract (names no plugin, so the union can project)
@@ -719,6 +760,8 @@ scripts/
                                 #   existing bank (unlisted questions kept as deprecated), then
                                 #   publishes it through publish-bank.js so the version and history
                                 #   advance by the one rule. Needs openpyxl from the root venv
+  report-folder-access.js       # prints, per report-feed folder, the SharePoint groups that must be
+                                #   able to read it — derived from each report plugin's `access`
   scaffold_case_type.py         # scaffolds a new Case Type module + bank artifact (ADR-0028)
   deploy_to_sharepoint.py       # the diff sync, plus its pre-flight verify gate, graph-derived
                                 #   leaf-first upload order and post-upload hash verification
@@ -746,6 +789,7 @@ dev/                            # local dev loop; not deployed
     people.js                   # directory people backing searchPeople, and the groups they hold
     access-log.js               # Access Log entries about the fully provisioned fixture person
     personas.js                 # ?asUser= personas (default: reviewer)
+    reports/                    # placeholder Report Feed files at their library paths (?mock=1)
     roadmap.js
 
 tests/                          # node:test unit tests — flat, one file per subject by filename

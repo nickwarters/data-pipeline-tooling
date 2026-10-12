@@ -7,6 +7,7 @@ import {
   formatDate,
   formatDateLike,
   formatTimestamp,
+  formatWeekdayDate,
 } from '../src/lib/format-datetime.js';
 
 /**
@@ -103,4 +104,41 @@ test('a reference number that merely starts with digits is left exactly as store
 test('a non-string value of unknown meaning is shown as its own text', () => {
   assert.equal(formatDateLike(42), '42');
   assert.equal(formatDateLike(true), 'true');
+});
+
+test('a report date names its weekday, with no leading zero and no year', () => {
+  inZone('Europe/London', () => {
+    assert.equal(formatWeekdayDate('2026-10-06'), 'Tue 6 Oct');
+    assert.equal(formatWeekdayDate('2026-12-27'), 'Sun 27 Dec');
+    assert.equal(formatWeekdayDate('2026-01-02'), 'Fri 2 Jan');
+  });
+});
+
+test('a report date key is read as written, never as midnight in Greenwich', () => {
+  inZone('America/New_York', () => {
+    assert.equal(formatWeekdayDate('2026-10-06'), 'Tue 6 Oct');
+  });
+});
+
+test('a report date for an instant is the weekday it falls on where the reader is', () => {
+  // 23:30 UTC on Tuesday the 6th is already Wednesday the 7th in British
+  // Summer Time, and still Tuesday in New York.
+  inZone('Europe/London', () => {
+    assert.equal(formatWeekdayDate('2026-10-06T23:30:00Z'), 'Wed 7 Oct');
+    assert.equal(
+      formatWeekdayDate(new Date('2026-10-06T23:30:00Z')),
+      'Wed 7 Oct'
+    );
+  });
+  inZone('America/New_York', () => {
+    assert.equal(formatWeekdayDate('2026-10-06T23:30:00Z'), 'Tue 6 Oct');
+  });
+});
+
+test("a report date with nothing readable shows the shared em dash or the caller's own wording", () => {
+  for (const value of [null, undefined, '', '   ', 'not a date', 42, {}]) {
+    assert.equal(formatWeekdayDate(value), NO_VALUE, String(value));
+  }
+  assert.equal(formatWeekdayDate(new Date('nonsense')), NO_VALUE);
+  assert.equal(formatWeekdayDate(null, 'Not stated'), 'Not stated');
 });

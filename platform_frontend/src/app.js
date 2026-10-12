@@ -93,6 +93,7 @@ async function boot() {
     journeyCaseSources,
     allocationSources,
     appEl,
+    reportPlugins: APP_CONFIG.reportPlugins,
   });
 
   router.init(routerContainer);

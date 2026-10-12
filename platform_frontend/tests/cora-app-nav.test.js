@@ -271,15 +271,16 @@ const PERSONAS = [
   [
     'case type owner',
     { ownedCaseTypes: ['complaints'] },
-    ['#/dashboard', '#/roadmap', '#/question-bank'],
+    ['#/dashboard', '#/roadmap', '#/reports', '#/question-bank'],
   ],
   // A Maintainer owns the banks across every Case Type and had no link to the
   // editor at all. They hold no working role, so they get that and the page
-  // support corrects Cases from and the page that gives out roles, and nothing else.
+  // support corrects Cases from and the page that gives out roles, and every
+  // report, since they own every Case Type's groups.
   [
     'maintainer',
     { isMaintainer: true },
-    ['#/question-bank', '#/case-support', '#/access'],
+    ['#/reports', '#/question-bank', '#/case-support', '#/access'],
   ],
   [
     'reviewer who also manages and owns',
@@ -293,6 +294,7 @@ const PERSONAS = [
       '#/dashboard',
       '#/roadmap',
       '#/my-stats',
+      '#/reports',
       '#/team-stats',
       '#/question-bank',
       '#/my-team',

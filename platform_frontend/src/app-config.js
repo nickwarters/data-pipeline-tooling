@@ -57,6 +57,11 @@ import * as myTeamPage from './pages/cora-my-team.js';
 import * as caseSearchPage from './pages/cora-case-search.js';
 import * as caseSupportPage from './pages/cora-case-support.js';
 import * as accessPage from './pages/cora-access.js';
+import * as reportsPage from './pages/cora-reports.js';
+import * as reportPage from './pages/cora-report.js';
+
+import { CaseTypeReport } from './reports/case-type/case-type-report-plugin.js';
+import { scopesFor } from './reports/report-access.js';
 
 /** @typedef {import('./setup/register-routes.js').AppContext} AppContext */
 /** @typedef {import('./setup/register-routes.js').PagePlugin} PagePlugin */
@@ -80,6 +85,26 @@ function hasAnyRole(caps) {
     caps.ownedCaseTypes.length > 0 ||
     caps.isControls
   );
+}
+
+/**
+ * The reports this application offers. Declared before `APP_CONFIG` because
+ * the two report routes' guard reads it: the Reports link, the index and the
+ * report page all answer "is there anything here for this viewer?" from this
+ * one list and each report's own `access`.
+ *
+ * @type {readonly import('./reports/contract.js').ReportPlugin[]}
+ */
+const REPORT_PLUGINS = [CaseTypeReport];
+
+/**
+ * Whether any report admits this viewer to at least one scope.
+ *
+ * @param {Capabilities} caps
+ * @returns {boolean}
+ */
+function opensAnyReport(caps) {
+  return REPORT_PLUGINS.some((plugin) => scopesFor(plugin, caps).length > 0);
 }
 
 export const APP_CONFIG = {
@@ -121,6 +146,13 @@ export const APP_CONFIG = {
    * @type {readonly import('../case-types/manifest.js').CaseTypeEntry[]}
    */
   caseTypes: CASE_TYPE_ENTRIES,
+
+  /**
+   * Every report, as a plugin: what it reads, who it is for, and its view.
+   * The report engine, the index and the nav derive everything else from this
+   * list, so adding a report is a plugin module and one entry here.
+   */
+  reportPlugins: REPORT_PLUGINS,
 
   /**
    * Every hash this application answers, and the page behind it.
@@ -177,6 +209,22 @@ export const APP_CONFIG = {
       page: teamStatsPage,
       guard: (caps) => caps.isReviewerManager,
       nav: { label: 'Team Stats', order: 40 },
+    },
+    {
+      id: 'reports',
+      paths: ['#/reports'],
+      page: reportsPage,
+      // The link and the route share one audience: anyone a report admits to
+      // at least one scope. Which reports and scopes they see is the page's
+      // business, read off the same rules.
+      guard: opensAnyReport,
+      nav: { label: 'Reports', order: 35 },
+    },
+    {
+      id: 'report',
+      paths: ['#/reports/:report/:scope', '#/reports/:report'],
+      page: reportPage,
+      guard: opensAnyReport,
     },
     {
       id: 'question-bank',

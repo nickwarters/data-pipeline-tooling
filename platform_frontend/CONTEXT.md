@@ -598,6 +598,48 @@ for (their `Reviewers - <type>` groups) plus any Case Type they hold a Case in, 
 every list a broad role such as Maintainer can read. The **Controls** and **Owner**
 lanes answer different questions and have no Action Centre counterpart.
 
+### Reports
+
+**Report**:
+A page that renders figures a pipeline computed offline and published as a **Report
+Feed**, rather than querying Case lists. Every report lives at
+`#/reports/<report>/<scope>` and is listed on the `#/reports` index for the viewers it
+admits. A report never computes history in the browser. My Stats predates the shared
+frame and keeps its own page and **Live Tail**. ([ADR-0058](./docs/adr/0058-report-pages-are-plugins-over-report-feed-files.md))
+_Avoid_: dashboard (the dashboard is a live worklist, not a report), MI page
+
+**Report Plugin**:
+One report's declaration: its `id`, title, layout, audience (`access`), scope kind, the
+file(s) it reads, its filters, and one pure `view` from loaded files to content. Listed
+in `APP_CONFIG.reportPlugins`. The **report engine** does everything around the view:
+routing, scope, loading, page states, filters, table toggles, sizing and tooltips.
+
+**Report Scope**:
+What one rendering of a report is about: one **Case Type** for a Case Type report, or
+the whole platform for a platform report. A scope has its own folder in the report-feed
+library, and that folder is the unit SharePoint read permission is set on, so every
+report about one scope shares one audience.
+
+**Report Access**:
+A report's audience, declared as roles from a fixed vocabulary. Platform roles
+(`maintainer`, `reviewer`, `controls`, …) admit a viewer to every scope. Case Type
+roles (`caseTypeOwner`, `journeyOwner`, `caseTypeReviewer`) admit a viewer only to the
+Case Types the role covers. The browser reads it to decide what to offer. Provisioning
+reads the same declaration, through `scripts/report-folder-access.js`, to set folder
+permissions, and those are the real boundary. Shaping a page for its viewer is for
+relevance, never secrecy: anyone who can read a file can read all of it.
+
+**Report Layout**:
+Where the engine places a report's content. **Stacked**: header, a **Right now**
+section of headline tiles and snapshot panels, then the report's sections. **Rail**:
+header and headline tiles in a sticky left rail beside the main column, folding back
+to stacked on a narrow page. A report chooses one; its view never knows which.
+
+**Panel**:
+One titled block of a report: what is shown, how it is measured in one line, the chart
+(or the same values as a sortable table), and any caveat. Panels sit on a 12-column
+grid by span.
+
 ### Communication
 
 **Conversation**:

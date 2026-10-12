@@ -84,6 +84,9 @@ test('registerRoutes: registers the complete public route contract, in order', (
     '#/dashboard',
     '#/my-stats',
     '#/team-stats',
+    '#/reports',
+    '#/reports/:report/:scope',
+    '#/reports/:report',
     '#/question-bank',
     '#/case/:caseType/:id',
     '#/case/:id',
@@ -309,6 +312,8 @@ test('route table: only the eligibility-gated routes guard their mount', () => {
   assert.deepEqual(gated, [
     'my-stats',
     'team-stats',
+    'reports',
+    'report',
     'question-bank',
     'journey-cases',
     'my-team',
