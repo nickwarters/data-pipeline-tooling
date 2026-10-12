@@ -77,7 +77,12 @@ export const personas = {
   'action-centre': {
     userId: 'user-reviewer',
     displayName: 'Dana Multi-role',
-    groups: ['Reviewers', 'Controls', 'CaseTypeOwner - Example Review'],
+    groups: [
+      'Reviewers',
+      'Reviewers - Complaints',
+      'Controls',
+      'CaseTypeOwner - Example Review',
+    ],
   },
   visitor: {
     userId: 'user-visitor',
