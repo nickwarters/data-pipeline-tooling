@@ -39,6 +39,7 @@ import { CASE_TYPES } from '../../case-types/manifest.js';
  * isAdviser: boolean,
  * ownedCaseTypes: string[],
  * ownedJourneyCaseTypes: string[],
+ * frontlineTeamCaseTypes: string[],
  * isControls: boolean,
  * isReviewerManager: boolean,
  * isResponsiblePartyManager: boolean,
@@ -49,20 +50,27 @@ import { CASE_TYPES } from '../../case-types/manifest.js';
  */
 
 /**
- * The three per-Case-Type SharePoint group names, all composed from the Case
- * Type's display name rather than its slug — a Case Type displayed as `Example
- * Review` owns the group `CaseTypeOwner - Example Review`. Deriving them here
- * means provisioning a new type needs one display name, not three hand-written
- * strings.
+ * The four per-Case-Type SharePoint group names the app reads, all composed
+ * from the Case Type's display name rather than its slug — a Case Type
+ * displayed as `Example Review` owns the group `CaseTypeOwner - Example
+ * Review`. Deriving them here means provisioning a new type needs one display
+ * name, not four hand-written strings.
+ *
+ * `frontlineTeam` is the team that receives a Case Type's Remediation Actions
+ * when that Case Type names no Responsible Party. It is deliberately a group of
+ * its own rather than the `Frontline - <type>` list-access group: that group is
+ * also granted to every Responsible Party a notification goes to, so reading it
+ * as a capability would hand each of them every Case of the type.
  *
  * @param {string} displayName
- * @returns {{ listAccess: string, caseTypeOwner: string, journeyOwner: string }}
+ * @returns {{ listAccess: string, caseTypeOwner: string, journeyOwner: string, frontlineTeam: string }}
  */
 export function caseTypeGroupNames(displayName) {
   return {
     listAccess: `Reviewers - ${displayName}`,
     caseTypeOwner: `CaseTypeOwner - ${displayName}`,
     journeyOwner: `JourneyOwner - ${displayName}`,
+    frontlineTeam: `FrontlineTeam - ${displayName}`,
   };
 }
 
@@ -91,8 +99,9 @@ export const permissions = {
   reviewerManager: 'Reviewer Managers',
   responsiblePartyManager: 'ResponsibleParty-Managers',
   maintainer: 'CORA Owner Delegates',
-  // Per-Case-Type group names derive from `displayName`: each entry
-  // yields `Reviewers - X`, `CaseTypeOwner - X`, and `JourneyOwner - X`.
+  // Per-Case-Type group names derive from `displayName`: each entry yields
+  // `Reviewers - X`, `CaseTypeOwner - X`, `JourneyOwner - X` and
+  // `FrontlineTeam - X`.
   // Projected from THE Case Type registry (case-types/manifest.js) so adding a
   // Case Type is one registry edit. That registry holds importer
   // *thunks* only, so reading it here stays synchronous and evaluates no Case
@@ -128,11 +137,14 @@ export function resolveCapabilities(userGroups, config = permissions) {
   const ownedCaseTypes = [];
   /** @type {string[]} */
   const ownedJourneyCaseTypes = [];
+  /** @type {string[]} */
+  const frontlineTeamCaseTypes = [];
   for (const { slug, displayName } of config.caseTypes) {
     const names = caseTypeGroupNames(displayName);
     if (has(names.listAccess)) listAccessCaseTypes.push(slug);
     if (has(names.caseTypeOwner)) ownedCaseTypes.push(slug);
     if (has(names.journeyOwner)) ownedJourneyCaseTypes.push(slug);
+    if (has(names.frontlineTeam)) frontlineTeamCaseTypes.push(slug);
   }
 
   // Axis 2 (list access) implies the reviewing function.
@@ -152,7 +164,8 @@ export function resolveCapabilities(userGroups, config = permissions) {
     !isResponsiblePartyManager &&
     !isMaintainer &&
     ownedCaseTypes.length === 0 &&
-    ownedJourneyCaseTypes.length === 0;
+    ownedJourneyCaseTypes.length === 0 &&
+    frontlineTeamCaseTypes.length === 0;
 
   return {
     isReviewer,
@@ -160,6 +173,7 @@ export function resolveCapabilities(userGroups, config = permissions) {
     isAdviser,
     ownedCaseTypes,
     ownedJourneyCaseTypes,
+    frontlineTeamCaseTypes,
     isControls,
     isReviewerManager,
     isResponsiblePartyManager,

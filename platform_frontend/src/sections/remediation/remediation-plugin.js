@@ -33,6 +33,7 @@ export const RemediationPlugin = /** @type {const} */ ({
       'reviewerManager',
       'responsibleParty',
       'responsiblePartyManager',
+      'frontlineTeam',
       'caseTypeOwner',
       'journeyOwner',
       'controls',

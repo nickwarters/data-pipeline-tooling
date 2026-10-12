@@ -90,6 +90,7 @@ test('registerRoutes: registers the complete public route contract, in order', (
     '#/team-cases',
     '#/my-cases',
     '#/journey-cases',
+    '#/frontline-cases',
     '#/roadmap',
     '#/my-team',
     '#/search',
@@ -311,6 +312,7 @@ test('route table: only the eligibility-gated routes guard their mount', () => {
     'team-stats',
     'question-bank',
     'journey-cases',
+    'frontline-cases',
     'my-team',
     'search',
     'case-support',
@@ -694,7 +696,12 @@ test('the Case-list routes carry no nav item, as they did not before', () => {
   // "links and order unchanged per persona". They cannot both hold: none of
   // the three has a link today, so adding one would change every persona's
   // bar. The constraint every ticket in the phase shares wins.
-  for (const id of ['team-cases', 'my-cases', 'journey-cases']) {
+  for (const id of [
+    'team-cases',
+    'my-cases',
+    'journey-cases',
+    'frontline-cases',
+  ]) {
     const entry = APP_CONFIG.pagePlugins.find((plugin) => plugin.id === id);
     assert.equal(entry?.nav, undefined, `${id} has no nav item`);
   }
@@ -715,6 +722,49 @@ test('journey-cases guards on the capability, not on the resolved sources', () =
       makePermissions({ isReviewer: false, ownedJourneyCaseTypes: [] })
     ),
     false
+  );
+});
+
+test('frontline-cases guards on the frontline team capability', () => {
+  const entry = APP_CONFIG.pagePlugins.find(
+    (plugin) => plugin.id === 'frontline-cases'
+  );
+  assert.equal(
+    entry?.guard?.(
+      makePermissions({ isReviewer: false, frontlineTeamCaseTypes: ['c'] })
+    ),
+    true
+  );
+  assert.equal(
+    entry?.guard?.(
+      makePermissions({ isReviewer: false, frontlineTeamCaseTypes: [] })
+    ),
+    false
+  );
+});
+
+test('landing: a frontline team member starts on Frontline Cases, behind a Reviewer and a Responsible Party', () => {
+  assert.equal(
+    resolveDefaultLandingPath(
+      makePermissions({ isReviewer: false, frontlineTeamCaseTypes: ['c'] })
+    ),
+    '#/frontline-cases'
+  );
+  assert.equal(
+    resolveDefaultLandingPath(
+      makePermissions({
+        isReviewer: false,
+        isAdviser: true,
+        frontlineTeamCaseTypes: ['c'],
+      })
+    ),
+    '#/my-cases'
+  );
+  assert.equal(
+    resolveDefaultLandingPath(
+      makePermissions({ isReviewer: true, frontlineTeamCaseTypes: ['c'] })
+    ),
+    '#/dashboard'
   );
 });
 

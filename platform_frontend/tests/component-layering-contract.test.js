@@ -200,10 +200,17 @@ test('boot: the composition root configures the Section engine before the router
  * resolves every specifier (static, side-effect, and dynamic) so the coupling
  * cannot slip back in via `import '…'`, `../pages/…`, or a subsystem file.
  */
-test('layering: no file under src/pages/ imports another top-level page (one documented exception)', () => {
+test('layering: no file under src/pages/ imports another top-level page (documented exceptions only)', () => {
   /** @type {Record<string, string[]>} rel -> allowed target rels */
   const CROSS_PAGE_ALLOWLIST = {
+    // The Dashboard embeds the Responsible Party queue as one of its panels.
     'src/pages/cora-dashboard.js': [
+      'src/pages/cora-responsible-party-dashboard.js',
+    ],
+    // A frontline team works the same queue as a Responsible Party, over
+    // every Case of its Case Types rather than the Cases naming one person,
+    // so it reuses that queue's state, reducer and view rather than a copy.
+    'src/pages/cora-frontline-cases.js': [
       'src/pages/cora-responsible-party-dashboard.js',
     ],
   };

@@ -30,6 +30,7 @@ export const ConversationPlugin = /** @type {const} */ ({
         'assignedReviewer',
         'responsibleParty',
         'responsiblePartyManager',
+        'frontlineTeam',
       ].includes(r)
     );
     if (!hasParticipantRole) {

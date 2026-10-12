@@ -43,7 +43,7 @@ export function createCaseLifecycleView({
   config,
   catalogue = [],
 }) {
-  const roles = resolveRoles(caseRow, currentUserId, capabilities);
+  const roles = resolveRoles(caseRow, currentUserId, capabilities, config);
   const access = evaluateSectionsAccess({
     caseRow,
     roles,

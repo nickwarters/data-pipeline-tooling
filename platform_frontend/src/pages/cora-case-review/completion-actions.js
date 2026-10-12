@@ -8,6 +8,7 @@ import {
   remediationComplete,
   remediationDecided,
 } from '../../evaluators/remediation-status.js';
+import { frontlineTeamOf } from '../../evaluators/case-lifecycle.js';
 import {
   buildActionsInProgressTransition,
   buildCompletedTransition,
@@ -65,10 +66,13 @@ const RESPONSIBLE_PARTY_REASON =
 /**
  * Whether the Case still owes a Responsible Party. Gated on the same condition
  * that renders the field, so the button is never disabled against a reason
- * pointing at a control that is not on the page.
+ * pointing at a control that is not on the page. A Case Type that sends its
+ * actions to a frontline team never owes one: the team is already known, and
+ * there is no field to fill.
  *
  * @param {{
  *   caseRow: import('../../sharepoint-client.js').CaseRow,
+ *   config?: import('../../sharepoint-client.js').CaseTypeConfig,
  *   catalogue: QuestionDefinition[],
  *   answers: Record<string, Answer>,
  * }} input
@@ -76,6 +80,7 @@ const RESPONSIBLE_PARTY_REASON =
  */
 function missingResponsibleParty(input) {
   return (
+    frontlineTeamOf(input.config) === null &&
     !input.caseRow.responsibleParty &&
     anyRemediationRequired(input.catalogue, input.answers)
   );
@@ -96,6 +101,7 @@ function missingResponsibleParty(input) {
  * @param {{
  *   machine: import('../../evaluators/case-lifecycle.js').CaseLifecycleView | null,
  *   caseRow: import('../../sharepoint-client.js').CaseRow,
+ *   config?: import('../../sharepoint-client.js').CaseTypeConfig,
  *   catalogue: QuestionDefinition[],
  *   answers: Record<string, Answer>,
  *   allAnswered: boolean,

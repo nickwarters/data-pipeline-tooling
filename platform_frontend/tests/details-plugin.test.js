@@ -21,7 +21,7 @@ test('DetailsPlugin has correct contract properties', () => {
   });
 });
 
-test('DetailsPlugin evaluates access correctly across all 9 roles', () => {
+test('DetailsPlugin evaluates access correctly across every role', () => {
   const expectedModes = {
     assignedReviewer: 'read-only',
     otherReviewer: 'read-only',
@@ -30,6 +30,7 @@ test('DetailsPlugin evaluates access correctly across all 9 roles', () => {
     responsiblePartyManager: 'hidden',
     caseTypeOwner: 'read-only',
     journeyOwner: 'read-only',
+    frontlineTeam: 'hidden',
     controls: 'read-only',
     none: 'hidden',
   };

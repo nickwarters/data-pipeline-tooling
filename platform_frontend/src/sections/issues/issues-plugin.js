@@ -1,7 +1,7 @@
 // src/sections/issues/issues-plugin.js
 // @ts-check
 import { RemediationSection } from '../../pages/cora-case-review/remediation-view.js';
-import { isFrozen } from '../../evaluators/case-lifecycle.js';
+import { frontlineTeamOf, isFrozen } from '../../evaluators/case-lifecycle.js';
 import {
   remediationActionToggled,
   remediationFreeFormEdited,
@@ -53,6 +53,7 @@ export const IssuesPlugin = /** @type {const} */ ({
               caseRow.responsiblePartyDisplayName || caseRow.responsibleParty,
           }
         : null,
+      frontlineTeam: frontlineTeamOf(config)?.name ?? null,
       captureGroups: config?.captureGroups ?? [],
       captureCollapsed: route?.captureCollapsed ?? {},
       captureSearch: route?.captureSearch ?? {},

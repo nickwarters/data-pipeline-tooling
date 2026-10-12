@@ -45,6 +45,7 @@ const CAPABILITY_KEYS = [
   'isAdviser',
   'ownedCaseTypes',
   'ownedJourneyCaseTypes',
+  'frontlineTeamCaseTypes',
   'isControls',
   'isReviewerManager',
   'isResponsiblePartyManager',

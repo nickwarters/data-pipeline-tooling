@@ -1133,6 +1133,30 @@ test('checkCaseTypes accepts a narrowed remediationStatuses and an absent one', 
   assert.deepEqual(absent, []);
 });
 
+test('checkCaseTypes fails a frontlineTeam that does not name the team', async () => {
+  for (const frontlineTeam of [{}, { name: '' }, { name: '   ' }]) {
+    const failures = await checkCaseTypes({
+      caseTypes: [demoEntry(demoConfig({ frontlineTeam }))],
+    });
+
+    assert.equal(failures.length, 1, JSON.stringify(frontlineTeam));
+    assert.match(failures[0].message, /frontlineTeam/);
+    assert.match(failures[0].message, /omit/i);
+  }
+});
+
+test('checkCaseTypes accepts a named frontlineTeam and an absent one', async () => {
+  const named = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(demoConfig({ frontlineTeam: { name: 'Payments Operations' } })),
+    ],
+  });
+  assert.deepEqual(named, []);
+
+  const absent = await checkCaseTypes({ caseTypes: [demoEntry(demoConfig())] });
+  assert.deepEqual(absent, []);
+});
+
 test('checkCaseTypes fails an empty voidReasons list', async () => {
   const failures = await checkCaseTypes({
     caseTypes: [demoEntry(demoConfig({ voidReasons: [] }))],

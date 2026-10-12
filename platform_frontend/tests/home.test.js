@@ -59,6 +59,7 @@ test('home view: each role keeps its existing destination and order', () => {
       isAdviser: true,
       ownedCaseTypes: ['complaints'],
       ownedJourneyCaseTypes: ['complaints'],
+      frontlineTeamCaseTypes: ['complaints'],
       isMaintainer: true,
       isVisitor: true,
     })
@@ -68,6 +69,7 @@ test('home view: each role keeps its existing destination and order', () => {
     'Reviewer',
     'Controls',
     'Responsible Party',
+    'Frontline Team',
     'Case Type Owner',
     'Journey Owner',
     'Maintainer',
@@ -77,6 +79,7 @@ test('home view: each role keeps its existing destination and order', () => {
     '#/dashboard',
     '#/search',
     '#/my-cases',
+    '#/frontline-cases',
     '#/question-bank',
     '#/journey-cases',
     '#/question-bank',
@@ -88,6 +91,13 @@ test('home view: a Controls-only user is offered search rather than an empty pag
 
   assert.deepEqual(headings(view), ['Controls']);
   assert.deepEqual(links(view), ['#/search']);
+});
+
+test('home view: a frontline team member is offered their team queue', () => {
+  const view = homeView(state({ frontlineTeamCaseTypes: ['complaints'] }));
+
+  assert.deepEqual(headings(view), ['Frontline Team']);
+  assert.deepEqual(links(view), ['#/frontline-cases']);
 });
 
 test('home view: no capabilities render an empty page tree', () => {

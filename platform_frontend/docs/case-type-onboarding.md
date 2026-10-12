@@ -81,6 +81,14 @@ edit does, and a full dev-harness verification tour — see
       entry (`Reviewers - {display}`, `CaseTypeOwner - {display}`,
       `JourneyOwner - {display}`) and set the list ACLs — list permissions are
       the real security boundary.
+- [ ] **Only if the Case Type declares `frontlineTeam`** (its Remediation
+      Actions go to a team, not a named Responsible Party): create
+      `FrontlineTeam - {display}` and give its members read access to
+      `Cases-{slug}`, directly or through `Frontline - {display}`. The
+      permissions workflow manages its membership. The `ResponsibleParty` and
+      `ResponsiblePartyManager` columns are still created and indexed like any
+      other list's, and simply stay blank. See
+      [ADR-0059](adr/0059-a-case-type-may-send-its-actions-to-a-frontline-team.md).
 
 ## `Cases-{slug}` column schema
 

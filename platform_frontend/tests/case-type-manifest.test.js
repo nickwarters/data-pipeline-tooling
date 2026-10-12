@@ -97,7 +97,7 @@ test('case type manifest: registry entries are frozen, so the one copy of a disp
     assert.ok(
       Object.isFrozen(entry),
       `${entry.slug}'s registry entry must be frozen — the display name it ` +
-        'carries composes three SharePoint group names, and both the ' +
+        'carries composes four SharePoint group names, and both the ' +
         'capability and eligibility sides read it'
     );
     assert.throws(

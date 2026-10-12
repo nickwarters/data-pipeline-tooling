@@ -74,6 +74,19 @@ export function remediationTabIsLive(caseRow, catalogue) {
 }
 
 /**
+ * The frontline team a Case Type sends its Remediation Actions to, or `null`
+ * when the Case Type names a Responsible Party on each Case instead. The one
+ * reader of the declaration, so "does this Case Type ask for a Responsible
+ * Party?" has a single answer wherever it is asked.
+ *
+ * @param {import('../sharepoint-client.js').CaseTypeConfig | null | undefined} config
+ * @returns {import('../sharepoint-client.js').FrontlineTeamConfig | null}
+ */
+export function frontlineTeamOf(config) {
+  return config?.frontlineTeam ?? null;
+}
+
+/**
  * Which of the Remediation Section's two renderings a viewer gets.
  *
  * @param {Role[]} roles
@@ -107,9 +120,13 @@ export function conversationSideOf(roles) {
   ) {
     return 'reviewer';
   }
+  // The frontline team answers for the Case exactly as a named Responsible
+  // Party would, so its posts are frontline posts: they open a thread the
+  // Case Type wants the frontline to start, and they clear Awaiting Frontline.
   if (
     roles.includes('responsibleParty') ||
-    roles.includes('responsiblePartyManager')
+    roles.includes('responsiblePartyManager') ||
+    roles.includes('frontlineTeam')
   ) {
     return 'responsibleParty';
   }

@@ -35,7 +35,12 @@ export const SummaryPlugin = /** @type {const} */ ({
     if (roles.some((role) => reviewerSide.includes(role))) {
       return 'read-only';
     }
-    if (roles.includes('responsibleParty') && reachedReportable(caseRow)) {
+    // The frontline team sees what a Responsible Party sees, from the same
+    // moment: the Summary arrives with the Remediation Actions it explains.
+    if (
+      (roles.includes('responsibleParty') || roles.includes('frontlineTeam')) &&
+      reachedReportable(caseRow)
+    ) {
       return 'read-only';
     }
     if (
@@ -51,6 +56,7 @@ export const SummaryPlugin = /** @type {const} */ ({
     const control = completionControl({
       machine: snapshot?.machine,
       caseRow,
+      config,
       catalogue: snapshot?.catalogue ?? [],
       answers: snapshot?.answers ?? {},
       allAnswered: snapshot?.allAnswered ?? false,

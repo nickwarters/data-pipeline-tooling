@@ -52,6 +52,7 @@ import * as caseReviewPage from './pages/cora-case-review.js';
 import * as teamCasesPage from './pages/cora-team-cases.js';
 import * as responsiblePartyPage from './pages/cora-responsible-party-dashboard.js';
 import * as journeyCasesPage from './pages/cora-journey-cases.js';
+import * as frontlineCasesPage from './pages/cora-frontline-cases.js';
 import * as roadmapPage from './pages/roadmap.js';
 import * as myTeamPage from './pages/cora-my-team.js';
 import * as caseSearchPage from './pages/cora-case-search.js';
@@ -109,7 +110,7 @@ export const APP_CONFIG = {
    * are cheap and needed at boot, so they are static imports; a Case Type
    * config is expensive and needed on demand, and its `slug` and `displayName`
    * have to be readable without evaluating it at all, because the
-   * boot-critical synchronous permissions config composes three SharePoint
+   * boot-critical synchronous permissions config composes four SharePoint
    * group names from the display name. Do not fold the three into one shape.
    *
    * Declared in `case-types/entries.js` rather than inline here, because
@@ -221,6 +222,23 @@ export const APP_CONFIG = {
       // unavailable-Case-Type banner already names, and one where an empty
       // list beside that banner reads better than a bounce with no reason.
       guard: (caps) => caps.ownedJourneyCaseTypes.length > 0,
+    },
+    {
+      id: 'frontline-cases',
+      paths: ['#/frontline-cases'],
+      page: frontlineCasesPage,
+      // A frontline team member's queue, for Case Types that send their
+      // Remediation Actions to a team instead of naming a Responsible Party.
+      // Read off the capability for the same reason as Journey Cases: a broken
+      // Case Type already has its banner, and an empty list beside it reads
+      // better than a bounce.
+      guard: (caps) => caps.frontlineTeamCaseTypes.length > 0,
+      // No nav item, like the other Case-list queues: a team member lands here
+      // and Home links here, and nobody else's bar changes.
+      // Ranked straight after a Responsible Party's own queue: the two are the
+      // same job, and someone who is also a Reviewer is still here to review.
+      defaultFor: (caps) => caps.frontlineTeamCaseTypes.length > 0,
+      defaultForOrder: 25,
     },
     {
       id: 'roadmap',

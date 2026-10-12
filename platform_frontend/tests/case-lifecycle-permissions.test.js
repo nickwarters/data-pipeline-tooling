@@ -228,3 +228,27 @@ test('Case permissions: a Section with nothing to show is hidden, not merely emp
     'hidden'
   );
 });
+
+test('Case permissions: the frontline team Role follows the Case Type the page loaded', () => {
+  // The page composes roles here, with the Case Type config in hand, so this is
+  // where a team group on a Case Type that declares no team is stopped.
+  const team = makePermissions({
+    isReviewer: false,
+    frontlineTeamCaseTypes: ['example-review'],
+  });
+  /** @param {import('../src/sharepoint-client.js').CaseTypeConfig} config */
+  const rolesUnder = (config) =>
+    createCaseLifecycleView({
+      caseRow: { ...BASE_ROW, responsibleParty: '' },
+      currentUserId: 'team-member',
+      capabilities: team,
+      config,
+      catalogue: CATALOGUE,
+    }).roles;
+
+  assert.deepEqual(
+    rolesUnder({ ...EMPTY_CONFIG, frontlineTeam: { name: 'Payments' } }),
+    ['frontlineTeam']
+  );
+  assert.deepEqual(rolesUnder(EMPTY_CONFIG), ['none']);
+});

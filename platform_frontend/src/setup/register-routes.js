@@ -31,6 +31,7 @@ import { APP_CONFIG } from '../app-config.js';
  * @property {import('../core/chrome-state.js').ChromeState} chrome
  * @property {import('./resolve-eligible-case-types.js').CaseSource[]} caseSources
  * @property {import('./resolve-eligible-case-types.js').CaseSource[]} journeyCaseSources
+ * @property {import('./resolve-eligible-case-types.js').CaseSource[]} frontlineCaseSources
  * @property {import('./resolve-eligible-case-types.js').AllocationSource[]} allocationSources
  * @property {Element} appEl
  * @property {() => Promise<unknown>} [loadQuestionBankEditor]

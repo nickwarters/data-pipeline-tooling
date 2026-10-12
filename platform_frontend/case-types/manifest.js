@@ -123,7 +123,7 @@ export function registerCaseType(entry) {
   if (!nonEmpty(entry.displayName))
     throw new TypeError(
       `registerCaseType: Case Type "${entry.slug}" must declare a non-empty ` +
-        "`displayName` — it composes this type's three SharePoint group names."
+        "`displayName` — it composes this type's four SharePoint group names."
     );
   if (typeof entry.importer !== 'function')
     throw new TypeError(

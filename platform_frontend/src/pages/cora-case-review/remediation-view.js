@@ -19,6 +19,9 @@ import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.
  * @property {QuestionDefinition[]} catalogue
  * @property {Record<string, Answer>} answers
  * @property {Party | null} responsibleParty
+ * @property {string | null} [frontlineTeam]
+ *   The team this Case Type sends its Remediation Actions to, when it names no
+ *   Responsible Party. Present means the picker is never offered.
  * @property {import('../../sharepoint-client.js').CaptureGroup[]} captureGroups
  * @property {Record<string, Map<string, boolean>>} captureCollapsed
  * @property {Record<string, Record<string, PeopleSearchState>>} captureSearch
@@ -103,6 +106,8 @@ export function RemediationSection(props) {
  * @returns {Node | null}
  */
 export function ResponsiblePartyField(props) {
+  if (props.frontlineTeam) return FrontlineTeamLine(props, props.frontlineTeam);
+
   const current = props.responsibleParty;
 
   if (!props.canEditIssues) {
@@ -149,6 +154,26 @@ export function ResponsiblePartyField(props) {
   );
 
   return h('div', { className: 'cora-responsible-party-field' }, ...children);
+}
+
+/**
+ * Where the Responsible Party picker would be, on a Case Type that sends its
+ * actions to a frontline team: who receives them, as text. There is nothing to
+ * choose, so editors and readers see the same line, and it appears on the same
+ * condition the picker would — once some failed Answer says remediation is
+ * required — because before that nothing is being sent to anyone.
+ *
+ * @param {RemediationSectionProps} props
+ * @param {string} team
+ * @returns {Node | null}
+ */
+function FrontlineTeamLine(props, team) {
+  if (!anyRemediationRequired(props.catalogue, props.answers)) return null;
+  return h(
+    'p',
+    { className: 'cora-frontline-team-value' },
+    `Frontline team: ${team}`
+  );
 }
 
 /**

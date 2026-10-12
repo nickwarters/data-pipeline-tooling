@@ -1436,8 +1436,11 @@
   border-radius: var(--cora-radius-pill, 999px);
 }
 
-/* Read-only once the actions are sent: the person named is who they went to. */
-.cora-responsible-party-value {
+/* Read-only once the actions are sent: the person named is who they went to.
+   A Case Type with a frontline team shows that team the same way throughout,
+   since there is nobody to choose. */
+.cora-responsible-party-value,
+.cora-frontline-team-value {
   margin: var(--cora-space-5) 0 0;
   padding: var(--cora-space-3) 0 0;
   font-size: var(--cora-font-size-sm);

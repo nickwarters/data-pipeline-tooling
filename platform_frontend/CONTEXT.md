@@ -395,8 +395,28 @@ them. A Case needing no remediation now completes with no Responsible Party at a
 actions are sent the Responsible Party gains `read-only`
 **Summary**, `read-only` **Remediation** and `edit` **Conversation** access (the only
 three Sections they see), and does the remediation work off-system, communicating via
-the Conversation.
+the Conversation. A **Case Type** with a **Frontline Team** names no Responsible Party
+at all: the picker is never offered and **Send Actions** does not wait for one.
 _Avoid_: Subject, owner (ambiguous), reviewee
+
+**Frontline Team**:
+The team that receives a **Case Type**'s **Remediation Actions** in place of a named
+**Responsible Party**, on a Case Type that declares `frontlineTeam: { name }`. There is
+one team per Case Type, and its members are the SharePoint group
+`FrontlineTeam - <type>`, which a permissions workflow outside this application
+manages. Membership grants the `frontlineTeam` Section-access Role on _every_ Case of
+the type, and only on a Case Type that declares the team; elsewhere the group grants
+nothing. That Role sees and posts exactly as a Responsible Party would:
+`read-only` **Summary** from **Reportable**, `read-only` **Remediation**, and the
+frontline side of the **Conversation**, so a team reply clears Awaiting Frontline. The
+Issues tab shows "Frontline team: _name_" where the Responsible Party picker would be.
+Members work from **Frontline Cases** (`#/frontline-cases`), the Responsible Party queue
+drawn from every Case of their Case Types. Deliberately not `Frontline - <type>`: that
+list-access group is given to every notified Responsible Party, so reading it as team
+membership would hand each of them every Case of the type. No Case data records the
+team. The Case Type says which team it is, so the lists and pipelines are unchanged.
+([ADR-0059](./docs/adr/0059-a-case-type-may-send-its-actions-to-a-frontline-team.md))
+_Avoid_: Responsible Party (the per-Case person this replaces), Frontline (the site-wide Adviser group)
 
 **Adviser**:
 The **frontline base role** — a SharePoint user in the `Frontline` group, eligible to be
@@ -425,7 +445,9 @@ sources. Unlike `Reviewers - <type>` the frontline list-access group implies **n
 capability and is read by **no** frontend code: what a frontline user may do on a Case is
 decided per-Case by `section-access.js` off the Case row's people fields, and the group
 only gives those roles a list to read the Case from. It is therefore absent from
-`caseTypeGroupNames()`, which composes the three groups the app reads. Its membership is
+`caseTypeGroupNames()`, which composes the four groups the app reads. The
+**Frontline Team**'s `FrontlineTeam - <type>` is one of those four, and is a different
+group for exactly this reason. Its membership is
 what the data pipeline's **User group privileges** Deliverable requests — see the [data
 pipeline's CONTEXT.md](../CONTEXT.md), whose `notifications` pass emits the
 `Frontline - <type>` grants its frontline recipients need alongside the notifications
@@ -599,7 +621,7 @@ lanes answer different questions and have no Action Centre counterpart.
 ### Communication
 
 **Conversation**:
-The thread between the **Reviewer** and the responsible-party side of one **Case** — the **Responsible Party** and their **Manager**, both of whom post. A **Case Type** declares the live statuses in which messages may be sent and may name either the Reviewer or Responsible Party side as the initiator. Before the first Message only that side may post; afterwards the other side may reply. An omitted initiator preserves the legacy rule that either side may start. Stored as a JSON array of **Messages** in a single plain-text field on the Case row.
+The thread between the **Reviewer** and the responsible-party side of one **Case** — the **Responsible Party** and their **Manager**, both of whom post, or on a Case Type with a **Frontline Team**, that team's members. A **Case Type** declares the live statuses in which messages may be sent and may name either the Reviewer or Responsible Party side as the initiator. Before the first Message only that side may post; afterwards the other side may reply. An omitted initiator preserves the legacy rule that either side may start. Stored as a JSON array of **Messages** in a single plain-text field on the Case row.
 
 **Message**:
 One entry in a **Conversation** — author, timestamp, body. The author is a
@@ -683,7 +705,7 @@ _Avoid_: Overridden Outcome, Amended Outcome (that is the _record_; Current Outc
 - An **Answer** has zero-to-many **Remediation Actions**.
 - A _failed_ **Answer** has zero-or-one **Attributed Party**.
 - A **Case** has one **Conversation** (= many **Messages**).
-- A **Case** has one **Assigned Reviewer** and one **Responsible Party**.
+- A **Case** has one **Assigned Reviewer** and one **Responsible Party**, unless its **Case Type** has a **Frontline Team**, which stands in for the Responsible Party on every Case of the type.
 
 ## Example dialogue
 
