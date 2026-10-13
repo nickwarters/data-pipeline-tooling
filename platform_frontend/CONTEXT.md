@@ -675,6 +675,94 @@ Controls-set value takes precedence. Shown in the **Summary** Outcome block and 
 the `effectiveOutcome` reporting column.
 _Avoid_: Overridden Outcome, Amended Outcome (that is the _record_; Current Outcome is the effective value)
 
+### Forms
+
+The **Forms** area is separate from Case review: its own route group, its own lists
+and its own access rules, recorded in
+[ADR-0059](./docs/adr/0059-hr-forms-are-a-gated-area-with-javascript-enforced-access.md).
+None of the Case terms above apply to a Form unless an entry here says so.
+
+**Form**:
+One internal HR record about one **Employee**, such as a 1-to-1, filled in by the
+Employee and their **Current first line manager**. An instance of a **Form Type**, held
+as one item on that Form Type's list. Not a **Case**: a Form has no **Question Bank**,
+**Answers**, **Outcome**, **Reviewer** or allocation, and appears in no Case
+dashboard, search or table.
+_Avoid_: Case, review, record (unqualified), questionnaire
+
+**Form Type**:
+A kind of **Form** (1-to-1, coaching form, learning plan), declared once as a
+JavaScript data module under `form-types/`: its slug, display name, list name, and
+the sections, panels and fields one generic renderer draws. Each Form Type has its
+own SharePoint list. A Form Type's definition selects layout and labels only; who may
+read or edit a Form, the lock and the lifecycle buttons are code shared by every Form
+Type.
+_Avoid_: Case Type (a different concept with a Question Bank and Outcome), template,
+form definition (say **Form Type**; "definition" is the module that declares one)
+
+**Employee**:
+The person a **Form** is about. Held in the Form's `Employee` Person column, written at
+creation and never changed by the app. One of the Form's two editors.
+_Avoid_: Adviser, Responsible Party (Case roles), subject
+
+**Current manager** (**Current first line manager**, **Current second line manager**):
+The **Employee**'s managers as they are now, held in `CurrentFirstLineManager` and
+`CurrentSecondLineManager`. These two columns, with `Employee`, are the only ones that
+grant access to a **Form**. The app writes them when the Form is created; after that
+only a process outside the app changes them, and the app assumes they are up to date.
+The current first line manager is the Form's second editor; the current second line
+manager may read it but not edit it.
+_Avoid_: Reviewer Manager, Responsible Party Manager (Case roles), Line Manager
+(ambiguous between current and at completion)
+
+**Manager at completion**:
+The **Form**'s own `FirstLineManager` and `SecondLineManager` fields. Ordinary fields the
+editors may change until the Form is **Locked**; the lock then freezes them as the record
+of who the managers were when it closed. They grant no access, so a manager recorded
+here who is no longer a **Current manager** cannot open the Form. The same split as a
+Case's recorded manager versus the live access role.
+_Avoid_: Current manager (the access-granting pair), previous manager
+
+**Forms Control group**:
+One SharePoint group, shared by every **Form Type**, whose members may read every
+**Form** and create Forms but never edit one. A member who is also a Form's
+**Employee** or **Current manager** has that role's rights on it as well. The group's
+name is still open.
+_Avoid_: Controls (the Case-side group that resolves Appeals; unrelated), HR (a
+department, not a group)
+
+**Form Status**:
+Where a **Form** is in its life, held in the plain `Status` Choice column and changed
+only by the Form's lifecycle buttons, never by a field. A Form is **Pending** until
+it closes; three values are terminal: **Completed**, **Void** and **Cancelled**. The
+words match a Case's `Completed` and `Void` but not their meaning: a Form's **Void**
+is not a **Void Case** and carries no **Void Reason**.
+_Avoid_: Case status values (`In-progress`, `Void` with a reason) when talking about
+a Form
+
+**Locked Form**:
+A **Form** whose **Form Status** is terminal. Read-only for everyone, its editors
+included, and never reopened. Shown in the Forms archive.
+_Avoid_: Completed Form (Void and Cancelled lock it too), closed (fine in the archive's
+copy, but **Locked** is the rule)
+
+**Form Action**:
+One of up to three follow-ups on a **Form** (title, due date, status, details). Its
+status is **Pending**, **Completed** or **Cancelled**, and is the Action's own, not
+the Form's. Every
+**Form Type** may carry them; the limit of three is the app's, not the Form Type's. All
+of a Form's Actions are stored together, encoded, in one column.
+_Avoid_: Action (unqualified), Remediation Action (the Case's corrective action), Send
+Actions (a Case button)
+
+**Encoded field**:
+A **Form** value stored as UTF-8-safe base64 so it is not readable at a glance in the
+list: every `text` and `textarea` field and the **Form Actions**. People, dates, choices
+and **Form Status** stay plain because queries and the access rule read them.
+Encoding is **not** encryption and **not** a permission boundary: anyone who can read
+the list can decode it.
+_Avoid_: encrypted, secure, protected, obfuscated (say **encoded**)
+
 ## Relationships
 
 - A **Case** belongs to exactly one **Case Type**.
@@ -686,6 +774,10 @@ _Avoid_: Overridden Outcome, Amended Outcome (that is the _record_; Current Outc
 - A _failed_ **Answer** has zero-or-one **Attributed Party**.
 - A **Case** has one **Conversation** (= many **Messages**).
 - A **Case** has one **Assigned Reviewer** and one **Responsible Party**.
+- A **Form** belongs to exactly one **Form Type**, and is about exactly one **Employee**.
+- A **Form** has one **Current first line manager**, one **Current second line manager**
+  and, separately, the two **Managers at completion**.
+- A **Form** has zero to three **Form Actions**.
 
 ## Example dialogue
 
@@ -703,3 +795,5 @@ _Avoid_: Overridden Outcome, Amended Outcome (that is the _record_; Current Outc
 - "Visitor" is _derived_ (absence of all named-group memberships), not a SharePoint group. Capability flags are UX-only and the real boundary is SharePoint list ACLs.
 - **Case Reference** uniqueness is assumed to be per **Case Type** (one list, one numbering sequence each) and needs confirming with the business. If References turn out to be globally unique, a Reference alone identifies a Case and search could resolve straight to it.
 - "Question Bank" vs "catalogue" — both name a Case Type's set of **Question Definitions**. Resolved: **Question Bank** is the _authoring_ form (edited in `#/question-bank`, compiled to a module + reporting export); _catalogue_ is the _runtime_ form (the same questions joined to **Answers** to compute applicability). One concept, two lifecycle stages.
+- "Form" and "Case" — a **Form** is not a kind of **Case**, and a **Form Type** is not a kind of **Case Type**. They share a site, auto-save and styling, nothing else. "Void" and "Controls" appear on both sides with different meanings: a Form's **Void** carries no reason, and the **Forms Control group** is not **Controls**.
+- "Manager" on a **Form** is ambiguous between the **Current manager**, who has access now, and the **Manager at completion**, who is the record. Always say which.

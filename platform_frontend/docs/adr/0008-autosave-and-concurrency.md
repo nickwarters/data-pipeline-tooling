@@ -6,6 +6,14 @@ Accepted. Still current; [ADR-0034](./0034-store-driven-views-supersede-componen
 moves orchestration into effects without changing `SaveQueue`, debounce, retry,
 or ETag semantics.
 
+Amended by [ADR-0059](./0059-hr-forms-are-a-gated-area-with-javascript-enforced-access.md)
+(2026-10): auto-save covers **Forms** as well as Cases. A Form saves through the
+same `SaveQueue` with the same debounce, field-level PATCH, ETag, retry and
+status, through a target adapter that leaves the Case behaviour below
+unchanged. A Form's 412 is a conflict when any field being saved changed
+remotely since it was loaded, and a Form shows when it was last saved. Where
+this record says "Case" below, it still means a Case.
+
 The framework auto-saves Case mutations through a single `SaveQueue` primitive — every Web Component that mutates Case data goes through it; nothing calls REST directly.
 
 ### Save trigger

@@ -18,6 +18,13 @@ capability model without changing SharePoint ACLs as the security boundary.
 > [ADR-0022]: ./0022-two-axis-role-model.md
 > [ADR-0026]: ./0026-amend-outcome-case-level-and-qa-retirement.md
 
+> **Narrowed for Forms by [ADR-0059] (Oct 2026).** On a Form list the list ACL is
+> still the boundary, but it is wider than the per-Form rule the page shows: any
+> member of the list's access group can read every Form on it through REST. That
+> gap is recorded and accepted there rather than closed.
+>
+> [ADR-0059]: ./0059-hr-forms-are-a-gated-area-with-javascript-enforced-access.md
+
 The framework assumes **standard SharePoint SE browser authentication** — NTLM/Kerberos handled transparently by the browser, requests sent with `credentials: 'include'`. No custom login flow, no token management. SharePoint's `X-RequestDigest` is fetched lazily from `_api/contextinfo` on first write and refreshed on 403.
 
 ### Security boundary
