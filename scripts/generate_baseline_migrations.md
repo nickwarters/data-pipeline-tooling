@@ -1,0 +1,182 @@
+```python
+"""Generate baseline SQL from SQLite databases.
+
+Copy non-machinery ``CREATE`` statements into numbered baselines without ever
+overwriting an existing file. See ``docs/migrations.md``.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sqlite3
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:  # pragma: no cover - import bootstrap
+    sys.path.insert(0, str(REPO_ROOT))
+
+from framework._internal.connection import connect  # noqa: E402
+from framework._internal.schema_control import LEDGER_TABLE  # noqa: E402
+from tools.migrations import MIGRATIONS_ROOT  # noqa: E402
+
+BASELINE_FILENAME = "0001_create_initial_tables.sql"
+
+
+def _is_generated(name: str) -> bool:
+    """Objects that are machinery rather than data, and never belong in a baseline.
+
+    The ledger is the migration runner's own bookkeeping, and it creates that
+    itself. The staging tables are the merge Writers' scratch space, dropped at
+    the end of the write that made them — one caught mid-run would otherwise be
+    declared as though it were part of the feed. ``sqlite_*`` is SQLite's own.
+    """
+    return (
+        name == LEDGER_TABLE
+        or name.startswith("_stage_")
+        or name.startswith("_upsert_stage_")
+        or name.startswith("_insert_or_ignore_stage_")
+        or name.startswith("sqlite_")
+    )
+
+
+def _statements_of(con: sqlite3.Connection) -> list[str]:
+    """Every ``CREATE`` statement the database holds, tables first, then indexes.
+
+    ``sql`` is NULL for the objects SQLite creates implicitly — the index behind
+    a ``PRIMARY KEY`` or a ``UNIQUE`` constraint — and re-running the table's own
+    statement recreates those, so skipping them loses nothing and declaring them
+    would fail.
+
+    Order is deterministic (tables before the indexes that need them, then by
+    name), so regenerating from an unchanged database produces a byte-identical
+    file and a baseline can be diffed against the database it describes.
+    """
+    rows = con.execute(
+        "SELECT name, tbl_name, sql FROM sqlite_master "
+        "WHERE sql IS NOT NULL "
+        "ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END, name"
+    ).fetchall()
+    return [
+        sql.strip() + ";"
+        for name, tbl_name, sql in rows
+        if not _is_generated(name) and not _is_generated(tbl_name)
+    ]
+
+
+def _databases_of(base_dir: Path, subject: str) -> list[Path]:
+    """Every database file a subject has under ``base_dir``, in a stable order.
+
+    Includes ``quarantine.db``: a quarantine reject table is a table in a
+    database like any other, so it earns its own migrations directory rather
+    than being smuggled into silver's.
+    """
+    subject_dir = base_dir / subject
+    if not subject_dir.is_dir():
+        return []
+    return sorted(p for p in subject_dir.glob("*.db") if p.is_file())
+
+
+def _header(subject: str, database: str) -> str:
+    lines = (
+        f"Baseline for {subject}/{database}.",
+        "",
+        "Copied by scripts/generate_baseline_migrations.py out of a real run's",
+        "database: these are that database's own CREATE statements, not a",
+        "reconstruction of them. Maintained by hand from here — this file's",
+        "checksum is recorded when it is applied, so a shape change is a new",
+        "numbered migration rather than an edit to this one.",
+    )
+    return "\n".join(f"-- {line}".rstrip() for line in lines)
+
+
+def _baseline_of(subject: str, db_path: Path) -> str:
+    """One database's baseline, or ``""`` if it holds nothing worth declaring."""
+    con = connect(db_path)
+    try:
+        statements = _statements_of(con)
+    finally:
+        con.close()
+    if not statements:
+        return ""
+    return "\n\n".join((_header(subject, db_path.stem), *statements)) + "\n"
+
+
+def generate(
+    subject: str,
+    *,
+    base_dir: Path,
+    out_root: Path,
+    to_stdout: bool,
+) -> int:
+    """Write (or print) one subject's baselines. Returns a process exit code."""
+    databases = _databases_of(base_dir, subject)
+    if not databases:
+        print(f"no databases for {subject!r} under {base_dir}", file=sys.stderr)
+        return 1
+
+    wrote = 0
+    for db_path in databases:
+        sql = _baseline_of(subject, db_path)
+        if not sql:
+            print(f"note: {db_path.name} holds no tables — skipped", file=sys.stderr)
+            continue
+        if to_stdout:
+            print(f"-- ==== {subject}/{db_path.stem} ====")
+            print(sql)
+            wrote += 1
+            continue
+        directory = out_root / subject / db_path.stem
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / BASELINE_FILENAME
+        if path.exists():
+            print(
+                f"refusing to overwrite {path} — an existing baseline is "
+                "maintained by hand; a shape change is a new numbered migration",
+                file=sys.stderr,
+            )
+            return 1
+        path.write_text(sql, encoding="utf-8")
+        print(f"wrote {path}")
+        wrote += 1
+    return 0 if wrote else 1
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="python scripts/generate_baseline_migrations.py",
+        description="Generate a subject's baseline migrations.",
+    )
+    parser.add_argument(
+        "subject", help="the subject to generate, e.g. sharepoint_cases"
+    )
+    parser.add_argument(
+        "--base-dir",
+        required=True,
+        help="a base directory a real run wrote; every database it holds for the "
+        "subject has its CREATE statements copied out",
+    )
+    parser.add_argument(
+        "--out",
+        default=str(MIGRATIONS_ROOT),
+        metavar="DIR",
+        help=f"the migrations tree to write into (default: {MIGRATIONS_ROOT})",
+    )
+    parser.add_argument(
+        "--stdout",
+        action="store_true",
+        help="print the SQL instead of writing it, for inspection",
+    )
+    args = parser.parse_args(argv)
+    return generate(
+        args.subject,
+        base_dir=Path(args.base_dir),
+        out_root=Path(args.out),
+        to_stdout=args.stdout,
+    )
+
+
+if __name__ == "__main__":  # pragma: no cover - thin script entry
+    raise SystemExit(main())
+
+```
