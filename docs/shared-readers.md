@@ -426,7 +426,8 @@ handle identically, not whether the shaping would be convenient.
 `current_cases_with_brand(base_dir, *, columns=None)`, a function returning a
 Reader over `CurrentCasesReader` that **attaches a `brand` column** no source
 carries: one of `brand 1` / `brand 2` / `brand 3`, picked by a SHA-256 of the
-Case's `case_id` so a Case keeps its brand from run to run. That is shaping, and
+Case's `case_id` (which only `case_current` carries, so the reader fetches it
+itself, named or not) so a Case keeps its brand from run to run. That is shaping, and
 it is there so `cora_platform_metric` can group by **Brand** before any source
 reachable from Sync carries one. It is not the carve-out above and not a
 precedent: the day a real Brand source lands, the function is deleted, its one

@@ -35,11 +35,14 @@ what can be missed to changes reversed within an hour.
 Brand yet, so the current Cases are read through
 `readers.sharepoint_cases.current_cases_with_brand`, which attaches one of
 `brand 1` / `brand 2` / `brand 3` to each Case, picked by a hash of its
-`case_id` so a Case keeps its brand from run to run. It is not a real Brand:
+`case_id` so a Case keeps its brand from run to run. (`case_id` is on
+`case_current` alone; the stand-in fetches it from there itself and no
+reduction asks for it.) It is not a real Brand:
 a number split by brand is real Cases under made-up labels. Every
 Case-counting table groups by it: a table reduced from the current Cases takes
 each Case's own, and one reduced from the observation history or a Detail
-Table takes the brand its Case has in the current Cases, so a Case's rows land
+Table takes the brand its Case has in the current Cases, matched on
+`source_item_key`, so a Case's rows land
 under one brand everywhere. A history Case the current Cases no longer hold has
 no brand to take and is counted under `(unknown)`. The day a real Brand source
 lands, only where the value comes from changes, never a table's shape. Reading
@@ -95,6 +98,19 @@ instant, so the tables cannot disagree about which snapshot they describe. An
 empty `case_current` has no snapshot to report against and fails the run rather
 than publishing empty tables.
 
+**Joining.** Every Sync table this pipeline reads — `case_current`, the
+observation history, `answer`, `answer_action`, `appeal` and
+`conversation_message` — is joined, grouped and counted on one column,
+`source_item_key`: a string unique per Case across Case Types, unlike the
+list-local `source_item_id`. `case_type` is only ever a reported dimension, never
+part of a Case's identity. `case_id` lives on `case_current` alone, so no
+reduction reads, joins or counts on it. This repository's own Sync migrations
+(`migrations/sharepoint_cases/`) do not declare `source_item_key` yet — they give
+the detail tables `case_id` and `(case_type, source_item_id)` — so a base
+directory built from them fails the read, naming `source_item_key`, rather than
+joining on something else. No table here exposes `case_id`, `source_item_id` or
+`source_item_key`.
+
 ## Part B — The tables
 
 Every table also carries `as_of_utc` (`str`, non-null, the Sync snapshot
@@ -105,7 +121,7 @@ stamps. Neither is repeated below.
 
 Reduced from the observation history. Grain: `brand` × `case_type` × `status`.
 
-Each Case's observations are walked in the source's `Modified` order — two
+Each Case's observations (grouped by `source_item_key`) are walked in the source's `Modified` order — two
 observations sharing a `Modified` are ordered by `source_version` read as a
 number (it is a whole number in quotes, so `"10"` comes after `"9"`); every change of `status` closes
 an interval at that observation's `Modified` and opens the next. Where a Case's *first* observation already carries
@@ -129,8 +145,8 @@ it been waiting".
 
 ### `case_hold_current` — how often and how long Cases are held
 
-Reduced from the observation history. Grain: `brand` × `case_type` ×
-`assigned_reviewer_name`.
+Reduced from the observation history, each Case's observations grouped by
+`source_item_key`. Grain: `brand` × `case_type` × `assigned_reviewer_name`.
 
 A hold opens at the first observation carrying `on_hold` while the Case is in
 an open status — from the source's `placed_on_hold_at` where it has one, else
@@ -235,7 +251,7 @@ non-void Cases, with `case_current` for the denominator. Grain: `case_type` ×
 ### `answer_remediation_by_manager_current` — remediation under each Responsible Party Manager
 
 Reduced from the `answer` Detail Table inner-joined to `case_current` on
-`case_id`. Grain: `case_type` × `responsible_party_manager_name` ×
+`source_item_key`. Grain: `case_type` × `responsible_party_manager_name` ×
 `remediation_required` × `remediation_status`. The Sync subject's
 `answer_remediation_current` has the same decision and status dimensions with
 no people on them; this is the cut by who answers for the remediation. An
@@ -306,8 +322,8 @@ answers the other question: across a Case Type, how long does a reply take.
 
 ### `conversation_volume_current` — how much Conversation Cases carry
 
-Reduced from the `conversation_message` Detail Table joined to `case_current`.
-Grain: `brand` × `case_type`, over the **current non-void Cases** of the Case
+Reduced from the `conversation_message` Detail Table joined to `case_current`
+on `source_item_key`. Grain: `brand` × `case_type`, over the **current non-void Cases** of the Case
 Type — Completed Cases included, since their Conversation is what they carried;
 a Message on a void Case, or on a Case no longer current, is not counted. So
 `message_count` is the volume on the live population, not a row count of the
@@ -535,8 +551,8 @@ are held.
 
 ### `remediation_overdue_current` — remediation outstanding past its Remediation Due Date
 
-Reduced from `case_current` with the `answer` and `answer_action` Detail Tables.
-Grain: `brand` × `case_type` × `assigned_reviewer_name` ×
+Reduced from `case_current` with the `answer` and `answer_action` Detail Tables,
+matched to each Case on `source_item_key`. Grain: `brand` × `case_type` × `assigned_reviewer_name` ×
 `responsible_party_name` × `days_over_bucket`.
 
 Over the `Actions In Progress` Cases whose `remediation_due_date` falls on an
@@ -582,8 +598,8 @@ was asked for, and the clock is stated here.
 
 ### `reviewer_workload_current` — what each Reviewer holds, and how fast they clear it
 
-Reduced from `case_current`, with the observation history for the age of the
-work in hand. Grain: `brand` × `case_type` × `assigned_reviewer_name`.
+Reduced from `case_current`, with the observation history (matched to each Case
+on `source_item_key`) for the age of the work in hand. Grain: `brand` × `case_type` × `assigned_reviewer_name`.
 
 - `in_progress_count` is the review work in hand. Less
   `in_progress_on_hold_count`, it is what the platform's **Allocation
@@ -622,8 +638,8 @@ A Reviewer with no work in hand and no output in the window has no row.
 
 ### `appeal_rate_by_reviewer_monthly` — how often each Reviewer's Cases are appealed
 
-Reduced from `case_current` and the `appeal` Detail Table. Grain:
-`reportable_month` × `brand` × `case_type` × `assigned_reviewer_name`.
+Reduced from `case_current` and the `appeal` Detail Table, matched to each Case
+on `source_item_key`. Grain: `reportable_month` × `brand` × `case_type` × `assigned_reviewer_name`.
 
 Over the same Reportable population as `case_outcome_monthly`, so
 `reportable_count` matches that table's `case_count` summed across Outcomes.
@@ -750,7 +766,8 @@ measured. Small-`n` nulling and the `(all)` row are as for
 
 ### `case_first_time_right_monthly` — Reportable Cases nobody had to correct
 
-Reduced from `case_current` and the `appeal` Detail Table. Grain:
+Reduced from `case_current` and the `appeal` Detail Table, matched to each
+Case on `source_item_key`. Grain:
 `reportable_month` × `brand` × `case_type` × `assigned_reviewer_name`, over the
 same Reportable population as `case_outcome_monthly`.
 
