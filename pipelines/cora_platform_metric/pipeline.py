@@ -5,7 +5,9 @@ snapshot instant off the current Cases, orders the observation history once,
 and hands each ``to_*`` step what it reduces (a function in ``metrics``), that
 instant and its table's Writer. Each source is read narrowed to the union of
 the columns its steps gate on, so a column missing from the source fails the
-read, before any table is written. The tables are in
+read, before any table is written. The current Cases come with a stand-in
+``brand`` (``current_cases_with_brand``) until a source carries Brand; every
+table with a ``brand`` takes its Case's from them. The tables are in
 ``docs/data-dictionary-cora-platform-metric.md``.
 
 Run parameter ``calendar``: a YAML working-day calendar, the file
@@ -42,7 +44,7 @@ from readers.sharepoint_cases import (
     AppealsReader,
     CaseObservationHistoryReader,
     ConversationMessagesReader,
-    CurrentCasesReader,
+    current_cases_with_brand,
 )
 from tools.calendar import WorkingDayCalendar
 from tools.medallion import medallion
@@ -91,6 +93,7 @@ ACCUMULATED_TABLES = ("case_open_age_daily", "reviewer_workload_daily")
 # One gate per source, on the columns the reductions read from it. Stateless,
 # so the steps that share a source share its gate.
 CURRENT_GATE = ColumnValidator(metrics.CURRENT_COLUMNS)
+CASE_BRAND_GATE = ColumnValidator(metrics.CASE_BRAND_COLUMNS)
 ORDERING_GATE = ColumnValidator(metrics.ORDERING_COLUMNS)
 HISTORY_GATE = ColumnValidator(metrics.HISTORY_COLUMNS)
 BACKLOG_GATE = ColumnValidator(metrics.BACKLOG_COLUMNS)
@@ -119,6 +122,7 @@ def _union(*column_sets: tuple[str, ...]) -> tuple[str, ...]:
 # the current Cases carry the landed JSON blobs, which no table here reads.
 CURRENT_READ = _union(
     metrics.CURRENT_COLUMNS,
+    metrics.CASE_BRAND_COLUMNS,
     metrics.LIFECYCLE_COLUMNS,
     metrics.OUTCOME_COLUMNS,
     metrics.DUE_COLUMNS,
@@ -151,21 +155,31 @@ def to_ordered_history(observations: Dataset) -> Dataset:
     return transform(metrics.ordered_history, observations, name="history:order")
 
 
-def to_stage_dwell(observations: Dataset, as_of: str, writer: Writer) -> Dataset:
+def to_stage_dwell(
+    observations: Dataset, cases: Dataset, as_of: str, writer: Writer
+) -> Dataset:
     validate(HISTORY_GATE, observations, name="dwell:history")
+    validate(CASE_BRAND_GATE, cases, name="dwell:current")
     data = transform(
         partial(metrics.case_stage_dwell, as_of=as_of),
         observations,
+        cases,
         name="dwell:reduce",
     )
     validate(SchemaValidator(schema.CaseStageDwell), data, name="dwell:validate")
     return write(writer, data, name="dwell:write")
 
 
-def to_hold(observations: Dataset, as_of: str, writer: Writer) -> Dataset:
+def to_hold(
+    observations: Dataset, cases: Dataset, as_of: str, writer: Writer
+) -> Dataset:
     validate(HISTORY_GATE, observations, name="hold:history")
+    validate(CASE_BRAND_GATE, cases, name="hold:current")
     data = transform(
-        partial(metrics.case_hold, as_of=as_of), observations, name="hold:reduce"
+        partial(metrics.case_hold, as_of=as_of),
+        observations,
+        cases,
+        name="hold:reduce",
     )
     validate(SchemaValidator(schema.CaseHold), data, name="hold:validate")
     return write(writer, data, name="hold:write")
@@ -311,10 +325,16 @@ def to_intake(cases: Dataset, as_of: str, writer: Writer) -> Dataset:
     return write(writer, data, name="intake:write")
 
 
-def to_backlog(observations: Dataset, as_of: str, writer: Writer) -> Dataset:
+def to_backlog(
+    observations: Dataset, cases: Dataset, as_of: str, writer: Writer
+) -> Dataset:
     validate(BACKLOG_GATE, observations, name="backlog:history")
+    validate(CASE_BRAND_GATE, cases, name="backlog:current")
     data = transform(
-        partial(metrics.case_backlog, as_of=as_of), observations, name="backlog:reduce"
+        partial(metrics.case_backlog, as_of=as_of),
+        observations,
+        cases,
+        name="backlog:reduce",
     )
     validate(SchemaValidator(schema.CaseBacklogDaily), data, name="backlog:validate")
     return write(writer, data, name="backlog:write")
@@ -509,7 +529,7 @@ def run(context: RunContext) -> Dataset:
     calendar = _calendar_from(context)
 
     cases = read(
-        CurrentCasesReader(base_dir, columns=CURRENT_READ), name="current:read"
+        current_cases_with_brand(base_dir, columns=CURRENT_READ), name="current:read"
     )
     validate(CURRENT_GATE, cases, name="current:columns")
     as_of = metrics.snapshot_as_of(cases)
@@ -534,8 +554,8 @@ def run(context: RunContext) -> Dataset:
         name="messages:read",
     )
 
-    to_stage_dwell(observations, as_of, target("case_stage_dwell_current"))
-    to_hold(observations, as_of, target("case_hold_current"))
+    to_stage_dwell(observations, cases, as_of, target("case_stage_dwell_current"))
+    to_hold(observations, cases, as_of, target("case_hold_current"))
     to_sla_attainment(cases, as_of, target("case_sla_attainment_monthly"), calendar)
     to_void_monthly(cases, as_of, target("case_void_monthly"))
     to_action_load(actions, cases, as_of, target("answer_action_load_current"))
@@ -552,7 +572,7 @@ def run(context: RunContext) -> Dataset:
         messages, cases, as_of, target("conversation_posting_pattern_current")
     )
     to_intake(cases, as_of, target("case_intake_daily"))
-    to_backlog(observations, as_of, target("case_backlog_daily"))
+    to_backlog(observations, cases, as_of, target("case_backlog_daily"))
     to_lifecycle_duration(cases, as_of, target("case_lifecycle_duration_monthly"))
     to_outcome(cases, as_of, target("case_outcome_monthly"))
     to_due_profile(cases, as_of, target("case_due_profile_current"))

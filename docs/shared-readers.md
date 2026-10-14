@@ -422,6 +422,18 @@ moved across as it stood. It is not a licence to add shaping to a new entry: the
 test is whether the source is untrustworthy in a way that every consumer must
 handle identically, not whether the shaping would be convenient.
 
+**A stand-in that breaks G5, knowingly.** `readers.sharepoint_cases` also has
+`current_cases_with_brand(base_dir, *, columns=None)`, a function returning a
+Reader over `CurrentCasesReader` that **attaches a `brand` column** no source
+carries: one of `brand 1` / `brand 2` / `brand 3`, picked by a SHA-256 of the
+Case's `case_id` (which only `case_current` carries, so the reader fetches it
+itself, named or not) so a Case keeps its brand from run to run. That is shaping, and
+it is there so `cora_platform_metric` can group by **Brand** before any source
+reachable from Sync carries one. It is not the carve-out above and not a
+precedent: the day a real Brand source lands, the function is deleted, its one
+consumer goes back to `CurrentCasesReader` and gets Brand by a join of its own,
+and every other consumer of the current Cases never saw it.
+
 **Not decided:** whether a reader may narrow *which rows* it fetches —
 `CurrentCasesReader(base_dir, case_ids=...)`. That is predicate pushdown rather
 than business logic, as narrowing the columns is; but an as-of window is also

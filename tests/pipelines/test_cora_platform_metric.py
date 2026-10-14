@@ -8,6 +8,7 @@ path from a seeded Sync subject.
 from __future__ import annotations
 
 import datetime as dt
+from collections import Counter
 
 import numpy as np
 import pandas as pd
@@ -41,6 +42,7 @@ from pipelines.cora_platform_metric.schema import (
     CaseDurationPercentilesDaily,
 )
 from pipelines.sharepoint_cases.schema import FEED_NAME as SYNC_SUBJECT
+from readers.sharepoint_cases import stand_in_brand
 from tests.framework_testing import (
     build_databases,
     given_rows,
@@ -54,6 +56,9 @@ from tools.observability.run_store import RunStore
 from tools.store import StoreRegistry
 
 AS_OF = "2026-08-20T06:00:00+00:00"
+# The brand every fixture Case carries unless a test says otherwise.
+BRAND = "brand 1"
+KEY = "source_item_id"
 KHAN = r"i:0#.w|CONTEXT\A.KHAN"
 JONES = r"i:0#.w|CONTEXT\B.JONES"
 
@@ -102,6 +107,7 @@ def _case(key: str, status: str, **overrides: object) -> dict[str, object]:
     row: dict[str, object] = {
         "source_item_id": key,
         "case_type": "complaints",
+        "brand": BRAND,
         "status": status,
         "assigned_reviewer_name": KHAN,
         "assigned_reviewer_manager_name": "M.ONE",
@@ -313,22 +319,47 @@ def _history(rows) -> Dataset:
     return metrics.ordered_history(given_rows(rows).read())
 
 
+def _brands(brand_by_case: dict) -> Dataset:
+    """Current Cases as the history reductions read them: the brand of each
+    history Case named, by its ``(case_type, source_item_id)``. A bare item id
+    is a complaints Case."""
+    rows = [
+        {"case_type": case_type, "source_item_id": item, "brand": brand}
+        for (case_type, item), brand in (
+            (case if isinstance(case, tuple) else ("complaints", case), brand)
+            for case, brand in brand_by_case.items()
+        )
+    ]
+    columns = ["case_type", "source_item_id", "brand"]
+    return Dataset.from_pandas(pd.DataFrame(rows, columns=columns))
+
+
+# A history none of whose Cases is current: every one is ``(unknown)``. The
+# history mechanics are tested over this; the brand is tested on its own.
+NO_CASES = _brands({})
+# HISTORY's two Cases, current under two brands.
+HISTORY_CASES = _brands({"1": "brand 1", "2": "brand 2"})
+
+
 # --- the history metrics ----------------------------------------------------
 
 
 def test_stage_dwell_closes_an_interval_at_each_observed_status_change():
-    result = _rows(metrics.case_stage_dwell(_history(HISTORY), as_of=AS_OF))
+    result = _rows(
+        metrics.case_stage_dwell(_history(HISTORY), HISTORY_CASES, as_of=AS_OF)
+    )
 
     # To-allocate: entered at ``created`` (1 Jul), not at the poll that first
     # saw it (2 Jul), and left on 4 Jul: three days. In-progress: 4 Jul to
     # 10 Jul for case 1, and still open for case 2. Completed dwells nowhere.
+    # Each under its own Case's current brand.
     assert result == [
         {
-            "brand": UNKNOWN_BRAND,
+            "brand": "brand 1",
             "case_type": "complaints",
             "status": "In-progress",
             "interval_count": 1,
-            "open_interval_count": 1,
+            "open_interval_count": 0,
             "dwell_days_mean": 6.0,
             "dwell_days_p50": 6.0,
             "dwell_days_p90": 6.0,
@@ -336,7 +367,7 @@ def test_stage_dwell_closes_an_interval_at_each_observed_status_change():
             "as_of_utc": AS_OF,
         },
         {
-            "brand": UNKNOWN_BRAND,
+            "brand": "brand 1",
             "case_type": "complaints",
             "status": "To-allocate",
             "interval_count": 1,
@@ -345,6 +376,18 @@ def test_stage_dwell_closes_an_interval_at_each_observed_status_change():
             "dwell_days_p50": 3.0,
             "dwell_days_p90": 3.0,
             "dwell_days_max": 3.0,
+            "as_of_utc": AS_OF,
+        },
+        {
+            "brand": "brand 2",
+            "case_type": "complaints",
+            "status": "In-progress",
+            "interval_count": 0,
+            "open_interval_count": 1,
+            "dwell_days_mean": None,
+            "dwell_days_p50": None,
+            "dwell_days_p90": None,
+            "dwell_days_max": None,
             "as_of_utc": AS_OF,
         },
     ]
@@ -358,7 +401,7 @@ def test_stage_dwell_credits_a_status_only_when_a_later_poll_saw_it_change():
         _observation("1", "b", "2026-07-03T09:00:00+00:00", "Completed"),
         _observation("1", "a", "2026-07-02T09:00:00+00:00", "In-progress"),
     ]
-    [row] = _rows(metrics.case_stage_dwell(_history(history), as_of=AS_OF))
+    [row] = _rows(metrics.case_stage_dwell(_history(history), NO_CASES, as_of=AS_OF))
 
     assert row["status"] == "In-progress"
     assert row["interval_count"] == 1
@@ -378,7 +421,7 @@ def test_an_unassigned_case_dwells_in_to_allocate_again_as_its_own_interval():
         ),
         _observation("1", "d", "2026-07-05T09:00:00+00:00", "In-progress"),
     ]
-    result = _rows(metrics.case_stage_dwell(_history(history), as_of=AS_OF))
+    result = _rows(metrics.case_stage_dwell(_history(history), NO_CASES, as_of=AS_OF))
     by_status = {row["status"]: row for row in result}
 
     assert by_status["To-allocate"]["interval_count"] == 2
@@ -397,7 +440,7 @@ def test_stage_dwell_publishes_no_interval_for_a_terminal_status_left_by_a_reope
         _observation("1", "c", "2026-07-09T09:00:00+00:00", "In-progress"),
         _observation("1", "d", "2026-07-10T09:00:00+00:00", "Completed"),
     ]
-    result = _rows(metrics.case_stage_dwell(_history(history), as_of=AS_OF))
+    result = _rows(metrics.case_stage_dwell(_history(history), NO_CASES, as_of=AS_OF))
 
     assert [(r["status"], r["interval_count"]) for r in result] == [("In-progress", 2)]
 
@@ -413,7 +456,7 @@ def test_a_same_instant_tie_is_ordered_by_the_version_as_a_number():
             "1", "a", "2026-07-02T09:00:00+00:00", "Completed", version='"10"'
         ),
     ]
-    result = _rows(metrics.case_stage_dwell(_history(history), as_of=AS_OF))
+    result = _rows(metrics.case_stage_dwell(_history(history), NO_CASES, as_of=AS_OF))
 
     assert [(r["status"], r["open_interval_count"]) for r in result] == [
         ("In-progress", 0)
@@ -426,8 +469,10 @@ def test_an_unparseable_modified_drops_the_observation_from_every_history_table(
         _observation("1", "b", "not a time", "In-progress"),
     ]
     observations = _history(history)
-    backlog = metrics.case_backlog(observations, as_of="2026-07-02T18:00:00+00:00")
-    [dwell] = _rows(metrics.case_stage_dwell(observations, as_of=AS_OF))
+    backlog = metrics.case_backlog(
+        observations, NO_CASES, as_of="2026-07-02T18:00:00+00:00"
+    )
+    [dwell] = _rows(metrics.case_stage_dwell(observations, NO_CASES, as_of=AS_OF))
 
     assert _counts(backlog, "backlog_date") == {
         ("2026-07-01", "To-allocate"): 1,
@@ -447,7 +492,7 @@ def test_backlog_counts_an_unassigned_case_back_in_to_allocate():
             "1", "c", "2026-07-04T09:00:00+00:00", "To-allocate", reviewer=None
         ),
     ]
-    result = metrics.case_backlog(_history(history), as_of=as_of)
+    result = metrics.case_backlog(_history(history), NO_CASES, as_of=as_of)
 
     assert _counts(result, "backlog_date") == {
         ("2026-07-01", "To-allocate"): 1,
@@ -458,12 +503,12 @@ def test_backlog_counts_an_unassigned_case_back_in_to_allocate():
 
 
 def test_hold_runs_from_the_source_stamp_or_the_observation_to_release_or_as_of():
-    result = _rows(metrics.case_hold(_history(HISTORY), as_of=AS_OF))
+    result = _rows(metrics.case_hold(_history(HISTORY), HISTORY_CASES, as_of=AS_OF))
 
     assert result == [
         {
             # Case 1: placed_on_hold_at 5 Jul, first seen clear on 8 Jul.
-            "brand": UNKNOWN_BRAND,
+            "brand": "brand 1",
             "case_type": "complaints",
             "assigned_reviewer_name": KHAN,
             "case_count": 1,
@@ -476,7 +521,7 @@ def test_hold_runs_from_the_source_stamp_or_the_observation_to_release_or_as_of(
         {
             # Case 2: no stamp, so from the observation (1 Aug 09:00) to as_of
             # (20 Aug 06:00), and still open.
-            "brand": UNKNOWN_BRAND,
+            "brand": "brand 2",
             "case_type": "complaints",
             "assigned_reviewer_name": JONES,
             "case_count": 1,
@@ -502,14 +547,14 @@ def test_a_hold_still_flagged_on_a_completed_case_closes_at_its_completion():
         _observation("1", "b", "2026-07-04T09:00:00+00:00", "Completed", on_hold=1),
         _observation("1", "c", "2026-07-08T09:00:00+00:00", "Completed", on_hold=1),
     ]
-    [row] = _rows(metrics.case_hold(_history(history), as_of=AS_OF))
+    [row] = _rows(metrics.case_hold(_history(history), NO_CASES, as_of=AS_OF))
 
     assert (row["open_hold_count"], row["held_days_total"]) == (0, 3.0)
 
 
 def _hold_counts(history) -> tuple[int, int, int, float]:
     """(case_count, hold_count, open_hold_count, held_days_total) of one row."""
-    [row] = _rows(metrics.case_hold(_history(history), as_of=AS_OF))
+    [row] = _rows(metrics.case_hold(_history(history), NO_CASES, as_of=AS_OF))
     return (
         row["case_count"],
         row["hold_count"],
@@ -554,7 +599,7 @@ def test_a_hold_flag_first_seen_on_a_terminal_case_opens_no_hold():
         _observation("1", "d", "2026-07-09T09:00:00+00:00", "Void", on_hold=1),
     ]
 
-    assert len(metrics.case_hold(_history(history), as_of=AS_OF)) == 0
+    assert len(metrics.case_hold(_history(history), NO_CASES, as_of=AS_OF)) == 0
 
 
 def test_a_flag_still_set_at_a_reopen_opens_a_new_hold_from_the_reopen():
@@ -596,17 +641,17 @@ def test_a_nullable_boolean_hold_flag_reads_as_the_flag_it_carries():
     frame = _history(HISTORY).to_pandas()
     flags = frame.assign(on_hold=frame["on_hold"].astype(bool).astype("boolean"))
 
-    assert _rows(metrics.case_hold(Dataset.from_pandas(flags), as_of=AS_OF)) == _rows(
-        metrics.case_hold(_history(HISTORY), as_of=AS_OF)
-    )
+    assert _rows(
+        metrics.case_hold(Dataset.from_pandas(flags), NO_CASES, as_of=AS_OF)
+    ) == _rows(metrics.case_hold(_history(HISTORY), NO_CASES, as_of=AS_OF))
 
 
 @pytest.mark.parametrize(
     "reduce",
     [
-        lambda history: metrics.case_stage_dwell(history, as_of=AS_OF),
-        lambda history: metrics.case_hold(history, as_of=AS_OF),
-        lambda history: metrics.case_backlog(history, as_of=AS_OF),
+        lambda history: metrics.case_stage_dwell(history, NO_CASES, as_of=AS_OF),
+        lambda history: metrics.case_hold(history, NO_CASES, as_of=AS_OF),
+        lambda history: metrics.case_backlog(history, NO_CASES, as_of=AS_OF),
         lambda history: metrics.reviewer_workload(_current(), history, as_of=AS_OF),
     ],
     ids=["stage_dwell", "hold", "backlog", "reviewer_workload"],
@@ -620,7 +665,7 @@ def test_a_history_reduction_names_ordered_history_when_handed_an_unordered_one(
 
 def test_a_history_with_no_holds_lands_the_declared_shape_and_no_rows():
     history = [_observation("1", "o1", "2026-07-02T09:00:00+00:00", "To-allocate")]
-    result = metrics.case_hold(_history(history), as_of=AS_OF)
+    result = metrics.case_hold(_history(history), NO_CASES, as_of=AS_OF)
 
     assert len(result) == 0
     assert list(result.columns) == [
@@ -646,7 +691,7 @@ def test_the_same_item_id_in_another_case_type_is_not_merged_in_the_history():
     # Item 7 of complaints is waiting then claimed (and still in progress); item
     # 7 of claims is claimed then completed. Told apart: complaints' In-progress
     # stay is open, claims' closed. Merged on the item id alone, one Case's
-    # Completed would end the other's stay.
+    # Completed would end the other's stay. Each under its own Case's brand.
     history = [
         _observation("7", "a", "2026-07-02T09:00:00+00:00", "To-allocate"),
         _observation("7", "c", "2026-07-04T09:00:00+00:00", "In-progress"),
@@ -657,15 +702,22 @@ def test_the_same_item_id_in_another_case_type_is_not_merged_in_the_history():
             ]
         ),
     ]
-    result = _rows(metrics.case_stage_dwell(_history(history), as_of=AS_OF))
+    brands = _brands({"7": "brand 1", ("claims", "7"): "brand 2"})
+    result = _rows(metrics.case_stage_dwell(_history(history), brands, as_of=AS_OF))
 
     assert [
-        (r["case_type"], r["status"], r["interval_count"], r["open_interval_count"])
+        (
+            r["brand"],
+            r["case_type"],
+            r["status"],
+            r["interval_count"],
+            r["open_interval_count"],
+        )
         for r in result
     ] == [
-        ("claims", "In-progress", 1, 0),
-        ("complaints", "In-progress", 0, 1),
-        ("complaints", "To-allocate", 1, 0),
+        ("brand 1", "complaints", "In-progress", 0, 1),
+        ("brand 1", "complaints", "To-allocate", 1, 0),
+        ("brand 2", "claims", "In-progress", 1, 0),
     ]
 
 
@@ -684,7 +736,8 @@ def test_the_same_item_id_in_another_case_type_is_held_separately():
             ]
         ),
     ]
-    result = _rows(metrics.case_hold(_history(history), as_of=AS_OF))
+    brands = _brands({"7": BRAND, ("claims", "7"): BRAND})
+    result = _rows(metrics.case_hold(_history(history), brands, as_of=AS_OF))
 
     assert [
         (r["case_type"], r["case_count"], r["hold_count"], r["held_days_total"])
@@ -797,7 +850,7 @@ def test_sla_attainment_judges_each_sla_against_its_own_due_date():
             # Only c1 carries a remediation due date, and completed before it.
             "sla_kind": "remediation",
             "completed_month": "2026-07",
-            "brand": UNKNOWN_BRAND,
+            "brand": BRAND,
             "case_type": "complaints",
             "assigned_reviewer_manager_name": "M.ONE",
             "case_count": 1,
@@ -812,7 +865,7 @@ def test_sla_attainment_judges_each_sla_against_its_own_due_date():
         {
             "sla_kind": "review",
             "completed_month": "2026-07",
-            "brand": UNKNOWN_BRAND,
+            "brand": BRAND,
             "case_type": "complaints",
             "assigned_reviewer_manager_name": "M.ONE",
             "case_count": 2,
@@ -1079,7 +1132,7 @@ def test_conversation_response_time_measures_replies_across_an_author_change():
     # seq 2 is the same author as seq 1: one turn, not a reply. seq 3 replies
     # 3h after seq 2; seq 4 replies 24h after seq 3.
     assert row == {
-        "brand": UNKNOWN_BRAND,
+        "brand": BRAND,
         "case_type": "complaints",
         "thread_count": 1,
         "reply_count": 2,
@@ -1111,7 +1164,7 @@ def test_conversation_volume_counts_threads_over_the_live_cases():
     )
 
     assert row == {
-        "brand": UNKNOWN_BRAND,
+        "brand": BRAND,
         "case_type": "complaints",
         "case_count": 3,
         "thread_count": 1,
@@ -1249,7 +1302,7 @@ def test_intake_counts_each_case_on_its_local_created_date_by_status_now():
         ("2026-07-02", "Void", 1),
     ]
     assert {(r["brand"], r["case_type"], r["as_of_utc"]) for r in result} == {
-        (UNKNOWN_BRAND, "complaints", AS_OF)
+        (BRAND, "complaints", AS_OF)
     }
 
 
@@ -1296,7 +1349,7 @@ def test_backlog_counts_the_status_each_case_closed_each_day_in():
         ),
         _observation("3", "c2", "2026-07-03T16:00:00+00:00", "In-progress"),
     ]
-    result = metrics.case_backlog(_history(history), as_of=as_of)
+    result = metrics.case_backlog(_history(history), NO_CASES, as_of=as_of)
 
     assert _counts(result, "backlog_date") == {
         ("2026-07-01", "To-allocate"): 1,
@@ -1332,7 +1385,9 @@ def test_backlog_dates_a_late_first_sighting_from_the_sources_own_stamp():
             reportable_at="2026-07-02T09:00:00+00:00",
         ),
     ]
-    result = metrics.case_backlog(_history(history), as_of="2026-07-04T06:00:00+00:00")
+    result = metrics.case_backlog(
+        _history(history), NO_CASES, as_of="2026-07-04T06:00:00+00:00"
+    )
 
     assert _counts(result, "backlog_date") == {
         ("2026-07-01", metrics.UNOBSERVED): 2,
@@ -1347,7 +1402,7 @@ def test_a_history_with_nothing_open_lands_the_backlog_shape_and_no_rows():
     history = [
         _observation("1", "a1", "2026-07-02T09:00:00+00:00", "Completed", created=None)
     ]
-    result = metrics.case_backlog(_history(history), as_of=AS_OF)
+    result = metrics.case_backlog(_history(history), NO_CASES, as_of=AS_OF)
 
     assert len(result) == 0
     assert list(result.columns) == [
@@ -1425,7 +1480,7 @@ def test_lifecycle_duration_measures_each_leg_between_the_sources_stamps():
     }
     # Sorted into lifecycle order, not by leg name.
     assert [r["leg"] for r in result][:2] == ["allocation", "allocation"]
-    assert {r["brand"] for r in result} == {UNKNOWN_BRAND}
+    assert {r["brand"] for r in result} == {BRAND}
 
 
 def test_lifecycle_duration_leaves_void_cases_out():
@@ -1531,9 +1586,7 @@ def test_outcome_counts_reportable_non_void_cases_by_effective_outcome():
         ("2026-07", JONES, UNSTATED, 1, 0, 0),
         ("2026-08", UNASSIGNED, "Not upheld", 1, 0, 0),
     ]
-    assert {(r["brand"], r["case_type"]) for r in result} == {
-        (UNKNOWN_BRAND, "complaints")
-    }
+    assert {(r["brand"], r["case_type"]) for r in result} == {(BRAND, "complaints")}
 
 
 # --- the workload and calibration metrics -----------------------------------
@@ -1664,6 +1717,29 @@ def test_remediation_overdue_counts_whats_outstanding_on_cases_past_their_date()
     assert {r["assigned_reviewer_name"] for r in result} == {KHAN}
 
 
+def test_a_message_takes_the_brand_of_the_case_of_its_own_case_type():
+    # Item 7 of complaints (brand 1) and of claims (brand 2) are both live; the
+    # thread is claims', so it counts under brand 2 and brand 1 has none.
+    cases = [
+        _case("7", "In-progress"),
+        *_in_claims([_case("7", "In-progress", brand=OTHER_BRAND)]),
+    ]
+    messages = [
+        {**message, "source_item_id": "7", "case_type": "claims"}
+        for message in MESSAGES
+    ]
+    result = _rows(
+        metrics.conversation_volume(
+            given_rows(messages).read(), _current(cases), as_of=AS_OF
+        )
+    )
+
+    assert [
+        (r["brand"], r["case_type"], r["thread_count"], r["message_count"])
+        for r in result
+    ] == [(BRAND, "complaints", 0, 0), (OTHER_BRAND, "claims", 1, 4)]
+
+
 def test_outstanding_remediation_is_counted_on_the_case_of_its_own_case_type():
     # Item 7 of both Case Types is past its date; only complaints' has an
     # outstanding Answer and Action.
@@ -1714,7 +1790,7 @@ def test_reviewer_workload_sets_work_in_hand_against_four_weeks_of_output():
 
     assert result == [
         {
-            "brand": UNKNOWN_BRAND,
+            "brand": BRAND,
             "case_type": "complaints",
             "assigned_reviewer_name": KHAN,
             "in_progress_count": 2,
@@ -1727,7 +1803,7 @@ def test_reviewer_workload_sets_work_in_hand_against_four_weeks_of_output():
             "as_of_utc": AS_OF,
         },
         {
-            "brand": UNKNOWN_BRAND,
+            "brand": BRAND,
             "case_type": "complaints",
             "assigned_reviewer_name": JONES,
             "in_progress_count": 1,
@@ -2123,7 +2199,7 @@ def test_first_time_right_excludes_appealed_amended_and_overridden_cases():
         )
         for r in result
     ] == [("2026-07", KHAN, 5, 2, 0.4), ("2026-08", JONES, 1, 1, 1.0)]
-    assert {r["brand"] for r in result} == {UNKNOWN_BRAND}
+    assert {r["brand"] for r in result} == {BRAND}
 
 
 def test_an_appeal_spoils_only_the_case_of_its_own_case_type():
@@ -2220,6 +2296,162 @@ def test_reviewer_workload_daily_is_the_current_workload_under_its_date():
     ]
 
 
+# --- brand ------------------------------------------------------------------
+
+OTHER_BRAND = "brand 2"
+ID_COLUMNS = (
+    "source_item_id",
+    "source_observation_id",
+    "appeal_id",
+    "action_id",
+)
+
+
+def _as_other_cases(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    """``rows`` again as other Cases, every id suffixed, under ``OTHER_BRAND``."""
+    return [
+        {
+            **row,
+            **{k: f"{row[k]}-b" for k in ID_COLUMNS if row.get(k) is not None},
+            **({"brand": OTHER_BRAND} if "brand" in row else {}),
+        }
+        for row in rows
+    ]
+
+
+def _sync(*, doubled: bool) -> dict[str, Dataset]:
+    """Every source a brand table reduces, once under ``BRAND``; ``doubled``,
+    every Case in it again as another Case under ``OTHER_BRAND``."""
+    sources = {
+        "current": [*CURRENT, PAST_DUE_REMEDIATION],
+        "answers": [*ANSWERS, PAST_DUE_ANSWER],
+        "actions": [*ACTIONS, PAST_DUE_ACTION],
+        "appeals": APPEALS,
+        "messages": MESSAGES,
+        "history": HISTORY,
+    }
+    brands = {"1": BRAND, "2": BRAND}
+    if doubled:
+        sources = {
+            name: [*rows, *_as_other_cases(rows)] for name, rows in sources.items()
+        }
+        brands.update({"1-b": OTHER_BRAND, "2-b": OTHER_BRAND})
+    datasets = {name: given_rows(rows).read() for name, rows in sources.items()}
+    datasets["history"] = metrics.ordered_history(datasets["history"])
+    datasets["brands"] = _brands(brands)
+    return datasets
+
+
+# Every table that carries ``brand``, by name, reduced from ``_sync``'s sources.
+BRAND_TABLES = {
+    "case_stage_dwell_current": lambda d: metrics.case_stage_dwell(
+        d["history"], d["brands"], as_of=AS_OF
+    ),
+    "case_hold_current": lambda d: metrics.case_hold(
+        d["history"], d["brands"], as_of=AS_OF
+    ),
+    "case_backlog_daily": lambda d: metrics.case_backlog(
+        d["history"], d["brands"], as_of=AS_OF
+    ),
+    "case_sla_attainment_monthly": lambda d: metrics.sla_attainment(
+        d["current"], as_of=AS_OF
+    ),
+    "case_void_monthly": lambda d: metrics.void_monthly(d["current"], as_of=AS_OF),
+    "conversation_response_time_current": lambda d: metrics.conversation_response_time(
+        d["messages"], d["current"], as_of=AS_OF
+    ),
+    "conversation_volume_current": lambda d: metrics.conversation_volume(
+        d["messages"], d["current"], as_of=AS_OF
+    ),
+    "conversation_posting_pattern_current": lambda d: (
+        metrics.conversation_posting_pattern(d["messages"], d["current"], as_of=AS_OF)
+    ),
+    "case_intake_daily": lambda d: metrics.case_intake(d["current"], as_of=AS_OF),
+    "case_lifecycle_duration_monthly": lambda d: metrics.case_lifecycle_duration(
+        d["current"], as_of=AS_OF
+    ),
+    "case_outcome_monthly": lambda d: metrics.case_outcome(d["current"], as_of=AS_OF),
+    "case_due_profile_current": lambda d: metrics.case_due_profile(
+        d["current"], as_of=AS_OF
+    ),
+    "remediation_overdue_current": lambda d: metrics.remediation_overdue(
+        d["current"], d["answers"], d["actions"], as_of=AS_OF
+    ),
+    "reviewer_workload_current": lambda d: metrics.reviewer_workload(
+        d["current"], _no_history(), as_of=AS_OF
+    ),
+    "appeal_rate_by_reviewer_monthly": lambda d: metrics.appeal_rate_by_reviewer(
+        d["current"], d["appeals"], as_of=AS_OF
+    ),
+    "case_first_time_right_monthly": lambda d: metrics.first_time_right(
+        d["current"], d["appeals"], as_of=AS_OF
+    ),
+    "reviewer_throughput_weekly": lambda d: metrics.reviewer_throughput(
+        d["current"], as_of=AS_OF
+    ),
+    "reviewer_workload_daily": lambda d: metrics.reviewer_workload_daily(
+        metrics.reviewer_workload(d["current"], _no_history(), as_of=AS_OF),
+        as_of=AS_OF,
+    ),
+}
+
+
+def test_every_table_with_a_brand_column_is_reduced_here():
+    # So a table that gains a brand cannot miss the grain check below.
+    declared = {
+        table
+        for table, contract in GOLD_TABLES
+        if "brand" in contract.__dataclass_fields__
+    }
+    assert set(BRAND_TABLES) == declared
+
+
+@pytest.mark.parametrize("reduce", BRAND_TABLES.values(), ids=BRAND_TABLES.keys())
+def test_brand_is_a_grouping_dimension_of_every_table_that_carries_it(reduce):
+    # The same Cases again under another brand land the same rows again under
+    # that brand, rather than adding into the first brand's: every group-by,
+    # total and share is per brand.
+    once = _rows(reduce(_sync(doubled=False)))
+    twice = _rows(reduce(_sync(doubled=True)))
+
+    assert once
+    assert {row["brand"] for row in once} == {BRAND}
+    assert [row for row in twice if row["brand"] == BRAND] == once
+    assert [
+        {**row, "brand": BRAND} for row in twice if row["brand"] == OTHER_BRAND
+    ] == once
+
+
+def test_a_history_case_the_current_cases_do_not_hold_is_unknown_brand():
+    observations = _history(HISTORY)
+    only_case_one = _brands({"1": OTHER_BRAND})
+
+    hold = _rows(metrics.case_hold(observations, only_case_one, as_of=AS_OF))
+    dwell = _rows(metrics.case_stage_dwell(observations, only_case_one, as_of=AS_OF))
+    backlog = _rows(metrics.case_backlog(observations, only_case_one, as_of=AS_OF))
+
+    assert {r["assigned_reviewer_name"]: r["brand"] for r in hold} == {
+        KHAN: OTHER_BRAND,
+        JONES: UNKNOWN_BRAND,
+    }
+    assert {(r["brand"], r["status"]) for r in dwell} == {
+        (OTHER_BRAND, "In-progress"),
+        (OTHER_BRAND, "To-allocate"),
+        (UNKNOWN_BRAND, "In-progress"),
+    }
+    assert {r["brand"] for r in backlog} == {OTHER_BRAND, UNKNOWN_BRAND}
+
+
+def test_a_current_case_with_no_brand_counts_under_unknown_rather_than_dropping():
+    cases = [_case("c1", "In-progress"), _case("c2", "In-progress", brand=None)]
+    result = _rows(metrics.case_intake(_current(cases), as_of=AS_OF))
+
+    assert [(r["brand"], r["case_count"]) for r in result] == [
+        (UNKNOWN_BRAND, 1),
+        (BRAND, 1),
+    ]
+
+
 # --- end to end -------------------------------------------------------------
 
 
@@ -2250,6 +2482,9 @@ PAST_DUE_ANSWER = {
     "remediation_required": "yes",
     "remediation_status": None,
 }
+# HISTORY's Case 2, current; HISTORY's Case 1 is not, so its brand is unknown.
+HISTORY_CASE_TWO = _case("2", "In-progress", assigned_reviewer_name=JONES)
+SEEDED_CURRENT = [*CURRENT, PAST_DUE_REMEDIATION, HISTORY_CASE_TWO]
 PAST_DUE_ACTION = {
     "source_item_id": "c5",
     "case_type": "complaints",
@@ -2263,8 +2498,15 @@ def _seed_sync(base_dir) -> None:
     sync.silver.writer("case_version", Refresh()).write(
         Dataset.from_pandas(pd.DataFrame(HISTORY))
     )
+    # Sync carries no brand: the stand-in attaches one as the pipeline reads,
+    # hashed from ``case_id`` -- which only ``case_current`` carries, so only
+    # the current rows are given one here (the key doubles as the id).
+    current = [
+        {**{k: v for k, v in row.items() if k != "brand"}, "case_id": row[KEY]}
+        for row in SEEDED_CURRENT
+    ]
     for table, rows in (
-        ("case_current", [*CURRENT, PAST_DUE_REMEDIATION]),
+        ("case_current", current),
         ("answer", [*ANSWERS, PAST_DUE_ANSWER]),
         ("answer_action", [*ACTIONS, PAST_DUE_ACTION]),
         ("appeal", APPEALS),
@@ -2302,6 +2544,17 @@ def test_main_reads_sync_and_refreshes_every_table_through_the_migrated_path(
         if r["assigned_reviewer_name"] == JONES
     ]
     assert hold["open_hold_count"] == 1
+
+    # The current Cases are read with their stand-in brand, which a table
+    # reduced from them carries, and a history table takes from them by Case.
+    intake = Counter()
+    for row in read_rows(gold, "case_intake_daily"):
+        intake[row["brand"]] += row["case_count"]
+    assert intake == Counter(stand_in_brand(row[KEY]) for row in SEEDED_CURRENT)
+    assert {
+        r["assigned_reviewer_name"]: r["brand"]
+        for r in read_rows(gold, "case_hold_current")
+    } == {KHAN: UNKNOWN_BRAND, JONES: stand_in_brand(HISTORY_CASE_TWO[KEY])}
 
     # A second run over a Sync snapshot with one fewer hold replaces, rather
     # than accumulates: every table is a Refresh.
