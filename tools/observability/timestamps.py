@@ -32,10 +32,13 @@ from __future__ import annotations
 
 import datetime as dt
 
+import pandas as pd
+
 __all__ = [
     "local_date",
     "local_now",
     "local_timezone",
+    "local_wall_clock",
     "parse_timestamp",
     "start_of_local_day",
     "utc_now_iso",
@@ -87,6 +90,23 @@ def local_date(value: str | dt.datetime) -> dt.date:
         # A pandas Timestamp: its astimezone(None) drops to UTC, not the system zone.
         moment = moment.to_pydatetime()
     return moment.astimezone(local_timezone()).date()
+
+
+# The zone a column is converted into when the seam is on its default. This
+# only ever runs on UK machines, so the system zone is the UK's; it is named
+# because pandas cannot convert into "the system zone" (``tz_convert(None)``
+# means UTC).
+UK_TIMEZONE = "Europe/London"
+
+
+def local_wall_clock(instants: pd.Series) -> pd.Series:
+    """UTC instants as naive UK wall-clock times; ``NaT`` stays ``NaT``.
+
+    :func:`local_date`'s rule for a whole column, through the same zone seam,
+    so each instant takes the offset in force when it happened (BST or GMT).
+    """
+    zone = local_timezone() or UK_TIMEZONE
+    return pd.to_datetime(instants, utc=True).dt.tz_convert(zone).dt.tz_localize(None)
 
 
 def start_of_local_day(day: dt.date) -> str:

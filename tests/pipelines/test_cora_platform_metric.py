@@ -12,7 +12,12 @@ import datetime as dt
 import pandas as pd
 import pytest
 
-from framework.core import RUN_PROVENANCE_COLUMN, Dataset
+from framework.core import (
+    RUN_PROVENANCE_COLUMN,
+    Dataset,
+    SchemaValidator,
+    ValidationError,
+)
 from framework.io import Refresh
 from framework.run import FreshnessRequirement
 from pipelines.cora_platform_metric import metrics
@@ -23,6 +28,7 @@ from pipelines.cora_platform_metric.metrics import (
     UNSTATED,
 )
 from pipelines.cora_platform_metric.pipeline import GOLD_TABLES, UPSTREAMS, main
+from pipelines.cora_platform_metric.schema import AnswerActionLoad
 from pipelines.sharepoint_cases.schema import FEED_NAME as SYNC_SUBJECT
 from tests.framework_testing import build_databases, given_rows, read_rows
 from tools.calendar import WorkingDayCalendar
@@ -52,12 +58,13 @@ def _observation(
     reportable_at: str | None = None,
     completed_at: str | None = None,
     voided_at: str | None = None,
+    version: str = '"1"',
 ) -> dict[str, object]:
     return {
         "case_type": "complaints",
         "source_item_id": item,
         "source_observation_id": observation_id,
-        "source_version": '"1"',
+        "source_version": version,
         "source_modified_at": modified,
         "status": status,
         "assigned_reviewer_name": reviewer,
@@ -71,9 +78,12 @@ def _observation(
     }
 
 
-def _case(case_id: str, status: str, **overrides: object) -> dict[str, object]:
+def _case(key: str, status: str, **overrides: object) -> dict[str, object]:
+    # No ``case_id``: it lives on ``case_current`` alone and the metrics never
+    # read it, so a stray use of it fails here rather than passing. A Case is its
+    # ``(case_type, source_item_id)``.
     row: dict[str, object] = {
-        "case_id": case_id,
+        "source_item_id": key,
         "case_type": "complaints",
         "status": status,
         "assigned_reviewer_name": KHAN,
@@ -163,21 +173,21 @@ CURRENT = [
 
 ANSWERS = [
     {
-        "case_id": "c1",
+        "source_item_id": "c1",
         "case_type": "complaints",
         "question_id": "q1",
         "remediation_required": "yes",
         "remediation_status": "complete",
     },
     {
-        "case_id": "c1",
+        "source_item_id": "c1",
         "case_type": "complaints",
         "question_id": "q2",
         "remediation_required": "no",
         "remediation_status": None,
     },
     {
-        "case_id": "c4",
+        "source_item_id": "c4",
         "case_type": "complaints",
         "question_id": "q1",
         "remediation_required": "yes",
@@ -187,19 +197,19 @@ ANSWERS = [
 
 ACTIONS = [
     {
-        "case_id": "c1",
+        "source_item_id": "c1",
         "case_type": "complaints",
         "question_id": "q1",
         "action_id": "a1",
     },
     {
-        "case_id": "c1",
+        "source_item_id": "c1",
         "case_type": "complaints",
         "question_id": "q1",
         "action_id": "a2",
     },
     {
-        "case_id": "c4",
+        "source_item_id": "c4",
         "case_type": "complaints",
         "question_id": "q1",
         "action_id": "a3",
@@ -208,7 +218,7 @@ ACTIONS = [
 
 APPEALS = [
     {
-        "case_id": "c1",
+        "source_item_id": "c1",
         "case_type": "complaints",
         "appeal_id": "ap1",
         "raised_at": "2026-07-11T09:00:00+00:00",
@@ -218,7 +228,7 @@ APPEALS = [
         "cited_question_ids_json": '["q1", "q2"]',
     },
     {
-        "case_id": "c4",
+        "source_item_id": "c4",
         "case_type": "complaints",
         "appeal_id": "ap2",
         "raised_at": "2026-07-14T09:00:00+00:00",
@@ -231,28 +241,28 @@ APPEALS = [
 
 MESSAGES = [
     {
-        "case_id": "c1",
+        "source_item_id": "c1",
         "case_type": "complaints",
         "seq": 1,
         "author_login": "a.khan",
         "posted_at": "2026-07-05T09:00:00+00:00",
     },
     {
-        "case_id": "c1",
+        "source_item_id": "c1",
         "case_type": "complaints",
         "seq": 2,
         "author_login": "a.khan",
         "posted_at": "2026-07-05T10:00:00+00:00",
     },
     {
-        "case_id": "c1",
+        "source_item_id": "c1",
         "case_type": "complaints",
         "seq": 3,
         "author_login": "r.party",
         "posted_at": "2026-07-05T13:00:00+00:00",
     },
     {
-        "case_id": "c1",
+        "source_item_id": "c1",
         "case_type": "complaints",
         "seq": 4,
         "author_login": "a.khan",
@@ -350,6 +360,54 @@ def test_an_unassigned_case_dwells_in_to_allocate_again_as_its_own_interval():
     assert by_status["In-progress"]["open_interval_count"] == 1
 
 
+def test_stage_dwell_publishes_no_interval_for_a_terminal_status_left_by_a_reopen():
+    # Completed 6 Jul, reopened 9 Jul, completed again 10 Jul: the three days
+    # Completed are the gap until the reopen, not a stage.
+    history = [
+        _observation("1", "a", "2026-07-02T09:00:00+00:00", "In-progress"),
+        _observation("1", "b", "2026-07-06T09:00:00+00:00", "Completed"),
+        _observation("1", "c", "2026-07-09T09:00:00+00:00", "In-progress"),
+        _observation("1", "d", "2026-07-10T09:00:00+00:00", "Completed"),
+    ]
+    result = _rows(metrics.case_stage_dwell(given_rows(history).read(), as_of=AS_OF))
+
+    assert [(r["status"], r["interval_count"]) for r in result] == [("In-progress", 2)]
+
+
+def test_a_same_instant_tie_is_ordered_by_the_version_as_a_number():
+    # One Modified, two versions. The observation ids sort the other way, and
+    # "10" sorts before "9" as text: only the parsed version puts 10 last.
+    history = [
+        _observation(
+            "1", "z", "2026-07-02T09:00:00+00:00", "In-progress", version='"9"'
+        ),
+        _observation(
+            "1", "a", "2026-07-02T09:00:00+00:00", "Completed", version='"10"'
+        ),
+    ]
+    result = _rows(metrics.case_stage_dwell(given_rows(history).read(), as_of=AS_OF))
+
+    assert [(r["status"], r["open_interval_count"]) for r in result] == [
+        ("In-progress", 0)
+    ]
+
+
+def test_an_unparseable_modified_drops_the_observation_from_every_history_table():
+    history = [
+        _observation("1", "a", "2026-07-01T09:00:00+00:00", "To-allocate"),
+        _observation("1", "b", "not a time", "In-progress"),
+    ]
+    observations = given_rows(history).read()
+    backlog = metrics.case_backlog(observations, as_of="2026-07-02T18:00:00+00:00")
+    [dwell] = _rows(metrics.case_stage_dwell(observations, as_of=AS_OF))
+
+    assert _counts(backlog, "backlog_date") == {
+        ("2026-07-01", "To-allocate"): 1,
+        ("2026-07-02", "To-allocate"): 1,
+    }
+    assert (dwell["status"], dwell["open_interval_count"]) == ("To-allocate", 1)
+
+
 def test_backlog_counts_an_unassigned_case_back_in_to_allocate():
     as_of = "2026-07-04T18:00:00+00:00"
     history = [
@@ -403,6 +461,104 @@ def test_hold_runs_from_the_source_stamp_or_the_observation_to_release_or_as_of(
     ]
 
 
+def test_a_hold_still_flagged_on_a_completed_case_closes_at_its_completion():
+    history = [
+        _observation(
+            "1",
+            "a",
+            "2026-07-02T09:00:00+00:00",
+            "In-progress",
+            on_hold=1,
+            placed_on_hold_at="2026-07-01T09:00:00+00:00",
+        ),
+        _observation("1", "b", "2026-07-04T09:00:00+00:00", "Completed", on_hold=1),
+        _observation("1", "c", "2026-07-08T09:00:00+00:00", "Completed", on_hold=1),
+    ]
+    [row] = _rows(metrics.case_hold(given_rows(history).read(), as_of=AS_OF))
+
+    assert (row["open_hold_count"], row["held_days_total"]) == (0, 3.0)
+
+
+def _hold_counts(history) -> tuple[int, int, int, float]:
+    """(case_count, hold_count, open_hold_count, held_days_total) of one row."""
+    [row] = _rows(metrics.case_hold(given_rows(history).read(), as_of=AS_OF))
+    return (
+        row["case_count"],
+        row["hold_count"],
+        row["open_hold_count"],
+        row["held_days_total"],
+    )
+
+
+HELD_THEN_COMPLETED = [
+    _observation("1", "a", "2026-07-02T09:00:00+00:00", "In-progress", on_hold=1),
+    _observation("1", "b", "2026-07-04T09:00:00+00:00", "Completed", on_hold=1),
+]
+
+
+def test_a_hold_cleared_after_completion_still_ends_at_the_completion():
+    # The flag is tidied four days after the Case completed: the hold is the
+    # two days to the completion, not six to the tidy-up.
+    history = [
+        *HELD_THEN_COMPLETED,
+        _observation("1", "c", "2026-07-08T09:00:00+00:00", "Completed", on_hold=0),
+    ]
+
+    assert _hold_counts(history) == (1, 1, 0, 2.0)
+
+
+def test_a_hold_does_not_count_the_spell_the_case_spent_completed():
+    # Completed on 4 Jul still flagged, reopened on 10 Jul with the flag clear:
+    # one hold of two days, not eight running through the Completed spell.
+    history = [
+        *HELD_THEN_COMPLETED,
+        _observation("1", "c", "2026-07-10T09:00:00+00:00", "In-progress", on_hold=0),
+    ]
+
+    assert _hold_counts(history) == (1, 1, 0, 2.0)
+
+
+def test_a_hold_flag_first_seen_on_a_terminal_case_opens_no_hold():
+    history = [
+        _observation("1", "a", "2026-07-02T09:00:00+00:00", "In-progress"),
+        _observation("1", "b", "2026-07-04T09:00:00+00:00", "Completed"),
+        _observation("1", "c", "2026-07-08T09:00:00+00:00", "Completed", on_hold=1),
+        _observation("1", "d", "2026-07-09T09:00:00+00:00", "Void", on_hold=1),
+    ]
+
+    assert len(metrics.case_hold(given_rows(history).read(), as_of=AS_OF)) == 0
+
+
+def test_a_flag_still_set_at_a_reopen_opens_a_new_hold_from_the_reopen():
+    # The reopened observation still carries the original placed_on_hold_at
+    # (2 Jul): the new hold runs from the reopen (10 Jul 09:00) to as_of
+    # (20 Aug 06:00), 40.875 days, beside the closed two-day hold before it.
+    stale = "2026-07-02T09:00:00+00:00"
+    history = [
+        _observation(
+            "1", "a", stale, "In-progress", on_hold=1, placed_on_hold_at=stale
+        ),
+        _observation(
+            "1",
+            "b",
+            "2026-07-04T09:00:00+00:00",
+            "Completed",
+            on_hold=1,
+            placed_on_hold_at=stale,
+        ),
+        _observation(
+            "1",
+            "c",
+            "2026-07-10T09:00:00+00:00",
+            "In-progress",
+            on_hold=1,
+            placed_on_hold_at=stale,
+        ),
+    ]
+
+    assert _hold_counts(history) == (1, 2, 1, 42.875)
+
+
 def test_a_history_with_no_holds_lands_the_declared_shape_and_no_rows():
     history = [_observation("1", "o1", "2026-07-02T09:00:00+00:00", "To-allocate")]
     result = metrics.case_hold(given_rows(history).read(), as_of=AS_OF)
@@ -419,6 +575,62 @@ def test_a_history_with_no_holds_lands_the_declared_shape_and_no_rows():
         "held_days_mean",
         "as_of_utc",
     ]
+
+
+def _in_claims(rows):
+    """The rows as another Case Type's, which numbers its items from the same
+    start: ``claims`` rather than ``complaints``, the same ``source_item_id``."""
+    return [{**row, "case_type": "claims"} for row in rows]
+
+
+def test_the_same_item_id_in_another_case_type_is_not_merged_in_the_history():
+    # Item 7 of complaints is waiting then claimed (and still in progress); item
+    # 7 of claims is claimed then completed. Told apart: complaints' In-progress
+    # stay is open, claims' closed. Merged on the item id alone, one Case's
+    # Completed would end the other's stay.
+    history = [
+        _observation("7", "a", "2026-07-02T09:00:00+00:00", "To-allocate"),
+        _observation("7", "c", "2026-07-04T09:00:00+00:00", "In-progress"),
+        *_in_claims(
+            [
+                _observation("7", "b", "2026-07-03T09:00:00+00:00", "In-progress"),
+                _observation("7", "d", "2026-07-05T09:00:00+00:00", "Completed"),
+            ]
+        ),
+    ]
+    result = _rows(metrics.case_stage_dwell(given_rows(history).read(), as_of=AS_OF))
+
+    assert [
+        (r["case_type"], r["status"], r["interval_count"], r["open_interval_count"])
+        for r in result
+    ] == [
+        ("claims", "In-progress", 1, 0),
+        ("complaints", "In-progress", 0, 1),
+        ("complaints", "To-allocate", 1, 0),
+    ]
+
+
+def test_the_same_item_id_in_another_case_type_is_held_separately():
+    # Overlapping two-day holds on item 7 of two Case Types: two Cases, each held
+    # once. Merged on the item id alone they would read as one Case.
+    history = [
+        _observation("7", "a", "2026-07-02T09:00:00+00:00", "In-progress", on_hold=1),
+        _observation("7", "c", "2026-07-04T09:00:00+00:00", "In-progress"),
+        *_in_claims(
+            [
+                _observation(
+                    "7", "b", "2026-07-03T09:00:00+00:00", "In-progress", on_hold=1
+                ),
+                _observation("7", "d", "2026-07-05T09:00:00+00:00", "In-progress"),
+            ]
+        ),
+    ]
+    result = _rows(metrics.case_hold(given_rows(history).read(), as_of=AS_OF))
+
+    assert [
+        (r["case_type"], r["case_count"], r["hold_count"], r["held_days_total"])
+        for r in result
+    ] == [("claims", 1, 1, 2.0), ("complaints", 1, 1, 2.0)]
 
 
 # --- the current metrics ----------------------------------------------------
@@ -556,6 +768,28 @@ def test_answer_action_load_measures_actions_per_case_and_share_of_live_cases():
     }
 
 
+def test_answer_action_load_counts_only_live_cases_so_the_share_cannot_pass_one():
+    # c3 is void: its Action is not on a live Case, so it is not counted either.
+    actions = [*ACTIONS, _action("c3", "q1", "a9"), _action("c3", "q2", "a10")]
+    result = _rows(
+        metrics.answer_action_load(given_rows(actions).read(), _current(), as_of=AS_OF)
+    )
+
+    assert [
+        (r["question_id"], r["case_count"], r["share_of_cases"]) for r in result
+    ] == [("q1", 2, 0.6667)]
+
+
+def test_a_share_of_cases_above_one_fails_the_tables_gate():
+    [row] = _rows(
+        metrics.answer_action_load(given_rows(ACTIONS).read(), _current(), as_of=AS_OF)
+    )
+    impossible = Dataset.from_pandas(pd.DataFrame([{**row, "share_of_cases": 1.5}]))
+
+    with pytest.raises(ValidationError, match="share_of_cases"):
+        SchemaValidator(AnswerActionLoad).validate(impossible)
+
+
 def test_answer_remediation_by_manager_joins_each_answer_to_its_case():
     result = _rows(
         metrics.answer_remediation_by_manager(
@@ -580,12 +814,56 @@ def test_answer_remediation_by_manager_joins_each_answer_to_its_case():
 
 
 def test_answer_remediation_by_manager_drops_an_answer_with_no_current_case():
-    orphan = [{**ANSWERS[0], "case_id": "gone"}]
+    orphan = [{**ANSWERS[0], "source_item_id": "gone"}]
     result = metrics.answer_remediation_by_manager(
         given_rows(orphan).read(), _current(), as_of=AS_OF
     )
 
     assert len(result) == 0
+
+
+def test_an_answer_joins_the_case_of_its_own_case_type():
+    # Item 7 of both Case Types; only complaints' has an Answer, so only its
+    # manager is credited with it.
+    cases = [
+        _case("7", "In-progress", responsible_party_manager_name="R.ONE"),
+        *_in_claims(
+            [_case("7", "In-progress", responsible_party_manager_name="R.TWO")]
+        ),
+    ]
+    answers = [_answer("7", "q1", "yes", "complete")]
+    result = _rows(
+        metrics.answer_remediation_by_manager(
+            given_rows(answers).read(), _current(cases), as_of=AS_OF
+        )
+    )
+
+    assert [
+        (r["responsible_party_manager_name"], r["answer_count"]) for r in result
+    ] == [("R.ONE", 1)]
+
+
+def test_an_action_is_not_credited_to_a_live_case_of_another_case_type():
+    # Item 7 of claims is void; item 7 of complaints is live. The claims Actions
+    # are not on a live Case, so they add nothing; complaints' own does.
+    cases = [
+        _case("7", "In-progress"),
+        *_in_claims([_case("7", "Void", voided_at=AS_OF)]),
+    ]
+    actions = [
+        _action("7", "q1", "a1"),
+        *_in_claims([_action("7", "q1", "a2"), _action("7", "q2", "a3")]),
+    ]
+    result = _rows(
+        metrics.answer_action_load(
+            given_rows(actions).read(), _current(cases), as_of=AS_OF
+        )
+    )
+
+    assert [
+        (r["case_type"], r["question_id"], r["case_count"], r["action_count"])
+        for r in result
+    ] == [("complaints", "q1", 1, 1)]
 
 
 def test_appeal_cycle_time_is_measured_over_the_resolved_appeals_only():
@@ -606,6 +884,28 @@ def test_appeal_cycle_time_is_measured_over_the_resolved_appeals_only():
     ]
 
 
+def test_appeal_cycle_time_clamps_a_resolution_stamped_before_the_raise():
+    # Raised 11 Jul, resolution stamped 10 Jul.
+    appeal = {**APPEALS[0], "resolution_at": "2026-07-10T09:00:00+00:00"}
+    [row] = _rows(metrics.appeal_cycle_time(given_rows([appeal]).read(), as_of=AS_OF))
+
+    assert (row["cycle_days_mean"], row["cycle_days_max"]) == (0.0, 0.0)
+
+
+def test_void_age_clamps_a_void_stamped_before_the_case_was_created():
+    rows = [
+        _case(
+            "c3",
+            "Void",
+            voided_at="2026-07-01T09:00:00+00:00",
+            created="2026-07-02T09:00:00+00:00",
+        )
+    ]
+    [row] = _rows(metrics.void_monthly(_current(rows), as_of=AS_OF))
+
+    assert (row["age_at_void_days_mean"], row["age_at_void_days_max"]) == (0.0, 0.0)
+
+
 def test_appeal_question_citations_count_an_appeal_once_per_cited_question():
     result = _rows(
         metrics.appeal_question_citations(given_rows(APPEALS).read(), as_of=AS_OF)
@@ -622,9 +922,15 @@ def test_a_citation_blob_that_is_not_a_list_of_ids_cites_nothing(blob):
     assert metrics._cited_questions(blob) in ([], ["1"])
 
 
+def test_a_json_boolean_is_not_a_cited_question_id():
+    assert metrics._cited_questions('["q1", true, false, 2]') == ["q1", "2"]
+
+
 def test_conversation_response_time_measures_replies_across_an_author_change():
     [row] = _rows(
-        metrics.conversation_response_time(given_rows(MESSAGES).read(), as_of=AS_OF)
+        metrics.conversation_response_time(
+            given_rows(MESSAGES).read(), _current(), as_of=AS_OF
+        )
     )
 
     # seq 2 is the same author as seq 1: one turn, not a reply. seq 3 replies
@@ -640,6 +946,17 @@ def test_conversation_response_time_measures_replies_across_an_author_change():
         "reply_hours_max": 24.0,
         "as_of_utc": AS_OF,
     }
+
+
+def test_conversation_response_time_counts_only_messages_on_live_cases():
+    void_thread = [{**message, "source_item_id": "c3"} for message in MESSAGES]
+    [row] = _rows(
+        metrics.conversation_response_time(
+            given_rows(MESSAGES + void_thread).read(), _current(), as_of=AS_OF
+        )
+    )
+
+    assert (row["thread_count"], row["reply_count"]) == (1, 2)
 
 
 def test_conversation_volume_counts_threads_over_the_live_cases():
@@ -668,8 +985,8 @@ def test_conversation_volume_counts_threads_over_the_live_cases():
 
 def test_conversation_volume_drops_messages_on_a_void_or_unknown_case():
     stray = [
-        {**MESSAGES[0], "case_id": "c3"},  # void
-        {**MESSAGES[0], "case_id": "c9"},  # not current
+        {**MESSAGES[0], "source_item_id": "c3"},  # void
+        {**MESSAGES[0], "source_item_id": "c9"},  # not current
     ]
     [row] = _rows(
         metrics.conversation_volume(
@@ -726,6 +1043,29 @@ def test_conversation_posting_pattern_files_each_message_under_its_local_hour(
 
     posted = {(r["weekday"], r["hour_of_day"]) for r in rows if r["message_count"]}
     assert posted == {("Sunday", 14), ("Sunday", 15), ("Sunday", 18), ("Monday", 18)}
+
+
+@pytest.fixture
+def default_zone(monkeypatch):
+    """The seam on its default (None), as in production: UK time."""
+    monkeypatch.setattr(timestamps, "local_timezone", lambda: None)
+
+
+def test_conversation_posting_pattern_reads_uk_time_per_message(default_zone):
+    # Sunday 5 Jul 23:30 UTC is Monday 00:30 BST; Monday 7 Dec 23:30 UTC is
+    # 23:30 GMT.
+    messages = [
+        {**MESSAGES[0], "posted_at": "2026-07-05T23:30:00+00:00"},
+        {**MESSAGES[1], "posted_at": "2026-12-07T23:30:00+00:00"},
+    ]
+    rows = _rows(
+        metrics.conversation_posting_pattern(
+            given_rows(messages).read(), _current(), as_of=AS_OF
+        )
+    )
+
+    posted = {(r["weekday"], r["hour_of_day"]) for r in rows if r["message_count"]}
+    assert posted == {("Monday", 0), ("Monday", 23)}
 
 
 def test_conversation_posting_pattern_with_no_messages_has_no_grid():
@@ -947,6 +1287,28 @@ def test_lifecycle_duration_measures_each_leg_between_the_sources_stamps():
     assert {r["brand"] for r in result} == {UNKNOWN_BRAND}
 
 
+def test_lifecycle_duration_leaves_void_cases_out():
+    cases = [
+        *LIFECYCLE_CASES,
+        _case(
+            "c4",
+            "Void",
+            created="2026-07-01T09:00:00+00:00",
+            assigned_at="2026-07-05T09:00:00+00:00",
+            voided_at="2026-07-06T09:00:00+00:00",
+        ),
+    ]
+    result = _rows(metrics.case_lifecycle_duration(_current(cases), as_of=AS_OF))
+    [allocation] = [
+        r
+        for r in result
+        if (r["leg"], r["ended_month"], r["assigned_reviewer_name"])
+        == ("allocation", "2026-07", KHAN)
+    ]
+
+    assert (allocation["case_count"], allocation["days_total"]) == (2, 3.0)
+
+
 def test_lifecycle_duration_files_a_leg_under_the_month_it_ended_in(monkeypatch):
     # 31 Jul 23:30 UTC is 1 Aug at UTC+1.
     monkeypatch.setattr(
@@ -1086,9 +1448,9 @@ def test_due_profile_judges_a_due_date_on_the_local_calendar(monkeypatch):
     assert row["due_bucket"] == "due_today"
 
 
-def _answer(case_id, question_id, required, status):
+def _answer(key, question_id, required, status):
     return {
-        "case_id": case_id,
+        "source_item_id": key,
         "case_type": "complaints",
         "question_id": question_id,
         "remediation_required": required,
@@ -1096,9 +1458,9 @@ def _answer(case_id, question_id, required, status):
     }
 
 
-def _action(case_id, question_id, action_id):
+def _action(key, question_id, action_id):
     return {
-        "case_id": case_id,
+        "source_item_id": key,
         "case_type": "complaints",
         "question_id": question_id,
         "action_id": action_id,
@@ -1106,10 +1468,8 @@ def _action(case_id, question_id, action_id):
 
 
 def test_remediation_overdue_counts_whats_outstanding_on_cases_past_their_date():
-    def past_due(case_id, due, **overrides):
-        return _case(
-            case_id, "Actions In Progress", remediation_due_date=due, **overrides
-        )
+    def past_due(key, due, **overrides):
+        return _case(key, "Actions In Progress", remediation_due_date=due, **overrides)
 
     cases = [
         past_due("r1", "2026-08-13T00:00:00+00:00", responsible_party_name="P.ONE"),
@@ -1163,6 +1523,33 @@ def test_remediation_overdue_counts_whats_outstanding_on_cases_past_their_date()
     assert {r["assigned_reviewer_name"] for r in result} == {KHAN}
 
 
+def test_outstanding_remediation_is_counted_on_the_case_of_its_own_case_type():
+    # Item 7 of both Case Types is past its date; only complaints' has an
+    # outstanding Answer and Action.
+    past_due = _case(
+        "7", "Actions In Progress", remediation_due_date="2026-08-13T00:00:00+00:00"
+    )
+    answers = [_answer("7", "q1", "yes", None)]
+    actions = [_action("7", "q1", "a1")]
+    result = _rows(
+        metrics.remediation_overdue(
+            _current([past_due, *_in_claims([past_due])]),
+            given_rows(answers).read(),
+            given_rows(actions).read(),
+            as_of=AS_OF,
+        )
+    )
+
+    assert {
+        r["case_type"]: (
+            r["case_count"],
+            r["outstanding_answer_count"],
+            r["outstanding_action_count"],
+        )
+        for r in result
+    } == {"complaints": (1, 1, 1), "claims": (1, 0, 0)}
+
+
 def test_reviewer_workload_sets_work_in_hand_against_four_weeks_of_output():
     cases = [
         _case("w1", "In-progress", assigned_at="2026-08-10T15:00:00+00:00"),
@@ -1180,7 +1567,9 @@ def test_reviewer_workload_sets_work_in_hand_against_four_weeks_of_output():
         _case("w6", "In-progress", assigned_reviewer_name=JONES),
         _case("w7", "Void", reportable_at="2026-08-15T09:00:00+00:00"),
     ]
-    result = _rows(metrics.reviewer_workload(_current(cases), as_of=AS_OF))
+    result = _rows(
+        metrics.reviewer_workload(_current(cases), _no_history(), as_of=AS_OF)
+    )
 
     assert result == [
         {
@@ -1211,9 +1600,74 @@ def test_reviewer_workload_sets_work_in_hand_against_four_weeks_of_output():
     ]
 
 
-def _appeal(case_id, appeal_id, state, verdict=None):
+def _no_history() -> Dataset:
+    return Dataset.from_pandas(pd.DataFrame(columns=metrics.HISTORY_COLUMNS))
+
+
+def test_reviewer_workload_ages_a_reopened_case_from_its_return_to_in_progress():
+    # Assigned 4 Jul, Completed 10 Jul, reopened 15 Jul, measured 20 Jul: five
+    # days in progress, not sixteen. w2 has no history, so its assigned_at
+    # stands (8 Jul: twelve days).
+    as_of = "2026-07-20T06:00:00+00:00"
+    history = [
+        _observation(
+            "w1",
+            "a",
+            "2026-07-04T10:00:00+00:00",
+            "In-progress",
+            assigned_at="2026-07-04T09:00:00+00:00",
+        ),
+        _observation("w1", "b", "2026-07-10T09:00:00+00:00", "Completed"),
+        _observation("w1", "c", "2026-07-15T09:00:00+00:00", "In-progress"),
+    ]
+    cases = [
+        _case("w1", "In-progress", assigned_at="2026-07-04T09:00:00+00:00"),
+        _case("w2", "In-progress", assigned_at="2026-07-08T09:00:00+00:00"),
+    ]
+
+    def oldest(rows):
+        [row] = _rows(
+            metrics.reviewer_workload(
+                _current(rows), given_rows(history).read(), as_of=as_of
+            )
+        )
+        return row["oldest_in_progress_days"]
+
+    assert oldest(cases[:1]) == 5.0
+    assert oldest(cases) == 12.0
+
+
+def test_a_reopened_case_does_not_lend_its_age_to_another_case_types_item():
+    # Complaints' item 7 was reopened on 15 Jul (five days in progress by 20
+    # Jul); claims' item 7 has no history, so it keeps its own assigned_at (8
+    # Jul: twelve days), not the reopen.
+    as_of = "2026-07-20T06:00:00+00:00"
+    history = [
+        _observation("7", "a", "2026-07-04T10:00:00+00:00", "In-progress"),
+        _observation("7", "b", "2026-07-10T09:00:00+00:00", "Completed"),
+        _observation("7", "c", "2026-07-15T09:00:00+00:00", "In-progress"),
+    ]
+    cases = [
+        _case("7", "In-progress", assigned_at="2026-07-04T09:00:00+00:00"),
+        *_in_claims(
+            [_case("7", "In-progress", assigned_at="2026-07-08T09:00:00+00:00")]
+        ),
+    ]
+    result = _rows(
+        metrics.reviewer_workload(
+            _current(cases), given_rows(history).read(), as_of=as_of
+        )
+    )
+
+    assert {r["case_type"]: r["oldest_in_progress_days"] for r in result} == {
+        "complaints": 5.0,
+        "claims": 12.0,
+    }
+
+
+def _appeal(key, appeal_id, state, verdict=None):
     return {
-        "case_id": case_id,
+        "source_item_id": key,
         "case_type": "complaints",
         "appeal_id": appeal_id,
         "raised_at": "2026-08-01T09:00:00+00:00",
@@ -1301,14 +1755,14 @@ PAST_DUE_REMEDIATION = _case(
     remediation_due_date="2026-08-13T00:00:00+00:00",
 )
 PAST_DUE_ANSWER = {
-    "case_id": "c5",
+    "source_item_id": "c5",
     "case_type": "complaints",
     "question_id": "q1",
     "remediation_required": "yes",
     "remediation_status": None,
 }
 PAST_DUE_ACTION = {
-    "case_id": "c5",
+    "source_item_id": "c5",
     "case_type": "complaints",
     "question_id": "q1",
     "action_id": "a9",
@@ -1394,3 +1848,23 @@ def test_a_source_missing_a_column_a_metric_needs_fails_that_step(tmp_path, caps
     gold = medallion(StoreRegistry(tmp_path), "cora_platform_metric").gold
     assert gold.columns_of("case_stage_dwell_current").columns() is not None
     assert gold.columns_of("conversation_response_time_current").columns() is None
+
+
+def test_a_sync_table_missing_the_item_id_fails_the_read_naming_it(tmp_path, capsys):
+    # A Case is its ``(case_type, source_item_id)`` in every Sync table, so a
+    # table without ``source_item_id`` must stop the run naming it rather than
+    # join on nothing.
+    _seed_sync(tmp_path)
+    sync = medallion(StoreRegistry(tmp_path), SYNC_SUBJECT)
+    narrowed = [
+        {k: v for k, v in row.items() if k != "source_item_id"} for row in MESSAGES
+    ]
+    sync.gold.writer("conversation_message", Refresh()).write(
+        Dataset.from_pandas(pd.DataFrame(narrowed))
+    )
+
+    assert main(["prog", "--base-dir", str(tmp_path)]) == 1
+
+    err = capsys.readouterr().err
+    assert "[ValidationError, data]" in err
+    assert "source_item_id" in err

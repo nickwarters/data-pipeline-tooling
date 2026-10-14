@@ -217,11 +217,14 @@ def to_appeal_citations(appeals: Dataset, as_of: str, writer: Writer) -> Dataset
     return write(writer, data, name="appeal_citations:write")
 
 
-def to_response_time(messages: Dataset, as_of: str, writer: Writer) -> Dataset:
+def to_response_time(
+    messages: Dataset, cases: Dataset, as_of: str, writer: Writer
+) -> Dataset:
     validate(MESSAGE_GATE, messages, name="response_time:messages")
     data = transform(
         partial(metrics.conversation_response_time, as_of=as_of),
         messages,
+        cases,
         name="response_time:reduce",
     )
     validate(
@@ -335,10 +338,16 @@ def to_remediation_overdue(
     return write(writer, data, name="remediation_overdue:write")
 
 
-def to_workload(cases: Dataset, as_of: str, writer: Writer) -> Dataset:
+def to_workload(
+    cases: Dataset, observations: Dataset, as_of: str, writer: Writer
+) -> Dataset:
     validate(WORKLOAD_GATE, cases, name="workload:current")
+    validate(HISTORY_GATE, observations, name="workload:history")
     data = transform(
-        partial(metrics.reviewer_workload, as_of=as_of), cases, name="workload:reduce"
+        partial(metrics.reviewer_workload, as_of=as_of),
+        cases,
+        observations,
+        name="workload:reduce",
     )
     validate(SchemaValidator(schema.ReviewerWorkload), data, name="workload:validate")
     return write(writer, data, name="workload:write")
@@ -409,7 +418,10 @@ def run(context: RunContext) -> Dataset:
         appeals, as_of, gold.writer("appeal_question_citations_current", Refresh())
     )
     to_response_time(
-        messages, as_of, gold.writer("conversation_response_time_current", Refresh())
+        messages,
+        cases,
+        as_of,
+        gold.writer("conversation_response_time_current", Refresh()),
     )
     to_volume(
         messages, cases, as_of, gold.writer("conversation_volume_current", Refresh())
@@ -434,7 +446,9 @@ def run(context: RunContext) -> Dataset:
         as_of,
         gold.writer("remediation_overdue_current", Refresh()),
     )
-    to_workload(cases, as_of, gold.writer("reviewer_workload_current", Refresh()))
+    to_workload(
+        cases, observations, as_of, gold.writer("reviewer_workload_current", Refresh())
+    )
     return to_appeal_rate(
         cases, appeals, as_of, gold.writer("appeal_rate_by_reviewer_monthly", Refresh())
     )

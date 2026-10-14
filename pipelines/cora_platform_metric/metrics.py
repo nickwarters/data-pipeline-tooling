@@ -51,11 +51,13 @@ from .schema import (
 )
 
 AS_OF_COLUMN = "as_of_utc"
-CASE_ID_COLUMN = "case_id"
 
-# The Sync subject's Case identity, as its history carries it. The history is
-# read below the layer that derives ``case_id``, so the natural key stands in.
-HISTORY_KEY = ("case_type", "source_item_id")
+# What identifies a Case in every Sync table this pipeline reads: current Cases,
+# the observation history, Answers, Actions, Appeals and Messages. The
+# ``source_item_id`` is list-local, so two Case Types can both have an item 7
+# (ADR-0016); only with its ``case_type`` is it a Case. ``case_id`` exists on
+# ``case_current`` alone, so no reduction here reads or joins on it.
+CASE_KEY = ("case_type", "source_item_id")
 
 # Reporting fills, not source values -- literal keys rather than NULL so an
 # aggregate's grain has no hole a reader may silently drop. The same spellings
@@ -129,8 +131,9 @@ SECONDS_PER_HOUR = 3_600.0
 # each source on the union for its consumers, and the failure message lands
 # beside the code that depends on them.
 HISTORY_COLUMNS = (
-    *HISTORY_KEY,
+    *CASE_KEY,
     "source_modified_at",
+    "source_version",
     "source_observation_id",
     "status",
     "assigned_reviewer_name",
@@ -141,8 +144,7 @@ HISTORY_COLUMNS = (
 )
 BACKLOG_COLUMNS = (*HISTORY_COLUMNS, "reportable_at", "completed_at", "voided_at")
 CURRENT_COLUMNS = (
-    CASE_ID_COLUMN,
-    "case_type",
+    *CASE_KEY,
     "status",
     "assigned_reviewer_manager_name",
     "responsible_party_manager_name",
@@ -157,6 +159,7 @@ CURRENT_COLUMNS = (
 )
 LIFECYCLE_COLUMNS = (
     "case_type",
+    "status",
     "assigned_reviewer_name",
     "created",
     "assigned_at",
@@ -182,15 +185,14 @@ DUE_COLUMNS = (
     "remediation_due_date",
 )
 REMEDIATION_OVERDUE_COLUMNS = (
-    CASE_ID_COLUMN,
-    "case_type",
+    *CASE_KEY,
     "status",
     "assigned_reviewer_name",
     "responsible_party_name",
     "remediation_due_date",
 )
 WORKLOAD_COLUMNS = (
-    "case_type",
+    *CASE_KEY,
     "status",
     "assigned_reviewer_name",
     "on_hold",
@@ -198,28 +200,25 @@ WORKLOAD_COLUMNS = (
     "reportable_at",
 )
 APPEAL_RATE_COLUMNS = (
-    CASE_ID_COLUMN,
-    "case_type",
+    *CASE_KEY,
     "status",
     "assigned_reviewer_name",
     "reportable_at",
 )
 OUTSTANDING_ANSWER_COLUMNS = (
-    CASE_ID_COLUMN,
+    *CASE_KEY,
     "question_id",
     "remediation_required",
     "remediation_status",
 )
 ANSWER_COLUMNS = (
-    CASE_ID_COLUMN,
-    "case_type",
+    *CASE_KEY,
     "remediation_required",
     "remediation_status",
 )
-ANSWER_ACTION_COLUMNS = (CASE_ID_COLUMN, "case_type", "question_id", "action_id")
+ANSWER_ACTION_COLUMNS = (*CASE_KEY, "question_id", "action_id")
 APPEAL_COLUMNS = (
-    CASE_ID_COLUMN,
-    "case_type",
+    *CASE_KEY,
     "appeal_id",
     "raised_at",
     "state",
@@ -228,8 +227,7 @@ APPEAL_COLUMNS = (
     "cited_question_ids_json",
 )
 CONVERSATION_COLUMNS = (
-    CASE_ID_COLUMN,
-    "case_type",
+    *CASE_KEY,
     "seq",
     "author_login",
     "posted_at",
@@ -273,6 +271,13 @@ def _filled(frame: pd.DataFrame, fills: dict[str, str]) -> pd.DataFrame:
             column: frame[column].astype("object").fillna(literal)
             for column, literal in fills.items()
         }
+    )
+
+
+def _in_cases(frame: pd.DataFrame, cases: pd.DataFrame) -> pd.Series:
+    """Which rows of ``frame`` belong to one of ``cases``, by ``CASE_KEY``."""
+    return pd.MultiIndex.from_frame(frame[list(CASE_KEY)]).isin(
+        pd.MultiIndex.from_frame(cases[list(CASE_KEY)])
     )
 
 
@@ -331,16 +336,31 @@ def _finish(
 def _ordered_history(dataset: Dataset) -> pd.DataFrame:
     """The observation history in the order things happened, per Case.
 
-    Ordered by the source's own ``Modified`` instant, then the observation id
-    as a deterministic last resort. Sync's current-state rule additionally
-    breaks a same-second tie on the parsed version; a tie that fine changes
-    which of two sub-second observations is credited, not any measure here.
+    Ordered by the source's own ``Modified`` instant, then ``source_version``
+    as a number, since two versions can share a ``Modified`` and the later
+    status must come last; then the observation id, a digest, as a
+    deterministic last resort. An observation
+    whose ``Modified`` does not parse has no place in that order and is dropped.
     """
     frame = dataset.to_pandas().copy()
     frame["_modified"] = _instants(frame["source_modified_at"])
-    return frame.sort_values(
-        [*HISTORY_KEY, "_modified", "source_observation_id"], kind="stable"
+    frame["_version"] = _version_number(frame["source_version"])
+    return frame.loc[frame["_modified"].notna()].sort_values(
+        [*CASE_KEY, "_modified", "_version", "source_observation_id"],
+        kind="stable",
     )
+
+
+def _version_number(versions: pd.Series) -> pd.Series:
+    """Each ``source_version`` -- a whole number in double quotes, ``'"10"'`` --
+    as the number it sorts on.
+
+    As text ``"10"`` sorts before ``"9"``. A version that is not a number (the
+    digest the Reader stamps when the item carried none) sorts first, at -1,
+    rather than as NA, which pandas would sort last.
+    """
+    number = pd.to_numeric(versions.astype("string").str.strip('"'), errors="coerce")
+    return number.fillna(-1)
 
 
 def _entry_instant(
@@ -356,6 +376,17 @@ def _entry_instant(
     return first["_modified"]
 
 
+def _entry_instants(
+    frame: pd.DataFrame, stamps: dict[str, str] = FIRST_OBSERVATION_ENTRY_STAMPS
+) -> pd.Series:
+    """``_entry_instant`` for every row, as though each were a first observation."""
+    stamped = pd.Series(pd.NaT, index=frame.index, dtype=frame["_modified"].dtype)
+    for status, column in stamps.items():
+        stamped = stamped.where(frame["status"].ne(status), _instants(frame[column]))
+    usable = stamped.notna() & stamped.le(frame["_modified"])
+    return stamped.where(usable, frame["_modified"])
+
+
 # --- history metrics --------------------------------------------------------
 
 
@@ -365,14 +396,16 @@ def case_stage_dwell(history: Dataset, *, as_of: str) -> Dataset:
 
     Walks each Case's observations in order; every change of ``status`` closes
     an interval at that observation's ``Modified`` and opens the next. A Case's
-    last interval is *open* unless its status is terminal. Statistics are over
-    closed intervals only -- an open one has no length yet, and measuring it to
-    ``as_of`` would mix two different questions (the Sync subject's age-bucket
-    aggregates already answer "how long has it been waiting").
+    last interval is *open* unless its status is terminal, and a terminal
+    status left by a reopen closes no interval: that was the gap until the
+    reopen, not a stage. Statistics are over closed intervals only -- an open
+    one has no length yet, and measuring it to ``as_of`` would mix two
+    different questions (the Sync subject's age-bucket aggregates already
+    answer "how long has it been waiting").
     """
     stays = []  # one per stay in a status: (case_type, status, days, open)
     for _, observations in _ordered_history(history).groupby(
-        list(HISTORY_KEY), sort=False
+        list(CASE_KEY), sort=False
     ):
         first = observations.iloc[0]
         case_type = first["case_type"]
@@ -381,9 +414,10 @@ def case_stage_dwell(history: Dataset, *, as_of: str) -> Dataset:
         for _, observation in observations.iloc[1:].iterrows():
             if observation["status"] == status:
                 continue
-            stays.append(
-                (case_type, status, _days(entered, observation["_modified"]), False)
-            )
+            if status not in TERMINAL_STATUSES:
+                stays.append(
+                    (case_type, status, _days(entered, observation["_modified"]), False)
+                )
             status = observation["status"]
             entered = observation["_modified"]
         if status not in TERMINAL_STATUSES:
@@ -416,31 +450,50 @@ def case_hold(history: Dataset, *, as_of: str) -> Dataset:
     """How often and how long Cases are held. **Grain: brand x case_type x
     assigned_reviewer_name.**
 
-    A hold opens at the first observation carrying ``on_hold`` (from the
-    source's ``placed_on_hold_at`` where it has one, else that observation's
-    ``Modified``) and closes at the first later observation without it. A hold
-    still open at the last observation is measured to ``as_of`` and counted in
-    ``open_hold_count``. Attributed to the Reviewer the Case's latest
+    A hold opens at the first open-status observation carrying ``on_hold``
+    (from the source's ``placed_on_hold_at`` where it has one, else that
+    observation's ``Modified``) and closes at the first later observation
+    without it, or at the observation where the Case entered ``Completed`` or
+    ``Void`` if that comes first. Terminal spells are not held time, as they are
+    not a stage in ``case_stage_dwell``: a flag first seen on a terminal
+    observation opens nothing, and a flag still set when the Case is reopened
+    opens a new hold from the reopen (never from a ``placed_on_hold_at`` before
+    it). A hold still open at the last observation is measured to ``as_of`` and
+    counted in ``open_hold_count``. Attributed to the Reviewer the Case's latest
     observation names, so a reassigned Case's holds follow the Case.
     """
     as_of_instant = pd.Timestamp(as_of)
     holds = []  # one per hold: (case_type, source_item_id, reviewer, days, open)
     for (case_type, item), observations in _ordered_history(history).groupby(
-        list(HISTORY_KEY), sort=False
+        list(CASE_KEY), sort=False
     ):
         reviewer = observations.iloc[-1]["assigned_reviewer_name"]
         if pd.isna(reviewer) or not reviewer:
             reviewer = UNASSIGNED
-        started = pd.NaT
+        started = pd.NaT  # the open hold's start, if one is open
+        terminal = False
+        reopened = pd.NaT  # the latest return from a terminal status
         for _, observation in observations.iterrows():
+            modified = observation["_modified"]
+            if observation["status"] in TERMINAL_STATUSES:
+                if pd.notna(started):  # entering a terminal status ends the hold
+                    holds.append(
+                        (case_type, item, reviewer, _days(started, modified), False)
+                    )
+                    started = pd.NaT
+                terminal = True
+                continue
+            if terminal:
+                terminal, reopened = False, modified
             on_hold = pd.notna(observation["on_hold"]) and bool(observation["on_hold"])
             if on_hold and pd.isna(started):
                 stamped = _instants(observation["placed_on_hold_at"])
-                started = stamped if pd.notna(stamped) else observation["_modified"]
+                started = stamped if pd.notna(stamped) else modified
+                if pd.notna(reopened) and started < reopened:
+                    started = reopened
             elif not on_hold and pd.notna(started):
-                released = observation["_modified"]
                 holds.append(
-                    (case_type, item, reviewer, _days(started, released), False)
+                    (case_type, item, reviewer, _days(started, modified), False)
                 )
                 started = pd.NaT
         if pd.notna(started):
@@ -451,8 +504,7 @@ def case_hold(history: Dataset, *, as_of: str) -> Dataset:
     held = pd.DataFrame(
         holds,
         columns=[
-            "case_type",
-            "source_item_id",
+            *CASE_KEY,
             "assigned_reviewer_name",
             "days",
             "open",
@@ -513,7 +565,7 @@ def case_backlog(history: Dataset, *, as_of: str) -> Dataset:
     as_of_day = local_date(as_of)
     spans = []  # (case_type, status, first_day, end_day)
     for (case_type, _), observations in _ordered_history(history).groupby(
-        list(HISTORY_KEY), sort=False
+        list(CASE_KEY), sort=False
     ):
         spans.extend(
             (case_type, status, start, end)
@@ -659,8 +711,9 @@ def void_monthly(current: Dataset, *, as_of: str) -> Dataset:
     voided = voided.loc[voided["_voided"].notna()]
     voided["void_month"] = _month(voided["_voided"])
     voided["_age"] = (
-        voided["_voided"] - _instants(voided["created"])
-    ).dt.total_seconds() / SECONDS_PER_DAY
+        (voided["_voided"] - _instants(voided["created"])).dt.total_seconds()
+        / SECONDS_PER_DAY
+    ).clip(lower=0.0)
     voided = _filled(voided, {"void_reason": UNSTATED, "voided_by_name": UNASSIGNED})
 
     dims = ["void_month", "case_type", "void_reason", "voided_by_name"]
@@ -713,8 +766,12 @@ def case_intake(current: Dataset, *, as_of: str) -> Dataset:
 
 
 def case_lifecycle_duration(current: Dataset, *, as_of: str) -> Dataset:
-    """How long each lifecycle leg takes; backwards legs are counted, not measured."""
-    frame = _filled(current.to_pandas(), {"assigned_reviewer_name": UNASSIGNED})
+    """How long each non-void Case's lifecycle legs take; backwards legs are
+    counted, not measured."""
+    frame = current.to_pandas()
+    frame = _filled(
+        frame.loc[frame["status"].ne("Void")], {"assigned_reviewer_name": UNASSIGNED}
+    )
     rows = []
     for order, (leg, started, ended, actions_path_only) in enumerate(
         LIFECYCLE_LEGS, start=1
@@ -922,17 +979,17 @@ def remediation_overdue(
         answer_rows["remediation_required"].eq("yes")
         & answer_rows["remediation_status"].isna()
     ]
-    per_case_answers = outstanding.groupby(CASE_ID_COLUMN).size()
+    per_case_answers = outstanding.groupby(list(CASE_KEY)).size().rename("_answers")
     action_rows = actions.to_pandas().merge(
-        outstanding[[CASE_ID_COLUMN, "question_id"]],
-        on=[CASE_ID_COLUMN, "question_id"],
+        outstanding[[*CASE_KEY, "question_id"]],
+        on=[*CASE_KEY, "question_id"],
         how="inner",
     )
-    per_case_actions = action_rows.groupby(CASE_ID_COLUMN).size()
-    cases = cases.assign(
-        _answers=cases[CASE_ID_COLUMN].map(per_case_answers).fillna(0),
-        _actions=cases[CASE_ID_COLUMN].map(per_case_actions).fillna(0),
+    per_case_actions = action_rows.groupby(list(CASE_KEY)).size().rename("_actions")
+    cases = cases.join(per_case_answers, on=list(CASE_KEY)).join(
+        per_case_actions, on=list(CASE_KEY)
     )
+    cases[["_answers", "_actions"]] = cases[["_answers", "_actions"]].fillna(0)
 
     dims = [
         "case_type",
@@ -972,11 +1029,33 @@ def remediation_overdue(
     )
 
 
-def reviewer_workload(current: Dataset, *, as_of: str) -> Dataset:
-    """What each Reviewer holds, against their last 28 days' output."""
+def _in_progress_since(history: Dataset) -> pd.DataFrame:
+    """When each Case whose latest observation is ``In-progress`` last entered
+    it -- after a reopen, the reopen, not the original claim."""
+    frame = _ordered_history(history)
+    cases = frame.groupby(list(CASE_KEY), sort=False)
+    first = cases.cumcount().eq(0)
+    entered = frame["status"].ne(cases["status"].shift())
+    starts = frame["_modified"].where(entered & ~first, _entry_instants(frame))
+    frame = frame.assign(_since=starts.where(entered).groupby(cases.ngroup()).ffill())
+    latest = frame.groupby(list(CASE_KEY), sort=False).tail(1)
+    return latest.loc[latest["status"].eq("In-progress"), [*CASE_KEY, "_since"]]
+
+
+def reviewer_workload(current: Dataset, history: Dataset, *, as_of: str) -> Dataset:
+    """What each Reviewer holds, against their last 28 days' output.
+
+    An ``In-progress`` Case's age runs from when the history last saw it enter
+    that status, so a reopened Case's Completed spell is not counted; a Case
+    the history has not seen there falls back to its ``assigned_at``.
+    """
     today = local_date(as_of)
     window_start = today - dt.timedelta(days=WORKLOAD_WINDOW_DAYS - 1)
     frame = _filled(current.to_pandas(), {"assigned_reviewer_name": UNASSIGNED})
+    frame = frame.merge(_in_progress_since(history), on=list(CASE_KEY), how="left")
+    started = frame["_since"].where(
+        frame["_since"].notna(), _instants(frame["assigned_at"])
+    )
     in_progress = frame["status"].eq("In-progress")
     reportable = _instants(frame["reportable_at"])
     recent = [
@@ -990,7 +1069,7 @@ def reviewer_workload(current: Dataset, *, as_of: str) -> Dataset:
         _recent=pd.Series(recent, index=frame.index) & frame["status"].ne("Void"),
         _age=[
             None if days is None else -days
-            for days in _days_until(frame["assigned_at"].where(in_progress), today)
+            for days in _days_until(started.where(in_progress), today)
         ],
     )
     frame = frame.loc[frame["_in_progress"] | frame["_actions"] | frame["_recent"]]
@@ -1035,7 +1114,7 @@ def appeal_rate_by_reviewer(
             _agreed=frame["resolution_verdict"].eq("agreed"),
             _rejected=frame["resolution_verdict"].eq("rejected"),
         )
-        .groupby(CASE_ID_COLUMN)
+        .groupby(list(CASE_KEY))
         .agg(
             _appeals=("appeal_id", "size"),
             _open=("_open", "sum"),
@@ -1043,7 +1122,7 @@ def appeal_rate_by_reviewer(
             _rejected=("_rejected", "sum"),
         )
     )
-    cases = cases.join(per_case, on=CASE_ID_COLUMN)
+    cases = cases.join(per_case, on=list(CASE_KEY))
     counts = ["_appeals", "_open", "_agreed", "_rejected"]
     cases[counts] = cases[counts].fillna(0)
 
@@ -1074,15 +1153,14 @@ def appeal_rate_by_reviewer(
 def answer_action_load(actions: Dataset, current: Dataset, *, as_of: str) -> Dataset:
     """Remediation Actions per question. **Grain: case_type x question_id.**
 
-    ``share_of_cases`` divides by the current non-void Cases of the Case Type,
-    so it reads as "this share of the Case Type's live Cases carry an Action on
-    this question".
+    Over the current non-void Cases only, so ``share_of_cases`` reads as "this
+    share of the Case Type's live Cases carry an Action on this question".
     """
     live = _live_cases(current)
     live_counts = live.groupby("case_type").size()
     per_case = (
-        actions.to_pandas()
-        .groupby(["case_type", "question_id", CASE_ID_COLUMN], sort=True)
+        _live_rows(actions, live)
+        .groupby(["case_type", "question_id", "source_item_id"], sort=True)
         .size()
         .reset_index(name="actions")
     )
@@ -1120,8 +1198,8 @@ def answer_remediation_by_manager(
     this joins each Answer to its Case for the manager who answers for the
     remediation, and counts both Answers and the distinct Cases behind them.
     """
-    cases = current.to_pandas()[[CASE_ID_COLUMN, "responsible_party_manager_name"]]
-    frame = answers.to_pandas().merge(cases, on=CASE_ID_COLUMN, how="inner")
+    cases = current.to_pandas()[[*CASE_KEY, "responsible_party_manager_name"]]
+    frame = answers.to_pandas().merge(cases, on=list(CASE_KEY), how="inner")
     frame = _filled(
         frame,
         {
@@ -1143,7 +1221,7 @@ def answer_remediation_by_manager(
             "remediation_required": required,
             "remediation_status": status,
             "answer_count": len(group),
-            "case_count": group[CASE_ID_COLUMN].nunique(),
+            "case_count": group["source_item_id"].nunique(),
         }
         for (case_type, manager, required, status), group in frame.groupby(
             dims, sort=True
@@ -1158,8 +1236,11 @@ def appeal_cycle_time(appeals: Dataset, *, as_of: str) -> Dataset:
     ``resolution_at``, over the Appeals carrying both."""
     frame = appeals.to_pandas().copy()
     frame["_cycle"] = (
-        _instants(frame["resolution_at"]) - _instants(frame["raised_at"])
-    ).dt.total_seconds() / SECONDS_PER_DAY
+        (
+            _instants(frame["resolution_at"]) - _instants(frame["raised_at"])
+        ).dt.total_seconds()
+        / SECONDS_PER_DAY
+    ).clip(lower=0.0)
     frame = _filled(frame, {"state": UNSTATED, "resolution_verdict": UNRESOLVED})
 
     dims = ["case_type", "state", "resolution_verdict"]
@@ -1191,7 +1272,11 @@ def _cited_questions(value: object) -> list[str]:
         return []
     if not isinstance(loaded, list):
         return []
-    return [str(item) for item in loaded if isinstance(item, (str, int))]
+    return [
+        str(item)
+        for item in loaded
+        if isinstance(item, (str, int)) and not isinstance(item, bool)
+    ]
 
 
 def appeal_question_citations(appeals: Dataset, *, as_of: str) -> Dataset:
@@ -1207,7 +1292,7 @@ def appeal_question_citations(appeals: Dataset, *, as_of: str) -> Dataset:
             "case_type": case_type,
             "question_id": question_id,
             "appeal_count": group["appeal_id"].nunique(),
-            "case_count": group[CASE_ID_COLUMN].nunique(),
+            "case_count": group["source_item_id"].nunique(),
         }
         for (case_type, question_id), group in cited.groupby(
             ["case_type", "question_id"], sort=True
@@ -1218,7 +1303,9 @@ def appeal_question_citations(appeals: Dataset, *, as_of: str) -> Dataset:
     )
 
 
-def conversation_response_time(messages: Dataset, *, as_of: str) -> Dataset:
+def conversation_response_time(
+    messages: Dataset, current: Dataset, *, as_of: str
+) -> Dataset:
     """How quickly Conversations are replied to. **Grain: brand x case_type.**
 
     Each Case's thread is read in ``seq`` order; a Message whose
@@ -1226,13 +1313,14 @@ def conversation_response_time(messages: Dataset, *, as_of: str) -> Dataset:
     hours are measured from that previous Message. Two consecutive Messages by
     one author are one turn, not a reply to oneself. Author-agnostic by design:
     the source's own ``awaiting_since`` already says who is being waited on
-    right now.
+    right now. Over the Messages on live Cases, as the other Conversation
+    tables count.
     """
-    frame = messages.to_pandas().copy()
+    frame = _live_rows(messages, _live_cases(current)).copy()
     frame["_posted"] = _instants(frame["posted_at"])
-    frame = frame.sort_values([CASE_ID_COLUMN, "seq"], kind="stable")
+    frame = frame.sort_values([*CASE_KEY, "seq"], kind="stable")
 
-    threads = frame.groupby(CASE_ID_COLUMN, sort=False)
+    threads = frame.groupby(list(CASE_KEY), sort=False)
     previous_author = threads["author_login"].shift()
     previous_posted = threads["_posted"].shift()
     replies = frame.loc[
@@ -1249,7 +1337,7 @@ def conversation_response_time(messages: Dataset, *, as_of: str) -> Dataset:
         {
             "brand": UNKNOWN_BRAND,
             "case_type": case_type,
-            "thread_count": group[CASE_ID_COLUMN].nunique(),
+            "thread_count": group["source_item_id"].nunique(),
             "reply_count": len(group),
             "reply_hours_mean": _mean(group["hours"]),
             "reply_hours_p50": _quantile(group["hours"], 0.5),
@@ -1266,7 +1354,7 @@ def conversation_response_time(messages: Dataset, *, as_of: str) -> Dataset:
 def _live_cases(current: Dataset) -> pd.DataFrame:
     """The current non-void Cases: the population a Conversation belongs to."""
     cases = current.to_pandas()
-    return cases.loc[cases["status"].ne("Void"), [CASE_ID_COLUMN, "case_type"]]
+    return cases.loc[cases["status"].ne("Void"), list(CASE_KEY)]
 
 
 def conversation_volume(messages: Dataset, current: Dataset, *, as_of: str) -> Dataset:
@@ -1280,9 +1368,9 @@ def conversation_volume(messages: Dataset, current: Dataset, *, as_of: str) -> D
     """
     live = _live_cases(current)
     per_thread = (
-        _live_messages(messages, live).groupby(CASE_ID_COLUMN).size().rename("messages")
+        _live_rows(messages, live).groupby(list(CASE_KEY)).size().rename("messages")
     )
-    counted = live.join(per_thread, on=CASE_ID_COLUMN)
+    counted = live.join(per_thread, on=list(CASE_KEY))
 
     rows = []
     for case_type, group in counted.groupby("case_type", sort=True):
@@ -1308,10 +1396,10 @@ def conversation_volume(messages: Dataset, current: Dataset, *, as_of: str) -> D
     )
 
 
-def _live_messages(messages: Dataset, live: pd.DataFrame) -> pd.DataFrame:
-    """The Messages whose Case is one of the live Cases."""
-    frame = messages.to_pandas()
-    return frame.loc[frame[CASE_ID_COLUMN].isin(live[CASE_ID_COLUMN])]
+def _live_rows(rows: Dataset, live: pd.DataFrame) -> pd.DataFrame:
+    """The Detail rows (Messages, Actions) whose Case is one of the live Cases."""
+    frame = rows.to_pandas()
+    return frame.loc[_in_cases(frame, live)]
 
 
 def conversation_posting_pattern(
@@ -1328,11 +1416,11 @@ def conversation_posting_pattern(
     was actually posted at. A Message with no parseable ``posted_at`` is not
     counted.
     """
-    posted = _live_messages(messages, _live_cases(current)).copy()
+    posted = _live_rows(messages, _live_cases(current)).copy()
     posted["_posted"] = _instants(posted["posted_at"])
     posted = posted.loc[posted["_posted"].notna()]
 
-    local = posted["_posted"].dt.tz_convert(timestamps.local_timezone())
+    local = timestamps.local_wall_clock(posted["_posted"])
     posted["weekday_order"] = local.dt.dayofweek + 1  # ISO: 1 = Monday
     posted["hour_of_day"] = local.dt.hour
     counts = posted.groupby(["case_type", "weekday_order", "hour_of_day"]).size()

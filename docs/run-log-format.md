@@ -163,6 +163,13 @@ from there:
   date, and a "successes on this run date" query bounds on **local midnight
   expressed as UTC**, formatted exactly as the emitter formats a record so
   SQLite's text comparison compares like with like.
+- **A column converts the same way.** `local_wall_clock` turns a pandas
+  column of UTC instants into local wall-clock times through the same zone
+  seam, so a reduction can take local dates, months or hours of a million rows
+  without a Python call per row. With the seam on its default it names
+  `Europe/London`, because pandas cannot convert into "the system zone" (its
+  `tz_convert(None)` means UTC) and these machines are always in the UK; each
+  instant still takes the offset in force when it happened.
 
 The behavioural consequence, and the bug that motivated it: the deployment
 target is a UK box, at UTC+1 for roughly half the year. An upstream that

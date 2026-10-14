@@ -114,8 +114,8 @@ class CaseVoidMonthly:
 class AnswerActionLoad:
     """``answer_action_load_current`` -- remediation Actions per question.
 
-    Grain: ``case_type`` x ``question_id``. ``share_of_cases`` is
-    ``case_count`` over every current non-void Case of the Case Type.
+    Grain: ``case_type`` x ``question_id``, over the current non-void Cases,
+    so ``share_of_cases`` -- ``case_count`` over those Cases -- is at most 1.
     """
 
     case_type: Annotated[str, NonNull()]
@@ -124,7 +124,7 @@ class AnswerActionLoad:
     action_count: Annotated[int, NonNull(), Range(minimum=1)]
     actions_per_case_mean: Annotated[float, NonNull(), Range(minimum=0)]
     actions_per_case_max: Annotated[int, NonNull(), Range(minimum=1)]
-    share_of_cases: float
+    share_of_cases: Annotated[float, Range(minimum=0, maximum=1)]
     as_of_utc: Annotated[str, NonNull()]
 
 
