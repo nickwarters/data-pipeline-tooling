@@ -1,11 +1,13 @@
 """Shared Readers for the ``sharepoint_cases`` published datasets.
 
-They pass through rows without validation or freshness policy.
+They pass through rows without validation or freshness policy, narrowed to the
+``columns`` a consumer names.
 """
 
 from __future__ import annotations
 
 import os
+from collections.abc import Sequence
 
 from framework.core import Dataset, Reader
 from tools.medallion import medallion
@@ -22,21 +24,34 @@ _APPEAL_TABLE = "appeal"
 _CASE_HISTORY_TABLE = "case_version"
 
 
-def _gold_reader(base_dir: str | os.PathLike[str], table: str) -> Reader:
+def _gold_reader(
+    base_dir: str | os.PathLike[str], table: str, columns: Sequence[str] | None
+) -> Reader:
     """Mint a Reader over a published gold table in this subject."""
-    return medallion(StoreRegistry(base_dir), _SUBJECT).gold.reader(table)
+    return medallion(StoreRegistry(base_dir), _SUBJECT).gold.reader(
+        table, columns=columns
+    )
 
 
-def _silver_reader(base_dir: str | os.PathLike[str], table: str) -> Reader:
+def _silver_reader(
+    base_dir: str | os.PathLike[str], table: str, columns: Sequence[str] | None
+) -> Reader:
     """Mint a Reader over one of the subject's silver tables -- the history."""
-    return medallion(StoreRegistry(base_dir), _SUBJECT).silver.reader(table)
+    return medallion(StoreRegistry(base_dir), _SUBJECT).silver.reader(
+        table, columns=columns
+    )
 
 
 class CurrentCasesReader:
     """Published current-state Cases, one row per ``case_id``."""
 
-    def __init__(self, base_dir: str | os.PathLike[str]) -> None:
-        self._reader = _gold_reader(base_dir, _CASE_CURRENT_TABLE)
+    def __init__(
+        self,
+        base_dir: str | os.PathLike[str],
+        *,
+        columns: Sequence[str] | None = None,
+    ) -> None:
+        self._reader = _gold_reader(base_dir, _CASE_CURRENT_TABLE, columns)
 
     @property
     def data_locations(self) -> list[dict[str, str]]:
@@ -52,8 +67,13 @@ class CurrentCasesReader:
 class ConversationMessagesReader:
     """Published conversation messages, one row per ``case_id`` × ``seq``."""
 
-    def __init__(self, base_dir: str | os.PathLike[str]) -> None:
-        self._reader = _gold_reader(base_dir, _CONVERSATION_MESSAGE_TABLE)
+    def __init__(
+        self,
+        base_dir: str | os.PathLike[str],
+        *,
+        columns: Sequence[str] | None = None,
+    ) -> None:
+        self._reader = _gold_reader(base_dir, _CONVERSATION_MESSAGE_TABLE, columns)
 
     @property
     def data_locations(self) -> list[dict[str, str]]:
@@ -74,8 +94,13 @@ class AnswersReader:
     status.
     """
 
-    def __init__(self, base_dir: str | os.PathLike[str]) -> None:
-        self._reader = _gold_reader(base_dir, _ANSWER_TABLE)
+    def __init__(
+        self,
+        base_dir: str | os.PathLike[str],
+        *,
+        columns: Sequence[str] | None = None,
+    ) -> None:
+        self._reader = _gold_reader(base_dir, _ANSWER_TABLE, columns)
 
     @property
     def data_locations(self) -> list[dict[str, str]]:
@@ -96,8 +121,13 @@ class AnswerActionsReader:
     winning observation's Actions per Case.
     """
 
-    def __init__(self, base_dir: str | os.PathLike[str]) -> None:
-        self._reader = _gold_reader(base_dir, _ANSWER_ACTION_TABLE)
+    def __init__(
+        self,
+        base_dir: str | os.PathLike[str],
+        *,
+        columns: Sequence[str] | None = None,
+    ) -> None:
+        self._reader = _gold_reader(base_dir, _ANSWER_ACTION_TABLE, columns)
 
     @property
     def data_locations(self) -> list[dict[str, str]]:
@@ -118,8 +148,13 @@ class AppealsReader:
     and -- once resolved -- its verdict and when.
     """
 
-    def __init__(self, base_dir: str | os.PathLike[str]) -> None:
-        self._reader = _gold_reader(base_dir, _APPEAL_TABLE)
+    def __init__(
+        self,
+        base_dir: str | os.PathLike[str],
+        *,
+        columns: Sequence[str] | None = None,
+    ) -> None:
+        self._reader = _gold_reader(base_dir, _APPEAL_TABLE, columns)
 
     @property
     def data_locations(self) -> list[dict[str, str]]:
@@ -147,8 +182,13 @@ class CaseObservationHistoryReader:
     passed through between two polls was never observed and is not here.
     """
 
-    def __init__(self, base_dir: str | os.PathLike[str]) -> None:
-        self._reader = _silver_reader(base_dir, _CASE_HISTORY_TABLE)
+    def __init__(
+        self,
+        base_dir: str | os.PathLike[str],
+        *,
+        columns: Sequence[str] | None = None,
+    ) -> None:
+        self._reader = _silver_reader(base_dir, _CASE_HISTORY_TABLE, columns)
 
     @property
     def data_locations(self) -> list[dict[str, str]]:

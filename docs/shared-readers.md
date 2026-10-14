@@ -5,21 +5,39 @@
 
 A **Shared Reader** is a `Reader` over a named business dataset that crosses a
 subject boundary. Its location and identity are declared **once**, in
-`readers/<subject>.py`, and a consumer instantiates it with a `base_dir` and
-nothing else:
+`readers/<subject>.py`, and a consumer instantiates it with a `base_dir` and,
+for a reader over a table, optionally the columns it needs:
 
 ```python
 from readers.sharepoint_cases import CaseObservationHistoryReader, CurrentCasesReader
 from readers.users import UsersReader
 
 CurrentCasesReader(base_dir=base_dir)
-CaseObservationHistoryReader(base_dir=base_dir)
+CaseObservationHistoryReader(base_dir=base_dir, columns=HISTORY_READ)
 UsersReader(base_dir=base_dir)
 ```
 
-The **import** names the subject. The **constructor** supplies the root.
-Everything past that — layer, table, file, database, whether there is a database
-at all — is the reader's.
+The **import** names the subject. The **constructor** supplies the root, and
+`columns` narrows what is fetched. Everything past that — layer, table, file,
+database, whether there is a database at all — is the reader's.
+
+## Narrowing the columns
+
+Every table-backed reader takes an optional, keyword-only `columns`
+([ADR-0033](adr/0033-a-shared-reader-may-narrow-the-columns-it-fetches.md)).
+Leave it out while exploring and every column comes back. Once a consumer knows
+what it reads, it names those columns, usually the union of the gates its steps
+apply, and only they are fetched, in that order. That matters for a table that
+carries landed JSON blobs: `cora_platform_metric` reads the observation history
+narrowed to 14 of its 47 columns, which cut a 100k-row read from 6.6s and 914MB
+to 1.1s and 87MB.
+
+A named column the table lacks fails the read with a `ValidationError` naming
+every missing column. Names match as SQLite matches them, ignoring ASCII case,
+and each column comes back under the spelling the consumer named. So narrowing moves a missing column's failure from the
+step that needed it to the read. `UsersReader` and the Question Bank store do
+not take `columns`: the first already reads a fixed, normalised set, and the
+second reads files.
 
 This is a read-side indirection and nothing more. Every feed still *writes*
 through its own medallion, single-writer-per-file still holds, and the numbered
@@ -60,15 +78,17 @@ _SUBJECT = "sharepoint_cases"
 _CASE_CURRENT_TABLE = "case_current"
 
 
-def _gold_reader(base_dir, table):
-    return medallion(StoreRegistry(base_dir), _SUBJECT).gold.reader(table)
+def _gold_reader(base_dir, table, columns):
+    return medallion(StoreRegistry(base_dir), _SUBJECT).gold.reader(
+        table, columns=columns
+    )
 
 
 class CurrentCasesReader:
     """Every Case as it currently stands — one row per ``case_id``."""
 
-    def __init__(self, base_dir: str | os.PathLike[str]) -> None:
-        self._reader = _gold_reader(base_dir, _CASE_CURRENT_TABLE)
+    def __init__(self, base_dir, *, columns=None) -> None:
+        self._reader = _gold_reader(base_dir, _CASE_CURRENT_TABLE, columns)
 
     @property
     def data_locations(self) -> list[dict[str, str]]:
@@ -321,8 +341,8 @@ declared nothing.
 
 ## The guardrails
 
-They are also in `readers/__init__.py`, so they are readable from inside the
-package.
+This page is where they live; `readers/__init__.py` points here rather than
+keeping a second copy that could drift.
 
 **G1 — Read-only.** `readers/` mints Readers, never Writers. This is what stops
 it becoming a second store facade beside `tools.store`, and it is encoded in the
@@ -382,8 +402,10 @@ inherits without deciding.
 
 ## What a Shared Reader must not do (G5)
 
-A Shared Reader over a stored table is a **pass-through**. No projection, no
-coercion, no re-shaping, **no joins, no aggregation, no as-of filtering.**
+A Shared Reader over a stored table is a **pass-through**. No coercion, no
+re-shaping, **no joins, no aggregation, no as-of filtering**, and no projection
+the reader chooses. The one narrowing allowed is the `columns` a consumer names
+for itself (above): it changes no value and affects no other consumer.
 
 The reason is that a Shared Reader has more than one consumer by definition —
 that is what admitted it. Shaping inside it is therefore shaping that every
@@ -400,11 +422,11 @@ moved across as it stood. It is not a licence to add shaping to a new entry: the
 test is whether the source is untrustworthy in a way that every consumer must
 handle identically, not whether the shaping would be convenient.
 
-**Not decided:** whether a reader may narrow *what it fetches* —
+**Not decided:** whether a reader may narrow *which rows* it fetches —
 `CurrentCasesReader(base_dir, case_ids=...)`. That is predicate pushdown rather
-than business logic, and `SqliteReader` already takes `columns=[...]`; but an
-as-of window is also just a predicate, and that is exactly where the line gets
-hard. It needs its own session. Until then, filter in the consumer.
+than business logic, as narrowing the columns is; but an as-of window is also
+just a predicate, and that is exactly where the line gets hard. It needs its own
+session. Until then, filter rows in the consumer.
 
 ## Where it is not
 

@@ -7,7 +7,7 @@ import sqlite3
 import pandas as pd
 import pytest
 
-from framework.core import Dataset
+from framework.core import Dataset, ValidationError
 from framework.io import Refresh
 from readers.sharepoint_cases import (
     AnswerActionsReader,
@@ -100,8 +100,8 @@ def test_each_reader_sees_only_its_own_table(tmp_path):
 
 
 def test_the_read_is_a_pass_through(tmp_path):
-    # No projection, no coercion, no re-shaping. Every landed column comes
-    # back, including one no consumer has asked for.
+    # No coercion, no re-shaping, and with no columns named every landed
+    # column comes back, including one no consumer has asked for.
     _seed(tmp_path, "case_current", [{**CASES[0], "unexpected_column": "kept"}])
 
     landed = CurrentCasesReader(tmp_path).read()
@@ -111,6 +111,36 @@ def test_the_read_is_a_pass_through(tmp_path):
         "assigned_reviewer_name",
         "unexpected_column",
     }
+
+
+@pytest.mark.parametrize(
+    "reader_class, table, layer",
+    [
+        (CurrentCasesReader, "case_current", "gold"),
+        (ConversationMessagesReader, "conversation_message", "gold"),
+        (AnswersReader, "answer", "gold"),
+        (AnswerActionsReader, "answer_action", "gold"),
+        (AppealsReader, "appeal", "gold"),
+        (CaseObservationHistoryReader, "case_version", "silver"),
+    ],
+)
+def test_named_columns_narrow_the_read_to_those_columns_in_that_order(
+    tmp_path, reader_class, table, layer
+):
+    rows = [{"case_id": "c-1", "status": "Open", "answers": "[...]"}]
+    _seed(tmp_path, table, rows, layer=layer)
+
+    narrowed = reader_class(tmp_path, columns=["status", "case_id"]).read()
+
+    assert rows_of(narrowed) == [{"status": "Open", "case_id": "c-1"}]
+    assert list(narrowed.columns) == ["status", "case_id"]
+
+
+def test_a_named_column_the_table_lacks_fails_the_read_naming_it(tmp_path):
+    _seed(tmp_path, "case_current", CASES)
+
+    with pytest.raises(ValidationError, match="missing required column.*: due_date"):
+        CurrentCasesReader(tmp_path, columns=["case_id", "due_date"]).read()
 
 
 @pytest.mark.parametrize(

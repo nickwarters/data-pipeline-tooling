@@ -32,6 +32,17 @@ def test_reads_what_the_producer_landed_in_silver(tmp_path):
     assert rows_of(ComplaintsCCasesReader(tmp_path).read()) == ROWS
 
 
+def test_named_columns_narrow_the_read_to_those_columns(tmp_path):
+    _seed(tmp_path, ROWS)
+
+    narrowed = ComplaintsCCasesReader(
+        tmp_path, columns=["department", "record_id"]
+    ).read()
+
+    assert list(narrowed.columns) == ["department", "record_id"]
+    assert len(narrowed) == len(ROWS)
+
+
 def test_describe_and_data_locations_delegate_to_the_reader_underneath(tmp_path):
     _seed(tmp_path, ROWS)
     reader = ComplaintsCCasesReader(tmp_path)

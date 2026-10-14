@@ -825,14 +825,13 @@ the rates) before it is written.
 
 - Nothing is quarantined: these are reductions of already-published gold and
   silver, whose row contracts the Sync subject enforces.
-- Each source is read once for the run. `case_current` is gated as it is read,
-  since the snapshot instant is taken off it there, and the observation history
-  is gated on the columns that order it and put in order once (`history:order`)
-  for every reduction that walks it; every other source is gated
-  by the step that reduces it, with a `ColumnValidator` on the columns that
-  reduction reads. So a Sync shape change fails that step with the column named
-  rather than publishing a wrong number; the tables before it in publication
-  order are already refreshed, and the next run rebuilds them all.
+- Each source is read once for the run, narrowed to the union of the columns
+  its steps read (`CURRENT_READ`, `HISTORY_READ` and so on in `pipeline.py`),
+  so the landed JSON blobs are never loaded. A column the source lacks fails
+  that read with the column named, before any table is written, rather than
+  publishing a wrong number. Each step still gates what it is handed with a
+  `ColumnValidator` on the columns it reduces, and the observation history is
+  put in order once (`history:order`) for every reduction that walks it.
 - `case_open_age_daily` and `reviewer_workload_daily` have no rows for a day
   the pipeline did not run, and cannot be backfilled: the state they record is
   gone once Sync's next snapshot replaces it.

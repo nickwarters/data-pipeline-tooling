@@ -41,10 +41,16 @@ from pipelines.cora_platform_metric.schema import (
     CaseDurationPercentilesDaily,
 )
 from pipelines.sharepoint_cases.schema import FEED_NAME as SYNC_SUBJECT
-from tests.framework_testing import build_databases, given_rows, read_rows
+from tests.framework_testing import (
+    build_databases,
+    given_rows,
+    read_rows,
+    read_run_log,
+)
 from tools.calendar import WorkingDayCalendar
 from tools.medallion import medallion
 from tools.observability import timestamps
+from tools.observability.run_store import RunStore
 from tools.store import StoreRegistry
 
 AS_OF = "2026-08-20T06:00:00+00:00"
@@ -2350,7 +2356,7 @@ def test_the_pipeline_declares_sync_as_its_freshness_upstream():
     assert requirement.max_age_days == 0
 
 
-def test_a_source_missing_a_column_a_metric_needs_fails_that_step(tmp_path, capsys):
+def test_a_source_missing_a_column_a_metric_needs_fails_the_read(tmp_path, capsys):
     # An unmigrated directory, so the narrowed table really lacks the column
     # (a migrated one would keep the declared column and land NULLs).
     _seed_sync(tmp_path)
@@ -2362,12 +2368,20 @@ def test_a_source_missing_a_column_a_metric_needs_fails_that_step(tmp_path, caps
 
     assert main(["prog", "--base-dir", str(tmp_path)]) == 1
 
-    assert "posted_at" in capsys.readouterr().err
-    # The gate sits inside the step that uses the column, so the tables before
-    # it are refreshed and the one that needed it is not.
-    gold = medallion(StoreRegistry(tmp_path), "cora_platform_metric").gold
-    assert gold.columns_of("case_stage_dwell_current").columns() is not None
-    assert gold.columns_of("conversation_response_time_current").columns() is None
+    missing = "conversation_message is missing required column(s): posted_at"
+    err = capsys.readouterr().err
+    assert "[ValidationError, data]" in err
+    assert missing in err
+    # Each source is read narrowed to what its steps need, so the run's own
+    # record shows the read failing on the column, and no step writing.
+    records = read_run_log(RunStore(tmp_path).log_path_for(PIPELINE_NAME))
+    [failed] = [r for r in records if r["status"] == "error" and r["step"] != "run"]
+    assert (failed["step"], failed["errors"], failed["error_category"]) == (
+        "messages:read",
+        [missing],
+        "data",
+    )
+    assert [r["step"] for r in records if r["step"].endswith(":write")] == []
 
 
 def test_a_sync_table_missing_the_item_id_fails_the_read_naming_it(tmp_path, capsys):
@@ -2385,6 +2399,10 @@ def test_a_sync_table_missing_the_item_id_fails_the_read_naming_it(tmp_path, cap
 
     assert main(["prog", "--base-dir", str(tmp_path)]) == 1
 
-    err = capsys.readouterr().err
-    assert "[ValidationError, data]" in err
-    assert "source_item_id" in err
+    missing = "conversation_message is missing required column(s): source_item_id"
+    assert missing in capsys.readouterr().err
+    # Read narrowed to what its steps need, so the run's own record shows the
+    # read failing on the column.
+    records = read_run_log(RunStore(tmp_path).log_path_for(PIPELINE_NAME))
+    [failed] = [r for r in records if r["status"] == "error" and r["step"] != "run"]
+    assert (failed["step"], failed["errors"]) == ("messages:read", [missing])

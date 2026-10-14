@@ -7,6 +7,7 @@ the protocol signature.
 from __future__ import annotations
 
 import os
+import string
 from pathlib import Path
 
 import pandas as pd
@@ -17,6 +18,7 @@ from framework._internal.locations import file_location, table_location
 from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError
 from framework.core.protocols import Reader
+from framework.core.validators import ValidationError
 from framework.io.sql import quote_identifier
 
 # ``Reader`` is imported only to be re-exported through ``framework.io``.
@@ -383,8 +385,20 @@ class ExcelReader:
         return render(self, path=str(self._path), sheet=self._sheet)
 
 
+# SQLite matches identifiers case-insensitively in ASCII only: "Adviser_ID"
+# answers to "adviser_id", but "Émis" does not answer to "émis".
+_SQLITE_FOLD = str.maketrans(string.ascii_uppercase, string.ascii_lowercase)
+
+
 class SqliteReader:
-    """Read one table from a SQLite database into a Dataset."""
+    """Read one table from a SQLite database into a Dataset.
+
+    ``columns`` narrows the read to those columns, in that order, each under the
+    spelling it was named by; a named column the table lacks raises
+    :class:`~framework.core.ValidationError` listing every one missing, as a
+    ``ColumnValidator`` over the whole table would. Names match as SQLite
+    matches them, ignoring ASCII case.
+    """
 
     def __init__(
         self,
@@ -403,16 +417,34 @@ class SqliteReader:
         self.data_locations = [table_location(self._db_path, self._table)]
         table = quote_identifier(self._table)
         if self._columns is not None:
-            col_list = ", ".join(quote_identifier(c) for c in self._columns)
+            col_list = ", ".join(
+                f"{quote_identifier(c)} AS {quote_identifier(c)}" for c in self._columns
+            )
             query = f"SELECT {col_list} FROM {table}"
         else:
             query = f"SELECT * FROM {table}"
         con = connect(self._db_path, self._busy_timeout_ms)
         try:
+            if self._columns is not None:
+                self._require_columns(con)
             frame = pd.read_sql(query, con)
         finally:
             con.close()
         return Dataset.from_pandas(frame)
+
+    def _require_columns(self, con) -> None:
+        present = {
+            row[1].translate(_SQLITE_FOLD)
+            for row in con.execute(
+                f"PRAGMA table_info({quote_identifier(self._table)})"
+            )
+        }
+        # No columns at all means no table: let the SELECT say so.
+        missing = [c for c in self._columns if c.translate(_SQLITE_FOLD) not in present]
+        if present and missing:
+            raise ValidationError(
+                f"{self._table} is missing required column(s): {', '.join(missing)}"
+            )
 
     def describe(self) -> str:
         return render(

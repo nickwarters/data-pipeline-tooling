@@ -3,9 +3,10 @@
 ``run`` reads each Sync source once through the Shared Readers, takes the
 snapshot instant off the current Cases, orders the observation history once,
 and hands each ``to_*`` step what it reduces (a function in ``metrics``), that
-instant and its table's Writer. A step gates its source on the columns it
-reads, so a missing column fails that table and leaves the earlier ones
-written. The tables are in ``docs/data-dictionary-cora-platform-metric.md``.
+instant and its table's Writer. Each source is read narrowed to the union of
+the columns its steps gate on, so a column missing from the source fails the
+read, before any table is written. The tables are in
+``docs/data-dictionary-cora-platform-metric.md``.
 
 Run parameter ``calendar``: a YAML working-day calendar, the file
 ``orchestrate --calendar`` takes; omitted, weekends-only.
@@ -108,6 +109,34 @@ DURATION_GATE = ColumnValidator(metrics.DURATION_COLUMNS)
 OPEN_AGE_GATE = ColumnValidator(metrics.OPEN_AGE_COLUMNS)
 FIRST_TIME_RIGHT_GATE = ColumnValidator(metrics.FIRST_TIME_RIGHT_COLUMNS)
 THROUGHPUT_GATE = ColumnValidator(metrics.THROUGHPUT_COLUMNS)
+
+
+def _union(*column_sets: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(c for columns in column_sets for c in columns))
+
+
+# What each source is read with: the union of the gates on it. The history and
+# the current Cases carry the landed JSON blobs, which no table here reads.
+CURRENT_READ = _union(
+    metrics.CURRENT_COLUMNS,
+    metrics.LIFECYCLE_COLUMNS,
+    metrics.OUTCOME_COLUMNS,
+    metrics.DUE_COLUMNS,
+    metrics.REMEDIATION_OVERDUE_COLUMNS,
+    metrics.WORKLOAD_COLUMNS,
+    metrics.APPEAL_RATE_COLUMNS,
+    metrics.DURATION_COLUMNS,
+    metrics.OPEN_AGE_COLUMNS,
+    metrics.FIRST_TIME_RIGHT_COLUMNS,
+    metrics.THROUGHPUT_COLUMNS,
+)
+HISTORY_READ = _union(
+    metrics.ORDERING_COLUMNS, metrics.HISTORY_COLUMNS, metrics.BACKLOG_COLUMNS
+)
+ANSWER_READ = _union(metrics.ANSWER_COLUMNS, metrics.OUTSTANDING_ANSWER_COLUMNS)
+ACTION_READ = metrics.ANSWER_ACTION_COLUMNS
+APPEAL_READ = metrics.APPEAL_COLUMNS
+MESSAGE_READ = metrics.CONVERSATION_COLUMNS
 
 CALENDAR_PARAM = "calendar"
 
@@ -479,7 +508,9 @@ def run(context: RunContext) -> Dataset:
     gold = medallion(StoreRegistry(base_dir), schema.SUBJECT).gold
     calendar = _calendar_from(context)
 
-    cases = read(CurrentCasesReader(base_dir), name="current:read")
+    cases = read(
+        CurrentCasesReader(base_dir, columns=CURRENT_READ), name="current:read"
+    )
     validate(CURRENT_GATE, cases, name="current:columns")
     as_of = metrics.snapshot_as_of(cases)
     by_day = snapshot_day_strategy(as_of)
@@ -488,12 +519,20 @@ def run(context: RunContext) -> Dataset:
         return gold.writer(table, by_day if table in ACCUMULATED_TABLES else Refresh())
 
     observations = to_ordered_history(
-        read(CaseObservationHistoryReader(base_dir), name="history:read")
+        read(
+            CaseObservationHistoryReader(base_dir, columns=HISTORY_READ),
+            name="history:read",
+        )
     )
-    answers = read(AnswersReader(base_dir), name="answers:read")
-    actions = read(AnswerActionsReader(base_dir), name="actions:read")
-    appeals = read(AppealsReader(base_dir), name="appeals:read")
-    messages = read(ConversationMessagesReader(base_dir), name="messages:read")
+    answers = read(AnswersReader(base_dir, columns=ANSWER_READ), name="answers:read")
+    actions = read(
+        AnswerActionsReader(base_dir, columns=ACTION_READ), name="actions:read"
+    )
+    appeals = read(AppealsReader(base_dir, columns=APPEAL_READ), name="appeals:read")
+    messages = read(
+        ConversationMessagesReader(base_dir, columns=MESSAGE_READ),
+        name="messages:read",
+    )
 
     to_stage_dwell(observations, as_of, target("case_stage_dwell_current"))
     to_hold(observations, as_of, target("case_hold_current"))

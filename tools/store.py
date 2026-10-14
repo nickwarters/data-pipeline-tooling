@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, Sequence
 
 from framework._internal.connection import connect
 from framework.io import (
@@ -96,9 +96,14 @@ class Store:
             self._db_path, table, busy_timeout_ms=self._busy_timeout_ms
         )
 
-    def reader(self, table: str) -> Reader:
-        """Mint a Reader over a table in this namespace."""
-        return SqliteReader(self._db_path, table, busy_timeout_ms=self._busy_timeout_ms)
+    def reader(self, table: str, *, columns: Sequence[str] | None = None) -> Reader:
+        """Mint a Reader over a table in this namespace; ``columns`` narrows it."""
+        return SqliteReader(
+            self._db_path,
+            table,
+            busy_timeout_ms=self._busy_timeout_ms,
+            columns=None if columns is None else list(columns),
+        )
 
     def quarantine_writer(self, table: str) -> Writer:
         """Mint a QuarantineWriter over this subject's quarantine file."""

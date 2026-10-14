@@ -56,6 +56,19 @@ def test_store_writer_with_accumulate_by_run_strategy_accumulates(tmp_path):
     assert "load_date" in landed.columns
 
 
+def test_store_reader_narrows_to_the_columns_named(tmp_path):
+    store = StoreRegistry(tmp_path).store("crm")
+    store.writer("cases", Refresh()).write(
+        Dataset.from_pandas(pd.DataFrame({"case_id": ["c-1"], "status": ["Open"]}))
+    )
+
+    assert store.reader("cases").read().columns == ["case_id", "status"]
+    assert store.reader("cases", columns=("status",)).read().columns == ["status"]
+    # Keyword-only, as on every Shared Reader that passes it through.
+    with pytest.raises(TypeError):
+        store.reader("cases", ("status",))
+
+
 def test_store_columns_of_reads_the_prior_landing_and_labels_the_table(tmp_path):
     # The PriorColumns seam the raw drift check reads: after a landing,
     # columns_of reports that table's columns (order preserved) and a label that
