@@ -8,9 +8,7 @@ path from a seeded Sync subject.
 from __future__ import annotations
 
 import datetime as dt
-import sqlite3
 from collections import Counter
-from contextlib import closing
 
 import numpy as np
 import pandas as pd
@@ -60,7 +58,7 @@ from tools.store import StoreRegistry
 AS_OF = "2026-08-20T06:00:00+00:00"
 # The brand every fixture Case carries unless a test says otherwise.
 BRAND = "brand 1"
-KEY = "source_item_key"
+KEY = "source_item_id"
 KHAN = r"i:0#.w|CONTEXT\A.KHAN"
 JONES = r"i:0#.w|CONTEXT\B.JONES"
 
@@ -86,7 +84,7 @@ def _observation(
 ) -> dict[str, object]:
     return {
         "case_type": "complaints",
-        "source_item_key": item,
+        "source_item_id": item,
         "source_observation_id": observation_id,
         "source_version": version,
         "source_modified_at": modified,
@@ -104,9 +102,10 @@ def _observation(
 
 def _case(key: str, status: str, **overrides: object) -> dict[str, object]:
     # No ``case_id``: it lives on ``case_current`` alone and the metrics never
-    # read it, so a stray use of it fails here rather than passing.
+    # read it, so a stray use of it fails here rather than passing. A Case is its
+    # ``(case_type, source_item_id)``.
     row: dict[str, object] = {
-        "source_item_key": key,
+        "source_item_id": key,
         "case_type": "complaints",
         "brand": BRAND,
         "status": status,
@@ -203,21 +202,21 @@ CURRENT = [
 
 ANSWERS = [
     {
-        "source_item_key": "c1",
+        "source_item_id": "c1",
         "case_type": "complaints",
         "question_id": "q1",
         "remediation_required": "yes",
         "remediation_status": "complete",
     },
     {
-        "source_item_key": "c1",
+        "source_item_id": "c1",
         "case_type": "complaints",
         "question_id": "q2",
         "remediation_required": "no",
         "remediation_status": None,
     },
     {
-        "source_item_key": "c4",
+        "source_item_id": "c4",
         "case_type": "complaints",
         "question_id": "q1",
         "remediation_required": "yes",
@@ -227,19 +226,19 @@ ANSWERS = [
 
 ACTIONS = [
     {
-        "source_item_key": "c1",
+        "source_item_id": "c1",
         "case_type": "complaints",
         "question_id": "q1",
         "action_id": "a1",
     },
     {
-        "source_item_key": "c1",
+        "source_item_id": "c1",
         "case_type": "complaints",
         "question_id": "q1",
         "action_id": "a2",
     },
     {
-        "source_item_key": "c4",
+        "source_item_id": "c4",
         "case_type": "complaints",
         "question_id": "q1",
         "action_id": "a3",
@@ -248,7 +247,7 @@ ACTIONS = [
 
 APPEALS = [
     {
-        "source_item_key": "c1",
+        "source_item_id": "c1",
         "case_type": "complaints",
         "appeal_id": "ap1",
         "raised_at": "2026-07-11T09:00:00+00:00",
@@ -258,7 +257,7 @@ APPEALS = [
         "cited_question_ids_json": '["q1", "q2"]',
     },
     {
-        "source_item_key": "c4",
+        "source_item_id": "c4",
         "case_type": "complaints",
         "appeal_id": "ap2",
         "raised_at": "2026-07-14T09:00:00+00:00",
@@ -271,28 +270,28 @@ APPEALS = [
 
 MESSAGES = [
     {
-        "source_item_key": "c1",
+        "source_item_id": "c1",
         "case_type": "complaints",
         "seq": 1,
         "author_login": "a.khan",
         "posted_at": "2026-07-05T09:00:00+00:00",
     },
     {
-        "source_item_key": "c1",
+        "source_item_id": "c1",
         "case_type": "complaints",
         "seq": 2,
         "author_login": "a.khan",
         "posted_at": "2026-07-05T10:00:00+00:00",
     },
     {
-        "source_item_key": "c1",
+        "source_item_id": "c1",
         "case_type": "complaints",
         "seq": 3,
         "author_login": "r.party",
         "posted_at": "2026-07-05T13:00:00+00:00",
     },
     {
-        "source_item_key": "c1",
+        "source_item_id": "c1",
         "case_type": "complaints",
         "seq": 4,
         "author_login": "a.khan",
@@ -320,16 +319,18 @@ def _history(rows) -> Dataset:
     return metrics.ordered_history(given_rows(rows).read())
 
 
-def _brands(brand_by_key: dict[str, str], *, shared_item_id: bool = False) -> Dataset:
+def _brands(brand_by_case: dict) -> Dataset:
     """Current Cases as the history reductions read them: the brand of each
-    history Case named, by the ``source_item_key`` the history carries.
-    ``shared_item_id`` gives them all one list-local ``source_item_id`` too."""
+    history Case named, by its ``(case_type, source_item_id)``. A bare item id
+    is a complaints Case."""
     rows = [
-        {"source_item_key": key, "brand": brand} for key, brand in brand_by_key.items()
+        {"case_type": case_type, "source_item_id": item, "brand": brand}
+        for (case_type, item), brand in (
+            (case if isinstance(case, tuple) else ("complaints", case), brand)
+            for case, brand in brand_by_case.items()
+        )
     ]
-    if shared_item_id:
-        rows = _sharing_an_item_id(rows)
-    columns = ["source_item_key", "brand", *(["source_item_id"] * shared_item_id)]
+    columns = ["case_type", "source_item_id", "brand"]
     return Dataset.from_pandas(pd.DataFrame(rows, columns=columns))
 
 
@@ -680,58 +681,68 @@ def test_a_history_with_no_holds_lands_the_declared_shape_and_no_rows():
     ]
 
 
-def _sharing_an_item_id(rows):
-    """The rows as the live tables can carry them: two Cases whose list-local
-    ``source_item_id`` collides, told apart only by ``source_item_key``."""
-    return [{**row, "source_item_id": "7"} for row in rows]
+def _in_claims(rows):
+    """The rows as another Case Type's, which numbers its items from the same
+    start: ``claims`` rather than ``complaints``, the same ``source_item_id``."""
+    return [{**row, "case_type": "claims"} for row in rows]
 
 
-def test_two_cases_sharing_a_source_item_id_are_not_merged_in_the_history():
-    # k1 is waiting then claimed (and still in progress); k2 is claimed then
-    # completed. Told apart: k1's In-progress stay is open, k2's closed. Merged
-    # on the shared item id, one Case's Completed would end the other's stay.
-    # Each under its own Case's brand, matched on the key too.
-    history = _sharing_an_item_id(
-        [
-            _observation("k1", "a", "2026-07-02T09:00:00+00:00", "To-allocate"),
-            _observation("k2", "b", "2026-07-03T09:00:00+00:00", "In-progress"),
-            _observation("k1", "c", "2026-07-04T09:00:00+00:00", "In-progress"),
-            _observation("k2", "d", "2026-07-05T09:00:00+00:00", "Completed"),
-        ]
-    )
-    brands = _brands({"k1": "brand 1", "k2": "brand 2"}, shared_item_id=True)
+def test_the_same_item_id_in_another_case_type_is_not_merged_in_the_history():
+    # Item 7 of complaints is waiting then claimed (and still in progress); item
+    # 7 of claims is claimed then completed. Told apart: complaints' In-progress
+    # stay is open, claims' closed. Merged on the item id alone, one Case's
+    # Completed would end the other's stay. Each under its own Case's brand.
+    history = [
+        _observation("7", "a", "2026-07-02T09:00:00+00:00", "To-allocate"),
+        _observation("7", "c", "2026-07-04T09:00:00+00:00", "In-progress"),
+        *_in_claims(
+            [
+                _observation("7", "b", "2026-07-03T09:00:00+00:00", "In-progress"),
+                _observation("7", "d", "2026-07-05T09:00:00+00:00", "Completed"),
+            ]
+        ),
+    ]
+    brands = _brands({"7": "brand 1", ("claims", "7"): "brand 2"})
     result = _rows(metrics.case_stage_dwell(_history(history), brands, as_of=AS_OF))
 
     assert [
-        (r["brand"], r["status"], r["interval_count"], r["open_interval_count"])
+        (
+            r["brand"],
+            r["case_type"],
+            r["status"],
+            r["interval_count"],
+            r["open_interval_count"],
+        )
         for r in result
     ] == [
-        ("brand 1", "In-progress", 0, 1),
-        ("brand 1", "To-allocate", 1, 0),
-        ("brand 2", "In-progress", 1, 0),
+        ("brand 1", "complaints", "In-progress", 0, 1),
+        ("brand 1", "complaints", "To-allocate", 1, 0),
+        ("brand 2", "claims", "In-progress", 1, 0),
     ]
 
 
-def test_two_cases_sharing_a_source_item_id_hold_separately():
-    # Overlapping holds on two Cases: two Cases, two holds, four days. Merged
-    # they would read as one Case held from the 2nd to the 4th.
-    history = _sharing_an_item_id(
-        [
-            _observation(
-                "k1", "a", "2026-07-02T09:00:00+00:00", "In-progress", on_hold=1
-            ),
-            _observation(
-                "k2", "b", "2026-07-03T09:00:00+00:00", "In-progress", on_hold=1
-            ),
-            _observation("k1", "c", "2026-07-04T09:00:00+00:00", "In-progress"),
-            _observation("k2", "d", "2026-07-05T09:00:00+00:00", "In-progress"),
-        ]
-    )
+def test_the_same_item_id_in_another_case_type_is_held_separately():
+    # Overlapping two-day holds on item 7 of two Case Types: two Cases, each held
+    # once. Merged on the item id alone they would read as one Case.
+    history = [
+        _observation("7", "a", "2026-07-02T09:00:00+00:00", "In-progress", on_hold=1),
+        _observation("7", "c", "2026-07-04T09:00:00+00:00", "In-progress"),
+        *_in_claims(
+            [
+                _observation(
+                    "7", "b", "2026-07-03T09:00:00+00:00", "In-progress", on_hold=1
+                ),
+                _observation("7", "d", "2026-07-05T09:00:00+00:00", "In-progress"),
+            ]
+        ),
+    ]
+    brands = _brands({"7": BRAND, ("claims", "7"): BRAND})
+    result = _rows(metrics.case_hold(_history(history), brands, as_of=AS_OF))
 
-    cases = _brands({"k1": BRAND, "k2": BRAND}, shared_item_id=True)
-    [row] = _rows(metrics.case_hold(_history(history), cases, as_of=AS_OF))
-
-    assert (row["case_count"], row["hold_count"], row["held_days_total"]) == (2, 2, 4.0)
+    assert [
+        (r["case_type"], r["case_count"], r["hold_count"], r["held_days_total"])
+        for r in result
+    ] == [("claims", 1, 1, 2.0), ("complaints", 1, 1, 2.0)]
 
 
 # --- the current metrics ----------------------------------------------------
@@ -999,7 +1010,7 @@ def test_answer_remediation_by_manager_joins_each_answer_to_its_case():
 
 
 def test_answer_remediation_by_manager_drops_an_answer_with_no_current_case():
-    orphan = [{**ANSWERS[0], "source_item_key": "gone"}]
+    orphan = [{**ANSWERS[0], "source_item_id": "gone"}]
     result = metrics.answer_remediation_by_manager(
         given_rows(orphan).read(), _current(), as_of=AS_OF
     )
@@ -1007,16 +1018,16 @@ def test_answer_remediation_by_manager_drops_an_answer_with_no_current_case():
     assert len(result) == 0
 
 
-def test_an_answer_joins_the_case_with_its_source_item_key_not_its_item_id():
-    # Both Cases carry item id 7; only k1 has an Answer, so only k1's manager
-    # is credited with it.
-    cases = _sharing_an_item_id(
-        [
-            _case("k1", "In-progress", responsible_party_manager_name="R.ONE"),
-            _case("k2", "In-progress", responsible_party_manager_name="R.TWO"),
-        ]
-    )
-    answers = _sharing_an_item_id([_answer("k1", "q1", "yes", "complete")])
+def test_an_answer_joins_the_case_of_its_own_case_type():
+    # Item 7 of both Case Types; only complaints' has an Answer, so only its
+    # manager is credited with it.
+    cases = [
+        _case("7", "In-progress", responsible_party_manager_name="R.ONE"),
+        *_in_claims(
+            [_case("7", "In-progress", responsible_party_manager_name="R.TWO")]
+        ),
+    ]
+    answers = [_answer("7", "q1", "yes", "complete")]
     result = _rows(
         metrics.answer_remediation_by_manager(
             given_rows(answers).read(), _current(cases), as_of=AS_OF
@@ -1028,28 +1039,27 @@ def test_an_answer_joins_the_case_with_its_source_item_key_not_its_item_id():
     ] == [("R.ONE", 1)]
 
 
-def test_an_action_is_not_credited_to_a_live_case_that_shares_its_item_id():
-    # k3 is void and shares item id 7 with the live k1: its Action is not on a
-    # live Case, so it adds nothing; k1's own does.
-    cases = _sharing_an_item_id(
-        [_case("k1", "In-progress"), _case("k3", "Void", voided_at=AS_OF)]
-    )
-    actions = _sharing_an_item_id(
-        [
-            _action("k1", "q1", "a1"),
-            _action("k3", "q1", "a2"),
-            _action("k3", "q2", "a3"),
-        ]
-    )
+def test_an_action_is_not_credited_to_a_live_case_of_another_case_type():
+    # Item 7 of claims is void; item 7 of complaints is live. The claims Actions
+    # are not on a live Case, so they add nothing; complaints' own does.
+    cases = [
+        _case("7", "In-progress"),
+        *_in_claims([_case("7", "Void", voided_at=AS_OF)]),
+    ]
+    actions = [
+        _action("7", "q1", "a1"),
+        *_in_claims([_action("7", "q1", "a2"), _action("7", "q2", "a3")]),
+    ]
     result = _rows(
         metrics.answer_action_load(
             given_rows(actions).read(), _current(cases), as_of=AS_OF
         )
     )
 
-    assert [(r["question_id"], r["case_count"], r["action_count"]) for r in result] == [
-        ("q1", 1, 1)
-    ]
+    assert [
+        (r["case_type"], r["question_id"], r["case_count"], r["action_count"])
+        for r in result
+    ] == [("complaints", "q1", 1, 1)]
 
 
 def test_appeal_cycle_time_is_measured_over_the_resolved_appeals_only():
@@ -1135,7 +1145,7 @@ def test_conversation_response_time_measures_replies_across_an_author_change():
 
 
 def test_conversation_response_time_counts_only_messages_on_live_cases():
-    void_thread = [{**message, "source_item_key": "c3"} for message in MESSAGES]
+    void_thread = [{**message, "source_item_id": "c3"} for message in MESSAGES]
     [row] = _rows(
         metrics.conversation_response_time(
             given_rows(MESSAGES + void_thread).read(), _current(), as_of=AS_OF
@@ -1171,8 +1181,8 @@ def test_conversation_volume_counts_threads_over_the_live_cases():
 
 def test_conversation_volume_drops_messages_on_a_void_or_unknown_case():
     stray = [
-        {**MESSAGES[0], "source_item_key": "c3"},  # void
-        {**MESSAGES[0], "source_item_key": "c9"},  # not current
+        {**MESSAGES[0], "source_item_id": "c3"},  # void
+        {**MESSAGES[0], "source_item_id": "c9"},  # not current
     ]
     [row] = _rows(
         metrics.conversation_volume(
@@ -1634,7 +1644,7 @@ def test_due_profile_judges_a_due_date_on_the_local_calendar(monkeypatch):
 
 def _answer(key, question_id, required, status):
     return {
-        "source_item_key": key,
+        "source_item_id": key,
         "case_type": "complaints",
         "question_id": question_id,
         "remediation_required": required,
@@ -1644,7 +1654,7 @@ def _answer(key, question_id, required, status):
 
 def _action(key, question_id, action_id):
     return {
-        "source_item_key": key,
+        "source_item_id": key,
         "case_type": "complaints",
         "question_id": question_id,
         "action_id": action_id,
@@ -1707,55 +1717,54 @@ def test_remediation_overdue_counts_whats_outstanding_on_cases_past_their_date()
     assert {r["assigned_reviewer_name"] for r in result} == {KHAN}
 
 
-def test_a_message_takes_the_brand_of_the_case_with_its_source_item_key():
-    # k1 (brand 1) and k2 (brand 2) share item id 7; the thread is k2's, so it
-    # counts under brand 2 and brand 1 has no conversation.
-    cases = _sharing_an_item_id(
-        [_case("k1", "In-progress"), _case("k2", "In-progress", brand=OTHER_BRAND)]
-    )
-    messages = _sharing_an_item_id(
-        [{**message, "source_item_key": "k2"} for message in MESSAGES]
-    )
+def test_a_message_takes_the_brand_of_the_case_of_its_own_case_type():
+    # Item 7 of complaints (brand 1) and of claims (brand 2) are both live; the
+    # thread is claims', so it counts under brand 2 and brand 1 has none.
+    cases = [
+        _case("7", "In-progress"),
+        *_in_claims([_case("7", "In-progress", brand=OTHER_BRAND)]),
+    ]
+    messages = [
+        {**message, "source_item_id": "7", "case_type": "claims"}
+        for message in MESSAGES
+    ]
     result = _rows(
         metrics.conversation_volume(
             given_rows(messages).read(), _current(cases), as_of=AS_OF
         )
     )
 
-    assert [(r["brand"], r["thread_count"], r["message_count"]) for r in result] == [
-        (BRAND, 0, 0),
-        (OTHER_BRAND, 1, 4),
-    ]
+    assert [
+        (r["brand"], r["case_type"], r["thread_count"], r["message_count"])
+        for r in result
+    ] == [(BRAND, "complaints", 0, 0), (OTHER_BRAND, "claims", 1, 4)]
 
 
-def test_outstanding_remediation_is_counted_on_the_case_with_its_source_item_key():
-    # r1 and r2 share item id 7; only r1 has an outstanding Answer and Action.
-    cases = _sharing_an_item_id(
-        [
-            _case(
-                key,
-                "Actions In Progress",
-                remediation_due_date="2026-08-13T00:00:00+00:00",
-            )
-            for key in ("r1", "r2")
-        ]
+def test_outstanding_remediation_is_counted_on_the_case_of_its_own_case_type():
+    # Item 7 of both Case Types is past its date; only complaints' has an
+    # outstanding Answer and Action.
+    past_due = _case(
+        "7", "Actions In Progress", remediation_due_date="2026-08-13T00:00:00+00:00"
     )
-    answers = _sharing_an_item_id([_answer("r1", "q1", "yes", None)])
-    actions = _sharing_an_item_id([_action("r1", "q1", "a1")])
-    [row] = _rows(
+    answers = [_answer("7", "q1", "yes", None)]
+    actions = [_action("7", "q1", "a1")]
+    result = _rows(
         metrics.remediation_overdue(
-            _current(cases),
+            _current([past_due, *_in_claims([past_due])]),
             given_rows(answers).read(),
             given_rows(actions).read(),
             as_of=AS_OF,
         )
     )
 
-    assert (
-        row["case_count"],
-        row["outstanding_answer_count"],
-        row["outstanding_action_count"],
-    ) == (2, 1, 1)
+    assert {
+        r["case_type"]: (
+            r["case_count"],
+            r["outstanding_answer_count"],
+            r["outstanding_action_count"],
+        )
+        for r in result
+    } == {"complaints": (1, 1, 1), "claims": (1, 0, 0)}
 
 
 def test_reviewer_workload_sets_work_in_hand_against_four_weeks_of_output():
@@ -1845,34 +1854,35 @@ def test_reviewer_workload_ages_a_reopened_case_from_its_return_to_in_progress()
     assert oldest(cases) == 12.0
 
 
-def test_a_reopened_case_does_not_lend_its_age_to_one_sharing_its_item_id():
-    # k1 was reopened on 15 Jul (five days in progress by 20 Jul); k2 has no
-    # history and shares its item id, so it keeps its own assigned_at (8 Jul:
-    # twelve days), not k1's reopen.
+def test_a_reopened_case_does_not_lend_its_age_to_another_case_types_item():
+    # Complaints' item 7 was reopened on 15 Jul (five days in progress by 20
+    # Jul); claims' item 7 has no history, so it keeps its own assigned_at (8
+    # Jul: twelve days), not the reopen.
     as_of = "2026-07-20T06:00:00+00:00"
-    history = _sharing_an_item_id(
-        [
-            _observation("k1", "a", "2026-07-04T10:00:00+00:00", "In-progress"),
-            _observation("k1", "b", "2026-07-10T09:00:00+00:00", "Completed"),
-            _observation("k1", "c", "2026-07-15T09:00:00+00:00", "In-progress"),
-        ]
-    )
-    cases = _sharing_an_item_id(
-        [
-            _case("k1", "In-progress", assigned_at="2026-07-04T09:00:00+00:00"),
-            _case("k2", "In-progress", assigned_at="2026-07-08T09:00:00+00:00"),
-        ]
-    )
-    [row] = _rows(
+    history = [
+        _observation("7", "a", "2026-07-04T10:00:00+00:00", "In-progress"),
+        _observation("7", "b", "2026-07-10T09:00:00+00:00", "Completed"),
+        _observation("7", "c", "2026-07-15T09:00:00+00:00", "In-progress"),
+    ]
+    cases = [
+        _case("7", "In-progress", assigned_at="2026-07-04T09:00:00+00:00"),
+        *_in_claims(
+            [_case("7", "In-progress", assigned_at="2026-07-08T09:00:00+00:00")]
+        ),
+    ]
+    result = _rows(
         metrics.reviewer_workload(_current(cases), _history(history), as_of=as_of)
     )
 
-    assert row["oldest_in_progress_days"] == 12.0
+    assert {r["case_type"]: r["oldest_in_progress_days"] for r in result} == {
+        "complaints": 5.0,
+        "claims": 12.0,
+    }
 
 
 def _appeal(key, appeal_id, state, verdict=None):
     return {
-        "source_item_key": key,
+        "source_item_id": key,
         "case_type": "complaints",
         "appeal_id": appeal_id,
         "raised_at": "2026-08-01T09:00:00+00:00",
@@ -2192,20 +2202,21 @@ def test_first_time_right_excludes_appealed_amended_and_overridden_cases():
     assert {r["brand"] for r in result} == {BRAND}
 
 
-def test_an_appeal_spoils_only_the_case_with_its_source_item_key():
-    # f1 and f2 share item id 7; only f1 was appealed.
-    cases = _sharing_an_item_id(
-        [
-            _case(key, "Completed", reportable_at="2026-07-08T09:00:00+00:00")
-            for key in ("f1", "f2")
-        ]
+def test_an_appeal_spoils_only_the_case_of_its_own_case_type():
+    # Item 7 of complaints and of claims, Reportable the same month; only
+    # complaints' was appealed.
+    case = _case("7", "Completed", reportable_at="2026-07-08T09:00:00+00:00")
+    appeals = given_rows([_appeal("7", "ap1", "resolved", "rejected")]).read()
+    result = _rows(
+        metrics.first_time_right(
+            _current([case, *_in_claims([case])]), appeals, as_of=AS_OF
+        )
     )
-    appeals = given_rows(
-        _sharing_an_item_id([_appeal("f1", "ap1", "resolved", "rejected")])
-    ).read()
-    [row] = _rows(metrics.first_time_right(_current(cases), appeals, as_of=AS_OF))
 
-    assert (row["reportable_count"], row["first_time_right_count"]) == (2, 1)
+    assert {
+        r["case_type"]: (r["reportable_count"], r["first_time_right_count"])
+        for r in result
+    } == {"complaints": (1, 0), "claims": (1, 1)}
 
 
 def test_reviewer_throughput_spreads_a_weeks_reportable_cases_over_reviewers():
@@ -2289,7 +2300,7 @@ def test_reviewer_workload_daily_is_the_current_workload_under_its_date():
 
 OTHER_BRAND = "brand 2"
 ID_COLUMNS = (
-    "source_item_key",
+    "source_item_id",
     "source_observation_id",
     "appeal_id",
     "action_id",
@@ -2447,48 +2458,13 @@ def test_a_current_case_with_no_brand_counts_under_unknown_rather_than_dropping(
 @pytest.fixture
 def base_dir(tmp_path):
     """Both subjects this pipeline touches, migrated: Sync's silver and gold
-    (what it reads, with ``source_item_key`` added as the live tables carry it)
-    and this subject's gold (what it writes)."""
-    built = build_databases(
+    (what it reads) and this subject's gold (what it writes)."""
+    return build_databases(
         tmp_path,
         f"{SYNC_SUBJECT}/silver",
         f"{SYNC_SUBJECT}/gold",
         "cora_platform_metric/gold",
     )
-    _declare_source_item_key(built)
-    return built
-
-
-# Every Sync table the pipeline reads, as (layer, table).
-SYNC_SOURCE_TABLES = (
-    ("silver", "case_version"),
-    ("gold", "case_current"),
-    ("gold", "answer"),
-    ("gold", "answer_action"),
-    ("gold", "appeal"),
-    ("gold", "conversation_message"),
-)
-
-
-def _declare_source_item_key(base_dir) -> None:
-    """Add ``source_item_key`` to every Sync table the pipeline reads.
-
-    This repository's Sync migrations (``migrations/sharepoint_cases``) do not
-    declare the column: they give the detail tables ``case_id`` and
-    ``(case_type, source_item_id)``. The pipeline requires it, because on the
-    live Sync tables ``source_item_key`` is the one column that identifies a
-    Case in every table (``case_id`` is on ``case_current`` alone). So a base
-    directory built from those migrations is ALTERed to look like the live
-    tables; the seeded rows then carry the value.
-    """
-    registry = StoreRegistry(base_dir)
-    for layer, table in SYNC_SOURCE_TABLES:
-        database = registry.db_file(f"{SYNC_SUBJECT}/{layer}")
-        # Closed explicitly: ``with connection`` commits but leaves the file open,
-        # and an open handle blocks the next writer on Windows.
-        with closing(sqlite3.connect(database)) as connection:
-            connection.execute(f'ALTER TABLE "{table}" ADD COLUMN source_item_key TEXT')
-            connection.commit()
 
 
 # A Case past its Remediation Due Date, seeded for the end-to-end test only.
@@ -2500,7 +2476,7 @@ PAST_DUE_REMEDIATION = _case(
     remediation_due_date="2026-08-13T00:00:00+00:00",
 )
 PAST_DUE_ANSWER = {
-    "source_item_key": "c5",
+    "source_item_id": "c5",
     "case_type": "complaints",
     "question_id": "q1",
     "remediation_required": "yes",
@@ -2510,7 +2486,7 @@ PAST_DUE_ANSWER = {
 HISTORY_CASE_TWO = _case("2", "In-progress", assigned_reviewer_name=JONES)
 SEEDED_CURRENT = [*CURRENT, PAST_DUE_REMEDIATION, HISTORY_CASE_TWO]
 PAST_DUE_ACTION = {
-    "source_item_key": "c5",
+    "source_item_id": "c5",
     "case_type": "complaints",
     "question_id": "q1",
     "action_id": "a9",
@@ -2661,16 +2637,14 @@ def test_a_source_missing_a_column_a_metric_needs_fails_the_read(tmp_path, capsy
     assert [r["step"] for r in records if r["step"].endswith(":write")] == []
 
 
-def test_a_sync_table_without_source_item_key_fails_the_read_naming_it(
-    tmp_path, capsys
-):
-    # Every Sync table identifies a Case by ``source_item_key``; the migrations
-    # in this repository do not declare it, so a table without it must stop the
-    # run at the read, naming the column, rather than join on nothing.
+def test_a_sync_table_missing_the_item_id_fails_the_read_naming_it(tmp_path, capsys):
+    # A Case is its ``(case_type, source_item_id)`` in every Sync table, so a
+    # table without ``source_item_id`` must stop the run naming it rather than
+    # join on nothing.
     _seed_sync(tmp_path)
     sync = medallion(StoreRegistry(tmp_path), SYNC_SUBJECT)
     narrowed = [
-        {k: v for k, v in row.items() if k != "source_item_key"} for row in MESSAGES
+        {k: v for k, v in row.items() if k != "source_item_id"} for row in MESSAGES
     ]
     sync.gold.writer("conversation_message", Refresh()).write(
         Dataset.from_pandas(pd.DataFrame(narrowed))
@@ -2678,8 +2652,10 @@ def test_a_sync_table_without_source_item_key_fails_the_read_naming_it(
 
     assert main(["prog", "--base-dir", str(tmp_path)]) == 1
 
-    missing = "conversation_message is missing required column(s): source_item_key"
+    missing = "conversation_message is missing required column(s): source_item_id"
     assert missing in capsys.readouterr().err
+    # Read narrowed to what its steps need, so the run's own record shows the
+    # read failing on the column.
     records = read_run_log(RunStore(tmp_path).log_path_for(PIPELINE_NAME))
     [failed] = [r for r in records if r["status"] == "error" and r["step"] != "run"]
     assert (failed["step"], failed["errors"]) == ("messages:read", [missing])

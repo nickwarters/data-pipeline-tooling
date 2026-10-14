@@ -183,7 +183,7 @@ Cases through `readers.sharepoint_cases.current_cases_with_brand`, which
 attaches `brand 1` / `brand 2` / `brand 3` to each Case by a hash of its
 `case_id` (stable from run to run; `case_current` alone carries it), so its
 tables group by a brand now, and a table reduced from the history or a Detail
-Table takes its Case's brand by `source_item_key`. It is
+Table takes its Case's brand by `(case_type, source_item_id)`. It is
 not a real Brand, it breaks a **Shared Reader**'s no-shaping rule (G5)
 deliberately, and it goes the day a real Brand source lands.
 Spelled the same as `case_selection`'s ref-lookup attribute because it *is*
