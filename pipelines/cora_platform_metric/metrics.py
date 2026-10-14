@@ -51,11 +51,14 @@ from .schema import (
 )
 
 AS_OF_COLUMN = "as_of_utc"
-CASE_ID_COLUMN = "case_id"
 
-# The Sync subject's Case identity, as its history carries it. The history is
-# read below the layer that derives ``case_id``, so the natural key stands in.
-HISTORY_KEY = ("case_type", "source_item_id")
+# The one column that identifies a Case in every Sync table this pipeline reads:
+# current Cases, the observation history, Answers, Actions, Appeals and
+# Messages. A key, unique per Case across Case Types -- unlike the list-local
+# ``source_item_id`` -- so a Case is never told apart by a second column, and
+# ``case_type`` is only ever a dimension. ``case_id`` exists on ``case_current``
+# alone, so no reduction here reads or joins on it.
+SOURCE_ITEM_KEY = "source_item_key"
 
 # Reporting fills, not source values -- literal keys rather than NULL so an
 # aggregate's grain has no hole a reader may silently drop. The same spellings
@@ -129,7 +132,8 @@ SECONDS_PER_HOUR = 3_600.0
 # each source on the union for its consumers, and the failure message lands
 # beside the code that depends on them.
 HISTORY_COLUMNS = (
-    *HISTORY_KEY,
+    SOURCE_ITEM_KEY,
+    "case_type",
     "source_modified_at",
     "source_version",
     "source_observation_id",
@@ -142,7 +146,7 @@ HISTORY_COLUMNS = (
 )
 BACKLOG_COLUMNS = (*HISTORY_COLUMNS, "reportable_at", "completed_at", "voided_at")
 CURRENT_COLUMNS = (
-    CASE_ID_COLUMN,
+    SOURCE_ITEM_KEY,
     "case_type",
     "status",
     "assigned_reviewer_manager_name",
@@ -184,7 +188,7 @@ DUE_COLUMNS = (
     "remediation_due_date",
 )
 REMEDIATION_OVERDUE_COLUMNS = (
-    CASE_ID_COLUMN,
+    SOURCE_ITEM_KEY,
     "case_type",
     "status",
     "assigned_reviewer_name",
@@ -192,7 +196,8 @@ REMEDIATION_OVERDUE_COLUMNS = (
     "remediation_due_date",
 )
 WORKLOAD_COLUMNS = (
-    *HISTORY_KEY,
+    SOURCE_ITEM_KEY,
+    "case_type",
     "status",
     "assigned_reviewer_name",
     "on_hold",
@@ -200,27 +205,27 @@ WORKLOAD_COLUMNS = (
     "reportable_at",
 )
 APPEAL_RATE_COLUMNS = (
-    CASE_ID_COLUMN,
+    SOURCE_ITEM_KEY,
     "case_type",
     "status",
     "assigned_reviewer_name",
     "reportable_at",
 )
 OUTSTANDING_ANSWER_COLUMNS = (
-    CASE_ID_COLUMN,
+    SOURCE_ITEM_KEY,
     "question_id",
     "remediation_required",
     "remediation_status",
 )
 ANSWER_COLUMNS = (
-    CASE_ID_COLUMN,
+    SOURCE_ITEM_KEY,
     "case_type",
     "remediation_required",
     "remediation_status",
 )
-ANSWER_ACTION_COLUMNS = (CASE_ID_COLUMN, "case_type", "question_id", "action_id")
+ANSWER_ACTION_COLUMNS = (SOURCE_ITEM_KEY, "case_type", "question_id", "action_id")
 APPEAL_COLUMNS = (
-    CASE_ID_COLUMN,
+    SOURCE_ITEM_KEY,
     "case_type",
     "appeal_id",
     "raised_at",
@@ -230,7 +235,7 @@ APPEAL_COLUMNS = (
     "cited_question_ids_json",
 )
 CONVERSATION_COLUMNS = (
-    CASE_ID_COLUMN,
+    SOURCE_ITEM_KEY,
     "case_type",
     "seq",
     "author_login",
@@ -343,12 +348,7 @@ def _ordered_history(dataset: Dataset) -> pd.DataFrame:
     frame["_modified"] = _instants(frame["source_modified_at"])
     frame["_version"] = _version_number(frame["source_version"])
     return frame.loc[frame["_modified"].notna()].sort_values(
-        [
-            *HISTORY_KEY,
-            "_modified",
-            "_version",
-            "source_observation_id",
-        ],
+        [SOURCE_ITEM_KEY, "_modified", "_version", "source_observation_id"],
         kind="stable",
     )
 
@@ -407,7 +407,7 @@ def case_stage_dwell(history: Dataset, *, as_of: str) -> Dataset:
     """
     stays = []  # one per stay in a status: (case_type, status, days, open)
     for _, observations in _ordered_history(history).groupby(
-        list(HISTORY_KEY), sort=False
+        SOURCE_ITEM_KEY, sort=False
     ):
         first = observations.iloc[0]
         case_type = first["case_type"]
@@ -465,10 +465,11 @@ def case_hold(history: Dataset, *, as_of: str) -> Dataset:
     observation names, so a reassigned Case's holds follow the Case.
     """
     as_of_instant = pd.Timestamp(as_of)
-    holds = []  # one per hold: (case_type, source_item_id, reviewer, days, open)
-    for (case_type, item), observations in _ordered_history(history).groupby(
-        list(HISTORY_KEY), sort=False
+    holds = []  # one per hold: (case_type, source_item_key, reviewer, days, open)
+    for item, observations in _ordered_history(history).groupby(
+        SOURCE_ITEM_KEY, sort=False
     ):
+        case_type = observations.iloc[0]["case_type"]
         reviewer = observations.iloc[-1]["assigned_reviewer_name"]
         if pd.isna(reviewer) or not reviewer:
             reviewer = UNASSIGNED
@@ -507,7 +508,7 @@ def case_hold(history: Dataset, *, as_of: str) -> Dataset:
         holds,
         columns=[
             "case_type",
-            "source_item_id",
+            SOURCE_ITEM_KEY,
             "assigned_reviewer_name",
             "days",
             "open",
@@ -518,7 +519,7 @@ def case_hold(history: Dataset, *, as_of: str) -> Dataset:
             "brand": UNKNOWN_BRAND,
             "case_type": case_type,
             "assigned_reviewer_name": reviewer,
-            "case_count": group["source_item_id"].nunique(),
+            "case_count": group[SOURCE_ITEM_KEY].nunique(),
             "hold_count": len(group),
             "open_hold_count": int(group["open"].sum()),
             "held_days_total": round(float(group["days"].sum()), 3),
@@ -567,9 +568,10 @@ def case_backlog(history: Dataset, *, as_of: str) -> Dataset:
     """Open Cases at each day's close, by status, rebuilt from the history."""
     as_of_day = local_date(as_of)
     spans = []  # (case_type, status, first_day, end_day)
-    for (case_type, _), observations in _ordered_history(history).groupby(
-        list(HISTORY_KEY), sort=False
+    for _, observations in _ordered_history(history).groupby(
+        SOURCE_ITEM_KEY, sort=False
     ):
+        case_type = observations.iloc[0]["case_type"]
         spans.extend(
             (case_type, status, start, end)
             for status, start, end in _open_spans(observations, as_of_day)
@@ -982,16 +984,16 @@ def remediation_overdue(
         answer_rows["remediation_required"].eq("yes")
         & answer_rows["remediation_status"].isna()
     ]
-    per_case_answers = outstanding.groupby(CASE_ID_COLUMN).size()
+    per_case_answers = outstanding.groupby(SOURCE_ITEM_KEY).size()
     action_rows = actions.to_pandas().merge(
-        outstanding[[CASE_ID_COLUMN, "question_id"]],
-        on=[CASE_ID_COLUMN, "question_id"],
+        outstanding[[SOURCE_ITEM_KEY, "question_id"]],
+        on=[SOURCE_ITEM_KEY, "question_id"],
         how="inner",
     )
-    per_case_actions = action_rows.groupby(CASE_ID_COLUMN).size()
+    per_case_actions = action_rows.groupby(SOURCE_ITEM_KEY).size()
     cases = cases.assign(
-        _answers=cases[CASE_ID_COLUMN].map(per_case_answers).fillna(0),
-        _actions=cases[CASE_ID_COLUMN].map(per_case_actions).fillna(0),
+        _answers=cases[SOURCE_ITEM_KEY].map(per_case_answers).fillna(0),
+        _actions=cases[SOURCE_ITEM_KEY].map(per_case_actions).fillna(0),
     )
 
     dims = [
@@ -1036,13 +1038,13 @@ def _in_progress_since(history: Dataset) -> pd.DataFrame:
     """When each Case whose latest observation is ``In-progress`` last entered
     it -- after a reopen, the reopen, not the original claim."""
     frame = _ordered_history(history)
-    cases = frame.groupby(list(HISTORY_KEY), sort=False)
+    cases = frame.groupby(SOURCE_ITEM_KEY, sort=False)
     first = cases.cumcount().eq(0)
     entered = frame["status"].ne(cases["status"].shift())
     starts = frame["_modified"].where(entered & ~first, _entry_instants(frame))
     frame = frame.assign(_since=starts.where(entered).groupby(cases.ngroup()).ffill())
-    latest = frame.groupby(list(HISTORY_KEY), sort=False).tail(1)
-    return latest.loc[latest["status"].eq("In-progress"), [*HISTORY_KEY, "_since"]]
+    latest = frame.groupby(SOURCE_ITEM_KEY, sort=False).tail(1)
+    return latest.loc[latest["status"].eq("In-progress"), [SOURCE_ITEM_KEY, "_since"]]
 
 
 def reviewer_workload(current: Dataset, history: Dataset, *, as_of: str) -> Dataset:
@@ -1055,7 +1057,7 @@ def reviewer_workload(current: Dataset, history: Dataset, *, as_of: str) -> Data
     today = local_date(as_of)
     window_start = today - dt.timedelta(days=WORKLOAD_WINDOW_DAYS - 1)
     frame = _filled(current.to_pandas(), {"assigned_reviewer_name": UNASSIGNED})
-    frame = frame.merge(_in_progress_since(history), on=list(HISTORY_KEY), how="left")
+    frame = frame.merge(_in_progress_since(history), on=SOURCE_ITEM_KEY, how="left")
     started = frame["_since"].where(
         frame["_since"].notna(), _instants(frame["assigned_at"])
     )
@@ -1117,7 +1119,7 @@ def appeal_rate_by_reviewer(
             _agreed=frame["resolution_verdict"].eq("agreed"),
             _rejected=frame["resolution_verdict"].eq("rejected"),
         )
-        .groupby(CASE_ID_COLUMN)
+        .groupby(SOURCE_ITEM_KEY)
         .agg(
             _appeals=("appeal_id", "size"),
             _open=("_open", "sum"),
@@ -1125,7 +1127,7 @@ def appeal_rate_by_reviewer(
             _rejected=("_rejected", "sum"),
         )
     )
-    cases = cases.join(per_case, on=CASE_ID_COLUMN)
+    cases = cases.join(per_case, on=SOURCE_ITEM_KEY)
     counts = ["_appeals", "_open", "_agreed", "_rejected"]
     cases[counts] = cases[counts].fillna(0)
 
@@ -1163,7 +1165,7 @@ def answer_action_load(actions: Dataset, current: Dataset, *, as_of: str) -> Dat
     live_counts = live.groupby("case_type").size()
     per_case = (
         _live_rows(actions, live)
-        .groupby(["case_type", "question_id", CASE_ID_COLUMN], sort=True)
+        .groupby(["case_type", "question_id", SOURCE_ITEM_KEY], sort=True)
         .size()
         .reset_index(name="actions")
     )
@@ -1201,8 +1203,8 @@ def answer_remediation_by_manager(
     this joins each Answer to its Case for the manager who answers for the
     remediation, and counts both Answers and the distinct Cases behind them.
     """
-    cases = current.to_pandas()[[CASE_ID_COLUMN, "responsible_party_manager_name"]]
-    frame = answers.to_pandas().merge(cases, on=CASE_ID_COLUMN, how="inner")
+    cases = current.to_pandas()[[SOURCE_ITEM_KEY, "responsible_party_manager_name"]]
+    frame = answers.to_pandas().merge(cases, on=SOURCE_ITEM_KEY, how="inner")
     frame = _filled(
         frame,
         {
@@ -1224,7 +1226,7 @@ def answer_remediation_by_manager(
             "remediation_required": required,
             "remediation_status": status,
             "answer_count": len(group),
-            "case_count": group[CASE_ID_COLUMN].nunique(),
+            "case_count": group[SOURCE_ITEM_KEY].nunique(),
         }
         for (case_type, manager, required, status), group in frame.groupby(
             dims, sort=True
@@ -1295,7 +1297,7 @@ def appeal_question_citations(appeals: Dataset, *, as_of: str) -> Dataset:
             "case_type": case_type,
             "question_id": question_id,
             "appeal_count": group["appeal_id"].nunique(),
-            "case_count": group[CASE_ID_COLUMN].nunique(),
+            "case_count": group[SOURCE_ITEM_KEY].nunique(),
         }
         for (case_type, question_id), group in cited.groupby(
             ["case_type", "question_id"], sort=True
@@ -1321,9 +1323,9 @@ def conversation_response_time(
     """
     frame = _live_rows(messages, _live_cases(current)).copy()
     frame["_posted"] = _instants(frame["posted_at"])
-    frame = frame.sort_values([CASE_ID_COLUMN, "seq"], kind="stable")
+    frame = frame.sort_values([SOURCE_ITEM_KEY, "seq"], kind="stable")
 
-    threads = frame.groupby(CASE_ID_COLUMN, sort=False)
+    threads = frame.groupby(SOURCE_ITEM_KEY, sort=False)
     previous_author = threads["author_login"].shift()
     previous_posted = threads["_posted"].shift()
     replies = frame.loc[
@@ -1340,7 +1342,7 @@ def conversation_response_time(
         {
             "brand": UNKNOWN_BRAND,
             "case_type": case_type,
-            "thread_count": group[CASE_ID_COLUMN].nunique(),
+            "thread_count": group[SOURCE_ITEM_KEY].nunique(),
             "reply_count": len(group),
             "reply_hours_mean": _mean(group["hours"]),
             "reply_hours_p50": _quantile(group["hours"], 0.5),
@@ -1357,7 +1359,7 @@ def conversation_response_time(
 def _live_cases(current: Dataset) -> pd.DataFrame:
     """The current non-void Cases: the population a Conversation belongs to."""
     cases = current.to_pandas()
-    return cases.loc[cases["status"].ne("Void"), [CASE_ID_COLUMN, "case_type"]]
+    return cases.loc[cases["status"].ne("Void"), [SOURCE_ITEM_KEY, "case_type"]]
 
 
 def conversation_volume(messages: Dataset, current: Dataset, *, as_of: str) -> Dataset:
@@ -1371,9 +1373,9 @@ def conversation_volume(messages: Dataset, current: Dataset, *, as_of: str) -> D
     """
     live = _live_cases(current)
     per_thread = (
-        _live_rows(messages, live).groupby(CASE_ID_COLUMN).size().rename("messages")
+        _live_rows(messages, live).groupby(SOURCE_ITEM_KEY).size().rename("messages")
     )
-    counted = live.join(per_thread, on=CASE_ID_COLUMN)
+    counted = live.join(per_thread, on=SOURCE_ITEM_KEY)
 
     rows = []
     for case_type, group in counted.groupby("case_type", sort=True):
@@ -1402,7 +1404,7 @@ def conversation_volume(messages: Dataset, current: Dataset, *, as_of: str) -> D
 def _live_rows(rows: Dataset, live: pd.DataFrame) -> pd.DataFrame:
     """The Detail rows (Messages, Actions) whose Case is one of the live Cases."""
     frame = rows.to_pandas()
-    return frame.loc[frame[CASE_ID_COLUMN].isin(live[CASE_ID_COLUMN])]
+    return frame.loc[frame[SOURCE_ITEM_KEY].isin(live[SOURCE_ITEM_KEY])]
 
 
 def conversation_posting_pattern(
