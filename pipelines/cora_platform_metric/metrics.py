@@ -11,7 +11,9 @@ a re-run over the same snapshot gives the same numbers.
 Each reduction hands its rows to ``_finish`` with the dataclass in ``schema``
 that declares the table: that dataclass is the one statement of a table's
 columns, their order and their types, so an empty result still lands the shape
-the table's ``SchemaValidator`` gates.
+the table's ``SchemaValidator`` gates. Each table's rules are stated in
+``docs/data-dictionary-cora-platform-metric.md``; a docstring here names its
+grain and the rule its code turns on.
 """
 
 from __future__ import annotations
@@ -29,6 +31,7 @@ from tools.observability import timestamps
 from tools.observability.timestamps import local_date
 
 from .schema import (
+    DURATION_WINDOWS,
     REMEDIATION_SLA,
     REVIEW_SLA,
     AnswerActionLoad,
@@ -38,9 +41,12 @@ from .schema import (
     AppealRateByReviewerMonthly,
     CaseBacklogDaily,
     CaseDueProfile,
+    CaseDurationPercentilesDaily,
+    CaseFirstTimeRightMonthly,
     CaseHold,
     CaseIntakeDaily,
     CaseLifecycleDurationMonthly,
+    CaseOpenAgeDaily,
     CaseOutcomeMonthly,
     CaseSlaAttainmentMonthly,
     CaseStageDwell,
@@ -49,7 +55,9 @@ from .schema import (
     ConversationResponseTime,
     ConversationVolume,
     RemediationOverdue,
+    ReviewerThroughputWeekly,
     ReviewerWorkload,
+    ReviewerWorkloadDaily,
 )
 
 AS_OF_COLUMN = "as_of_utc"
@@ -72,6 +80,9 @@ UNSTATED = "(unstated)"
 UNSTAMPED = "(unstamped)"
 # Time a Case was open before any poll saw which status it was in.
 UNOBSERVED = "(unobserved)"
+# The row a distribution table adds over every Case Type at once: a percentile
+# does not roll up, so the total is taken, not left to a reader to sum.
+ALL_CASE_TYPES = "(all)"
 
 # The Case lifecycle's terminal states: a Case observed in one has stopped
 # dwelling, so its last interval is neither open nor closed -- it is over.
@@ -110,6 +121,35 @@ DUE_CLOCKS = (
     (REVIEW_SLA, "In-progress", "due_date"),
     (REMEDIATION_SLA, "Actions In Progress", "remediation_due_date"),
 )
+
+# (measure, from stamp, to stamp, actions-path Cases only) for the duration
+# percentiles; ``sla_margin_review`` is working days, measured apart.
+DURATION_LEGS = (
+    ("end_to_end", "created", "completed_at", False),
+    ("to_reportable", "created", "reportable_at", False),
+    ("allocation_wait", "created", "assigned_at", False),
+    ("review", "assigned_at", "reportable_at", False),
+    ("remediation", "reportable_at", "completed_at", True),
+)
+SLA_MARGIN_MEASURE = "sla_margin_review"
+# The measures that end at ``completed_at``: the first of those sets the first
+# as-of date.
+COMPLETION_MEASURES = (
+    *(measure for measure, _, ended, _ in DURATION_LEGS if ended == "completed_at"),
+    SLA_MARGIN_MEASURE,
+)
+
+# Each open status's Case-age measure.
+OPEN_AGE_BY_STATUS = {
+    "To-allocate": "open_age_to_allocate",
+    "In-progress": "open_age_in_progress",
+    "Actions In Progress": "open_age_actions_in_progress",
+}
+
+# A percentile over fewer measurements than this is published NULL: with so
+# few, it is one Case's value, not a tail.
+MIN_N_FOR_P90 = 10
+MIN_N_FOR_P95 = 20
 
 # Output window for ``reviewer_workload_current``, in whole weeks.
 WORKLOAD_WINDOW_DAYS = 28
@@ -231,6 +271,35 @@ APPEAL_COLUMNS = (
     "resolution_at",
     "cited_question_ids_json",
 )
+DURATION_COLUMNS = (
+    "case_type",
+    "status",
+    "created",
+    "assigned_at",
+    "reportable_at",
+    "completed_at",
+    "had_remediation",
+    "due_date",
+)
+OPEN_AGE_COLUMNS = (
+    "case_type",
+    "status",
+    "created",
+    "awaiting_responsible_party",
+    "awaiting_since",
+    "has_open_appeal",
+    "appeal_raised_at",
+)
+FIRST_TIME_RIGHT_COLUMNS = (
+    *CASE_KEY,
+    "status",
+    "assigned_reviewer_name",
+    "reportable_at",
+    "outcome_overridden",
+    "amended_outcome_id",
+    "amended_at",
+)
+THROUGHPUT_COLUMNS = ("case_type", "status", "assigned_reviewer_name", "reportable_at")
 CONVERSATION_COLUMNS = (
     *CASE_KEY,
     "seq",
@@ -329,41 +398,47 @@ def _summaries(frame: pd.DataFrame, dims: list[str], value: str) -> pd.DataFrame
         dtype="float64",
     )
     ascending = values[np.lexsort((values, codes))]
-    some = counts > 0
-
-    def at(positions: np.ndarray) -> np.ndarray:
-        picked = np.full(len(rows), np.nan)
-        picked[some] = ascending[positions[some]]
-        return picked
-
-    def quantile(q: float) -> np.ndarray:
-        # numpy's linear method: index (n - 1) * q, interpolated from whichever
-        # neighbour is nearer, the last value once the index reaches it.
-        index = (counts - 1) * q
-        top = index >= counts - 1
-        below = np.where(top, -1, np.floor(index)).astype("int64")
-        lower = at(starts + np.where(top, counts - 1, below))
-        upper = at(starts + np.where(top, counts - 1, below + 1))
-        weight = index - below
-        step = upper - lower
-        return np.where(
-            weight >= 0.5, upper - step * (1 - weight), lower + step * weight
-        )
 
     with np.errstate(invalid="ignore", divide="ignore"):
-        means = np.where(some, totals / counts, np.nan)
+        means = np.where(counts > 0, totals / counts, np.nan)
     return pd.DataFrame(
         {
             "rows": rows.to_numpy(),
             "count": counts,
             "total": totals,
             "mean": means,
-            "p50": quantile(0.5),
-            "p90": quantile(0.9),
-            "max": at(ends - 1),
+            "p50": _run_quantiles(ascending, starts, counts, 0.5),
+            "p90": _run_quantiles(ascending, starts, counts, 0.9),
+            "max": _run_quantiles(ascending, starts, counts, 1.0),
         },
         index=rows.index,
     )
+
+
+def _run_quantiles(
+    ascending: np.ndarray, starts: np.ndarray, counts: np.ndarray, q: float
+) -> np.ndarray:
+    """Quantile ``q`` of each run ``ascending[start : start + count]``, as
+    ``Series.quantile`` takes it; NaN for an empty run.
+
+    numpy's linear method: index (n - 1) * q, interpolated from whichever
+    neighbour is nearer, the last value once the index reaches it.
+    """
+    some = counts > 0
+    index = (counts - 1) * q
+    top = index >= counts - 1
+    below = np.where(top, -1, np.floor(index)).astype("int64")
+
+    def at(offsets: np.ndarray) -> np.ndarray:
+        picked = np.full(len(counts), np.nan)
+        picked[some] = ascending[(starts + offsets)[some]]
+        return picked
+
+    lower = at(np.where(top, counts - 1, below))
+    upper = at(np.where(top, counts - 1, below + 1))
+    weight = index - below
+    step = upper - lower
+    return np.where(weight >= 0.5, upper - step * (1 - weight), lower + step * weight)
 
 
 def _rounded_all(values) -> list[float | None]:
@@ -524,17 +599,8 @@ def _elapsed_days(started: pd.Series, ended: pd.Series) -> pd.Series:
 
 def case_stage_dwell(history: Dataset, *, as_of: str) -> Dataset:
     """How long Cases dwell in each status. **Grain: brand x case_type x
-    status.**
-
-    Reduces the ordered history (``ordered_history``). Every change of
-    ``status`` closes an interval at that observation's ``Modified`` and opens
-    the next. A Case's last interval is *open* unless its status is terminal,
-    and a terminal status left by a reopen closes no interval: that was the gap
-    until the reopen, not a stage. Statistics are over closed intervals only --
-    an open one has no length yet, and measuring it to ``as_of`` would mix two
-    different questions (the Sync subject's age-bucket aggregates already
-    answer "how long has it been waiting").
-    """
+    status.** Statistics are over closed intervals; a terminal status closes
+    none, even when a reopen leaves it."""
     frame = _history_frame(history)
     first = _case_starts(frame)
     last = first.shift(-1, fill_value=True)
@@ -574,21 +640,10 @@ def case_stage_dwell(history: Dataset, *, as_of: str) -> Dataset:
 
 def case_hold(history: Dataset, *, as_of: str) -> Dataset:
     """How often and how long Cases are held. **Grain: brand x case_type x
-    assigned_reviewer_name.**
-
-    Reduces the ordered history (``ordered_history``). A hold opens at the
-    first open-status observation carrying ``on_hold`` (from the source's
-    ``placed_on_hold_at`` where it has one, else that observation's
-    ``Modified``) and closes at the first later observation without it, or at
-    the observation where the Case entered ``Completed`` or ``Void`` if that
-    comes first. Terminal spells are not held time, as they are not a stage in
-    ``case_stage_dwell``: a flag first seen on a terminal observation opens
-    nothing, and a flag still set when the Case is reopened opens a new hold
-    from the reopen (never from a ``placed_on_hold_at`` before it). A hold
-    still open at the last observation is measured to ``as_of`` and counted in
-    ``open_hold_count``. Attributed to the Reviewer the Case's latest
-    observation names, so a reassigned Case's holds follow the Case.
-    """
+    assigned_reviewer_name.** A hold ends at its release, or where the Case
+    entered a terminal status if that comes first; a terminal spell is never
+    held, so a reopen still flagged opens a new hold from the reopen. One open
+    at the last observation runs to ``as_of``."""
     frame = _history_frame(history)
     first = _case_starts(frame)
     last = first.shift(-1, fill_value=True)
@@ -765,25 +820,34 @@ def working_days_late(
     return late
 
 
+def _working_days_after(
+    calendar: WorkingDayCalendar, due: pd.Series, completed: pd.Series
+) -> pd.Series:
+    """Signed working days from each due day to its completion day: those after
+    ``due`` up to and including ``completed``, or, completed early, minus those
+    after ``completed`` up to and including ``due``; NaN where either is
+    missing."""
+    weekmask = [day not in calendar.weekend for day in range(7)]
+    after = pd.Series(np.nan, index=due.index)
+    judged = due.notna() & completed.notna()
+    if not judged.any() or not any(weekmask):
+        return after.where(~judged, 0.0)
+    due_days = due[judged].to_numpy("datetime64[D]")
+    done_days = completed[judged].to_numpy("datetime64[D]")
+    day = np.timedelta64(1, "D")
+    rules = {"weekmask": weekmask, "holidays": sorted(calendar.holidays)}
+    # Backwards, busday_count counts (end, begin] and negates it.
+    after[judged] = np.busday_count(
+        due_days + day, np.maximum(done_days, due_days) + day, **rules
+    ) + np.busday_count(due_days, np.minimum(done_days, due_days), **rules)
+    return after
+
+
 def _working_days_late(
     calendar: WorkingDayCalendar, due: pd.Series, completed: pd.Series
 ) -> pd.Series:
     """``working_days_late`` for each pair of local days; NaN where no due day."""
-    weekmask = [day not in calendar.weekend for day in range(7)]
-    late = pd.Series(np.nan, index=due.index)
-    judged = due.notna() & completed.notna()
-    if not judged.any() or not any(weekmask):
-        return late.where(~judged, 0.0)
-    after_due = due[judged].to_numpy("datetime64[D]") + np.timedelta64(1, "D")
-    through = completed[judged].to_numpy("datetime64[D]") + np.timedelta64(1, "D")
-    counted = np.busday_count(
-        after_due,
-        np.maximum(through, after_due),
-        weekmask=weekmask,
-        holidays=sorted(calendar.holidays),
-    )
-    late[judged] = counted
-    return late
+    return _working_days_after(calendar, due, completed).clip(lower=0.0)
 
 
 # Each SLA and the due-date column it judges ``completed_at`` against.
@@ -793,17 +857,9 @@ SLA_DUE_DATES = ((REVIEW_SLA, "due_date"), (REMEDIATION_SLA, "remediation_due_da
 def sla_attainment(
     current: Dataset, *, as_of: str, calendar: WorkingDayCalendar | None = None
 ) -> Dataset:
-    """Completed Cases against each SLA. **Grain: sla_kind x completed_month x
-    brand x case_type x assigned_reviewer_manager_name.**
-
-    One row family per SLA: the review SLA judges ``completed_at`` against
-    ``due_date``; the remediation SLA judges it against
-    ``remediation_due_date`` over only the Cases that carry one -- the source
-    stamps no remediation-complete instant of its own, and the Case's final
-    ``Completed`` transition is after its Actions close. Days late are
-    ``working_days_late`` between the two local dates, on the calendar the run
-    was given (weekends-only when none).
-    """
+    """Completed Cases against each SLA, in working days late on
+    ``calendar``. **Grain: sla_kind x completed_month x brand x case_type x
+    assigned_reviewer_manager_name.**"""
     calendar = calendar or WorkingDayCalendar()
     frame = current.to_pandas()
     completed = frame.loc[frame["status"].eq("Completed")].copy()
@@ -849,6 +905,12 @@ def sla_attainment(
                     "no_due_date_count": counted["_no_due"].to_numpy(),
                     "late_working_days_mean": _rounded_all(stats["mean"]),
                     "late_working_days_max": _rounded_all(stats["max"]),
+                    "on_time_rate": [
+                        round(on_time / (on_time + late), 4) if on_time + late else None
+                        for on_time, late in zip(
+                            counted["_on_time"], counted["_is_late"]
+                        )
+                    ],
                 }
             )
         )
@@ -1176,12 +1238,9 @@ def _in_progress_since(history: Dataset) -> pd.DataFrame:
 
 
 def reviewer_workload(current: Dataset, history: Dataset, *, as_of: str) -> Dataset:
-    """What each Reviewer holds, against their last 28 days' output.
-
-    An ``In-progress`` Case's age runs from when the history last saw it enter
-    that status, so a reopened Case's Completed spell is not counted; a Case
-    the history has not seen there falls back to its ``assigned_at``.
-    """
+    """What each Reviewer holds, against their last 28 days' output. An
+    ``In-progress`` Case ages from its latest entry into that status, else
+    from ``assigned_at``."""
     today = local_date(as_of)
     frame = _filled(current.to_pandas(), {"assigned_reviewer_name": UNASSIGNED})
     frame = frame.merge(_in_progress_since(history), on=list(CASE_KEY), how="left")
@@ -1276,11 +1335,8 @@ def appeal_rate_by_reviewer(
 
 
 def answer_action_load(actions: Dataset, current: Dataset, *, as_of: str) -> Dataset:
-    """Remediation Actions per question. **Grain: case_type x question_id.**
-
-    Over the current non-void Cases only, so ``share_of_cases`` reads as "this
-    share of the Case Type's live Cases carry an Action on this question".
-    """
+    """Remediation Actions per question, over the live Cases. **Grain:
+    case_type x question_id.**"""
     live = _live_cases(current)
     live_counts = live.groupby("case_type").size()
     per_case = (
@@ -1315,14 +1371,9 @@ def answer_action_load(actions: Dataset, current: Dataset, *, as_of: str) -> Dat
 def answer_remediation_by_manager(
     answers: Dataset, current: Dataset, *, as_of: str
 ) -> Dataset:
-    """Remediation decisions and statuses under each Responsible Party
+    """Answers, and the Cases behind them, under each Responsible Party
     Manager. **Grain: case_type x responsible_party_manager_name x
-    remediation_required x remediation_status.**
-
-    The Sync subject's ``answer_remediation_current`` has no people on it;
-    this joins each Answer to its Case for the manager who answers for the
-    remediation, and counts both Answers and the distinct Cases behind them.
-    """
+    remediation_required x remediation_status.**"""
     cases = current.to_pandas()[[*CASE_KEY, "responsible_party_manager_name"]]
     frame = answers.to_pandas().merge(cases, on=list(CASE_KEY), how="inner")
     frame = _filled(
@@ -1431,16 +1482,9 @@ def appeal_question_citations(appeals: Dataset, *, as_of: str) -> Dataset:
 def conversation_response_time(
     messages: Dataset, current: Dataset, *, as_of: str
 ) -> Dataset:
-    """How quickly Conversations are replied to. **Grain: brand x case_type.**
-
-    Each Case's thread is read in ``seq`` order; a Message whose
-    ``author_login`` differs from the previous Message's is a reply, and its
-    hours are measured from that previous Message. Two consecutive Messages by
-    one author are one turn, not a reply to oneself. Author-agnostic by design:
-    the source's own ``awaiting_since`` already says who is being waited on
-    right now. Over the Messages on live Cases, as the other Conversation
-    tables count.
-    """
+    """How quickly Conversations on live Cases are replied to; a reply is a
+    Message by a different author from the one before it. **Grain: brand x
+    case_type.**"""
     frame = _live_rows(messages, _live_cases(current)).copy()
     frame["_posted"] = _instants(frame["posted_at"])
     frame = frame.sort_values([*CASE_KEY, "seq"], kind="stable")
@@ -1483,14 +1527,8 @@ def _live_cases(current: Dataset) -> pd.DataFrame:
 
 
 def conversation_volume(messages: Dataset, current: Dataset, *, as_of: str) -> Dataset:
-    """How much Conversation Cases carry. **Grain: brand x case_type.**
-
-    Counts over the current non-void Cases of each Case Type: how many have a
-    thread at all, how many have none, and how the thread lengths are spread.
-    A Message whose Case is not among those Cases is not counted -- the Case
-    is void, or no longer current -- so ``message_count`` is the volume on the
-    live population, not on the Detail Table.
-    """
+    """How much Conversation the live Cases carry. **Grain: brand x
+    case_type.**"""
     live = _live_cases(current)
     per_thread = (
         _live_rows(messages, live).groupby(list(CASE_KEY)).size().rename("messages")
@@ -1530,17 +1568,9 @@ def _live_rows(rows: Dataset, live: pd.DataFrame) -> pd.DataFrame:
 def conversation_posting_pattern(
     messages: Dataset, current: Dataset, *, as_of: str
 ) -> Dataset:
-    """When Messages get posted. **Grain: brand x case_type x weekday_order x
-    hour_of_day.**
-
-    Every Case Type with at least one counted Message gets the full 7 x 24
-    grid, so a quiet cell is a row holding 0 rather than a hole a chart would
-    have to infer. Weekday and hour are on the *local* clock, the same zone
-    the calendar dates are expressed in -- converted instant by instant, so a
-    thread spanning a summer-time change files each Message under the hour it
-    was actually posted at. A Message with no parseable ``posted_at`` is not
-    counted.
-    """
+    """When Messages on live Cases get posted, on the local clock instant by
+    instant. **Grain: brand x case_type x weekday_order x hour_of_day**, the
+    full 7 x 24 grid for each Case Type with a Message."""
     posted = _live_rows(messages, _live_cases(current)).copy()
     posted["_posted"] = _instants(posted["posted_at"])
     posted = posted.loc[posted["_posted"].notna()]
@@ -1568,4 +1598,288 @@ def conversation_posting_pattern(
         ConversationPostingPattern,
         as_of=as_of,
         sort_by=("brand", "case_type", "weekday_order", "hour_of_day"),
+    )
+
+
+# --- distributions and trends -----------------------------------------------
+
+
+def _percentiles(
+    codes: np.ndarray, ascending: np.ndarray, groups: int
+) -> dict[str, np.ndarray]:
+    """n, p50, p90, p95 and max per group code in ``range(groups)``, the values
+    given sorted by (code, value); a percentile over too few is NaN."""
+    counts = np.bincount(codes, minlength=groups)
+    starts = np.cumsum(counts) - counts
+    stats = {
+        name: _run_quantiles(ascending, starts, counts, q)
+        for name, q in (("p50", 0.5), ("p90", 0.9), ("p95", 0.95), ("max", 1.0))
+    }
+    stats["p90"] = np.where(counts >= MIN_N_FOR_P90, stats["p90"], np.nan)
+    stats["p95"] = np.where(counts >= MIN_N_FOR_P95, stats["p95"], np.nan)
+    return {"n": counts, **stats}
+
+
+def _with_all_case_types(frame: pd.DataFrame) -> pd.DataFrame:
+    """``frame`` again under ``(all)``, so each measure is also taken over
+    every Case Type together."""
+    return pd.concat([frame, frame.assign(case_type=ALL_CASE_TYPES)], ignore_index=True)
+
+
+def _grouped_percentiles(
+    frame: pd.DataFrame, dims: list[str], value: str
+) -> tuple[pd.DataFrame, dict[str, np.ndarray]]:
+    """Each ``dims`` group (sorted) and ``_percentiles`` of its ``value``."""
+    grouped = frame.groupby(dims, sort=True)
+    keys = grouped.size().index.to_frame(index=False)
+    codes = grouped.ngroup().to_numpy()
+    values = frame[value].to_numpy(dtype="float64")
+    order = np.lexsort((values, codes))
+    return keys, _percentiles(codes[order], values[order], len(keys))
+
+
+def _durations(current: Dataset, calendar: WorkingDayCalendar) -> pd.DataFrame:
+    """One row per live Case per measure it has: its ``case_type``,
+    ``measure``, the local day it ended (``_end_day``) and its ``_value``."""
+    frame = current.to_pandas()
+    live = frame.loc[frame["status"].ne("Void")]
+    parts = []
+    for measure, started, ended, actions_path_only in DURATION_LEGS:
+        legs = (
+            live.loc[_flagged(live["had_remediation"])] if actions_path_only else live
+        )
+        end = _instants(legs[ended])
+        days = (end - _instants(legs[started])).dt.total_seconds() / SECONDS_PER_DAY
+        # A leg that runs backwards is excluded, as the lifecycle table does.
+        parts.append(
+            pd.DataFrame({"case_type": legs["case_type"], "_end": end, "_value": days})
+            .loc[days.ge(0)]
+            .assign(measure=measure)
+        )
+    completed = live.loc[live["status"].eq("Completed")]
+    done = _instants(completed["completed_at"])
+    margin = _working_days_after(
+        calendar, _local_days(_instants(completed["due_date"])), _local_days(done)
+    )
+    parts.append(
+        pd.DataFrame(
+            {"case_type": completed["case_type"], "_end": done, "_value": margin}
+        )
+        .loc[margin.notna()]
+        .assign(measure=SLA_MARGIN_MEASURE)
+    )
+    measured = pd.concat(parts, ignore_index=True)
+    measured = measured.loc[measured["_end"].notna()]
+    return measured.assign(_end_day=_local_days(measured["_end"]))
+
+
+# How many as-of days share one pass over the measurements near them.
+DAYS_PER_PASS = 32
+
+
+def case_duration_percentiles(
+    current: Dataset, *, as_of: str, calendar: WorkingDayCalendar | None = None
+) -> Dataset:
+    """Trailing-window duration percentiles. **Grain: as_of_date x window_days
+    x case_type x measure.** Every as-of date from the first completion, so the
+    table is its own backfill. The first as-of date is the local day of the
+    earliest completion, not of the earliest measurement: until something
+    completes there are no rows, even for legs already measured."""
+    measured = _with_all_case_types(
+        _durations(current, calendar or WorkingDayCalendar())
+    )
+    grouped = measured.groupby(["case_type", "measure"], sort=True)
+    keys = grouped.size().index.to_frame(index=False)
+    codes = grouped.ngroup().to_numpy()
+    values = measured["_value"].to_numpy(dtype="float64")
+    days = measured["_end_day"].to_numpy("datetime64[D]").astype("int64")
+    order = np.lexsort((values, codes))
+    codes, values, days = codes[order], values[order], days[order]
+
+    today = int(np.datetime64(local_date(as_of), "D").astype("int64"))
+    completed = measured.loc[measured["measure"].isin(COMPLETION_MEASURES), "_end_day"]
+    first = (
+        int(np.datetime64(completed.min(), "D").astype("int64"))
+        if len(completed)
+        else today + 1
+    )
+    widest = max(DURATION_WINDOWS)
+    found: list[pd.DataFrame] = []
+    for start in range(first, today + 1, DAYS_PER_PASS):
+        stop = min(start + DAYS_PER_PASS - 1, today)
+        # Within a pass, only what ended inside its widest window is looked at.
+        near = (days > start - widest) & (days <= stop)
+        near_codes, near_values, near_days = codes[near], values[near], days[near]
+        for as_of_day in range(start, stop + 1):
+            for window in DURATION_WINDOWS:
+                inside = (near_days > as_of_day - window) & (near_days <= as_of_day)
+                stats = _percentiles(near_codes[inside], near_values[inside], len(keys))
+                some = stats["n"] > 0
+                found.append(
+                    pd.DataFrame(
+                        {
+                            "_day": as_of_day,
+                            "window_days": window,
+                            "_group": np.flatnonzero(some),
+                            **{name: column[some] for name, column in stats.items()},
+                        }
+                    )
+                )
+    rows: pd.DataFrame | list = []
+    if found:
+        built = pd.concat(found, ignore_index=True)
+        group = built["_group"].to_numpy()
+        rows = built.assign(
+            as_of_date=built["_day"].to_numpy().astype("datetime64[D]").astype(str),
+            case_type=keys["case_type"].to_numpy()[group],
+            measure=keys["measure"].to_numpy()[group],
+            **{
+                name: _rounded_all(built[name]) for name in ("p50", "p90", "p95", "max")
+            },
+        )
+    return _finish(
+        rows,
+        CaseDurationPercentilesDaily,
+        as_of=as_of,
+        sort_by=("as_of_date", "window_days", "case_type", "measure"),
+    )
+
+
+def case_open_age(current: Dataset, *, as_of: str) -> Dataset:
+    """How old the open work is at the snapshot. **Grain: as_of_date x
+    case_type x measure.**"""
+    frame = current.to_pandas()
+    live = frame.loc[frame["status"].ne("Void")]
+    open_cases = live.loc[live["status"].isin(list(OPEN_AGE_BY_STATUS))]
+    awaited = open_cases.loc[_flagged(open_cases["awaiting_responsible_party"])]
+    appealed = live.loc[_flagged(live["has_open_appeal"])]
+    started = pd.concat(
+        [
+            pd.DataFrame(
+                {
+                    "case_type": open_cases["case_type"],
+                    "measure": open_cases["status"].map(OPEN_AGE_BY_STATUS),
+                    "_start": _instants(open_cases["created"]),
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "case_type": awaited["case_type"],
+                    "measure": "awaiting_responsible_party",
+                    "_start": _instants(awaited["awaiting_since"]),
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "case_type": appealed["case_type"],
+                    "measure": "open_appeal_age",
+                    "_start": _instants(appealed["appeal_raised_at"]),
+                }
+            ),
+        ],
+        ignore_index=True,
+    )
+    started = started.loc[started["_start"].notna()]
+    snapshot = pd.Series(_instants(as_of), index=started.index)
+    ages = _with_all_case_types(
+        started.assign(_age=_elapsed_days(started["_start"], snapshot))
+    )
+    keys, stats = _grouped_percentiles(ages, ["case_type", "measure"], "_age")
+    rows = keys.assign(
+        as_of_date=local_date(as_of).isoformat(),
+        n=stats["n"],
+        **{name: _rounded_all(stats[name]) for name in ("p50", "p90", "p95", "max")},
+    )
+    return _finish(
+        rows,
+        CaseOpenAgeDaily,
+        as_of=as_of,
+        sort_by=("as_of_date", "case_type", "measure"),
+    )
+
+
+def first_time_right(current: Dataset, appeals: Dataset, *, as_of: str) -> Dataset:
+    """Reportable Cases right first time: never appealed, amended or
+    overridden. **Grain: reportable_month x brand x case_type x
+    assigned_reviewer_name.**"""
+    cases = _reportable_cases(current)
+    appealed = _in_cases(cases, appeals.to_pandas())
+    amended = cases["amended_outcome_id"].notna() | cases["amended_at"].notna()
+    right = ~appealed & ~amended & ~_flagged(cases["outcome_overridden"])
+    dims = ["reportable_month", "case_type", "assigned_reviewer_name"]
+    rows = (
+        cases.assign(_right=right)
+        .groupby(dims, sort=True)
+        .agg(
+            reportable_count=("_right", "size"),
+            first_time_right_count=("_right", "sum"),
+        )
+        .reset_index()
+    )
+    rows = rows.assign(
+        brand=UNKNOWN_BRAND,
+        first_time_right_rate=[
+            round(right / total, 4)
+            for right, total in zip(
+                rows["first_time_right_count"], rows["reportable_count"]
+            )
+        ],
+    )
+    return _finish(
+        rows,
+        CaseFirstTimeRightMonthly,
+        as_of=as_of,
+        sort_by=("reportable_month", "brand", "case_type", "assigned_reviewer_name"),
+    )
+
+
+def _iso_week(days: pd.Series) -> pd.Series:
+    """``YYYY-Www`` of each local day's ISO week."""
+    iso = days.dt.isocalendar()
+    return iso["year"].astype(str) + "-W" + iso["week"].astype(str).str.zfill(2)
+
+
+def reviewer_throughput(current: Dataset, *, as_of: str) -> Dataset:
+    """Cases made Reportable per ISO week, and how they spread over the
+    Reviewers who made them. **Grain: iso_week x brand x case_type.**"""
+    cases = _reportable_cases(current)
+    cases = _with_all_case_types(
+        cases.assign(iso_week=_iso_week(_local_days(cases["_reportable"])))
+    )
+    dims = ["iso_week", "case_type"]
+    totals = cases.groupby(dims, sort=True).size()
+    per_reviewer = (
+        cases.loc[cases["assigned_reviewer_name"].ne(UNASSIGNED)]
+        .groupby([*dims, "assigned_reviewer_name"], sort=True)
+        .size()
+        .reset_index(name="_completions")
+    )
+    codes = totals.index.get_indexer(pd.MultiIndex.from_frame(per_reviewer[dims]))
+    values = per_reviewer["_completions"].to_numpy(dtype="float64")
+    order = np.lexsort((values, codes))
+    stats = _percentiles(codes[order], values[order], len(totals))
+    rows = totals.index.to_frame(index=False).assign(
+        brand=UNKNOWN_BRAND,
+        active_reviewer_count=stats["n"],
+        completions_total=totals.to_numpy(),
+        completions_per_reviewer_p50=_rounded_all(stats["p50"]),
+        completions_per_reviewer_p90=_rounded_all(stats["p90"]),
+        completions_per_reviewer_max=_rounded_all(stats["max"]),
+    )
+    return _finish(
+        rows,
+        ReviewerThroughputWeekly,
+        as_of=as_of,
+        sort_by=("iso_week", "brand", "case_type"),
+    )
+
+
+def reviewer_workload_daily(workload: Dataset, *, as_of: str) -> Dataset:
+    """``reviewer_workload_current``'s rows under the snapshot's local date."""
+    frame = workload.to_pandas().assign(as_of_date=local_date(as_of).isoformat())
+    return _finish(
+        frame,
+        ReviewerWorkloadDaily,
+        as_of=as_of,
+        sort_by=("as_of_date", "brand", "case_type", "assigned_reviewer_name"),
     )

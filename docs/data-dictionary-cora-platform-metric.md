@@ -1,11 +1,13 @@
 # Data dictionary — `cora_platform_metric`
 
-Nineteen gold **Aggregate tables** measuring how the Case Review Platform is
+Twenty-four gold **Aggregate tables** measuring how the Case Review Platform is
 operating, reduced from the Sync subject's published current state and its
 observation history. They belong to the `cora_platform_metric` Reporting
-subject and are rebuilt whole (`Refresh()`) on every run, so a re-run over the
-same Sync snapshot produces the same numbers. Every table carries the Sync
-snapshot's `as_of_utc`; no table carries a Case.
+subject. All but two are rebuilt whole (`Refresh()`) on every run, so a re-run
+over the same Sync snapshot produces the same numbers; `case_open_age_daily`
+and `reviewer_workload_daily` keep a row set per snapshot day (`AccumulateByRun`),
+because what was open on a past day cannot be rebuilt from the current state.
+Every table carries the Sync snapshot's `as_of_utc`; no table carries a Case.
 
 The Python contracts are
 [`pipelines/cora_platform_metric/schema.py`](../pipelines/cora_platform_metric/schema.py);
@@ -67,10 +69,10 @@ read off the same history, not from its original `assigned_at`.
 | **Is this a Case Type?** | No — Reporting aggregates |
 | **Source system** | Sync gold `case_current`, `answer`, `answer_action`, `appeal`, `conversation_message`; Sync silver `case_version` (the observation history) |
 | **Readers** | `readers.sharepoint_cases.CurrentCasesReader`, `AnswersReader`, `AnswerActionsReader`, `AppealsReader`, `ConversationMessagesReader`, `CaseObservationHistoryReader` — the Shared Readers over the Sync subject ([ADR-0026](adr/0026-shared-readers-declare-cross-subject-reads.md)). This pipeline names no layer and no table for data it does not own; the physical sources above are facts about the data, not couplings in the code |
-| **Load strategy** | `Refresh()`, every table |
+| **Load strategy** | `Refresh()`, every table but `case_open_age_daily` and `reviewer_workload_daily`, which are `AccumulateByRun` keyed on the Sync snapshot's local date (`cora_platform_metric:<as_of_date>`), not the run date |
 | **Upstream dependencies** | `sharepoint_cases` Sync pipeline (`UPSTREAMS`) |
 | **Schedule / freshness** | Daily, in the `case_management` set after `reviewer_activity`, with the Sync freshness check |
-| **Run parameters** | `calendar` — path to a YAML working-day calendar (`holidays` + `weekend`, the same file `orchestrate --calendar` takes) for `case_sla_attainment_monthly`; omitted, weekends-only |
+| **Run parameters** | `calendar` — path to a YAML working-day calendar (`holidays` + `weekend`, the same file `orchestrate --calendar` takes) for `case_sla_attainment_monthly` and the `sla_margin_review` measure; omitted, weekends-only |
 | **Migrations** | `migrations/cora_platform_metric/gold/` |
 | **Owner / data steward** | *<team>* |
 | **Last reviewed** | 2026-10-09 |
@@ -78,9 +80,9 @@ read off the same history, not from its original `assigned_at`.
 The Sync snapshot instant, `as_of_utc`, is read off `case_current` — one
 literal on every row — once at the top of the run, and is what an open hold is
 measured to and what every table is stamped with. Each reduction is handed that
-instant, so the nineteen tables cannot disagree about which snapshot they
-describe. An empty `case_current` has no snapshot to report against and fails
-the run rather than publishing nineteen empty tables.
+instant, so the tables cannot disagree about which snapshot they describe. An
+empty `case_current` has no snapshot to report against and fails the run rather
+than publishing empty tables.
 
 **Joining.** Every Sync table this pipeline reads — `case_current`, the
 observation history, `answer`, `answer_action`, `appeal` and
@@ -191,6 +193,7 @@ non-working days — the Saturday after a Friday due date — is on time.
 | `late_count` | `int` | No | Completed one or more working days late. |
 | `no_due_date_count` | `int` | No | In `case_count` but judged neither way (`review` only — a `remediation` row is by construction over Cases with a due date). |
 | `late_working_days_mean` / `_max` | `float` | Yes | Over the late Cases; NULL when `late_count` is 0. |
+| `on_time_rate` | `float` | Yes | `on_time_count / (on_time_count + late_count)`, to four places: the Cases with no due date are judged neither way, so they are left out. NULL when both counts are 0. To roll up, sum the counts and divide again. |
 
 ### `case_void_monthly` — voided Cases by reason and by whom
 
@@ -650,12 +653,173 @@ counted.
 | `agreed_appeal_count` | `int` | No | Resolved `agreed`. |
 | `rejected_appeal_count` | `int` | No | Resolved `rejected`. |
 
+### `case_duration_percentiles_daily` — trailing-window percentiles of how long things take
+
+Reduced from `case_current` over the **non-void** Cases. Grain: `as_of_date` ×
+`window_days` × `case_type` × `measure`. Rebuilt whole every run, so the table
+is its own backfill: every `as_of_date` from the local date of the first
+completion up to `as_of_utc`'s local date. A measure that ended before the first
+completion is in the windows that reach back to it.
+
+A row is the distribution of one measure over the Cases whose measurement
+**ended** on a local date in the window `(as_of_date − window_days,
+as_of_date]`, for `window_days` 28 and 90. So `p90` on a 28-day row reads "of
+the Cases that finished this leg in the four weeks to `as_of_date`, nine in ten
+took no longer than this". A Case is measured on its current stamps, so a
+reopened Case leaves the rows it was in until it is sent or completed again
+(item 4 above), and an `as_of_date` already published can change.
+
+| `measure` | From | To | Over | Unit |
+|---|---|---|---|---|
+| `end_to_end` | `created` | `completed_at` | every Case carrying both | decimal days |
+| `to_reportable` | `created` | `reportable_at` | every Case carrying both | decimal days |
+| `allocation_wait` | `created` | `assigned_at` | every Case carrying both | decimal days |
+| `review` | `assigned_at` | `reportable_at` | every Case carrying both | decimal days |
+| `remediation` | `reportable_at` | `completed_at` | Cases stamped `had_remediation` only | decimal days |
+| `sla_margin_review` | `due_date` | `completed_at` | `Completed` Cases carrying both | working days, signed |
+
+The duration measures are the legs of `case_lifecycle_duration_monthly`
+(`allocation_wait` is its `allocation`), and a leg that runs backwards is left
+out here as it is there. `sla_margin_review` is the review SLA's
+`working_days_late`, signed: the working days after the due date's local date
+up to and including the completion's, or, completed early, minus the working
+days after the completion up to and including the due date. Positive is late,
+so the upper percentiles read as the late tail: a `p90` of `2` means nine in ten
+finished no more than two working days late. It uses the run's working-day
+calendar, as `case_sla_attainment_monthly` does.
+
+A percentile over too few Cases is one Case's value, not a tail, so `p90` is
+NULL where `n` is under 10 and `p95` where it is under 20. Percentiles do not
+roll up, so each `as_of_date` × window × measure also carries a `case_type`
+of `(all)`, the same distribution taken over every Case Type together. There
+is no `brand` column: it would be `(unknown)` on every row, and a placeholder
+cannot be rolled up from here the day a Brand source lands, so that day it is
+a new dimension. A group with no measurement in the window has no row.
+
+| Field | Type | Nullable | Description |
+|-------|------|----------|-------------|
+| `as_of_date` | `str` | No | `YYYY-MM-DD`, the local date the window ends on. |
+| `window_days` | `int` | No | `28` or `90`. |
+| `case_type` | `str` | No | Case Type slug, or `(all)`. |
+| `measure` | `str` | No | One of the six above. |
+| `n` | `int` | No | Measurements in the window. |
+| `p50` / `max` | `float` | No | Median and largest, in the measure's unit. |
+| `p90` | `float` | Yes | NULL where `n` < 10. |
+| `p95` | `float` | Yes | NULL where `n` < 20. |
+
+### `case_open_age_daily` — how old the open work is
+
+Reduced from `case_current` over the **non-void** Cases. Grain: `as_of_date` ×
+`case_type` × `measure`. **Accumulated one day at a time**
+(`AccumulateByRun`), not rebuilt: what was open on a past day cannot be read
+back off the current state, so each run adds the rows for its snapshot's local
+date. The rows are keyed on that date, not on the run date
+(`logical_run_id` is `cora_platform_metric:<as_of_date>`), so any run over the
+same Sync snapshot replaces that day's rows — including a re-drive under an
+earlier `--run-date` after a later Sync has published — and the table holds
+one row set per `as_of_date`. A run over a later snapshot adds a new day and
+leaves the earlier ones as they were.
+
+| `measure` | Over | Age from |
+|---|---|---|
+| `open_age_to_allocate` | Cases in `To-allocate` | `created` |
+| `open_age_in_progress` | Cases in `In-progress` | `created` |
+| `open_age_actions_in_progress` | Cases in `Actions In Progress` | `created` |
+| `awaiting_responsible_party` | open Cases flagged `awaiting_responsible_party` | `awaiting_since` |
+| `open_appeal_age` | Cases flagged `has_open_appeal`, open or `Completed` | `appeal_raised_at` |
+
+Ages are decimal days to `as_of_utc`. The three status measures age the
+**Case**, from `created`, split by the status it is in now. That is not the time
+in that status, which `case_stage_dwell_current` measures from the history, and
+not the time since assignment: `assigned_at` is the latest hand-over, and a
+reopen does not restamp it. A Case with no parseable start stamp is not
+measured. Small-`n` nulling and the `(all)` row are as for
+`case_duration_percentiles_daily`; a measure nothing is open under has no row.
+
+| Field | Type | Nullable | Description |
+|-------|------|----------|-------------|
+| `as_of_date` | `str` | No | `YYYY-MM-DD`, `as_of_utc`'s local date. |
+| `case_type` | `str` | No | Case Type slug, or `(all)`. |
+| `measure` | `str` | No | One of the five above. |
+| `n` | `int` | No | Cases measured. |
+| `p50` / `max` | `float` | No | In decimal days. |
+| `p90` | `float` | Yes | NULL where `n` < 10. |
+| `p95` | `float` | Yes | NULL where `n` < 20. |
+| `logical_run_id` / `load_date` | `str` | No | The day's replace key, `cora_platform_metric:<as_of_date>`, and that `as_of_date` (`AccumulateByRun`'s columns, stamped by the Writer, not declared in `schema.py`). Which run attempt wrote them is `pipeline_run_id`. |
+
+### `case_first_time_right_monthly` — Reportable Cases nobody had to correct
+
+Reduced from `case_current` and the `appeal` Detail Table, matched to each
+Case on `(case_type, source_item_id)`. Grain:
+`reportable_month` × `brand` × `case_type` × `assigned_reviewer_name`, over the
+same Reportable population as `case_outcome_monthly`.
+
+A Case is **first time right** when it has **no Appeal** (any `appeal` row, in
+any state or verdict — a rejected Appeal still sent the Case back for a second
+look), **no amendment** (no `amended_outcome_id` and no `amended_at`) and **no
+override** (`outcome_overridden` not set). A **reopen is not part of the
+definition**: a Maintainer's Reopen clears the stamps that would show it, and
+the reopened Case counts at its current state like everywhere here (item 4
+above). Like `appeal_rate_by_reviewer_monthly`, each month is a cohort that
+keeps changing as late Appeals arrive, so the latest months' rates are upper
+bounds.
+
+| Field | Type | Nullable | Description |
+|-------|------|----------|-------------|
+| `reportable_month` | `str` | No | `YYYY-MM` of the Case's `reportable_at` local date. |
+| `brand` | `str` | No | `(unknown)`. |
+| `case_type` | `str` | No | Case Type slug. |
+| `assigned_reviewer_name` | `str` | No | The Reviewer's bare account; `(unassigned)` where absent. |
+| `reportable_count` | `int` | No | Reportable Cases in the group. |
+| `first_time_right_count` | `int` | No | Of those, first time right. |
+| `first_time_right_rate` | `float` | No | `first_time_right_count / reportable_count`, to four places. To roll up, sum the counts and divide again. |
+
+### `reviewer_throughput_weekly` — how much the Reviewers get through each week
+
+Reduced from `case_current`. Grain: `iso_week` × `brand` × `case_type`, plus a
+`case_type` of `(all)`.
+
+A **completion** here is a Reviewer making a Case Reportable — their output, as
+`reviewer_workload_current` counts it — over the same Reportable population as
+`case_outcome_monthly`, filed under the ISO week of `reportable_at`'s local
+date. `completions_total` counts every one; the per-Reviewer figures are over
+the Reviewers who made at least one that week (`active_reviewer_count`), so a
+Case with no Reviewer named is in the total but credited to nobody. The
+`(all)` row counts a Reviewer's completions across every Case Type together,
+which is why its percentiles are not those of the Case Type rows. `..._p90` is
+NULL where `active_reviewer_count` is under 10.
+
+| Field | Type | Nullable | Description |
+|-------|------|----------|-------------|
+| `iso_week` | `str` | No | `YYYY-Www`, ISO year and week of the local date. |
+| `brand` | `str` | No | `(unknown)`. |
+| `case_type` | `str` | No | Case Type slug, or `(all)`. |
+| `active_reviewer_count` | `int` | No | Reviewers with a completion that week. |
+| `completions_total` | `int` | No | Cases made Reportable that week. |
+| `completions_per_reviewer_p50` / `_max` | `float` | Yes | Over the active Reviewers; NULL where there are none. |
+| `completions_per_reviewer_p90` | `float` | Yes | NULL where `active_reviewer_count` < 10. |
+
+### `reviewer_workload_daily` — Reviewer workload, kept day by day
+
+`reviewer_workload_current`'s rows under `as_of_date`, `as_of_utc`'s local
+date, **accumulated one day at a time** (`AccumulateByRun`) so the work in hand
+can be trended. Keyed on `as_of_date` as `case_open_age_daily` is: any run over
+the same Sync snapshot replaces that day's rows, whatever its run date.
+Every column means what it does in `reviewer_workload_current`.
+
+| Field | Type | Nullable | Description |
+|-------|------|----------|-------------|
+| `as_of_date` | `str` | No | `YYYY-MM-DD`, `as_of_utc`'s local date. |
+| *every `reviewer_workload_current` field* | | | As there. |
+| `logical_run_id` / `load_date` | `str` | No | As in `case_open_age_daily`. |
+
 ## Part C — Row checks
 
 None. Each group-by produces its declared grain, so no uniqueness gate is
 attached — the same reasoning as the Sync subject's aggregates. Every table is
 gated by its `SchemaValidator` (columns, types, nullability, `OneOf` on
-`sla_kind`, `Range` on the counts and on `share_of_cases`) before it is written.
+`sla_kind`, `measure` and `window_days`, `Range` on the counts, the ages and
+the rates) before it is written.
 
 ## Part D — Quarantine & data quality
 
@@ -669,6 +833,9 @@ gated by its `SchemaValidator` (columns, types, nullability, `OneOf` on
   reduction reads. So a Sync shape change fails that step with the column named
   rather than publishing a wrong number; the tables before it in publication
   order are already refreshed, and the next run rebuilds them all.
+- `case_open_age_daily` and `reviewer_workload_daily` have no rows for a day
+  the pipeline did not run, and cannot be backfilled: the state they record is
+  gone once Sync's next snapshot replaces it.
 - An instant that does not parse (`errors="coerce"`) drops that row from the
   measure it feeds — a Completed Case with an unparseable `completed_at` is not
   in the SLA table; an Appeal with an unparseable `resolution_at` is in
@@ -700,9 +867,10 @@ gated by its `SchemaValidator` (columns, types, nullability, `OneOf` on
   is computable from the same observations, but it would be a new table with
   its own question, not a widened grain on this one.
 - **Roll-up-able duration percentiles.** `case_lifecycle_duration_monthly`'s
-  medians and p90s hold at its own grain only. Publishing a duration histogram
-  (counts per day-band) would make an approximate percentile available at any
-  roll-up, if a consumer asks for one.
+  medians and p90s hold at its own grain only, and the distribution tables
+  carry exactly one roll-up, `(all)`. Publishing a duration histogram (counts
+  per day-band) would make an approximate percentile available at any roll-up,
+  if a consumer asks for one.
 - **A per-Case status-transition log.** The history tables are reduced
   from one in memory, and publishing it would be the first non-aggregate table
   on a Reporting subject; if a second consumer wants transitions at Case grain
