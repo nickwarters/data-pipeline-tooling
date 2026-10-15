@@ -1482,7 +1482,9 @@ Unlike the primitives above it touches no `Dataset`, `Store`, or engine — it
 is pure stdlib `datetime`, hence deterministic and identical on Windows/macOS,
 and is **not** a Feed. Two queries: `is_working_day(day)`
 and `last_n_working_days(n, from_date)` (the `n` most recent working days on or
-before `from_date`, most-recent first, skipping weekends + holidays). Full
+before `from_date`, most-recent first, skipping weekends + holidays); its
+`weekend` and `holidays` (normalised to `date`s on construction) are readable
+for column-wise arithmetic. Full
 config and boundary semantics in
 [`working-day-calendar.md`](working-day-calendar.md).
 

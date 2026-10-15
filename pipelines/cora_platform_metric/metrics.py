@@ -2,8 +2,9 @@
 
 Each function takes the Sync datasets as read and returns one Aggregate table;
 nothing here reads or writes. ``case_stage_dwell``, ``case_hold`` and
-``case_backlog`` reduce the observation history and so measure what the polls
-saw -- a change reversed between two polls was never observed. Every table is
+``case_backlog`` reduce the observation history -- put in order once, by
+``ordered_history`` -- and so measure what the polls saw: a change reversed
+between two polls was never observed. Every table is
 stamped with Sync's own ``as_of_utc`` and open intervals are measured to it, so
 a re-run over the same snapshot gives the same numbers.
 
@@ -19,6 +20,7 @@ import datetime as dt
 import json
 from typing import get_type_hints
 
+import numpy as np
 import pandas as pd
 
 from framework.core import Dataset
@@ -130,11 +132,14 @@ SECONDS_PER_HOUR = 3_600.0
 # The columns each reduction needs from what it is handed; the pipeline gates
 # each source on the union for its consumers, and the failure message lands
 # beside the code that depends on them.
-HISTORY_COLUMNS = (
+ORDERING_COLUMNS = (
     *CASE_KEY,
     "source_modified_at",
     "source_version",
     "source_observation_id",
+)
+HISTORY_COLUMNS = (
+    *ORDERING_COLUMNS,
     "status",
     "assigned_reviewer_name",
     "created",
@@ -260,6 +265,13 @@ def _instants(values):
     return pd.to_datetime(values, utc=True, errors="coerce", format="ISO8601")
 
 
+def _in_cases(frame: pd.DataFrame, cases: pd.DataFrame) -> pd.Series:
+    """Which rows of ``frame`` belong to one of ``cases``, by ``CASE_KEY``."""
+    known = pd.MultiIndex.from_frame(cases[list(CASE_KEY)])
+    mask = pd.MultiIndex.from_frame(frame[list(CASE_KEY)]).isin(known)
+    return pd.Series(mask, index=frame.index)
+
+
 def _filled(frame: pd.DataFrame, fills: dict[str, str]) -> pd.DataFrame:
     """Replace a dimension's NULLs with the literal that stands in for them.
 
@@ -272,18 +284,6 @@ def _filled(frame: pd.DataFrame, fills: dict[str, str]) -> pd.DataFrame:
             for column, literal in fills.items()
         }
     )
-
-
-def _in_cases(frame: pd.DataFrame, cases: pd.DataFrame) -> pd.Series:
-    """Which rows of ``frame`` belong to one of ``cases``, by ``CASE_KEY``."""
-    return pd.MultiIndex.from_frame(frame[list(CASE_KEY)]).isin(
-        pd.MultiIndex.from_frame(cases[list(CASE_KEY)])
-    )
-
-
-def _days(started: pd.Timestamp, ended: pd.Timestamp) -> float:
-    """Days from one instant to another, never negative."""
-    return max((ended - started).total_seconds() / SECONDS_PER_DAY, 0.0)
 
 
 def _rounded(value: object) -> float | None:
@@ -303,12 +303,80 @@ def _maximum(values: pd.Series) -> float | None:
     return _rounded(values.dropna().max())
 
 
+def _summaries(frame: pd.DataFrame, dims: list[str], value: str) -> pd.DataFrame:
+    """Per ``dims`` group (sorted, a NULL key dropped as ``groupby`` drops it):
+    its rows, and the count, total, mean, p50, p90 and max of ``value``'s
+    non-null entries.
+
+    Each statistic is bit for bit what ``Series.sum`` / ``.mean`` /
+    ``.quantile`` / ``.max`` give on that group's values alone -- the total
+    summed over the group in frame order, the quantiles interpolated as numpy
+    interpolates them -- so a published figure rounds the same however the
+    groups were formed.
+    """
+    grouped = frame.groupby(dims, sort=True)
+    rows = grouped.size()
+    codes = grouped.ngroup().to_numpy(dtype="float64")
+    values = frame[value].to_numpy(dtype="float64")
+    measured = ~np.isnan(codes) & ~np.isnan(values)
+    codes, values = codes[measured].astype("int64"), values[measured]
+    counts = np.bincount(codes, minlength=len(rows))
+    ends = np.cumsum(counts)
+    starts = ends - counts
+    in_frame_order = values[np.argsort(codes, kind="stable")]
+    totals = np.array(
+        [in_frame_order[start:end].sum() for start, end in zip(starts, ends)],
+        dtype="float64",
+    )
+    ascending = values[np.lexsort((values, codes))]
+    some = counts > 0
+
+    def at(positions: np.ndarray) -> np.ndarray:
+        picked = np.full(len(rows), np.nan)
+        picked[some] = ascending[positions[some]]
+        return picked
+
+    def quantile(q: float) -> np.ndarray:
+        # numpy's linear method: index (n - 1) * q, interpolated from whichever
+        # neighbour is nearer, the last value once the index reaches it.
+        index = (counts - 1) * q
+        top = index >= counts - 1
+        below = np.where(top, -1, np.floor(index)).astype("int64")
+        lower = at(starts + np.where(top, counts - 1, below))
+        upper = at(starts + np.where(top, counts - 1, below + 1))
+        weight = index - below
+        step = upper - lower
+        return np.where(
+            weight >= 0.5, upper - step * (1 - weight), lower + step * weight
+        )
+
+    with np.errstate(invalid="ignore", divide="ignore"):
+        means = np.where(some, totals / counts, np.nan)
+    return pd.DataFrame(
+        {
+            "rows": rows.to_numpy(),
+            "count": counts,
+            "total": totals,
+            "mean": means,
+            "p50": quantile(0.5),
+            "p90": quantile(0.9),
+            "max": at(ends - 1),
+        },
+        index=rows.index,
+    )
+
+
+def _rounded_all(values) -> list[float | None]:
+    """``_rounded`` over a column of statistics."""
+    return [_rounded(value) for value in values]
+
+
 # What each declared type is held as while the table is being built.
 PANDAS_DTYPES = {str: "string", int: "int64", float: "float64", bool: "bool"}
 
 
 def _finish(
-    rows: list[dict[str, object]],
+    rows: list[dict[str, object]] | pd.DataFrame,
     table: type,
     *,
     as_of: str,
@@ -333,22 +401,71 @@ def _finish(
     return Dataset.from_pandas(ordered)
 
 
-def _ordered_history(dataset: Dataset) -> pd.DataFrame:
+def _flagged(values: pd.Series) -> pd.Series:
+    """A source flag as True/False, NULL reading as not set."""
+    return values.notna() & values.astype("object").fillna(0).astype(bool)
+
+
+def _local_days(instants: pd.Series) -> pd.Series:
+    """Each instant's local calendar date, as a midnight; ``NaT`` where none."""
+    return timestamps.local_wall_clock(instants).dt.normalize()
+
+
+def _month(instants: pd.Series) -> pd.Series:
+    """``YYYY-MM`` of each instant's local date; None where there is no instant."""
+    months = _local_days(instants).dt.strftime("%Y-%m").astype("object")
+    return months.where(months.notna(), None)
+
+
+def _local_day(instants: pd.Series) -> pd.Series:
+    """``YYYY-MM-DD`` of each instant's local date; ``(unstamped)`` where none."""
+    days = _local_days(instants).dt.strftime("%Y-%m-%d").astype("object")
+    return days.where(days.notna(), UNSTAMPED)
+
+
+def _days_until(stamps: pd.Series, today: dt.date) -> pd.Series:
+    """Local calendar days from ``today`` to each stamp; negative once passed,
+    NaN where there is no stamp."""
+    return (_local_days(_instants(stamps)) - pd.Timestamp(today)).dt.days.astype(
+        "float64"
+    )
+
+
+def _days_since(stamps: pd.Series, today: dt.date) -> pd.Series:
+    """Local calendar days from each stamp to ``today``; NaN where none."""
+    return (pd.Timestamp(today) - _local_days(_instants(stamps))).dt.days.astype(
+        "float64"
+    )
+
+
+# --- history metrics --------------------------------------------------------
+
+
+def ordered_history(history: Dataset) -> Dataset:
     """The observation history in the order things happened, per Case.
 
     Ordered by the source's own ``Modified`` instant, then ``source_version``
     as a number, since two versions can share a ``Modified`` and the later
     status must come last; then the observation id, a digest, as a
-    deterministic last resort. An observation
-    whose ``Modified`` does not parse has no place in that order and is dropped.
+    deterministic last resort. An observation whose ``Modified`` does not
+    parse, or that names no Case, has no place in that order and is dropped.
+    Parsed and sorted once, for every reduction of the history; each row
+    carries ``_modified``, the parsed instant, and ``_case``, its Case's
+    position in that order.
     """
-    frame = dataset.to_pandas().copy()
-    frame["_modified"] = _instants(frame["source_modified_at"])
-    frame["_version"] = _version_number(frame["source_version"])
-    return frame.loc[frame["_modified"].notna()].sort_values(
+    frame = history.to_pandas()
+    frame = frame.assign(
+        _modified=_instants(frame["source_modified_at"]),
+        _version=_version_number(frame["source_version"]),
+    )
+    placed = frame["_modified"].notna() & frame[list(CASE_KEY)].notna().all(axis=1)
+    ordered = frame.loc[placed].sort_values(
         [*CASE_KEY, "_modified", "_version", "source_observation_id"],
         kind="stable",
     )
+    keys = ordered[list(CASE_KEY)]
+    ordered = ordered.assign(_case=keys.ne(keys.shift()).any(axis=1).cumsum())
+    return Dataset.from_pandas(ordered.reset_index(drop=True))
 
 
 def _version_number(versions: pd.Series) -> pd.Series:
@@ -363,23 +480,28 @@ def _version_number(versions: pd.Series) -> pd.Series:
     return number.fillna(-1)
 
 
-def _entry_instant(
-    first: pd.Series, stamps: dict[str, str] = FIRST_OBSERVATION_ENTRY_STAMPS
-) -> pd.Timestamp:
-    """When a Case entered the status its *first* observation carries."""
-    stamp_column = stamps.get(first["status"])
-    if stamp_column is None:
-        return first["_modified"]
-    stamped = _instants(first.get(stamp_column))
-    if pd.notna(stamped) and stamped <= first["_modified"]:
-        return stamped
-    return first["_modified"]
+def _history_frame(history: Dataset) -> pd.DataFrame:
+    """The frame of a history that has been through ``ordered_history``."""
+    frame = history.to_pandas()
+    if "_case" not in frame.columns:
+        raise ValueError(
+            "a history reduction takes the ordered history: pass the observation "
+            "history through ordered_history() first"
+        )
+    return frame
+
+
+def _case_starts(frame: pd.DataFrame) -> pd.Series:
+    """True on each Case's first row of an ordered history."""
+    return frame["_case"].ne(frame["_case"].shift())
 
 
 def _entry_instants(
     frame: pd.DataFrame, stamps: dict[str, str] = FIRST_OBSERVATION_ENTRY_STAMPS
 ) -> pd.Series:
-    """``_entry_instant`` for every row, as though each were a first observation."""
+    """When each row's Case entered the status it carries, were that row the
+    Case's *first* observation: the source's own entry stamp where it has one
+    for that status and it is no later than the poll, else the poll."""
     stamped = pd.Series(pd.NaT, index=frame.index, dtype=frame["_modified"].dtype)
     for status, column in stamps.items():
         stamped = stamped.where(frame["status"].ne(status), _instants(frame[column]))
@@ -387,60 +509,64 @@ def _entry_instants(
     return stamped.where(usable, frame["_modified"])
 
 
-# --- history metrics --------------------------------------------------------
+def _stays(frame: pd.DataFrame, first: pd.Series) -> tuple[pd.Series, pd.Series]:
+    """Where each row starts a stay in a status, and when that stay began."""
+    previous = frame["status"].shift()
+    changed = frame["status"].ne(previous) & ~first
+    began = frame["_modified"].where(~first, _entry_instants(frame.loc[first]))
+    return changed, began.where(first | changed).ffill()
+
+
+def _elapsed_days(started: pd.Series, ended: pd.Series) -> pd.Series:
+    """Days from each start to its end, never negative."""
+    return ((ended - started).dt.total_seconds() / SECONDS_PER_DAY).clip(lower=0.0)
 
 
 def case_stage_dwell(history: Dataset, *, as_of: str) -> Dataset:
     """How long Cases dwell in each status. **Grain: brand x case_type x
     status.**
 
-    Walks each Case's observations in order; every change of ``status`` closes
-    an interval at that observation's ``Modified`` and opens the next. A Case's
-    last interval is *open* unless its status is terminal, and a terminal
-    status left by a reopen closes no interval: that was the gap until the
-    reopen, not a stage. Statistics are over closed intervals only -- an open
-    one has no length yet, and measuring it to ``as_of`` would mix two
+    Reduces the ordered history (``ordered_history``). Every change of
+    ``status`` closes an interval at that observation's ``Modified`` and opens
+    the next. A Case's last interval is *open* unless its status is terminal,
+    and a terminal status left by a reopen closes no interval: that was the gap
+    until the reopen, not a stage. Statistics are over closed intervals only --
+    an open one has no length yet, and measuring it to ``as_of`` would mix two
     different questions (the Sync subject's age-bucket aggregates already
     answer "how long has it been waiting").
     """
-    stays = []  # one per stay in a status: (case_type, status, days, open)
-    for _, observations in _ordered_history(history).groupby(
-        list(CASE_KEY), sort=False
-    ):
-        first = observations.iloc[0]
-        case_type = first["case_type"]
-        status = first["status"]
-        entered = _entry_instant(first)
-        for _, observation in observations.iloc[1:].iterrows():
-            if observation["status"] == status:
-                continue
-            if status not in TERMINAL_STATUSES:
-                stays.append(
-                    (case_type, status, _days(entered, observation["_modified"]), False)
-                )
-            status = observation["status"]
-            entered = observation["_modified"]
-        if status not in TERMINAL_STATUSES:
-            stays.append((case_type, status, None, True))
+    frame = _history_frame(history)
+    first = _case_starts(frame)
+    last = first.shift(-1, fill_value=True)
+    changed, began = _stays(frame, first)
+    left = frame["status"].shift()
+    closed = pd.DataFrame(
+        {
+            "case_type": frame["case_type"],
+            "status": left,
+            "days": _elapsed_days(began.shift(), frame["_modified"]),
+        }
+    ).loc[changed & ~left.isin(TERMINAL_STATUSES)]
+    still_open = frame.loc[
+        last & ~frame["status"].isin(TERMINAL_STATUSES), ["case_type", "status"]
+    ]
+    stays = pd.concat([closed, still_open.assign(days=np.nan)], ignore_index=True)
 
-    frame = pd.DataFrame(stays, columns=["case_type", "status", "days", "open"])
-    frame["days"] = pd.to_numeric(frame["days"])
-    rows = []
-    for (case_type, status), group in frame.groupby(["case_type", "status"], sort=True):
-        closed = group.loc[~group["open"].astype(bool), "days"]
-        rows.append(
-            {
-                "brand": UNKNOWN_BRAND,
-                "case_type": case_type,
-                "status": status,
-                "interval_count": len(closed),
-                "open_interval_count": len(group) - len(closed),
-                "dwell_days_mean": _mean(closed),
-                "dwell_days_p50": _quantile(closed, 0.5),
-                "dwell_days_p90": _quantile(closed, 0.9),
-                "dwell_days_max": _maximum(closed),
-            }
-        )
+    stats = _summaries(stays, ["case_type", "status"], "days")
+    keys = stats.index.to_frame(index=False)
+    rows = pd.DataFrame(
+        {
+            "brand": UNKNOWN_BRAND,
+            "case_type": keys["case_type"],
+            "status": keys["status"],
+            "interval_count": stats["count"].to_numpy(),
+            "open_interval_count": (stats["rows"] - stats["count"]).to_numpy(),
+            "dwell_days_mean": _rounded_all(stats["mean"]),
+            "dwell_days_p50": _rounded_all(stats["p50"]),
+            "dwell_days_p90": _rounded_all(stats["p90"]),
+            "dwell_days_max": _rounded_all(stats["max"]),
+        }
+    )
     return _finish(
         rows, CaseStageDwell, as_of=as_of, sort_by=("brand", "case_type", "status")
     )
@@ -450,81 +576,87 @@ def case_hold(history: Dataset, *, as_of: str) -> Dataset:
     """How often and how long Cases are held. **Grain: brand x case_type x
     assigned_reviewer_name.**
 
-    A hold opens at the first open-status observation carrying ``on_hold``
-    (from the source's ``placed_on_hold_at`` where it has one, else that
-    observation's ``Modified``) and closes at the first later observation
-    without it, or at the observation where the Case entered ``Completed`` or
-    ``Void`` if that comes first. Terminal spells are not held time, as they are
-    not a stage in ``case_stage_dwell``: a flag first seen on a terminal
-    observation opens nothing, and a flag still set when the Case is reopened
-    opens a new hold from the reopen (never from a ``placed_on_hold_at`` before
-    it). A hold still open at the last observation is measured to ``as_of`` and
-    counted in ``open_hold_count``. Attributed to the Reviewer the Case's latest
+    Reduces the ordered history (``ordered_history``). A hold opens at the
+    first open-status observation carrying ``on_hold`` (from the source's
+    ``placed_on_hold_at`` where it has one, else that observation's
+    ``Modified``) and closes at the first later observation without it, or at
+    the observation where the Case entered ``Completed`` or ``Void`` if that
+    comes first. Terminal spells are not held time, as they are not a stage in
+    ``case_stage_dwell``: a flag first seen on a terminal observation opens
+    nothing, and a flag still set when the Case is reopened opens a new hold
+    from the reopen (never from a ``placed_on_hold_at`` before it). A hold
+    still open at the last observation is measured to ``as_of`` and counted in
+    ``open_hold_count``. Attributed to the Reviewer the Case's latest
     observation names, so a reassigned Case's holds follow the Case.
     """
-    as_of_instant = pd.Timestamp(as_of)
-    holds = []  # one per hold: (case_type, source_item_id, reviewer, days, open)
-    for (case_type, item), observations in _ordered_history(history).groupby(
-        list(CASE_KEY), sort=False
-    ):
-        reviewer = observations.iloc[-1]["assigned_reviewer_name"]
-        if pd.isna(reviewer) or not reviewer:
-            reviewer = UNASSIGNED
-        started = pd.NaT  # the open hold's start, if one is open
-        terminal = False
-        reopened = pd.NaT  # the latest return from a terminal status
-        for _, observation in observations.iterrows():
-            modified = observation["_modified"]
-            if observation["status"] in TERMINAL_STATUSES:
-                if pd.notna(started):  # entering a terminal status ends the hold
-                    holds.append(
-                        (case_type, item, reviewer, _days(started, modified), False)
-                    )
-                    started = pd.NaT
-                terminal = True
-                continue
-            if terminal:
-                terminal, reopened = False, modified
-            on_hold = pd.notna(observation["on_hold"]) and bool(observation["on_hold"])
-            if on_hold and pd.isna(started):
-                stamped = _instants(observation["placed_on_hold_at"])
-                started = stamped if pd.notna(stamped) else modified
-                if pd.notna(reopened) and started < reopened:
-                    started = reopened
-            elif not on_hold and pd.notna(started):
-                holds.append(
-                    (case_type, item, reviewer, _days(started, modified), False)
-                )
-                started = pd.NaT
-        if pd.notna(started):
-            holds.append(
-                (case_type, item, reviewer, _days(started, as_of_instant), True)
-            )
-
-    held = pd.DataFrame(
-        holds,
-        columns=[
-            *CASE_KEY,
-            "assigned_reviewer_name",
-            "days",
-            "open",
-        ],
+    frame = _history_frame(history)
+    first = _case_starts(frame)
+    last = first.shift(-1, fill_value=True)
+    terminal = frame["status"].isin(TERMINAL_STATUSES)
+    # A terminal row reads as unheld whatever its flag says: entering a
+    # terminal status ends a hold there, and a flag seen there opens none.
+    on_hold = _flagged(frame["on_hold"]) & ~terminal
+    was_on_hold = on_hold.shift(fill_value=False) & ~first
+    reopened = (
+        frame["_modified"]
+        .where(~terminal & terminal.shift(fill_value=False) & ~first)
+        .groupby(frame["_case"])
+        .ffill()
     )
-    rows = [
+    placed = _instants(frame["placed_on_hold_at"])
+    started = placed.where(placed.notna(), frame["_modified"])
+    hold = (on_hold & ~was_on_hold).cumsum()
+    reviewer = (
+        frame["assigned_reviewer_name"]
+        .where(last)
+        .groupby(frame["_case"])
+        .transform("last")
+    )
+
+    opened = frame.loc[on_hold & ~was_on_hold].assign(
+        _hold=hold,
+        _started=started.mask(reopened.gt(started), reopened),
+        _reviewer=reviewer,
+    )
+    released = pd.Series(
+        frame["_modified"].loc[~on_hold & was_on_hold].array,
+        index=hold.loc[~on_hold & was_on_hold].to_numpy(),
+    )
+    ended = pd.Series(released.reindex(opened["_hold"]).array, index=opened.index)
+    still_open = ended.isna()
+    ended = ended.fillna(pd.Timestamp(as_of))
+    held = pd.DataFrame(
+        {
+            "case_type": opened["case_type"],
+            "source_item_id": opened["source_item_id"],
+            "assigned_reviewer_name": opened["_reviewer"]
+            .astype("object")
+            .where(
+                opened["_reviewer"].notna() & opened["_reviewer"].ne(""), UNASSIGNED
+            ),
+            "days": _elapsed_days(opened["_started"], ended),
+            "open": still_open,
+        }
+    )
+
+    dims = ["case_type", "assigned_reviewer_name"]
+    stats = _summaries(held, dims, "days")
+    counted = held.groupby(dims, sort=True).agg(
+        case_count=("source_item_id", "nunique"), open_hold_count=("open", "sum")
+    )
+    keys = stats.index.to_frame(index=False)
+    rows = pd.DataFrame(
         {
             "brand": UNKNOWN_BRAND,
-            "case_type": case_type,
-            "assigned_reviewer_name": reviewer,
-            "case_count": group["source_item_id"].nunique(),
-            "hold_count": len(group),
-            "open_hold_count": int(group["open"].sum()),
-            "held_days_total": round(float(group["days"].sum()), 3),
-            "held_days_mean": round(float(group["days"].mean()), 3),
+            "case_type": keys["case_type"],
+            "assigned_reviewer_name": keys["assigned_reviewer_name"],
+            "case_count": counted["case_count"].to_numpy(),
+            "hold_count": stats["rows"].to_numpy(),
+            "open_hold_count": counted["open_hold_count"].to_numpy(),
+            "held_days_total": [round(float(v), 3) for v in stats["total"]],
+            "held_days_mean": [round(float(v), 3) for v in stats["mean"]],
         }
-        for (case_type, reviewer), group in held.groupby(
-            ["case_type", "assigned_reviewer_name"], sort=True
-        )
-    ]
+    )
     return _finish(
         rows,
         CaseHold,
@@ -533,71 +665,81 @@ def case_hold(history: Dataset, *, as_of: str) -> Dataset:
     )
 
 
-def _open_spans(
-    observations: pd.DataFrame, as_of_day: dt.date
-) -> list[tuple[str, dt.date, dt.date]]:
-    """One Case's open time as ``(status, first_day, end_day)`` spans, end exclusive."""
-    first = observations.iloc[0]
-    entered = _entry_instant(first, BACKLOG_ENTRY_STAMPS)
-    opened = _instants(first["created"])
-    changes = []  # (instant, status), in the order they happened
-    if pd.notna(opened) and opened < entered:
-        changes.append((opened, UNOBSERVED))
-    changes.append((entered, first["status"]))
-    for _, observation in observations.iloc[1:].iterrows():
-        if observation["status"] != changes[-1][1]:
-            changes.append((observation["_modified"], observation["status"]))
-
-    closing = {}  # local day -> the status the Case closed that day in
-    for instant, status in changes:
-        closing[local_date(instant)] = status
-    days = sorted(day for day in closing if day <= as_of_day)
-    ends = [*days[1:], as_of_day + dt.timedelta(days=1)]
-    return [
-        (closing[day], day, end)
-        for day, end in zip(days, ends)
-        if closing[day] not in TERMINAL_STATUSES
-    ]
+def _open_spans(frame: pd.DataFrame, as_of_day: pd.Timestamp) -> pd.DataFrame:
+    """Every Case's open time as ``(case_type, status, start, end)`` local-day
+    spans, end exclusive: on each local day, the status the Case closed it in."""
+    first = _case_starts(frame)
+    changed = frame["status"].ne(frame["status"].shift()) & ~first
+    heads = frame.loc[first]
+    entered = _entry_instants(heads, BACKLOG_ENTRY_STAMPS)
+    opened = _instants(heads["created"])
+    events = pd.concat(
+        [
+            pd.DataFrame(
+                {
+                    "_case": heads["_case"],
+                    "_row": heads.index,
+                    "_order": 0,
+                    "case_type": heads["case_type"],
+                    "status": UNOBSERVED,
+                    "_at": opened,
+                }
+            ).loc[opened.notna() & opened.lt(entered)],
+            pd.DataFrame(
+                {
+                    "_case": frame["_case"],
+                    "_row": frame.index,
+                    "_order": 1,
+                    "case_type": frame["case_type"],
+                    "status": frame["status"],
+                    "_at": frame["_modified"].where(~first, entered),
+                }
+            ).loc[first | changed],
+        ]
+    ).sort_values(["_row", "_order"], kind="stable")
+    events["start"] = _local_days(events["_at"])
+    events = events.drop_duplicates(["_case", "start"], keep="last")
+    events = events.loc[events["start"].le(as_of_day)]
+    events["end"] = (
+        events.groupby("_case")["start"]
+        .shift(-1)
+        .fillna(as_of_day + pd.Timedelta(days=1))
+    )
+    spans = events.loc[~events["status"].isin(TERMINAL_STATUSES)]
+    return spans[["case_type", "status", "start", "end"]]
 
 
 def case_backlog(history: Dataset, *, as_of: str) -> Dataset:
-    """Open Cases at each day's close, by status, rebuilt from the history."""
-    as_of_day = local_date(as_of)
-    spans = []  # (case_type, status, first_day, end_day)
-    for (case_type, _), observations in _ordered_history(history).groupby(
-        list(CASE_KEY), sort=False
-    ):
-        spans.extend(
-            (case_type, status, start, end)
-            for status, start, end in _open_spans(observations, as_of_day)
-        )
+    """Open Cases at each day's close, by status, rebuilt from the ordered
+    history."""
+    as_of_day = pd.Timestamp(local_date(as_of))
+    spans = _open_spans(_history_frame(history), as_of_day)
 
-    rows = []
-    frame = pd.DataFrame(spans, columns=["case_type", "status", "start", "end"])
-    for case_type, group in frame.groupby("case_type", sort=True):
+    grids = []
+    for case_type, group in spans.groupby("case_type", sort=True):
         first_day = group["start"].min()
-        days = [
-            first_day + dt.timedelta(days=offset)
-            for offset in range((as_of_day - first_day).days + 1)
-        ]
+        length = (as_of_day - first_day).days + 1
+        days = pd.date_range(first_day, periods=length, freq="D")
         for status in sorted({*OPEN_STATUSES, *group["status"]}):
             of_status = group.loc[group["status"].eq(status)]
-            change = {}  # day -> how many Cases entered (+) or left (-) it
-            for start, end in zip(of_status["start"], of_status["end"]):
-                change[start] = change.get(start, 0) + 1
-                change[end] = change.get(end, 0) - 1
-            open_count = 0
-            for day in days:
-                open_count += change.get(day, 0)
-                rows.append(
+            entered = np.bincount(
+                (of_status["start"] - first_day).dt.days, minlength=length + 1
+            )
+            left = np.bincount(
+                (of_status["end"] - first_day).dt.days, minlength=length + 1
+            )
+            grids.append(
+                pd.DataFrame(
                     {
-                        "backlog_date": day.isoformat(),
+                        "backlog_date": days.strftime("%Y-%m-%d"),
                         "brand": UNKNOWN_BRAND,
                         "case_type": case_type,
                         "status": status,
-                        "case_count": open_count,
+                        "case_count": np.cumsum(entered - left)[:length],
                     }
                 )
+            )
+    rows = pd.concat(grids, ignore_index=True) if grids else []
     return _finish(
         rows,
         CaseBacklogDaily,
@@ -607,13 +749,6 @@ def case_backlog(history: Dataset, *, as_of: str) -> Dataset:
 
 
 # --- current metrics --------------------------------------------------------
-
-
-def _month(instants: pd.Series) -> pd.Series:
-    """``YYYY-MM`` of each instant's local date; None where there is no instant."""
-    return instants.map(
-        lambda v: None if pd.isna(v) else local_date(v).strftime("%Y-%m")
-    )
 
 
 def working_days_late(
@@ -627,6 +762,27 @@ def working_days_late(
         day += dt.timedelta(days=1)
         if calendar.is_working_day(day):
             late += 1
+    return late
+
+
+def _working_days_late(
+    calendar: WorkingDayCalendar, due: pd.Series, completed: pd.Series
+) -> pd.Series:
+    """``working_days_late`` for each pair of local days; NaN where no due day."""
+    weekmask = [day not in calendar.weekend for day in range(7)]
+    late = pd.Series(np.nan, index=due.index)
+    judged = due.notna() & completed.notna()
+    if not judged.any() or not any(weekmask):
+        return late.where(~judged, 0.0)
+    after_due = due[judged].to_numpy("datetime64[D]") + np.timedelta64(1, "D")
+    through = completed[judged].to_numpy("datetime64[D]") + np.timedelta64(1, "D")
+    counted = np.busday_count(
+        after_due,
+        np.maximum(through, after_due),
+        weekmask=weekmask,
+        holidays=sorted(calendar.holidays),
+    )
+    late[judged] = counted
     return late
 
 
@@ -644,9 +800,9 @@ def sla_attainment(
     ``due_date``; the remediation SLA judges it against
     ``remediation_due_date`` over only the Cases that carry one -- the source
     stamps no remediation-complete instant of its own, and the Case's final
-    ``Completed`` transition is after its Actions close. Days late are working
-    days after the due date's local date, on the calendar the run was given
-    (weekends-only when none).
+    ``Completed`` transition is after its Actions close. Days late are
+    ``working_days_late`` between the two local dates, on the calendar the run
+    was given (weekends-only when none).
     """
     calendar = calendar or WorkingDayCalendar()
     frame = current.to_pandas()
@@ -657,38 +813,47 @@ def sla_attainment(
     completed = _filled(completed, {"assigned_reviewer_manager_name": UNASSIGNED})
 
     dims = ["completed_month", "case_type", "assigned_reviewer_manager_name"]
-    rows = []
+    parts = []
     for sla_kind, due_column in SLA_DUE_DATES:
-        judged = completed.copy()
-        judged["_due"] = _instants(judged[due_column])
+        judged = completed.assign(_due=_instants(completed[due_column]))
         if sla_kind == REMEDIATION_SLA:
             judged = judged.loc[judged["_due"].notna()]
-        judged["_late"] = [
-            None
-            if pd.isna(due)
-            else working_days_late(calendar, local_date(due), local_date(done))
-            for due, done in zip(judged["_due"], judged["_completed"])
-        ]
-        for (month, case_type, manager), group in judged.groupby(dims, sort=True):
-            late = pd.to_numeric(group["_late"])
-            overdue = late[late > 0]
-            rows.append(
+        late = _working_days_late(
+            calendar, _local_days(judged["_due"]), _local_days(judged["_completed"])
+        )
+        judged = judged.assign(
+            _late=late,
+            _over=late.where(late > 0),
+            _on_time=late.eq(0),
+            _is_late=late.gt(0),
+            _no_due=late.isna(),
+        )
+        stats = _summaries(judged, dims, "_over")
+        counted = judged.groupby(dims, sort=True)[
+            ["_on_time", "_is_late", "_no_due"]
+        ].sum()
+        keys = stats.index.to_frame(index=False)
+        parts.append(
+            pd.DataFrame(
                 {
                     "sla_kind": sla_kind,
-                    "completed_month": month,
+                    "completed_month": keys["completed_month"],
                     "brand": UNKNOWN_BRAND,
-                    "case_type": case_type,
-                    "assigned_reviewer_manager_name": manager,
-                    "case_count": len(group),
-                    "on_time_count": int((late == 0).sum()),
-                    "late_count": len(overdue),
-                    "no_due_date_count": int(late.isna().sum()),
-                    "late_working_days_mean": _mean(overdue),
-                    "late_working_days_max": _maximum(overdue),
+                    "case_type": keys["case_type"],
+                    "assigned_reviewer_manager_name": keys[
+                        "assigned_reviewer_manager_name"
+                    ],
+                    "case_count": stats["rows"].to_numpy(),
+                    "on_time_count": counted["_on_time"].to_numpy(),
+                    "late_count": counted["_is_late"].to_numpy(),
+                    "no_due_date_count": counted["_no_due"].to_numpy(),
+                    "late_working_days_mean": _rounded_all(stats["mean"]),
+                    "late_working_days_max": _rounded_all(stats["max"]),
                 }
             )
+        )
     return _finish(
-        rows,
+        pd.concat(parts, ignore_index=True),
         CaseSlaAttainmentMonthly,
         as_of=as_of,
         sort_by=(
@@ -738,19 +903,6 @@ def void_monthly(current: Dataset, *, as_of: str) -> Dataset:
     )
 
 
-def _local_day(instants: pd.Series) -> list[str]:
-    """``YYYY-MM-DD`` of each instant's local date; ``(unstamped)`` where none."""
-    return [
-        UNSTAMPED if pd.isna(instant) else local_date(instant).isoformat()
-        for instant in instants
-    ]
-
-
-def _flagged(values: pd.Series) -> pd.Series:
-    """A source flag as True/False, NULL reading as not set."""
-    return values.map(lambda value: pd.notna(value) and bool(value))
-
-
 def case_intake(current: Dataset, *, as_of: str) -> Dataset:
     """How many Cases arrive each day, by the status they hold now."""
     frame = current.to_pandas()
@@ -758,10 +910,7 @@ def case_intake(current: Dataset, *, as_of: str) -> Dataset:
         intake_date=_local_day(_instants(frame["created"])), brand=UNKNOWN_BRAND
     )
     dims = ["intake_date", "brand", "case_type", "status"]
-    rows = [
-        dict(zip(dims, keys), case_count=len(group))
-        for keys, group in frame.groupby(dims, sort=True)
-    ]
+    rows = frame.groupby(dims, sort=True).size().reset_index(name="case_count")
     return _finish(rows, CaseIntakeDaily, as_of=as_of, sort_by=tuple(dims))
 
 
@@ -772,7 +921,8 @@ def case_lifecycle_duration(current: Dataset, *, as_of: str) -> Dataset:
     frame = _filled(
         frame.loc[frame["status"].ne("Void")], {"assigned_reviewer_name": UNASSIGNED}
     )
-    rows = []
+    dims = ["ended_month", "case_type", "assigned_reviewer_name"]
+    parts = []
     for order, (leg, started, ended, actions_path_only) in enumerate(
         LIFECYCLE_LEGS, start=1
     ):
@@ -783,34 +933,33 @@ def case_lifecycle_duration(current: Dataset, *, as_of: str) -> Dataset:
             _started=_instants(legs[started]), _ended=_instants(legs[ended])
         )
         legs = legs.loc[legs["_started"].notna() & legs["_ended"].notna()]
+        days = (legs["_ended"] - legs["_started"]).dt.total_seconds() / SECONDS_PER_DAY
         legs = legs.assign(
-            ended_month=_month(legs["_ended"]),
-            _days=(legs["_ended"] - legs["_started"]).dt.total_seconds()
-            / SECONDS_PER_DAY,
+            ended_month=_month(legs["_ended"]), _days=days.where(days >= 0)
         )
-        for (month, case_type, reviewer), group in legs.groupby(
-            ["ended_month", "case_type", "assigned_reviewer_name"], sort=True
-        ):
-            days = group.loc[group["_days"].ge(0), "_days"]
-            rows.append(
+        stats = _summaries(legs, dims, "_days")
+        keys = stats.index.to_frame(index=False)
+        parts.append(
+            pd.DataFrame(
                 {
                     "leg": leg,
                     "leg_order": order,
-                    "ended_month": month,
+                    "ended_month": keys["ended_month"],
                     "brand": UNKNOWN_BRAND,
-                    "case_type": case_type,
-                    "assigned_reviewer_name": reviewer,
-                    "case_count": len(days),
-                    "out_of_order_count": len(group) - len(days),
-                    "days_total": round(float(days.sum()), 3),
-                    "days_mean": _mean(days),
-                    "days_p50": _quantile(days, 0.5),
-                    "days_p90": _quantile(days, 0.9),
-                    "days_max": _maximum(days),
+                    "case_type": keys["case_type"],
+                    "assigned_reviewer_name": keys["assigned_reviewer_name"],
+                    "case_count": stats["count"].to_numpy(),
+                    "out_of_order_count": (stats["rows"] - stats["count"]).to_numpy(),
+                    "days_total": [round(float(v), 3) for v in stats["total"]],
+                    "days_mean": _rounded_all(stats["mean"]),
+                    "days_p50": _rounded_all(stats["p50"]),
+                    "days_p90": _rounded_all(stats["p90"]),
+                    "days_max": _rounded_all(stats["max"]),
                 }
             )
+        )
     return _finish(
-        rows,
+        pd.concat(parts, ignore_index=True),
         CaseLifecycleDurationMonthly,
         as_of=as_of,
         sort_by=(
@@ -836,30 +985,26 @@ def _reportable_cases(current: Dataset) -> pd.DataFrame:
 def case_outcome(current: Dataset, *, as_of: str) -> Dataset:
     """Reportable non-void Cases by month and ``effective_outcome``."""
     reportable = _filled(_reportable_cases(current), {"effective_outcome": UNSTATED})
-
     dims = [
         "reportable_month",
         "case_type",
         "assigned_reviewer_name",
         "effective_outcome",
     ]
-    rows = [
-        {
-            "reportable_month": month,
-            "brand": UNKNOWN_BRAND,
-            "case_type": case_type,
-            "assigned_reviewer_name": reviewer,
-            "effective_outcome": outcome,
-            "case_count": len(group),
-            "remediation_count": int(
-                _flagged(group["effective_had_remediation"]).sum()
-            ),
-            "overridden_count": int(_flagged(group["outcome_overridden"]).sum()),
-        }
-        for (month, case_type, reviewer, outcome), group in reportable.groupby(
-            dims, sort=True
+    rows = (
+        reportable.assign(
+            _remediation=_flagged(reportable["effective_had_remediation"]),
+            _overridden=_flagged(reportable["outcome_overridden"]),
         )
-    ]
+        .groupby(dims, sort=True)
+        .agg(
+            case_count=("_remediation", "size"),
+            remediation_count=("_remediation", "sum"),
+            overridden_count=("_overridden", "sum"),
+        )
+        .reset_index()
+        .assign(brand=UNKNOWN_BRAND)
+    )
     return _finish(
         rows,
         CaseOutcomeMonthly,
@@ -872,14 +1017,6 @@ def case_outcome(current: Dataset, *, as_of: str) -> Dataset:
             "effective_outcome",
         ),
     )
-
-
-def _days_until(stamps: pd.Series, today: dt.date) -> list[int | None]:
-    """Local calendar days from ``today`` to each stamp; negative once passed."""
-    return [
-        None if pd.isna(stamp) else (local_date(stamp) - today).days
-        for stamp in _instants(stamps)
-    ]
 
 
 def _due_bucket(days_until: int | None) -> tuple[str, int]:
@@ -905,7 +1042,8 @@ def case_due_profile(current: Dataset, *, as_of: str) -> Dataset:
     for sla_kind, status, due_column in DUE_CLOCKS:
         on_clock = frame.loc[frame["status"].eq(status)]
         buckets = [
-            _due_bucket(days) for days in _days_until(on_clock[due_column], today)
+            _due_bucket(None if pd.isna(days) else days)
+            for days in _days_until(on_clock[due_column], today)
         ]
         on_clock = on_clock.assign(
             due_bucket=[name for name, _ in buckets],
@@ -959,10 +1097,7 @@ def remediation_overdue(
     today = local_date(as_of)
     cases = current.to_pandas()
     cases = cases.loc[cases["status"].eq("Actions In Progress")].copy()
-    days_until = _days_until(cases["remediation_due_date"], today)
-    cases["_days_over"] = pd.to_numeric(
-        pd.Series(days_until, index=cases.index, dtype="object")
-    ).mul(-1)
+    cases["_days_over"] = _days_until(cases["remediation_due_date"], today).mul(-1)
     cases = cases.loc[cases["_days_over"].notna() & cases["_days_over"].gt(0)]
     cases = _filled(
         cases,
@@ -1032,14 +1167,12 @@ def remediation_overdue(
 def _in_progress_since(history: Dataset) -> pd.DataFrame:
     """When each Case whose latest observation is ``In-progress`` last entered
     it -- after a reopen, the reopen, not the original claim."""
-    frame = _ordered_history(history)
-    cases = frame.groupby(list(CASE_KEY), sort=False)
-    first = cases.cumcount().eq(0)
-    entered = frame["status"].ne(cases["status"].shift())
-    starts = frame["_modified"].where(entered & ~first, _entry_instants(frame))
-    frame = frame.assign(_since=starts.where(entered).groupby(cases.ngroup()).ffill())
-    latest = frame.groupby(list(CASE_KEY), sort=False).tail(1)
-    return latest.loc[latest["status"].eq("In-progress"), [*CASE_KEY, "_since"]]
+    frame = _history_frame(history)
+    first = _case_starts(frame)
+    last = first.shift(-1, fill_value=True)
+    _, began = _stays(frame, first)
+    latest = last & frame["status"].eq("In-progress")
+    return frame.assign(_since=began).loc[latest, [*CASE_KEY, "_since"]]
 
 
 def reviewer_workload(current: Dataset, history: Dataset, *, as_of: str) -> Dataset:
@@ -1050,27 +1183,20 @@ def reviewer_workload(current: Dataset, history: Dataset, *, as_of: str) -> Data
     the history has not seen there falls back to its ``assigned_at``.
     """
     today = local_date(as_of)
-    window_start = today - dt.timedelta(days=WORKLOAD_WINDOW_DAYS - 1)
     frame = _filled(current.to_pandas(), {"assigned_reviewer_name": UNASSIGNED})
     frame = frame.merge(_in_progress_since(history), on=list(CASE_KEY), how="left")
     started = frame["_since"].where(
         frame["_since"].notna(), _instants(frame["assigned_at"])
     )
     in_progress = frame["status"].eq("In-progress")
-    reportable = _instants(frame["reportable_at"])
-    recent = [
-        pd.notna(stamp) and window_start <= local_date(stamp) <= today
-        for stamp in reportable
-    ]
+    reportable = _days_since(frame["reportable_at"], today)
     frame = frame.assign(
         _in_progress=in_progress,
         _held=in_progress & _flagged(frame["on_hold"]),
         _actions=frame["status"].eq("Actions In Progress"),
-        _recent=pd.Series(recent, index=frame.index) & frame["status"].ne("Void"),
-        _age=[
-            None if days is None else -days
-            for days in _days_until(started.where(in_progress), today)
-        ],
+        _recent=reportable.between(0, WORKLOAD_WINDOW_DAYS - 1)
+        & frame["status"].ne("Void"),
+        _age=_days_since(started.where(in_progress), today),
     )
     frame = frame.loc[frame["_in_progress"] | frame["_actions"] | frame["_recent"]]
 
@@ -1127,21 +1253,20 @@ def appeal_rate_by_reviewer(
     cases[counts] = cases[counts].fillna(0)
 
     dims = ["reportable_month", "case_type", "assigned_reviewer_name"]
-    rows = [
-        {
-            "reportable_month": month,
-            "brand": UNKNOWN_BRAND,
-            "case_type": case_type,
-            "assigned_reviewer_name": reviewer,
-            "reportable_count": len(group),
-            "appealed_case_count": int(group["_appeals"].gt(0).sum()),
-            "appeal_count": int(group["_appeals"].sum()),
-            "open_appeal_count": int(group["_open"].sum()),
-            "agreed_appeal_count": int(group["_agreed"].sum()),
-            "rejected_appeal_count": int(group["_rejected"].sum()),
-        }
-        for (month, case_type, reviewer), group in cases.groupby(dims, sort=True)
-    ]
+    rows = (
+        cases.assign(_appealed=cases["_appeals"].gt(0))
+        .groupby(dims, sort=True)
+        .agg(
+            reportable_count=("_appeals", "size"),
+            appealed_case_count=("_appealed", "sum"),
+            appeal_count=("_appeals", "sum"),
+            open_appeal_count=("_open", "sum"),
+            agreed_appeal_count=("_agreed", "sum"),
+            rejected_appeal_count=("_rejected", "sum"),
+        )
+        .reset_index()
+        .assign(brand=UNKNOWN_BRAND)
+    )
     return _finish(
         rows,
         AppealRateByReviewerMonthly,

@@ -9,12 +9,13 @@ so a run reads top to bottom and can be stepped through in a debugger.
 
 ``run`` does the wiring: it reads each source once, takes the Sync snapshot
 instant off the current Cases -- the one ``as_of_utc`` every table is stamped
-with -- and hands each ``to_*`` step what it reduces, that instant, and the
-Writer for its table. A step gates the source it reduces on the columns it
-needs, so a source missing a column fails that table rather than the ones
-before it: the tables commit independently, in order, and a failure part-way
-leaves the earlier ones refreshed, which is safe because the next run rebuilds
-everything from the same Sync snapshot or a newer one.
+with -- puts the observation history in order once, and hands each ``to_*``
+step what it reduces, that instant, and the Writer for its table. A step gates
+the source it reduces on the columns it needs, so a source missing a column
+fails that table rather than the ones before it: the tables commit
+independently, in order, and a failure part-way leaves the earlier ones
+refreshed, which is safe because the next run rebuilds everything from the same
+Sync snapshot or a newer one.
 
 Run parameters:
 
@@ -91,6 +92,7 @@ GOLD_TABLES = (
 # One gate per source, on the columns the reductions read from it. Stateless,
 # so the steps that share a source share its gate.
 CURRENT_GATE = ColumnValidator(metrics.CURRENT_COLUMNS)
+ORDERING_GATE = ColumnValidator(metrics.ORDERING_COLUMNS)
 HISTORY_GATE = ColumnValidator(metrics.HISTORY_COLUMNS)
 BACKLOG_GATE = ColumnValidator(metrics.BACKLOG_COLUMNS)
 LIFECYCLE_GATE = ColumnValidator(metrics.LIFECYCLE_COLUMNS)
@@ -111,6 +113,11 @@ CALENDAR_PARAM = "calendar"
 def _calendar_from(context: RunContext) -> WorkingDayCalendar:
     path = context.params.get(CALENDAR_PARAM)
     return WorkingDayCalendar.from_yaml(path) if path else WorkingDayCalendar()
+
+
+def to_ordered_history(observations: Dataset) -> Dataset:
+    validate(ORDERING_GATE, observations, name="history:columns")
+    return transform(metrics.ordered_history, observations, name="history:order")
 
 
 def to_stage_dwell(observations: Dataset, as_of: str, writer: Writer) -> Dataset:
@@ -388,7 +395,9 @@ def run(context: RunContext) -> Dataset:
     validate(CURRENT_GATE, cases, name="current:columns")
     as_of = metrics.snapshot_as_of(cases)
 
-    observations = read(CaseObservationHistoryReader(base_dir), name="history:read")
+    observations = to_ordered_history(
+        read(CaseObservationHistoryReader(base_dir), name="history:read")
+    )
     answers = read(AnswersReader(base_dir), name="answers:read")
     actions = read(AnswerActionsReader(base_dir), name="actions:read")
     appeals = read(AppealsReader(base_dir), name="appeals:read")
