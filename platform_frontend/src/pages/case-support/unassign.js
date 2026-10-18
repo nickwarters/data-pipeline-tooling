@@ -3,6 +3,7 @@ import { h } from '../../lib/html.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
 import { buildUnassignTransition } from '../../evaluators/case-transitions.js';
 import { runSupportAction } from '../../services/support-action.js';
+import { withCurrentManagers } from '../../services/current-managers.js';
 import { formFooterView, reasonFieldView } from './form-parts.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
@@ -36,14 +37,14 @@ export function unassignBlockedReason(row) {
 }
 
 /**
- * Each field the release changes, with `assignedAt`, which the write clears alongside the Reviewer.
+ * Each field the release changes, with `assignedAt` and the current manager, which the write clears alongside the Reviewer and the recorded manager.
  *
  * @param {CaseRow} row
  * @param {Partial<CaseRow>} fields
  * @returns {SupportLogChange[]}
  */
 function releasedFields(row, fields) {
-  const written = { ...fields, assignedAt: null };
+  const written = { ...withCurrentManagers(fields), assignedAt: null };
   const current = /** @type {Record<string, unknown>} */ (row);
   return Object.entries(written)
     .map(([field, after]) => ({ field, before: current[field] ?? null, after }))

@@ -115,16 +115,18 @@ test('the sent-to-adviser Case is addressed to a Responsible Party persona', () 
 
 test('the sent-to-adviser Case names a Responsible Party Manager persona', () => {
   // Both Remediation audiences must be switchable in mock mode. The Manager's
-  // role is resolved from the Case row field, not group membership, so the
+  // role is resolved from the Case row's current manager field, not group
+  // membership, so the
   // fixture has to name them for the responsible-party rendering — and the
   // Conversation it points at — to be demoable.
   const row = sentToAdviserCase();
   const personaIds = new Set(Object.values(personas).map((p) => p.userId));
   assert.ok(
-    row.responsiblePartyManager && personaIds.has(row.responsiblePartyManager),
+    row.currentResponsiblePartyManager &&
+      personaIds.has(row.currentResponsiblePartyManager),
     'the Responsible Party Manager is a switchable ?asUser= persona'
   );
-  assert.notEqual(row.responsiblePartyManager, row.responsibleParty);
+  assert.notEqual(row.currentResponsiblePartyManager, row.responsibleParty);
 });
 
 test('a mock complaints Case is unallocated, so the allocation flow has a candidate', () => {
@@ -142,16 +144,16 @@ test('a mock complaints Case is unallocated, so the allocation flow has a candid
 
 test('the sent-to-adviser Case names a Reviewer Manager persona', () => {
   // The reviewer-side Remediation rendering is held by the Assigned Reviewer's
-  // manager too, and that role is now resolved from the `assignedReviewerManager`
+  // manager too, and that role is resolved from the `currentReviewerManager`
   // row field rather than group membership — so the fixture has to name them for
   // the read-only reviewer rendering to be demoable.
   const row = sentToAdviserCase();
   const personaIds = new Set(Object.values(personas).map((p) => p.userId));
   assert.ok(
-    row.assignedReviewerManager && personaIds.has(row.assignedReviewerManager),
+    row.currentReviewerManager && personaIds.has(row.currentReviewerManager),
     'the Reviewer Manager is a switchable ?asUser= persona'
   );
-  assert.notEqual(row.assignedReviewerManager, row.assignedReviewer);
+  assert.notEqual(row.currentReviewerManager, row.assignedReviewer);
 });
 
 test('every assigned mock Case carries the moment it was assigned', () => {

@@ -65,7 +65,7 @@ export function reviewerCandidates(members, row) {
 }
 
 /**
- * Move a Case to another Reviewer, restamping the assignment and its manager in one guarded write.
+ * Move a Case to another Reviewer, restamping the assignment and its recorded and current manager in one guarded write.
  *
  * @param {SharePointClient} client
  * @param {{ row: CaseRow, listName: string, reviewer: string, reason: string }} request
@@ -91,6 +91,11 @@ export async function reassignCase(
         {
           field: 'assignedReviewerManager',
           before: row.assignedReviewerManager ?? null,
+          after: manager,
+        },
+        {
+          field: 'currentReviewerManager',
+          before: row.currentReviewerManager ?? null,
           after: manager,
         },
       ],

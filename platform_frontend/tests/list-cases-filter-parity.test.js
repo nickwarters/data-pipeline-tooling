@@ -105,6 +105,7 @@ function toListItem(row) {
     AssignedAt: row.assignedAt,
     ResponsiblePartyId: personId(row.responsibleParty),
     AssignedReviewerManagerId: personId(row.assignedReviewerManager),
+    CurrentReviewerManagerId: personId(row.currentReviewerManager),
     DueDate: row.dueDate ?? null,
     CompletedAt: row.completedAt ?? null,
     VoidedAt: row.voidedAt ?? null,
@@ -252,11 +253,15 @@ const SCENARIOS = [
     expected: ['theirs'],
   },
   {
-    name: 'assignedReviewerManager',
-    filter: { assignedReviewerManager: 'mgr-a' },
+    name: 'currentReviewerManager',
+    filter: { currentReviewerManager: 'mgr-a' },
     rows: [
-      caseRow('managed', { assignedReviewerManager: 'mgr-a' }),
-      caseRow('elsewhere', { assignedReviewerManager: 'rev-b' }),
+      caseRow('managed', { currentReviewerManager: 'mgr-a' }),
+      caseRow('elsewhere', { currentReviewerManager: 'rev-b' }),
+      caseRow('formerly', {
+        assignedReviewerManager: 'mgr-a',
+        currentReviewerManager: 'rev-b',
+      }),
     ],
     expected: ['managed'],
   },

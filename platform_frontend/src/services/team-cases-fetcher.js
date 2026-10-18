@@ -13,6 +13,10 @@ import { CASE_STATUS } from '../lib/case-statuses.js';
  * (`source.listName`), so every `listCases` call carries an explicit
  * `{ listName }` and the per-list rows are merged client-side.
  *
+ * "Manager" is the Reviewer's current manager, the same field that grants the
+ * manager their Section access on each Case, so a manager's team list and the
+ * Cases they can open agree.
+ *
  * @param {SharePointClient} client
  * @param {string | null} caseType the single Case Type to scope to, or null for all
  * @param {string} managerId
@@ -25,7 +29,7 @@ export function fetchTeamCases(client, caseType, managerId, sources) {
     : sources;
 
   return listCasesAcrossSources(client, targets, {
-    assignedReviewerManager: managerId,
+    currentReviewerManager: managerId,
   });
 }
 
@@ -41,7 +45,7 @@ export function fetchTeamCases(client, caseType, managerId, sources) {
  */
 export function fetchTeamWorkloadCases(client, managerId, sources) {
   return listCasesAcrossSources(client, sources, {
-    assignedReviewerManager: managerId,
+    currentReviewerManager: managerId,
   });
 }
 
@@ -58,7 +62,7 @@ export function fetchTeamWorkloadCases(client, managerId, sources) {
  */
 export function fetchTeamVoidedCases(client, managerId, sources, since) {
   return listCasesAcrossSources(client, sources, {
-    assignedReviewerManager: managerId,
+    currentReviewerManager: managerId,
     status: CASE_STATUS.VOID,
     voidedAfter: since,
   });

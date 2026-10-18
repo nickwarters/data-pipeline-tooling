@@ -712,6 +712,7 @@ function live(setup = {}) {
           title: 'CR-1',
           assignedReviewer: 'zara',
           assignedReviewerManager: 'old-manager',
+          currentReviewerManager: 'current-manager',
           ...setup.row,
         }),
       ],
@@ -761,6 +762,7 @@ function live(setup = {}) {
       title: 'CR-1',
       assignedReviewer: 'zara',
       assignedReviewerManager: 'old-manager',
+      currentReviewerManager: 'current-manager',
       ...setup.row,
     }),
   });
@@ -851,6 +853,8 @@ test('reassign: the log is written first, then the Reviewer and manager change i
   });
   assert.equal(stored?.assignedReviewer, 'bea');
   assert.equal(stored?.assignedAt, '2026-10-05T12:00:00.000Z');
+  assert.equal(stored?.assignedReviewerManager, 'mo');
+  assert.equal(stored?.currentReviewerManager, 'mo');
   const [entry] = await page.client.listSupportLog({
     caseType: 'complaints',
     caseId: '1',
@@ -861,6 +865,7 @@ test('reassign: the log is written first, then the Reviewer and manager change i
   assert.deepEqual(entry.changes, [
     { field: 'assignedReviewer', before: 'zara', after: 'bea' },
     { field: 'assignedReviewerManager', before: 'old-manager', after: 'mo' },
+    { field: 'currentReviewerManager', before: 'current-manager', after: 'mo' },
   ]);
 
   const view = page.view();
@@ -1089,6 +1094,7 @@ test('un-assign: the log is written first, then the Case returns to the pot in o
   assert.equal(stored?.assignedReviewer, '');
   assert.equal(stored?.assignedAt, null);
   assert.equal(stored?.assignedReviewerManager, null);
+  assert.equal(stored?.currentReviewerManager, null);
   assert.equal(stored?.dueDate, null);
   assert.equal(stored?.onHold, false);
   assert.deepEqual(stored?.answers, opened?.answers, 'Answers are kept');
@@ -1106,6 +1112,7 @@ test('un-assign: the log is written first, then the Case returns to the pot in o
     { field: 'dueDate', before: HELD.dueDate, after: null },
     { field: 'onHold', before: true, after: false },
     { field: 'placedOnHoldAt', before: HELD.placedOnHoldAt, after: null },
+    { field: 'currentReviewerManager', before: 'current-manager', after: null },
     { field: 'assignedAt', before: opened?.assignedAt, after: null },
   ]);
 

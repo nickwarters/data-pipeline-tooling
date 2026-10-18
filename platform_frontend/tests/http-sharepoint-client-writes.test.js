@@ -196,6 +196,8 @@ test('HttpSharePointClient: patchCase writes mutable CaseRow fields to SharePoin
     PlacedOnHoldAt: '2026-07-23T09:30:00.000Z',
     AssignedReviewerManagerId: null,
     ResponsiblePartyManagerId: 21,
+    CurrentReviewerManagerId: null,
+    CurrentResponsiblePartyManagerId: 21,
   });
 });
 
@@ -695,7 +697,7 @@ test('HttpSharePointClient: a legacy verbose EnsureUser envelope still yields th
 
 // --- Assignment pairing ---
 
-test('HttpSharePointClient: allocation writes Reviewer and manager as Person ids in one PATCH', async () => {
+test('HttpSharePointClient: allocation writes Reviewer and manager as Person ids in one PATCH, the manager once for both its columns', async () => {
   let nextPersonId = 14;
   /** @type {Map<string, number>} */
   const ensuredIds = new Map();
@@ -730,6 +732,7 @@ test('HttpSharePointClient: allocation writes Reviewer and manager as Person ids
   assert.deepEqual(patchBody(calls), {
     AssignedReviewerId: ensuredIds.get(reviewerLogin),
     AssignedReviewerManagerId: ensuredIds.get(managerLogin),
+    CurrentReviewerManagerId: ensuredIds.get(managerLogin),
     AssignedAt: FROZEN_ASSIGNMENT,
   });
 });
@@ -752,6 +755,7 @@ test('HttpSharePointClient: allocation with a null manager omits manager EnsureU
   assert.deepEqual(patchBody(calls), {
     AssignedReviewerId: 14,
     AssignedReviewerManagerId: null,
+    CurrentReviewerManagerId: null,
     AssignedAt: FROZEN_ASSIGNMENT,
   });
 });

@@ -162,7 +162,7 @@ test('resolveRoles: the Reviewer Manager a real read produces is one this matche
             Title: 'T',
             Status: 'In-progress',
             CaseType: 'example-review',
-            AssignedReviewerManager: { Name: claims },
+            CurrentReviewerManager: { Name: claims },
             Answers: '{}',
             Conversation: '[]',
             Notes: '',
@@ -253,9 +253,9 @@ test('resolveRoles: owner of a different case type does not get owner role', () 
   assert.deepEqual(roles, ['none']);
 });
 
-test('resolveRoles: responsible party manager (matched via the row field)', () => {
+test('resolveRoles: responsible party manager (matched via the current manager field)', () => {
   const roles = resolveRoles(
-    makeCase({ responsiblePartyManager: 'user-rpm' }),
+    makeCase({ currentResponsiblePartyManager: 'user-rpm' }),
     'user-rpm',
     caps({ isResponsiblePartyManager: true })
   );
@@ -264,11 +264,24 @@ test('resolveRoles: responsible party manager (matched via the row field)', () =
 
 test('resolveRoles: not the case row manager → no responsiblePartyManager role', () => {
   const roles = resolveRoles(
-    makeCase({ responsiblePartyManager: 'someone-else' }),
+    makeCase({ currentResponsiblePartyManager: 'someone-else' }),
     'user-rpm',
     caps({ isResponsiblePartyManager: true })
   );
   assert.deepEqual(roles, ['none']);
+});
+
+test('resolveRoles: a Responsible Party Manager who has moved on keeps no role, and their successor holds it', () => {
+  const movedOn = makeCase({
+    responsiblePartyManager: 'user-rpm',
+    currentResponsiblePartyManager: 'user-rpm-successor',
+  });
+  const capabilities = caps({ isResponsiblePartyManager: true });
+
+  assert.deepEqual(resolveRoles(movedOn, 'user-rpm', capabilities), ['none']);
+  assert.deepEqual(resolveRoles(movedOn, 'user-rpm-successor', capabilities), [
+    'responsiblePartyManager',
+  ]);
 });
 
 test('resolveRoles: Controls capability → controls role', () => {
@@ -291,13 +304,13 @@ test('resolveRoles: assigned reviewer who is also Controls gets both roles', () 
 
 // --- Reviewer Manager ---
 // Scoped to the Case, exactly like the Responsible Party Manager: the role comes
-// from the `assignedReviewerManager` row field, not from the platform-wide
+// from the `currentReviewerManager` row field, not from the platform-wide
 // `Reviewer Managers` group. A manager reads the Cases of the Reviewers they
 // manage, not every Case of every Case Type.
 
 test('resolveRoles: the Reviewer Manager named on the Case row holds the role', () => {
   const roles = resolveRoles(
-    makeCase({ assignedReviewerManager: 'user-rm' }),
+    makeCase({ currentReviewerManager: 'user-rm' }),
     'user-rm',
     caps({ isReviewerManager: true })
   );
@@ -306,11 +319,24 @@ test('resolveRoles: the Reviewer Manager named on the Case row holds the role', 
 
 test('resolveRoles: a Reviewer Manager not named on the Case row holds no role', () => {
   const roles = resolveRoles(
-    makeCase({ assignedReviewerManager: 'another-manager' }),
+    makeCase({ currentReviewerManager: 'another-manager' }),
     'user-rm',
     caps({ isReviewerManager: true })
   );
   assert.deepEqual(roles, ['none']);
+});
+
+test('resolveRoles: a Reviewer Manager recorded when the Reviewer was assigned, but no longer current, holds no role', () => {
+  const movedOn = makeCase({
+    assignedReviewerManager: 'user-rm',
+    currentReviewerManager: 'user-rm-successor',
+  });
+  const capabilities = caps({ isReviewerManager: true });
+
+  assert.deepEqual(resolveRoles(movedOn, 'user-rm', capabilities), ['none']);
+  assert.deepEqual(resolveRoles(movedOn, 'user-rm-successor', capabilities), [
+    'reviewerManager',
+  ]);
 });
 
 test('resolveRoles: group membership alone does not grant the role', () => {
@@ -325,7 +351,7 @@ test('resolveRoles: group membership alone does not grant the role', () => {
 
 test('resolveRoles: a reviewer manager who is also the assigned reviewer holds both roles', () => {
   const roles = resolveRoles(
-    makeCase({ assignedReviewerManager: 'user-reviewer' }),
+    makeCase({ currentReviewerManager: 'user-reviewer' }),
     'user-reviewer',
     caps({ isReviewer: true, isReviewerManager: true })
   );
@@ -344,9 +370,9 @@ test('every role in the vocabulary is one resolveRoles can actually produce', ()
   const everyRoleAtOnce = resolveRoles(
     makeCase({
       assignedReviewer: 'u1',
-      assignedReviewerManager: 'u1',
+      currentReviewerManager: 'u1',
       responsibleParty: 'u1',
-      responsiblePartyManager: 'u1',
+      currentResponsiblePartyManager: 'u1',
     }),
     'u1',
     caps({

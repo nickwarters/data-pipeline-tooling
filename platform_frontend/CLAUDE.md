@@ -610,6 +610,10 @@ src/
     assignment-stamp.js           # the write-path rule pairing assignedAt with assignedReviewer, so
                                   #   no caller can set a Reviewer without stamping when (#633)
     create-sharepoint-client.js
+    current-managers.js           # the write-path rule pairing each recorded manager with its current
+                                  #   manager, applied by both clients: the only place the app writes
+                                  #   the current managers, which decide manager access and are kept
+                                  #   up to date outside the app afterwards
     reviewer-manager.js           # a Reviewer's current manager for an assignment write, shared by
                                   #   the allocation claim and Case Support's Reassign
     responsible-party-manager.js  # the write-path rule pairing responsibleParty with that person's

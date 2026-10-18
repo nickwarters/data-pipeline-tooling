@@ -119,7 +119,7 @@ the diagnosable, re-runnable copy of what the list returned.
 | **Schedule / freshness** | polled; window `end = server_now - 30s`, `start = watermark - 5m` |
 | **Owner / data steward** | *<team>* |
 | **Source of truth doc** | `platform_frontend/docs/case-type-onboarding.md` |
-| **Last reviewed** | 2026-08-06 |
+| **Last reviewed** | 2026-10-18 |
 
 ### Part B — Field dictionary
 
@@ -189,7 +189,7 @@ own question bank and that is a gold concern.
 | **Schedule / freshness** | with the poll |
 | **Owner / data steward** | *<team>* |
 | **Source of truth doc** | `pipelines/sharepoint_cases/schema.py` |
-| **Last reviewed** | 2026-08-06 |
+| **Last reviewed** | 2026-10-18 |
 
 **The rename is one mechanical rule**, not a curated map: each source name is
 split on word boundaries and on `/`, and lower-snake-cased. `DueDate` →
@@ -205,7 +205,7 @@ hand in the SharePoint web UI, and gold keys a Case on it — `DeriveKey` refuse
 null natural-key value, so one blank cell would abort gold for every list. After
 silver, `case_type` is always the Case Type of the list the row came from.
 
-**The five `…_name` Person columns are not faithful copies either.** Raw holds
+**The seven `…_name` Person columns are not faithful copies either.** Raw holds
 the claims login the list gave (`i:0#.w|CONTOSO\A.Khan`); silver holds the
 lower-cased **bare account** (`a.khan`) — see *Person columns* below.
 
@@ -227,8 +227,10 @@ lower-cased **bare account** (`a.khan`) — see *Person columns* below.
 | `assigned_at` | `AssignedAt` | `datetime` | Yes | — | When the Case was last handed to its Reviewer. | `2026-07-01T09:15:00+00:00` | None | The operational predeploy gate establishes the conditional invariant: an outstanding row with `AssignedReviewer` must have `AssignedAt`; unassigned rows carry null. It remains nullable in the landed schema because the rule is conditional, not global over completed or void rows. The Action Centre filter only defensively excludes legacy gaps, which would otherwise fail silently by disappearing from the worklist and count. The SharePoint source column is indexed for Action Centre age/order, with no `Created` fallback. |
 | `responsible_party_name` | `ResponsibleParty/Name` | `str` | Yes | — | The Responsible Party, as a bare account. | `b.okafor` | PII | |
 | `responsible_party_title` | `ResponsibleParty/Title` | `str` | Yes | — | The Responsible Party's directory display name. | `Bola Okafor` | PII | Kept for the views that already read it. Every person's display name, this one's included, is in the silver `person` table and gold `person_current`. |
-| `assigned_reviewer_manager_name` | `AssignedReviewerManager/Name` | `str` | Yes | — | The Reviewer's manager. | `d.reid` | PII | |
-| `responsible_party_manager_name` | `ResponsiblePartyManager/Name` | `str` | Yes | — | The Responsible Party's manager, as the directory gave it when the Responsible Party was last saved. Empty on Cases saved before the platform recorded it, and when the lookup found nobody. | `e.novak` | PII | |
+| `assigned_reviewer_manager_name` | `AssignedReviewerManager/Name` | `str` | Yes | — | The Reviewer's manager **at the time the Reviewer was set** on the Case — a record, not kept current. | `d.reid` | PII | What reporting reads. See *The two manager pairs* below. |
+| `responsible_party_manager_name` | `ResponsiblePartyManager/Name` | `str` | Yes | — | The Responsible Party's manager, as the directory gave it when the Responsible Party was last saved — a record, not kept current. Empty on Cases saved before the platform recorded it, and when the lookup found nobody. | `e.novak` | PII | What reporting reads. See *The two manager pairs* below. |
+| `current_reviewer_manager_name` | `CurrentReviewerManager/Name` | `str` | Yes | — | The Reviewer's **current** manager. Written by the platform with the same value, at the same moment, as `assigned_reviewer_manager_name`, and never again; kept up to date afterwards by a process outside the platform. | `k.adeyemi` | PII | What the platform decides manager access from. Null on observations landed before the column existed. See *The two manager pairs* below. |
+| `current_responsible_party_manager_name` | `CurrentResponsiblePartyManager/Name` | `str` | Yes | — | The Responsible Party's **current** manager, written and kept up to date the same way as `current_reviewer_manager_name`. | `e.novak` | PII | As `current_reviewer_manager_name`. |
 | `due_date` | `DueDate` | `datetime` | Yes | — | Working-day SLA due date. | `2026-08-14T00:00:00+00:00` | None | |
 | `completed_at` | `CompletedAt` | `datetime` | Yes | — | Stamped at the final `Completed` transition. | | None | Cleared to null by a Maintainer's Reopen, and stamped again on the next completion. |
 | `reportable_at` | `ReportableAt` | `datetime` | Yes | — | Stamped at the reportable milestone. | | None | Cleared by a Reopen and stamped afresh by the next Send Actions or completion, so a Case can hold a later value than it once did. The cleared value is kept in the Support Log. |
@@ -264,7 +266,7 @@ lower-cased **bare account** (`a.khan`) — see *Person columns* below.
 #### Person columns
 
 There are **no multi-value columns on this list** — no Lookup, no multi Choice,
-no multi User. All five person columns hold a single user, and the read expands
+no multi User. All seven person columns hold a single user, and the read expands
 each so it answers with its selected sub-fields — `Name`, `Title` and `EMail` —
 rather than the numeric id it otherwise returns. The columns are provisioned
 "Person or Group" but hold only people here, so an expanded value carries a
@@ -277,7 +279,7 @@ An expanded person arrives **nested on the property** —
 `null` where nobody holds the role. The feed flattens that onto
 `AssignedReviewer/Name`, `AssignedReviewer/Title` and `AssignedReviewer/EMail`
 before anything is stored; the split in the column names is this feed's storage
-shape, not the payload's. Raw keeps all three for all five roles.
+shape, not the payload's. Raw keeps all three for all seven roles.
 
 `Name` is the claims login (`i:0#.w|CONTOSO\a.khan`). **Silver reduces it to
 the lower-cased bare account** (`a.khan`) with `shared.account_names.to_bare_account`:
@@ -297,6 +299,38 @@ Rows stored before the reduction held the claims login. The silver and gold
 `0003` migrations reduce those in place with the same rule, so every row
 spells a person one way; the aggregates keyed on `assigned_reviewer_name` are
 rebuilt from `case_current` on the next publish.
+
+#### The two manager pairs
+
+Each manager is held twice, and the two mean different things:
+
+| Role | The record | The current manager |
+|------|------------|---------------------|
+| the Reviewer's manager | `assigned_reviewer_manager_name` (`AssignedReviewerManager`) | `current_reviewer_manager_name` (`CurrentReviewerManager`) |
+| the Responsible Party's manager | `responsible_party_manager_name` (`ResponsiblePartyManager`) | `current_responsible_party_manager_name` (`CurrentResponsiblePartyManager`) |
+
+**The record** is who managed that person at the time the Reviewer or
+Responsible Party was set on the Case; it does not move when the org chart
+does. **The current manager** is written by the platform with the same value,
+at the same moment, and never again by the platform; afterwards a process
+outside it keeps the column current. The platform decides manager access —
+section roles, team queries — from the current pair. The two agree on a Case
+until somebody's manager changes, and then only the current one moves.
+
+This feed lands both and changes neither: the read expands all four, silver
+reduces each to the bare account, and `case_current` republishes both pairs.
+**Reporting keeps reading the record** — the `cora_platform_metric`
+aggregates group on `assigned_reviewer_manager_name` and
+`responsible_party_manager_name` — so a Case is attributed to the manager it
+was set under, not whoever manages that person today. A consumer wanting
+today's manager reads the current pair.
+
+The current pair arrived after the rest (raw and silver `0004`, quarantine and
+gold `0005`), so observations landed before then hold nulls there. Nothing is
+backfilled from the record: a copy of it would claim a currency this feed never
+observed. And because the read names both columns in `$select` / `$expand`, a
+list not yet provisioned with them fails the read — provision a list's columns
+before this feed polls it.
 
 #### JSON blob columns
 
@@ -864,7 +898,7 @@ Person columns are reduced and their display names and emails dropped.
 
 | Source | Account | Domain | Display name | Email |
 |--------|---------|--------|--------------|-------|
-| the five Person columns | `…/Name`, reduced | from the claims login | `…/Title` | `…/EMail` |
+| the seven Person columns | `…/Name`, reduced | from the claims login | `…/Title` | `…/EMail` |
 | `Answers` — a captured person | `capture[field_key].loginName` | `capture[field_key].domain` | `capture[field_key].displayName` | `capture[field_key].email` |
 | `Conversation` | `author.loginName` | — | `author.displayName` | — |
 | `Appeals` | `appellant`, `resolution.resolver` | — | — | — |
@@ -919,7 +953,7 @@ else as they were.
 | `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that last wrote the row. | *(32-char hex)* | None |
 
 It joins to every person column in this feed on `account`: `case_current`'s
-five `…_name` columns, `answer_capture.person_login`,
+seven `…_name` columns, `answer_capture.person_login`,
 `conversation_message.author_login`, `appeal.appellant` and
 `resolution_resolver`, and `case_current.amended_by`. A bare account is assumed
 unique across domains, so a person seen in two domains is one row holding the
@@ -1294,8 +1328,8 @@ status. Manager rollups join the Staff Hierarchy at report time.
 `assigned_reviewer_name` is the **bare account**, as silver holds it — not a
 display name; the silver `person` table, and gold `person_current`, have the display name. There is no team column on the provisioned list; what the
 review platform calls "my team" is exactly the set of Cases whose
-`AssignedReviewerManagerId` is the signed-in user, which this table does not
-carry.
+`CurrentReviewerManager` is the signed-in user, which this table does not
+carry (`case_current.current_reviewer_manager_name` does).
 
 A Case with no Assigned Reviewer is counted under the literal `(unassigned)`
 in that column. That is a **reporting fill, never a source value**; it exists
