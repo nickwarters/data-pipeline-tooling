@@ -8,6 +8,10 @@ const { buildTeamWorkload } =
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 
+// Days in progress count calendar dates in the viewer's own zone, so the zone
+// is pinned once and the fixtures below mean the dates they read as.
+process.env.TZ = 'UTC';
+
 /**
  * @param {string} id
  * @param {Partial<CaseRow>} overrides
@@ -42,6 +46,7 @@ test('buildTeamWorkload: counts outstanding allocated cases per reviewer and Cas
     [
       caseRow('a1', {
         assignedReviewer: 'reviewer-a',
+        assignedAt: '2026-07-10T12:00:00.000Z',
         onHold: true,
         placedOnHoldAt: '2026-07-20T00:00:00.000Z',
       }),
@@ -49,12 +54,14 @@ test('buildTeamWorkload: counts outstanding allocated cases per reviewer and Cas
         assignedReviewer: 'reviewer-a',
         caseType: 'conduct',
         status: 'Actions In Progress',
+        assignedAt: '2026-07-21T12:00:00.000Z',
         onHold: true,
         placedOnHoldAt: '2026-07-22T00:00:00.000Z',
       }),
       caseRow('b1', {
         assignedReviewer: 'reviewer-b',
         caseType: 'conduct',
+        assignedAt: '2026-07-23T12:00:00.000Z',
         onHold: true,
         placedOnHoldAt: '2026-07-22T00:00:00.000Z',
       }),
@@ -63,7 +70,7 @@ test('buildTeamWorkload: counts outstanding allocated cases per reviewer and Cas
       caseRow('unknown-type', { caseType: 'unknown' }),
     ],
     sources,
-    new Date('2026-07-24T00:00:00.000Z')
+    new Date('2026-07-24T12:00:00.000Z')
   );
 
   assert.deepEqual(model, [
@@ -72,6 +79,7 @@ test('buildTeamWorkload: counts outstanding allocated cases per reviewer and Cas
       reviewer: 'reviewer-a',
       countsByCaseType: { complaints: 1, conduct: 1 },
       totalOutstanding: 2,
+      longestInProgressDays: 14,
       onHold: 2,
       longestHoldDays: 4,
       isTotal: false,
@@ -81,6 +89,7 @@ test('buildTeamWorkload: counts outstanding allocated cases per reviewer and Cas
       reviewer: 'reviewer-b',
       countsByCaseType: { complaints: 0, conduct: 1 },
       totalOutstanding: 1,
+      longestInProgressDays: 1,
       onHold: 1,
       longestHoldDays: 2,
       isTotal: false,
@@ -90,6 +99,7 @@ test('buildTeamWorkload: counts outstanding allocated cases per reviewer and Cas
       reviewer: 'Total',
       countsByCaseType: { complaints: 1, conduct: 2 },
       totalOutstanding: 3,
+      longestInProgressDays: 14,
       onHold: 3,
       longestHoldDays: 4,
       isTotal: true,
@@ -132,10 +142,57 @@ test('buildTeamWorkload: an empty live position still returns the all-staff tota
         reviewer: 'Total',
         countsByCaseType: { complaints: 0, conduct: 0 },
         totalOutstanding: 0,
+        longestInProgressDays: null,
         onHold: 0,
         longestHoldDays: null,
         isTotal: true,
       },
     ]
   );
+});
+
+test('buildTeamWorkload: longest in progress is the oldest allocation, held or not, in calendar days', () => {
+  const model = buildTeamWorkload(
+    [
+      caseRow('held', {
+        assignedAt: '2026-07-04T12:00:00.000Z',
+        onHold: true,
+        placedOnHoldAt: '2026-07-20T12:00:00.000Z',
+      }),
+      caseRow('recent', { assignedAt: '2026-07-22T12:00:00.000Z' }),
+      caseRow('unstamped', { assignedAt: null }),
+      caseRow('unreadable', { assignedAt: 'not-a-date' }),
+      caseRow('future', { assignedAt: '2026-07-30T12:00:00.000Z' }),
+      caseRow('today', {
+        assignedReviewer: 'reviewer-b',
+        assignedAt: '2026-07-24T09:00:00.000Z',
+      }),
+      caseRow('unknown-only', {
+        assignedReviewer: 'reviewer-c',
+        assignedAt: null,
+      }),
+    ],
+    sources,
+    new Date('2026-07-24T15:00:00.000Z')
+  );
+
+  assert.deepEqual(
+    model.map((row) => [row.reviewer, row.longestInProgressDays]),
+    [
+      ['reviewer-a', 20],
+      ['reviewer-b', 0],
+      ['reviewer-c', null],
+      ['Total', 20],
+    ]
+  );
+});
+
+test('buildTeamWorkload: a Case allocated late yesterday is a day in progress by early today', () => {
+  const [row] = buildTeamWorkload(
+    [caseRow('overnight', { assignedAt: '2026-07-23T23:00:00.000Z' })],
+    sources,
+    new Date('2026-07-24T01:00:00.000Z')
+  );
+
+  assert.equal(row.longestInProgressDays, 1);
 });

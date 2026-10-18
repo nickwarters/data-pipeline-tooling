@@ -89,6 +89,12 @@ export function myTeamColumns(sources) {
       sortable: true,
     },
     {
+      key: 'longestInProgressDays',
+      label: 'Longest in progress (days)',
+      value: 'longestInProgressDays',
+      sortable: true,
+    },
+    {
       key: 'onHold',
       label: 'On hold',
       value: 'onHold',
