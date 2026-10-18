@@ -339,7 +339,7 @@ test('HttpSharePointClient: listCases with responsibleParty filters server-side 
   );
 });
 
-test('HttpSharePointClient: an assignedReviewerManager filter compares against the numeric person id', async () => {
+test('HttpSharePointClient: a currentReviewerManager filter compares against the numeric person id', async () => {
   // The manager column is a Person column like the other two, and this filter
   // leads every Team Cases read — a quoted account against the lookup returns
   // an empty team, which reads as "you manage nobody" rather than an error.
@@ -350,7 +350,7 @@ test('HttpSharePointClient: an assignedReviewerManager filter compares against t
   });
 
   await client.listCases(
-    { assignedReviewerManager: 'mgr-user' },
+    { currentReviewerManager: 'mgr-user' },
     { listName: 'Cases-ExampleReview' }
   );
 
@@ -358,7 +358,7 @@ test('HttpSharePointClient: an assignedReviewerManager filter compares against t
     String(calls.find((c) => c.url.includes('/items?'))?.url)
   );
   assert.ok(
-    url.includes('AssignedReviewerManagerId eq 41'),
+    url.includes('CurrentReviewerManagerId eq 41'),
     'the filter names the id column and compares unquoted'
   );
   assert.ok(!url.includes("eq '41'"), 'a quoted number is not a person id');

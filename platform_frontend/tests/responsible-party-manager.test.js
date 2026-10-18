@@ -49,6 +49,7 @@ test('saving a Responsible Party records their manager in the same save', async 
   assert.deepEqual(sp.patched(), {
     ResponsiblePartyId: 7,
     ResponsiblePartyManagerId: 7,
+    CurrentResponsiblePartyManagerId: 7,
   });
 });
 
@@ -68,6 +69,7 @@ test('clearing the Responsible Party clears their manager without asking the dir
   assert.deepEqual(sp.patched(), {
     ResponsiblePartyId: null,
     ResponsiblePartyManagerId: null,
+    CurrentResponsiblePartyManagerId: null,
   });
   assert.deepEqual(sp.profiles(), []);
 });
@@ -90,6 +92,7 @@ test('a Responsible Party with no manager, or a profile that cannot be read, sti
     assert.deepEqual(sp.patched(), {
       ResponsiblePartyId: 7,
       ResponsiblePartyManagerId: null,
+      CurrentResponsiblePartyManagerId: null,
     });
   }
 });
@@ -149,5 +152,7 @@ test('the mock client records the same manager the directory gives', async () =>
   );
 
   assert.equal(picked.data?.responsiblePartyManager, 'boss');
+  assert.equal(picked.data?.currentResponsiblePartyManager, 'boss');
   assert.equal(cleared.data?.responsiblePartyManager, null);
+  assert.equal(cleared.data?.currentResponsiblePartyManager, null);
 });

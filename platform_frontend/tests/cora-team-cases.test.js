@@ -355,7 +355,7 @@ test('team cases slice: a read that completes before navigation is unaffected', 
     personas: { reviewer: { groups: [] } },
     lists: {
       'Cases-Complaints': [
-        { ...row('c1'), assignedReviewerManager: 'manager-1' },
+        { ...row('c1'), currentReviewerManager: 'manager-1' },
       ],
     },
   });

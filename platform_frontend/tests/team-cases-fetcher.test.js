@@ -62,11 +62,11 @@ test('fetchTeamCases: fans out to all eligible case types when caseType is null'
     })),
     [
       {
-        filter: { assignedReviewerManager: 'u1' },
+        filter: { currentReviewerManager: 'u1' },
         listName: 'example-review-list',
       },
       {
-        filter: { assignedReviewerManager: 'u1' },
+        filter: { currentReviewerManager: 'u1' },
         listName: 'product-sale-review-list',
       },
     ]
@@ -81,7 +81,7 @@ test('fetchTeamCases: queries only the specified caseType when set', async () =>
   ]);
   assert.equal(client.calls.length, 1);
   assert.deepEqual(client.calls[0], {
-    filter: { assignedReviewerManager: 'u1' },
+    filter: { currentReviewerManager: 'u1' },
     opts: { listName: 'example-review-list' },
   });
 });
@@ -91,7 +91,7 @@ test('fetchTeamCases: scopes every list to the calling manager', async () => {
   await fetchTeamCases(/** @type {any} */ (client), null, 'mgr-99', [
     src('example-review'),
   ]);
-  assert.equal(client.calls[0].filter.assignedReviewerManager, 'mgr-99');
+  assert.equal(client.calls[0].filter.currentReviewerManager, 'mgr-99');
 });
 
 test('fetchTeamCases: passes an explicit { listName } for every listCases call', async () => {
@@ -171,13 +171,13 @@ test('fetchTeamWorkloadCases: reuses manager-scoped fan-out without Team Cases p
     [
       {
         filter: {
-          assignedReviewerManager: 'manager-1',
+          currentReviewerManager: 'manager-1',
         },
         listName: 'complaints-list',
       },
       {
         filter: {
-          assignedReviewerManager: 'manager-1',
+          currentReviewerManager: 'manager-1',
         },
         listName: 'conduct-list',
       },
@@ -209,7 +209,7 @@ test('fetchTeamVoidedCases: scopes each source by manager, Void status and the w
     [
       {
         filter: {
-          assignedReviewerManager: 'manager-1',
+          currentReviewerManager: 'manager-1',
           status: 'Void',
           voidedAfter: '2026-06-24T00:00:00.000Z',
         },
@@ -217,7 +217,7 @@ test('fetchTeamVoidedCases: scopes each source by manager, Void status and the w
       },
       {
         filter: {
-          assignedReviewerManager: 'manager-1',
+          currentReviewerManager: 'manager-1',
           status: 'Void',
           voidedAfter: '2026-06-24T00:00:00.000Z',
         },

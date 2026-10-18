@@ -124,7 +124,7 @@ from .schema import (
 # none.
 UPSTREAMS = ()
 
-# The five Person columns, expanded so each answers with the claims login rather
+# The seven Person columns, expanded so each answers with the claims login rather
 # than the numeric id it otherwise returns, and the sub-fields of each the read
 # asks for. The Case row keeps the login, reduced to the bare account; the
 # display name and email ride along so the ``person`` table can record them.
@@ -138,12 +138,21 @@ UPSTREAMS = ()
 # carries. Matching on display names would be the
 # wrong repair anyway -- they are neither unique nor stable, and the pair most
 # likely to collide is a Responsible Party and their own Manager.
+#
+# Each manager is read twice. ``AssignedReviewerManager`` and
+# ``ResponsiblePartyManager`` are the record of who managed that person when
+# the Reviewer or Responsible Party was set on the Case; the ``Current…`` pair
+# start with the same value and are then kept up to date by a process outside
+# the platform. Both are landed: reporting reads the record, and the
+# platform's manager access reads the current pair.
 PERSON_SUBFIELDS = dict.fromkeys(
     (
         "AssignedReviewer",
         "ResponsibleParty",
         "AssignedReviewerManager",
         "ResponsiblePartyManager",
+        "CurrentReviewerManager",
+        "CurrentResponsiblePartyManager",
         "VoidedBy",
     ),
     ("Name", "Title", "EMail"),
@@ -185,6 +194,12 @@ RAW_FEED_COLUMNS = (
     "ResponsiblePartyManager/Name",
     "ResponsiblePartyManager/Title",
     "ResponsiblePartyManager/EMail",
+    "CurrentReviewerManager/Name",
+    "CurrentReviewerManager/Title",
+    "CurrentReviewerManager/EMail",
+    "CurrentResponsiblePartyManager/Name",
+    "CurrentResponsiblePartyManager/Title",
+    "CurrentResponsiblePartyManager/EMail",
     "DueDate",
     "CompletedAt",
     "ReportableAt",
@@ -353,7 +368,7 @@ def _person_subfield(
     if isinstance(value, dict):
         # An expanded person always carries a claims login, so an object with no
         # ``Name`` was never expanded; reading it as an empty role would turn a
-        # broken read into five roles nobody holds. A display name, by contrast,
+        # broken read into seven roles nobody holds. A display name, by contrast,
         # is genuinely optional.
         if "Name" not in value:
             raise SharePointFeedError(
