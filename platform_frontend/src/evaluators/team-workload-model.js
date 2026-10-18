@@ -1,5 +1,6 @@
 // @ts-check
 import { CASE_STATUS } from '../lib/case-statuses.js';
+import { daysBetweenDateKeys, toLocalDateKey } from '../lib/local-calendar.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../setup/resolve-eligible-case-types.js').CaseSource} CaseSource */
@@ -17,6 +18,7 @@ const OUTSTANDING_STATUSES = new Set([
  * @property {string} reviewer
  * @property {Record<string, number>} countsByCaseType
  * @property {number} totalOutstanding
+ * @property {number | null} longestInProgressDays
  * @property {number} onHold
  * @property {number | null} longestHoldDays
  * @property {boolean} isTotal
@@ -40,6 +42,40 @@ function holdDays(placedOnHoldAt, now) {
   const placedAt = Date.parse(placedOnHoldAt);
   if (!Number.isFinite(placedAt)) return null;
   return Math.max(0, Math.floor((now.getTime() - placedAt) / DAY_MS));
+}
+
+/**
+ * Days a Case has been with its current Reviewer, counted the way the Action
+ * Centre's "N days in progress" is: between local calendar dates rather than
+ * instants, so the figure ticks over at midnight and the two pages agree about
+ * the same Case.
+ *
+ * @param {string | null | undefined} assignedAt
+ * @param {Date} now
+ * @returns {number | null}
+ */
+function inProgressDays(assignedAt, now) {
+  const assignedDate = toLocalDateKey(assignedAt);
+  if (assignedDate === null) return null;
+  return Math.max(
+    0,
+    daysBetweenDateKeys(
+      assignedDate,
+      /** @type {string} */ (toLocalDateKey(now))
+    )
+  );
+}
+
+/**
+ * The larger of two ages, where `null` means "no age known" and never wins.
+ *
+ * @param {number | null} current
+ * @param {number | null} candidate
+ * @returns {number | null}
+ */
+function longest(current, candidate) {
+  if (candidate === null) return current;
+  return current === null || candidate > current ? candidate : current;
 }
 
 /**
@@ -77,6 +113,7 @@ export function buildTeamWorkload(cases, sources, now) {
         reviewer: item.assignedReviewer,
         countsByCaseType: emptyCaseTypeCounts(sources),
         totalOutstanding: 0,
+        longestInProgressDays: null,
         onHold: 0,
         longestHoldDays: null,
         isTotal: false,
@@ -86,15 +123,16 @@ export function buildTeamWorkload(cases, sources, now) {
 
     row.countsByCaseType[item.caseType] += 1;
     row.totalOutstanding += 1;
+    row.longestInProgressDays = longest(
+      row.longestInProgressDays,
+      inProgressDays(item.assignedAt, now)
+    );
     if (item.onHold === true) {
       row.onHold += 1;
-      const days = holdDays(item.placedOnHoldAt, now);
-      if (
-        days !== null &&
-        (row.longestHoldDays === null || days > row.longestHoldDays)
-      ) {
-        row.longestHoldDays = days;
-      }
+      row.longestHoldDays = longest(
+        row.longestHoldDays,
+        holdDays(item.placedOnHoldAt, now)
+      );
     }
   }
 
@@ -107,6 +145,7 @@ export function buildTeamWorkload(cases, sources, now) {
     reviewer: 'Total',
     countsByCaseType: emptyCaseTypeCounts(sources),
     totalOutstanding: 0,
+    longestInProgressDays: null,
     onHold: 0,
     longestHoldDays: null,
     isTotal: true,
@@ -116,14 +155,12 @@ export function buildTeamWorkload(cases, sources, now) {
       total.countsByCaseType[source.slug] += row.countsByCaseType[source.slug];
     }
     total.totalOutstanding += row.totalOutstanding;
+    total.longestInProgressDays = longest(
+      total.longestInProgressDays,
+      row.longestInProgressDays
+    );
     total.onHold += row.onHold;
-    if (
-      row.longestHoldDays !== null &&
-      (total.longestHoldDays === null ||
-        row.longestHoldDays > total.longestHoldDays)
-    ) {
-      total.longestHoldDays = row.longestHoldDays;
-    }
+    total.longestHoldDays = longest(total.longestHoldDays, row.longestHoldDays);
   }
 
   return [...staffRows, total];
