@@ -144,6 +144,29 @@ test('CORARemediationSection: multi-choice answer renders array as comma-joined'
   assert.equal(ansText.textContent, 'Answer: Account, Billing');
 });
 
+test('CORARemediationSection: a failed Outcome Answer reads as the Outcome wording', () => {
+  /** @type {QuestionDefinition[]} */
+  const cat = [
+    {
+      id: 'q-outcome',
+      text: 'Handled well?',
+      responseType: 'outcome',
+      options: ['good', 'poor'],
+      optionOutcomes: { good: 'good', poor: 'poor' },
+      optionLabels: { good: 'Good', poor: 'Below standard' },
+      failureValues: ['poor'],
+      deprecated: false,
+    },
+  ];
+  const el = new CORARemediationSection();
+  el.catalogue = cat;
+  el.answers = { 'q-outcome': { value: 'poor' } };
+  el.connectedCallback();
+
+  const ansText = findByClass(el, 'cora-remediation-answer');
+  assert.equal(ansText.textContent, 'Answer: Below standard');
+});
+
 test('CORARemediationSection: _renderItem with no answer shows empty string via ?? fallback', () => {
   /** @type {QuestionDefinition} */
   const q = {

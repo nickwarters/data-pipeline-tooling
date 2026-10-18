@@ -17,6 +17,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { cases } from '../dev/fixtures/cases.js';
 import { MockSharePointClient } from '../src/services/mock-sharepoint-client.js';
 import { allApplicableAnswered } from '../src/evaluators/applicability-evaluator.js';
+import { computeConfiguredOutcome } from '../src/evaluators/configured-outcome.js';
 import { personas } from '../dev/fixtures/personas.js';
 import { QUESTION_BANK_IMPORTERS } from '../case-types/manifest.js';
 import { versionedExportName } from '../src/lib/bank-artifacts.js';
@@ -137,6 +138,38 @@ test('a stamped Case answers every Question its own version makes applicable', a
       allApplicableAnswered(catalogue, row.answers),
       true,
       `${row.id} answers every Question its as-reviewed version applies`
+    );
+  }
+});
+
+test('a stamped Case recomputes to its frozen Outcome against its own version', async () => {
+  // Both versions were published while an Outcome Question's options were the
+  // Outcome wordings, and the Answers frozen against them hold those wordings.
+  // Read against the catalogue the Case was reviewed with they still score the
+  // Outcome that was stamped; read against today's bank, which lists the ids,
+  // they would score nothing.
+  const client = mockClient();
+
+  for (const row of stampedCases) {
+    const version =
+      /** @type {import('../src/sharepoint-client.js').VersionedExport} */ (
+        await client.getVersionedExport(
+          row.caseType,
+          /** @type {string} */ (row.questionBankVersion)
+        )
+      );
+    const catalogue = /** @type {any[]} */ (
+      version.questions.filter((q) => !q.deprecated)
+    );
+    assert.equal(
+      computeConfiguredOutcome(
+        catalogue,
+        row.answers,
+        version.outcomeOptions,
+        version.defaultOutcomeId ?? ''
+      ).outcome,
+      row.outcomeAtCompletion,
+      `${row.id} recomputes to its frozen Outcome`
     );
   }
 });

@@ -9,8 +9,8 @@ Before doing any non-trivial work in this repo, read:
 1. **[CONTEXT.md](./CONTEXT.md)** — domain language. Use these terms exactly when discussing or coding (`Case Type`, `Question Definition`, `Applicable Question`, `Answer`, `Remediation Action`, `Reviewer`, `Responsible Party`, `Case Type Owner`, `Conversation`, `Outcome`).
 2. **[docs/guide/add-a-page.md](./docs/guide/add-a-page.md)** — the one-page
    authoring path: state → `h()`/`svg()`, actions, effects, route entry, and tests.
-3. **[docs/adr/](./docs/adr/)** — 58 architecture decisions, numbered
-   (`0001`–`0058`). Read the status before relying on an older decision, and do
+3. **[docs/adr/](./docs/adr/)** — 59 architecture decisions, numbered
+   (`0001`–`0059`). Read the status before relying on an older decision, and do
    not deviate from an accepted ADR without surfacing the deviation explicitly.
 
 ## Project overview
@@ -380,7 +380,8 @@ src/
                                 #   through one callback, and owns the PeopleSearchState shape
                                 #   every picker holds (was pages/cora-case-review/)
     question-order.js           # generic question/category ordering helpers (was question-bank/)
-    response-options.js         # single source of truth for response options + the NA_VALUE literal (#391)
+    response-options.js         # single source of truth for response options + the NA_VALUE literal (#391),
+                                #   and responseLabel: what a stored response id reads as (ADR-0059)
     route-error-panel.js        # shared route-failure panel, used by router.js and core/store-route.js (#437)
     router.js                   # hash-based SPA router
     section-labels.js           # the resolved Section display copy: each Section's own declared
@@ -648,7 +649,9 @@ src/
                                  #   resolution", asked by the Appeal views, Section access, the
                                  #   Controls worklist and the flag pairing (#691)
     applicability-evaluator.js
-    configured-outcome.js
+    configured-outcome.js        # the configured Outcome, and an Outcome question's responses: its
+                                 #   options are Outcome ids, labelled with their wording at load and
+                                 #   upgraded from a stored wording on load (ADR-0059)
     failure-evaluator.js
     capture-values.js            # leaf: what a stored Issue Capture value IS, read off the VALUE —
                                  #   emptiness and display text, never routed through the field's

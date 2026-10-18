@@ -380,13 +380,28 @@ win an observation.
 | `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
 | `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema — the Writer adds it after validation — so it appears in no schema and in no grain. | *(32-char hex)* | None |
 | `question_id` | the `answers` map's key | `str` | No | `NonNull` | The Question Definition this row answers. No `Pattern`: a question id has no documented format, so a pattern would divert real answers into quarantine to guard a namespace nobody has proposed. | `q-root-cause` | None |
-| `value_json` | `answers[question_id].value` | `str` | Yes | — | The value exactly as the source stored it — a scalar as itself, a list as JSON text. Not always parseable as a single JSON value; it is the lossless copy. | `["Process","Training"]` | Internal |
+| `value_json` | `answers[question_id].value` | `str` | Yes | — | The value exactly as the source stored it — a scalar as itself, a list as JSON text. Not always parseable as a single JSON value; it is the lossless copy. For an `outcome` question it is the **Outcome id** (`poor-with-harm`), not its wording; an Answer recorded before the platform stored the id holds the wording (`Poor with harm`) — see *Response ids* below. | `["Process","Training"]` | Internal |
 | `value_text` | *(derived)* | `str` | Yes | — | The canonical, groupable rendering of `value_json`: a multi-select's elements joined on `\|`; anything else stringified. Not display copy — see `derive_value_text`. | `Process\|Training` | Internal |
 | `justification` | `answers[question_id].justification` | `str` | Yes | — | Free text. | | Internal |
 | `remediation_required` | `answers[question_id].remediationRequired` | `str` | Yes | `OneOf(yes, no)` | Tri-state: `"yes"`, `"no"`, or the key **absent**, which means undecided and is distinct from `"no"`. A key is deleted, not nulled, when a reviewer changes their mind. | `yes` | None |
 | `free_form_remediation` | `answers[question_id].freeFormRemediation` | `str` | Yes | — | Free text. | | Internal |
 | `remediation_status` | `answers[question_id].remediationStatus.status` | `str` | Yes | `OneOf(complete, partial, cancelled)` | The full framework vocabulary is validated even where one Case Type's UI offers fewer — a narrower offer is display-only. | `partial` | None |
 | `remediation_status_details` | `answers[question_id].remediationStatus.details` | `str` | Yes | — | Free text. | | Internal |
+
+**Response ids.** The review platform stores the *id* of a chosen response, not
+the wording it was shown with
+([platform ADR-0059](../platform_frontend/docs/adr/0059-answers-store-the-response-id.md)):
+an `outcome` question's value is the Outcome id, so rewording an Outcome leaves
+every recorded value where it was. Rows recorded earlier hold the wording, and
+the two spellings coexist in this table — a Case frozen against a Question Bank
+version published before the change keeps its wordings, and an In-progress Case
+is rewritten with ids the next time its Answers are saved. This feed lands the
+value verbatim and **deliberately does not translate it**: the translation needs
+the Question Bank dimension this Case-Type-agnostic feed does not join, and the
+one rule that covers both spellings — look the value up in the `option_outcomes`
+of the bank version the Case resolves against — belongs to the bank-aware
+answer-outcome grain deferred below. Until then, group on that translation, not
+on `value_text`.
 
 ### Part C — Row checks
 

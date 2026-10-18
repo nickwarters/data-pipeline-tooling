@@ -7,7 +7,10 @@ import {
   normaliseConfiguredActions,
   outcomeResponseOptions,
   validateConfiguredOutcomeConfig,
+  withResponseIds,
+  withResponseLabels,
 } from '../src/evaluators/configured-outcome.js';
+import { NA_VALUE } from '../src/lib/response-options.js';
 
 const PASS_REFER_FAIL = [
   { id: 'pass', wording: 'Pass', severity: 0 },
@@ -364,15 +367,177 @@ test('computeConfiguredOutcome: equal severity uses the later specific mapping',
   );
 });
 
-test('outcomeResponseOptions: derives read-only labels and mapping from the outcome vocabulary', () => {
+test('outcomeResponseOptions: an Outcome response is its id, shown with its wording', () => {
   assert.deepEqual(outcomeResponseOptions(PASS_REFER_FAIL), {
-    options: ['Pass', 'Refer', 'Fail'],
-    optionOutcomes: { Pass: 'pass', Refer: 'refer', Fail: 'fail' },
+    options: ['pass', 'refer', 'fail'],
+    optionOutcomes: { pass: 'pass', refer: 'refer', fail: 'fail' },
+    optionLabels: { pass: 'Pass', refer: 'Refer', fail: 'Fail' },
   });
   assert.deepEqual(outcomeResponseOptions(), {
     options: [],
     optionOutcomes: {},
+    optionLabels: {},
   });
+});
+
+/**
+ * An `outcome` question compiled the way the bank compiles it.
+ *
+ * @param {string} id
+ * @param {import('../src/sharepoint-client.js').OutcomeOption[]} outcomes
+ * @returns {import('../src/sharepoint-client.js').QuestionDefinition}
+ */
+function compiledOutcomeQuestion(id, outcomes = PASS_REFER_FAIL) {
+  const { options, optionOutcomes } = outcomeResponseOptions(outcomes);
+  return {
+    id,
+    text: 'Overall assessment',
+    responseType: 'outcome',
+    options,
+    optionOutcomes,
+    deprecated: false,
+  };
+}
+
+/**
+ * An `outcome` question published before Answers stored the Outcome id: its
+ * options are the wordings, mapped to the ids.
+ *
+ * @param {string} id
+ * @returns {import('../src/sharepoint-client.js').QuestionDefinition}
+ */
+function wordingKeyedOutcomeQuestion(id) {
+  return {
+    id,
+    text: 'Overall assessment',
+    responseType: 'outcome',
+    options: PASS_REFER_FAIL.map((option) => option.wording),
+    optionOutcomes: Object.fromEntries(
+      PASS_REFER_FAIL.map((option) => [option.wording, option.id])
+    ),
+    deprecated: false,
+  };
+}
+
+test('withResponseLabels: an Outcome question reads its options in the wording they are published with', () => {
+  const [labelled] = withResponseLabels(
+    [compiledOutcomeQuestion('q1')],
+    PASS_REFER_FAIL
+  );
+  assert.deepEqual(labelled.optionLabels, {
+    pass: 'Pass',
+    refer: 'Refer',
+    fail: 'Fail',
+  });
+
+  const reworded = PASS_REFER_FAIL.map((option) =>
+    option.id === 'refer' ? { ...option, wording: 'Escalate' } : option
+  );
+  const [relabelled] = withResponseLabels(
+    [compiledOutcomeQuestion('q1')],
+    reworded
+  );
+  assert.equal(relabelled.optionLabels?.refer, 'Escalate');
+  assert.deepEqual(
+    relabelled.options,
+    labelled.options,
+    'rewording moves the label and leaves the stored options alone'
+  );
+});
+
+test('withResponseLabels: a question whose options are already their own text is left alone', () => {
+  /** @type {import('../src/sharepoint-client.js').QuestionDefinition} */
+  const choice = {
+    id: 'q-choice',
+    text: 'Channel',
+    responseType: 'single-choice',
+    options: ['pass', 'fail'],
+    deprecated: false,
+  };
+  const legacy = wordingKeyedOutcomeQuestion('q-legacy');
+
+  const [choiceOut, legacyOut] = withResponseLabels(
+    [choice, legacy],
+    PASS_REFER_FAIL
+  );
+
+  assert.equal(choiceOut, choice, 'only an Outcome question is labelled');
+  assert.equal(
+    legacyOut,
+    legacy,
+    'a version whose options are the wordings already reads as it should'
+  );
+});
+
+test('withResponseIds: an Answer holding an Outcome wording is read as that Outcome id', () => {
+  const answers = {
+    q1: { value: 'Refer', justification: 'kept' },
+    q2: { value: 'fail' },
+  };
+
+  const upgraded = withResponseIds(
+    [compiledOutcomeQuestion('q1'), compiledOutcomeQuestion('q2')],
+    answers,
+    PASS_REFER_FAIL
+  );
+
+  assert.deepEqual(upgraded, {
+    q1: { value: 'refer', justification: 'kept' },
+    q2: { value: 'fail' },
+  });
+  assert.deepEqual(
+    answers.q1,
+    { value: 'Refer', justification: 'kept' },
+    'the stored Answers are not mutated'
+  );
+});
+
+test('withResponseIds: anything that is not a recognised Outcome wording is left as stored', () => {
+  const answers = {
+    id: { value: 'pass' },
+    na: { value: NA_VALUE },
+    blank: { value: '' },
+    unknown: { value: 'Somewhat' },
+    multi: { value: ['Pass'] },
+    choice: { value: 'Pass' },
+    legacy: { value: 'Pass' },
+  };
+  /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
+  const questions = [
+    ...['id', 'na', 'blank', 'unknown', 'multi'].map((id) =>
+      compiledOutcomeQuestion(id)
+    ),
+    {
+      id: 'choice',
+      text: 'Channel',
+      responseType: 'single-choice',
+      options: ['Pass', 'Fail'],
+      deprecated: false,
+    },
+    wordingKeyedOutcomeQuestion('legacy'),
+  ];
+
+  assert.equal(
+    withResponseIds(questions, answers, PASS_REFER_FAIL),
+    answers,
+    'nothing to upgrade hands back the same Answers'
+  );
+});
+
+test('withResponseIds: a wording whose Outcome the question does not offer stays as stored', () => {
+  const answers = { q1: { value: 'Refer' } };
+  const withoutRefer = PASS_REFER_FAIL.filter(
+    (option) => option.id !== 'refer'
+  );
+
+  assert.equal(
+    withResponseIds(
+      [compiledOutcomeQuestion('q1', withoutRefer)],
+      answers,
+      PASS_REFER_FAIL
+    ),
+    answers
+  );
 });
 
 test('computeConfiguredOutcome: an outcome-type response drives the outcome', () => {
@@ -391,7 +556,7 @@ test('computeConfiguredOutcome: an outcome-type response drives the outcome', ()
 
   const result = computeConfiguredOutcome(
     questions,
-    { q1: { value: 'Refer' } },
+    { q1: { value: 'refer' } },
     PASS_REFER_FAIL,
     'pass'
   );

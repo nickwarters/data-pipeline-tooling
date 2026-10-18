@@ -133,7 +133,44 @@ test('diffBanks: outcome-type questions compare derived options', () => {
   ]);
 });
 
+test('diffBanks: rewording an Outcome changes no question', () => {
+  const base = baselineBank();
+  base.questions.push({
+    id: 'q-outcome',
+    text: 'Overall outcome?',
+    responseType: 'outcome',
+    deprecated: false,
+  });
+  const draft = draftFrom(base, (b) => {
+    b.outcomeOptions[1].wording = 'Not met';
+  });
+  assert.deepEqual(diffBanks(base, draft).changed, []);
+});
+
 // ── simulateBankImpact ──────────────────────────────────────────────────────
+
+test('simulate: a sampled Case holding an Outcome wording scores as that Outcome', () => {
+  // A historical Case recorded before Answers stored the Outcome id. Without
+  // reading the wording as its id it would score nothing, and every such
+  // sample would read as an Outcome the draft changed.
+  const base = baselineBank();
+  base.questions.push({
+    id: 'q-outcome',
+    text: 'Overall outcome?',
+    responseType: 'outcome',
+    deprecated: false,
+  });
+  const draft = draftFrom(base, (b) => {
+    b.outcomeOptions[1].wording = 'Not met';
+  });
+
+  const result = simulateBankImpact(base, draft, [
+    sampleCase({ 'q-a': { value: 'Yes' }, 'q-outcome': { value: 'Fail' } }),
+  ]);
+
+  assert.deepEqual(result.cases[0].outcome.before, 'fail');
+  assert.equal(result.cases[0].changed, false);
+});
 
 test('simulate: identical banks report no impact', () => {
   const base = baselineBank();

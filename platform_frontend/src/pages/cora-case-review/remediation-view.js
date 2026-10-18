@@ -3,6 +3,7 @@ import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
 import { evaluate } from '../../evaluators/applicability-evaluator.js';
 import { isFailure } from '../../evaluators/failure-evaluator.js';
+import { answerLabel } from '../../lib/response-options.js';
 import { anyRemediationRequired } from '../../evaluators/remediation-status.js';
 import { PeoplePicker } from '../../components/base/cora-people-picker.js';
 import { CaptureGroups } from '../../components/sections/cora-capture-groups.js';
@@ -207,7 +208,7 @@ function buildItemContent(props, q) {
   );
 
   const v = props.answers[q.id]?.value;
-  const ansText = `Answer: ${Array.isArray(v) ? v.join(', ') : (v ?? '')}`;
+  const ansText = `Answer: ${answerLabel(q, v)}`;
   before.appendChild(h('p', { className: 'cora-remediation-answer' }, ansText));
 
   const after = h('div', {});

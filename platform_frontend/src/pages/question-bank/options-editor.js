@@ -22,7 +22,10 @@ export const MAX_OPTION_LENGTH = 250;
  *
  * @param {any} question
  * @param {import('../../sharepoint-client.js').OutcomeOption[]} outcomeOptions
- * @returns {{ options: string[], editable: boolean, outcomeReadOnly: boolean, mapping: Record<string, string> }}
+ * `labels` is the wording an option is shown with when the option is an id —
+ * an `outcome` question's Outcome ids — and is empty otherwise.
+ *
+ * @returns {{ options: string[], editable: boolean, outcomeReadOnly: boolean, mapping: Record<string, string>, labels: Record<string, string> }}
  */
 export function effectiveOptions(question, outcomeOptions) {
   if (question.responseType === 'yes-no-na') {
@@ -31,6 +34,7 @@ export function effectiveOptions(question, outcomeOptions) {
       editable: false,
       outcomeReadOnly: false,
       mapping: question.optionOutcomes || {},
+      labels: {},
     };
   }
   if (question.responseType === 'outcome') {
@@ -40,6 +44,7 @@ export function effectiveOptions(question, outcomeOptions) {
       editable: false,
       outcomeReadOnly: true,
       mapping: derived.optionOutcomes,
+      labels: derived.optionLabels,
     };
   }
   return {
@@ -47,6 +52,7 @@ export function effectiveOptions(question, outcomeOptions) {
     editable: true,
     outcomeReadOnly: false,
     mapping: question.optionOutcomes || {},
+    labels: {},
   };
 }
 
@@ -103,14 +109,12 @@ export function OptionsEditor({
 }) {
   if (!question) return undefined;
 
-  const { options, editable, outcomeReadOnly, mapping } = effectiveOptions(
-    question,
-    outcomeOptions
-  );
+  const { options, editable, outcomeReadOnly, mapping, labels } =
+    effectiveOptions(question, outcomeOptions);
 
   const rows = options.map((option, index) => {
     const children = [
-      h('span', { className: 'opt-label' }, option),
+      h('span', { className: 'opt-label' }, labels[option] ?? option),
       optionOutcomeSelect(
         mapping[option] ?? '',
         outcomeOptions,

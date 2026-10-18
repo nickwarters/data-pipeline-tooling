@@ -39,6 +39,33 @@ export function baseResponseOptions(question) {
 }
 
 /**
+ * What a Reviewer reads for one stored response value. An `outcome`-type
+ * question stores the Outcome id and is shown its wording; every other value
+ * reads as itself.
+ *
+ * @param {Pick<QuestionDefinition, 'optionLabels'>} question
+ * @param {string} value
+ * @returns {string}
+ */
+export function responseLabel(question, value) {
+  return question.optionLabels?.[value] ?? value;
+}
+
+/**
+ * A stored Answer value as display text: each selected response read through
+ * `responseLabel`, a multi-choice selection joined with commas.
+ *
+ * @param {Pick<QuestionDefinition, 'optionLabels'>} question
+ * @param {string | string[] | undefined} value
+ * @returns {string}
+ */
+export function answerLabel(question, value) {
+  if (Array.isArray(value))
+    return value.map((item) => responseLabel(question, item)).join(', ');
+  return value ? responseLabel(question, value) : '';
+}
+
+/**
  * The options offered to the Reviewer: the question's own options plus the
  * universal N/A, on every response type.
  *
