@@ -12,6 +12,7 @@ import {
 import { h } from '../../lib/html.js';
 import {
   NA_VALUE,
+  responseLabel,
   reviewerResponseOptions,
 } from '../../lib/response-options.js';
 
@@ -119,6 +120,7 @@ export function createQuestionPanelView() {
             ? GroupOutcomeControl({
                 questionGroup: group,
                 options: reviewerResponseOptions(targets[0]),
+                optionLabels: targets[0].optionLabels ?? {},
                 value: groupOutcomeValue(targets, answers),
                 onGroupOutcome,
               })
@@ -183,7 +185,10 @@ export function questionCardView({ question, answer, access, onAnswer }) {
   const options = reviewerResponseOptions(question);
   const isMulti = question.responseType === 'multi-choice';
   const hasLongOption =
-    !isMulti && options.some((option) => option.length > LONG_OPTION_THRESHOLD);
+    !isMulti &&
+    options.some(
+      (option) => responseLabel(question, option).length > LONG_OPTION_THRESHOLD
+    );
   const fieldsetClass = hasLongOption
     ? 'cora-question cora-question-options-long'
     : 'cora-question';
@@ -222,7 +227,7 @@ export function questionCardView({ question, answer, access, onAnswer }) {
           );
         },
       }),
-      h('span', {}, ` ${option}`)
+      h('span', {}, ` ${responseLabel(question, option)}`)
     )
   );
 

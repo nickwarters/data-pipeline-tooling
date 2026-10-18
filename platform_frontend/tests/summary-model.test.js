@@ -196,6 +196,24 @@ test('buildSummaryModel: failure with a multi-choice value joins selections for 
   ]);
 });
 
+test('buildSummaryModel: a failed Outcome Answer reads as the Outcome wording', () => {
+  /** @type {QuestionDefinition[]} */
+  const cat = [
+    {
+      id: 'q-outcome',
+      text: 'Handled well?',
+      responseType: 'outcome',
+      options: ['good', 'poor'],
+      optionOutcomes: { good: 'good', poor: 'poor' },
+      optionLabels: { good: 'Good', poor: 'Below standard' },
+      failureValues: ['poor'],
+      deprecated: false,
+    },
+  ];
+  const model = buildSummaryModel(cat, { 'q-outcome': { value: 'poor' } });
+  assert.equal(model.failures[0].answer, 'Below standard');
+});
+
 test('buildSummaryModel: counts carry the Category their Question Group sits under', () => {
   /** @type {QuestionDefinition[]} */
   const cat = [

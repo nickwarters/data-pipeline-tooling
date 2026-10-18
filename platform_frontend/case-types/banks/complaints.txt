@@ -1,7 +1,7 @@
 {
   "slug": "complaints",
   "label": "Complaints",
-  "version": "49fee46ee894ffc9f98557f181d8575cadf07d3c58ca072c9b6a1ea38fe69ec4",
+  "version": "02d3770be53b8824a13e2a8c7992515f3bbdbcf8f3c1cdc3000f77d9b03b17f0",
   "history": [
     {
       "version": "5b4be525cff4b0321856f70662112ee6bf57d4af8399d9d0a1ae8db8d8a024cd",
@@ -14,6 +14,10 @@
     {
       "version": "49fee46ee894ffc9f98557f181d8575cadf07d3c58ca072c9b6a1ea38fe69ec4",
       "generatedAt": "2026-08-13T15:34:31.259Z"
+    },
+    {
+      "version": "02d3770be53b8824a13e2a8c7992515f3bbdbcf8f3c1cdc3000f77d9b03b17f0",
+      "generatedAt": "2026-10-18T05:59:34.908Z"
     }
   ],
   "questions": [
@@ -23,16 +27,16 @@
       "questionGroup": "Acknowledgement",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "remediationActions": [
         "Log the complaint on the complaints register and correct the recorded receipt date."
@@ -45,16 +49,16 @@
       "questionGroup": "Acknowledgement",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -64,16 +68,16 @@
       "questionGroup": "Acknowledgement",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -83,16 +87,16 @@
       "questionGroup": "Acknowledgement",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -103,16 +107,16 @@
       "labelIds": ["lbl-sla"],
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -122,16 +126,16 @@
       "questionGroup": "Acknowledgement",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -141,16 +145,16 @@
       "questionGroup": "Acknowledgement",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -160,16 +164,16 @@
       "questionGroup": "Investigation",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -179,16 +183,16 @@
       "questionGroup": "Investigation",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -198,16 +202,16 @@
       "questionGroup": "Investigation",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -217,16 +221,16 @@
       "questionGroup": "Investigation",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -236,16 +240,16 @@
       "questionGroup": "Investigation",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -255,16 +259,16 @@
       "questionGroup": "Investigation",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -275,16 +279,16 @@
       "labelIds": ["lbl-sla"],
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -294,16 +298,16 @@
       "questionGroup": "Resolution",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -313,16 +317,16 @@
       "questionGroup": "Resolution",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "remediationActions": [
         "Recalculate the redress against the current methodology and offer it to the customer."
@@ -335,16 +339,16 @@
       "questionGroup": "Resolution",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -354,16 +358,16 @@
       "questionGroup": "Resolution",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -373,16 +377,16 @@
       "questionGroup": "Resolution",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -392,16 +396,16 @@
       "questionGroup": "Resolution",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -411,16 +415,16 @@
       "questionGroup": "Resolution",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -430,16 +434,16 @@
       "questionGroup": "Communication",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -449,16 +453,16 @@
       "questionGroup": "Communication",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "remediationActions": [
         "Issue a supplementary response covering the points the final response did not address."
@@ -471,16 +475,16 @@
       "questionGroup": "Communication",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -491,16 +495,16 @@
       "labelIds": ["lbl-regulatory"],
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -510,16 +514,16 @@
       "questionGroup": "Communication",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -530,16 +534,16 @@
       "labelIds": ["lbl-sla"],
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -549,16 +553,16 @@
       "questionGroup": "Communication",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -568,16 +572,16 @@
       "questionGroup": "Customer Treatment",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -587,16 +591,16 @@
       "questionGroup": "Customer Treatment",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -606,16 +610,16 @@
       "questionGroup": "Customer Treatment",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "remediationActions": [
         "Record the adjustments the customer needs and re-contact them using those adjustments."
@@ -628,16 +632,16 @@
       "questionGroup": "Customer Treatment",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -647,16 +651,16 @@
       "questionGroup": "Customer Treatment",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -666,16 +670,16 @@
       "questionGroup": "Customer Treatment",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -685,16 +689,16 @@
       "questionGroup": "Customer Treatment",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -704,16 +708,16 @@
       "questionGroup": "Records & Evidence",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -723,16 +727,16 @@
       "questionGroup": "Records & Evidence",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -742,16 +746,16 @@
       "questionGroup": "Records & Evidence",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -761,16 +765,16 @@
       "questionGroup": "Records & Evidence",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -781,16 +785,16 @@
       "labelIds": ["lbl-regulatory"],
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -800,16 +804,16 @@
       "questionGroup": "Records & Evidence",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -819,16 +823,16 @@
       "questionGroup": "Records & Evidence",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -839,16 +843,16 @@
       "labelIds": ["lbl-regulatory"],
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -858,16 +862,16 @@
       "questionGroup": "Regulatory & Reporting",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -878,16 +882,16 @@
       "labelIds": ["lbl-sla", "lbl-regulatory"],
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -898,20 +902,20 @@
       "labelIds": ["lbl-regulatory"],
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "showWhen": {
         "q-cmp-0045": {
-          "in": ["Good with process enhancement", "Poor", "Poor with harm"]
+          "in": ["good-with-process-enhancement", "poor", "poor-with-harm"]
         }
       },
       "deprecated": false
@@ -922,16 +926,16 @@
       "questionGroup": "Regulatory & Reporting",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -942,16 +946,16 @@
       "labelIds": ["lbl-regulatory"],
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     },
@@ -961,16 +965,16 @@
       "questionGroup": "Regulatory & Reporting",
       "responseType": "outcome",
       "options": [
-        "Good",
-        "Good with process enhancement",
-        "Poor",
-        "Poor with harm"
+        "good",
+        "good-with-process-enhancement",
+        "poor",
+        "poor-with-harm"
       ],
       "optionOutcomes": {
-        "Good": "good",
-        "Good with process enhancement": "good-with-process-enhancement",
-        "Poor": "poor",
-        "Poor with harm": "poor-with-harm"
+        "good": "good",
+        "good-with-process-enhancement": "good-with-process-enhancement",
+        "poor": "poor",
+        "poor-with-harm": "poor-with-harm"
       },
       "deprecated": false
     }

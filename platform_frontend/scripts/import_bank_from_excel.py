@@ -291,14 +291,16 @@ def build_question(
     if response_type == "outcome":
         # An Outcome question answers in the Case Type's Outcomes; its options are
         # derived from them, exactly as the Question Bank editor compiles them.
+        # An option is the Outcome's id, which is what an Answer stores, so a
+        # reworded Outcome leaves every recorded Answer pointing at it.
         if split_lines(row.get("options")) or cell_text(row.get("optionOutcomes")):
             raise SheetError(
                 f"{where}: an `outcome` question takes its options from the bank's Outcomes "
                 "— leave options/optionOutcomes blank"
             )
         outcomes = bank.get("outcomeOptions", [])
-        set_or_clear("options", [o["wording"] for o in outcomes])
-        set_or_clear("optionOutcomes", {o["wording"]: o["id"] for o in outcomes})
+        set_or_clear("options", [o["id"] for o in outcomes])
+        set_or_clear("optionOutcomes", {o["id"]: o["id"] for o in outcomes})
     elif response_type in CHOICE_TYPES and not question.get("options"):
         raise SheetError(f"{where}: a {response_type} question needs at least one option")
 

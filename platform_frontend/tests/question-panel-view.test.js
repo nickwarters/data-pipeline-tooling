@@ -512,3 +512,36 @@ test('choosing a wording reports one outcome for that group', () => {
 
   assert.deepEqual(calls, [['Alpha', 'Poor']]);
 });
+
+test('an Outcome Question card shows each Outcome by its wording and answers in its id', () => {
+  /** @type {{questionId: string, value: string|string[]}[]} */
+  const calls = [];
+  const outcomeQuestion = {
+    ...question('q-outcome', 'Alpha'),
+    responseType: /** @type {const} */ ('outcome'),
+    options: ['good', 'poor'],
+    optionOutcomes: { good: 'good', poor: 'poor' },
+    optionLabels: { good: 'Good', poor: 'Below standard' },
+  };
+  const node = createQuestionPanelView().view(
+    props({
+      catalogue: [outcomeQuestion],
+      questions: [outcomeQuestion],
+      answers: { 'q-outcome': { value: 'poor' } },
+      onAnswer: (
+        /** @type {string} */ questionId,
+        /** @type {string|string[]} */ value
+      ) => calls.push({ questionId, value }),
+    })
+  );
+
+  const labels = Array.from(node.querySelectorAll('.cora-question-option')).map(
+    (label) => label.textContent.trim()
+  );
+  assert.deepEqual(labels, ['Good', 'Below standard', 'NA']);
+
+  const inputs = node.querySelectorAll('input');
+  assert.equal(inputs[1].checked, true, 'the stored id selects its wording');
+  fireEvent(inputs[0], 'change');
+  assert.deepEqual(calls, [{ questionId: 'q-outcome', value: 'good' }]);
+});

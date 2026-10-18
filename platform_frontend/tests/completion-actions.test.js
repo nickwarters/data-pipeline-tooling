@@ -160,6 +160,41 @@ test('completionPatch freezes outcome and effective columns in the lifecycle PAT
   assert.equal('placedOnHoldAt' in (patch ?? {}), false);
 });
 
+test('completionPatch freezes the Answers the Outcome was computed from when the row holds others', () => {
+  // Loading reads a stored Outcome wording as its id. A Reviewer who then
+  // completes without answering anything has written no Answers, so the
+  // transition has to carry them or the row freezes the wording.
+  const stored = { q1: { value: 'Yes' } };
+  const loaded = { q1: { value: 'yes' } };
+  const input = {
+    machine: machine(),
+    catalogue: CATALOGUE,
+    allAnswered: true,
+    captureGroups: [],
+    generalQuestions: [],
+    computeOutcome: () => ({ outcome: 'pass' }),
+    bankVersion: 'v2',
+  };
+
+  const upgraded = completionPatch({
+    ...input,
+    caseRow: { ...CASE_ROW, answers: stored },
+    answers: loaded,
+  });
+  assert.deepEqual(upgraded?.answers, loaded);
+
+  const unchanged = completionPatch({
+    ...input,
+    caseRow: { ...CASE_ROW, answers: loaded },
+    answers: loaded,
+  });
+  assert.equal(
+    'answers' in (unchanged ?? {}),
+    false,
+    'Answers the row already holds are not written again'
+  );
+});
+
 test('completionPatch chooses the transition and stamps it from one catalogue', () => {
   // The fork and the `hadRemediation` stamp are the same fact read twice, so
   // they must come from one catalogue. They used to come from two — the

@@ -166,7 +166,11 @@ function liveBankComplaintsCases() {
 }
 
 test('complaints fixtures: every reference Case with answers computes to its frozen outcomeAtCompletion', () => {
-  const frozen = reportableComplaintsCases();
+  // A Case stamped with an older version recomputes against that version's
+  // catalogue instead, in published-bank-versions.test.js.
+  const frozen = liveBankComplaintsCases().filter((c) =>
+    isReportable(c.status)
+  );
   assert.ok(frozen.length >= 1, 'expected a frozen-Outcome Complaints Case');
   for (const row of frozen) {
     assert.equal(

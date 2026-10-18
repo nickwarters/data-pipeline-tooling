@@ -250,8 +250,24 @@ Each entry in `answers`, keyed by question `id`:
 ```
 
 - **`value` is the only field needed to derive failure.** It is a **string** for
-  `yes-no-na` and `single-choice`, and a **`string[]`** for `multi-choice`. An
-  empty string or empty array means **unanswered**.
+  `yes-no-na`, `single-choice` and `outcome`, and a **`string[]`** for
+  `multi-choice`. An empty string or empty array means **unanswered**.
+- **`value` holds the response's id, not the wording it was shown with.** For an
+  `outcome` question that is the Outcome id (`"poor-with-harm"`, not
+  `"Poor with harm"`) — the same id `outcomeAtCompletion` stores — so rewording an
+  Outcome in the bank moves no recorded Answer. Read the wording from the
+  export's `outcomeOptions` by that id. Every other response type's option text
+  is its own id. ([ADR-0059](./adr/0059-answers-store-the-response-id.md))
+- **Older Answers hold the wording.** An `outcome` Answer recorded before that
+  change holds the Outcome wording, and so does every Case frozen against a bank
+  version published before it — that version's `options` and `optionOutcomes`
+  keys are the wordings too. The failure test below needs no special case: it
+  looks `value` up in the `optionOutcomes` of the export the Case resolves
+  against, and both kinds of version map their own kind of value. To group
+  Answers across versions, translate each `value` through that export's
+  `optionOutcomes` to an Outcome id rather than grouping on `value` itself. An
+  In-progress Case that still holds a wording is rewritten with the id the next
+  time its Answers are saved, at the latest when it is completed.
 - `justification`, `remediationRequired`, `remediationActions`,
   `freeFormRemediation`, `capture` are optional and not needed for
   failure counting (use them for richer reports if you want — e.g. "failures
@@ -319,6 +335,13 @@ for case in cases_modified_yesterday:           # filter on completedAt
 ```
 
 ## Caveats — read these
+
+0. **Group on the Outcome id, not the stored value.** `value` is an Outcome id
+   for `outcome` questions answered since
+   [ADR-0059](./adr/0059-answers-store-the-response-id.md) and the Outcome
+   wording before it, so a report grouping raw values counts `"Poor"` and
+   `"poor"` as two answers. `optionOutcomes[value]`, read from the export the
+   Case resolves against, gives the Outcome id in both cases.
 
 1. **Use versioned exports for Completed Cases.** When a Case row carries a
    `questionBankVersion`, fetch `{slug}.<version>.txt` for that identifier instead of

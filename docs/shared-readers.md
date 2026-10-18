@@ -182,9 +182,12 @@ The grain split is the reason there are two datasets rather than one: an
 artifact declares a Case Type's questions *and* the outcomes those questions'
 answers map onto, and denormalising ~4 rows across ~50 would make anyone
 counting outcomes de-duplicate questions first. They join on `id` — a question's
-`option_outcomes` maps each answer *wording* to an outcome `id`, so the outcomes
-dataset is the key side of that map, carrying the `severity` score that makes
-one outcome worse than another. Both carry `default_outcome_id`, so the failure
+`option_outcomes` maps each stored answer value to an outcome `id`, so the
+outcomes dataset is the value side of that map, carrying the `wording` a
+Reviewer reads and the `severity` score that makes one outcome worse than
+another. For an `outcome` question the stored value *is* the outcome `id` (each
+key maps to itself) in every version published since Answers stored the id;
+older snapshots key it by the wording, as the Answers frozen against them do. Both carry `default_outcome_id`, so the failure
 test — *an option mapped to anything other than the default fails* — can be
 applied from either end.
 

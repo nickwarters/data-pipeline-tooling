@@ -245,9 +245,22 @@ export function completionPatch(input) {
     computeOutcome: input.computeOutcome,
     questionBankVersion: input.bankVersion,
   });
+  // The Answers freeze here, so the row must carry the ones the Outcome was
+  // just computed from. They differ from the loaded row when loading upgraded
+  // a stored Outcome wording to its id and nothing has been answered since,
+  // which would otherwise freeze the wording against a bank that lists ids.
+  const frozenAnswers =
+    JSON.stringify(input.answers) === JSON.stringify(input.caseRow.answers)
+      ? {}
+      : { answers: input.answers };
   return input.caseRow.onHold === true
-    ? { ...transitionFields, onHold: false, placedOnHoldAt: null }
-    : transitionFields;
+    ? {
+        ...transitionFields,
+        ...frozenAnswers,
+        onHold: false,
+        placedOnHoldAt: null,
+      }
+    : { ...transitionFields, ...frozenAnswers };
 }
 
 /**

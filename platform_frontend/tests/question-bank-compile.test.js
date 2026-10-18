@@ -127,9 +127,37 @@ test('compileBank: outcome-type questions bake derived options and mappings', ()
     text: 'Overall outcome',
     responseType: 'outcome',
     deprecated: false,
-    options: ['Pass', 'Fail'],
-    optionOutcomes: { Pass: 'pass', Fail: 'fail' },
+    // The Outcome ids, which is what an Answer stores. The wording is not
+    // baked in: it is read from `outcomeOptions` when the bank is loaded, so
+    // rewording an Outcome does not change a single option.
+    options: ['pass', 'fail'],
+    optionOutcomes: { pass: 'pass', fail: 'fail' },
   });
+});
+
+test('compileBank: rewording an Outcome leaves its questions compiling the same', () => {
+  /** @param {string} wording */
+  const compiled = (wording) =>
+    JSON.parse(
+      compileBank({
+        label: 'L',
+        slug: 's',
+        outcomeOptions: [
+          { id: 'pass', wording: 'Pass', severity: 0 },
+          { id: 'fail', wording, severity: 100 },
+        ],
+        questions: [
+          {
+            id: 'q-outcome',
+            text: 'Overall outcome',
+            responseType: 'outcome',
+            deprecated: false,
+          },
+        ],
+      })
+    ).questions;
+
+  assert.deepEqual(compiled('Fail'), compiled('Not met'));
 });
 
 test('compileBank: preserves edited question order', () => {
