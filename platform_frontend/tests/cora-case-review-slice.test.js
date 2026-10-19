@@ -263,6 +263,7 @@ test('state: route state owns loading, save status, and selected tab under route
     voidPending: false,
     captureCollapsed: {},
     captureSearch: {},
+    rcaCaptureSearch: {},
     responsiblePartySearch: { query: '', people: [], status: 'idle' },
     saveStatus: 'saved',
     saveFailures: [],
@@ -509,9 +510,15 @@ test('state: capture person search is held per failed Question and per field', (
  * pending, so the person search is exercised only through the route's public
  * render/start seams.
  *
+ * With `tab: 'rootCause'` the Case Type also declares a `person` Root Cause
+ * Field under the same key, and the Root Cause tab is opened for a viewer who
+ * may edit it, so the two pickers can be told apart.
+ *
  * @param {(query: string) => Promise<any[]>} searchPeople
+ * @param {{ tab?: 'issues' | 'rootCause' }} [options]
  */
-function renderCaptureSearchRoute(searchPeople) {
+function renderCaptureSearchRoute(searchPeople, options = {}) {
+  const tab = options.tab ?? 'issues';
   const failedSnapshot = snapshot();
   failedSnapshot.catalogue[0].failureValues = ['No'];
   failedSnapshot.answers = { q1: { value: 'No' } };
@@ -526,6 +533,10 @@ function renderCaptureSearchRoute(searchPeople) {
       fields: [{ key: 'attributedTo', label: 'Attributed to', type: 'person' }],
     },
   ];
+  if (tab === 'rootCause') {
+    failedSnapshot.config.rootCauseGroups = failedSnapshot.config.captureGroups;
+    failedSnapshot.access = { ...failedSnapshot.access, rootCause: 'edit' };
+  }
   failedSnapshot.machine = {
     canEditIssues: true,
     canToggleConversation: false,
@@ -534,7 +545,7 @@ function renderCaptureSearchRoute(searchPeople) {
     type: 'case/load-finished',
     snapshot: failedSnapshot,
   });
-  state = caseReviewReducer(state, { type: 'case/tab-selected', id: 'issues' });
+  state = caseReviewReducer(state, { type: 'case/tab-selected', id: tab });
   const never = new Promise(() => {});
   const client = /** @type {any} */ ({
     getCase: () => never,
@@ -617,6 +628,63 @@ test('route: a person capture field searches, records the person, and closes its
     getByRole(route.container, 'button', { name: 'Clear Attributed to' })
       .tagName,
     'BUTTON'
+  );
+  route.dispose();
+});
+
+test('route: a person Root Cause Field searches apart from the Issue capture, and records into rcaCapture', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  /** @type {string[]} */
+  const searches = [];
+  const route = renderCaptureSearchRoute(
+    async (query) => {
+      searches.push(query);
+      return [{ loginName: 'jsmith', displayName: 'Jane Smith' }];
+    },
+    { tab: 'rootCause' }
+  );
+  /** @returns {HTMLElement} */
+  const panel = () => {
+    const found = queryAllByRole(route.container, 'tabpanel').find(
+      (candidate) => candidate.id === 'case-panel-rootCause'
+    );
+    assert.ok(found);
+    return found;
+  };
+
+  const input = getByRole(panel(), 'combobox', {
+    name: 'Search people for Attributed to',
+  });
+  input.value = 'Jane';
+  fireEvent(input, 'input');
+  const opened = route.state.routes.caseReview;
+  assert.equal(opened.rcaCaptureSearch.q1.attributedTo.query, 'Jane');
+  assert.deepEqual(
+    opened.captureSearch,
+    {},
+    'the Issue Capture Field sharing its key opens no search'
+  );
+
+  t.mock.timers.tick(200);
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(searches, ['Jane']);
+  assert.equal(
+    route.state.routes.caseReview.rcaCaptureSearch.q1.attributedTo.status,
+    'success',
+    'the results land in the Root Cause search'
+  );
+
+  fireEvent(getByRole(panel(), 'option', { name: /Jane Smith/ }), 'click');
+  const answer = route.state.routes.caseReview.snapshot?.answers.q1;
+  assert.deepEqual(answer?.rcaCapture, {
+    attributedTo: { loginName: 'jsmith', displayName: 'Jane Smith' },
+  });
+  assert.equal(answer?.capture, undefined, 'the Reviewer capture is untouched');
+  assert.equal(
+    route.state.routes.caseReview.rcaCaptureSearch.q1?.attributedTo,
+    undefined,
+    'choosing someone closes the search that found them'
   );
   route.dispose();
 });

@@ -44,7 +44,12 @@
  * @property {(next: Record<string, import('../../sharepoint-client.js').Answer> | null) => void} editAnswers
  * @property {(questionId: string, value: string | string[]) => void} onAnswer
  * @property {(questionId: string, fieldKey: string, value: import('../../evaluators/issue-capture.js').CaptureValue | null) => void} captureEdited
- * @property {(questionId: string, fieldKey: string, query: string) => void} requestCaptureSearch
+ * @property {(questionId: string, fieldKey: string, query: string, slot?: import('../../sharepoint-client.js').CaptureSlot) => void} requestCaptureSearch
+ *   Opens or narrows a `person` field's people search. The slot says whose
+ *   field it is: the Issue capture's by default, or `rcaCapture` for a Root
+ *   Cause Field, whose searches are held apart.
+ * @property {(questionId: string, fieldKey: string, slot?: import('../../sharepoint-client.js').CaptureSlot) => void} clearCaptureSearch
+ *   Closes that search, as a chosen or cleared person does.
  * @property {(party: { loginName: string, displayName: string }) => void} selectResponsibleParty
  * @property {() => void} clearResponsibleParty
  * @property {(query: string) => void} requestResponsiblePartySearch

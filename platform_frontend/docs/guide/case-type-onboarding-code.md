@@ -437,7 +437,7 @@ group in either direction (`{ Build: { allowBulkOutcome: false } }`), so a type
 states the rule once and names only the exceptions; `captureGroups` extends
 per-failure capture; `rootCauseGroups` declares the Root Cause Fields the
 Responsible Party Manager records per Issue once the Case is reportable, in the
-same shape as `captureGroups` but without `person` fields, and must be paired
+same shape as `captureGroups`, `person` fields included, and must be paired
 with a `rootCause` entry in `sections` (the verify gate refuses one without the
 other), see [ADR-0059](../adr/0059-root-cause-is-a-frontline-capture-section-over-the-failed-answer-lifecycle.md); `remediationStatuses` narrows which Remediation
 Resolutions a Reviewer is offered (`['complete', 'cancelled']`), see

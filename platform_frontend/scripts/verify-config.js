@@ -262,7 +262,6 @@ const CHOICE_CAPTURE_TYPES = ['select', 'radio'];
  * @property {string} fieldNoun What one field is called, e.g. "Issue Capture Field".
  * @property {string} groupNoun What one group is called.
  * @property {string} recorder Who fills the fields in, for a failure that says who is left stuck.
- * @property {string[]} types The field types this family may declare.
  */
 
 /**
@@ -275,13 +274,13 @@ const ISSUE_CAPTURE = {
   fieldNoun: 'Issue Capture Field',
   groupNoun: 'Issue Capture Group',
   recorder: 'the Reviewer',
-  types: CAPTURE_FIELD_TYPES,
 };
 
 /**
  * The Responsible Party Manager's Root Cause capture, declared as
- * `rootCauseGroups`. A person field is refused until the Root Cause tab can
- * search the directory for one.
+ * `rootCauseGroups`. It may declare every type the Issue capture can, `person`
+ * included, because the Root Cause tab searches the directory under its own
+ * state.
  *
  * @type {CaptureGroupsSpec}
  */
@@ -290,7 +289,6 @@ const ROOT_CAUSE_CAPTURE = {
   fieldNoun: 'Root Cause Field',
   groupNoun: 'Root Cause Group',
   recorder: 'the Responsible Party Manager',
-  types: CAPTURE_FIELD_TYPES.filter((type) => type !== 'person'),
 };
 
 /**
@@ -379,9 +377,9 @@ function checkCaptureGroups(slug, file, config, spec) {
 
   for (const group of groups) {
     for (const field of group?.fields ?? []) {
-      if (!spec.types.includes(field?.type)) {
+      if (!CAPTURE_FIELD_TYPES.includes(field?.type)) {
         fail(
-          `${spec.fieldNoun} "${field?.key}" declares type "${field?.type}", which nothing renders — use one of: ${spec.types.join(', ')}`
+          `${spec.fieldNoun} "${field?.key}" declares type "${field?.type}", which nothing renders — use one of: ${CAPTURE_FIELD_TYPES.join(', ')}`
         );
         continue;
       }

@@ -802,6 +802,13 @@ registerCaseType({
           ],
         },
       ],
+      rootCauseGroups: [
+        {
+          key: 'cause',
+          label: 'Cause',
+          fields: [{ key: 'raisedBy', label: 'Raised by', type: 'person' }],
+        },
+      ],
     },
   }),
 });
@@ -857,6 +864,48 @@ test('CaseLoader.load() refreshes person capture display names in one directory 
     'a non-person capture value is left alone whatever it looks like'
   );
   assert.equal(patches.length, 0, 'a display-name refresh is never persisted');
+});
+
+test('CaseLoader.load() refreshes person Root Cause Field names in the same directory call', async () => {
+  /** @type {string[][]} */
+  const resolveCalls = [];
+  const loader = makeLoader({
+    row: {
+      caseType: 'person-capture-review',
+      answers: {
+        'q-needs': {
+          value: 'No',
+          // The same key in both slots, naming different people: each slot is
+          // refreshed from its own value.
+          capture: { raisedBy: { loginName: 'jsmith', displayName: 'J. S' } },
+          rcaCapture: {
+            raisedBy: { loginName: 'akhan', displayName: 'A. Khan' },
+          },
+        },
+      },
+    },
+    client: {
+      resolveUsers: async (/** @type {string[]} */ accounts) => {
+        resolveCalls.push(accounts);
+        return { jsmith: 'Jane Smith', akhan: 'Aisha Khan' };
+      },
+    },
+    caseType: 'person-capture-review',
+  });
+
+  await loader.load();
+
+  assert.equal(resolveCalls.length, 1, 'one batched directory call');
+  assert.deepEqual(resolveCalls[0].sort(), ['akhan', 'jsmith']);
+  const loaded = loader.answers['q-needs'];
+  assert.deepEqual(loaded.capture?.raisedBy, {
+    loginName: 'jsmith',
+    displayName: 'Jane Smith',
+  });
+  assert.deepEqual(loaded.rcaCapture?.raisedBy, {
+    loginName: 'akhan',
+    displayName: 'Aisha Khan',
+  });
 });
 
 test('CaseLoader.load() hands the directory the domain stored beside a person', async () => {

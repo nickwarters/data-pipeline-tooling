@@ -438,6 +438,7 @@ export const cases = [
             'The shared inbox had no cover over the bank holiday weekend.',
           preventable: 'Yes',
           preventionNote: 'Rota cover for the inbox on bank holidays.',
+          fixOwner: { loginName: 'sowner', displayName: 'Sam Owner' },
         },
       },
       'q-cmp-0016': {

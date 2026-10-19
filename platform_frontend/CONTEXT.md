@@ -328,9 +328,11 @@ Capture Group**, collapsed and expanded on its own, apart from the Issues tab's 
 **Root Cause Field**:
 A typed input the **Responsible Party Manager** records against one **Issue**, declared
 inside a **Root Cause Group**. Same type set and rules as an **Issue Capture Field**
-(choice fields hold a declared option, `showWhen` prunes a hidden sibling's value), except
-that `person` is not yet allowed. Stored flat by field key in the failed Answer's own
-slot, `Answer.rcaCapture`, beside the Reviewer's `capture`: one engine writes both, keys
+(choice fields hold a declared option, `showWhen` prunes a hidden sibling's value), `person`
+included: its people search is held apart from the Issues tab's, so a Root Cause Field and
+an Issue Capture Field sharing a key never see each other's matches, and its display name
+is refreshed from the directory on load like any other. Stored flat by field key in the
+failed Answer's own slot, `Answer.rcaCapture`, beside the Reviewer's `capture`: one engine writes both, keys
 are unique within the Case Type's `rootCauseGroups` only, and a Root Cause Field may share
 a key with an Issue Capture Field. Shares the failed-Answer lifecycle: **stripped** when
 the Answer stops failing, kept through a **Reopen**.

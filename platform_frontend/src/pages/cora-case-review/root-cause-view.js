@@ -9,6 +9,7 @@ import { CaptureGroups } from '../../components/sections/cora-capture-groups.js'
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../../sharepoint-client.js').CaptureGroup} CaptureGroup */
 /** @typedef {import('../../evaluators/issue-capture.js').CaptureValue} CaptureValue */
+/** @typedef {import('../../lib/people-search.js').PeopleSearchState} PeopleSearchState */
 
 /**
  * @typedef {object} RootCauseSectionProps
@@ -18,8 +19,11 @@ import { CaptureGroups } from '../../components/sections/cora-capture-groups.js'
  * @property {CaptureGroup[]} groups The Case Type's `rootCauseGroups`.
  * @property {Record<string, Map<string, boolean>>} collapsed
  *   Per Issue, the groups the viewer has opened or shut.
+ * @property {Record<string, Record<string, PeopleSearchState>>} peopleSearch
+ *   Per Issue, per `person` Root Cause Field: the open people search.
  * @property {boolean} canEdit Whether the viewer may write the Root Cause.
  * @property {(questionId: string, fieldKey: string, value: CaptureValue | null) => void} dispatchCapture
+ * @property {(questionId: string, fieldKey: string, query: string) => void} dispatchPersonQuery
  * @property {(questionId: string, groupKey: string, collapsed: boolean) => void} dispatchToggle
  */
 
@@ -92,11 +96,11 @@ function renderIssue(props, q, answer) {
     namePrefix: `rc-${q.id}-`,
     collapsed: props.collapsed[q.id] ?? new Map(),
     onToggle: (groupKey, next) => props.dispatchToggle(q.id, groupKey, next),
-    // Person fields are refused in Root Cause groups, so no picker is built.
-    peopleSearch: {},
+    peopleSearch: props.peopleSearch[q.id] ?? {},
     onCapture: (fieldKey, value) =>
       props.dispatchCapture(q.id, fieldKey, value),
-    onPersonQuery() {},
+    onPersonQuery: (fieldKey, query) =>
+      props.dispatchPersonQuery(q.id, fieldKey, query),
   });
   if (fields.length === 0) {
     li.appendChild(

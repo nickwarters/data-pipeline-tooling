@@ -80,8 +80,13 @@ switch holding only the final Complete (never the no-actions Complete, which has
 no manager to wait on) on `unfilledRequiredCapture(…, 'rcaCapture')`, and an
 amendment to this ADR.
 
-**Person fields** are refused in `rootCauseGroups` by the verify gate until the
-tab can search the directory for one under its own state.
+**Person fields** are allowed in `rootCauseGroups`. The page holds their people
+searches in their own route field, `rcaCaptureSearch`, beside the Issues tab's
+`captureSearch`, with their own debounce: a Root Cause Field may share a key with
+an Issue Capture Field on the same Answer, and a search keyed by Question and
+field alone would let one picker show, or close, the other's matches. The
+loader refreshes a stored person's display name in both slots in the one
+directory call it already makes.
 
 ## Consequences
 
