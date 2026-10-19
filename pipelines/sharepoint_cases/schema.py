@@ -2,12 +2,13 @@
 
 ``CaseVersion`` is one row per observation of a Case: the source's column
 names mechanically snake_cased and the columns typed, with nothing derived or
-reshaped. ``AnswerRow``, ``AnswerCaptureRow``, ``AnswerActionRow`` and
-``GeneralAnswerRow`` explode ``CaseVersion.answers``; ``ConversationMessageRow``
-and ``AppealRow`` explode ``conversation`` and ``appeals``; ``CaseDetailRow``
-explodes ``details``. See ``docs/data-dictionary-sharepoint-cases.md`` for the
-full field-level contract -- this module states the type declarations and the
-few non-obvious constraints behind them.
+reshaped. ``AnswerRow``, ``AnswerCaptureRow``, ``AnswerRootCauseRow``,
+``AnswerActionRow`` and ``GeneralAnswerRow`` explode ``CaseVersion.answers``;
+``ConversationMessageRow`` and ``AppealRow`` explode ``conversation`` and
+``appeals``; ``CaseDetailRow`` explodes ``details``. See
+``docs/data-dictionary-sharepoint-cases.md`` for the full field-level contract
+-- this module states the type declarations and the few non-obvious
+constraints behind them.
 
 Alongside the schemas, this module holds the feed's **declarations** -- the
 names it is known by and the identity a Case is keyed on. They live here
@@ -254,6 +255,41 @@ class AnswerCaptureRow:
 
 
 @dataclass
+class AnswerRootCauseRow:
+    """One row per observation x Question Definition x Root Cause Field,
+    exploded from one answer's flat ``rcaCapture`` map.
+
+    The Responsible Party Manager's frontline root-cause capture on a failed
+    Answer -- **not** the Reviewer's Issue capture, which is
+    ``AnswerCaptureRow``. The two share a value shape (plain text, or a person
+    as ``{loginName, displayName}``) and so share ``discriminate_capture_value``
+    and every column, but they are different people's records of different
+    things, so they are different tables. Which fields a Case Type declares
+    lives in the frontend's Case Type config, which this pipeline does not see;
+    ``field_key`` is that config's key, unvalidated here.
+    """
+
+    case_type: Annotated[str, NonNull()]
+    source_item_id: Annotated[str, NonNull()]
+    # datetime, not str -- see AnswerRow's own field for why.
+    source_modified_at: Annotated[datetime, NonNull()]
+    source_version: Annotated[str, NonNull()]
+    source_observation_id: Annotated[str, NonNull()]
+
+    question_id: Annotated[str, NonNull()]
+    field_key: Annotated[str, NonNull()]
+
+    # As AnswerCaptureRow: the reject label stays outside the OneOf.
+    value_kind: Annotated[str, NonNull(), OneOf(*CAPTURE_VALUE_KINDS)]
+    value_text: str
+
+    # The person arm: the login as the frontend stamped it, the same spelling
+    # AnswerCaptureRow.person_login holds.
+    person_login: str
+    person_display: str
+
+
+@dataclass
 class AnswerActionRow:
     """One row per observation x Question Definition x ticked Remediation
     Action, exploded from one answer's ``remediationActions`` list.
@@ -413,8 +449,9 @@ class PersonRow:
     """One row per person this feed has seen named: user details only.
 
     A person is named by the seven Person columns and inside the JSON blobs: a
-    person picked in an Issue Capture Field, a Conversation author, an
-    Appellant or resolver, whoever amended the Outcome. Each poll merges the
+    person picked in an Issue Capture Field or a Root Cause Field, a
+    Conversation author, an Appellant or resolver, whoever amended the
+    Outcome. Each poll merges the
     people its batch names into this table and upserts them on ``account``,
     each detail the latest any sighting gave.
 

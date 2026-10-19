@@ -55,6 +55,10 @@ ANSWERS_1 = {
             "field-note": "Called back within SLA.",
             "field-owner": {"loginName": "user-rp", "displayName": "Bola Okafor"},
         },
+        "rcaCapture": {
+            "rca-category": "Process gap",
+            "rca-accountable": {"loginName": "b.okafor", "displayName": "Bola Okafor"},
+        },
     },
     "general:complaint-channel": {"value": "Phone"},
 }
@@ -115,6 +119,7 @@ ANSWERS_2 = {
         ],
         "remediationStatus": {"status": "complete", "details": "Training finished."},
         "capture": {"field-note": "Called back within SLA."},
+        "rcaCapture": {"rca-category": "Training gap"},
     },
     "q-timeliness": {"value": "Yes"},
     "general:complaint-channel": {"value": "Email"},
@@ -159,6 +164,8 @@ SILVER_COUNTS = {
     "conversation_message": len(CONVERSATION_1) + len(CONVERSATION_2),
     "appeal": len(APPEALS_1) + len(APPEALS_2),
     "case_detail": len(DETAILS_1) + len(DETAILS_2),
+    "answer_root_cause": len(ANSWERS_1["q-root-cause"]["rcaCapture"])
+    + len(ANSWERS_2["q-root-cause"]["rcaCapture"]),
 }
 GOLD_COUNTS = {
     "answer": len(_question_ids(ANSWERS_2)),
@@ -168,6 +175,7 @@ GOLD_COUNTS = {
     "conversation_message": len(CONVERSATION_2),
     "appeal": len(APPEALS_2),
     "case_detail": len(DETAILS_2),
+    "answer_root_cause": len(ANSWERS_2["q-root-cause"]["rcaCapture"]),
 }
 assert set(SILVER_COUNTS) == set(GOLD_COUNTS) == set(DETAIL_GRAIN), (
     "the fixture must cover every declared Detail Table, no more and no less"
@@ -218,6 +226,16 @@ def test_the_whole_feed_refines_one_full_nest_case_to_gold_across_two_polls(tmp_
     assert {row["field_key"] for row in read_rows(med.gold, "answer_capture")} == {
         "field-note"
     }
+
+    assert {row["field_key"] for row in read_rows(med.silver, "answer_root_cause")} == {
+        "rca-category",
+        "rca-accountable",
+    }
+    [root_cause] = read_rows(med.gold, "answer_root_cause")
+    assert (root_cause["field_key"], root_cause["value_text"]) == (
+        "rca-category",
+        "Training gap",
+    )
 
     [general] = read_rows(med.gold, "general_answer")
     assert general["value_text"] == "Email"

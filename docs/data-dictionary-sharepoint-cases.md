@@ -1,13 +1,14 @@
 # Data dictionary — `sharepoint_cases`
 
 The filled-in entry for the `sharepoint_cases` feed, following
-[`data-dictionary-template.md`](data-dictionary-template.md). Twenty-five
+[`data-dictionary-template.md`](data-dictionary-template.md). Twenty-seven
 tables: the faithful raw observation, the typed Case version and its silver
 `answer`, `answer_capture`, `answer_action`, `general_answer`,
-`conversation_message`, `appeal` and `case_detail` Detail Tables, the silver
-`person` table of everyone the feed has seen named, and the fifteen gold
-tables — the current Case, the current details of every person, those same seven Detail Tables, and six aggregates, two of which reduce from a Detail Table rather than from
-the current Case. Every declared Case list
+`conversation_message`, `appeal`, `case_detail` and `answer_root_cause` Detail
+Tables, the silver `person` table of everyone the feed has seen named, and the
+sixteen gold tables — the current Case, the current details of every person,
+those same eight Detail Tables, and six aggregates, two of which reduce from a
+Detail Table rather than from the current Case. Every declared Case list
 lands in the same tables and is told apart by
 `case_type`. The
 Python contract is
@@ -74,17 +75,17 @@ dropped by `to_raw`'s `observation` transform for the same reason.
 ## Where a quarantined row lands
 
 Every silver step here is handed a quarantine Writer of its own, so a
-value-rule breach in *any* of the eight silver tables is routed aside rather
-than aborting the poll. A reject lands in
+value-rule breach in *any* of the silver tables — `case_version`, `person` and
+the eight Detail Tables — is routed aside rather than aborting the poll. A reject lands in
 `<base>/sharepoint_cases/quarantine.db`, in a table of the **same name as the
 silver table it was headed for**, carrying the row as it stood at the
 quarantine step plus `failed_rule` (every rule it breached), `logical_run_id`,
-`load_date` and `pipeline_run_id`. `answer_capture`'s reject keeps `raw_value`,
-which its silver step drops only *after* quarantining, so the offending value
-sits beside the reason.
+`load_date` and `pipeline_run_id`. `answer_capture`'s and
+`answer_root_cause`'s rejects keep `raw_value`, which their silver steps drop
+only *after* quarantining, so the offending value sits beside the reason.
 
-**All eight are declared in `migrations/sharepoint_cases/quarantine/`, including
-the five whose schema carries no rule that can fire yet.** This database is
+**Every one is declared in `migrations/sharepoint_cases/quarantine/`, including
+those whose schema carries no rule that can fire yet.** This database is
 under migration control, so a Writer will not create a missing table
 ([ADR-0025](adr/0025-sql-migrations-own-the-physical-table-shape.md)): an
 undeclared reject table is not a gap in the reject history but a
@@ -369,8 +370,8 @@ guessed at here would quarantine real data.
 One row per observation × Question Definition, exploded from `case_version`'s
 `answers` JSON map. `general:`-prefixed keys belong to the
 [`general_answer`](#general_answer--silver-layer-detail-table) table and are
-excluded before this table ever sees them; `remediationActions` and `capture`
-are separate Detail Tables of their own.
+excluded before this table ever sees them; `remediationActions`, `capture` and
+`rcaCapture` are separate Detail Tables of their own.
 
 ### Why this table reads silver, not raw
 
@@ -881,6 +882,86 @@ None.
 - A structural breach — a missing column, a wrong dtype, a null provenance
   column — still aborts the run.
 
+## `answer_root_cause` — silver layer (Detail Table)
+
+One row per observation × Question Definition × Root Cause Field, exploded
+from one answer's flat `rcaCapture` map — the **Responsible Party Manager's**
+frontline root-cause capture on a failed Answer, recorded in the Case Review
+Platform's Root Cause tab. It is not the Reviewer's Issue capture: that is
+`answer_capture`, exploded from the `capture` map beside it on the same
+answer. The two maps hold the same value shape, so this table is
+`answer_capture`'s twin column for column, built the same way
+(`to_silver_answer_root_cause`: two chained explodes, then
+`discriminate_capture_value`) — but they are different people's records of
+different things, so they are different tables
+([ADR-0033](adr/0033-root-cause-values-land-as-a-detail-table-and-the-config-is-not-exported.md)).
+
+No SharePoint column carries it — `rcaCapture` lives inside the existing
+`Answers` blob — so raw and `case_version` are unchanged by it. An answer
+without `rcaCapture`, or with a null or empty one, contributes zero rows, not
+an error: that is every answer on a Case Type that declares no Root Cause
+fields.
+
+**Which fields a Case Type declares is not visible here.** The Root Cause field
+configuration (keys, labels, types, options) lives in the frontend's Case Type
+modules and is not exported to the pipeline, so `field_key` is landed as the
+key the frontend wrote, unvalidated — see *Considered and deferred: Root Cause
+configuration*, below.
+
+### Part A — Table / Feed overview
+
+| Attribute | Value |
+|-----------|-------|
+| **Table / Feed name** | `answer_root_cause` |
+| **Subject / Case Type** | `sharepoint_cases` |
+| **Medallion layer** | silver |
+| **Grain** | one row per observation × Question Definition × Root Cause Field |
+| **Is this a Case Type?** | No — a Detail Table hanging off `case_version` |
+| **Natural key → `case_id`** | `schema.NATURAL_KEY`, via `DETAIL_ID_VARS` — applied at gold, not here |
+| **Source system** | the settled `case_version` batch just fetched (not the whole silver history) |
+| **Reader** | `DatasetReader` over that batch |
+| **Load strategy** | `AppendOnly(("source_observation_id", "question_id", "field_key"))` — composite, because one observation yields many root-cause rows |
+| **Upstream dependencies** | none declared — the batch is in memory, not reread from silver |
+| **Schedule / freshness** | with the poll, alongside the other Detail Tables |
+| **Owner / data steward** | *<team>* |
+| **Source of truth doc** | `pipelines/sharepoint_cases/schema.py` (`AnswerRootCauseRow`) |
+| **Last reviewed** | 2026-10-19 |
+
+### Part B — Field dictionary
+
+| Field | Source path | Type | Nullable | Value rules | Description | Example | Sensitivity |
+|-------|--------------|------|----------|-------------|-------------|---------|-------------|
+| `case_type` | *(from `case_version`)* | `str` | No | `NonNull` | The settled Case Type. | `complaints` | None |
+| `source_item_id` | *(from `case_version`)* | `str` | No | `NonNull` | The list item observed. | `101` | Internal |
+| `source_modified_at` | *(from `case_version`)* | `datetime` | No | `NonNull` | When the observation was made. | `2026-08-05T08:10:00+00:00` | None |
+| `source_version` | *(from `case_version`)* | `str` | No | `NonNull` | The version observed. | `"3"` | None |
+| `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
+| `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema. | *(32-char hex)* | None |
+| `question_id` | the `answers` map's key | `str` | No | `NonNull` | The failed Question Definition this root cause belongs to. | `q-root-cause` | None |
+| `field_key` | the `rcaCapture` map's key | `str` | No | `NonNull` | The Root Cause Field key, as the Case Type's frontend config declares it — not validated here. | `rca-category` | None |
+| `value_kind` | *(derived)* | `str` | No | `NonNull`, `OneOf(text, person)` | Which arm the value discriminated to, by `answer_capture`'s own `discriminate_capture_value`; anything else is stamped `unsupported` and quarantines. | `text` | None |
+| `value_text` | the `rcaCapture` map's value | `str` | Yes | — | Filled for the `text` arm only (a select's chosen option lands here as its text). | `Process gap` | Internal |
+| `person_login` | `rcaCapture[field_key].loginName` | `str` | Yes | — | Filled for the `person` arm only — the login as the frontend stamped it, the same spelling `answer_capture.person_login` holds. | `b.okafor` | PII |
+| `person_display` | `rcaCapture[field_key].displayName` | `str` | Yes | — | Filled for the `person` arm only. Cached at selection time; not looked up here. | `Bola Okafor` | PII |
+
+A person value's `domain` and `email` are not landed here, as in
+`answer_capture`; they reach the `person` table instead.
+
+### Part C — Row checks
+
+None.
+
+### Part D — Quarantine & data quality
+
+- Exactly as `answer_capture`: `value_kind` is the only value rule that can
+  quarantine a row, the discriminator is total, and the reject row in
+  `quarantine.db`'s `answer_root_cause` keeps `raw_value` beside the reason.
+- A malformed `answers` or `rcaCapture` blob is a feed defect: the chained
+  `ExplodeJsonMap` passes raise `JsonShapeError` and abort the run before
+  anything from that batch commits.
+- A structural breach — a missing column, a wrong dtype, a null provenance
+  column — still aborts the run.
+
 ## `person` — silver layer
 
 One row per person this feed has seen named: **user details only** — the bare
@@ -900,6 +981,7 @@ Person columns are reduced and their display names and emails dropped.
 |--------|---------|--------|--------------|-------|
 | the seven Person columns | `…/Name`, reduced | from the claims login | `…/Title` | `…/EMail` |
 | `Answers` — a captured person | `capture[field_key].loginName` | `capture[field_key].domain` | `capture[field_key].displayName` | `capture[field_key].email` |
+| `Answers` — a Root Cause person | `rcaCapture[field_key].loginName` | `rcaCapture[field_key].domain` | `rcaCapture[field_key].displayName` | `rcaCapture[field_key].email` |
 | `Conversation` | `author.loginName` | — | `author.displayName` | — |
 | `Appeals` | `appellant`, `resolution.resolver` | — | — | — |
 | `AmendedOutcome` | `amendedBy` | — | — | — |
@@ -954,7 +1036,7 @@ else as they were.
 
 It joins to every person column in this feed on `account`: `case_current`'s
 seven `…_name` columns, `answer_capture.person_login`,
-`conversation_message.author_login`, `appeal.appellant` and
+`answer_root_cause.person_login`, `conversation_message.author_login`, `appeal.appellant` and
 `resolution_resolver`, and `case_current.amended_by`. A bare account is assumed
 unique across domains, so a person seen in two domains is one row holding the
 domain seen last.
@@ -1017,6 +1099,7 @@ everything.
 | `conversation_message` | `case_id` × `seq` | the winning observation's Conversation messages |
 | `appeal` | `case_id` × `appeal_id` | the winning observation's Appeals |
 | `case_detail` | `case_id` × `field_key` | the winning observation's Case Details fields |
+| `answer_root_cause` | `case_id` × `question_id` × `field_key` | the winning observation's Root Cause rows |
 | `case_counts_current` | brand × `case_type` × `assigned_reviewer_name` × `status` | `case_count` |
 | `case_age_buckets_current` | brand × `case_type` × `assigned_reviewer_name` × `age_bucket` × `status` | `case_count` |
 | `case_age_from_assigned_buckets_current` | brand × `case_type` × `assigned_reviewer_name` × `age_bucket` × `status` | `case_count` |
@@ -1183,6 +1266,26 @@ is therefore a tripwire, the same role it plays below `case_current`'s own
 reduction — kept for the case a future change gets it wrong, not because
 today's data could trip it.
 
+### `answer_root_cause`
+
+| Attribute | Value |
+|-----------|-------|
+| **Grain** | `case_id` × `question_id` × `field_key` |
+| **Load strategy** | `Refresh()` |
+| **Source** | silver `answer_root_cause`'s accumulated history, semi-joined to `case_current`'s winning `(case_id, source_observation_id)` pairs |
+| **Columns** | every silver `answer_root_cause` column, plus `case_id` and `as_of_utc` |
+
+Reduced by the same `to_gold_detail`, per the same rule as `answer` above, and
+`answer_capture`'s twin in every respect but its source map. A Root Cause the
+Manager clears, or one that disappears because its question stopped failing,
+is absent from the winning observation's `rcaCapture`, and the semi-join reads
+that absence correctly: the Case contributes no rows for it, though silver
+keeps the earlier observation's rows. A report rolling Root Causes up by team
+joins `case_current` on `case_id` and reads `responsible_party_manager_name`
+for the record (who managed the Responsible Party when they were set on the
+Case) or `current_responsible_party_manager_name` for who manages them now —
+see *The two manager pairs*, above.
+
 ### `as_of_utc`, on every table
 
 `as_of_utc` is the **candidate SharePoint window end** — the instant this run is
@@ -1276,8 +1379,8 @@ Two things to know about what this table holds:
   beside its typed rows — is exactly the duplication the normalisation
   removes, and the blob is the arm no schema enforcement, value rule or
   grain validation can say anything about. Where each blob's data now
-  lives: `answers` in the gold `answer`, `answer_capture`, `answer_action`
-  and `general_answer` Detail Tables; `conversation` in
+  lives: `answers` in the gold `answer`, `answer_capture`, `answer_action`,
+  `general_answer` and `answer_root_cause` Detail Tables; `conversation` in
   `conversation_message`; `appeals` in `appeal`; `details` in `case_detail`;
   `amended_outcome` in the flattened `amended_*` columns on this very table.
   The landed blob text itself remains readable in silver `case_version`,
@@ -1521,6 +1624,13 @@ rather than deferred quietly. Each earns its refusal on its own terms.
   all — a login is an identity, not a measure. Its real home is the Reporting
   pipeline's per-Case-Type pivots, which can shape a typed, per-field view
   this Case-Type-agnostic ingest feed cannot.
+- **Root Cause field values** (`case_type` × `question_id` × `field_key` ×
+  `value_text`) — deferred, for the same reason as capture values (a free-text
+  Root Cause field is close to one value per Case, and a person is an identity,
+  not a measure) and one more: the per-Case-Type Root Cause field
+  configuration is not exported to the pipeline yet, so a count could not tell
+  a select field's closed options from free text, nor label a field. A report
+  that needs one reads gold `answer_root_cause` directly.
 - **Conversation latency** (`case_id`, or `case_type` × author side) —
   refused. `case_current.awaiting_responsible_party` and
   `case_current.awaiting_since` are already source-written and already answer
@@ -1530,3 +1640,15 @@ rather than deferred quietly. Each earns its refusal on its own terms.
   `case_current`'s Person columns, which share one spelling — but it would
   still be that second spelling. #356, the in-app clock, is the related
   inverse and should be read before re-proposing this.
+
+### Considered and deferred: Root Cause configuration
+
+Which Root Cause fields a Case Type declares — their keys, labels, types and a
+select's options — lives in the frontend's Case Type modules, beside the Issue
+Capture configuration, and is **not exported** to the pipeline. So
+`answer_root_cause.field_key` is landed unvalidated and unlabelled. Exporting
+it was considered and deferred until a report needs it: widening the
+question-bank export would change every bank's version identity for a change
+that is not about questions, and the alternative — a sibling export and a
+Shared Reader over it — is a new feed for a consumer that does not exist yet
+([ADR-0033](adr/0033-root-cause-values-land-as-a-detail-table-and-the-config-is-not-exported.md)).

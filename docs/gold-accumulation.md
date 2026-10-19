@@ -304,10 +304,12 @@ key — `answer` on `(source_observation_id, question_id)`, `answer_capture` on
 `(source_observation_id, general_key)`, `conversation_message` on
 `(source_observation_id, seq)`, `appeal` on
 `(source_observation_id, appeal_id)`, `case_detail` on
-`(source_observation_id, field_key)` — because the observation alone is not
-its grain: one observation yields many child rows, one per question,
-catalogue key, message, Appeal or Case Details field (and, for the two
-field-level answer tables, one per field or action within that question), and
+`(source_observation_id, field_key)`, `answer_root_cause` on
+`(source_observation_id, question_id, field_key)` — because the observation
+alone is not its grain: one observation yields many child rows, one per
+question, catalogue key, message, Appeal or Case Details field (and, for the
+three field-level answer tables, one per field or action within that
+question), and
 a single-column key would raise on
 the second of any of them for the same Case.
 
@@ -333,5 +335,5 @@ re-read from disk would see a stale or missing table.
 each `(table, step, transform)` entry reads, so the loop needs no branch —
 only a table naming a Detail Table as its source is looked up any
 differently. A Detail Table's dataset is kept in memory only when
-`DETAIL_AGGREGATES` names it as a source, so the other five Detail Tables'
+`DETAIL_AGGREGATES` names it as a source, so the other six Detail Tables'
 frames are freed once written rather than held for nobody to read.

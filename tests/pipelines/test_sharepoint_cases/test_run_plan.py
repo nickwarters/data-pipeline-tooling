@@ -100,8 +100,9 @@ def test_raw_lands_the_observation_without_a_gate(recorded):
 def test_every_silver_table_is_enforced_in_order_before_it_writes(recorded):
     # coerce / quarantine / schema_validator are ``enforce``'s three steps: it
     # is shorthand for the sequence, not a step of its own. Whether a table
-    # spells them out (answer_capture drops raw_value between the quarantine
-    # and the validate) or calls the shorthand, the order is the same promise.
+    # spells them out (answer_capture and answer_root_cause drop raw_value
+    # between the quarantine and the validate) or calls the shorthand, the
+    # order is the same promise.
     for prefix in (SILVER, *SILVER_DETAIL, SILVER_PERSON):
         steps = steps_of(recorded, prefix)
         assert_in_order(steps, "read", *ENFORCE, "write")
