@@ -13,6 +13,7 @@ export { captureDisplayText, isEmptyCaptureValue } from './capture-values.js';
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').CaptureField} CaptureField */
 /** @typedef {import('../sharepoint-client.js').CaptureGroup} CaptureGroup */
+/** @typedef {import('../sharepoint-client.js').CaptureSlot} CaptureSlot */
 
 /**
  * Load-time check that every `CaptureField.key` is unique across all groups of a
@@ -87,20 +88,24 @@ function validateCaptureWrite(field, value) {
 }
 
 /**
- * Records a single Issue Capture value against an Answer, returning a
- * fresh Answer with the value stored inline under `capture[field.key]`. Mirrors
- * the configurable remediation-detail capture, generalised to the unified engine.
+ * Records a single capture value against an Answer, returning a fresh Answer
+ * with the value stored inline under `answer[slot][field.key]`. Mirrors the
+ * configurable remediation-detail capture, generalised to the unified engine.
  *
  * An empty value clears the key rather than storing emptiness, and is never
- * validated: clearing a field must stay possible whatever its options say.
+ * validated: clearing a field must stay possible whatever its options say. A
+ * slot left with no keys is dropped from the Answer, so an empty one is never
+ * stored.
  *
  * @param {Answer} answer
  * @param {CaptureField} field
  * @param {CaptureValue | null | undefined} value
+ * @param {CaptureSlot} slot
  * @returns {Answer}
  */
-function captureValue(answer, field, value) {
-  const capture = { ...answer.capture };
+function captureValue(answer, field, value, slot) {
+  /** @type {Record<string, unknown>} */
+  const capture = { ...answer[slot] };
   if (isEmptyCaptureValue(value)) {
     delete capture[field.key];
   } else {
@@ -108,10 +113,10 @@ function captureValue(answer, field, value) {
     capture[field.key] = /** @type {CaptureValue} */ (value);
   }
   if (Object.keys(capture).length === 0) {
-    const { capture: _drop, ...rest } = answer;
+    const { [slot]: _drop, ...rest } = answer;
     return rest;
   }
-  return { ...answer, capture };
+  return { ...answer, [slot]: capture };
 }
 
 /**
@@ -120,7 +125,7 @@ function captureValue(answer, field, value) {
  * so `answered` works on one; `equals`/`in` against a person are not
  * meaningful, and the verify gate refuses a Case Type that writes one.
  *
- * @param {NonNullable<Answer['capture']>} capture
+ * @param {Record<string, unknown>} capture
  * @returns {Record<string, { value: string }>}
  */
 function captureConditionValues(capture) {
@@ -139,7 +144,7 @@ function captureConditionValues(capture) {
  * so a Case Type Owner learns one conditional vocabulary rather than two.
  *
  * @param {CaptureField[]} fields
- * @param {NonNullable<Answer['capture']>} capture
+ * @param {Record<string, unknown>} capture
  * @returns {CaptureField[]}
  */
 export function visibleCaptureFields(fields, capture) {
@@ -166,19 +171,31 @@ export function visibleCaptureFields(fields, capture) {
  * Type has stopped declaring, and pruning it would be this write deciding to
  * delete history it knows nothing about.
  *
+ * `slot` names the Answer property the groups write to. Issue capture is the
+ * default; Root Cause capture passes `'rcaCapture'`. Visibility and pruning
+ * read only that slot, so one slot's writes never touch the other's values.
+ *
  * @param {Answer} answer
  * @param {CaptureGroup[]} groups
  * @param {string} fieldKey
  * @param {CaptureValue | null | undefined} value
+ * @param {CaptureSlot} [slot]
  * @returns {Answer | null}
  */
-export function applyCapture(answer, groups, fieldKey, value) {
+export function applyCapture(
+  answer,
+  groups,
+  fieldKey,
+  value,
+  slot = 'capture'
+) {
   const field = findCaptureField(groups, fieldKey);
   if (!field) return null;
 
-  let next = captureValue(answer, field, value);
+  let next = captureValue(answer, field, value, slot);
   for (;;) {
-    const capture = next.capture ?? {};
+    /** @type {Record<string, unknown>} */
+    const capture = next[slot] ?? {};
     const visible = new Set(
       groups.flatMap((group) =>
         visibleCaptureFields(group.fields, capture).map((f) => f.key)
@@ -190,7 +207,7 @@ export function applyCapture(answer, groups, fieldKey, value) {
         (f) => !visible.has(f.key) && !isEmptyCaptureValue(capture[f.key])
       );
     if (hidden.length === 0) return next;
-    for (const stale of hidden) next = captureValue(next, stale, null);
+    for (const stale of hidden) next = captureValue(next, stale, null, slot);
   }
 }
 
@@ -203,19 +220,29 @@ export function applyCapture(answer, groups, fieldKey, value) {
  * `required` field a `showWhen` has hidden gates nothing, which is what lets a
  * Case Type ask for detail on one branch without demanding it on the others.
  *
+ * `slot` names the Answer property the groups are recorded in, as for
+ * `applyCapture`.
+ *
  * @param {QuestionDefinition[]} catalogue
  * @param {Record<string, Answer>} answers
  * @param {CaptureGroup[]} groups
+ * @param {CaptureSlot} [slot]
  * @returns {boolean}
  */
-export function unfilledRequiredCapture(catalogue, answers, groups) {
+export function unfilledRequiredCapture(
+  catalogue,
+  answers,
+  groups,
+  slot = 'capture'
+) {
   if (!groups.length) return false;
   const applicable = evaluate(catalogue, answers);
   for (const question of catalogue) {
     if (!applicable.has(question.id)) continue;
     const answer = answers[question.id];
     if (!isFailure(question, answer)) continue;
-    const capture = answer?.capture ?? {};
+    /** @type {Record<string, unknown>} */
+    const capture = answer?.[slot] ?? {};
     for (const group of groups) {
       for (const field of visibleCaptureFields(group.fields, capture)) {
         if (field.required && isEmptyCaptureValue(capture[field.key])) {

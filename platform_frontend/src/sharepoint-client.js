@@ -54,7 +54,19 @@
  * serialised — undecided blocks completion, decided-no does not, and a `false`
  * written into the JSON blob reads the same as a field that was never there.
  *
- * @typedef {{ value: string | string[], justification?: string, remediationRequired?: 'yes' | 'no', remediationActions?: Array<{id: string, text: string}>, freeFormRemediation?: string, remediationStatus?: RemediationStatus, capture?: Record<string, string | { loginName: string, displayName: string, domain?: string, email?: string } | Array<string | RemediationAction>> }} Answer
+ * `capture` holds what the Reviewer records against a failed Answer;
+ * `rcaCapture` is the same shape, held apart, for what the Responsible Party
+ * Manager records about its root cause. Each is a **capture slot**: one engine
+ * writes both, and neither ever reads the other's keys.
+ *
+ * @typedef {{ value: string | string[], justification?: string, remediationRequired?: 'yes' | 'no', remediationActions?: Array<{id: string, text: string}>, freeFormRemediation?: string, remediationStatus?: RemediationStatus, capture?: Record<string, string | { loginName: string, displayName: string, domain?: string, email?: string } | Array<string | RemediationAction>>, rcaCapture?: Record<string, string | { loginName: string, displayName: string, domain?: string, email?: string }> }} Answer
+ */
+
+/**
+ * The Answer property a capture write lands in: `capture` for Issue capture,
+ * `rcaCapture` for Root Cause capture.
+ *
+ * @typedef {'capture' | 'rcaCapture'} CaptureSlot
  */
 
 /**

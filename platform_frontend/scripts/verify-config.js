@@ -209,7 +209,9 @@ export async function checkCaseTypes(options = {}) {
       );
     }
 
-    failures.push(...checkCaptureGroups(entry.slug, file, config));
+    failures.push(
+      ...checkCaptureGroups(entry.slug, file, config, ISSUE_CAPTURE)
+    );
     failures.push(...checkQuestions(entry.slug, file, config));
     failures.push(...checkSections(entry.slug, file, config));
     failures.push(...checkQuestionGroups(entry.slug, file, config));
@@ -247,9 +249,35 @@ const CAPTURE_FIELD_TYPES = captureFieldTypeNames();
 const CHOICE_CAPTURE_TYPES = ['select', 'radio'];
 
 /**
- * Shape checks over a Case Type's `captureGroups`: every field is one the
- * engine can render, choice fields offer something to choose, and a person
- * offers nothing to choose from.
+ * One family of capture groups a Case Type may declare, and the words a
+ * failure about it is written in. The capture engine writes every family the
+ * same way, so the gate checks every family with the same rules.
+ *
+ * @typedef {object} CaptureGroupsSpec
+ * @property {string} property The Case Type key the groups are declared under.
+ * @property {string} fieldNoun What one field is called, e.g. "Issue Capture Field".
+ * @property {string} groupNoun What one group is called.
+ * @property {string} recorder Who fills the fields in, for a failure that says who is left stuck.
+ * @property {string[]} types The field types this family may declare.
+ */
+
+/**
+ * The Reviewer's Issue capture, declared as `captureGroups`.
+ *
+ * @type {CaptureGroupsSpec}
+ */
+const ISSUE_CAPTURE = {
+  property: 'captureGroups',
+  fieldNoun: 'Issue Capture Field',
+  groupNoun: 'Issue Capture Group',
+  recorder: 'the Reviewer',
+  types: CAPTURE_FIELD_TYPES,
+};
+
+/**
+ * Shape checks over one family of a Case Type's capture groups: every field is
+ * one the family may declare, choice fields offer something to choose, and a
+ * person offers nothing to choose from.
  *
  * The duplicate-key rule is the loader's own `validateCaptureGroups`, not a
  * second copy of it — the gate and the browser must agree on what a colliding
@@ -258,9 +286,10 @@ const CHOICE_CAPTURE_TYPES = ['select', 'radio'];
  * @param {string} slug
  * @param {string} file
  * @param {any} config
+ * @param {CaptureGroupsSpec} spec
  * @returns {Failure[]}
  */
-function checkCaptureGroups(slug, file, config) {
+function checkCaptureGroups(slug, file, config, spec) {
   /** @type {Failure[]} */
   const failures = [];
   /** @param {string} message */
@@ -271,14 +300,14 @@ function checkCaptureGroups(slug, file, config) {
       message: `Case Type "${slug}": ${message}`,
     });
 
-  const groups = config?.captureGroups;
+  const groups = config?.[spec.property];
   // Most Case Types declare none, so absent is fine. Anything else the loader
   // cannot iterate would break every Case of this type at load — exactly the
   // authoring error the gate exists to catch first.
   if (groups === undefined || groups === null) return failures;
   if (!Array.isArray(groups)) {
     fail(
-      '`captureGroups` is present but is not a list, so no Case of this Case Type would load'
+      `\`${spec.property}\` is present but is not a list, so no Case of this Case Type would load`
     );
     return failures;
   }
@@ -291,9 +320,9 @@ function checkCaptureGroups(slug, file, config) {
 
   for (const group of groups) {
     for (const field of group?.fields ?? []) {
-      if (!CAPTURE_FIELD_TYPES.includes(field?.type)) {
+      if (!spec.types.includes(field?.type)) {
         fail(
-          `Issue Capture Field "${field?.key}" declares type "${field?.type}", which nothing renders — use one of: ${CAPTURE_FIELD_TYPES.join(', ')}`
+          `${spec.fieldNoun} "${field?.key}" declares type "${field?.type}", which nothing renders — use one of: ${spec.types.join(', ')}`
         );
         continue;
       }
@@ -303,27 +332,27 @@ function checkCaptureGroups(slug, file, config) {
         (!Array.isArray(options) || options.length === 0)
       ) {
         fail(
-          `Issue Capture Field "${field.key}" is a ${field.type} with no \`options\`, so the Reviewer has nothing to choose`
+          `${spec.fieldNoun} "${field.key}" is a ${field.type} with no \`options\`, so ${spec.recorder} has nothing to choose`
         );
       }
       if (field.type === 'person' && options !== undefined) {
         fail(
-          `Issue Capture Field "${field.key}" is a person and also declares \`options\`, which nothing reads — a person is chosen from the directory`
+          `${spec.fieldNoun} "${field.key}" is a person and also declares \`options\`, which nothing reads — a person is chosen from the directory`
         );
       }
       if (field.required !== undefined && typeof field.required !== 'boolean') {
         fail(
-          `Issue Capture Field "${field.key}" declares a non-boolean \`required\`, which the completion gate would read as always required`
+          `${spec.fieldNoun} "${field.key}" declares a non-boolean \`required\`, which the completion gate would read as always required`
         );
       }
     }
-    failures.push(...checkCaptureShowWhen(slug, file, group));
+    failures.push(...checkCaptureShowWhen(slug, file, group, spec));
   }
   return failures;
 }
 
 /**
- * The `showWhen` rules of one Issue Capture Group: shaped like a condition,
+ * The `showWhen` rules of one capture group: shaped like a condition,
  * pointing only at a sibling in the same group, and free of cycles.
  *
  * Same-group is a policy the gate enforces and the runtime does not: field keys
@@ -336,9 +365,10 @@ function checkCaptureGroups(slug, file, config) {
  * @param {string} slug
  * @param {string} file
  * @param {any} group
+ * @param {CaptureGroupsSpec} spec
  * @returns {Failure[]}
  */
-function checkCaptureShowWhen(slug, file, group) {
+function checkCaptureShowWhen(slug, file, group, spec) {
   /** @type {Failure[]} */
   const failures = [];
   /** @param {string} message */
@@ -352,7 +382,7 @@ function checkCaptureShowWhen(slug, file, group) {
   const fields = group?.fields ?? [];
   for (const field of fields) {
     for (const problem of malformedNodes(field?.showWhen)) {
-      fail(`Issue Capture Field "${field.key}" has a showWhen ${problem}`);
+      fail(`${spec.fieldNoun} "${field.key}" has a showWhen ${problem}`);
     }
   }
   // Every check below walks the condition tree, and a node that is not shaped
@@ -364,17 +394,17 @@ function checkCaptureShowWhen(slug, file, group) {
     for (const ref of showWhenReferences(field?.showWhen)) {
       if (ref === field.key) {
         fail(
-          `Issue Capture Field "${field.key}" has a showWhen that references itself`
+          `${spec.fieldNoun} "${field.key}" has a showWhen that references itself`
         );
       } else if (!keys.has(ref)) {
         fail(
-          `Issue Capture Field "${field.key}" has a showWhen reference to "${ref}", which is not a field of its own group "${group.key}"`
+          `${spec.fieldNoun} "${field.key}" has a showWhen reference to "${ref}", which is not a field of its own group "${group.key}"`
         );
       }
     }
     for (const siblings of ignoredSiblingKeys(field?.showWhen)) {
       fail(
-        `Issue Capture Field "${field.key}" has a showWhen node holding ${siblings} together — the evaluator stops at the first of \`$and\`/\`$or\` and ignores everything beside it`
+        `${spec.fieldNoun} "${field.key}" has a showWhen node holding ${siblings} together — the evaluator stops at the first of \`$and\`/\`$or\` and ignores everything beside it`
       );
     }
   }
@@ -391,7 +421,7 @@ function checkCaptureShowWhen(slug, file, group) {
     for (const ref of valueComparedKeys(field?.showWhen)) {
       if (personKeys.has(ref)) {
         fail(
-          `Issue Capture Field "${field.key}" has a showWhen comparing the value of "${ref}", which is a person — only \`answered\` is meaningful against one`
+          `${spec.fieldNoun} "${field.key}" has a showWhen comparing the value of "${ref}", which is a person — only \`answered\` is meaningful against one`
         );
       }
     }
@@ -406,7 +436,7 @@ function checkCaptureShowWhen(slug, file, group) {
   }));
   if (detectCycles(asGraph)) {
     fail(
-      `Issue Capture Group "${group.key}" has a showWhen cycle, so its fields could never settle`
+      `${spec.groupNoun} "${group.key}" has a showWhen cycle, so its fields could never settle`
     );
   }
   return failures;
