@@ -192,6 +192,11 @@ const config = {
           type: 'text',
           showWhen: { preventable: { equals: 'Yes' } },
         },
+        {
+          key: 'fixOwner',
+          label: 'Who will put it right',
+          type: 'person',
+        },
       ],
     },
   ],

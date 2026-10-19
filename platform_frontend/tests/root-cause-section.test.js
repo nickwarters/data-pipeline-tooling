@@ -308,7 +308,7 @@ test('verify-config holds rootCauseGroups and sections.rootCause in step', async
   assert.match(sectionOnly[0].message, /declares no `rootCauseGroups`/);
 });
 
-test('verify-config refuses a person Root Cause Field, and checks the rest like Issue capture', async () => {
+test('verify-config accepts a person Root Cause Field, and checks the rest like Issue capture', async () => {
   const failures = await checkCaseTypes({
     caseTypes: [
       demoEntry({
@@ -327,7 +327,7 @@ test('verify-config refuses a person Root Cause Field, and checks the rest like 
     ],
   });
   const messages = failures.map((failure) => failure.message).join('\n');
-  assert.match(messages, /Root Cause Field "who" declares type "person"/);
+  assert.doesNotMatch(messages, /"who"/);
   assert.match(
     messages,
     /Root Cause Field "kind" is a select with no `options`/
@@ -432,7 +432,7 @@ test('an Answer that stops failing loses its Root Cause with the failure', () =>
 /**
  * Mount the shipped Root Cause panel.
  *
- * @param {{ answers?: any, access?: string, sectionState?: any }} [options]
+ * @param {{ answers?: any, access?: string, sectionState?: any, groups?: any[], rcaCaptureSearch?: any }} [options]
  */
 function rootCausePanel(options = {}) {
   /** @type {any[]} */
@@ -445,12 +445,22 @@ function rootCausePanel(options = {}) {
       access: { rootCause: options.access ?? 'edit' },
       sectionLabels: {},
     },
-    config: rootCauseConfig(),
+    config: rootCauseConfig(
+      options.groups ? { rootCauseGroups: options.groups } : {}
+    ),
+    route: {
+      captureSearch: {},
+      rcaCaptureSearch: options.rcaCaptureSearch ?? {},
+    },
     sectionState: options.sectionState,
     dispatch: (/** @type {any} */ action) => calls.push(['dispatch', action]),
     actions: {
       currentAnswers: () => answers,
       editAnswers: (/** @type {any} */ next) => calls.push(['edit', next]),
+      requestCaptureSearch: (/** @type {any[]} */ ...args) =>
+        calls.push(['search', ...args]),
+      clearCaptureSearch: (/** @type {any[]} */ ...args) =>
+        calls.push(['clear', ...args]),
     },
   });
   const root = document.createElement('div');
@@ -468,7 +478,50 @@ test('the manager records a Root Cause Field against an Issue', () => {
   fireEvent(no, 'change');
   assert.deepEqual(calls, [
     ['edit', { q1: { value: 'No', rcaCapture: { preventable: 'No' } } }],
+    ['clear', 'q1', 'preventable', 'rcaCapture'],
   ]);
+});
+
+/** @type {import('../src/sharepoint-client.js').CaptureGroup[]} */
+const PERSON_GROUPS = [
+  {
+    key: 'cause',
+    label: 'Cause',
+    fields: [{ key: 'owner', label: 'Owner', type: 'person' }],
+  },
+];
+
+const JANE = { loginName: 'corp\\jsmith', displayName: 'Jane Smith' };
+
+test("the manager picks a person Root Cause Field from the directory, under the Root Cause's own search", () => {
+  const { root, calls } = rootCausePanel({
+    groups: PERSON_GROUPS,
+    rcaCaptureSearch: { q1: { owner: { query: 'Ja', people: [JANE] } } },
+  });
+
+  const input = getByRole(root, 'combobox', {
+    name: 'Search people for Owner',
+  });
+  assert.equal(input.value, 'Ja', 'the open search is the Root Cause one');
+  input.value = 'Jan';
+  fireEvent(input, 'input');
+  assert.deepEqual(calls, [['search', 'q1', 'owner', 'Jan', 'rcaCapture']]);
+
+  fireEvent(getByRole(root, 'option', { name: /Jane Smith/ }), 'click');
+  assert.deepEqual(calls.slice(1), [
+    ['edit', { q1: { value: 'No', rcaCapture: { owner: JANE } } }],
+    ['clear', 'q1', 'owner', 'rcaCapture'],
+  ]);
+});
+
+test('a reader sees a recorded person by name, with no picker', () => {
+  const { root } = rootCausePanel({
+    access: 'read-only',
+    groups: PERSON_GROUPS,
+    answers: { q1: { value: 'No', rcaCapture: { owner: JANE } } },
+  });
+  assert.equal(queryAllByRole(root, 'combobox').length, 0);
+  assert.match(root.textContent ?? '', /Owner: Jane Smith/);
 });
 
 test('a reader sees what was recorded, as text, and no controls', () => {

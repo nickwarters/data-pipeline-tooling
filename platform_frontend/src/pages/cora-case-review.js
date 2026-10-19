@@ -108,6 +108,10 @@ import { voidReasonText } from '../lib/void-reasons.js';
  *   Per failed Answer, per `person` Issue Capture Field: the open people search.
  *   Nested rather than keyed by a joined string so a panel can hand one
  *   Answer's searches straight to its capture view.
+ * @property {Record<string, Record<string, PeopleSearchState>>} rcaCaptureSearch
+ *   The same, for each `person` Root Cause Field. Held apart from
+ *   `captureSearch` because a Root Cause Field may share a key with an Issue
+ *   Capture Field, and the two pickers must not see each other's results.
  * @property {PeopleSearchState} responsiblePartySearch
  *   One search, not one per Question: the Responsible Party is a Case-level
  *   field, so there is only ever one of these boxes open.
@@ -154,6 +158,7 @@ export function createInitialCaseReviewState(chrome) {
         voidPending: false,
         captureCollapsed: {},
         captureSearch: {},
+        rcaCaptureSearch: {},
         responsiblePartySearch: { query: '', people: [], status: 'idle' },
         sections: {},
         snapshot: null,
@@ -205,6 +210,18 @@ function selectAdjacentTab(event, tabs, activeTab, dispatch) {
     );
     /** @type {any} */ (button)?.focus?.();
   });
+}
+
+/**
+ * Which route field holds a capture search action's people searches: the Root
+ * Cause Fields' when the action names the `rcaCapture` slot, the Issue Capture
+ * Fields' otherwise.
+ *
+ * @param {{ slot?: import('../sharepoint-client.js').CaptureSlot }} action
+ * @returns {'captureSearch' | 'rcaCaptureSearch'}
+ */
+function captureSearchSlot(action) {
+  return action.slot === 'rcaCapture' ? 'rcaCaptureSearch' : 'captureSearch';
 }
 
 /**
@@ -322,11 +339,12 @@ export function caseReviewReducer(state, action) {
     });
   }
   if (action.type === 'case/capture-search-input') {
-    const current = route.captureSearch[action.questionId]?.[action.fieldKey];
+    const searches = route[captureSearchSlot(action)];
+    const current = searches[action.questionId]?.[action.fieldKey];
     // Prior matches remain visible/selectable for up to 200ms; retaining real
     // directory people avoids flicker until the new search starts.
     return patchRoute(state, 'caseReview', {
-      captureSearch: withCaptureSearch(route.captureSearch, action, {
+      [captureSearchSlot(action)]: withCaptureSearch(searches, action, {
         query: action.query,
         people: action.query.trim() ? (current?.people ?? []) : [],
         status: 'idle',
@@ -334,24 +352,25 @@ export function caseReviewReducer(state, action) {
     });
   }
   if (action.type === 'case/capture-search-results') {
-    const current = route.captureSearch[action.questionId]?.[action.fieldKey];
+    const searches = route[captureSearchSlot(action)];
+    const current = searches[action.questionId]?.[action.fieldKey];
     // Identity guard: an outcome for a query the Reviewer has typed past, or
     // for a field whose picker is no longer open.
     if (!current || current.query !== action.search.query) return state;
     return patchRoute(state, 'caseReview', {
-      captureSearch: withCaptureSearch(
-        route.captureSearch,
+      [captureSearchSlot(action)]: withCaptureSearch(
+        searches,
         action,
         action.search
       ),
     });
   }
   if (action.type === 'case/capture-search-cleared') {
+    const searches = route[captureSearchSlot(action)];
     // Identity guard: clearing a search that is not open.
-    if (!route.captureSearch[action.questionId]?.[action.fieldKey])
-      return state;
+    if (!searches[action.questionId]?.[action.fieldKey]) return state;
     return patchRoute(state, 'caseReview', {
-      captureSearch: withCaptureSearch(route.captureSearch, action, null),
+      [captureSearchSlot(action)]: withCaptureSearch(searches, action, null),
     });
   }
   if (action.type === 'case/responsible-party-search-input') {
@@ -911,6 +930,25 @@ export function createRouteSlice(params, context) {
       });
     },
   });
+  // The Root Cause Fields' own debounce map, so a Root Cause Field sharing a
+  // key with an Issue Capture Field on the same Answer never shares its timer.
+  const rcaCapturePeopleSearch = createDebouncedPeopleSearch({
+    client: context.client,
+    isActive: () => isSliceActive(),
+    onState: (key, search) => {
+      dispatch({
+        type: 'case/capture-search-results',
+        ...splitCaptureSearchKey(key),
+        slot: 'rcaCapture',
+        search,
+      });
+    },
+  });
+  /** @type {Record<import('../sharepoint-client.js').CaptureSlot, typeof capturePeopleSearch>} */
+  const peopleSearchFor = {
+    capture: capturePeopleSearch,
+    rcaCapture: rcaCapturePeopleSearch,
+  };
   const responsiblePartyPeopleSearch = createDebouncedPeopleSearch({
     client: context.client,
     isActive: () => isSliceActive(),
@@ -944,21 +982,49 @@ export function createRouteSlice(params, context) {
     };
   }
 
-  /** @param {string} questionId @param {string} fieldKey */
-  function clearCaptureSearch(questionId, fieldKey) {
-    capturePeopleSearch.clear(captureSearchKey(questionId, fieldKey));
-    dispatch({ type: 'case/capture-search-cleared', questionId, fieldKey });
+  /**
+   * The slot rides on the action only when it is not the Issue capture's, so
+   * the Issues tab's actions are what they always were.
+   *
+   * @param {import('../sharepoint-client.js').CaptureSlot} slot
+   */
+  function slotOf(slot) {
+    return slot === 'capture' ? {} : { slot };
   }
 
-  /** @param {string} questionId @param {string} fieldKey @param {string} query */
-  function requestCaptureSearch(questionId, fieldKey, query) {
+  /**
+   * @param {string} questionId
+   * @param {string} fieldKey
+   * @param {import('../sharepoint-client.js').CaptureSlot} [slot]
+   */
+  function clearCaptureSearch(questionId, fieldKey, slot = 'capture') {
+    peopleSearchFor[slot].clear(captureSearchKey(questionId, fieldKey));
+    dispatch({
+      type: 'case/capture-search-cleared',
+      questionId,
+      fieldKey,
+      ...slotOf(slot),
+    });
+  }
+
+  /**
+   * @param {string} questionId
+   * @param {string} fieldKey
+   * @param {string} query
+   * @param {import('../sharepoint-client.js').CaptureSlot} [slot]
+   */
+  function requestCaptureSearch(questionId, fieldKey, query, slot = 'capture') {
     dispatch({
       type: 'case/capture-search-input',
       questionId,
       fieldKey,
       query,
+      ...slotOf(slot),
     });
-    capturePeopleSearch.request(captureSearchKey(questionId, fieldKey), query);
+    peopleSearchFor[slot].request(
+      captureSearchKey(questionId, fieldKey),
+      query
+    );
   }
 
   function clearResponsiblePartySearch() {
@@ -1388,6 +1454,7 @@ export function createRouteSlice(params, context) {
       onAnswer,
       captureEdited,
       requestCaptureSearch,
+      clearCaptureSearch,
       selectResponsibleParty,
       clearResponsibleParty,
       requestResponsiblePartySearch,

@@ -106,6 +106,7 @@ test('plugins own completion on Summary and Void on Case Details', () => {
     completionPending: false,
     captureCollapsed: {},
     captureSearch: {},
+    rcaCaptureSearch: {},
     responsiblePartySearch: { query: '', people: [], status: 'idle' },
     snapshot: null,
   };
@@ -117,6 +118,7 @@ test('plugins own completion on Summary and Void on Case Details', () => {
     onAnswer: () => {},
     captureEdited: () => {},
     requestCaptureSearch: () => {},
+    clearCaptureSearch: () => {},
     selectResponsibleParty: () => {},
     clearResponsibleParty: () => {},
     requestResponsiblePartySearch: () => {},

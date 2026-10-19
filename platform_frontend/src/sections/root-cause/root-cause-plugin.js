@@ -76,7 +76,7 @@ export const RootCausePlugin = /** @type {const} */ ({
 
   summaryView: rootCauseSummaryView,
 
-  view({ snapshot, config, dispatch, actions, sectionState }) {
+  view({ snapshot, config, route, dispatch, actions, sectionState }) {
     const canEdit = snapshot?.access?.rootCause === 'edit';
     const groups = config?.rootCauseGroups ?? [];
     return RootCauseSection({
@@ -85,8 +85,11 @@ export const RootCausePlugin = /** @type {const} */ ({
       answers: snapshot?.answers ?? {},
       groups,
       collapsed: sectionState?.collapsed ?? {},
+      peopleSearch: route?.rcaCaptureSearch ?? {},
       canEdit,
-      dispatchCapture: (questionId, fieldKey, value) =>
+      // A chosen or cleared person closes that field's search, as it does on
+      // the Issues tab; closing one that never opened changes nothing.
+      dispatchCapture: (questionId, fieldKey, value) => {
         actions?.editAnswers?.(
           rootCauseCaptured({
             answers: actions.currentAnswers(),
@@ -96,6 +99,15 @@ export const RootCausePlugin = /** @type {const} */ ({
             value,
             canEditRootCause: canEdit,
           })
+        );
+        actions?.clearCaptureSearch?.(questionId, fieldKey, 'rcaCapture');
+      },
+      dispatchPersonQuery: (questionId, fieldKey, query) =>
+        actions?.requestCaptureSearch?.(
+          questionId,
+          fieldKey,
+          query,
+          'rcaCapture'
         ),
       dispatchToggle: (questionId, groupKey, collapsed) =>
         dispatch?.({

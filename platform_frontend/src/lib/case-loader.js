@@ -403,11 +403,12 @@ export class CaseLoader {
    * the store. Not persisted: a display-name refresh is presentation, not a
    * Reviewer edit.
    *
-   * Covers every `person` Issue Capture Field on the Case in one batched call:
-   * one cached-name problem, so one round trip to the directory.
+   * Covers every `person` Issue Capture Field and Root Cause Field on the Case
+   * in one batched call: one cached-name problem, so one round trip to the
+   * directory.
    */
   async _resolvePersonNames() {
-    const personKeys = this._personCaptureKeys();
+    const slots = this._personCaptureKeys();
     /** @type {string[]} */
     const accounts = [];
     /** @type {Record<string, string>} */
@@ -429,7 +430,9 @@ export class CaseLoader {
       }
     };
     for (const answer of Object.values(this.answers)) {
-      for (const key of personKeys) collect(answer.capture?.[key]);
+      for (const [slot, keys] of slots) {
+        for (const key of keys) collect(answer[slot]?.[key]);
+      }
     }
     if (accounts.length === 0) return;
 
@@ -453,13 +456,15 @@ export class CaseLoader {
     const next = {};
     for (const [id, answer] of Object.entries(this.answers)) {
       let updated = answer;
-      for (const key of personKeys) {
-        const person = refreshed(answer.capture?.[key]);
-        if (person) {
-          updated = {
-            ...updated,
-            capture: { ...updated.capture, [key]: person },
-          };
+      for (const [slot, keys] of slots) {
+        for (const key of keys) {
+          const person = refreshed(answer[slot]?.[key]);
+          if (person) {
+            updated = {
+              ...updated,
+              [slot]: { ...updated[slot], [key]: person },
+            };
+          }
         }
       }
       if (updated !== answer) changed = true;
@@ -469,15 +474,22 @@ export class CaseLoader {
   }
 
   /**
-   * The capture field keys this Case Type declares as people. A key the config
-   * does not name a person is left alone whatever it holds — the config is the
-   * only authority on which values are accounts.
+   * The field keys this Case Type declares as people, per capture slot: the
+   * Issue Capture Fields in `capture`, the Root Cause Fields in `rcaCapture`.
+   * A key the config does not name a person is left alone whatever it holds —
+   * the config is the only authority on which values are accounts.
    *
-   * @returns {string[]}
+   * @returns {Array<[import('../sharepoint-client.js').CaptureSlot, string[]]>}
    */
   _personCaptureKeys() {
-    return (this.config?.captureGroups ?? []).flatMap((group) =>
-      group.fields.filter((f) => f.type === 'person').map((f) => f.key)
-    );
+    /** @param {import('../sharepoint-client.js').CaptureGroup[] | undefined} groups */
+    const people = (groups) =>
+      (groups ?? []).flatMap((group) =>
+        group.fields.filter((f) => f.type === 'person').map((f) => f.key)
+      );
+    return [
+      ['capture', people(this.config?.captureGroups)],
+      ['rcaCapture', people(this.config?.rootCauseGroups)],
+    ];
   }
 }
