@@ -194,3 +194,36 @@ def test_a_quarantined_detail_row_is_routed_aside_rather_than_aborting_the_poll(
     [bad_appeal] = quarantined["appeal"]
     assert bad_appeal["appeal_id"] == "appeal-2"
     assert "state" in bad_appeal["failed_rule"]
+
+
+def test_an_unmodelled_root_cause_value_is_routed_aside_with_its_raw_value(
+    base_dir,
+):
+    # The root-cause step is the last Detail Table the poll writes, so a
+    # reject table its migration forgot would abort the poll after every other
+    # silver table had landed -- gold unpublished, the watermark unadvanced.
+    answers = json.dumps(
+        {
+            "q1": {
+                "value": "A",
+                "rcaCapture": {
+                    "rca-category": "Process gap",
+                    "rca-accountable": {"loginName": "b.okafor"},
+                },
+            }
+        }
+    )
+    client = FakeListClient(items(item(Answers=answers)))
+
+    [poll] = run(RunContext(base_dir=base_dir, pipeline=FEED_NAME), client=client)
+
+    assert poll.detail_rows["answer_root_cause"] == 1
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
+    for layer in (med.silver, med.gold):
+        assert [row["field_key"] for row in read_rows(layer, "answer_root_cause")] == [
+            "rca-category"
+        ]
+    [rejected] = quarantine_rows(base_dir)["answer_root_cause"]
+    assert rejected["field_key"] == "rca-accountable"
+    assert "value_kind" in rejected["failed_rule"]
+    assert json.loads(rejected["raw_value"]) == {"loginName": "b.okafor"}

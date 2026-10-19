@@ -202,6 +202,57 @@ def test_the_winning_observation_settles_gold_capture_and_action_and_drops_the_o
     assert added["field_key"] == "field-added"
 
 
+def test_the_winning_observation_settles_gold_answer_root_cause(base_dir):
+    # Item 101's Manager clears the Root Cause on poll 2; item 102's records
+    # one, naming a person. Gold must hold only the winners' rows: none for
+    # 101, both of 102's -- the person arm discriminated as it is in capture.
+    cleared_early = item(
+        Id=101,
+        Answers=json.dumps(
+            {"q1": {"value": "A", "rcaCapture": {"rca-category": "Process gap"}}}
+        ),
+    )
+    cleared_later = later_item(
+        Id=101, Answers=json.dumps({"q1": {"value": "A"}}), Status="Completed"
+    )
+    recorded_early = item(Id=102, Answers=json.dumps({"q1": {"value": "A"}}))
+    recorded_later = later_item(
+        Id=102,
+        Answers=json.dumps(
+            {
+                "q1": {
+                    "value": "A",
+                    "rcaCapture": {
+                        "rca-category": "Training gap",
+                        "rca-accountable": {
+                            "loginName": "b.okafor",
+                            "displayName": "Bola Okafor",
+                        },
+                    },
+                }
+            }
+        ),
+        Status="Completed",
+    )
+
+    two_polls(
+        base_dir, [cleared_early, recorded_early], [cleared_later, recorded_later]
+    )
+
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
+    assert len(read_rows(med.silver, "answer_root_cause")) == 3
+    gold_root_cause = read_rows(med.gold, "answer_root_cause")
+
+    assert {row["source_item_id"] for row in gold_root_cause} == {"102"}
+    by_field = {row["field_key"]: row for row in gold_root_cause}
+    assert set(by_field) == {"rca-category", "rca-accountable"}
+    assert by_field["rca-category"]["value_text"] == "Training gap"
+    person = by_field["rca-accountable"]
+    assert (person["value_kind"], person["person_login"]) == ("person", "b.okafor")
+    # Root Cause rows never leak into the Reviewer's capture table.
+    assert read_rows(med.gold, "answer_capture") == []
+
+
 def test_the_winning_observation_settles_gold_conversation_message_and_appeal(
     base_dir,
 ):

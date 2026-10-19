@@ -9,9 +9,10 @@ published once, over every list's accumulated history.
 - ``to_silver`` snake_cases those names, settles ``case_type`` to the
   polled list's declared one, then ``enforce``s ``CaseVersion`` -- coerce,
   quarantine value-rule breaches, validate, in that order.
-- The seven ``to_silver_*`` Detail Table steps (``answer``,
+- The eight ``to_silver_*`` Detail Table steps (``answer``,
   ``answer_capture``, ``answer_action``, ``general_answer``,
-  ``conversation_message``, ``appeal``, ``case_detail``) each explode one
+  ``conversation_message``, ``appeal``, ``case_detail``,
+  ``answer_root_cause``) each explode one
   blob -- or one level further into one -- of that same silver batch into
   one row per child structure; see each builder's own docstring.
 - ``gold.publish_gold`` rebuilds the current Case, the Detail Tables and six
@@ -110,6 +111,7 @@ from .schema import (
     UNSUPPORTED_CAPTURE_VALUE_KIND,
     AnswerActionRow,
     AnswerCaptureRow,
+    AnswerRootCauseRow,
     AnswerRow,
     AppealRow,
     CaseDetailRow,
@@ -705,6 +707,55 @@ def to_silver_answer_capture(
     return write(writer, data, name=f"{at}:write")
 
 
+def to_silver_answer_root_cause(
+    reader: Reader, writer: Writer, case_list: CaseList, reject_writer: Writer
+) -> Dataset:
+    """One list's answer-root-cause table: explode ``answers`` and then each
+    answer's flat ``rcaCapture`` map, one row per Root Cause Field.
+
+    ``to_silver_answer_capture`` over the Responsible Party Manager's
+    ``rcaCapture`` rather than the Reviewer's ``capture``: the same two-level
+    explode, the same value discriminator, and the same quarantine-then-drop of
+    ``raw_value``. An answer without ``rcaCapture`` -- every answer on a Case
+    Type that does not declare Root Cause fields -- contributes no rows.
+    """
+    at = f"silver:{case_list.case_type}:answer_root_cause"
+    data = read(reader, name=f"{at}:read")
+    data = transform(
+        ExplodeJsonMap(
+            column="answers",
+            key_into="question_id",
+            id_vars=list(DETAIL_ID_VARS),
+            exclude_key_prefix="general:",
+            fields={"rcaCapture": "rca_capture_json"},
+        ),
+        data,
+        name=f"{at}:explode-answers",
+    )
+    data = transform(
+        ExplodeJsonMap(
+            column="rca_capture_json",
+            key_into="field_key",
+            id_vars=[*DETAIL_ID_VARS, "question_id"],
+            value_into="raw_value",
+        ),
+        data,
+        name=f"{at}:explode-rca-capture",
+    )
+    data = transform(discriminate_capture_value, data, name=f"{at}:discriminate")
+    data = transform(SchemaCoercion(AnswerRootCauseRow), data, name=f"{at}:coerce")
+    data = quarantine(
+        SchemaValueRulePartitioner(AnswerRootCauseRow),
+        reject_writer,
+        data,
+        name=f"{at}:quarantine",
+    )
+    # Dropped after quarantine, not before, as to_silver_answer_capture does.
+    data = transform(DropColumns(["raw_value"]), data, name=f"{at}:drop-raw-value")
+    validate(SchemaValidator(AnswerRootCauseRow), data, name=f"{at}:schema_validator")
+    return write(writer, data, name=f"{at}:write")
+
+
 def to_silver_answer_action(
     reader: Reader, writer: Writer, case_list: CaseList, reject_writer: Writer
 ) -> Dataset:
@@ -904,6 +955,11 @@ _DETAIL_TABLES = (
         to_silver_case_detail,
         ("source_observation_id", "field_key"),
     ),
+    (
+        "answer_root_cause",
+        to_silver_answer_root_cause,
+        ("source_observation_id", "question_id", "field_key"),
+    ),
 )
 
 
@@ -940,16 +996,19 @@ def _people_named_in(row: Mapping[str, object]):
         )
 
     answers = _json(row.get("Answers"))
+    # The Reviewer's Issue capture, then the Responsible Party Manager's Root
+    # Cause capture: one value shape, so a person in either is named alike.
     for answer in answers.values() if isinstance(answers, dict) else ():
-        capture = answer.get("capture") if isinstance(answer, dict) else None
-        for value in capture.values() if isinstance(capture, dict) else ():
-            if isinstance(value, dict):
-                yield (
-                    value.get("loginName"),
-                    value.get("domain"),
-                    value.get("displayName"),
-                    value.get("email"),
-                )
+        for blob in ("capture", "rcaCapture"):
+            capture = answer.get(blob) if isinstance(answer, dict) else None
+            for value in capture.values() if isinstance(capture, dict) else ():
+                if isinstance(value, dict):
+                    yield (
+                        value.get("loginName"),
+                        value.get("domain"),
+                        value.get("displayName"),
+                        value.get("email"),
+                    )
 
     conversation = _json(row.get("Conversation"))
     for message in conversation if isinstance(conversation, list) else ():

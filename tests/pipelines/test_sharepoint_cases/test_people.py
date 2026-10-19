@@ -191,6 +191,29 @@ def test_both_manager_pairs_reach_gold_and_the_current_managers_are_people(
     assert {"d.reid", "e.novak"} <= set(people)
 
 
+def test_a_root_cause_person_reaches_person_current(base_dir):
+    # A person is named in rcaCapture exactly as one in capture is, so nobody
+    # a Manager picks as accountable is missing from the people table.
+    answers = {
+        "q-1": {
+            "value": "x",
+            "rcaCapture": {
+                "accountable": {"loginName": "N.Park", "displayName": "Nia Park"}
+            },
+        }
+    }
+    run(
+        RunContext(base_dir=base_dir, pipeline=FEED_NAME),
+        client=FakeListClient(items(item(Answers=json.dumps(answers)))),
+    )
+
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
+    people = {row["account"]: row for row in read_rows(med.gold, PERSON_CURRENT_TABLE)}
+    assert people["n.park"]["display_name"] == "Nia Park"
+    [root_cause] = read_rows(med.gold, "answer_root_cause")
+    assert root_cause["value_kind"] == "person"
+
+
 def test_a_quarantined_case_keeps_both_manager_pairs(base_dir):
     run(
         RunContext(base_dir=base_dir, pipeline=FEED_NAME),
@@ -264,6 +287,17 @@ EVERY_BLOB = {
                     },
                     "note": "free text is not a person",
                 },
+                # The Responsible Party Manager's Root Cause capture holds a
+                # person in the same shape.
+                "rcaCapture": {
+                    "accountable": {
+                        "loginName": "n.park",
+                        "displayName": "Nia Park",
+                        "domain": "otherdom",
+                        "email": "N.Park@Contoso.com",
+                    },
+                    "category": "Process gap",
+                },
             }
         }
     ),
@@ -291,6 +325,7 @@ def test_a_sighting_is_recorded_for_everyone_an_observation_names():
         "v.grey",
         # ... and everyone the JSON blobs name.
         "c.ito",
+        "n.park",
         "f.lund",
         "g.moss",
         "h.ruiz",
@@ -316,6 +351,8 @@ def test_a_sighting_keeps_what_its_source_said_in_one_spelling():
     assert details("v.grey") == ("OTHERDOM", "Val Grey", "v.grey@contoso.com")
     # A captured person records its own domain and email.
     assert details("c.ito") == ("CONTOSO", "Chie Ito", "c.ito@contoso.com")
+    # So does one picked in a Root Cause Field.
+    assert details("n.park") == ("OTHERDOM", "Nia Park", "n.park@contoso.com")
     # A Conversation author has a display name and nothing else.
     assert details("f.lund") == (None, "Finn Lund", None)
     # An Appeal or amendment names the account alone.

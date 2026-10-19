@@ -1,10 +1,10 @@
 """The Detail Table explodes: one silver observation's JSON blobs fanned out
 into one row per question / capture field / message / appeal / detail.
 
-Six tables, one shape of test: drive the builder over a single ``version()``
+Eight tables, one shape of test: drive the builder over a single ``version()``
 whose blob a test names, and read what it would have written. ``exploded()``
 owns the wiring so each test is its blob and its claim, and
-``assert_carries_the_five_stamps`` owns the rule every one of the six shares —
+``assert_carries_the_five_stamps`` owns the rule every one of them shares —
 a child row is exactly its declared columns, stamped with the parent
 observation it came from.
 """
@@ -19,10 +19,12 @@ import pandas as pd
 import pytest
 
 from framework.run import RunContext, RunLog, active_context
+from framework.transform import JsonShapeError
 from pipelines.sharepoint_cases.pipeline import (
     FEED_NAME,
     to_silver_answer,
     to_silver_answer_capture,
+    to_silver_answer_root_cause,
     to_silver_appeal,
     to_silver_case_detail,
     to_silver_conversation_message,
@@ -31,6 +33,7 @@ from pipelines.sharepoint_cases.pipeline import (
 from pipelines.sharepoint_cases.schema import (
     DETAIL_ID_VARS,
     AnswerCaptureRow,
+    AnswerRootCauseRow,
     AnswerRow,
     AppealRow,
     CaseDetailRow,
@@ -80,6 +83,7 @@ def exploded(
 
 silver_answers = partial(exploded, to_silver_answer, "answers")
 silver_captures = partial(exploded, to_silver_answer_capture, "answers")
+silver_root_causes = partial(exploded, to_silver_answer_root_cause, "answers")
 silver_general_answers = partial(exploded, to_silver_general_answer, "answers")
 silver_conversation_messages = partial(
     exploded, to_silver_conversation_message, "conversation"
@@ -103,7 +107,7 @@ STAMPS = {
 def assert_carries_the_five_stamps(rows: list[dict], row_type: type) -> None:
     """Every row is exactly ``row_type``'s columns, stamped with its parent.
 
-    The six Detail Tables differ in what they explode, not in how a child is
+    The Detail Tables differ in what they explode, not in how a child is
     tied back to its Case version -- so the rule is stated here once and each
     table's test names only the shape it is proving.
     """
@@ -319,6 +323,118 @@ def test_discriminate_capture_value_places_every_shape(
     else:
         kind, value_text, login, display = expected
         [target] = [row for row in rows if row["field_key"] == "field-target"]
+        assert target["value_kind"] == kind
+        assert target["value_text"] == value_text
+        assert target["person_login"] == login
+        assert target["person_display"] == display
+
+
+# --- answer_root_cause -------------------------------------------------------
+
+
+def test_an_rca_capture_map_becomes_one_row_per_field_carrying_the_five_stamps():
+    # The Reviewer's capture beside it must not leak in: the two maps are two
+    # tables, and raw_value / rca_capture_json never reach the writer.
+    rows = silver_root_causes(
+        json.dumps(
+            {
+                "q1": {
+                    "value": "A",
+                    "capture": {"field-note": "The Reviewer's note."},
+                    "rcaCapture": {
+                        "rca-category": "Process gap",
+                        "rca-accountable": {
+                            "loginName": "b.okafor",
+                            "displayName": "Bola Okafor",
+                        },
+                    },
+                },
+                "q2": {"value": "B", "rcaCapture": {"rca-category": "Training"}},
+            }
+        )
+    )
+
+    assert {(row["question_id"], row["field_key"]) for row in rows} == {
+        ("q1", "rca-category"),
+        ("q1", "rca-accountable"),
+        ("q2", "rca-category"),
+    }
+    assert_carries_the_five_stamps(rows, AnswerRootCauseRow)
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        pytest.param({"value": "A"}, id="absent"),
+        pytest.param({"value": "A", "rcaCapture": None}, id="null"),
+        pytest.param({"value": "A", "rcaCapture": {}}, id="empty"),
+    ],
+)
+def test_an_answer_without_root_cause_values_lands_no_rows(answer):
+    # Every Case Type that declares no Root Cause fields looks like this.
+    assert silver_root_causes(json.dumps({"q1": answer})) == []
+
+
+def test_a_malformed_answers_blob_raises_for_the_root_cause_table_too():
+    with pytest.raises(JsonShapeError):
+        silver_root_causes("not json")
+
+
+@pytest.mark.parametrize(
+    "rca_value, expected, rejected_raw_value",
+    [
+        pytest.param(
+            {"loginName": "b.okafor", "displayName": "Bola Okafor"},
+            ("person", None, "b.okafor", "Bola Okafor"),
+            None,
+            id="a-whole-person",
+        ),
+        pytest.param(
+            "Process gap",
+            ("text", "Process gap", None, None),
+            None,
+            id="text",
+        ),
+        pytest.param(
+            {"loginName": "b.okafor"},
+            None,
+            json.dumps({"loginName": "b.okafor"}),
+            id="a-half-filled-person",
+        ),
+        pytest.param(42, None, 42, id="a-bare-json-number"),
+    ],
+)
+def test_a_root_cause_value_is_discriminated_as_a_capture_value_is(
+    rca_value, expected, rejected_raw_value
+):
+    # The discriminator is capture's own; this proves only that the root-cause
+    # step routes through it, quarantine and raw_value included.
+    rejects = RecordingWriter()
+    rows = silver_root_causes(
+        json.dumps(
+            {
+                "q1": {
+                    "value": "A",
+                    "rcaCapture": {
+                        "rca-control": "Always fine.",
+                        "rca-target": rca_value,
+                    },
+                }
+            }
+        ),
+        rejects=rejects,
+    )
+
+    if expected is None:
+        assert {row["field_key"] for row in rows} == {"rca-control"}
+        [rejected] = rows_of(rejects)
+        assert rejected["field_key"] == "rca-target"
+        assert "value_kind" in rejected["failed_rule"]
+        assert rejected["raw_value"] == rejected_raw_value
+    else:
+        assert rejects.writes == []
+        kind, value_text, login, display = expected
+        [target] = [row for row in rows if row["field_key"] == "rca-target"]
         assert target["value_kind"] == kind
         assert target["value_text"] == value_text
         assert target["person_login"] == login
