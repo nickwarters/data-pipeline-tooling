@@ -524,3 +524,71 @@ test('unfilledRequiredCapture: an inapplicable failed Question never blocks', ()
     false
   );
 });
+
+// --- capture slots ----------------------------------------------------------
+
+test('applyCapture: a write naming no slot lands in capture', () => {
+  const next = captured({ value: 'No' }, TYPED_GROUPS, 'detail', 'Typed');
+  assert.deepEqual(next, { value: 'No', capture: { detail: 'Typed' } });
+});
+
+test('applyCapture: a write to the rcaCapture slot leaves capture untouched', () => {
+  /** @type {Answer} */
+  const answer = { value: 'No', capture: { origin: 'Sales' } };
+  const next = applyCapture(
+    answer,
+    CONDITIONAL_GROUPS,
+    'origin',
+    'Ops',
+    'rcaCapture'
+  );
+  assert.deepEqual(next, {
+    value: 'No',
+    capture: { origin: 'Sales' },
+    rcaCapture: { origin: 'Ops' },
+  });
+});
+
+test('applyCapture: pruning in one slot reads and drops only that slot', () => {
+  /** @type {Answer} */
+  const answer = {
+    value: 'No',
+    capture: { origin: 'Sales', salesTeam: 'North' },
+    rcaCapture: { origin: 'Sales', salesTeam: 'South' },
+  };
+  const next = applyCapture(
+    answer,
+    CONDITIONAL_GROUPS,
+    'origin',
+    '',
+    'rcaCapture'
+  );
+  assert.deepEqual(
+    next,
+    { value: 'No', capture: { origin: 'Sales', salesTeam: 'North' } },
+    'clearing the last rcaCapture value drops the slot and nothing else'
+  );
+});
+
+test('unfilledRequiredCapture: reads the slot it is given, not capture', () => {
+  const answers = {
+    q1: {
+      value: 'No',
+      capture: { origin: 'Sales', salesTeam: 'North' },
+      rcaCapture: { origin: 'Sales' },
+    },
+  };
+  assert.equal(
+    unfilledRequiredCapture(REQUIRED_CATALOGUE, answers, REQUIRED_GROUPS),
+    false
+  );
+  assert.equal(
+    unfilledRequiredCapture(
+      REQUIRED_CATALOGUE,
+      answers,
+      REQUIRED_GROUPS,
+      'rcaCapture'
+    ),
+    true
+  );
+});
