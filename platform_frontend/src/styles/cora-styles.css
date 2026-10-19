@@ -1325,7 +1325,8 @@
   color: var(--cora-color-danger);
 }
 
-.cora-remediation-list {
+.cora-remediation-list,
+.cora-root-cause-list {
   list-style: none;
   padding: 0;
   margin: 0;
@@ -1333,7 +1334,8 @@
   gap: var(--cora-space-3);
 }
 
-.cora-remediation-item {
+.cora-remediation-item,
+.cora-root-cause-item {
   background: var(--cora-color-surface);
   border: 1px solid var(--cora-color-border);
   border-radius: var(--cora-radius-md);
@@ -1779,9 +1781,19 @@
   margin: var(--cora-space-1) 0 0;
 }
 
-.cora-remediation-empty {
+.cora-remediation-empty,
+.cora-root-cause-empty,
+.cora-root-cause-none {
   color: var(--cora-color-text-muted);
   font-style: italic;
+}
+
+/* A required Root Cause Field still empty: a note, not an error, since it holds
+   nothing. */
+.cora-root-cause-outstanding {
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-medium);
+  color: var(--cora-color-text-muted);
 }
 
 /* ── Conversation ────────────────────────────────────────────────────────── */
@@ -2166,7 +2178,8 @@
 
 /* The count/due lines that sit directly under an Issues / Remediation heading. */
 [data-cora-root] .cora-summary .cora-summary-remediation > p,
-[data-cora-root] .cora-summary .cora-summary-remediation-tracking > p {
+[data-cora-root] .cora-summary .cora-summary-remediation-tracking > p,
+[data-cora-root] .cora-summary .cora-summary-root-cause > p {
   color: var(--cora-color-text-muted);
   font-size: var(--cora-font-size-sm);
 }
@@ -2174,7 +2187,8 @@
 /* Failed-Answer entries: drop the list marker and set each out as a left-accented
    block so the failures are individually scannable within the card. */
 [data-cora-root] .cora-summary .cora-summary-remediation > ul,
-[data-cora-root] .cora-summary .cora-summary-remediation-tracking > ul {
+[data-cora-root] .cora-summary .cora-summary-remediation-tracking > ul,
+[data-cora-root] .cora-summary .cora-summary-root-cause > ul {
   list-style: none;
   margin: 0;
   padding-left: 0;
@@ -2183,13 +2197,15 @@
 }
 
 [data-cora-root] .cora-summary .cora-summary-remediation > ul > li,
-[data-cora-root] .cora-summary .cora-summary-remediation-tracking > ul > li {
+[data-cora-root] .cora-summary .cora-summary-remediation-tracking > ul > li,
+[data-cora-root] .cora-summary .cora-summary-root-cause > ul > li {
   padding-left: var(--cora-space-3);
   border-left: 2px solid var(--cora-color-border);
 }
 
 [data-cora-root] .cora-summary .cora-summary-remediation li p,
-[data-cora-root] .cora-summary .cora-summary-remediation-tracking li p {
+[data-cora-root] .cora-summary .cora-summary-remediation-tracking li p,
+[data-cora-root] .cora-summary .cora-summary-root-cause li p {
   margin: 0 0 var(--cora-space-1);
 }
 

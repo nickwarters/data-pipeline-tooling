@@ -14,6 +14,11 @@ today). [ADR-0012](./0012-outcome-snapshot-at-completion-for-reporting.md)'s
 freeze rationale remains applicable to the Outcome/reporting columns; this ADR
 does not extend it to the allocation cache.
 
+Amended (2026-10) by [ADR-0059](./0059-root-cause-is-a-frontline-capture-section-over-the-failed-answer-lifecycle.md): the Role resolved from
+`currentResponsiblePartyManager` now also edits the Root Cause Section, the
+first right it carries beyond the Conversation. Following the current manager is
+what that edit right needs too.
+
 This ADR is a decision about **semantics and mechanism**. The allocation-time
 Reviewer-manager stamp is now implemented; repair-on-touch, reconciliation and
 any Reportable freeze remain conditional future work, not behavior promised by

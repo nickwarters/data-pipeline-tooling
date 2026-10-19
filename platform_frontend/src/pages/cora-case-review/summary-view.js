@@ -23,6 +23,7 @@ import { GENERAL_QUESTIONS_TITLE } from './general-questions-view.js';
  * @property {QuestionDefinition[]} catalogue
  * @property {Section[]} summarySections
  * @property {import('../../sharepoint-client.js').CaptureGroup[]} captureGroups
+ * @property {import('../../sharepoint-client.js').CaptureGroup[]} [rootCauseGroups] The Case Type's Root Cause Fields, for the Root Cause block. Absent reads as none.
  * @property {import('../../sharepoint-client.js').CaseDetailField[]} detailFields
  * @property {import('../../sharepoint-client.js').OutcomeOption[]} outcomeOptions
  * @property {string} [heading] This view's own heading, already resolved against the Case Type's copy by the Section that renders it. 'Summary' when absent, so the view stays usable standalone.

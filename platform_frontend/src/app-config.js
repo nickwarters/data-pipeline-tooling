@@ -35,6 +35,7 @@ import { QuestionsPlugin } from './sections/questions/questions-plugin.js';
 import { IssuesPlugin } from './sections/issues/issues-plugin.js';
 import { SummaryPlugin } from './sections/summary/summary-plugin.js';
 import { RemediationPlugin } from './sections/remediation/remediation-plugin.js';
+import { RootCausePlugin } from './sections/root-cause/root-cause-plugin.js';
 import { NotesPlugin } from './sections/notes/notes-plugin.js';
 import { ConversationPlugin } from './sections/conversation/conversation-plugin.js';
 import { AppealRequestPlugin } from './sections/appeals/appeal-request-plugin.js';
@@ -95,6 +96,7 @@ export const APP_CONFIG = {
     IssuesPlugin,
     SummaryPlugin,
     RemediationPlugin,
+    RootCausePlugin,
     NotesPlugin,
     ConversationPlugin,
     AppealRequestPlugin,

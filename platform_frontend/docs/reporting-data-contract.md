@@ -245,6 +245,10 @@ Each entry in `answers`, keyed by question `id`:
   "capture": {
     "rootCauseSummary": "Handoff missed.",
     "attributedTo": { "loginName": "jsmith", "displayName": "J. Smith" }
+  },
+  "rcaCapture": {
+    "primaryCause": "Process gap",
+    "causeDetail": "The handoff checklist skips the RCA step."
   }
 }
 ```
@@ -253,15 +257,22 @@ Each entry in `answers`, keyed by question `id`:
   `yes-no-na` and `single-choice`, and a **`string[]`** for `multi-choice`. An
   empty string or empty array means **unanswered**.
 - `justification`, `remediationRequired`, `remediationActions`,
-  `freeFormRemediation`, `capture` are optional and not needed for
+  `freeFormRemediation`, `capture`, `rcaCapture` are optional and not needed for
   failure counting (use them for richer reports if you want — e.g. "failures
   with no justification," or remediation-completion rates).
 - `capture` holds the **Issue Capture Fields** the Case Type declares, keyed by
   field key, and is the only place failure attribution now lives — the retired
   `attributedParty` Answer property is never written any more. Field keys are
   per-Case-Type, so a cross-Case-Type report should find the attribution field
-  by its `role: 'attributedParty'` tag in the exported Case Type config rather
-  than by key.
+  by its `role: 'attributedParty'` tag in the Case Type config rather than by
+  key. That config is not exported today, so the tag can only be read from the
+  Case Type's source.
+- `rcaCapture` holds the **Root Cause Fields** the Responsible Party Manager
+  records on the Root Cause tab, keyed by field key, in the same shape as
+  `capture` and only on a failed Answer. It is written after the Case is
+  reportable, including after it is Completed, so it can change on a row whose
+  Outcome is already frozen. Its keys are the Case Type's `rootCauseGroups`
+  keys and may coincide with `capture` keys without meaning the same thing.
 - `remediationRequired` is the Reviewer's explicit `"yes"` / `"no"` decision on
   a failed Answer. It is absent on Answers that never failed, and on Cases
   completed before the decision existed; treat absent as "not recorded" rather

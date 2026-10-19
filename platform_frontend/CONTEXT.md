@@ -121,6 +121,11 @@ snapshot was taken" (`reachedReportable` — Reportable, or Void with a `reporta
 two questions now. A Case voided from `Actions In Progress` reached the milestone and
 keeps everything stamped at it; a Case voided from `In-progress` never did and has no
 Outcome at all.
+
+"Freeze" is about what decides the Outcome. Two writes still land on the Answers after
+the milestone, each from one Section and one Role, and neither touches a value the
+Outcome reads: the **Assigned Reviewer**'s **Remediation Resolution**, and the
+**Responsible Party Manager**'s **Root Cause Field**s.
 _Avoid_: Frozen (describes the effect, not the milestone), Locked
 
 **QA Check** _(shelved — see **Amended Outcome**)_:
@@ -143,7 +148,7 @@ One of the role-gated areas of a Case. Each Section has an access mode (`edit` /
 per-Section config (membership + `showInSummary`, which is either a flag or a list of
 the roles the Summary block is composed for). As of the Jul 2026 workflow
 changes the Section set is: `details` · `questions` · `issues` · `summary` ·
-`remediation` · `notes` · `conversation` · `appealRequest` · `appealReview` ·
+`remediation` · `rootCause` · `notes` · `conversation` · `appealRequest` · `appealReview` ·
 `amendOutcome`. A Section's display copy is one per-Section descriptor carrying
 two spellings — a `tab` caption and a `heading` — which a **Case Type** may
 rename via `sectionLabels` (`src/lib/section-labels.js`). The **Reviewer**'s tab
@@ -155,7 +160,10 @@ detail + **Remediation Actions** (Reviewer-edit until **Reportable**); the stand
 **Remediation** Section _tracks_ each failed Answer's remediation to a **Remediation
 Resolution** (resolves #144), and shows the same breakdown — without the Reviewer's
 fields, and with a pointer to the **Conversation** — to the **Responsible Party**, their
-**Manager** and the **Journey Owner**. **Amend Outcome** is the **Controls** surface for a case-level **Amended Outcome**
+**Manager** and the **Journey Owner**. **Root Cause** is the frontline twin of **Issues**:
+the **Responsible Party Manager** records the cause of each Issue there once the Case is
+**Reportable**, for Case Types that declare **Root Cause Field**s (see **Root Cause
+Section**). **Amend Outcome** is the **Controls** surface for a case-level **Amended Outcome**
 — it is _not_ the retired **Answer Override**. **Appeal Request**
 and **Appeal Review** are the two ends of the **Appeal** flow. Access modes are
 `edit` / `read-only` / `hidden` only — the `override` mode is removed. **Conversation** is a
@@ -294,6 +302,39 @@ _Avoid_: Section (the tab/area concept — a Issue Capture Group is not a Sectio
 **Issue Capture Field**:
 A single configured input recorded against a _failed_ **Answer** (an **Issue**), one of the closed type set `text | textarea | select | radio | person`. Declared inside a **Issue Capture Group** per **Case Type**; field keys are **unique within a Case Type**. Values are stored flat in `Answer.capture: Record<fieldKey, string | {loginName,displayName} | Action[]>` in the Answers JSON blob — a `person` field's `{loginName, displayName}` pair is always directory-resolved, chosen from the people picker's search results, since typed text is never offered as an account — sharing the failed-Answer lifecycle: **stripped** when the Answer is no longer a failure, **frozen** once the Case is **Completed**. A field may carry an **intra-group `showWhen`** (references a _sibling_ field's value on the same Answer); a hidden field's value is stripped and starts empty if it becomes visible again. `required` gates Case **completion** only while the field is _visible_. May carry an optional semantic `role` (e.g. `attributedParty`, `remediationOwner`) so cross-Case-Type reporting can find it regardless of its per-Case-Type key — _deferred, not yet built_. The previously first-class **Attributed Party** is now a `person` field — there is one capture engine, not two special cases. `actions` is **not** a declarable type: the verify gate rejects it, and the `Action[]` arm of the stored shape describes values already on disk, not something a Case Type can declare today.
 _Avoid_: Remediation Detail (too narrow — fields are no longer only about remediation), Custom field (overloaded), Metadata
+
+**Root Cause Section**:
+The **Root Cause** tab (Section id `rootCause`): the frontline twin of the **Issues**
+Section. It lists the Case's **Issues** and, under each, the **Root Cause Field**s its
+**Case Type** declares, for the **Responsible Party Manager** to fill in. Live once the
+Case has reached **Reportable** (a Case voided after the milestone stays readable) and
+carries at least one Issue. The manager edits it while the Case is `Actions In Progress`
+_or_ `Completed`, so a cause can be written after the Reviewer has closed the Case; the
+reviewer side (**Assigned Reviewer**, other Reviewers, **Reviewer Manager**, **Case Type
+Owner**, **Journey Owner**, **Controls**) reads it; the **Responsible Party** never sees it.
+Switched on per Case Type by declaring `rootCauseGroups` and listing `rootCause` in
+`sections`; the verify gate refuses one without the other. A `required` Root Cause Field
+is marked as still to record, on the tab and in its Summary block, and holds nothing: no
+transition waits on it ([ADR-0059](./docs/adr/0059-root-cause-is-a-frontline-capture-section-over-the-failed-answer-lifecycle.md)).
+_Avoid_: Root cause for the Complaints **Issue Capture Group** `root-cause` and its
+`rootCauseSummary` field: that is the Reviewer's own capture on the Issues tab, stored in
+`capture`, and not this.
+
+**Root Cause Group**:
+A presentation-only grouping of **Root Cause Field**s on the **Root Cause Section**,
+declared per **Case Type** as `rootCauseGroups`. Same shape and rules as an **Issue
+Capture Group**, collapsed and expanded on its own, apart from the Issues tab's groups.
+
+**Root Cause Field**:
+A typed input the **Responsible Party Manager** records against one **Issue**, declared
+inside a **Root Cause Group**. Same type set and rules as an **Issue Capture Field**
+(choice fields hold a declared option, `showWhen` prunes a hidden sibling's value), except
+that `person` is not yet allowed. Stored flat by field key in the failed Answer's own
+slot, `Answer.rcaCapture`, beside the Reviewer's `capture`: one engine writes both, keys
+are unique within the Case Type's `rootCauseGroups` only, and a Root Cause Field may share
+a key with an Issue Capture Field. Shares the failed-Answer lifecycle: **stripped** when
+the Answer stops failing, kept through a **Reopen**.
+_Avoid_: Issue Capture Field (that is the Reviewer's, in `capture`), RCA field
 
 **Remediation Detail** _(superseded)_:
 Former name for a single configurable extra capture field on a failed **Answer**. Replaced by **Issue Capture Field** / **Issue Capture Group** once attribution and actions were unified into one typed, grouped, conditional capture engine. Kept here only to redirect old references.
@@ -462,7 +503,7 @@ each Case, broken down by **Case Type** and naming each Reviewer's leading **Voi
 _Avoid_: Team Lead, Reviewer Supervisor
 
 **Responsible Party Manager**:
-A SharePoint user in the Responsible Party Managers **SharePoint Group** who manages a team of **Responsible Parties** (e.g. the line manager of a group of call-centre agents being assessed). Sees the `#/reports/responsible-party-team` report — a 12-calendar-month view of their team's assessed Cases, broken down by pass / fail / had-remediation, totalled and per-Responsible-Party. The relationship "Responsible Party X is managed by Responsible Party Manager Y" is denormalised onto every **Case** row twice, as the Reviewer's is. `responsiblePartyManager` (a user field) is the **record**: saving a **Responsible Party** records the manager `SharePointClient.resolveManagers` gives for them in the same PATCH (nobody, if the lookup fails; clearing the Responsible Party clears it), and it decides nothing. `currentResponsiblePartyManager` is the **current** manager and is what `resolveRoles` grants the Role from: because this role posts in the **Conversation**, it must follow who manages the Responsible Party now. The app writes it only when it writes the record, with the same person; afterwards a process outside the app keeps it up to date. When a Responsible Party's manager changes mid-Case the outgoing manager loses posting rights at the first Case load after that process has caught up, with their existing **Messages** staying in the thread, attributed to them. An empty current field grants the Role to nobody. _(This replaces the earlier plan to resolve the Role live from the directory at Case load; [ADR-0038](./docs/adr/0038-manager-fields-split-reporting-snapshot-vs-live-access-role.md), amended.)_ Conventionally distinct from **Reviewer Manager**, though nothing in code depends on that. On a Case they read the **Remediation** Section's breakdown (without the Reviewer's fields) and, like the **Responsible Party** they manage, post in the **Conversation** — their interface for chasing remediation with the **Reviewer**. Withdrawing that posting right — so the Conversation has two parties and the data pipeline's notification rule has one recipient rather than two — **was considered and rejected**: chasing remediation is what the role is for, and a downstream pipeline's simplicity does not buy a shipped access right (data pipeline [ADR-0024](../docs/adr/0024-notification-recipients-are-the-two-parties-who-did-not-speak-last.md); the `section-access.js` matrix is unchanged).
+A SharePoint user in the Responsible Party Managers **SharePoint Group** who manages a team of **Responsible Parties** (e.g. the line manager of a group of call-centre agents being assessed). Sees the `#/reports/responsible-party-team` report — a 12-calendar-month view of their team's assessed Cases, broken down by pass / fail / had-remediation, totalled and per-Responsible-Party. The relationship "Responsible Party X is managed by Responsible Party Manager Y" is denormalised onto every **Case** row twice, as the Reviewer's is. `responsiblePartyManager` (a user field) is the **record**: saving a **Responsible Party** records the manager `SharePointClient.resolveManagers` gives for them in the same PATCH (nobody, if the lookup fails; clearing the Responsible Party clears it), and it decides nothing. `currentResponsiblePartyManager` is the **current** manager and is what `resolveRoles` grants the Role from: because this role posts in the **Conversation**, it must follow who manages the Responsible Party now. The app writes it only when it writes the record, with the same person; afterwards a process outside the app keeps it up to date. When a Responsible Party's manager changes mid-Case the outgoing manager loses posting rights at the first Case load after that process has caught up, with their existing **Messages** staying in the thread, attributed to them. An empty current field grants the Role to nobody. _(This replaces the earlier plan to resolve the Role live from the directory at Case load; [ADR-0038](./docs/adr/0038-manager-fields-split-reporting-snapshot-vs-live-access-role.md), amended.)_ Conventionally distinct from **Reviewer Manager**, though nothing in code depends on that. On a Case they read the **Remediation** Section's breakdown (without the Reviewer's fields) and, like the **Responsible Party** they manage, post in the **Conversation** — their interface for chasing remediation with the **Reviewer**. Where the **Case Type** declares **Root Cause Field**s, they also fill in the **Root Cause Section** on a **Reportable** Case with **Issues**, the one place this Role writes the Answers. Withdrawing that posting right — so the Conversation has two parties and the data pipeline's notification rule has one recipient rather than two — **was considered and rejected**: chasing remediation is what the role is for, and a downstream pipeline's simplicity does not buy a shipped access right (data pipeline [ADR-0024](../docs/adr/0024-notification-recipients-are-the-two-parties-who-did-not-speak-last.md); the `section-access.js` matrix is unchanged).
 _Avoid_: Line Manager (overloaded), RP Manager (jargon abbreviation)
 
 **Case Type Owner**:
@@ -684,6 +725,7 @@ _Avoid_: Overridden Outcome, Amended Outcome (that is the _record_; Current Outc
 - A **Case** has many **Answers**, one per **Applicable Question**.
 - An **Answer** has zero-to-many **Remediation Actions**.
 - A _failed_ **Answer** has zero-or-one **Attributed Party**.
+- A _failed_ **Answer** carries the Reviewer's **Issue Capture Field** values and, apart from them, the **Responsible Party Manager**'s **Root Cause Field** values.
 - A **Case** has one **Conversation** (= many **Messages**).
 - A **Case** has one **Assigned Reviewer** and one **Responsible Party**.
 

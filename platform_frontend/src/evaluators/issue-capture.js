@@ -20,16 +20,24 @@ export { captureDisplayText, isEmptyCaptureValue } from './capture-values.js';
  * Case Type — keys double as storage keys and `showWhen` references,
  * so duplicates would be ambiguous. Throws on the first collision.
  *
+ * Uniqueness is per family of groups, because each family writes its own slot:
+ * a Root Cause Field may share a key with an Issue Capture Field. `fieldNoun`
+ * names the family in the error.
+ *
  * @param {CaptureGroup[] | undefined} groups
+ * @param {string} [fieldNoun]
  */
-export function validateCaptureGroups(groups) {
+export function validateCaptureGroups(
+  groups,
+  fieldNoun = 'Issue Capture Field'
+) {
   /** @type {Set<string>} */
   const seen = new Set();
   for (const group of groups ?? []) {
     for (const field of group.fields) {
       if (seen.has(field.key)) {
         throw new Error(
-          `Duplicate Issue Capture Field key "${field.key}" across capture groups.`
+          `Duplicate ${fieldNoun} key "${field.key}" across capture groups.`
         );
       }
       seen.add(field.key);
@@ -212,6 +220,23 @@ export function applyCapture(
 }
 
 /**
+ * The `required` fields of these groups still empty against one Answer's
+ * captured values, counting only the ones a `showWhen` leaves visible, in
+ * declaration order.
+ *
+ * @param {CaptureGroup[]} groups
+ * @param {Record<string, unknown>} capture
+ * @returns {CaptureField[]}
+ */
+export function unfilledRequiredFields(groups, capture) {
+  return groups.flatMap((group) =>
+    visibleCaptureFields(group.fields, capture).filter(
+      (field) => field.required && isEmptyCaptureValue(capture[field.key])
+    )
+  );
+}
+
+/**
  * Whether any Issue Capture Field the Reviewer must fill is still empty: the
  * completion half of `required`.
  *
@@ -241,14 +266,8 @@ export function unfilledRequiredCapture(
     if (!applicable.has(question.id)) continue;
     const answer = answers[question.id];
     if (!isFailure(question, answer)) continue;
-    /** @type {Record<string, unknown>} */
-    const capture = answer?.[slot] ?? {};
-    for (const group of groups) {
-      for (const field of visibleCaptureFields(group.fields, capture)) {
-        if (field.required && isEmptyCaptureValue(capture[field.key])) {
-          return true;
-        }
-      }
+    if (unfilledRequiredFields(groups, answer?.[slot] ?? {}).length > 0) {
+      return true;
     }
   }
   return false;

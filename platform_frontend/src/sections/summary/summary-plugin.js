@@ -69,6 +69,7 @@ export const SummaryPlugin = /** @type {const} */ ({
         catalogue: snapshot?.catalogue ?? [],
         summarySections: snapshot?.summarySections ?? [],
         captureGroups: config?.captureGroups ?? [],
+        rootCauseGroups: config?.rootCauseGroups ?? [],
         detailFields: config?.detailFields ?? [],
         outcomeOptions: config?.outcomeOptions ?? [],
         sectionLabels: snapshot?.sectionLabels,

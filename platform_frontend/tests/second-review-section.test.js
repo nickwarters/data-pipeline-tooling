@@ -139,6 +139,7 @@ test('the tab order places it between Questions and Issues, renumbering neither'
     'issues',
     'summary',
     'remediation',
+    'rootCause',
     'notes',
     'appealRequest',
     'appealReview',

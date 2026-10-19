@@ -263,6 +263,7 @@ const config = {
     notes: { showInSummary: false },
     issues: { showInSummary: true },
     remediation: { showInSummary: true },
+    // rootCause: { showInSummary: true }, // with rootCauseGroups, below
     summary: {},
     appealRequest: {},
     appealReview: {},
@@ -434,7 +435,11 @@ only place that copy exists; `allowBulkOutcome: true` opts every Question
 Group into the bulk-outcome control, and `questionGroups` overrides that per
 group in either direction (`{ Build: { allowBulkOutcome: false } }`), so a type
 states the rule once and names only the exceptions; `captureGroups` extends
-per-failure capture; `remediationStatuses` narrows which Remediation
+per-failure capture; `rootCauseGroups` declares the Root Cause Fields the
+Responsible Party Manager records per Issue once the Case is reportable, in the
+same shape as `captureGroups` but without `person` fields, and must be paired
+with a `rootCause` entry in `sections` (the verify gate refuses one without the
+other), see [ADR-0059](../adr/0059-root-cause-is-a-frontline-capture-section-over-the-failed-answer-lifecycle.md); `remediationStatuses` narrows which Remediation
 Resolutions a Reviewer is offered (`['complete', 'cancelled']`), see
 [ADR-0037](../adr/0037-question-level-remediation-resolution.md);
 `extraAmendmentReasons` **adds** to the shared Amendment Reasons offered on the

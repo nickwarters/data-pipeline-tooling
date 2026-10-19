@@ -95,6 +95,8 @@ function outcomeAnswers(value) {
  *                       open (raised) appeal → ready for Controls to resolve
  *   complaints-case-5 — Actions In Progress: Remediation Actions sent to the
  *                       adviser (Responsible Party) and still outstanding
+ *   complaints-case-7 — Completed with one failure and a Responsible Party
+ *                       Manager, whose Root Cause tab is still editable
  *   complaints-case-6 — In-progress and unallocated: the candidate the
  *                       "Take a Case" allocation flow reads
  *   complaints-frozen-v1 — Completed against the January Question Bank version;
@@ -427,6 +429,16 @@ export const cases = [
           harmLevel: 'Minor',
           redressRequired: 'No',
         },
+        // The Responsible Party Manager's Root Cause, recorded on this Issue
+        // only, so ?asUser=responsible-party-manager shows one Issue filled in
+        // and the redress Issue below still to do.
+        rcaCapture: {
+          primaryCause: 'Workload',
+          causeDetail:
+            'The shared inbox had no cover over the bank holiday weekend.',
+          preventable: 'Yes',
+          preventionNote: 'Rota cover for the inbox on bank holidays.',
+        },
       },
       'q-cmp-0016': {
         value: 'Poor with harm',
@@ -493,6 +505,48 @@ export const cases = [
     created: '2026-06-02T08:00:00Z',
     assignedAt: '2026-06-02T08:00:00Z',
     etag: 'etag-cm5-v1',
+  },
+  {
+    // Completed with one failure and a Responsible Party Manager, whose Root
+    // Cause tab stays editable after the close: the manager may finish
+    // recording the cause once the Reviewer has moved on.
+    id: 'complaints-case-7',
+    caseType: 'complaints',
+    title: 'Complaint #7',
+    status: 'Completed',
+    assignedReviewer: 'user-reviewer',
+    assignedReviewerManager: 'user-rm',
+    currentReviewerManager: 'user-rm',
+    responsibleParty: 'user-rp',
+    responsiblePartyDisplayName: 'Jordan RP',
+    responsiblePartyManager: 'user-rp-manager',
+    currentResponsiblePartyManager: 'user-rp-manager',
+    answers: {
+      ...outcomeAnswers('Good'),
+      'q-cmp-0016': {
+        value: 'Poor',
+        remediationRequired: 'no',
+        justification: 'Upheld complaint closed without offering redress.',
+        rcaCapture: { primaryCause: 'Training gap' },
+      },
+    },
+    conversation: [],
+    details: {
+      complaintRef: 'CMP-2026-0007',
+      customerName: 'Priya Natarajan',
+      complaintDate: '2026-06-09',
+    },
+    notes: '',
+    reportableAt: _fiveDaysAgo.toISOString(),
+    completedAt: _fiveDaysAgo.toISOString(),
+    outcomeAtCompletion: 'poor',
+    hadRemediation: false,
+    effectiveOutcome: 'poor',
+    effectiveHadRemediation: false,
+    outcomeOverridden: false,
+    created: '2026-06-09T08:00:00Z',
+    assignedAt: '2026-06-09T08:00:00Z',
+    etag: 'etag-cm7-v1',
   },
   {
     // The allocation candidate: sitting in `To-allocate` with no Assigned

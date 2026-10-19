@@ -318,7 +318,7 @@ test('evaluateAccess: allowMessagesWhen cannot reopen the Conversation on a term
 test('summaryBlockIds() lists the Sections that can appear as Summary blocks', () => {
   assert.deepEqual(
     [...summaryBlockIds()],
-    ['details', 'questions', 'issues', 'remediation', 'notes']
+    ['details', 'questions', 'issues', 'remediation', 'rootCause', 'notes']
   );
 });
 

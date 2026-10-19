@@ -176,6 +176,43 @@ export function issueCaptured({
 }
 
 /**
+ * Capture one Root Cause Field on an existing Answer: the frontline manager's
+ * twin of `issueCaptured`, written to the Answer's `rcaCapture` slot so it
+ * never touches what the Reviewer captured.
+ *
+ * @param {{
+ *   answers: Answers,
+ *   rootCauseGroups: import('../../sharepoint-client.js').CaptureGroup[],
+ *   questionId: string,
+ *   fieldKey: string,
+ *   value: import('../../evaluators/issue-capture.js').CaptureValue | null,
+ *   canEditRootCause: boolean,
+ * }} input
+ * @returns {Answers | null}
+ */
+export function rootCauseCaptured({
+  answers,
+  rootCauseGroups,
+  questionId,
+  fieldKey,
+  value,
+  canEditRootCause,
+}) {
+  if (!canEditRootCause) return null;
+  const existing = answers[questionId];
+  if (!existing) return null;
+  const next = applyCapture(
+    existing,
+    rootCauseGroups,
+    fieldKey,
+    value,
+    'rcaCapture'
+  );
+  if (!next) return null;
+  return { ...answers, [questionId]: next };
+}
+
+/**
  * Tick/untick a configured Remediation Action on a failed Answer. Selection is
  * stored as the reviewer-chosen subset on `answer.remediationActions`; only
  * these feed the per-action outcome scoring in `computeConfiguredOutcome`.

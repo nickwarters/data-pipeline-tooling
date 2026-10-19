@@ -131,6 +131,38 @@ function* failedApplicable(catalogue, answers) {
 }
 
 /**
+ * The Case's **Issues**: every active, applicable Question whose Answer fails,
+ * with that Answer, in catalogue order. The same three filters the
+ * remediation rules share, materialised for a caller that renders or counts
+ * them rather than folding over them.
+ *
+ * @param {QuestionDefinition[] | null | undefined} catalogue
+ * @param {Record<string, Answer>} answers
+ * @returns {Array<{ question: QuestionDefinition, answer: Answer }>}
+ */
+export function failedIssues(catalogue, answers) {
+  return Array.from(
+    failedApplicable(catalogue, answers),
+    ([question, answer]) => ({
+      question,
+      answer,
+    })
+  );
+}
+
+/**
+ * Whether the Case has any Issue at all: one failed, applicable, active
+ * Question. Stops at the first, so a gate asking it does not walk the rest.
+ *
+ * @param {QuestionDefinition[] | null | undefined} catalogue
+ * @param {Record<string, Answer>} answers
+ * @returns {boolean}
+ */
+export function hasIssues(catalogue, answers) {
+  return !failedApplicable(catalogue, answers).next().done;
+}
+
+/**
  * The last result, keyed by the identity of the inputs that produced it. Both
  * the tab and the completion gate ask for the rows on every render — and the
  * details textarea re-renders on every keystroke — so without this the
