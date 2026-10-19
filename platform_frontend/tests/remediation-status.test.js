@@ -14,7 +14,13 @@ import {
   remediationDecided,
   anyRemediationRequired,
   setRemediationStatus,
+  failedIssues,
+  hasIssues,
 } from '../src/evaluators/remediation-status.js';
+import { failedQuestions } from '../src/pages/cora-case-review/remediation-view.js';
+import { withDerivedFailureValues } from '../src/evaluators/failure-evaluator.js';
+import complaints from '../case-types/complaints.js';
+import { cases } from '../dev/fixtures/cases.js';
 
 /** @typedef {import('../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
@@ -588,4 +594,67 @@ test('remediationDecided: "yes" alone decides a Question that can record no reme
     }),
     true
   );
+});
+
+// --- Issues -----------------------------------------------------------------
+
+test('failedIssues: the applicable failing Questions with their Answers, in catalogue order', () => {
+  const answers = {
+    q2: { value: 'No' },
+    q1: { value: 'No' },
+    q3: { value: 'Yes' },
+  };
+  assert.deepEqual(
+    failedIssues(CATALOGUE, answers).map(({ question, answer }) => [
+      question.id,
+      answer,
+    ]),
+    [
+      ['q1', answers.q1],
+      ['q2', answers.q2],
+    ]
+  );
+});
+
+test('failedIssues: a failure on a deprecated or inapplicable Question is not an Issue', () => {
+  const catalogue = CATALOGUE.map((q) =>
+    q.id === 'q2' ? { ...q, deprecated: true } : q
+  );
+  assert.deepEqual(
+    failedIssues(catalogue, {
+      q1: { value: 'Yes' },
+      q2: { value: 'No' },
+      q3: { value: 'No' },
+    }),
+    [],
+    'q2 is deprecated, and q3 is shown only once q1 fails'
+  );
+});
+
+test('hasIssues: true once any applicable Answer fails, false otherwise', () => {
+  assert.equal(hasIssues(CATALOGUE, { q2: { value: 'No' } }), true);
+  assert.equal(hasIssues(CATALOGUE, { q1: { value: 'Yes' } }), false);
+  assert.equal(hasIssues(CATALOGUE, {}), false);
+  assert.equal(hasIssues(null, { q1: { value: 'No' } }), false);
+});
+
+test('failedIssues lists the same Issues as the Issues tab on every fixture Case', () => {
+  const catalogue = withDerivedFailureValues(
+    complaints.questions.filter((q) => !q.deprecated),
+    complaints.defaultOutcomeId
+  );
+  let withIssues = 0;
+  for (const caseRow of cases) {
+    const answers = caseRow.answers ?? {};
+    const shown = failedQuestions(
+      /** @type {any} */ ({ catalogue, answers })
+    ).map((q) => q.id);
+    const issues = failedIssues(catalogue, answers).map(
+      ({ question }) => question.id
+    );
+    assert.deepEqual(issues, shown, caseRow.id);
+    assert.equal(hasIssues(catalogue, answers), shown.length > 0, caseRow.id);
+    if (shown.length > 0) withIssues += 1;
+  }
+  assert.ok(withIssues > 0, 'the fixtures must include a Case with Issues');
 });

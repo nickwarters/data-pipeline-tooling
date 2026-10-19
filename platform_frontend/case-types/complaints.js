@@ -64,6 +64,7 @@ const config = {
       ],
     },
     remediation: { showInSummary: true },
+    rootCause: { showInSummary: true },
     summary: {},
     secondReview: {},
     appealRequest: {},
@@ -147,6 +148,49 @@ const config = {
           label: 'Impact notes',
           type: 'text',
           placeholder: 'Optional additional detail.',
+        },
+      ],
+    },
+  ],
+
+  // Root Cause Groups — what the Responsible Party Manager records about the
+  // cause of each Issue on the Root Cause tab, once the Case is reportable.
+  // Stored apart from the Issue capture above, so these keys may repeat its
+  // ones without colliding.
+  rootCauseGroups: [
+    {
+      key: 'cause',
+      label: 'Root cause',
+      fields: [
+        {
+          key: 'primaryCause',
+          label: 'Primary cause',
+          type: 'select',
+          options: [
+            'Training gap',
+            'Process gap',
+            'System',
+            'Workload',
+            'Other',
+          ],
+          required: true,
+        },
+        {
+          key: 'causeDetail',
+          label: 'What happened and why',
+          type: 'textarea',
+        },
+        {
+          key: 'preventable',
+          label: 'Could this have been prevented?',
+          type: 'radio',
+          options: ['Yes', 'No'],
+        },
+        {
+          key: 'preventionNote',
+          label: 'How',
+          type: 'text',
+          showWhen: { preventable: { equals: 'Yes' } },
         },
       ],
     },

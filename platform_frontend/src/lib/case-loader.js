@@ -297,6 +297,7 @@ export class CaseLoader {
         : bankVersion;
 
     validateCaptureGroups(config.captureGroups);
+    validateCaptureGroups(config.rootCauseGroups, 'Root Cause Field');
     validateGeneralQuestions(config.generalQuestions);
 
     if (stampedVersion && versionedExport) {

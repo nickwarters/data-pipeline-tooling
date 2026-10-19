@@ -21,7 +21,7 @@
  */
 
 import { CASE_STATUS } from '../lib/case-statuses.js';
-import { hasTrackableRemediation } from './remediation-status.js';
+import { hasIssues, hasTrackableRemediation } from './remediation-status.js';
 
 /**
  * Whether the Case has reached a reportable milestone.
@@ -71,6 +71,23 @@ export function remediationTabIsLive(caseRow, catalogue) {
     reachedReportable(caseRow) &&
     hasTrackableRemediation(catalogue, caseRow.answers)
   );
+}
+
+/**
+ * Whether the Root Cause Section has anything to be filled in against: the Case
+ * passed the reportable milestone and carries at least one Issue.
+ *
+ * Every Issue, not only those with remediation, because a failure the Reviewer
+ * decided needs no remediation still has a cause. `reachedReportable`, not
+ * `isReportable`, so a Case voided after Send Actions keeps what was written
+ * readable, as the Remediation Section does.
+ *
+ * @param {import('../sharepoint-client.js').CaseRow} caseRow
+ * @param {import('../sharepoint-client.js').QuestionDefinition[]} catalogue
+ * @returns {boolean}
+ */
+export function rootCauseTabIsLive(caseRow, catalogue) {
+  return reachedReportable(caseRow) && hasIssues(catalogue, caseRow.answers);
 }
 
 /**

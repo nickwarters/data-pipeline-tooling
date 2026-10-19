@@ -7,6 +7,7 @@ import {
   captureDisplayText,
   isEmptyCaptureValue,
   unfilledRequiredCapture,
+  unfilledRequiredFields,
   validateCaptureGroups,
   findCaptureField,
   visibleCaptureFields,
@@ -590,5 +591,30 @@ test('unfilledRequiredCapture: reads the slot it is given, not capture', () => {
       'rcaCapture'
     ),
     true
+  );
+});
+
+test('unfilledRequiredFields: the visible, empty required fields, in declaration order', () => {
+  assert.deepEqual(
+    unfilledRequiredFields(REQUIRED_GROUPS, { origin: 'Sales' }).map(
+      (f) => f.key
+    ),
+    ['salesTeam']
+  );
+  assert.deepEqual(
+    unfilledRequiredFields(REQUIRED_GROUPS, {}),
+    [],
+    'a required field its showWhen hides is not outstanding'
+  );
+});
+
+test('validateCaptureGroups: names the family of field in a collision', () => {
+  const groups = [
+    { key: 'a', label: 'A', fields: [TEXT_FIELD] },
+    { key: 'b', label: 'B', fields: [TEXT_FIELD] },
+  ];
+  assert.throws(
+    () => validateCaptureGroups(groups, 'Root Cause Field'),
+    /Duplicate Root Cause Field key "rootCause"/
   );
 });

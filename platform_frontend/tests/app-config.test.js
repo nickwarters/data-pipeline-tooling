@@ -25,6 +25,7 @@ const COMPOSED_SECTION_IDS = [
   'notes',
   'questions',
   'remediation',
+  'rootCause',
   'secondReview',
   'summary',
 ];

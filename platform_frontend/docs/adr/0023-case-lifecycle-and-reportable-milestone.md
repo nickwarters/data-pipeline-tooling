@@ -11,6 +11,11 @@ Responsible Party is asked for, and gates completion, only where some failed Ans
 "Is remediation required?" decision is `yes` (amends [ADR-0012], [ADR-0016],
 [ADR-0021]; storage in [ADR-0007])
 
+Amended (2026-10) by [ADR-0059](./0059-root-cause-is-a-frontline-capture-section-over-the-failed-answer-lifecycle.md): a second write reaches the Answers after the
+milestone, the Responsible Party Manager's Root Cause Fields in each failed
+Answer's `rcaCapture`. Like the remediation resolution, it touches nothing the
+Outcome reads, so the freeze still holds for the Outcome.
+
 ## Context
 
 Today a Case has a binary lifecycle: `In-progress → Completed` (`CaseMachine`,

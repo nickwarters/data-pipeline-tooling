@@ -19,6 +19,10 @@ required details or justification), the store it reads
 Rendering and event handling follow
 [ADR-0034](./0034-store-driven-views-supersede-component-owned-state.md).
 
+Amended (2026-10) by [ADR-0059](./0059-root-cause-is-a-frontline-capture-section-over-the-failed-answer-lifecycle.md): the remediation resolution is no longer the only
+Answers write after the reportable milestone. The Root Cause Section is the
+second, by a different Role, and the two share the Answers ETag.
+
 ## Context
 
 The standalone **Remediation** tab has been parked since the Jun 2026 restructure (#144,

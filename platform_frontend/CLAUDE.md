@@ -9,8 +9,8 @@ Before doing any non-trivial work in this repo, read:
 1. **[CONTEXT.md](./CONTEXT.md)** — domain language. Use these terms exactly when discussing or coding (`Case Type`, `Question Definition`, `Applicable Question`, `Answer`, `Remediation Action`, `Reviewer`, `Responsible Party`, `Case Type Owner`, `Conversation`, `Outcome`).
 2. **[docs/guide/add-a-page.md](./docs/guide/add-a-page.md)** — the one-page
    authoring path: state → `h()`/`svg()`, actions, effects, route entry, and tests.
-3. **[docs/adr/](./docs/adr/)** — 58 architecture decisions, numbered
-   (`0001`–`0058`). Read the status before relying on an older decision, and do
+3. **[docs/adr/](./docs/adr/)** — 59 architecture decisions, numbered
+   (`0001`–`0059`). Read the status before relying on an older decision, and do
    not deviate from an accepted ADR without surfacing the deviation explicitly.
 
 ## Project overview
@@ -458,6 +458,8 @@ src/
       remediation-summary-view.js # the Remediation tracking Summary block, drawn by
                                #   RemediationPlugin.summaryView. The resolution details follow the
                                #   audience, exactly as the Remediation tab does
+      root-cause-summary-view.js # the Root Cause Summary block — what the Responsible Party Manager
+                               #   recorded per Issue — drawn by RootCausePlugin.summaryView
       notes-summary-view.js    # the Notes Summary block, drawn by NotesPlugin.summaryView
       outcome-view.js          # CASE-4 configured Outcome view
       completion-actions.js    # CASE-4 CaseMachine-guarded completion state + pure Summary control; completeCase is
@@ -466,6 +468,7 @@ src/
       void-actions.js          # pure Case Details Void control and the patch behind it
       remediation-view.js      # CASE-5 pure Issues and Remediation Actions view
       remediation-tracking-view.js # pure question-level Remediation tab, reviewer + responsible-party renderings (#499)
+      root-cause-view.js       # pure Root Cause tab: the Root Cause Fields per Issue, over each Answer's rcaCapture
       appeal-actions.js        # CASE-6 immutable Appeal/resolution/amendment state transitions
       appeal-effects.js        # the persistence half of those transitions: injected clock + id, SaveQueue writes (#511)
       appeal-view.js           # CASE-6 pure Appeal request form and history view
@@ -569,6 +572,9 @@ src/
       summary-plugin.js         # Summary roll-up section plugin
     remediation/
       remediation-plugin.js     # Remediation tracking section plugin
+    root-cause/
+      root-cause-plugin.js      # Root Cause section plugin: the Responsible Party Manager's per-Issue
+                                #   root-cause capture, switched on by a Case Type's rootCauseGroups
     notes/
       notes-plugin.js           # Notes section plugin
     conversation/

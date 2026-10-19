@@ -6,6 +6,12 @@ Accepted. Supersedes [ADR-0017](./0017-configurable-remediation-details.md) and
 the capture-specific parts of ADR-0013; lifecycle and identity-resolution rules
 that it explicitly carries forward remain current.
 
+Amended (2026-10) by [ADR-0059](./0059-root-cause-is-a-frontline-capture-section-over-the-failed-answer-lifecycle.md): the engine writes a second slot. `applyCapture` and
+`unfilledRequiredCapture` take the Answer property they read and write, so the
+Responsible Party Manager's Root Cause Fields (`rootCauseGroups`, stored in
+`rcaCapture`) follow these rules apart from the Issue Capture Fields in
+`capture`. Key uniqueness is per family of groups, not across both.
+
 A **Case Type** declares everything captured against a _failed_ **Answer** (an **Issue**) as one model: an ordered list of **Issue Capture Group**s, each holding ordered, typed **Issue Capture Field**s. This replaces the three previously separate concerns on a failed Answer — **Attributed Party**, **Remediation Actions**, and flat Remediation Details — with a single engine. The driver is **consolidation**: Case Type Owners workshopped a shared structure to stop Case Types diverging, and channelled all per-Case-Type variation into this one well-defined slot.
 
 ## Why one engine, not three special cases

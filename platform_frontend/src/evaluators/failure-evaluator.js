@@ -74,10 +74,15 @@ export function isFailure(question, answer) {
  * pre-captured and pre-resolved, and the completion gate would count a decision
  * nobody made this time round.
  *
+ * The frontline manager's root-cause capture is in the list for the same
+ * reason: it explains a failure, so it cannot outlive one. An Answer that fails
+ * again starts its Root Cause empty, as it starts its Issue capture.
+ *
  * @type {Array<keyof Answer>}
  */
 const FAILURE_LIFETIME_KEYS = [
   'capture',
+  'rcaCapture',
   'remediationRequired',
   'freeFormRemediation',
   'remediationStatus',

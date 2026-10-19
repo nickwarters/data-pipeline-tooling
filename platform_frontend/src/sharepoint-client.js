@@ -700,6 +700,13 @@
  * Amendment Reasons in `lib/amendment-reasons.js` rather than narrowing them,
  * which is why the key is named for the direction it travels in.
  *
+ * `rootCauseGroups` declares the **Root Cause Fields** the Responsible Party
+ * Manager fills in against each Issue on the Root Cause tab, stored in each
+ * failed Answer's `rcaCapture`. Same group and field shape as `captureGroups`,
+ * but its own key namespace. Absent or empty switches the Root Cause Section off
+ * for the Case Type, and the verify gate holds it in step with
+ * `sections.rootCause`.
+ *
  * `selectQuestions` optionally narrows the bank for one Case by its `details`,
  * returning the questions to keep.
  *
@@ -727,6 +734,7 @@
  * voidReasons?: string[],
  * extraAmendmentReasons?: import('./lib/amendment-reasons.js').AmendmentReason[],
  * captureGroups?: CaptureGroup[],
+ * rootCauseGroups?: CaptureGroup[],
  * generalQuestions?: GeneralQuestionField[],
  * generalQuestionsPlacement?: 'before' | 'after',
  * detailFields?: CaseDetailField[]

@@ -351,9 +351,11 @@ state and keeps `eq 0`.
 
 ```js
 /**
- * @typedef {{ value: string | string[], justification?: string, capture?: Record<string, string | { loginName: string, displayName: string } | Array<string | RemediationAction>> }} Answer
+ * @typedef {{ value: string | string[], justification?: string, capture?: Record<string, string | { loginName: string, displayName: string } | Array<string | RemediationAction>>, rcaCapture?: Record<string, string | { loginName: string, displayName: string }> }} Answer
  */
 ```
+
+`capture` is what the Reviewer records against a failed Answer on the Issues tab; `rcaCapture` is what the Responsible Party Manager records against it on the Root Cause tab (ADR-0059). One engine writes both, and neither reads the other's keys.
 
 A **Remediation Action** the Reviewer selected on a failed Answer is `{ id, text }` in `answer.remediationActions`; how that Answer's remediation ended up is `answer.remediationStatus` (ADR-0037). The `{ id, text, status, cancelReason? }` shape in an `actions`-typed Issue Capture Field value is ADR-0024's retired store: no Case Type declares one and nothing reads it any more (#497).
 

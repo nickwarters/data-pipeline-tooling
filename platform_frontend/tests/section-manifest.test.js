@@ -31,6 +31,7 @@ test('the configured list is the Section list, and repeated reads agree', () => 
     'notes',
     'questions',
     'remediation',
+    'rootCause',
     'secondReview',
     'summary',
   ]);
@@ -73,7 +74,7 @@ test('summaryBlockIds() is derived from the registry (summary blocks in order)',
   // amend Sections never appear as Summary blocks.
   assert.deepEqual(
     [...summaryBlockIds()],
-    ['details', 'questions', 'issues', 'remediation', 'notes']
+    ['details', 'questions', 'issues', 'remediation', 'rootCause', 'notes']
   );
 });
 
@@ -92,6 +93,7 @@ test('registered plugins derive tab order and ids', () => {
       'issues',
       'summary',
       'remediation',
+      'rootCause',
       'notes',
       'appealRequest',
       'appealReview',

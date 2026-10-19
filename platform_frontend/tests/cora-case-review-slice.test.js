@@ -5316,6 +5316,13 @@ function everySectionVisibleCase() {
   const config = {
     detailFields: [{ key: 'customerName', label: 'Customer name' }],
     captureGroups: [],
+    rootCauseGroups: [
+      {
+        key: 'cause',
+        label: 'Cause',
+        fields: [{ key: 'why', label: 'Why', type: 'text' }],
+      },
+    ],
     appeal: { raisedBy: 'journeyOwner' },
     outcomeOptions: [{ id: 'pass', wording: 'Compliant', severity: 0 }],
     computeOutcome: () => ({ outcome: 'pass' }),
@@ -5361,6 +5368,7 @@ test('a Case Type that renames every Section renames every tab and every heading
       questions: { tab: 'Assess', heading: 'Assessment' },
       issues: 'Findings',
       remediation: 'Fix-ups',
+      rootCause: 'Why it happened',
       summary: 'Wrap-up',
       notes: 'Scribbles',
       conversation: 'Chat',
@@ -5400,6 +5408,7 @@ test('a Case Type that renames every Section renames every tab and every heading
       'Assess',
       'Findings',
       'Fix-ups',
+      'Why it happened',
       'Wrap-up',
       'Scribbles',
       'Challenge',
@@ -5416,6 +5425,7 @@ test('a Case Type that renames every Section renames every tab and every heading
     'Assessment',
     'Findings',
     'Fix-ups',
+    'Why it happened',
     'Wrap-up',
     'Scribbles',
     'Challenge',

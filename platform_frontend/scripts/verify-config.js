@@ -212,6 +212,10 @@ export async function checkCaseTypes(options = {}) {
     failures.push(
       ...checkCaptureGroups(entry.slug, file, config, ISSUE_CAPTURE)
     );
+    failures.push(
+      ...checkCaptureGroups(entry.slug, file, config, ROOT_CAUSE_CAPTURE)
+    );
+    failures.push(...checkRootCauseSwitch(entry.slug, file, config));
     failures.push(...checkQuestions(entry.slug, file, config));
     failures.push(...checkSections(entry.slug, file, config));
     failures.push(...checkQuestionGroups(entry.slug, file, config));
@@ -275,6 +279,61 @@ const ISSUE_CAPTURE = {
 };
 
 /**
+ * The Responsible Party Manager's Root Cause capture, declared as
+ * `rootCauseGroups`. A person field is refused until the Root Cause tab can
+ * search the directory for one.
+ *
+ * @type {CaptureGroupsSpec}
+ */
+const ROOT_CAUSE_CAPTURE = {
+  property: 'rootCauseGroups',
+  fieldNoun: 'Root Cause Field',
+  groupNoun: 'Root Cause Group',
+  recorder: 'the Responsible Party Manager',
+  types: CAPTURE_FIELD_TYPES.filter((type) => type !== 'person'),
+};
+
+/**
+ * The Root Cause Section is switched on by two keys, and they must agree:
+ * `rootCauseGroups` says what to record, `sections.rootCause` puts the tab in
+ * the Case Type's Section set. Groups without the Section would never be shown;
+ * the Section without groups would be a tab with nothing in it, which the
+ * Section refuses to show.
+ *
+ * @param {string} slug
+ * @param {string} file
+ * @param {any} config
+ * @returns {Failure[]}
+ */
+function checkRootCauseSwitch(slug, file, config) {
+  const groups = config?.rootCauseGroups;
+  const declaresGroups = Array.isArray(groups) && groups.length > 0;
+  const sections = config?.sections;
+  // An absent `sections` is every Section, so only an explicit set can leave
+  // the Root Cause Section out.
+  const explicit =
+    sections !== null &&
+    typeof sections === 'object' &&
+    !Array.isArray(sections);
+  const listsSection = explicit && Object.hasOwn(sections, 'rootCause');
+  /** @param {string} message @returns {Failure[]} */
+  const fail = (message) => [
+    { kind: 'case-type', file, message: `Case Type "${slug}": ${message}` },
+  ];
+  if (declaresGroups && explicit && !listsSection) {
+    return fail(
+      'declares `rootCauseGroups` but its `sections` leave out `rootCause`, so the Root Cause tab never shows them'
+    );
+  }
+  if (listsSection && !declaresGroups) {
+    return fail(
+      'lists `sections.rootCause` but declares no `rootCauseGroups`, so the Root Cause tab has nothing to record'
+    );
+  }
+  return [];
+}
+
+/**
  * Shape checks over one family of a Case Type's capture groups: every field is
  * one the family may declare, choice fields offer something to choose, and a
  * person offers nothing to choose from.
@@ -313,7 +372,7 @@ function checkCaptureGroups(slug, file, config, spec) {
   }
 
   try {
-    validateCaptureGroups(groups);
+    validateCaptureGroups(groups, spec.fieldNoun);
   } catch (error) {
     fail(messageOf(error));
   }

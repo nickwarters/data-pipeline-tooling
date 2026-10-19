@@ -28,6 +28,7 @@ test('sectionIds() is the composed set (appeal split into request/review + amend
     'notes',
     'questions',
     'remediation',
+    'rootCause',
     'secondReview',
     'summary',
   ]);
