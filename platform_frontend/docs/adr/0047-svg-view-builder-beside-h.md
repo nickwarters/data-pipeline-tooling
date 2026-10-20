@@ -148,3 +148,32 @@ ADR-0048 records the page-level provenance colors and ordering; the rest of this
 primitive's SVG and accessibility contract remains unchanged. Multi-mark groups
 still use stable key-based series slots; a singleton group centers its bar on
 the x-axis tick so sparse data aligns with its label.
+
+## Amendment (2026-10, Hairline Spotlight)
+
+The primitive's visual design changes; its call does not. The same
+`GroupedBarChart({ data, config })` with the same data shape renders the new
+look, and the only additions are two optional config keys.
+
+- **Provisional marks are drawn again, as a dashed outline in their own tone.**
+  The 2026-08 amendment made `provisional` metadata only; it now carries a
+  visual rule once more, but not a colour: the mark keeps its series tone, so
+  colour is left to mean the series. The legend swatch follows the same rule.
+- **`neutral` is the chart's own ink.** It maps to the new
+  `--cora-color-chart-ink` token (grey-7 light, grey-5 dark) instead of
+  `--cora-color-on-surface`, so history is not the darkest thing on the page.
+- **Hairline geometry.** Slim rounded bars (at most 24px), hairline gridlines,
+  no vertical axis rule or tick marks, the y-axis label as a caption above the
+  plot, a compact flowing legend, and x-axis labels thinned so they never
+  collide and never clip at an edge.
+- **Value labels print only where they earn it**: the peak, and every mark of
+  the spotlit group. Every mark keeps its full value in its accessible name and
+  tooltip.
+- **A spotlight.** `emphasis` (`'latest'` by default, a group key, or `'none'`)
+  draws an `aria-hidden` accent-muted band behind one group, tagged with
+  `emphasisLabel` (default `'Latest'`). The reserved bands above the plot gain a
+  caption band for the tag and the y-axis caption.
+
+The accessibility contract (a named `role="group"` root, `role="img"` focusable
+marks with full descriptions, the HTML tooltip hooks) and the keyed structure
+are unchanged.

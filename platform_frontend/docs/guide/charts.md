@@ -42,18 +42,27 @@ than silently canonicalising misleading accessible text.
 
 `value` must be finite and non-negative. `tone` is optional and uses an
 existing design-token tone: `accent`, `success`, `warning`, `danger`, `info`, or
-`neutral`. `seriesOrder` places listed keys into deterministic legend and
-multi-mark visual slots; unlisted keys follow in key order. Every mark has a
-token-backed fill and stroke. A provisional mark keeps its `provisional` flag
-in the accessible description and marker class, but that metadata does not
-change the tone-backed SVG attributes. The class is a semantic/testing marker
-only and intentionally has no live CSS rule. This is a visual encoding supplied
-by the caller, not a second data source or an inferred status.
+`neutral`. `neutral` is the chart's own ink, `--cora-color-chart-ink` (grey-7 in
+light, grey-5 in dark), deliberately quieter than body text so history is not
+the darkest thing on the page. `seriesOrder` places listed keys into
+deterministic legend and multi-mark visual slots; unlisted keys follow in key
+order.
+
+A solid mark is filled with its tone and has no outline. A `provisional` mark
+keeps the same tone but is drawn as a dashed outline over a faint wash of it,
+so "not yet settled" reads without spending a second colour: colour stays free
+to mean the series. The legend swatch of a series with any provisional mark is
+drawn the same way, so the key always matches a bar on the chart. The
+`--provisional` class remains a semantic/testing marker with no live CSS rule;
+the flag also reaches the accessible description and the tooltip. This is a
+visual encoding supplied by the caller, not a second data source or an
+inferred status.
 
 The required configuration is `width`, `height`, and `ariaLabel`. Optional
-`margin`, `yMax`, `tickCount`, `seriesOrder`, axis labels, `formatValue`, and
-`formatGroupLabel` control the fixed chart geometry, ordering, and copy. Invalid
-keys, values, formatters, or geometry throw explicitly. An explicit `yMax` must be
+`margin`, `yMax`, `tickCount`, `seriesOrder`, axis labels, `formatValue`,
+`formatGroupLabel`, `emphasis` and `emphasisLabel` control the fixed chart
+geometry, ordering, and copy. Invalid keys, values, formatters, or geometry
+throw explicitly. An explicit `yMax` must be
 positive and cover every value; derived all-zero and constant data use a
 positive, sensible domain with useful ticks. `tickCount` defaults to five and
 must be at least two. Text and labels are passed as SVG text nodes and
@@ -64,18 +73,52 @@ figures, so nonzero subunit values such as `0.004` do not become `0`, while
 values such as `3.333` remain readable.
 
 The left and bottom margins are clamped to safe minimums when axis labels would
-otherwise be clipped by the SVG viewBox. A zero top margin remains valid; the
-legend and value-label bands are reserved above the plot independently.
+otherwise be clipped by the SVG viewBox, whether they were supplied or left at
+their defaults. A zero top margin remains valid; the legend, caption and
+value-label bands are reserved above the plot independently.
+
+### The look
+
+The chart is drawn as hairlines and slim marks. Bars take about 62% of their
+group's width and never more than 24px, with lightly rounded corners; a
+multi-mark group is a cluster centred on its tick. Gridlines are hairlines at
+each non-zero tick; there is no vertical axis rule and no tick marks, and the
+x-axis line is the baseline. The y-axis label, when given, is a small uppercase
+caption above the top-left of the plot rather than rotated down its side.
+
+Not every bar prints its value. The peak value prints (where it is above zero),
+and so does every mark of the spotlit group, a zero included; the full value of
+every mark stays in its accessible name and tooltip, and a page's own table or
+figures carry the rest.
+
+### The spotlight
+
+One group is spotlit: a tinted `--cora-color-accent-muted` band behind it, its
+tag above in the accent colour, and its group label in strong text. `emphasis`
+picks the group: `'latest'` (the default) for the last group, any group key, or
+`'none'`. `emphasisLabel` is the tag, such as `'Today'` or `'This month'`,
+defaulting to `'Latest'`. An `emphasis` that names no group throws. The band is
+`aria-hidden`: the marks already name their group, so it is not announced
+twice. The brand red belongs to the spotlight; the bars themselves do not need
+to wear it.
+
+### Legend and x-axis labels
 
 The chart generates one legend item per series, with the full series name in
-the item's `aria-label` and `<title>`. X-axis group labels and ticks are evenly
-sampled when there are more than twelve groups, retaining the first and last
-group and omitting duplicate visible labels. The legend wraps to rows based on
-available width and truncates only the visible label when needed. At most twelve
-legend rows are accepted; an overflow throws an error naming the series and
-group counts. Legend rows and a value-label band reserve space above the plot,
-including when the caller supplies a zero top margin, so value labels cannot
-land in the legend.
+the item's `aria-label` and `<title>`. Legend items sit one after another at
+their own width and wrap to a new row when the next would overrun the plot;
+only the visible label is truncated, and only when a single item is wider than
+the plot. At most twelve legend rows are accepted; an overflow throws an error
+naming the series and group counts. Legend rows, a caption band (the y-axis
+caption and the spotlight tag) and a value-label band reserve space above the
+plot, including when the caller supplies a zero top margin, so value labels
+cannot land in the legend.
+
+X-axis group labels are thinned to a common stride wide enough that the
+longest label clears its neighbour, never more than twelve, always retaining the
+first and last group and omitting duplicate visible labels. A label that would
+run past either edge of the chart is aligned to that edge instead of being
+clipped.
 
 The returned root is named with `role="group"`. Each bar has its own stable
 key, `role="img"`, and `aria-label` containing its group, series, formatted
@@ -128,14 +171,17 @@ totals window.
 
 That one report feeds all three readings. `statsChartView()` in
 [`src/pages/my-stats/stats-chart-view.js`](../../src/pages/my-stats/stats-chart-view.js)
-maps buckets to groups, drawing a solid `Settled` mark and a solid red-accent
+maps buckets to groups, drawing a solid `Settled` mark and a dashed-outline
 `Provisional` one and omitting either where the bucket has no days of that
-provenance. The provisional metadata remains available to the tooltip and
-accessible name. Settled is always the first series and uses
-`--cora-color-on-surface`, while Provisional uses `--cora-color-accent`; both
-tokens follow the forced or system theme. A daily bucket therefore draws one
-bar, and the current monthly bucket can draw both. The y-axis domain is rounded
-up to a multiple of four so counts get whole-number ticks. `headlineStripView()` in
+provenance. Both series use the `neutral` tone, so every bar is the one chart
+ink and provenance is carried by the outline, the tooltip and the accessible
+name. Settled is always the first series. A daily bucket therefore draws one
+bar, and the current monthly bucket can draw both. The last bucket is the one
+that reaches today, so it is spotlit with `emphasisLabel` `Today` on a daily
+range and `This month` on a monthly one. The y-axis domain is four times the
+smallest whole round step that covers the data (1, 2, 3, 4, 5, 10, 15, 20, 25,
+30, 40, 50 and so on), so the ticks are whole Cases a reader counts in: 0, 20,
+40, 60, 80 rather than 0, 17, 34, 51, 68. `headlineStripView()` in
 [`src/pages/my-stats/headline-strip-view.js`](../../src/pages/my-stats/headline-strip-view.js)
 renders the same report's figures beneath the full-width chart: total (asterisked,
 `* excludes today`), average per working day with its divisor, active days, and

@@ -155,6 +155,18 @@ in light and dark themes, while the provisional flag remains available to the
 tooltip, accessible name, and marker class. The totals rule is unchanged:
 color does not mean included or excluded.
 
+## Amendment (2026-10, Hairline Spotlight)
+
+Provenance is visible again, by outline rather than colour. Both series use
+the chart's neutral ink; the settled series is solid and the provisional series
+is a dashed outline over a faint wash of the same ink, which is close to the
+original solid-versus-hollow rule. The brand red moves off the bars entirely
+and onto a spotlight: the last bucket, which is always the one reaching today,
+sits on an accent-tinted band tagged `Today` on a daily range or `This month` on
+a monthly one. The y-axis ticks are whole round steps (0, 20, 40, 60, 80)
+instead of quarters of a multiple of four. The totals rule is unchanged:
+neither the outline nor the spotlight means included or excluded.
+
 ## Consequences
 
 - **This is a bend in the MI policy, and it is deliberate.** The split becomes
