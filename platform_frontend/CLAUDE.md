@@ -413,7 +413,8 @@ src/
       cora-people-picker.js        # pure People Picker renderer: the directory's matches plus a
                                   #   status line; nothing else is ever selectable
       cora-group-progress.js      # pure per-Question-Group progress strip
-      cora-grouped-bar-chart.js   # pure grouped SVG chart with keyed accessible bars
+      cora-grouped-bar-chart.js   # pure grouped SVG chart with keyed accessible bars, hairline
+                                  #   axes and an optional spotlit group (emphasis/emphasisLabel)
       cora-status-banner.js       # the save-status surface (saving/reconnecting/failed/conflict),
                                   #   rendered in the Case Review page chrome
       cora-toast.js
@@ -499,7 +500,8 @@ src/
     my-stats/
       headline-strip-view.js      # pure four-figure strip (total, avg per working day, active days,
                                   #   busiest day); deliberately not the dashboard's KPI strip
-      stats-chart-view.js         # pure report -> grouped bar chart, on-surface published vs red-accent live
+      stats-chart-view.js         # pure report -> grouped bar chart: one chart ink, live days as dashed
+                                  #   outlines, the bucket reaching today spotlit as Today / This month
       stats-breakdown-table-view.js # pure report -> grain-matched Case Type count/percentage table
     cora-team-stats.js             # store-driven Reviewer Manager-only empty shell
     dashboard/

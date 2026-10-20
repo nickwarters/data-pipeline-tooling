@@ -327,12 +327,12 @@ Its rows are the Reviewer's **Reportable** Cases — `Actions In Progress` or
 as reviewed work — bucketed onto browser-local calendar dates from their
 `reportableAt` instant. The file wins for every day it covers; the tail answers
 only for the days after it. Marks from the file are solid and marks from the
-tail retain provisional metadata; both are rendered as solid bars on this chart
-so the source states remain readable by color. A day that is finished but
+tail are dashed outlines in the same chart ink, so the source states are
+readable by outline rather than colour. A day that is finished but
 unpublished is real work and counts, and a day still in progress is excluded
-from the totals. Settled marks are the first series and use the theme's
-`on-surface` token; tail marks follow them and use the theme's red accent token, so
-the distinction remains readable in both color modes.
+from the totals. Settled marks are the first series; the bucket reaching today
+is spotlit and tagged `Today` or `This month`, and that spotlight is the only
+red on the chart.
 A failed tail, or a feed older than the clamp, is stated in one muted line and
 never hides the published half.
 

@@ -4002,7 +4002,18 @@
   vector-effect: non-scaling-stroke;
 }
 
-[data-cora-root] .cora-grouped-bar-chart__value-label {
+[data-cora-root] .cora-grouped-bar-chart__bar:hover {
+  opacity: 0.8;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-cora-root] .cora-grouped-bar-chart__bar {
+    transition: opacity 120ms ease;
+  }
+}
+
+[data-cora-root] .cora-grouped-bar-chart__value-label,
+[data-cora-root] .cora-grouped-bar-chart__emphasis {
   pointer-events: none;
 }
 
@@ -4010,8 +4021,7 @@
   vector-effect: non-scaling-stroke;
 }
 
-[data-cora-root] .cora-grouped-bar-chart__axis-line,
-[data-cora-root] .cora-grouped-bar-chart__tick-line {
+[data-cora-root] .cora-grouped-bar-chart__axis-line {
   fill: none;
   stroke: var(--cora-color-border-strong);
   vector-effect: non-scaling-stroke;
@@ -4030,21 +4040,42 @@
     .cora-grouped-bar-chart__value-label,
     .cora-grouped-bar-chart__legend-label,
     .cora-grouped-bar-chart__x-axis-label,
-    .cora-grouped-bar-chart__y-axis-label
+    .cora-grouped-bar-chart__y-axis-label,
+    .cora-grouped-bar-chart__emphasis-label
   ) {
   fill: var(--cora-color-text-muted);
   font-family: var(--cora-font-body);
   font-size: var(--cora-font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-cora-root] .cora-grouped-bar-chart__legend-label {
+  fill: var(--cora-color-on-surface);
 }
 
 [data-cora-root]
   :where(
-    .cora-grouped-bar-chart__group-label,
-    .cora-grouped-bar-chart__x-axis-label,
-    .cora-grouped-bar-chart__y-axis-label
+    .cora-grouped-bar-chart__group-label--emphasis,
+    .cora-grouped-bar-chart__value-label--emphasis,
+    .cora-grouped-bar-chart__x-axis-label
   ) {
   fill: var(--cora-color-on-surface);
   font-weight: var(--cora-font-weight-semibold);
+}
+
+[data-cora-root]
+  :where(
+    .cora-grouped-bar-chart__y-axis-label,
+    .cora-grouped-bar-chart__emphasis-label
+  ) {
+  font-size: var(--cora-font-size-2xs);
+  font-weight: var(--cora-font-weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+[data-cora-root] .cora-grouped-bar-chart__emphasis-label {
+  fill: var(--cora-color-accent);
 }
 
 [data-cora-root] .cora-chart-tooltip {

@@ -7,19 +7,31 @@ import { GroupedBarChart } from '../../components/base/cora-grouped-bar-chart.js
 const CHART_WIDTH = 720;
 const CHART_HEIGHT = 320;
 
+const TICK_INTERVALS = 4;
+const TICK_STEP_MULTIPLIERS = [1, 1.5, 2, 2.5, 3, 4, 5];
+
 /**
- * The y-axis is a count of Cases, so its ticks have to be whole ones. The
- * chart's own derived domain is chosen to look tidy for arbitrary data and
- * happily lands on quarter-Cases for small numbers, so the domain is named
- * here instead: rounded up to a multiple of four, which the default five ticks
- * divide exactly, and never smaller than four so an empty range still draws a
+ * The y-axis is a count of Cases, so its ticks have to be whole ones, and they
+ * should be numbers a reader counts in: 0, 20, 40, 60, 80 rather than 0, 17,
+ * 34, 51, 68. The chart's own derived domain is chosen to look tidy for
+ * arbitrary data and happily lands on quarter-Cases for small numbers, so the
+ * domain is named here instead: four times the smallest whole round step that
+ * covers the data, and never smaller than four so an empty range still draws a
  * readable axis rather than a scale from zero to one.
  *
  * @param {number} maxValue
  * @returns {number}
  */
-function integerYMax(maxValue) {
-  return Math.max(4, Math.ceil(maxValue / 4) * 4);
+function wholeTickYMax(maxValue) {
+  const needed = maxValue / TICK_INTERVALS;
+  for (let magnitude = 1; ; magnitude *= 10) {
+    for (const multiplier of TICK_STEP_MULTIPLIERS) {
+      const step = multiplier * magnitude;
+      if (Number.isInteger(step) && step >= needed) {
+        return step * TICK_INTERVALS;
+      }
+    }
+  }
 }
 
 /**
@@ -27,13 +39,16 @@ function integerYMax(maxValue) {
  *
  * Provenance is the only thing the two series carry: settled counts came from
  * the Reviewer's report and provisional counts were computed in the browser a
- * moment ago. The settled series is always placed first and uses the theme's
- * neutral on-surface token; the provisional series follows it and uses the
- * accent token as a solid bar while retaining its provisional metadata. The
- * colors make the two states readable at a glance; the tooltip and accessible
- * name retain the source detail. A day that is finished but not yet published
- * is real work, and today is not finished at all. What separates those two is
- * the totals below, not the bar's height.
+ * moment ago. Both are the same count of the same work, so both wear the one
+ * neutral chart ink; the provisional series is drawn as a dashed outline, which
+ * says "not yet published" without spending a colour on it. The settled series
+ * is always placed first. A day that is finished but not yet published is real
+ * work, and today is not finished at all. What separates those two is the
+ * totals below, not the bar's height.
+ *
+ * The last bucket is always the one that reaches today, so it is spotlit and
+ * tagged with the period it is: today on a daily range, this month on a
+ * monthly one. The brand red belongs to that tag and band alone.
  *
  * A bucket draws only the series it actually has days for, so a settled day
  * shows one bar rather than one bar and an empty slot. Monthly buckets can hold
@@ -66,7 +81,7 @@ export function statsChartView(report) {
               label: 'Provisional',
               value: bucket.provisional,
               provisional: true,
-              tone: 'accent',
+              tone: 'neutral',
             },
           ]),
     ]),
@@ -89,7 +104,8 @@ export function statsChartView(report) {
       ariaLabel: `Reportable Cases by ${report.range.grain}, ${report.range.label.toLowerCase()}`,
       yAxisLabel: 'Cases',
       seriesOrder: ['settled', 'provisional'],
-      yMax: integerYMax(maxValue),
+      yMax: wholeTickYMax(maxValue),
+      emphasisLabel: report.range.grain === 'day' ? 'Today' : 'This month',
     },
   });
 }

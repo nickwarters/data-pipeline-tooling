@@ -124,6 +124,14 @@ settled attribution and the Case-row cache remains the live-tail filter. The
 settled/live provenance still remains explicit in the data and accessible
 metadata.
 
+## Amendment (2026-10, Hairline Spotlight)
+
+The planned team chart follows ADR-0048's 2026-10 amendment instead: both
+series in the neutral chart ink, the live tail as a dashed outline, and the
+bucket reaching today spotlit with the accent band and tag. A team chart whose
+series need their own colours (Pass and Fail, say) keeps their tones; the
+spotlight is unchanged by them.
+
 ## Consequences
 
 - **The live tail depends on an operational cache.** Allocation writes
