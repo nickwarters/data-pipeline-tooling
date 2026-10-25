@@ -301,6 +301,35 @@ dataclass without a migration beside it?* Two things to know when answering that
   carry the `case_id` and `as_of_utc` their builder derives, and none of that
   belongs in a feed's row schema.
 
+## Index an append-only target's key
+
+`AppendOnly` ([core-primitives.md](core-primitives.md)) matches every staged row
+to the target with a correlated `EXISTS (SELECT 1 FROM target WHERE <key
+match>)`, twice per write. With nothing indexed on the key, SQLite answers each
+with a full `SCAN` of the target, so a write costs (rows in the batch) x (rows
+ever landed) and a feed gets slower every day it runs; with an index it is one
+`SEARCH ... USING INDEX` per row. The Writer does not create the index, so a
+database under migration control declares one, in a numbered migration beside
+the table:
+
+- **On exactly the columns the `AppendOnly(...)` declares, in that order.** A
+  composite key's index leads with the key's own columns, or the lookup cannot
+  use it. Name it `ix_<table>_key`.
+- **Plain, not `UNIQUE`.** A `UNIQUE` index refuses to build if the database
+  already holds a duplicate key, and the migration would fail on a real
+  environment. The Writer's own check enforces the contract; the index only makes
+  it cheap. Tightening to `UNIQUE` is a later migration, once the data is known
+  to be clean.
+- **Building it is a one-off scan of the table**, run by the ordinary `migrate`;
+  nothing else changes.
+
+`sharepoint_cases` declares these in `raw/0004` (`case_observation`) and
+`silver/0004` (`case_version` and the seven Detail Tables); `person` is upserted
+on its account and is not an append-only target.
+`tests/pipelines/test_sharepoint_cases/test_indexes.py` drives one real poll,
+records the Writers it actually builds, and fails if any append-only key lacks
+an index or its match statements plan as a `SCAN`.
+
 ## Which subjects are under migration control
 
 `sharepoint_cases`, `case_support_log`, `cora_access_log`, `reviewer_activity`,

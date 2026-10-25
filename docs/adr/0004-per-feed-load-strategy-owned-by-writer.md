@@ -34,7 +34,10 @@ The strategies:
   silently. Physical uniqueness
   on the target is deliberately **not** required here — the single-writer rule
   plus the Writer's one transaction is the boundary, and a later schema
-  migration can add a UNIQUE constraint without changing these semantics.
+  migration can add a UNIQUE constraint without changing these semantics. What
+  a target does need is an *index* on the key, not for correctness but so a
+  write costs the batch rather than the history; see
+  [migrations.md](../migrations.md#index-an-append-only-targets-key).
 
 ## How the ownership is mechanised
 

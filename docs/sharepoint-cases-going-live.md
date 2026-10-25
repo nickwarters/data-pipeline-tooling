@@ -169,6 +169,22 @@ unset, the resolver emits a warning to stderr so a run cannot silently hide
 that it used the fallback; the go/no-go checklist below still requires the
 explicit production variable for a live machine.
 
+Then bring the feed's databases to their declared shape, which a Writer will not
+do for itself ([migrations.md](migrations.md)):
+
+```sh
+python -m cli migrate --env prod --subject sharepoint_cases --check   # what is pending
+python -m cli migrate --env prod --subject sharepoint_cases
+```
+
+That includes the indexes on every append-only key (`raw/0004`, `silver/0004`).
+They are what keep a poll costing the size of its batch rather than the size of
+the history: without them each staged row is matched by a full scan of the
+table it is appended to, and the polls slow down every day the feed runs. On a
+database that already holds history, building them is a one-off scan of each
+table; they are plain indexes, so a duplicate key already there cannot make the
+migration fail.
+
 ## Stage 4 — the first live run, by hand
 
 Run it yourself, once, deliberately. Not through the scheduler.
@@ -251,6 +267,8 @@ Do not proceed past stage 4 unless all of these hold:
 
 - [ ] `SITE` and every `CaseList`'s `list_id` verified against that list's own
       settings page, each GUID double-checked by a second pair of eyes.
+- [ ] `python -m cli migrate --env prod --subject sharepoint_cases --check`
+      reports nothing pending, so the append-only key indexes exist.
 - [ ] No two `CaseList` entries share a `(site, list_id)`, a `list_name` or a
       `case_type`.
 - [ ] `Modified` indexed, or the list is comfortably under 5,000 rows and someone

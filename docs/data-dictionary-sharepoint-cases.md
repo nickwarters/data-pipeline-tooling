@@ -55,6 +55,19 @@ column of a re-presented row against the row already stored; a per-read stamp
 would differ on every overlapping poll and turn each ordinary re-read into an
 append-only conflict. The rows record *what the list said*, and only that.
 
+## Indexes on the append-only keys
+
+Each append-only table carries a plain index named `ix_<table>_key` on exactly
+the key columns its `Load strategy` row below declares, in that order (raw:
+`raw/0004`; silver: `silver/0004`, for `case_version` and the seven Detail
+Tables). They add no column and change no row. `AppendOnly` matches every staged
+row to the table by that key, and the index is what turns each match from a scan
+of the whole table into a lookup, so a poll costs its batch rather than its
+history ([migrations.md](migrations.md#index-an-append-only-targets-key)). They
+are deliberately not `UNIQUE`: that would refuse to build over a duplicate key
+already stored. `person`, upserted on `account`, and the quarantine and gold
+databases carry none.
+
 **The one exception is `pipeline_run_id`**, the reserved run-provenance column
 every table-backed Writer stamps
 ([ADR-0020](adr/0020-writer-stamped-run-provenance-column.md)). It escapes the

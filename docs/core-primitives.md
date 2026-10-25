@@ -273,7 +273,12 @@ Deliverables and SQLite tables:
   `InsertOrIgnore` would silently drop rows for constraint breaches having
   nothing to do with duplicate identity. Physical uniqueness on the target is
   not required: the single-writer rule plus the Writer's one transaction is the
-  boundary today.
+  boundary today. **An index on the key columns is**, in practice: both of its
+  match statements are correlated `EXISTS` subqueries against the target, so
+  without one each staged row costs a full scan of the target and a write grows
+  with the history rather than the batch. The Writer creates none; a migrated
+  database declares a plain index on exactly the declared key, beside the table
+  ([migrations.md](migrations.md#index-an-append-only-targets-key)).
 
 The file Writers accept `Refresh()`, `AccumulateByRun(...)`, and `InsertOrIgnore()`
 strategies: `Refresh()` overwrites the file; `AccumulateByRun(...)` reads any
