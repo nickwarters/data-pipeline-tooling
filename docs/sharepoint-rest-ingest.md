@@ -30,6 +30,12 @@ safe.** The two questions are answered in two places: the schedule answers only
 *is today a working day?*, and the feed's durable watermark answers *what changed
 since the last successful poll?* A pass with nothing new to fetch still polls,
 finds no rows, rebuilds gold and advances the watermark — cheap and convergent.
+(Cheap per list too: a list whose window came back empty records its
+`raw:<type>:read` and `raw:<type>:observation` steps, so the run log still shows
+it was polled, and then stops — no raw write, and none of its silver, person or
+Detail Table steps, so it opens no connection to raw, silver or quarantine. Its
+`ListPoll` still carries zero counts and names `person` and every Detail Table,
+and its watermark advances like any other's. Gold is rebuilt either way.)
 (A pass repeated *inside* the safety lag gets no window at all and stops before
 writing anything.) Each pass appends its own decision row to
 `<base>/_orchestration/runs.db`, so the audit trail shows every invocation.
