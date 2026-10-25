@@ -21,6 +21,8 @@ published once, over every list's accumulated history.
 **Every watermark is committed last**, after gold has been written, because
 advancing one is what vouches for its window having been *published*. A run that
 fails anywhere above leaves them alone and the next run re-polls and converges.
+They commit **together** -- one ``commit_all``, one transaction, all or none --
+so even a failure while committing leaves every list on its old watermark.
 Under a dry run nothing is committed: a step's writes are previewed by the
 ambient run context the runner makes active, and the checkpoint -- not a
 pipeline step, so with no ambient skip to inherit -- is guarded explicitly.
@@ -93,6 +95,7 @@ from tools.integrations.sharepoint_rest import (
 )
 from tools.medallion import medallion
 from tools.source_checkpoint import (
+    CheckpointCommit,
     InstantWindow,
     SourceCheckpointStore,
     instant_window,
@@ -1177,15 +1180,21 @@ def run(
 
     # Visibly last, and only on a real run. Advancing a watermark is what vouches
     # for its window having been *published*, so nothing above may be allowed to
-    # fail silently: every step either committed or raised before this line.
+    # fail silently: every step either committed or raised before this line. The
+    # lists commit together -- one transaction, all or none -- so a failure here
+    # leaves every list on its old watermark rather than some advanced.
     if not context.dry_run:
-        for poll in polls:
-            checkpoints.commit(
-                SharePointSource(poll.case_list.site, poll.case_list.list_id).key,
-                poll.window.end,
-                batch_id=poll.ingestion_batch_id,
-                pipeline_run_id=context.pipeline_run_id,
-            )
+        checkpoints.commit_all(
+            [
+                CheckpointCommit(
+                    SharePointSource(poll.case_list.site, poll.case_list.list_id).key,
+                    poll.window.end,
+                    poll.ingestion_batch_id,
+                    context.pipeline_run_id,
+                )
+                for poll in polls
+            ]
+        )
 
     return polls
 

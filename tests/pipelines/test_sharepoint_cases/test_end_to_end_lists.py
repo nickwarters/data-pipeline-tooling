@@ -27,7 +27,7 @@ from tests._sharepoint_cases_fixtures import (
     run,
 )
 from tests.framework_testing import RecordingRunLog, read_rows
-from tools.integrations.sharepoint_rest import SharePointFeedError
+from tools.integrations.sharepoint_rest import SharePointFeedError, SharePointSource
 from tools.medallion import medallion
 from tools.source_checkpoint import SourceCheckpointStore
 from tools.store import StoreRegistry
@@ -180,5 +180,40 @@ def test_a_retry_after_a_partial_failure_converges_and_advances_both_lists(base_
         assert sorted(row["case_type"] for row in read_rows(layer, table)) == sorted(
             case_list.case_type for case_list in TWO_LISTS
         ), table
+    assert checkpoints.watermark(SOURCE.key) == SERVER_NOW - SAFETY_LAG
+    assert checkpoints.watermark(OTHER_SOURCE.key) == SERVER_NOW - SAFETY_LAG
+
+
+def test_every_polled_list_is_committed_in_one_batch_with_its_own_provenance(
+    base_dir, monkeypatch
+):
+    # The watermarks commit together: one commit_all, so fifteen lists cost one
+    # transaction and a failure while committing cannot advance some of them.
+    batches = []
+    real_commit_all = SourceCheckpointStore.commit_all
+
+    def spy(self, commits):
+        batches.append(list(commits))
+        return real_commit_all(self, commits)
+
+    monkeypatch.setattr(SourceCheckpointStore, "commit_all", spy)
+
+    polls = run(
+        RunContext(base_dir=base_dir, pipeline=FEED_NAME, pipeline_run_id="run-7"),
+        client=two_list_client(),
+        case_lists=TWO_LISTS,
+    )
+
+    assert len(batches) == 1
+    assert {c.pipeline_run_id for c in batches[0]} == {"run-7"}
+    # Each list keeps the batch id of its own poll.
+    assert {c.source_key: c.batch_id for c in batches[0]} == {
+        SharePointSource(poll.case_list.site, poll.case_list.list_id).key: (
+            poll.ingestion_batch_id
+        )
+        for poll in polls
+    }
+    assert {c.source_key for c in batches[0]} == {SOURCE.key, OTHER_SOURCE.key}
+    checkpoints = SourceCheckpointStore(base_dir)
     assert checkpoints.watermark(SOURCE.key) == SERVER_NOW - SAFETY_LAG
     assert checkpoints.watermark(OTHER_SOURCE.key) == SERVER_NOW - SAFETY_LAG

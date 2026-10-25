@@ -794,6 +794,16 @@ raises, because a watermark that moved backwards would quietly re-poll covered
 ground and hide that a run had lost its place. The `batch_id` is opaque
 provenance handed in by the caller, not derived here.
 
+**A run that polled several sources commits them together.**
+`commit_all([CheckpointCommit(source_key, window_end, batch_id,
+pipeline_run_id), ...])` advances every one in a single connection and a single
+`BEGIN IMMEDIATE` transaction: all or none, each held to the same
+never-backwards rule (the error names the offending source and *nothing* in the
+batch is committed). Fifteen lists are one transaction rather than fifteen
+connections to a network share, and a failure while committing cannot leave some
+lists advanced and the rest not. `commit` is `commit_all` for one source; an empty
+batch does nothing and creates no file.
+
 **A run's time is never a source's watermark.** The run registry knows when
 this pipeline last succeeded, and `FreshnessRequirement` makes that easy to
 reach for; it is a fact about this box's clock, and under a failed run it and
@@ -864,7 +874,7 @@ vouching for actually landed.
 
 The two halves above wired into a real feed: **every** Case list declared in
 `CASE_LISTS`, each polled by its own `Modified` window into the same append-only
-raw and silver tables, then reduced to gold once and checkpointed per list. It
+raw and silver tables, then reduced to gold once and checkpointed per list (all in one commit). It
 follows the ordinary scaffold shape — one function per medallion step, driven by
 `run(context)` — and the first two are deliberately thin. Landing the list's rows as immutable
 versions is one job and interpreting them is another: raw and silver do no
@@ -878,7 +888,8 @@ tuple of them. All Case Types share one SharePoint list template, so every list
 gets identical processing and onboarding one is a new entry with its own GUID.
 `run(context, *, client=None, case_lists=CASE_LISTS)` loops over them, doing
 source → raw → silver per list, publishes gold once over the accumulated
-history of all of them, and only then commits each list's watermark. It returns
+history of all of them, and only then commits every list's watermark together
+(one `commit_all`). It returns
 one `ListPoll` per list polled — a list polled again inside the safety lag is
 skipped, not failed.
 
@@ -957,8 +968,9 @@ and in the returned `ingestion_batch_id` instead.
 
 **5. Every watermark is committed last, after gold.** Advancing one vouches for
 its window having been *published*, not merely fetched — so the commits are the
-final statement of `run`, in one block below every list's steps and every gold
-table. That is why they are not committed per list after its silver write.
+final statement of `run`, in one `commit_all` below every list's steps and every
+gold table. That is why they are not committed per list after its silver write,
+and why they are one transaction rather than one per list.
 
 Each list has its own watermark, keyed on `(site, list_id)`, so a newly onboarded
 list does a first load while the others resume. Where a partial failure lands:
@@ -967,7 +979,7 @@ list does a first load while the others resume. Where a partial failure lands:
 |---|---|
 | A list's raw or silver step | The lists before it are in raw/silver (append-only, committed per step). **No gold, no watermark advanced.** The next run re-polls every list from unchanged watermarks, `AppendOnly` no-ops the re-reads, and gold rebuilds whole. |
 | A gold table | Earlier gold tables stay refreshed. No watermark advanced — same convergence. |
-| Inside the commit loop | The lists before it advanced; the rest simply re-poll a wider window next time. Gold was already published from the whole history. |
+| The commit itself | `commit_all` is one transaction, so **no** list advanced: every list re-polls a wider window next time. Gold was already published from the whole history. |
 
 `run` returns a `ListPoll` per list, each carrying that list, its window, its
 batch id and its row counts.

@@ -73,7 +73,8 @@ survives as `SharePointSource` beside the Reader that polls the list.
 
 - A new polled source is a stable string key, a Reader handed an
   `InstantWindow`, and the four visible lines in `run()`: `watermark`,
-  `instant_window`, the landings, and `commit` after gold. See the checkpoint
+  `instant_window`, the landings, and `commit` after gold (a feed that polls
+  several sources commits them in one `commit_all`, all or none). See the checkpoint
   section of
   [adding-a-feed.md](../adding-a-feed.md#sourcecheckpointstorebase_dir--where-the-polling-got-to).
 - **One on-disk change.** `_checkpoints/sharepoint.db` is renamed
