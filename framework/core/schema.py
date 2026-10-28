@@ -72,12 +72,15 @@ class SchemaValidator:
 
     Derived from the dataclass's fields — name gives the required column, the
     annotation gives the required type. Extra columns are ignored (the contract
-    is the declared fields only). Reports every breach at once in one located
-    message, then raises, so an abort names the full problem.
+    is the declared fields only) unless ``strict=True``, which makes the declared
+    fields the *whole* column set: every undeclared column is a breach, reported
+    alongside the rest. Reports every breach at once in one located message,
+    then raises, so an abort names the full problem.
     """
 
-    def __init__(self, schema: type) -> None:
+    def __init__(self, schema: type, *, strict: bool = False) -> None:
         self._schema = schema
+        self._strict = strict
         self._expected = _declared_fields(schema)
         self._row_checks = _declared_row_checks(schema)
         self._nullable = _declared_nullability(schema)
@@ -123,6 +126,15 @@ class SchemaValidator:
                 ill_typed.add(name)
             elif not self._nullable[name] and frame[name].isna().any():
                 problems.append(f"column {name!r} contains null value(s)")
+        # Strict mode closes the column set. Like presence, it is a claim about
+        # the shape, not the values, so it holds on a zero-row frame too.
+        if self._strict:
+            declared = {name for name, _ in self._expected}
+            problems.extend(
+                f"unexpected column {name!r}"
+                for name in frame.columns
+                if name not in declared
+            )
         # Value rules run on the same frame via the shared traversal, but only
         # over columns that carry the declared dtype — a wrong-typed column's
         # dtype breach is the prior problem to fix, and running e.g. a string rule
