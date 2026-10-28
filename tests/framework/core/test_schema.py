@@ -70,6 +70,53 @@ def test_schema_validator_ignores_columns_not_declared_in_the_schema():
     SchemaValidator(CaseA).validate(dataset)  # does not raise
 
 
+def test_strict_schema_validator_passes_a_frame_with_exactly_the_declared_columns():
+    SchemaValidator(CaseA, strict=True).validate(
+        Dataset.from_pandas(_silver_frame())
+    )  # does not raise
+
+
+def test_strict_schema_validator_names_every_undeclared_column():
+    # Strict mode closes the column set: each extra column is its own located
+    # breach, so the abort names everything that has to be narrowed away.
+    frame = _silver_frame()
+    frame["unexpected"] = pd.Series([1, 2], dtype="int64")
+    frame["also_unexpected"] = pd.Series(["x", "y"], dtype="string")
+    dataset = Dataset.from_pandas(frame)
+
+    with pytest.raises(ValidationError) as excinfo:
+        SchemaValidator(CaseA, strict=True).validate(dataset)
+
+    message = str(excinfo.value)
+    assert "unexpected column 'unexpected'" in message
+    assert "unexpected column 'also_unexpected'" in message
+    assert "case_ref" not in message
+
+
+def test_strict_schema_validator_reports_extras_alongside_other_breaches():
+    # One located message still names the full problem: a missing column and an
+    # extra one are reported together rather than one masking the other.
+    frame = _silver_frame().rename(columns={"case_ref": "case_reference"})
+    dataset = Dataset.from_pandas(frame)
+
+    with pytest.raises(ValidationError) as excinfo:
+        SchemaValidator(CaseA, strict=True).validate(dataset)
+
+    message = str(excinfo.value)
+    assert "missing column 'case_ref'" in message
+    assert "unexpected column 'case_reference'" in message
+
+
+def test_strict_schema_validator_checks_the_column_set_on_a_zero_row_frame():
+    # Like presence, the column set is a claim about shape, not values, so an
+    # empty window carrying an undeclared column still breaches.
+    frame = _silver_frame().iloc[0:0].copy()
+    frame["unexpected"] = pd.Series([], dtype="int64")
+
+    with pytest.raises(ValidationError, match="unexpected column 'unexpected'"):
+        SchemaValidator(CaseA, strict=True).validate(Dataset.from_pandas(frame))
+
+
 @dataclass
 class Measurement:
     count: int

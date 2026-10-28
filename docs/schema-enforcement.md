@@ -61,7 +61,7 @@ What it checks:
 
 - **Columns present** — every declared field must be a column. Columns the
   schema does not declare are ignored, so silver may carry more than the schema
-  names.
+  names — unless the validator is built **strict** (see below).
 - **Dtypes match** — each present column's dtype must match the declared Python
   type. The supported mapping:
 
@@ -72,6 +72,32 @@ What it checks:
   | `float`              | float                 |
   | `bool`               | bool / boolean        |
   | `date` / `datetime`  | datetime64            |
+
+### Strict mode — only the declared columns
+
+`SchemaValidator(CaseA, strict=True)` (or the eager step
+`enforce(CaseA, data, strict=True)`) closes the column set: the declared fields
+are the *whole* contract, and every column the schema does not declare is a
+breach, reported in the same located message as the rest:
+
+```
+CaseA schema: missing column 'case_ref'; unexpected column 'case_reference'
+```
+
+It is **opt-in**; the default stays lenient, so existing feeds are unaffected.
+Use it where a silver or gold table should hold exactly its schema and a stray
+column — a typo'd rename, an upstream addition nobody declared — should fail the
+run rather than land quietly. Like column presence, it is a claim about shape,
+so it holds on a zero-row frame too.
+
+Strict means *every* undeclared column, with no exemptions — including the
+reserved provenance column (`RUN_PROVENANCE_COLUMN`, `pipeline_run_id`) that
+every table-backed Writer stamps. Enforcement comes **before** the write, so in
+the ordinary enforce → write shape that column does not exist yet. A step that
+enforces data already read back from a table (enforce → write → read/transform →
+enforce again) narrows it with `SelectColumns` before the second enforcement,
+as the scaffolded `to_silver` already narrows its raw read; the Writer re-stamps
+the provenance column on the way out.
 
 ### A zero-row frame satisfies any declared schema
 

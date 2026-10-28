@@ -343,6 +343,34 @@ def test_enforce_without_a_reject_writer_is_coerce_then_validate():
     assert _steps(run_log) == ["read", "coerce", "schema_validator"]
 
 
+def test_enforce_ignores_undeclared_columns_by_default():
+    with active_context(_context()[0]):
+        data = read(given_rows([{"record_id": "a", "amount": "5", "extra": "x"}]))
+        result = enforce(Row, data)
+
+    assert "extra" in result.columns
+
+
+def test_strict_enforce_fails_the_schema_validator_step_on_an_undeclared_column():
+    # The breach is the validator's, so the run log blames `schema_validator`
+    # and nothing downstream — a write — is reached with the extra column.
+    context, run_log = _context()
+    with active_context(context):
+        data = read(given_rows([{"record_id": "a", "amount": "5", "extra": "x"}]))
+        with pytest.raises(ValidationError, match="unexpected column 'extra'"):
+            enforce(Row, data, strict=True)
+
+    assert _steps(run_log) == ["read", "coerce", "schema_validator"]
+
+
+def test_strict_enforce_passes_data_with_exactly_the_declared_columns():
+    with active_context(_context()[0]):
+        data = read(given_rows([{"record_id": "a", "amount": "5"}]))
+        result = enforce(Row, data, strict=True)
+
+    assert list(result.columns) == ["record_id", "amount"]
+
+
 # --- dry run -----------------------------------------------------------------
 
 
