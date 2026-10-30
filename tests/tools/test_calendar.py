@@ -148,3 +148,29 @@ def test_invalid_yaml_is_reported_as_a_value_error(tmp_path):
         WorkingDayCalendar.from_yaml(path)
 
     assert str(path) in str(caught.value)
+
+
+def test_add_working_days_skips_the_weekend_and_never_counts_the_start():
+    calendar = WorkingDayCalendar()
+    friday = dt.date(2026, 5, 22)
+
+    assert calendar.add_working_days(friday, 0) == friday
+    assert calendar.add_working_days(friday, 1) == dt.date(2026, 5, 25)
+    assert calendar.add_working_days(friday, 5) == dt.date(2026, 5, 29)
+
+
+def test_add_working_days_skips_holidays():
+    calendar = WorkingDayCalendar(holidays=[dt.date(2026, 5, 25)])
+
+    assert calendar.add_working_days(dt.date(2026, 5, 22), 1) == dt.date(2026, 5, 26)
+
+
+def test_add_working_days_from_a_weekend_counts_from_the_next_working_day():
+    calendar = WorkingDayCalendar()
+
+    assert calendar.add_working_days(dt.date(2026, 5, 23), 1) == dt.date(2026, 5, 25)
+
+
+def test_add_working_days_rejects_a_negative_count():
+    with pytest.raises(ValueError, match="must not be negative"):
+        WorkingDayCalendar().add_working_days(dt.date(2026, 5, 22), -1)

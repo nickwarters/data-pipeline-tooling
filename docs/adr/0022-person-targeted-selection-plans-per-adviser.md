@@ -1,8 +1,18 @@
 ---
-status: accepted
+status: accepted, partly superseded by ADR-0033
 ---
 
 # Person-targeted Selection plans per Adviser, and counts a check at Reportable
+
+> **Partly superseded by [ADR-0033](0033-person-targeted-selection-plans-across-a-selection-group-to-a-committed-ten.md)**
+> (2026-10-30). The planning unit is now a **Selection group**, not one Case
+> Type; there is one number — a **Check target** of 10 that is also the cap — and
+> no Check minimum; a **Case Type quota** replaces both Variation quotas, with
+> combined checks the default; and the cadence is 20 working days normally, 10
+> while Behind, with an overdue line at 25. Everything else below stands: planning
+> per Adviser, counting at Reportable, one outstanding check, no Void
+> replacement, the rule-neutral Sync aggregate, metrics over a trace,
+> `code_version`, and the verdicts.
 
 **A Case Type declares exactly one Selection mode.** In *person-targeted* mode,
 Selection plans per **Adviser** against a pro-rata **Check target** — it answers
