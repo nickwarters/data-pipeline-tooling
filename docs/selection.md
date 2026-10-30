@@ -261,6 +261,39 @@ This is the simplest form. Cells not named in `targets` get no Cases of their
 own and are used only to make up other cells. Nothing records which level a
 Case was made up from; that would need a stamped column or a trace rung.
 
+## Person-targeted selection — who is due a check, and which Case
+
+`PersonTargetedSelection` (in `tools.person_targeted_selection`) is the processor
+for the other **Selection mode**: it plans per **Adviser** across a **Selection
+group** rather than filling a pool to targets. It has the same shape as
+`TargetedSelection` — a frozen config and a processor that takes it — and is one
+`transform` step over the roster's sales:
+
+```python
+from tools.person_targeted_selection import (
+    PersonTargetedSelection,
+    PersonTargetedSelectionConfig,
+)
+
+config = PersonTargetedSelectionConfig(
+    case_types=("ct_a", "ct_b", "ct_c", "ct_d", "ct_e"),
+    quota_case_type="ct_a",
+)
+selection = PersonTargetedSelection(
+    config, checks=checks, current=current, as_of=run_date, calendar=calendar
+)
+pool = transform(selection, sales, name="person-targeted selection")
+```
+
+It returns one sale per Adviser who is due a check and has one available,
+largest shortfall first; `selection.plan(sales)` also returns every Adviser's
+standing and **Check verdict**. Every rule behind it — the pro-rata target and
+cap, the reserved **Case Type quota**, the **Check cadence**, highest risk first —
+is a public pure function, specified in
+[`person-targeted-selection.md`](person-targeted-selection.md), with the decision
+in [ADR-0022](adr/0022-person-targeted-selection-plans-per-adviser.md) as amended
+by [ADR-0033](adr/0033-person-targeted-selection-plans-across-a-selection-group-to-a-committed-ten.md).
+
 ## Explainability — why each Case was (or wasn't) selected
 
 Selecting *which advisers' Cases get reviewed* is itself a governed act that will
