@@ -98,6 +98,22 @@ class WorkingDayCalendar:
             day -= timedelta(days=1)
         return days
 
+    def add_working_days(self, day: date, n: int) -> date:
+        """The date ``n`` working days after ``day``.
+
+        ``day`` itself is never counted, so ``n=0`` returns it unchanged and
+        ``n=1`` from a Friday is the following Monday. Walks forward, skipping
+        weekends and holidays.
+        """
+        if n < 0:
+            raise ValueError(f"`n` must not be negative, got {n!r}")
+        counted = 0
+        while counted < n:
+            day += timedelta(days=1)
+            if self.is_working_day(day):
+                counted += 1
+        return day
+
 
 def _parse_holidays(value: Any, path: Path) -> list[date]:
     """The ``holidays`` key: a list of ``YYYY-MM-DD`` dates."""

@@ -57,7 +57,7 @@ toolchain, a domain language, or a release. Two rules follow:
   `deliverables` / `source_checkpoint` (where every polled source got to, and
   the pure window rule over it — ADR-0030) /
   `environments` / migrations / orchestration /
-  observability / `targeted_selection` utilities in the top-level `tools/` package — both siblings of
+  observability / `targeted_selection` / `person_targeted_selection` utilities in the top-level `tools/` package — both siblings of
   `framework/`,
   not facades. `shared/` contains application-wide declarations such as
   environment roots, kept separate from the resolver in `tools/` so other
@@ -130,7 +130,7 @@ toolchain, a domain language, or a release. Two rules follow:
   (`tools.retry` / `tools.calendar` / `tools.orchestration` /
   `tools.observability` / `tools.environments` /
   `tools.migrations` / `tools.deliverables` /
-  `tools.targeted_selection`) are a sibling
+  `tools.targeted_selection` / `tools.person_targeted_selection`) are a sibling
   utility package, not a facade.
   The facades are the stable contract;
   [`docs/public-api.md`](docs/public-api.md) lists the surface, the internal

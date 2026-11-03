@@ -110,6 +110,20 @@ cal.last_n_working_days(2, date(2026, 1, 3))   # a Saturday
 For an availability criterion, `result[-1]` is the earliest eligible day (the
 window's far edge) and `result[0]` the most recent.
 
+### `add_working_days(day, n) -> date`
+The date `n` working days **after** `day`, walking forward and skipping weekends
+and holidays. `day` itself is never counted, so `n=0` returns it unchanged and
+`n=1` from a Friday is the following Monday; a negative `n` is a `ValueError`.
+
+```python
+cal.add_working_days(date(2026, 5, 22), 1)    # a Friday
+# date(2026, 5, 25)  -> the Monday
+```
+
+Person-targeted Selection reads its **Check cadence** with it: the next check is
+selectable a declared number of working days after the previous one reached
+Reportable ([person-targeted-selection.md](person-targeted-selection.md)).
+
 ## Where the calendar is used — orchestration
 
 A scheduled pipeline reaches the calendar through its `Schedule`. The worked
