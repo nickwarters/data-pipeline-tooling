@@ -836,3 +836,11 @@ test('case review is not a destination: no nav item and no landing rule', () => 
     )
   );
 });
+
+test('route table: a route is titled by its own title, else its nav label', () => {
+  const table = routeTable(makeContext());
+  assert.equal(table['team-stats'].title, 'Team Stats');
+  assert.equal(table.case.title, 'Case');
+  assert.equal(table['team-cases'].title, 'Team Cases');
+  assert.equal(table.root.title, undefined);
+});

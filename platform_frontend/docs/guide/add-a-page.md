@@ -147,6 +147,12 @@ if the route needs an eligibility check before mounting — a pure predicate; th
 engine owns the bounce that follows a `false`. Add a
 `nav: { label, order }` if the page belongs in the navigation bar, and its
 audience defaults to that same guard, so most pages say who they are for once.
+The nav label is also the page's tab title ("Greeting — CORA"); a page with no
+nav item, or one whose tab should read differently, declares `title` instead.
+It is worth getting right: it is the text Edge pastes when someone copies the
+address bar. A page that learns something more specific once its data loads —
+the Case page titles itself with the Case Reference and Case Type — calls
+`setPageTitle()` from `src/lib/page-title.js` in its effect.
 Add `defaultFor` with a `defaultForOrder` only if this page is where some user
 should land when they have asked for nothing in particular.
 

@@ -34,6 +34,7 @@ registerCaseType({
 
 const {
   caseReviewReducer,
+  caseReviewTitleParts,
   conversationPanelMode,
   createRouteSlice,
   createInitialCaseReviewState,
@@ -3989,6 +3990,9 @@ test('route: mock-mode store shell keeps Review working at the existing URL', as
   );
 
   assert.equal(state.routes.caseReview.snapshot?.loaded, true);
+  // The tab is retitled with the Case Reference and Case Type once the Case
+  // loads: it is the text Edge pastes for a copied link to this Case.
+  assert.equal(document.title, 'Config-driven Case · Example Review — CORA');
   // Appeal Review is not among them: this persona is a Reviewer, and the
   // Section is Controls-only. Neither is Appeal Request: that tab belongs to
   // the Case Type's configured appeal raiser, and a Reviewer never raises one.
@@ -6483,4 +6487,43 @@ test('save failures: a Responsible Party failure with no pick to undo puts the p
   const row = state.routes.caseReview.snapshot.caseRow;
   assert.equal(row.responsibleParty, '');
   assert.equal('responsiblePartyDisplayName' in row, false);
+});
+
+test('title: a loaded, visible Case is titled by its Case Reference then its Case Type', () => {
+  assert.deepEqual(
+    caseReviewTitleParts({
+      loaded: true,
+      caseRow: /** @type {any} */ (caseRow),
+    }),
+    ['Config-driven Case', 'Example Review']
+  );
+});
+
+test('title: a Case Row with no Title falls back to its id, as the Case tables do', () => {
+  assert.deepEqual(
+    caseReviewTitleParts({
+      loaded: true,
+      caseRow: /** @type {any} */ ({ ...caseRow, title: '  ' }),
+    }),
+    ['Case c1', 'Example Review']
+  );
+});
+
+test('title: a denied, failed or unfinished load says nothing about the Case', () => {
+  const row = /** @type {any} */ (caseRow);
+  assert.equal(
+    caseReviewTitleParts({ loaded: true, accessDenied: true, caseRow: row }),
+    null
+  );
+  assert.equal(
+    caseReviewTitleParts({
+      loaded: false,
+      error: 'Case not found.',
+      caseRow: row,
+    }),
+    null
+  );
+  assert.equal(caseReviewTitleParts({ loaded: false, caseRow: row }), null);
+  assert.equal(caseReviewTitleParts({ loaded: true, caseRow: null }), null);
+  assert.equal(caseReviewTitleParts(null), null);
 });

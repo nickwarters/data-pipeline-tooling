@@ -619,3 +619,50 @@ test('store route: unmounting mid-read aborts the request and produces no error 
   );
   assert.deepEqual(toasts, [], 'an abort raises no toast');
 });
+
+test('registerStoreRoute: each mount titles the tab with the route title before the page mounts', async () => {
+  const registration = routeRegistrationSpy();
+  registerStoreRoute(/** @type {any} */ (registration.router), {
+    paths: ['#/titled'],
+    load: markerModule('Titled'),
+    context: {},
+    title: 'Team Cases',
+  });
+  registerStoreRoute(/** @type {any} */ (registration.router), {
+    paths: ['#/untitled'],
+    load: markerModule('Untitled'),
+    context: {},
+  });
+
+  document.title = 'CMP-1 · Complaints — CORA';
+  await registration
+    .handlerFor('#/titled')
+    .mount(document.createElement('main'), {});
+  assert.equal(document.title, 'Team Cases — CORA');
+
+  await registration
+    .handlerFor('#/untitled')
+    .mount(document.createElement('main'), {});
+  assert.equal(
+    document.title,
+    'CORA',
+    "a route with no title does not keep the previous page's"
+  );
+});
+
+test('registerStoreRoute: a guard returning false leaves the title to the route it bounces to', async () => {
+  const registration = routeRegistrationSpy();
+  registerStoreRoute(/** @type {any} */ (registration.router), {
+    paths: ['#/guarded-title'],
+    load: markerModule('Guarded'),
+    context: {},
+    guard: () => false,
+    title: 'Secret',
+  });
+
+  document.title = 'Home — CORA';
+  await registration
+    .handlerFor('#/guarded-title')
+    .mount(document.createElement('main'), {});
+  assert.equal(document.title, 'Home — CORA');
+});

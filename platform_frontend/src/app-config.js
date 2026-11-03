@@ -197,12 +197,21 @@ export const APP_CONFIG = {
       id: 'case',
       paths: ['#/case/:caseType/:id', '#/case/:id'],
       page: caseReviewPage,
+      // Until the Case loads; the page then retitles the tab with the Case
+      // Reference and Case Type, which is what a pasted link shows.
+      title: 'Case',
     },
-    { id: 'team-cases', paths: ['#/team-cases'], page: teamCasesPage },
+    {
+      id: 'team-cases',
+      paths: ['#/team-cases'],
+      page: teamCasesPage,
+      title: 'Team Cases',
+    },
     {
       id: 'my-cases',
       paths: ['#/my-cases'],
       page: responsiblePartyPage,
+      title: 'My Cases',
       // A Responsible Party's own queue is where their day starts. Ranked
       // behind the Reviewer rule and ahead of Controls: precedence between the
       // three lives in these numbers and nowhere else, so no predicate has to
@@ -214,6 +223,7 @@ export const APP_CONFIG = {
       id: 'journey-cases',
       paths: ['#/journey-cases'],
       page: journeyCasesPage,
+      title: 'Journey Cases',
       // List-scope Journey Owner capability: only a user who owns at least one
       // Case Type as a Journey Owner may see this view. Read off the
       // capability rather than off the RESOLVED sources, which differ only
