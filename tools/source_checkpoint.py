@@ -134,6 +134,14 @@ _UPSERT_CHECKPOINT = """
 
 _SELECT_WATERMARK = "SELECT watermark_utc FROM source_checkpoints WHERE source_key = ?"
 
+_CHECKPOINT_FIELDS = (
+    "source_key",
+    "watermark_utc",
+    "committed_at_utc",
+    "batch_id",
+    "pipeline_run_id",
+)
+
 _TABLE_EXISTS = (
     "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'source_checkpoints'"
 )
@@ -177,6 +185,32 @@ class SourceCheckpointStore:
         finally:
             con.close()
         return dt.datetime.fromisoformat(row[0]) if row else None
+
+    def list_checkpoints(self, source_key: str | None = None) -> list[dict[str, str]]:
+        """Inspect persisted watermarks and provenance in source-key order.
+
+        ``source_key`` filters by exact equality when supplied. An absent file,
+        table or matching row returns an empty list. SQLite and filesystem
+        failures propagate: unreadable control state is not an unseen source.
+        This opens read-only and never creates or migrates checkpoint state.
+        """
+        try:
+            self.path.stat()
+        except FileNotFoundError:
+            return []
+        con = connect(self.path, self._busy_timeout_ms, read_only=True)
+        try:
+            if con.execute(_TABLE_EXISTS).fetchone() is None:
+                return []
+            query = f"SELECT {', '.join(_CHECKPOINT_FIELDS)} FROM source_checkpoints"
+            parameters = ()
+            if source_key is not None:
+                query += " WHERE source_key = ?"
+                parameters = (source_key,)
+            rows = con.execute(query + " ORDER BY source_key", parameters).fetchall()
+            return [dict(zip(_CHECKPOINT_FIELDS, row)) for row in rows]
+        finally:
+            con.close()
 
     def commit(
         self,

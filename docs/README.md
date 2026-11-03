@@ -652,10 +652,11 @@ review queue with plain-Python rules, and separately aggregates an
 `AccumulateByRun`, so rerunning the same `logical_run_id` replaces that run's
 rows without touching prior loads.
 
-### Operate pipelines from the CLI — run, status, runs, log
+### Operate pipelines from the CLI — run, status, runs, log, checkpoints
 
 For the everyday operator tasks — running a pipeline, checking its status,
-listing recent runs, inspecting a run log — use `python -m cli` instead
+listing recent runs, inspecting a run log or a source watermark — use
+`python -m cli` instead
 of writing a wrapper script. It is a thin shell over the runner and the
 `RunRegistry` / `RunLog` seam; full reference with example output is
 [`operator-cli.md`](operator-cli.md).
@@ -667,7 +668,16 @@ python -m cli run pipelines/ingest --env dev         # or resolve base_dir from 
 python -m cli status --base-dir /data --pipeline ingest
 python -m cli runs --base-dir /data --pipeline ingest --limit 5
 python -m cli log ingest --base-dir /data --pipeline-run-id 5f8ff8c7
+python -m cli checkpoints show --base-dir /data     # local watermarks and committing run IDs
+python -m cli checkpoints show --env dev --source claims.dbo.Complaint --json
 ```
+
+`checkpoints show` reads the existing source control state without creating or
+migrating it. It reports each source's stored UTC watermark and commit time,
+batch ID and full pipeline run ID, in source-key order. `--source` is an exact
+key filter; `--json` always emits an array. Missing state or no match is a
+successful empty result; unreadable or malformed state is an error. It neither
+contacts the source nor computes a polling window.
 
 `orchestrate` runs the scheduled due work instead of one named pipeline. In this
 repository the `--app` module is `pipelines.schedules`:
@@ -754,7 +764,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`run-log-format.md`](run-log-format.md) | The JSONL record schema and the run registry. |
 | [`retry.md`](retry.md) | Targeted retry at the reader/writer edges — `RetryPolicy`, where to use it and where not. |
 | [`migrations.md`](migrations.md) | SQL migrations as the authority for a database's physical shape: the `migrations/<subject>/<database>/` layout, the per-database `schema_migrations` ledger whose presence is the opt-in, and the three rules (one transaction per file, an edited migration is an error, line endings are not an edit). |
-| [`operator-cli.md`](operator-cli.md) | The operator CLI (`run` / `orchestrate` / `status` / `runs` / `log` / `scaffold`) with example commands and output. |
+| [`operator-cli.md`](operator-cli.md) | The operator CLI (`run` / `orchestrate` / `migrate` / `status` / `runs` / `log` / `checkpoints show` / `scaffold`) with example commands and output. |
 | [`resolving-a-failed-run.md`](resolving-a-failed-run.md) | The operator loop from a failed run — investigate (`status`/`log`), diagnose, resolve, and re-drive idempotently. |
 | [`shared-readers.md`](shared-readers.md) | Reading data your pipeline does **not** own: the `readers/<subject>.py` Shared Readers that declare a cross-subject read once, how to add one (medallion-backed, backed by nothing, or a store over a family such as the review platform's **Question Bank** exports — including when a second grain in one artifact earns a second Reader, why the grain is the method and the scope is the arguments, and where a sweep silently double counts), the guardrails G1–G6, and why a Shared Reader is a pass-through and never a shaping layer. |
 | [`escape-hatch-store.md`](escape-hatch-store.md) | Iterating against a flat scratch db (and a pre-baked SQL query) outside the medallion / namespace Store, and migrating back. |

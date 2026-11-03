@@ -1,6 +1,7 @@
 """Test the source checkpoint: the store, and the window rule over its watermark."""
 
 import datetime as dt
+import os
 import sqlite3
 import time
 
@@ -119,6 +120,105 @@ def stored_rows(store):
         return [dict(zip(columns, row)) for row in cur.fetchall()]
     finally:
         con.close()
+
+
+def test_listing_preserves_provenance_order_and_database(tmp_path):
+    store = SourceCheckpointStore(tmp_path)
+    commit(store, source=SOURCE, batch="full-batch-id", run="full-pipeline-run-id")
+    commit(store, source=OTHER, batch="other-batch", run="other-run")
+    before = store.path.read_bytes()
+    files = set(tmp_path.rglob("*"))
+
+    rows = store.list_checkpoints()
+
+    assert rows == stored_rows(store)
+    assert [row["source_key"] for row in rows] == [OTHER, SOURCE]
+    assert set(rows[0]) == {
+        "source_key",
+        "watermark_utc",
+        "committed_at_utc",
+        "batch_id",
+        "pipeline_run_id",
+    }
+    assert rows[1]["batch_id"] == "full-batch-id"
+    assert rows[1]["pipeline_run_id"] == "full-pipeline-run-id"
+    assert dt.datetime.fromisoformat(rows[1]["committed_at_utc"]).utcoffset() == (
+        dt.timedelta(0)
+    )
+    assert rows[1]["watermark_utc"] == COMMITTED.isoformat()
+    assert store.path.read_bytes() == before
+    assert set(tmp_path.rglob("*")) == files
+
+
+@pytest.mark.parametrize("source", [SOURCE, "' OR 1=1 --", ""])
+def test_listing_filters_exact_keys_even_empty_or_sql_like(tmp_path, source):
+    store = SourceCheckpointStore(tmp_path)
+    commit(store, source=source)
+    commit(store, source=OTHER)
+
+    assert store.list_checkpoints(source) == [
+        row for row in stored_rows(store) if row["source_key"] == source
+    ]
+    assert store.list_checkpoints(source + "missing") == []
+
+
+def test_listing_missing_state_creates_no_artifacts(tmp_path):
+    store = SourceCheckpointStore(tmp_path / "not-yet-created")
+
+    assert store.list_checkpoints() == []
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_listing_absent_table_does_not_create_or_migrate_it(tmp_path):
+    store = SourceCheckpointStore(tmp_path)
+    store.path.parent.mkdir()
+    con = sqlite3.connect(store.path)
+    try:
+        con.execute("CREATE TABLE other (value TEXT)")
+    finally:
+        con.close()
+    before = store.path.read_bytes()
+
+    assert store.list_checkpoints() == []
+    assert store.path.read_bytes() == before
+    assert list(store.path.parent.iterdir()) == [store.path]
+
+
+def test_listing_reads_during_reserved_write_lock_but_reports_exclusive_lock(tmp_path):
+    store = SourceCheckpointStore(tmp_path, busy_timeout_ms=50)
+    commit(store)
+    holder = sqlite3.connect(store.path)
+    try:
+        holder.execute("BEGIN IMMEDIATE")
+        assert len(store.list_checkpoints()) == 1
+        holder.rollback()
+        holder.execute("BEGIN EXCLUSIVE")
+        started = time.monotonic()
+        with pytest.raises(sqlite3.OperationalError, match="locked"):
+            store.list_checkpoints()
+        assert time.monotonic() - started >= 0.04
+    finally:
+        holder.close()
+
+
+def test_listing_question_mark_path_is_not_a_uri_query(tmp_path):
+    if os.name == "nt":
+        pytest.skip("Windows does not allow question marks in filenames")
+    store = SourceCheckpointStore(tmp_path / "source?mode=rw")
+    commit(store)
+
+    assert store.list_checkpoints() == stored_rows(store)
+
+
+def test_listing_does_not_treat_a_filesystem_error_as_absence(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    def denied(path):
+        raise PermissionError("access denied")
+
+    monkeypatch.setattr(Path, "stat", denied)
+    with pytest.raises(PermissionError, match="access denied"):
+        SourceCheckpointStore(tmp_path).list_checkpoints()
 
 
 def test_an_unseen_source_has_no_watermark_and_creates_no_file(tmp_path):

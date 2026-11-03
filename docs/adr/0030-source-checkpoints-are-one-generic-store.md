@@ -71,6 +71,12 @@ survives as `SharePointSource` beside the Reader that polls the list.
 
 ## Consequences
 
+- `list_checkpoints(source_key=None)` and `python -m cli checkpoints show`
+  inspect the existing five persisted fields in source-key order, with an
+  optional exact-key filter. Inspection opens SQLite read-only and creates or
+  migrates nothing; missing state is empty and read failures remain errors.
+  This adds a local inspection surface without changing the store, commit
+  contract or source-clock window rule.
 - A new polled source is a stable string key, a Reader handed an
   `InstantWindow`, and the four visible lines in `run()`: `watermark`,
   `instant_window`, the landings, and `commit` after gold. See the checkpoint
