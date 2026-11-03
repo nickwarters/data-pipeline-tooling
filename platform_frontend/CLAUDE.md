@@ -375,6 +375,10 @@ src/
     local-calendar.js           # THE crossing between an instant and a browser-local calendar
                                 #   date: toLocalDateKey/startOfLocalDay plus date-key arithmetic
     navigate.js                 # navigateTo/redirectTo: the only writers of location.hash (#519)
+    page-title.js               # THE writer of document.title ("<parts> — CORA"); every route
+                                #   mount sets it from the plugin's title/nav label, and the Case
+                                #   page retitles with Reference · Case Type once loaded, which is
+                                #   the text Edge pastes for a copied link
     people-search.js            # debounced, mount-lifetime-checked directory search shared by every
                                 #   people picker; reports every outcome (idle/loading/success/error)
                                 #   through one callback, and owns the PeopleSearchState shape

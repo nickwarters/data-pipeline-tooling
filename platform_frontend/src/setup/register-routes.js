@@ -83,6 +83,11 @@ import { APP_CONFIG } from '../app-config.js';
  *   nothing else. `isVisible` defaults to the route's own `guard`, so most
  *   pages state their audience once; write it out only where nav visibility
  *   genuinely differs from route access, and say why where you do.
+ * @property {string} [title]
+ *   The tab title while this page is open, before "— CORA". Defaults to the
+ *   nav label, so only a page without a nav item, or one whose tab should read
+ *   differently from its link, writes it out. It is also the text Edge pastes
+ *   for a copied link (`lib/page-title.js`).
  * @property {(capabilities: Capabilities) => boolean} [defaultFor]
  *   Whether this page is where a user with these capabilities lands when no
  *   route is asked for.
@@ -99,6 +104,7 @@ import { APP_CONFIG } from '../app-config.js';
  * @property {any} [page]
  * @property {() => Promise<any>} [load]
  * @property {() => boolean} [guard]
+ * @property {string} [title]
  */
 
 /**
@@ -225,6 +231,7 @@ export function routeTable(context) {
           guard: guard
             ? () => guard(context.chrome.permissions) || bounceHome()
             : undefined,
+          title: plugin.title ?? plugin.nav?.label,
         },
       ];
     })

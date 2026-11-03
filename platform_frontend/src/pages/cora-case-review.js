@@ -41,6 +41,8 @@ import {
 import { voidPatch } from './cora-case-review/void-actions.js';
 import { evaluateAccess } from '../services/section-access.js';
 import { voidReasonText } from '../lib/void-reasons.js';
+import { setPageTitle } from '../lib/page-title.js';
+import { caseTypeLabelFor } from '../evaluators/stats-case-type-model.js';
 
 /** @typedef {import('../services/save-queue.js').SaveStatus} SaveStatus */
 /** @typedef {import('../services/save-queue.js').SaveFailureNotice} SaveFailureNotice */
@@ -226,6 +228,27 @@ function withCaptureSearch(captureSearch, target, entry) {
     delete forQuestion[target.fieldKey];
   }
   return { ...captureSearch, [target.questionId]: forQuestion };
+}
+
+/**
+ * The tab title a loaded Case earns: its Case Reference, then its Case Type,
+ * since a Reference is only unique within its Case Type. This is the text Edge
+ * pastes for a copied link to the Case.
+ *
+ * `null` — leave the route's plain "Case" title alone — unless the viewer can
+ * actually see the Case. A denied viewer, or one whose load failed, learns
+ * nothing about the row from the tab. A row with no Title falls back to its
+ * `id`, as the Case tables do; that is a display fallback, not a Reference.
+ *
+ * @param {{ loaded?: boolean, accessDenied?: boolean, error?: string | null, caseRow?: import('../sharepoint-client.js').CaseRow | null } | null | undefined} snapshot
+ * @returns {string[] | null}
+ */
+export function caseReviewTitleParts(snapshot) {
+  if (!snapshot?.loaded || snapshot.accessDenied || snapshot.error) return null;
+  const caseRow = snapshot.caseRow;
+  if (!caseRow) return null;
+  const reference = caseRow.title?.trim() || `Case ${caseRow.id}`;
+  return [reference, caseTypeLabelFor(caseRow.caseType)];
 }
 
 /**
@@ -1610,10 +1633,10 @@ export function createRouteSlice(params, context) {
         .load()
         .then(() => {
           if (!tools.isActive()) return;
-          tools.dispatch({
-            type: 'case/load-finished',
-            snapshot: loader.toStoreSnapshot(),
-          });
+          const snapshot = loader.toStoreSnapshot();
+          tools.dispatch({ type: 'case/load-finished', snapshot });
+          const titleParts = caseReviewTitleParts(snapshot);
+          if (titleParts) setPageTitle(...titleParts);
         })
         .catch(ignoreAbortError);
       return () => {

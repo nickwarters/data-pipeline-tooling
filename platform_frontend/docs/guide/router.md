@@ -22,7 +22,7 @@ import * as myPage from './pages/my-page.js';
 { id: 'my-page', paths: ['#/my-page/:id'], page: myPage },
 ```
 
-`registerStoreRoute(router, { paths, page, context, guard })` creates the
+`registerStoreRoute(router, { paths, page, context, guard, title })` creates the
 `createStoreRoute()` adapter once and registers it on every pattern in `paths`
 — that is how `#/case/:caseType/:id` and `#/case/:id` share one handler. It
 takes `page` or `load`, exactly one; passing neither or both is a `TypeError`.
@@ -31,6 +31,10 @@ The optional `guard: (context) => boolean` on a page entry becomes a
 returning `false` skips the mount, which is how `#/journey-cases` bounces an
 ineligible user. The guard buys the short-circuit, not the download — no slice,
 store or effect runs for an ineligible user, but the module is already in memory.
+Once the guard passes, the mount sets the tab title from `title` — the entry's
+own, or its nav label — through `src/lib/page-title.js`, so no route keeps the
+previous page's title; a route with neither is titled plainly "CORA". A bounced
+mount leaves the title to the route it bounced to.
 
 `registerRoutes()` walks the table and registers each entry. An entry is a paths
 array and a module reference, so registration itself runs no page code; the

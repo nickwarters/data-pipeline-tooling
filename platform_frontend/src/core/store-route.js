@@ -3,6 +3,7 @@ import { render } from './render.js';
 import { createMemo } from './memo.js';
 import { createStore } from './store.js';
 import { createRouteErrorPanel } from '../lib/route-error-panel.js';
+import { setPageTitle } from '../lib/page-title.js';
 
 /**
  * What a page module's `createRouteSlice` hands back.
@@ -161,8 +162,10 @@ export function createStoreRoute({ page, load, context }) {
 /**
  * Register one store-driven page on one or more hash patterns.
  *
- * Without a guard the adapter is registered directly, so nothing sits between
- * the router and `createStoreRoute`.
+ * Every mount first titles the tab with `title` (the page's own, or its nav
+ * label, resolved by the route table) via `lib/page-title.js`, so no route
+ * keeps the title of the page before it. A route with no title is titled
+ * plainly "CORA". The page may set a more specific one later, from its data.
  *
  * The page reference is the caller's, whether it is a module the route table
  * imported or a thunk that fetches one. Naming a page is the route table's job
@@ -182,26 +185,26 @@ export function createStoreRoute({ page, load, context }) {
  *   load?: Parameters<typeof createStoreRoute<Context>>[0]['load'],
  *   context: Context,
  *   guard?: () => boolean,
+ *   title?: string,
  * }} options
  * @returns {void}
  */
 export function registerStoreRoute(
   router,
-  { paths, page, load, context, guard }
+  { paths, page, load, context, guard, title }
 ) {
   const handler = createStoreRoute({ page, load, context });
-  const registered = guard
-    ? {
-        /** @type {import('../lib/router.js').RouteHandler['mount']} */
-        mount(container, params) {
-          if (!guard()) return;
-          return handler.mount(container, params);
-        },
-        unmount() {
-          handler.unmount();
-        },
-      }
-    : handler;
+  /** @type {import('../lib/router.js').RouteHandler} */
+  const registered = {
+    mount(container, params) {
+      if (guard && !guard()) return;
+      setPageTitle(title);
+      return handler.mount(container, params);
+    },
+    unmount() {
+      handler.unmount();
+    },
+  };
 
   for (const path of paths) router.register(path, registered);
 }
