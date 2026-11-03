@@ -29,7 +29,11 @@
  * viewer's local calendar first, through `local-calendar.js` — the one module
  * allowed to cross between the two.
  */
-import { isDateKey, toLocalDateKey } from './local-calendar.js';
+import {
+  isDateKey,
+  toLocalDateKey,
+  weekdayOfDateKey,
+} from './local-calendar.js';
 
 /**
  * What every surface shows in place of a date it does not have. An em dash,
@@ -121,6 +125,34 @@ export function formatTimestamp(value, fallback = NO_VALUE) {
   if (instant === null) return fallback;
   const day = `${instant.getDate()} ${MONTH_NAMES[instant.getMonth()]} ${instant.getFullYear()}`;
   return `${day}, ${twoDigits(instant.getHours())}:${twoDigits(instant.getMinutes())}`;
+}
+
+const WEEKDAY_NAMES = Object.freeze([
+  'Sun',
+  'Mon',
+  'Tue',
+  'Wed',
+  'Thu',
+  'Fri',
+  'Sat',
+]);
+
+/**
+ * A recent calendar date as a reader says it — `Tue 6 Oct`. A third shape,
+ * for reports, where every date on the page falls in the last year or so and
+ * the weekday is what tells a reader whether a figure covers last Friday or
+ * the weekend; the year would only add width. Not for anything that might be
+ * older than a year, which keeps `dd/mm/yyyy`.
+ *
+ * @param {unknown} value An ISO instant, a `YYYY-MM-DD` key, or a `Date`.
+ * @param {string} [fallback] Shown when there is no readable date.
+ * @returns {string}
+ */
+export function formatWeekdayDate(value, fallback = NO_VALUE) {
+  const key = dateKeyOf(value);
+  if (key === null) return fallback;
+  const [, month, day] = key.split('-').map(Number);
+  return `${WEEKDAY_NAMES[weekdayOfDateKey(key)]} ${day} ${MONTH_NAMES[month - 1]}`;
 }
 
 /**

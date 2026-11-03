@@ -19,6 +19,7 @@ you are changing.
 | [Testing](testing.md)                                         | Public seams, semantic DOM tests, and repository gates                       |
 | [In-memory flow runner](in-memory-flow-runner.md)             | Browser-free end-to-end domain and persistence journeys                      |
 | [Charts](charts.md)                                           | Grouped SVG charts plus the My Stats grain-matched Case Type breakdown table |
+| [Add a report](add-a-report.md)                               | Report plugins: the feed, model, view, access, layout and the chart kit      |
 
 ## Explainers
 

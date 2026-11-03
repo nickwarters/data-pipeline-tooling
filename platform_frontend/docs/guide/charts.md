@@ -1,5 +1,12 @@
 # Grouped charts
 
+> **Building a report?** Use the report chart kit in `src/components/charts/`
+> (`LineChart`, `BarList`, `StackBar`, `Sparkline`), which colours marks by role
+> through the validated `--cora-viz-*` palette — see
+> [Add a report](add-a-report.md). `GroupedBarChart` below predates it, colours
+> its series with status tones, and serves My Stats until that page moves onto
+> the report frame.
+
 `GroupedBarChart({ data, config })` is a pure view builder at
 [`src/components/base/cora-grouped-bar-chart.js`](../../src/components/base/cora-grouped-bar-chart.js).
 It returns a detached SVG tree made only with `svg()`. A caller supplies the

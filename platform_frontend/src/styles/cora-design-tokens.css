@@ -24,6 +24,20 @@
  *   Dark-mode grey  #656565 #474747 #404040 #212121 #1D1D1D #101010
  *                   (exclusive to dark mode — never used in light mode)
  *
+ * DATA VISUALISATION PALETTE (the one exception to the brand palette)
+ *   Report charts need hues the brand does not have: six series colours a
+ *   reader can tell apart, including with a colour-vision deficiency. They are
+ *   --cora-viz-* tokens, used ONLY for data marks — never for chrome, text or
+ *   controls. Validated as an ordered set against this file's own surfaces
+ *   (#FFFFFF light, #1D1D1D dark): worst adjacent colour-blind ΔE 16.3 light /
+ *   13.0 dark, all six inside the lightness band and chroma floor. Series 2, 4
+ *   and 5 sit under 3:1 on white, so a chart using them always carries a legend
+ *   or labels and a table view. Order is the safety mechanism: assign series in
+ *   order 1→6 and never cycle or generate a seventh. Orange is deliberately
+ *   absent — beside brand red its normal-vision ΔE is 13.1, under the floor of
+ *   15. Red is not a series colour at all: in a chart it means danger, through
+ *   --cora-color-danger, and always beside a label.
+ *
  * WCAG / CONTRAST TARGETS
  *   Light mode
  *     --cora-color-text on bg / surface      ≥ 7:1  (grey-8 #333: ≥12:1 ✓)
@@ -77,6 +91,18 @@
   --cora-color-info: #004cb5;
   --cora-color-info-bg: rgba(0, 76, 181, 0.07);
 
+  /* ── Data visualisation (see header: data marks only) ───────────────── */
+  --cora-viz-series-1: #2a78d6; /* blue */
+  --cora-viz-series-2: #1baf7a; /* aqua */
+  --cora-viz-series-3: #4a3aa7; /* violet */
+  --cora-viz-series-4: #eda100; /* yellow */
+  --cora-viz-series-5: #e87ba4; /* magenta */
+  --cora-viz-series-6: #008300; /* green */
+  --cora-viz-quiet: #b7b7b7; /* the rest, de-emphasis */
+  --cora-viz-quiet-strong: #9b9b9b; /* sparklines, history */
+  --cora-viz-range: #9ec5f4; /* series-1 light step, bands */
+  --cora-viz-grid: #ededed; /* gridlines */
+
   /* ── Focus ───────────────────────────────────────────────────────────── */
   --cora-focus-outline: 2px solid var(--cora-color-accent);
   --cora-focus-offset: 3px;
@@ -129,6 +155,17 @@
     --cora-color-info: #4d9eff;
     --cora-color-info-bg: rgba(77, 158, 255, 0.1);
 
+    --cora-viz-series-1: #3987e5;
+    --cora-viz-series-2: #199e70;
+    --cora-viz-series-3: #9085e9;
+    --cora-viz-series-4: #c98500;
+    --cora-viz-series-5: #d55181;
+    --cora-viz-series-6: #008300;
+    --cora-viz-quiet: #656565;
+    --cora-viz-quiet-strong: #7d7d7d;
+    --cora-viz-range: #1c5cab;
+    --cora-viz-grid: #2c2c2c;
+
     --cora-focus-ring: 0 0 0 3px rgba(227, 30, 34, 0.4);
 
     --cora-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
@@ -171,6 +208,17 @@
   --cora-color-danger-bg: rgba(227, 30, 34, 0.12);
   --cora-color-info: #4d9eff;
   --cora-color-info-bg: rgba(77, 158, 255, 0.1);
+
+  --cora-viz-series-1: #3987e5;
+  --cora-viz-series-2: #199e70;
+  --cora-viz-series-3: #9085e9;
+  --cora-viz-series-4: #c98500;
+  --cora-viz-series-5: #d55181;
+  --cora-viz-series-6: #008300;
+  --cora-viz-quiet: #656565;
+  --cora-viz-quiet-strong: #7d7d7d;
+  --cora-viz-range: #1c5cab;
+  --cora-viz-grid: #2c2c2c;
 
   --cora-focus-ring: 0 0 0 3px rgba(227, 30, 34, 0.4);
 

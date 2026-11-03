@@ -33,6 +33,10 @@ import { APP_CONFIG } from '../app-config.js';
  * @property {import('./resolve-eligible-case-types.js').CaseSource[]} journeyCaseSources
  * @property {import('./resolve-eligible-case-types.js').AllocationSource[]} allocationSources
  * @property {Element} appEl
+ * @property {readonly import('../reports/contract.js').ReportPlugin[]} [reportPlugins]
+ *   The reports this application offers, read by the reports index and the
+ *   report page. Optional so a test that mounts an unrelated page need not
+ *   build one; a page that reads it treats its absence as no reports.
  * @property {() => Promise<unknown>} [loadQuestionBankEditor]
  * @property {() => Promise<unknown>} [loadQuestionBankSamples]
  * @property {(artifacts: ReturnType<import('../pages/question-bank/question-bank-compile.js').buildPublishArtifacts>) => Promise<void>} [writeQuestionBankArtifacts]
