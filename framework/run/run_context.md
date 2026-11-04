@@ -1,0 +1,169 @@
+```python
+"""Run context — execution identity, logical identity, dates, and collaborators."""
+
+from __future__ import annotations
+
+import contextvars
+import datetime as dt
+import uuid
+from collections.abc import Mapping
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Iterator
+
+from framework.run.dry_run import DryRunReport
+from tools.observability.run_log import NULL_RUN_LOG, RunLog
+from tools.observability.run_registry import RunRegistry
+
+RunParams = Mapping[str, str]
+
+
+class RunContext:
+    """The execution context shared by orchestration, builders, and writers.
+
+    The three run identifiers, widest to narrowest scope:
+
+    * ``orchestration_run_id`` — the umbrella id of one runner/orchestrator pass,
+      shared by every pipeline it triggers. Owned by ``tools.orchestration``; it
+      is not minted here (a bare ``Pipeline.run()`` has no orchestration above it).
+    * ``pipeline_run_id`` — this one concrete pipeline attempt. A fresh id per
+      execution; the correlating key every RunLog/RunRegistry record carries.
+    * ``logical_run_id`` — the business run / idempotency key (``<label>:<run_date>``)
+      whose rows a re-drive replaces. Stable across re-drives of the same run date.
+    """
+
+    def __init__(
+        self,
+        *,
+        run_date: dt.date | None = None,
+        pipeline_run_id: str | None = None,
+        logical_run_id: str | None = None,
+        load_date: dt.date | str | None = None,
+        run_log: RunLog | None = None,
+        run_registry: RunRegistry | None = None,
+        base_dir: str | Path | None = None,
+        subject: str | None = None,
+        pipeline: str | None = None,
+        freshness_days: int = 0,
+        params: RunParams | None = None,
+        dry_run: bool = False,
+    ) -> None:
+        self.dry_run = dry_run
+        self.dry_run_report: DryRunReport | None = DryRunReport() if dry_run else None
+        self.base_dir = Path(base_dir) if base_dir is not None else None
+        self.subject = subject
+        self.pipeline = pipeline
+        self.params: RunParams = dict(params or {})
+        self.run_date = run_date or dt.date.today()
+        self.pipeline_run_id = pipeline_run_id or uuid.uuid4().hex
+        self.logical_run_id = logical_run_id or self._default_logical_run_id()
+        self.load_date = _date_text(load_date or self.run_date)
+        self.run_log = run_log or NULL_RUN_LOG
+        self.run_registry = run_registry
+        self.freshness_days = freshness_days
+        self._run_summary_recorded = False
+
+    @property
+    def label(self) -> str:
+        """Stable run-history label for a domain Pipeline."""
+        if self.subject and self.pipeline:
+            return f"{self.subject}/{self.pipeline}"
+        return self.pipeline or ""
+
+    @property
+    def run_summary_recorded(self) -> bool:
+        """Whether this execution already emitted its run-level summary."""
+        return self._run_summary_recorded
+
+    def mark_run_summary_recorded(self) -> None:
+        """Mark that the run-level summary has been emitted."""
+        self._run_summary_recorded = True
+
+    def _default_logical_run_id(self) -> str:
+        if self.pipeline:
+            return f"{self.label}:{self.run_date.isoformat()}"
+        return self.pipeline_run_id
+
+    def for_nested_pipeline(
+        self, name: str | None = None, *, logical_run_id: str | None = None
+    ) -> "RunContext":
+        """Derive a child context for a nested ``Pipeline.run()`` of one attempt.
+
+        A handler often runs several ``Pipeline`` stages (raw -> silver -> gold) in
+        one execution. Each ``p.run()`` inherits this context so every stage's
+        run-log records — and the rows its Writers stamp — carry the *same*
+        ``pipeline_run_id`` / ``logical_run_id``: the one correlating key the
+        three-tier scheme promises. Sharing the identity is the whole point; a
+        fresh id per stage would orphan the step records from the run summary and
+        the data they wrote.
+
+        The child keeps its **own** run-summary flag so recording a stage's summary
+        never marks *this* context recorded — the runner still writes the
+        pipeline-level summary its freshness history depends on. The dry-run
+        flag and its report are carried over too — the report by reference — so a
+        preview stays a preview through every nesting level and accumulates every
+        stage's steps. The run parameters come along for the same reason: a nested
+        stage reads ``context.params`` exactly as the outer handler does.
+
+        ``name`` defaults to this context's pipeline, for a caller deriving a
+        child of the *same* pipeline. ``logical_run_id`` overrides the inherited
+        business key, for a fan-out that gives each item its own idempotency key
+        while keeping the one attempt-level ``pipeline_run_id``.
+        """
+        child = RunContext(
+            run_date=self.run_date,
+            pipeline_run_id=self.pipeline_run_id,
+            logical_run_id=logical_run_id or self.logical_run_id,
+            load_date=self.load_date,
+            run_log=self.run_log,
+            run_registry=self.run_registry,
+            base_dir=self.base_dir,
+            subject=self.subject,
+            pipeline=name if name is not None else self.pipeline,
+            freshness_days=self.freshness_days,
+            params=self.params,
+            dry_run=self.dry_run,
+        )
+        # Share the parent's report so a dry-run preview captures nested stages.
+        child.dry_run_report = self.dry_run_report
+        return child
+
+
+def _date_text(value: dt.date | str) -> str:
+    return value.isoformat() if isinstance(value, dt.date) else value
+
+
+# Ambient context inherited by nested pipelines and eager steps, preserving run
+# identity, logging, and dry-run state without explicit threading.
+_ACTIVE_CONTEXT: contextvars.ContextVar["RunContext | None"] = contextvars.ContextVar(
+    "active_run_context", default=None
+)
+
+
+@contextmanager
+def active_context(context: "RunContext") -> "Iterator[RunContext]":
+    """Make ``context`` the ambient run context for the duration of the block.
+
+    ``run_pipeline`` already does this around a pipeline's ``run(context)``, so
+    a pipeline started by the operator CLI, by its own ``main()`` or by the
+    orchestrator never needs it. It is here for the case that has no runner:
+    driving a ``run(context)`` or a single step by hand, from a test or a scratch
+    script. The eager steps read the *ambient* context, so a
+    ``RunContext(dry_run=True)`` passed as an argument and never made active
+    would be ignored -- and the writes it was meant to hold back would land::
+
+        with active_context(context):
+            run(context)
+    """
+    token = _ACTIVE_CONTEXT.set(context)
+    try:
+        yield context
+    finally:
+        _ACTIVE_CONTEXT.reset(token)
+
+
+def current_context() -> "RunContext | None":
+    """Return the ambient run context, or ``None`` outside an active block."""
+    return _ACTIVE_CONTEXT.get()
+
+```
