@@ -43,6 +43,7 @@ test('myTeamColumns: derives Case Type columns from resolved sources', () => {
       ['case-type-complaints', 'Complaints'],
       ['case-type-conduct', 'Conduct Reviews'],
       ['totalOutstanding', 'Total outstanding'],
+      ['longestInProgressDays', 'Longest in progress (days)'],
       ['onHold', 'On hold'],
       ['longestHoldDays', 'Longest hold (days)'],
     ]
@@ -77,6 +78,7 @@ test('my team view: renders loading, errors, the workload table, and roster limi
         reviewer: 'reviewer-a',
         countsByCaseType: { complaints: 2, conduct: 1 },
         totalOutstanding: 3,
+        longestInProgressDays: 12,
         onHold: 1,
         longestHoldDays: 4,
         isTotal: false,
@@ -86,6 +88,7 @@ test('my team view: renders loading, errors, the workload table, and roster limi
         reviewer: 'Total',
         countsByCaseType: { complaints: 2, conduct: 1 },
         totalOutstanding: 3,
+        longestInProgressDays: 12,
         onHold: 1,
         longestHoldDays: 4,
         isTotal: true,
@@ -101,6 +104,19 @@ test('my team view: renders loading, errors, the workload table, and roster limi
   );
   assert.equal(view.querySelector('tbody')?.querySelectorAll('tr').length, 1);
   assert.equal(view.querySelector('tfoot')?.querySelectorAll('tr').length, 1);
+  const headers = [
+    ...(view.querySelector('thead')?.querySelectorAll('th') ?? []),
+  ].map((th) => th.textContent);
+  const cells = [
+    ...(view
+      .querySelector('tbody')
+      ?.querySelector('tr')
+      ?.querySelectorAll('td') ?? []),
+  ];
+  assert.equal(
+    cells[headers.indexOf('Longest in progress (days)')]?.textContent,
+    '12'
+  );
 });
 
 test('my team slice: loads fresh data, refreshes manually, sorts, and ignores stale completion', async () => {
@@ -196,6 +212,7 @@ test('my team view: keeps Total last under every sortable column and direction',
         reviewer: 'Zara Reviewer',
         countsByCaseType: { complaints: 1, conduct: 0 },
         totalOutstanding: 1,
+        longestInProgressDays: 7,
         onHold: 0,
         longestHoldDays: null,
         isTotal: false,
@@ -205,6 +222,7 @@ test('my team view: keeps Total last under every sortable column and direction',
         reviewer: 'Alex Reviewer',
         countsByCaseType: { complaints: 0, conduct: 2 },
         totalOutstanding: 2,
+        longestInProgressDays: 12,
         onHold: 1,
         longestHoldDays: 4,
         isTotal: false,
@@ -214,6 +232,7 @@ test('my team view: keeps Total last under every sortable column and direction',
         reviewer: 'Total',
         countsByCaseType: { complaints: 1, conduct: 2 },
         totalOutstanding: 3,
+        longestInProgressDays: 12,
         onHold: 1,
         longestHoldDays: 4,
         isTotal: true,
@@ -238,7 +257,7 @@ test('my team view: keeps Total last under every sortable column and direction',
       });
       assert.equal(
         view.querySelector('tfoot')?.querySelector('tr')?.textContent,
-        'Total12314'
+        'Total1231214'
       );
       assert.equal(
         view.querySelector('tbody')?.querySelectorAll('tr').length,
@@ -362,6 +381,7 @@ test('my team view: clicking a column header dispatches the workload table sort 
         reviewer: 'reviewer-a',
         countsByCaseType: { complaints: 2, conduct: 1 },
         totalOutstanding: 3,
+        longestInProgressDays: 12,
         onHold: 1,
         longestHoldDays: 4,
         isTotal: false,
@@ -480,6 +500,7 @@ test('my team view: a failed void load leaves the workload table standing', () =
           reviewer: 'Alex Reviewer',
           countsByCaseType: { complaints: 1, conduct: 0 },
           totalOutstanding: 1,
+          longestInProgressDays: 3,
           onHold: 0,
           longestHoldDays: null,
           isTotal: false,
