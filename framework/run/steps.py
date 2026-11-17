@@ -481,6 +481,7 @@ def enforce(
     *,
     reject_writer: Writer | None = None,
     name: str | None = None,
+    strict: bool = False,
 ) -> Dataset:
     """Coerce to ``schema``, optionally quarantine value-rule breaches, then check it.
 
@@ -497,6 +498,13 @@ def enforce(
     ``name`` prefixes all three, for a feed that enforces the same schema several
     times in one run and needs the log to say which one -- ``claims:coerce``,
     ``appeals:coerce`` -- rather than ``coerce`` and ``coerce-2``.
+
+    ``strict=True`` makes the schema the whole column set: a column it does not
+    declare fails the ``schema_validator`` step rather than passing through to
+    the write. Off by default, where undeclared columns are ignored. Data read
+    back from a table carries more than the schema -- at least the provenance
+    column every table-backed Writer stamps -- so narrow it (``SelectColumns``)
+    before enforcing it strictly.
     """
     from framework.core.schema import SchemaValidator
     from framework.transform.quarantine import SchemaValueRulePartitioner
@@ -510,4 +518,6 @@ def enforce(
             dataset,
             name=f"{at}quarantine",
         )
-    return validate(SchemaValidator(schema), dataset, name=f"{at}schema_validator")
+    return validate(
+        SchemaValidator(schema, strict=strict), dataset, name=f"{at}schema_validator"
+    )
