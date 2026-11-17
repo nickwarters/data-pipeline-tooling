@@ -67,6 +67,9 @@
   --cora-color-text-subtle: #9b9b9b; /* grey-5 · captions; large text / UI only  */
   --cora-color-text-on-accent: #ffffff; /* white text on accent-filled elements     */
 
+  /* ── Charts — the ink history is drawn in, quieter than body text ────── */
+  --cora-color-chart-ink: #545454; /* grey-7 · 7.5:1 on white                  */
+
   /* ── Semantic — danger tracks brand red; others are functional signals ─ */
   --cora-color-success: #006742;
   --cora-color-success-bg: rgba(0, 103, 66, 0.07);
@@ -120,6 +123,8 @@
     --cora-color-text-subtle: #767676; /* grey-6 · large text / UI only            */
     --cora-color-text-on-accent: #ffffff;
 
+    --cora-color-chart-ink: #9b9b9b; /* grey-5 · ~5.9:1 on surface              */
+
     --cora-color-success: #00a368;
     --cora-color-success-bg: rgba(0, 163, 104, 0.12);
     --cora-color-warning: #d4820a;
@@ -162,6 +167,8 @@
   --cora-color-text-muted: #9b9b9b; /* grey-5                                   */
   --cora-color-text-subtle: #767676; /* grey-6                                   */
   --cora-color-text-on-accent: #ffffff;
+
+  --cora-color-chart-ink: #9b9b9b; /* grey-5                                   */
 
   --cora-color-success: #00a368;
   --cora-color-success-bg: rgba(0, 163, 104, 0.12);

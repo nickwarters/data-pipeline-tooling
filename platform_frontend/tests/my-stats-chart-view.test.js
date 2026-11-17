@@ -69,22 +69,56 @@ test('stats chart: a bucket draws only the provenance it has days for', () => {
     (bar) =>
       Number(bar.getAttribute('x')) + Number(bar.getAttribute('width')) / 2
   );
-  const tickCenters = byClass(chart, 'cora-grouped-bar-chart__x-tick').map(
-    (tick) => Number(tick.childNodes[0].getAttribute('x1'))
+  const tickCenters = byClass(chart, 'cora-grouped-bar-chart__group-label').map(
+    (label) => Number(label.getAttribute('x'))
   );
-  assert.deepEqual(barCenters, tickCenters);
+  assert.equal(barCenters.length, tickCenters.length);
+  barCenters.forEach((centre, index) =>
+    assert.ok(Math.abs(centre - tickCenters[index]) < 1e-5)
+  );
 });
 
-test('stats chart: completed uses the neutral token and pending uses the red accent', () => {
+test('stats chart: settled and provisional share one ink, provisional drawn as a dashed outline', () => {
   const [settled, provisional] = byClass(
     statsChartView(report()),
     'cora-grouped-bar-chart__bar'
   );
 
-  assert.equal(settled.getAttribute('fill'), 'var(--cora-color-on-surface)');
-  assert.equal(provisional.getAttribute('fill'), 'var(--cora-color-accent)');
-  assert.equal(provisional.getAttribute('stroke'), 'var(--cora-color-accent)');
-  assert.equal(provisional.getAttribute('stroke-width'), '1');
+  assert.equal(settled.getAttribute('fill'), 'var(--cora-color-chart-ink)');
+  assert.equal(settled.getAttribute('stroke'), null);
+  assert.equal(provisional.getAttribute('fill'), 'var(--cora-color-chart-ink)');
+  assert.equal(
+    provisional.getAttribute('stroke'),
+    'var(--cora-color-chart-ink)'
+  );
+  assert.ok(provisional.getAttribute('stroke-dasharray'));
+});
+
+test('stats chart: the bucket reaching today is spotlit as today or this month', () => {
+  /** @param {any} chart */
+  const tag = (chart) =>
+    byClass(chart, 'cora-grouped-bar-chart__emphasis-label')[0]?.textContent;
+  /** @param {any} chart */
+  const spotlit = (chart) =>
+    byClass(chart, 'cora-grouped-bar-chart__group-label--emphasis').map(
+      (label) => label.textContent
+    );
+
+  const daily = statsChartView(report());
+  assert.equal(tag(daily), 'Today');
+  assert.deepEqual(spotlit(daily), ['Aug 9']);
+
+  const monthly = statsChartView(
+    report({
+      range: { ...report().range, grain: 'month', label: '3 months' },
+      buckets: [
+        { key: '2026-07', label: 'July', settled: 9, provisional: null },
+        { key: '2026-08', label: 'August', settled: 6, provisional: 3 },
+      ],
+    })
+  );
+  assert.equal(tag(monthly), 'This month');
+  assert.deepEqual(spotlit(monthly), ['August']);
 });
 
 test('stats chart: a bucket spanning the boundary draws both bars', () => {
@@ -130,6 +164,18 @@ test('stats chart: the y axis counts in whole Cases', () => {
     ),
     ['0', '4', '8', '12', '16']
   );
+  /** @param {number} settled */
+  const ticksFor = (settled) =>
+    tickLabels(
+      statsChartView(
+        report({
+          buckets: [{ key: 'a', label: 'A', settled, provisional: null }],
+        })
+      )
+    );
+  assert.deepEqual(ticksFor(11), ['0', '3', '6', '9', '12']);
+  assert.deepEqual(ticksFor(45), ['0', '15', '30', '45', '60']);
+  assert.deepEqual(ticksFor(66), ['0', '20', '40', '60', '80']);
 });
 
 test('stats chart: an empty range still draws a readable axis', () => {

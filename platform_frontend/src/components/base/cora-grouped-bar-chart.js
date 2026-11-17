@@ -59,35 +59,56 @@ import { svg } from '../../lib/html.js';
  * @property {string[]} [seriesOrder] Series keys in their preferred visual order
  * @property {GroupedBarChartValueFormatter} [formatValue]
  * @property {GroupedBarChartGroupLabelFormatter} [formatGroupLabel]
+ * @property {string} [emphasis] The group to spotlight: `'latest'` (the
+ *   default) for the last group, a group key, or `'none'` for no spotlight
+ * @property {string} [emphasisLabel] The tag above the spotlit group, such as
+ *   `'Today'` or `'This month'`; defaults to `'Latest'`
  */
 
 /** @typedef {{ data: GroupedBarChartData, config: GroupedBarChartConfig }} GroupedBarChartProps */
 /** @typedef {{ top: number, right: number, bottom: number, left: number }} ResolvedMargin */
-/** @typedef {{ width: number, height: number, ariaLabel: string, margin: ResolvedMargin, yMax: number, tickCount: number, xAxisLabel?: string, yAxisLabel?: string, seriesOrder: string[], formatValue: GroupedBarChartValueFormatter, formatGroupLabel: GroupedBarChartGroupLabelFormatter }} ResolvedConfig */
-/** @typedef {{ key: string, label: string, tone: GroupedBarChartTone }} GroupedBarChartSeries */
+/** @typedef {{ width: number, height: number, ariaLabel: string, margin: ResolvedMargin, yMax: number, tickCount: number, xAxisLabel?: string, yAxisLabel?: string, seriesOrder: string[], formatValue: GroupedBarChartValueFormatter, formatGroupLabel: GroupedBarChartGroupLabelFormatter, emphasis: string, emphasisLabel: string }} ResolvedConfig */
+/** @typedef {{ x: number, row: number, label: string }} LegendPlacement */
+/** @typedef {{ rows: number, height: number, items: LegendPlacement[] }} LegendLayout */
+/** @typedef {{ key: string, label: string, tone: GroupedBarChartTone, provisional: boolean }} GroupedBarChartSeries */
 
 const DEFAULT_MARGIN = Object.freeze({
-  top: 20,
-  right: 20,
-  bottom: 52,
-  left: 52,
+  top: 8,
+  right: 12,
+  bottom: 32,
+  left: 40,
 });
+// The neutral tone is the chart's own ink rather than the text colour: history
+// is the quiet part of a chart, so it should not be the darkest thing on the
+// page.
 const TONE_TOKENS = Object.freeze({
   accent: 'var(--cora-color-accent)',
   success: 'var(--cora-color-success)',
   warning: 'var(--cora-color-warning)',
   danger: 'var(--cora-color-danger)',
   info: 'var(--cora-color-info)',
-  neutral: 'var(--cora-color-on-surface)',
+  neutral: 'var(--cora-color-chart-ink)',
 });
+const EMPHASIS_FILL = 'var(--cora-color-accent-muted)';
 const MAX_VISIBLE_X_TICKS = 12;
 const MAX_LEGEND_ROWS = 12;
-const LEGEND_ITEM_MIN_WIDTH = 128;
+const LEGEND_SWATCH_SIZE = 12;
+const LEGEND_SWATCH_LABEL_GAP = 5;
+const LEGEND_ITEM_GAP = 20;
 const LEGEND_ROW_HEIGHT = 20;
 const LEGEND_BOTTOM_PADDING = 4;
+const CAPTION_BAND_HEIGHT = 18;
 const VALUE_LABEL_BAND_HEIGHT = 20;
 const VALUE_LABEL_GAP = 6;
 const LEGEND_LABEL_CHAR_WIDTH = 7;
+const X_LABEL_CHAR_WIDTH = 6.5;
+const X_LABEL_MIN_GAP = 8;
+const MAX_BAR_WIDTH = 24;
+const BAR_BAND_SHARE = 0.62;
+const BAR_CORNER_RADIUS = 3;
+const PROVISIONAL_FILL_OPACITY = 0.18;
+const PROVISIONAL_STROKE_WIDTH = 1.5;
+const PROVISIONAL_DASH = '3 2';
 const MIN_LEFT_MARGIN = 24;
 const MIN_BOTTOM_MARGIN = 24;
 const MIN_BOTTOM_MARGIN_WITH_AXIS_LABEL = 44;
@@ -196,9 +217,11 @@ function resolveMargin(input, hasXAxisLabel) {
     input === undefined ? {} : requireObject(input, 'config.margin');
   /** @param {'top' | 'right' | 'bottom' | 'left'} side */
   const side = (side) => {
-    const value = margin[side];
-    if (value === undefined) return DEFAULT_MARGIN[side];
-    requireNonNegativeNumber(value, `config.margin.${side}`);
+    const given = margin[side];
+    if (given !== undefined) {
+      requireNonNegativeNumber(given, `config.margin.${side}`);
+    }
+    const value = given ?? DEFAULT_MARGIN[side];
     if (side === 'left') return Math.max(value, MIN_LEFT_MARGIN);
     if (side === 'bottom') {
       const minimum = hasXAxisLabel
@@ -257,8 +280,30 @@ function resolveYMax(maxValue, configured, tickCount) {
   return Number.isFinite(candidate) ? Math.max(maxValue, candidate) : maxValue;
 }
 
-/** @param {GroupedBarChartConfig} input @param {number} maxValue @returns {ResolvedConfig} */
-function resolveConfig(input, maxValue) {
+/**
+ * The spotlit group defaults to the last one, because the latest bucket is
+ * what a reader of a time series comes to see. A key that names no group is
+ * refused rather than quietly spotlighting nothing.
+ *
+ * @param {unknown} emphasis
+ * @param {GroupedBarChartGroup[]} groups
+ * @returns {string}
+ */
+function resolveEmphasis(emphasis, groups) {
+  if (emphasis === undefined) return 'latest';
+  requireString(emphasis, 'config.emphasis', true);
+  const value = /** @type {string} */ (emphasis);
+  if (value === 'latest' || value === 'none') return value;
+  if (!groups.some((group) => group.key === value)) {
+    throw new TypeError(
+      `config.emphasis must be 'latest', 'none' or a group key: ${value}`
+    );
+  }
+  return value;
+}
+
+/** @param {GroupedBarChartConfig} input @param {number} maxValue @param {GroupedBarChartGroup[]} groups @returns {ResolvedConfig} */
+function resolveConfig(input, maxValue, groups) {
   const config = requireObject(input, 'config');
   requirePositiveNumber(config.width, 'config.width');
   requirePositiveNumber(config.height, 'config.height');
@@ -299,6 +344,9 @@ function resolveConfig(input, maxValue) {
   ) {
     throw new TypeError('config.formatGroupLabel must be a function');
   }
+  if (config.emphasisLabel !== undefined) {
+    requireString(config.emphasisLabel, 'config.emphasisLabel', true);
+  }
   const margin = resolveMargin(config.margin, config.xAxisLabel !== undefined);
 
   return {
@@ -313,6 +361,8 @@ function resolveConfig(input, maxValue) {
     seriesOrder: [...seriesOrder],
     formatValue: config.formatValue ?? defaultFormatValue,
     formatGroupLabel: config.formatGroupLabel ?? defaultFormatGroupLabel,
+    emphasis: resolveEmphasis(config.emphasis, groups),
+    emphasisLabel: config.emphasisLabel ?? 'Latest',
   };
 }
 
@@ -336,7 +386,20 @@ function resolveSeriesSlots(groups, preferredOrder) {
         }
         continue;
       }
-      identities.set(mark.key, { key: mark.key, label: mark.label, tone });
+      identities.set(mark.key, {
+        key: mark.key,
+        label: mark.label,
+        tone,
+        provisional: false,
+      });
+    }
+  }
+  // A series is drawn as provisional in the legend when any of its marks is,
+  // so the swatch always matches a bar the reader can find on the chart.
+  for (const group of groups) {
+    for (const mark of group.marks) {
+      const series = identities.get(mark.key);
+      if (series && mark.provisional === true) series.provisional = true;
     }
   }
 
@@ -359,63 +422,92 @@ function resolveSeriesSlots(groups, preferredOrder) {
   return { slots, byKey };
 }
 
-/** @param {number} groupCount @returns {number[]} */
-function evenlySpacedIndexes(groupCount) {
-  if (groupCount <= MAX_VISIBLE_X_TICKS) {
-    return Array.from({ length: groupCount }, (_, index) => index);
-  }
+/**
+ * Choose which group labels the x-axis prints. Labels are thinned to a common
+ * stride wide enough that the longest one never runs into its neighbour, and
+ * never more than twelve are shown. The first and the last always appear: the
+ * last is usually the bucket the reader came for.
+ *
+ * @param {string[]} labels
+ * @param {number} groupBand
+ * @returns {number[]}
+ */
+function visibleXTickIndexes(labels, groupBand) {
+  if (labels.length === 0) return [];
+  const widest = Math.max(...labels.map((label) => label.length));
+  const stride = Math.max(
+    1,
+    Math.ceil((widest * X_LABEL_CHAR_WIDTH + X_LABEL_MIN_GAP) / groupBand),
+    Math.ceil(labels.length / MAX_VISIBLE_X_TICKS)
+  );
   const indexes = [];
-  let previous = -1;
-  for (let index = 0; index < MAX_VISIBLE_X_TICKS; index += 1) {
-    const candidate = Math.round(
-      (index * (groupCount - 1)) / (MAX_VISIBLE_X_TICKS - 1)
-    );
-    if (candidate !== previous) indexes.push(candidate);
-    previous = candidate;
-  }
-  return indexes;
-}
-
-/** @param {string[]} labels @returns {number[]} */
-function visibleXTickIndexes(labels) {
-  const indexes = [];
-  const seen = new Set();
-  for (const index of evenlySpacedIndexes(labels.length)) {
-    const label = labels[index].trim();
-    if (seen.has(label)) continue;
-    seen.add(label);
+  for (let index = 0; index < labels.length; index += stride) {
     indexes.push(index);
   }
-  return indexes;
-}
-
-/** @param {number} seriesCount @param {number} plotWidth */
-function resolveLegendLayout(seriesCount, plotWidth) {
-  if (seriesCount === 0) {
-    return { columns: 0, rows: 0, itemWidth: 0, height: 0 };
+  const last = labels.length - 1;
+  if (indexes[indexes.length - 1] !== last) {
+    if (indexes.length > 1 && last - indexes[indexes.length - 1] < stride) {
+      indexes.pop();
+    }
+    indexes.push(last);
   }
-  const columns = Math.max(
-    1,
-    Math.min(seriesCount, Math.floor(plotWidth / LEGEND_ITEM_MIN_WIDTH))
-  );
-  const rows = Math.ceil(seriesCount / columns);
-  return {
-    columns,
-    rows,
-    itemWidth: plotWidth / columns,
-    height: rows * LEGEND_ROW_HEIGHT + LEGEND_BOTTOM_PADDING,
-  };
+  const seen = new Set();
+  return indexes.filter((index) => {
+    const label = labels[index].trim();
+    if (seen.has(label)) return false;
+    seen.add(label);
+    return true;
+  });
 }
 
-/** @param {string} label @param {number} itemWidth @returns {string} */
-function visibleLegendLabel(label, itemWidth) {
+/** @param {string} label @param {number} maxWidth @returns {string} */
+function visibleLegendLabel(label, maxWidth) {
   const maxCharacters = Math.max(
     1,
-    Math.floor((itemWidth - 14) / LEGEND_LABEL_CHAR_WIDTH)
+    Math.floor(
+      (maxWidth - LEGEND_SWATCH_SIZE - LEGEND_SWATCH_LABEL_GAP) /
+        LEGEND_LABEL_CHAR_WIDTH
+    )
   );
   if (label.length <= maxCharacters) return label;
   if (maxCharacters === 1) return '…';
   return `${label.slice(0, maxCharacters - 1)}…`;
+}
+
+/**
+ * Legend items sit one after another at their own width and wrap when the
+ * next one would overrun the plot, so a two-series chart reads as one compact
+ * key rather than labels spread across the full width.
+ *
+ * @param {GroupedBarChartSeries[]} series
+ * @param {number} plotWidth
+ * @returns {LegendLayout}
+ */
+function resolveLegendLayout(series, plotWidth) {
+  if (series.length === 0) return { rows: 0, height: 0, items: [] };
+  /** @type {LegendPlacement[]} */
+  const items = [];
+  let x = 0;
+  let row = 0;
+  for (const item of series) {
+    const label = visibleLegendLabel(item.label, plotWidth);
+    const width =
+      LEGEND_SWATCH_SIZE +
+      LEGEND_SWATCH_LABEL_GAP +
+      label.length * LEGEND_LABEL_CHAR_WIDTH;
+    if (x > 0 && x + width > plotWidth) {
+      x = 0;
+      row += 1;
+    }
+    items.push({ x, row, label });
+    x += width + LEGEND_ITEM_GAP;
+  }
+  const rows = row + 1;
+  return {
+    rows,
+    height: rows * LEGEND_ROW_HEIGHT + LEGEND_BOTTOM_PADDING,
+    items,
+  };
 }
 
 /** @param {GroupedBarChartValueFormatter} formatter @param {number} value @param {GroupedBarChartMark | undefined} mark @param {GroupedBarChartGroup | undefined} group */
@@ -467,22 +559,43 @@ function requireDistinctTickLabels(labels) {
 }
 
 /**
+ * The fill and outline of a mark or legend swatch. A solid mark is its tone
+ * and nothing else. A provisional one keeps the same tone as a dashed outline
+ * over a faint wash of it, so it reads as unfinished without needing a second
+ * colour: colour is left free to mean the series.
+ *
+ * @param {GroupedBarChartTone} tone
+ * @param {boolean} provisional
+ * @returns {Record<string, string | number>}
+ */
+function markPaint(tone, provisional) {
+  const token = TONE_TOKENS[tone];
+  if (!provisional) return { fill: token };
+  return {
+    fill: token,
+    'fill-opacity': PROVISIONAL_FILL_OPACITY,
+    stroke: token,
+    'stroke-width': PROVISIONAL_STROKE_WIDTH,
+    'stroke-dasharray': PROVISIONAL_DASH,
+  };
+}
+
+/**
  * Build one mark. The rectangle owns the accessible image semantics; the
  * visible text is marked as decorative so assistive technology announces each
- * mark once.
+ * mark once. Only some marks print their value, so a chart is read from its
+ * shape and the numbers that matter rather than a number on every bar; the
+ * full value of every mark stays in its accessible name and tooltip.
  *
  * @param {GroupedBarChartMark} mark
  * @param {GroupedBarChartSeries} series
  * @param {string} groupLabel
  * @param {string} valueLabel
- * @param {number} x
- * @param {number} y
- * @param {number} width
- * @param {number} height
+ * @param {{ x: number, y: number, width: number, height: number }} box
+ * @param {'none' | 'plain' | 'emphasis'} valueLabelStyle
  * @returns {SVGElement}
  */
-function markView(mark, series, groupLabel, valueLabel, x, y, width, height) {
-  const token = TONE_TOKENS[series.tone];
+function markView(mark, series, groupLabel, valueLabel, box, valueLabelStyle) {
   const provisional = mark.provisional === true;
   const description = `${groupLabel}: ${series.label}, ${valueLabel}${provisional ? ', provisional' : ''}`;
   return svg(
@@ -491,35 +604,36 @@ function markView(mark, series, groupLabel, valueLabel, x, y, width, height) {
     svg('rect', {
       className: `cora-grouped-bar-chart__bar${provisional ? ' cora-grouped-bar-chart__bar--provisional' : ''}`,
       key: 'bar',
-      x,
-      y,
-      width,
-      height,
-      fill: token,
-      stroke: token,
-      'stroke-width': 1,
+      x: box.x,
+      y: box.y,
+      width: box.width,
+      height: box.height,
+      rx: BAR_CORNER_RADIUS,
+      ...markPaint(series.tone, provisional),
       role: 'img',
       'aria-label': description,
       'data-cora-chart-mark': 'true',
       'data-cora-chart-description': description,
       tabindex: '0',
     }),
-    svg(
-      'text',
-      {
-        className: 'cora-grouped-bar-chart__value-label',
-        key: 'value-label',
-        x: x + width / 2,
-        y: y - VALUE_LABEL_GAP,
-        'text-anchor': 'middle',
-        'aria-hidden': 'true',
-      },
-      valueLabel
-    )
+    valueLabelStyle === 'none'
+      ? null
+      : svg(
+          'text',
+          {
+            className: `cora-grouped-bar-chart__value-label${valueLabelStyle === 'emphasis' ? ' cora-grouped-bar-chart__value-label--emphasis' : ''}`,
+            key: 'value-label',
+            x: geometry(box.x + box.width / 2),
+            y: geometry(box.y - VALUE_LABEL_GAP),
+            'text-anchor': 'middle',
+            'aria-hidden': 'true',
+          },
+          valueLabel
+        )
   );
 }
 
-/** @param {GroupedBarChartSeries[]} series @param {ResolvedMargin} margin @param {{ columns: number, rows: number, itemWidth: number, height: number }} layout */
+/** @param {GroupedBarChartSeries[]} series @param {ResolvedMargin} margin @param {LegendLayout} layout */
 function legendView(series, margin, layout) {
   if (series.length === 0) return null;
   return svg(
@@ -531,10 +645,9 @@ function legendView(series, margin, layout) {
       'aria-label': 'Chart series',
     },
     series.map((item, index) => {
-      const row = Math.floor(index / layout.columns);
-      const column = index % layout.columns;
-      const x = margin.left + column * layout.itemWidth;
-      const labelY = margin.top + row * LEGEND_ROW_HEIGHT + 14;
+      const placement = layout.items[index];
+      const x = margin.left + placement.x;
+      const labelY = margin.top + placement.row * LEGEND_ROW_HEIGHT + 14;
       return svg(
         'g',
         {
@@ -548,31 +661,56 @@ function legendView(series, margin, layout) {
           className: 'cora-grouped-bar-chart__legend-swatch',
           key: 'swatch',
           x,
-          y: labelY - 10,
-          width: 10,
-          height: 10,
-          fill: TONE_TOKENS[item.tone],
-          stroke: TONE_TOKENS[item.tone],
+          y: labelY - 11,
+          width: LEGEND_SWATCH_SIZE,
+          height: LEGEND_SWATCH_SIZE,
+          rx: 2,
+          ...markPaint(item.tone, item.provisional),
         }),
         svg(
           'text',
           {
             className: 'cora-grouped-bar-chart__legend-label',
             key: 'label',
-            x: x + 14,
+            x: x + LEGEND_SWATCH_SIZE + LEGEND_SWATCH_LABEL_GAP,
             y: labelY,
           },
-          visibleLegendLabel(item.label, layout.itemWidth)
+          placement.label
         )
       );
     })
   );
 }
 
-/** @param {GroupedBarChartGroup[]} groups @param {string[]} groupLabels @param {ResolvedConfig} config @param {number} baseline @param {number} plotWidth */
-function xAxisView(groups, groupLabels, config, baseline, plotWidth) {
-  const indexes = visibleXTickIndexes(groupLabels);
+/**
+ * A group label sits centred under its group unless that would push it past
+ * the edge of the chart, which happens to the last label first because it is
+ * often the longest ("Oct 20 (today)"). Such a label is aligned to the edge
+ * instead, so it is never clipped.
+ *
+ * @param {number} centre
+ * @param {string} label
+ * @param {number} width
+ * @returns {{ x: number, anchor: 'start' | 'middle' | 'end' }}
+ */
+function groupLabelPlacement(centre, label, width) {
+  const half = (label.length * X_LABEL_CHAR_WIDTH) / 2;
+  if (centre + half > width) return { x: width, anchor: 'end' };
+  if (centre - half < 0) return { x: 0, anchor: 'start' };
+  return { x: geometry(centre), anchor: 'middle' };
+}
+
+/** @param {GroupedBarChartGroup[]} groups @param {string[]} groupLabels @param {ResolvedConfig} config @param {number} baseline @param {number} plotWidth @param {number} emphasisIndex */
+function xAxisView(
+  groups,
+  groupLabels,
+  config,
+  baseline,
+  plotWidth,
+  emphasisIndex
+) {
   const groupBand = groups.length > 0 ? plotWidth / groups.length : plotWidth;
+  const indexes = visibleXTickIndexes(groupLabels, groupBand);
   return svg(
     'g',
     { className: 'cora-grouped-bar-chart__x-axis', key: 'x-axis' },
@@ -586,30 +724,25 @@ function xAxisView(groups, groupLabels, config, baseline, plotWidth) {
       stroke: 'var(--cora-color-border-strong)',
     }),
     indexes.map((groupIndex) => {
-      const x = config.margin.left + groupIndex * groupBand + groupBand / 2;
+      const { x, anchor } = groupLabelPlacement(
+        config.margin.left + groupIndex * groupBand + groupBand / 2,
+        groupLabels[groupIndex],
+        config.width
+      );
       return svg(
         'g',
         {
           className: 'cora-grouped-bar-chart__x-tick',
           key: groups[groupIndex].key,
         },
-        svg('line', {
-          className: 'cora-grouped-bar-chart__tick-line',
-          key: 'line',
-          x1: x,
-          y1: baseline,
-          x2: x,
-          y2: baseline + 5,
-          stroke: 'var(--cora-color-border-strong)',
-        }),
         svg(
           'text',
           {
-            className: 'cora-grouped-bar-chart__group-label',
+            className: `cora-grouped-bar-chart__group-label${groupIndex === emphasisIndex ? ' cora-grouped-bar-chart__group-label--emphasis' : ''}`,
             key: 'label',
             x,
             y: baseline + 18,
-            'text-anchor': 'middle',
+            'text-anchor': anchor,
           },
           groupLabels[groupIndex]
         )
@@ -631,40 +764,44 @@ function xAxisView(groups, groupLabels, config, baseline, plotWidth) {
   );
 }
 
-/** @param {ResolvedConfig} config @param {number[]} tickValues @param {string[]} tickLabels @param {number} plotTop @param {number} plotHeight @param {number} baseline */
+/**
+ * Hairline gridlines and their values. There is no vertical axis rule and no
+ * gridline at zero, where the x-axis already draws the baseline; the unit
+ * reads once as a caption above the plot instead of rotated down its side.
+ *
+ * @param {ResolvedConfig} config
+ * @param {number[]} tickValues
+ * @param {string[]} tickLabels
+ * @param {number} captionY
+ * @param {number} plotTop
+ * @param {number} plotHeight
+ */
 function yAxisView(
   config,
   tickValues,
   tickLabels,
+  captionY,
   plotTop,
-  plotHeight,
-  baseline
+  plotHeight
 ) {
   return svg(
     'g',
     { className: 'cora-grouped-bar-chart__y-axis', key: 'y-axis' },
-    svg('line', {
-      className: 'cora-grouped-bar-chart__axis-line',
-      key: 'line',
-      x1: config.margin.left,
-      y1: plotTop,
-      x2: config.margin.left,
-      y2: baseline,
-      stroke: 'var(--cora-color-border-strong)',
-    }),
     tickValues.map((value, index) => {
       const y = barY(value, config.yMax, plotTop, plotHeight);
       return svg(
         'g',
         { className: 'cora-grouped-bar-chart__y-tick', key: `tick-${index}` },
-        svg('line', {
-          className: 'cora-grouped-bar-chart__grid-line',
-          key: 'line',
-          x1: config.margin.left,
-          y1: y,
-          x2: config.width - config.margin.right,
-          y2: y,
-        }),
+        value === 0
+          ? null
+          : svg('line', {
+              className: 'cora-grouped-bar-chart__grid-line',
+              key: 'line',
+              x1: config.margin.left,
+              y1: y,
+              x2: config.width - config.margin.right,
+              y2: y,
+            }),
         svg(
           'text',
           {
@@ -685,14 +822,71 @@ function yAxisView(
           {
             className: 'cora-grouped-bar-chart__y-axis-label',
             key: 'label',
-            x: 14,
-            y: plotTop + plotHeight / 2,
-            transform: `rotate(-90 14 ${plotTop + plotHeight / 2})`,
-            'text-anchor': 'middle',
+            x: config.margin.left,
+            y: captionY,
+            'text-anchor': 'start',
           },
           config.yAxisLabel
         )
   );
+}
+
+/**
+ * The spotlight: a tinted band behind one group with its tag above it. It is
+ * decoration over the marks, which already name their group, so it is hidden
+ * from assistive technology rather than announced twice.
+ *
+ * @param {ResolvedConfig} config
+ * @param {number} groupStart
+ * @param {number} groupBand
+ * @param {number} bandTop
+ * @param {number} baseline
+ * @param {number} captionY
+ */
+function emphasisView(
+  config,
+  groupStart,
+  groupBand,
+  bandTop,
+  baseline,
+  captionY
+) {
+  return svg(
+    'g',
+    {
+      className: 'cora-grouped-bar-chart__emphasis',
+      key: 'emphasis',
+      'aria-hidden': 'true',
+    },
+    svg('rect', {
+      className: 'cora-grouped-bar-chart__emphasis-band',
+      key: 'band',
+      x: geometry(groupStart),
+      y: geometry(bandTop),
+      width: geometry(groupBand),
+      height: geometry(baseline - bandTop),
+      rx: 4,
+      fill: EMPHASIS_FILL,
+    }),
+    svg(
+      'text',
+      {
+        className: 'cora-grouped-bar-chart__emphasis-label',
+        key: 'label',
+        x: geometry(groupStart + groupBand / 2),
+        y: captionY,
+        'text-anchor': 'middle',
+      },
+      config.emphasisLabel
+    )
+  );
+}
+
+/** @param {ResolvedConfig} config @param {GroupedBarChartGroup[]} groups @returns {number} */
+function emphasisIndexOf(config, groups) {
+  if (config.emphasis === 'none' || groups.length === 0) return -1;
+  if (config.emphasis === 'latest') return groups.length - 1;
+  return groups.findIndex((group) => group.key === config.emphasis);
 }
 
 /**
@@ -708,7 +902,7 @@ export function GroupedBarChart(props) {
     throw new TypeError('GroupedBarChart expects { data, config }');
   }
   const { data, maxValue } = validateData(props.data);
-  const config = resolveConfig(props.config, maxValue);
+  const config = resolveConfig(props.config, maxValue, data.groups);
   const { slots, byKey } = resolveSeriesSlots(data.groups, config.seriesOrder);
   const plotWidth = config.width - config.margin.left - config.margin.right;
   if (plotWidth <= 0) {
@@ -717,13 +911,17 @@ export function GroupedBarChart(props) {
     );
   }
 
-  const legend = resolveLegendLayout(slots.length, plotWidth);
+  const legend = resolveLegendLayout(slots, plotWidth);
   if (legend.rows > MAX_LEGEND_ROWS) {
     throw new RangeError(
       `GroupedBarChart cannot draw ${slots.length} series in ${legend.rows} legend rows for ${data.groups.length} groups; increase width or reduce the series count`
     );
   }
-  const plotTop = config.margin.top + legend.height + VALUE_LABEL_BAND_HEIGHT;
+  // Below the legend sits one caption band, shared by the unit caption and the
+  // spotlight tag, then the band that keeps value labels clear of both.
+  const captionTop = config.margin.top + legend.height;
+  const captionY = captionTop + 12;
+  const plotTop = captionTop + CAPTION_BAND_HEIGHT + VALUE_LABEL_BAND_HEIGHT;
   const plotHeight = config.height - config.margin.bottom - plotTop;
   if (plotHeight <= 0) {
     throw new RangeError(
@@ -735,18 +933,22 @@ export function GroupedBarChart(props) {
   const groupBand =
     data.groups.length > 0 ? plotWidth / data.groups.length : plotWidth;
   const seriesCount = slots.length;
-  const groupPadding = seriesCount > 0 ? Math.min(12, groupBand * 0.15) : 0;
-  const markGap = seriesCount > 1 ? Math.min(4, groupBand * 0.03) : 0;
+  const markGap = seriesCount > 1 ? Math.min(2, groupBand * 0.03) : 0;
   const barWidth =
     seriesCount > 0
-      ? (groupBand - groupPadding * 2 - markGap * (seriesCount - 1)) /
-        seriesCount
+      ? Math.min(
+          MAX_BAR_WIDTH,
+          (groupBand * BAR_BAND_SHARE - markGap * (seriesCount - 1)) /
+            seriesCount
+        )
       : 0;
   if (seriesCount > 0 && barWidth <= 0) {
     throw new RangeError(
       `GroupedBarChart cannot draw ${seriesCount} series in a ${data.groups.length}-group chart: each group is too narrow for a bar`
     );
   }
+  const clusterWidth = barWidth * seriesCount + markGap * (seriesCount - 1);
+  const emphasisIndex = emphasisIndexOf(config, data.groups);
 
   const groupLabels = data.groups.map((group) =>
     formatGroupLabel(config.formatGroupLabel, group)
@@ -765,12 +967,14 @@ export function GroupedBarChart(props) {
     { className: 'cora-grouped-bar-chart__bars', key: 'bars' },
     data.groups.map((group, groupIndex) => {
       const groupStart = config.margin.left + groupIndex * groupBand;
+      const emphasised = groupIndex === emphasisIndex;
       // A sparse bucket represents one point on the x-axis, so center its
-      // bar on the tick. Groups with multiple marks retain their stable slots.
+      // bar on the tick. Groups with multiple marks retain their stable slots
+      // within a cluster centered the same way.
       const markStart =
         group.marks.length === 1
           ? groupStart + (groupBand - barWidth) / 2
-          : groupStart + groupPadding;
+          : groupStart + (groupBand - clusterWidth) / 2;
       return svg(
         'g',
         {
@@ -788,18 +992,26 @@ export function GroupedBarChart(props) {
             group
           );
           const slotIndex = group.marks.length === 1 ? 0 : slot.index;
-          const x = markStart + slotIndex * (barWidth + markGap);
-          const y = barY(mark.value, config.yMax, plotTop, plotHeight);
-          const height = barHeight(mark.value, config.yMax, plotHeight);
+          const x = geometry(markStart + slotIndex * (barWidth + markGap));
+          // The spotlit group always prints its numbers, a zero included, and
+          // the peak prints its own so the top of the scale is never a guess.
+          const valueLabelStyle = emphasised
+            ? 'emphasis'
+            : mark.value > 0 && mark.value === maxValue
+              ? 'plain'
+              : 'none';
           return markView(
             mark,
             slot.series,
             groupLabels[groupIndex],
             valueLabel,
-            x,
-            y,
-            barWidth,
-            height
+            {
+              x,
+              y: barY(mark.value, config.yMax, plotTop, plotHeight),
+              width: geometry(barWidth),
+              height: barHeight(mark.value, config.yMax, plotHeight),
+            },
+            valueLabelStyle
           );
         })
       );
@@ -818,9 +1030,26 @@ export function GroupedBarChart(props) {
         'aria-label': config.ariaLabel,
       },
       legendView(slots, config.margin, legend),
-      yAxisView(config, tickValues, tickLabels, plotTop, plotHeight, baseline),
+      yAxisView(config, tickValues, tickLabels, captionY, plotTop, plotHeight),
+      emphasisIndex === -1
+        ? null
+        : emphasisView(
+            config,
+            config.margin.left + emphasisIndex * groupBand,
+            groupBand,
+            captionTop,
+            baseline,
+            captionY
+          ),
       barsLayer,
-      xAxisView(data.groups, groupLabels, config, baseline, plotWidth)
+      xAxisView(
+        data.groups,
+        groupLabels,
+        config,
+        baseline,
+        plotWidth,
+        emphasisIndex
+      )
     )
   );
 }

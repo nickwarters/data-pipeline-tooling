@@ -100,7 +100,7 @@ test('GroupedBarChart returns a detached, named SVG tree', () => {
   );
 });
 
-test('GroupedBarChart lays out grouped bars, axes, legend, and value labels', () => {
+test('GroupedBarChart lays out grouped bars, hairline axes, legend, and the values that matter', () => {
   const root = GroupedBarChart({ data, config });
   const groupNodes = all(root, '.cora-grouped-bar-chart__group');
   const barNodes = bars(root);
@@ -110,10 +110,17 @@ test('GroupedBarChart lays out grouped bars, axes, legend, and value labels', ()
   assert.equal(all(root, '.cora-grouped-bar-chart__y-tick').length, 3);
   assert.equal(all(root, '.cora-grouped-bar-chart__x-tick').length, 2);
   assert.equal(all(root, '.cora-grouped-bar-chart__group-label').length, 2);
-  assert.equal(all(root, '.cora-grouped-bar-chart__value-label').length, 3);
   assert.equal(all(root, '.cora-grouped-bar-chart__legend-item').length, 2);
-  assert.equal(all(root, '.cora-grouped-bar-chart__grid-line').length, 3);
-  assert.equal(all(root, '.cora-grouped-bar-chart__tick-line').length, 2);
+  // The x-axis is the only rule: the zero gridline would sit on top of it.
+  assert.equal(all(root, '.cora-grouped-bar-chart__axis-line').length, 1);
+  assert.equal(all(root, '.cora-grouped-bar-chart__grid-line').length, 2);
+  // Only the peak and the spotlit latest group print their value.
+  assert.deepEqual(
+    all(root, '.cora-grouped-bar-chart__value-label').map(
+      (label) => label.textContent
+    ),
+    ['8 cases', '2 cases']
+  );
   assert.deepEqual(
     Array.from(root.childNodes, (/** @type {any} */ child) =>
       child.getAttribute('class')
@@ -121,6 +128,7 @@ test('GroupedBarChart lays out grouped bars, axes, legend, and value labels', ()
     [
       'cora-grouped-bar-chart__legend',
       'cora-grouped-bar-chart__y-axis',
+      'cora-grouped-bar-chart__emphasis',
       'cora-grouped-bar-chart__bars',
       'cora-grouped-bar-chart__x-axis',
     ]
@@ -142,11 +150,7 @@ test('GroupedBarChart lays out grouped bars, axes, legend, and value labels', ()
   const settledBar = firstGroupBars.find(
     (bar) => bar.getAttribute('fill') === 'var(--cora-color-success)'
   );
-  assert.equal(settledBar?.getAttribute('stroke'), 'var(--cora-color-success)');
-  assert.equal(
-    all(root, '.cora-grouped-bar-chart__value-label')[0].textContent,
-    '8 cases'
-  );
+  assert.equal(settledBar?.getAttribute('stroke'), null);
   assert.equal(
     all(root, '.cora-grouped-bar-chart__group-label')[0].textContent,
     'Group: Week <one>'
@@ -172,8 +176,8 @@ test('x-axis selection is bounded and does not render duplicate labels', () => {
     config: { width: 900, height: 280, ariaLabel: 'Daily review counts' },
   });
 
-  assert.equal(all(daily, '.cora-grouped-bar-chart__x-tick').length, 12);
-  assert.equal(all(daily, '.cora-grouped-bar-chart__group-label').length, 12);
+  assert.ok(all(daily, '.cora-grouped-bar-chart__x-tick').length <= 12);
+  assert.ok(all(daily, '.cora-grouped-bar-chart__group-label').length <= 12);
   assert.equal(
     all(daily, '.cora-grouped-bar-chart__group-label')[0].textContent,
     'Day 1'
@@ -199,6 +203,87 @@ test('x-axis selection is bounded and does not render duplicate labels', () => {
     (label) => label.textContent
   );
   assert.deepEqual(labels, ['Mon', 'Tue', 'Wed']);
+});
+
+test('an x-axis label that would run off the chart is aligned to its edge', () => {
+  const root = GroupedBarChart({
+    data: {
+      groups: [
+        {
+          key: 'september',
+          label: 'Sep',
+          marks: [{ key: 'count', label: 'Count', value: 3 }],
+        },
+        {
+          key: 'october',
+          label: 'October (current month)',
+          marks: [{ key: 'count', label: 'Count', value: 1 }],
+        },
+      ],
+    },
+    config: { width: 240, height: 220, ariaLabel: 'Long last label' },
+  });
+  const [first, last] = all(root, '.cora-grouped-bar-chart__group-label');
+
+  assert.equal(first.getAttribute('text-anchor'), 'middle');
+  assert.equal(last.getAttribute('text-anchor'), 'end');
+  assert.equal(numberAttribute(last, 'x'), 240);
+
+  const leading = GroupedBarChart({
+    data: {
+      groups: ['November of last year (2025)', 'December', 'January'].map(
+        (label, index) => ({
+          key: `month-${index}`,
+          label,
+          marks: [{ key: 'count', label: 'Count', value: index + 1 }],
+        })
+      ),
+    },
+    config: { width: 240, height: 220, ariaLabel: 'Long first label' },
+  });
+  const opening = all(leading, '.cora-grouped-bar-chart__group-label')[0];
+  assert.equal(opening.getAttribute('text-anchor'), 'start');
+  assert.equal(numberAttribute(opening, 'x'), 0);
+});
+
+test('x-axis labels too wide for their group are thinned, keeping the first and last', () => {
+  const months = [
+    'November',
+    'December',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+  ];
+  const narrow = GroupedBarChart({
+    data: {
+      groups: months.map((label, index) => ({
+        key: `month-${index}`,
+        label,
+        marks: [{ key: 'settled', label: 'Settled', value: index }],
+      })),
+    },
+    config: { width: 360, height: 240, ariaLabel: 'Monthly counts' },
+  });
+  const shown = all(narrow, '.cora-grouped-bar-chart__group-label');
+  const centres = shown.map((label) => numberAttribute(label, 'x'));
+
+  assert.ok(shown.length < months.length);
+  assert.equal(shown[0].textContent, months[0]);
+  assert.equal(shown.at(-1).textContent, months.at(-1));
+  for (let index = 1; index < centres.length; index += 1) {
+    const room = centres[index] - centres[index - 1];
+    const needed =
+      (shown[index].textContent.length + shown[index - 1].textContent.length) *
+      3.25;
+    assert.ok(room >= needed, `${shown[index].textContent} has room`);
+  }
 });
 
 test('series slots stay stable for multi-mark groups and single marks center', () => {
@@ -233,6 +318,7 @@ test('series slots stay stable for multi-mark groups and single marks center', (
       height: 240,
       ariaLabel: 'Sparse series',
       tickCount: 2,
+      margin: { left: 52, right: 20 },
     },
   });
   const groups = all(sparse, '.cora-grouped-bar-chart__group');
@@ -250,13 +336,16 @@ test('series slots stay stable for multi-mark groups and single marks center', (
     'Beta'
   );
   const groupBand = (360 - 52 - 20) / 3;
-  assert.equal(
+  /** @param {number} actual @param {number} expected */
+  const near = (actual, expected) =>
+    assert.ok(Math.abs(actual - expected) < 1e-5, `${actual} ≈ ${expected}`);
+  near(
     numberAttribute(secondBars[0], 'x') +
       numberAttribute(secondBars[0], 'width') / 2,
     52 + groupBand + groupBand / 2
   );
-  assert.equal(numberAttribute(thirdBars[0], 'x') - groupBand * 2, alphaOffset);
-  assert.equal(numberAttribute(thirdBars[1], 'x') - groupBand * 2, betaOffset);
+  near(numberAttribute(thirdBars[0], 'x') - groupBand * 2, alphaOffset);
+  near(numberAttribute(thirdBars[1], 'x') - groupBand * 2, betaOffset);
 });
 
 test('seriesOrder keeps a preferred status order ahead of alphabetical order', () => {
@@ -413,7 +502,7 @@ test('legend labels wrap into rows, retain full accessible names, and reject ove
         data: { groups: [{ key: 'one', label: 'One', marks: tooMany }] },
         config: { width: 220, height: 320, ariaLabel: 'Too many series' },
       }),
-    /20 series.*20 legend rows/
+    /20 series in \d+ legend rows/
   );
 });
 
@@ -547,7 +636,6 @@ test('each mark carries its own accessible identity and provisional metadata', (
   assert.equal(provisional.getAttribute('tabindex'), '0');
   assert.equal(provisional.getAttribute('fill'), 'var(--cora-color-warning)');
   assert.equal(provisional.getAttribute('stroke'), 'var(--cora-color-warning)');
-  assert.equal(provisional.getAttribute('stroke-width'), '1');
   assert.equal(
     provisional.getAttribute('aria-label'),
     'Group: Week <one>: Provisional, 4 cases, provisional'
@@ -561,7 +649,7 @@ test('each mark carries its own accessible identity and provisional metadata', (
   assert.equal(provisional.querySelector('script'), null);
 });
 
-test('provisional metadata keeps a solid theme-colored bar', () => {
+test('a provisional mark is a dashed outline in its own tone, not a second colour', () => {
   const root = GroupedBarChart({
     data: {
       groups: [
@@ -569,12 +657,13 @@ test('provisional metadata keeps a solid theme-colored bar', () => {
           key: 'one',
           label: 'One',
           marks: [
+            { key: 'done', label: 'Done', value: 3, tone: 'neutral' },
             {
               key: 'pending',
               label: 'Pending',
               value: 2,
               provisional: true,
-              tone: 'accent',
+              tone: 'neutral',
             },
           ],
         },
@@ -582,14 +671,156 @@ test('provisional metadata keeps a solid theme-colored bar', () => {
     },
     config: { width: 240, height: 220, ariaLabel: 'Pending counts' },
   });
-  const pending = bars(root)[0];
+  const [done, pending] = bars(root);
+  const [doneSwatch, pendingSwatch] = all(
+    root,
+    '.cora-grouped-bar-chart__legend-swatch'
+  );
 
-  assert.equal(pending.getAttribute('fill'), 'var(--cora-color-accent)');
-  assert.equal(pending.getAttribute('stroke-width'), '1');
+  assert.equal(done.getAttribute('fill'), 'var(--cora-color-chart-ink)');
+  assert.equal(done.getAttribute('stroke'), null);
+  assert.equal(pending.getAttribute('fill'), 'var(--cora-color-chart-ink)');
+  assert.equal(pending.getAttribute('stroke'), 'var(--cora-color-chart-ink)');
+  assert.ok(pending.getAttribute('stroke-dasharray'));
+  assert.ok(Number(pending.getAttribute('fill-opacity')) < 1);
   assert.match(pending.getAttribute('aria-label'), /provisional/);
   assert.equal(
     pending.getAttribute('class'),
     'cora-grouped-bar-chart__bar cora-grouped-bar-chart__bar--provisional'
+  );
+  // The key matches the bar the reader will find on the chart.
+  assert.equal(doneSwatch.getAttribute('stroke-dasharray'), null);
+  assert.equal(
+    pendingSwatch.getAttribute('stroke-dasharray'),
+    pending.getAttribute('stroke-dasharray')
+  );
+});
+
+test('the latest group is spotlit and tagged unless the caller moves or removes it', () => {
+  /** @param {import('../src/components/base/cora-grouped-bar-chart.js').GroupedBarChartConfig} [extra] */
+  const chart = (extra) =>
+    GroupedBarChart({
+      data,
+      config: { ...config, ...extra },
+    });
+  /** @param {any} root */
+  const emphasis = (root) => all(root, '.cora-grouped-bar-chart__emphasis')[0];
+  /** @param {any} root */
+  const tag = (root) =>
+    all(root, '.cora-grouped-bar-chart__emphasis-label')[0]?.textContent;
+  /** @param {any} root */
+  const bandCentre = (root) => {
+    const band = all(root, '.cora-grouped-bar-chart__emphasis-band')[0];
+    return numberAttribute(band, 'x') + numberAttribute(band, 'width') / 2;
+  };
+  /** @param {any} root @param {number} index */
+  const groupCentre = (root, index) => {
+    const groupBars = bars(all(root, '.cora-grouped-bar-chart__group')[index]);
+    const first = groupBars[0];
+    const last = groupBars.at(-1);
+    return (
+      (numberAttribute(first, 'x') +
+        numberAttribute(last, 'x') +
+        numberAttribute(last, 'width')) /
+      2
+    );
+  };
+
+  const latest = chart();
+  assert.equal(tag(latest), 'Latest');
+  assert.equal(emphasis(latest).getAttribute('aria-hidden'), 'true');
+  assert.ok(Math.abs(bandCentre(latest) - groupCentre(latest, 1)) < 1e-5);
+  assert.deepEqual(
+    all(latest, '.cora-grouped-bar-chart__group-label--emphasis').map(
+      (label) => label.textContent
+    ),
+    ['Group: Week two']
+  );
+  const legendY = numberAttribute(
+    all(latest, '.cora-grouped-bar-chart__legend-label')[0],
+    'y'
+  );
+  const tagY = numberAttribute(
+    all(latest, '.cora-grouped-bar-chart__emphasis-label')[0],
+    'y'
+  );
+  const valueY = Math.min(
+    ...all(latest, '.cora-grouped-bar-chart__value-label').map((label) =>
+      numberAttribute(label, 'y')
+    )
+  );
+  assert.ok(legendY < tagY && tagY < valueY);
+
+  assert.equal(
+    tag(chart({ ...config, emphasisLabel: 'This week' })),
+    'This week'
+  );
+
+  const first = chart({ ...config, emphasis: 'week-one' });
+  assert.ok(Math.abs(bandCentre(first) - groupCentre(first, 0)) < 1e-5);
+  assert.deepEqual(
+    all(first, '.cora-grouped-bar-chart__value-label--emphasis').map(
+      (label) => label.textContent
+    ),
+    ['8 cases', '4 cases']
+  );
+
+  const none = chart({ ...config, emphasis: 'none' });
+  assert.equal(emphasis(none), undefined);
+  assert.equal(
+    all(none, '.cora-grouped-bar-chart__group-label--emphasis').length,
+    0
+  );
+  assert.deepEqual(
+    all(none, '.cora-grouped-bar-chart__value-label').map(
+      (label) => label.textContent
+    ),
+    ['8 cases']
+  );
+
+  assert.throws(
+    () => chart({ ...config, emphasis: 'week-three' }),
+    /config.emphasis.*week-three/
+  );
+  assert.throws(
+    () => chart({ ...config, emphasisLabel: ' ' }),
+    /emphasisLabel/
+  );
+  assert.equal(
+    emphasis(
+      GroupedBarChart({
+        data: { groups: [] },
+        config: { width: 200, height: 160, ariaLabel: 'Empty chart' },
+      })
+    ),
+    undefined
+  );
+});
+
+test('a spotlit group with nothing in it still says zero', () => {
+  const root = GroupedBarChart({
+    data: {
+      groups: [
+        {
+          key: 'yesterday',
+          label: 'Yesterday',
+          marks: [{ key: 'count', label: 'Count', value: 5 }],
+        },
+        {
+          key: 'today',
+          label: 'Today',
+          marks: [{ key: 'count', label: 'Count', value: 0 }],
+        },
+      ],
+    },
+    config: { width: 240, height: 220, ariaLabel: 'Quiet today' },
+  });
+
+  assert.deepEqual(
+    all(root, '.cora-grouped-bar-chart__value-label').map(
+      (label) => label.textContent
+    ),
+    ['5', '0']
   );
 });
 
