@@ -347,6 +347,13 @@ What each field does, and how to choose its value:
     stored on the Case row, so in-flight Cases keep the date they were given and
     only later transitions see the new number. Expect this to be reported as a
     bug; it is the design.
+- **Capture field types** are `text`, `textarea`, `select`, `radio`,
+  `multiselect` and `person`. `select`, `radio` and `multiselect` need a
+  non-empty `options` list. A `multiselect` is a set of checkboxes and stores
+  the options chosen as a list. To show a sibling field when one of its options
+  is ticked, use `showWhen: { causes: { in: ['System'] } }`; `equals` against a
+  multiselect is refused by `npm run verify`, because a list never equals one
+  value.
 - **Failure attribution** is not a flag: declare a `person` Issue Capture Field
   in `captureGroups` and tag it `role: 'attributedParty'`, so cross-Case-Type
   reporting can find it whatever your field key is.

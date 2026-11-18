@@ -65,9 +65,10 @@ export function findCaptureField(groups, key) {
 
 /**
  * What one Issue Capture Field holds: a string for the four text/choice types,
- * a person for a `person` field.
+ * a list of chosen options for a `multiselect` field, and a person for a
+ * `person` field.
  *
- * @typedef {string | { loginName: string, displayName: string, domain?: string, email?: string }} CaptureValue
+ * @typedef {string | string[] | { loginName: string, displayName: string, domain?: string, email?: string }} CaptureValue
  */
 
 /**
@@ -129,18 +130,24 @@ function captureValue(answer, field, value, slot) {
 
 /**
  * The captured values as the `showWhen` evaluator reads them: one entry per
- * recorded field, its value as text. A person contributes their display name,
- * so `answered` works on one; `equals`/`in` against a person are not
- * meaningful, and the verify gate refuses a Case Type that writes one.
+ * recorded field. A list of chosen options stays a list, so `in` asks whether
+ * any of them was chosen, exactly as it does of a multi-choice Answer. Anything
+ * else contributes its text, and a person contributes their display name, so
+ * `answered` works on one; `equals`/`in` against a person are not meaningful,
+ * and the verify gate refuses a Case Type that writes one.
  *
  * @param {Record<string, unknown>} capture
- * @returns {Record<string, { value: string }>}
+ * @returns {Record<string, { value: string | string[] }>}
  */
 function captureConditionValues(capture) {
-  /** @type {Record<string, { value: string }>} */
+  /** @type {Record<string, { value: string | string[] }>} */
   const values = {};
   for (const [key, value] of Object.entries(capture)) {
-    values[key] = { value: captureDisplayText(value) };
+    values[key] = {
+      value: Array.isArray(value)
+        ? value.filter((v) => typeof v === 'string')
+        : captureDisplayText(value),
+    };
   }
   return values;
 }

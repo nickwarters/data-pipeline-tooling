@@ -58,6 +58,14 @@ const PERSON_FIELD = {
   type: 'person',
 };
 
+/** @type {CaptureField} */
+const MULTISELECT_FIELD = {
+  key: 'causes',
+  label: 'Causes',
+  type: 'multiselect',
+  options: ['Process', 'Training', 'System'],
+};
+
 const PERSON = { loginName: 'corp\\jsmith', displayName: 'Jane Smith' };
 
 /**
@@ -75,6 +83,7 @@ const TYPED_GROUPS = [
       TEXTAREA_FIELD,
       SELECT_FIELD,
       RADIO_FIELD,
+      MULTISELECT_FIELD,
       PERSON_FIELD,
     ],
   },
@@ -203,12 +212,48 @@ test('applyCapture: clearing the last person value drops capture entirely', () =
   assert.equal('capture' in out, false);
 });
 
-test('isEmptyCaptureValue: only an absent value or empty text is nothing recorded', () => {
+test('applyCapture: stores a multiselect value as the list of options chosen', () => {
+  const out = captured({ value: 'No' }, TYPED_GROUPS, 'causes', [
+    'Process',
+    'System',
+  ]);
+  assert.deepEqual(out.capture, { causes: ['Process', 'System'] });
+});
+
+test('applyCapture: rejects a multiselect write naming an option it does not offer', () => {
+  for (const value of [
+    ['Process', 'Weather'],
+    'Process',
+    ['Process', 'Process'],
+  ]) {
+    assert.throws(
+      () => applyCapture({ value: 'No' }, TYPED_GROUPS, 'causes', value),
+      /multiselect Issue Capture Field "causes"/,
+      JSON.stringify(value)
+    );
+  }
+});
+
+test('applyCapture: choosing no options clears a multiselect field', () => {
+  const answer = { value: 'No', capture: { causes: ['Training'] } };
+  for (const nothing of [[], null]) {
+    const out = captured(answer, TYPED_GROUPS, 'causes', nothing);
+    assert.equal('capture' in out, false, JSON.stringify(nothing));
+  }
+});
+
+test('isEmptyCaptureValue: only an absent value, empty text or an empty list is nothing recorded', () => {
   assert.equal(isEmptyCaptureValue(undefined), true);
   assert.equal(isEmptyCaptureValue(null), true);
   assert.equal(isEmptyCaptureValue(''), true);
+  assert.equal(isEmptyCaptureValue([]), true);
+  assert.equal(isEmptyCaptureValue(['Process']), false);
   assert.equal(isEmptyCaptureValue('Rushed'), false);
   assert.equal(isEmptyCaptureValue(PERSON), false);
+});
+
+test('captureDisplayText: a multiselect reads as its chosen options, comma-separated', () => {
+  assert.equal(captureDisplayText(['Process', 'System']), 'Process, System');
 });
 
 test('captureDisplayText: a person reads as their display name', () => {
@@ -357,6 +402,77 @@ test('visibleCaptureFields: a person sibling contributes its display name', () =
     visibleCaptureFields(fields, { attributedTo: PERSON }).map((f) => f.key),
     ['attributedTo', 'why']
   );
+});
+
+test('visibleCaptureFields: `in` against a multiselect asks whether any listed option was chosen', () => {
+  /** @type {CaptureField[]} */
+  const fields = [
+    MULTISELECT_FIELD,
+    {
+      key: 'systemName',
+      label: 'Which system?',
+      type: 'text',
+      showWhen: { causes: { in: ['System'] } },
+    },
+    {
+      key: 'anyCause',
+      label: 'Anything else?',
+      type: 'text',
+      showWhen: { causes: { answered: true } },
+    },
+  ];
+  /** @param {Record<string, any>} capture */
+  const keys = (capture) =>
+    visibleCaptureFields(fields, capture).map((f) => f.key);
+
+  assert.deepEqual(keys({}), ['causes']);
+  assert.deepEqual(keys({ causes: ['Process'] }), ['causes', 'anyCause']);
+  assert.deepEqual(keys({ causes: ['Process', 'System'] }), [
+    'causes',
+    'systemName',
+    'anyCause',
+  ]);
+});
+
+test('applyCapture: unticking the option a sibling depends on drops the sibling', () => {
+  /** @type {CaptureGroup[]} */
+  const groups = [
+    {
+      key: 'g1',
+      label: 'Group one',
+      fields: [
+        MULTISELECT_FIELD,
+        {
+          key: 'systemName',
+          label: 'Which system?',
+          type: 'text',
+          showWhen: { causes: { in: ['System'] } },
+        },
+      ],
+    },
+  ];
+  const answer = {
+    value: 'No',
+    capture: { causes: ['Process', 'System'], systemName: 'Billing' },
+  };
+  const out = captured(answer, groups, 'causes', ['Process']);
+  assert.deepEqual(out.capture, { causes: ['Process'] });
+});
+
+test('unfilledRequiredFields: a required multiselect with nothing chosen is still to fill', () => {
+  /** @type {CaptureGroup[]} */
+  const groups = [
+    {
+      key: 'g1',
+      label: 'Group one',
+      fields: [{ ...MULTISELECT_FIELD, required: true }],
+    },
+  ];
+  assert.deepEqual(
+    unfilledRequiredFields(groups, { causes: [] }).map((f) => f.key),
+    ['causes']
+  );
+  assert.deepEqual(unfilledRequiredFields(groups, { causes: ['Process'] }), []);
 });
 
 // --- applyCapture -----------------------------------------------------------

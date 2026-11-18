@@ -26,8 +26,9 @@ function field(overrides = {}) {
 
 // --- The four primitives ---
 
-test('the built-in types are the four that hold text, plus the one that holds a person', () => {
+test('the built-in types are the four that hold text, the one that holds a list, and the one that holds a person', () => {
   assert.deepEqual(captureFieldTypeNames().sort(), [
+    'multiselect',
     'person',
     'radio',
     'select',
@@ -236,4 +237,118 @@ test('a person field is captioned beside its control, not wrapped by it', () => 
   // The picker names its own input and the chosen form is text plus a button;
   // neither is something a caption may wrap.
   assert.equal(getCaptureFieldType('person')?.caption, 'beside');
+});
+
+// --- The multiselect type ---
+
+const MULTISELECT = /** @type {any} */ (getCaptureFieldType('multiselect'));
+
+/** @returns {any} */
+function causesField() {
+  return field({
+    key: 'causes',
+    label: 'Causes',
+    type: 'multiselect',
+    options: ['Process', 'Training', 'System'],
+  });
+}
+
+test('a multiselect takes a list of the options its field offers, each at most once', () => {
+  const multiselect = MULTISELECT;
+  const declared = causesField();
+
+  assert.doesNotThrow(() => multiselect.validate(declared, ['Training']));
+  assert.doesNotThrow(() =>
+    multiselect.validate(declared, ['Process', 'System'])
+  );
+  for (const refused of [
+    'Process',
+    ['Weather'],
+    ['Process', 'Process'],
+    [{ loginName: 'a', displayName: 'A' }],
+  ]) {
+    assert.throws(
+      () => multiselect.validate(declared, refused),
+      /multiselect Issue Capture Field "causes"/,
+      JSON.stringify(refused)
+    );
+  }
+});
+
+test('a multiselect is a set of checkboxes captioned by a legend', () => {
+  // Several inputs, each inside its own label, cannot be wrapped by one more.
+  assert.equal(getCaptureFieldType('multiselect')?.caption, 'legend');
+
+  const control = /** @type {any} */ (
+    MULTISELECT.editControl(
+      /** @type {any} */ ({
+        field: causesField(),
+        value: ['System'],
+        namePrefix: 'row-1-',
+        onCapture: () => {},
+      })
+    )
+  );
+  const boxes = control.querySelectorAll('input');
+  assert.deepEqual(
+    boxes.map((/** @type {any} */ b) => [b.type, b.value, b.checked]),
+    [
+      ['checkbox', 'Process', false],
+      ['checkbox', 'Training', false],
+      ['checkbox', 'System', true],
+    ]
+  );
+  for (const box of boxes) assert.equal(box.name, 'row-1-causes');
+});
+
+test('ticking and unticking writes the whole selection, in declared order', () => {
+  /** @type {any[]} */
+  const edits = [];
+  /** @param {unknown} value */
+  const boxesFor = (value) =>
+    /** @type {any} */ (
+      MULTISELECT.editControl(
+        /** @type {any} */ ({
+          field: causesField(),
+          value,
+          namePrefix: '',
+          onCapture: (/** @type {any} */ ...args) => edits.push(args),
+        })
+      )
+    ).querySelectorAll('input');
+  /** @param {any} box @param {boolean} checked */
+  const toggle = (box, checked) => {
+    box.checked = checked;
+    box._listeners.change[0]({ target: box, currentTarget: box });
+  };
+
+  toggle(boxesFor(['System'])[0], true);
+  toggle(boxesFor(['Process', 'System'])[2], false);
+  toggle(boxesFor(['Process'])[0], false);
+
+  assert.deepEqual(edits, [
+    ['causes', ['Process', 'System']],
+    ['causes', ['Process']],
+    // Unticking the last box writes nothing, which clears the field.
+    ['causes', null],
+  ]);
+});
+
+test('a multiselect over a value saved as a single option shows that option ticked', () => {
+  // A field changed from `select` to `multiselect` still holds the old string
+  // on Cases saved before the change; the reader shows what is there.
+  const control = /** @type {any} */ (
+    MULTISELECT.editControl(
+      /** @type {any} */ ({
+        field: causesField(),
+        value: 'Training',
+        namePrefix: '',
+        onCapture: () => {},
+      })
+    )
+  );
+  assert.deepEqual(
+    control.querySelectorAll('input').map((/** @type {any} */ b) => b.checked),
+    [false, true, false]
+  );
 });

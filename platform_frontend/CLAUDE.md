@@ -549,6 +549,10 @@ src/
     primitive-types.js          # text/textarea/select/radio — one adapter, because they differ only
                                 #   in whether the value comes from the declared options and how the
                                 #   caption is attached
+    multiselect-type.js         # the `multiselect` type: any number of the declared options as
+                                #   checkboxes, stored as a list in declared order. Its own module
+                                #   rather than a flag on `select`, because both its value shape and
+                                #   its caption (a legend over several inputs) differ
     person-type.js              # the `person` type: an object rather than a string, picked from the
                                 #   directory rather than typed, and two controls — a picker until
                                 #   someone is chosen, then their name plus a way back to nobody

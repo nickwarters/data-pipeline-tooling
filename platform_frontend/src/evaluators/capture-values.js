@@ -17,16 +17,21 @@
  * write path (which deletes the key rather than storing emptiness) and the
  * completion gate (which asks whether a required field is filled) both read.
  *
- * Only an absent value or empty text is nothing. Anything else is something,
- * which is what keeps a malformed write a rejection rather than a silent
- * delete: emptiness clears a field, it does not excuse a value the field cannot
- * hold.
+ * Only an absent value, empty text or an empty list is nothing. Anything else
+ * is something, which is what keeps a malformed write a rejection rather than a
+ * silent delete: emptiness clears a field, it does not excuse a value the field
+ * cannot hold.
  *
  * @param {unknown} value
  * @returns {boolean}
  */
 export function isEmptyCaptureValue(value) {
-  return value === null || value === undefined || value === '';
+  return (
+    value === null ||
+    value === undefined ||
+    value === '' ||
+    (Array.isArray(value) && value.length === 0)
+  );
 }
 
 /**
@@ -53,13 +58,17 @@ export function isPerson(value) {
 }
 
 /**
- * How one stored capture value reads as text, whatever it holds. Total on
- * purpose — see the note at the top of this file.
+ * How one stored capture value reads as text, whatever it holds: a list of
+ * chosen options reads as those options, comma-separated. Total on purpose —
+ * see the note at the top of this file.
  *
  * @param {unknown} value
  * @returns {string}
  */
 export function captureDisplayText(value) {
   if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    return value.filter((v) => typeof v === 'string').join(', ');
+  }
   return isPerson(value) ? value.displayName : '';
 }
