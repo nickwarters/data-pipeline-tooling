@@ -265,6 +265,32 @@ _REJECTED_AS_NAN = object()
             id="a-legacy-action-array",
         ),
         pytest.param(
+            ["Process", "System"],
+            ("options", "Process|System", None, None),
+            None,
+            id="a-multiselect-joined-as-an-answer-is",
+        ),
+        pytest.param(
+            ["Process"],
+            ("options", "Process", None, None),
+            None,
+            id="a-multiselect-with-one-option",
+        ),
+        pytest.param(
+            ["Process", {"id": "legacy-action-0", "text": "Old-style action"}],
+            None,
+            json.dumps(
+                ["Process", {"id": "legacy-action-0", "text": "Old-style action"}]
+            ),
+            id="a-list-mixing-options-and-actions",
+        ),
+        pytest.param(
+            [],
+            None,
+            json.dumps([]),
+            id="an-empty-list",
+        ),
+        pytest.param(
             None,
             None,
             # A JSON null lands as pandas NaN, not the string "null" -- hence
@@ -400,6 +426,12 @@ def test_a_malformed_answers_blob_raises_for_the_root_cause_table_too():
             None,
             json.dumps({"loginName": "b.okafor"}),
             id="a-half-filled-person",
+        ),
+        pytest.param(
+            ["Process gap", "Training"],
+            ("options", "Process gap|Training", None, None),
+            None,
+            id="a-multiselect",
         ),
         pytest.param(42, None, 42, id="a-bare-json-number"),
     ],

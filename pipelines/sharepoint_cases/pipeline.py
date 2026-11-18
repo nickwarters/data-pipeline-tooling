@@ -105,6 +105,7 @@ from .schema import (
     CASE_LISTS,
     DETAIL_ID_VARS,
     FEED_NAME,
+    OPTIONS_VALUE_KIND,
     PERSON_TABLE,
     PERSON_VALUE_KIND,
     TEXT_VALUE_KIND,
@@ -570,7 +571,16 @@ def encode_detail_value(dataset: Dataset) -> Dataset:
 def discriminate_capture_value(dataset: Dataset) -> Dataset:
     """Add ``value_kind`` / ``value_text`` / ``person_login`` / ``person_display``,
     discriminating one Issue Capture field's ``raw_value`` into ``text``,
-    ``person`` or ``unsupported`` -- see the data dictionary for the arms.
+    ``person``, ``options`` or ``unsupported`` -- see the data dictionary for
+    the arms.
+
+    ``options`` is a multiselect's non-empty list of chosen options, every
+    element a string; its ``value_text`` joins them on
+    ``VALUE_TEXT_SEPARATOR``, the same rendering ``derive_value_text`` gives a
+    multi-choice answer, so the subject has one rule for a list of chosen
+    options. Any other list -- the legacy ``Action[]`` arm, whose elements are
+    objects, or an empty list the review application never stores -- stays
+    ``unsupported``.
 
     Must be **total**: ``value_kind`` is never null. A value rule masks on
     ``notna()``, so a null ``value_kind`` would slip past quarantine and then
@@ -598,7 +608,11 @@ def discriminate_capture_value(dataset: Dataset) -> Dataset:
                     login, display = login_value, display_value
                 # else: a half-filled person -- stays unsupported.
             elif parses and isinstance(decoded, list):
-                pass  # the legacy Action[] arm -- stays unsupported.
+                if decoded and all(isinstance(e, str) for e in decoded):
+                    kind = OPTIONS_VALUE_KIND
+                    text = VALUE_TEXT_SEPARATOR.join(decoded)
+                # else: the legacy Action[] arm, or an empty or mixed list --
+                # stays unsupported.
             else:
                 kind = TEXT_VALUE_KIND
                 text = cell

@@ -483,8 +483,8 @@ feed does not join — Groups are presentation-only.
 | `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema — the Writer adds it after validation — so it appears in no schema and in no grain. | *(32-char hex)* | None |
 | `question_id` | the `answers` map's key | `str` | No | `NonNull` | The Question Definition this capture value belongs to. | `q-root-cause` | None |
 | `field_key` | the `capture` map's key | `str` | No | `NonNull` | The Issue Capture Field key — unique within a Case Type by app contract, not enforced here. | `field-owner` | None |
-| `value_kind` | *(derived)* | `str` | No | `NonNull`, `OneOf(text, person)` | Which arm the value discriminated to; see `discriminate_capture_value`. A legacy `Action[]` value, a half-filled person, or any other unrecognised shape is stamped `unsupported` and quarantines on this rule, rather than earning a label of its own. | `person` | None |
-| `value_text` | the `capture` map's value | `str` | Yes | — | Filled for the `text` arm only. A `person`-typed field holding a bare string still lands here, as `text` — discrimination is on the value, never on a declared type this feed does not see, matching the review application's own reader. | `Called back within SLA.` | Internal |
+| `value_kind` | *(derived)* | `str` | No | `NonNull`, `OneOf(text, person, options)` | Which arm the value discriminated to; see `discriminate_capture_value`. `options` is a multiselect field's non-empty list of chosen options, every element a string. A legacy `Action[]` value (a list of objects), an empty list, a half-filled person, or any other unrecognised shape is stamped `unsupported` and quarantines on this rule, rather than earning a label of its own. | `person` | None |
+| `value_text` | the `capture` map's value | `str` | Yes | — | Filled for the `text` and `options` arms. A `person`-typed field holding a bare string still lands here, as `text` — discrimination is on the value, never on a declared type this feed does not see, matching the review application's own reader. An `options` value lands as its options joined on `\|`, in the order the review application stored them (the field's declared order) — the same rendering `answer.value_text` gives a multi-choice answer, so grouping on it counts combinations, not single options, and an option label containing `\|` cannot be told apart. | `Called back within SLA.` / `Process\|System` | Internal |
 | `person_login` | `capture[field_key].loginName` | `str` | Yes | — | Filled for the `person` arm only. A **bare account** (`user-rp`), the same spelling `case_version`'s Person columns hold. | `user-rp` | PII |
 | `person_display` | `capture[field_key].displayName` | `str` | Yes | — | Filled for the `person` arm only. Cached at selection time; not looked up here. | `Bola Okafor` | PII |
 
@@ -502,13 +502,15 @@ None.
 ### Part D — Quarantine & data quality
 
 - `value_kind` is the only value rule that can quarantine a row, and it is
-  total: `discriminate_capture_value` always stamps one of `text`, `person` or
-  `unsupported`, so every row reaches the rule with a non-null value to judge.
+  total: `discriminate_capture_value` always stamps one of `text`, `person`,
+  `options` or `unsupported`, so every row reaches the rule with a non-null value to judge.
   The rejected row still carries `raw_value` (dropped only after quarantine),
   so the offending shape is diagnosable from the reject table alone.
 - The legacy `Action[]` capture arm — a value shape no live Case Type writes —
   quarantines here rather than being modelled: it fails the `OneOf(text,
-  person)` rule the same way a half-filled person object does.
+  person, options)` rule the same way a half-filled person object does. A list
+  is `options` only when every element is a string, which an `Action[]` (a list
+  of `{id, text}` objects) never is; a list mixing the two quarantines.
 - A malformed `answers` or `capture` blob (text that is not JSON, or JSON of
   the wrong shape) is a feed defect, not a bad value: the chained
   `ExplodeJsonMap` passes raise `JsonShapeError` and abort the run before
@@ -939,8 +941,8 @@ configuration*, below.
 | `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema. | *(32-char hex)* | None |
 | `question_id` | the `answers` map's key | `str` | No | `NonNull` | The failed Question Definition this root cause belongs to. | `q-root-cause` | None |
 | `field_key` | the `rcaCapture` map's key | `str` | No | `NonNull` | The Root Cause Field key, as the Case Type's frontend config declares it — not validated here. | `rca-category` | None |
-| `value_kind` | *(derived)* | `str` | No | `NonNull`, `OneOf(text, person)` | Which arm the value discriminated to, by `answer_capture`'s own `discriminate_capture_value`; anything else is stamped `unsupported` and quarantines. | `text` | None |
-| `value_text` | the `rcaCapture` map's value | `str` | Yes | — | Filled for the `text` arm only (a select's chosen option lands here as its text). | `Process gap` | Internal |
+| `value_kind` | *(derived)* | `str` | No | `NonNull`, `OneOf(text, person, options)` | Which arm the value discriminated to, by `answer_capture`'s own `discriminate_capture_value`; anything else is stamped `unsupported` and quarantines. | `text` | None |
+| `value_text` | the `rcaCapture` map's value | `str` | Yes | — | Filled for the `text` arm (a select's chosen option lands here as its text) and the `options` arm (a multiselect's chosen options joined on `\|`, exactly as in `answer_capture`). | `Process gap` | Internal |
 | `person_login` | `rcaCapture[field_key].loginName` | `str` | Yes | — | Filled for the `person` arm only — the login as the frontend stamped it, the same spelling `answer_capture.person_login` holds. | `b.okafor` | PII |
 | `person_display` | `rcaCapture[field_key].displayName` | `str` | Yes | — | Filled for the `person` arm only. Cached at selection time; not looked up here. | `Bola Okafor` | PII |
 

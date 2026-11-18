@@ -84,11 +84,14 @@ DETAIL_ID_VARS = (
 REMEDIATION_STATUSES = ("complete", "partial", "cancelled")
 REMEDIATION_DECISIONS = ("yes", "no")
 
-# CAPTURE_VALUE_KINDS deliberately holds two labels, not one per unsupported
-# shape -- everything else collapses onto UNSUPPORTED_CAPTURE_VALUE_KIND.
+# CAPTURE_VALUE_KINDS deliberately holds one label per modelled shape, not one
+# per unsupported shape -- everything else collapses onto
+# UNSUPPORTED_CAPTURE_VALUE_KIND. OPTIONS is a multiselect's list of chosen
+# options, landed as one row whose value_text joins them as an answer's does.
 TEXT_VALUE_KIND = "text"
 PERSON_VALUE_KIND = "person"
-CAPTURE_VALUE_KINDS = (TEXT_VALUE_KIND, PERSON_VALUE_KIND)
+OPTIONS_VALUE_KIND = "options"
+CAPTURE_VALUE_KINDS = (TEXT_VALUE_KIND, PERSON_VALUE_KIND, OPTIONS_VALUE_KIND)
 UNSUPPORTED_CAPTURE_VALUE_KIND = "unsupported"
 
 # The Appeal lifecycle.

@@ -2,6 +2,19 @@
 status: accepted
 ---
 
+> **Amended (2026-11):** the review application gained a `multiselect` field
+> type, the first value shape here that is neither text nor a person, and one
+> of the cases "What would reopen it" names. It is modelled rather than
+> quarantined, in both tables at once through the shared
+> `discriminate_capture_value`: a non-empty list of strings is stamped
+> `options` and lands as **one row** per field, its `value_text` the options
+> joined on `|` — the rendering `derive_value_text` already gives a
+> multi-choice answer, so the subject keeps one rule for a list of chosen
+> options rather than two. One row per option was considered and declined:
+> it would change the tables' grain, `(…, question_id, field_key)`, and so
+> their migrations, for a gain a per-Case-Type Reporting pivot can still make
+> by splitting. A date remains unmodelled and still quarantines.
+
 # Root Cause values land as a Detail Table, and the field configuration is not exported
 
 The Case Review Platform's Root Cause tab lets the **Responsible Party
@@ -70,8 +83,9 @@ Type modules and is not exported to the pipeline.**
 - A report that needs Root Cause fields labelled, typed or limited to declared
   keys — that is the consumer an export of the config waits for, and the point
   to choose between widening the question-bank export and a sibling export.
-- A Root Cause value whose shape is neither text nor a person (a multi-select,
-  a date) — `discriminate_capture_value` quarantines it today, and modelling it
-  would change both tables' discriminator together.
+- A Root Cause value whose shape is neither text, a person nor a list of
+  options (a date, say) — `discriminate_capture_value` quarantines it today,
+  and modelling it would change both tables' discriminator together. (A
+  multi-select reopened this once; see the amendment above.)
 - The frontend moving Root Cause out of the `Answers` blob, into a column or a
   list of its own — then this table's source changes, not its grain.
