@@ -377,3 +377,59 @@ test('CaptureGroups renders only the fields their siblings reveal', () => {
     /Sales team/
   );
 });
+
+const MULTISELECT_GROUPS =
+  /** @type {import('../src/sharepoint-client.js').CaptureGroup[]} */ ([
+    {
+      key: 'cause',
+      label: 'Cause',
+      fields: [
+        {
+          key: 'causes',
+          label: 'Causes',
+          type: 'multiselect',
+          options: ['Process', 'Training', 'System'],
+        },
+      ],
+    },
+  ]);
+
+test('CaptureGroups names a multiselect by a legend over its checkboxes and reports the selection', () => {
+  /** @type {any[]} */
+  const actions = [];
+  const root = rootOf(
+    CaptureGroups(
+      personProps({
+        groups: MULTISELECT_GROUPS,
+        capture: { causes: ['Process'] },
+        onCapture: (/** @type {string} */ key, /** @type {any} */ value) =>
+          actions.push([key, value]),
+      })
+    )
+  );
+  const fieldset = /** @type {any} */ (root.querySelector('fieldset'));
+  assert.equal(fieldset.querySelector('legend')?.textContent, 'Causes');
+  assert.equal(getByRole(root, 'checkbox', { name: 'Process' }).checked, true);
+
+  const training = getByRole(root, 'checkbox', { name: 'Training' });
+  training.checked = true;
+  fireEvent(training, 'change');
+  assert.deepEqual(actions, [['causes', ['Process', 'Training']]]);
+});
+
+test('CaptureGroups reads a multiselect back as its chosen options', () => {
+  const root = rootOf(
+    CaptureGroups(
+      personProps({
+        groups: MULTISELECT_GROUPS,
+        capture: { causes: ['Process', 'System'] },
+        canCapture: false,
+      })
+    )
+  );
+  assert.equal(
+    root.querySelector('.cora-capture-value')?.textContent,
+    'Causes: Process, System'
+  );
+  assert.equal(queryAllByRole(root, 'checkbox').length, 0);
+});

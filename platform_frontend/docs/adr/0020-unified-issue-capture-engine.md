@@ -12,6 +12,21 @@ Responsible Party Manager's Root Cause Fields (`rootCauseGroups`, stored in
 `rcaCapture`) follow these rules apart from the Issue Capture Fields in
 `capture`. Key uniqueness is per family of groups, not across both.
 
+Amended (2026-11): the closed type set gains **`multiselect`**, any number of a
+field's declared `options`, rendered as checkboxes and stored as a `string[]` in
+declared order. The "no extra multi-select" line below held until a Case Type
+needed one. It is a type of its own rather than a flag on `select` because the
+two differ in both things a type decides: what a write may hold (a list, not a
+string) and how a caption names the control (a `<legend>` over several inputs,
+not a `<label>` around one). Checkboxes rather than a `<select multiple>` box,
+because a list box needs a held modifier key to pick a second option and
+silently clears the selection on a plain click. An empty list is nothing
+recorded, so unticking the last box clears the field and a `required`
+multiselect counts as unfilled until something is chosen. In `showWhen`, `in`
+against a multiselect asks whether any listed option was chosen, as it already
+does of a `multi-choice` Answer; `equals` against one can never be true, and the
+verify gate refuses it. Allowed in `rootCauseGroups` too.
+
 A **Case Type** declares everything captured against a _failed_ **Answer** (an **Issue**) as one model: an ordered list of **Issue Capture Group**s, each holding ordered, typed **Issue Capture Field**s. This replaces the three previously separate concerns on a failed Answer — **Attributed Party**, **Remediation Actions**, and flat Remediation Details — with a single engine. The driver is **consolidation**: Case Type Owners workshopped a shared structure to stop Case Types diverging, and channelled all per-Case-Type variation into this one well-defined slot.
 
 ## Why one engine, not three special cases

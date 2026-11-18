@@ -1474,6 +1474,89 @@ test('checkCaptureGroups fails a showWhen comparing a person by value', async ()
   );
 });
 
+test('checkCaseTypes fails a multiselect with no options to choose from', async () => {
+  for (const options of [undefined, []]) {
+    const failures = await captureFailures([
+      { key: 'causes', label: 'Causes', type: 'multiselect', options },
+    ]);
+    assert.equal(failures.length, 1, joined(failures));
+    assert.match(failures[0].message, /causes/);
+    assert.match(failures[0].message, /multiselect/);
+  }
+
+  const declared = await captureFailures([
+    {
+      key: 'causes',
+      label: 'Causes',
+      type: 'multiselect',
+      options: ['Process', 'Training'],
+    },
+  ]);
+  assert.deepEqual(declared, [], joined(declared));
+});
+
+test('checkCaptureGroups fails a showWhen asking a multiselect to equal one option', async () => {
+  const causes = {
+    key: 'causes',
+    label: 'Causes',
+    type: 'multiselect',
+    options: ['Process', 'Training'],
+  };
+
+  const equals = await captureFailures([
+    causes,
+    {
+      key: 'detail',
+      label: 'Detail',
+      type: 'text',
+      showWhen: { $and: [{ causes: { equals: 'Process' } }] },
+    },
+  ]);
+  assert.equal(equals.length, 1, joined(equals));
+  assert.match(equals[0].message, /detail/);
+  assert.match(equals[0].message, /causes/);
+  assert.match(equals[0].message, /`in`/);
+
+  for (const op of [{ in: ['Process'] }, { answered: true }]) {
+    const fine = await captureFailures([
+      causes,
+      {
+        key: 'detail',
+        label: 'Detail',
+        type: 'text',
+        showWhen: { causes: op },
+      },
+    ]);
+    assert.deepEqual(fine, [], joined(fine));
+  }
+});
+
+test('the Root Cause tab may declare a multiselect field', async () => {
+  const failures = await checkCaseTypes({
+    caseTypes: [
+      demoEntry(
+        demoConfig({
+          rootCauseGroups: [
+            {
+              key: 'cause',
+              label: 'Cause',
+              fields: [
+                {
+                  key: 'causes',
+                  label: 'Causes',
+                  type: 'multiselect',
+                  options: ['Process', 'Training'],
+                },
+              ],
+            },
+          ],
+        })
+      ),
+    ],
+  });
+  assert.deepEqual(failures, [], joined(failures));
+});
+
 test('checkCaptureGroups fails a showWhen reference outside its own group', async () => {
   const failures = await captureFailures(
     [

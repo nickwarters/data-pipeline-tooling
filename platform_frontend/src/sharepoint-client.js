@@ -59,7 +59,7 @@
  * Manager records about its root cause. Each is a **capture slot**: one engine
  * writes both, and neither ever reads the other's keys.
  *
- * @typedef {{ value: string | string[], justification?: string, remediationRequired?: 'yes' | 'no', remediationActions?: Array<{id: string, text: string}>, freeFormRemediation?: string, remediationStatus?: RemediationStatus, capture?: Record<string, string | { loginName: string, displayName: string, domain?: string, email?: string } | Array<string | RemediationAction>>, rcaCapture?: Record<string, string | { loginName: string, displayName: string, domain?: string, email?: string }> }} Answer
+ * @typedef {{ value: string | string[], justification?: string, remediationRequired?: 'yes' | 'no', remediationActions?: Array<{id: string, text: string}>, freeFormRemediation?: string, remediationStatus?: RemediationStatus, capture?: Record<string, string | { loginName: string, displayName: string, domain?: string, email?: string } | Array<string | RemediationAction>>, rcaCapture?: Record<string, string | string[] | { loginName: string, displayName: string, domain?: string, email?: string }> }} Answer
  */
 
 /**
@@ -84,7 +84,7 @@
  * `'actions'` is **not** declarable: per-action Remediation tracking moved to
  * `answer.remediationStatus`, and nothing renders or validates such a field.
  *
- * @typedef {{ key: string, label: string, type: 'text' | 'textarea' | 'select' | 'radio' | 'person', options?: string[], required?: boolean, role?: string, showWhen?: Record<string, unknown>, placeholder?: string }} CaptureField
+ * @typedef {{ key: string, label: string, type: 'text' | 'textarea' | 'select' | 'radio' | 'multiselect' | 'person', options?: string[], required?: boolean, role?: string, showWhen?: Record<string, unknown>, placeholder?: string }} CaptureField
  */
 
 /**

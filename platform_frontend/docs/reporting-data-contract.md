@@ -261,7 +261,11 @@ Each entry in `answers`, keyed by question `id`:
   failure counting (use them for richer reports if you want — e.g. "failures
   with no justification," or remediation-completion rates).
 - `capture` holds the **Issue Capture Fields** the Case Type declares, keyed by
-  field key, and is the only place failure attribution now lives — the retired
+  field key. A value is a string for `text`, `textarea`, `select` and `radio`; a
+  `string[]` of the chosen options, in the order the field declares them, for
+  `multiselect`; and `{ loginName, displayName }` for `person`. An empty list is
+  never stored: clearing a multiselect removes its key. `capture` is the only
+  place failure attribution now lives — the retired
   `attributedParty` Answer property is never written any more. Field keys are
   per-Case-Type, so a cross-Case-Type report should find the attribution field
   by its `role: 'attributedParty'` tag in the Case Type config rather than by

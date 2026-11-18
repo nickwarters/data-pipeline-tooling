@@ -250,7 +250,7 @@ function caseTypeFile(entry) {
 const CAPTURE_FIELD_TYPES = captureFieldTypeNames();
 
 /** The types whose value is chosen from a declared list. */
-const CHOICE_CAPTURE_TYPES = ['select', 'radio'];
+const CHOICE_CAPTURE_TYPES = ['select', 'radio', 'multiselect'];
 
 /**
  * One family of capture groups a Case Type may declare, and the words a
@@ -485,6 +485,23 @@ function checkCaptureShowWhen(slug, file, group, spec) {
       }
     }
   }
+  // A multiselect reaches the evaluator as the list of options chosen, and a
+  // list never equals a string, so `equals` against one hides its field for
+  // good. `in` asks whether any listed option was chosen, which is the question.
+  const multiselectKeys = new Set(
+    fields
+      .filter((/** @type {any} */ f) => f?.type === 'multiselect')
+      .map((/** @type {any} */ f) => f.key)
+  );
+  for (const field of fields) {
+    for (const ref of equalsComparedKeys(field?.showWhen)) {
+      if (multiselectKeys.has(ref)) {
+        fail(
+          `${spec.fieldNoun} "${field.key}" has a showWhen \`equals\` against "${ref}", which is a multiselect and never equals one value — use \`in\` to ask whether an option was chosen`
+        );
+      }
+    }
+  }
   if (failures.length) return failures;
 
   // `detectCycles` asks a list of things with ids and showWhens whether their
@@ -715,6 +732,36 @@ function collectValueCompared(cond, into) {
         collectValueCompared(child, into);
       }
     } else if (op && typeof op === 'object' && ('equals' in op || 'in' in op)) {
+      into.add(key);
+    }
+  }
+}
+
+/**
+ * Every key a condition compares with `equals`.
+ *
+ * @param {Record<string, unknown> | undefined} cond
+ * @returns {Set<string>}
+ */
+function equalsComparedKeys(cond) {
+  /** @type {Set<string>} */
+  const keys = new Set();
+  collectEqualsCompared(cond, keys);
+  return keys;
+}
+
+/**
+ * @param {unknown} cond
+ * @param {Set<string>} into
+ */
+function collectEqualsCompared(cond, into) {
+  if (!cond || typeof cond !== 'object') return;
+  for (const [key, op] of Object.entries(cond)) {
+    if (key === '$and' || key === '$or') {
+      for (const child of /** @type {unknown[]} */ (op ?? [])) {
+        collectEqualsCompared(child, into);
+      }
+    } else if (op && typeof op === 'object' && 'equals' in op) {
       into.add(key);
     }
   }

@@ -18,12 +18,14 @@
 
 import { PRIMITIVE_CAPTURE_FIELD_TYPES } from './primitive-types.js';
 import { PERSON_CAPTURE_FIELD_TYPE } from './person-type.js';
+import { MULTISELECT_CAPTURE_FIELD_TYPE } from './multiselect-type.js';
 
 /** @type {Map<string, CaptureFieldType>} */
 const registry = new Map();
 
 for (const type of [
   ...PRIMITIVE_CAPTURE_FIELD_TYPES,
+  MULTISELECT_CAPTURE_FIELD_TYPE,
   PERSON_CAPTURE_FIELD_TYPE,
 ]) {
   registry.set(type.type, type);
