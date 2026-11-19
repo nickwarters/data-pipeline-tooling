@@ -19,8 +19,11 @@ export const AmendOutcomePlugin = /** @type {const} */ ({
   showInSummaryDefault: false,
   defaultLabels: AMEND_OUTCOME_LABELS,
 
-  evaluateAccess({ caseRow, roles }) {
-    if (!roles.includes('controls')) return 'hidden';
+  // Controls amends an Outcome, and so does anyone given that one permission
+  // without the rest of Controls.
+  evaluateAccess({ caseRow, roles, capabilities }) {
+    if (!roles.includes('controls') && !capabilities?.canChangeOutcome)
+      return 'hidden';
     if (caseRow && !isReportable(caseRow.status)) return 'hidden';
     return 'edit';
   },

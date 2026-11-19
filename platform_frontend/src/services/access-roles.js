@@ -3,7 +3,7 @@ import { allCaseListGroups, caseListGroupNames } from './permissions.js';
 import { roleCaseTypeEntry, roleFlagEntry } from './user-roles.js';
 
 /** @typedef {{ slug: string, displayName: string }} CaseTypeRef */
-/** @typedef {'reviewer' | 'reviewer-manager' | 'controls' | 'case-type-owner' | 'journey-owner'} AccessRoleId */
+/** @typedef {'reviewer' | 'reviewer-manager' | 'controls' | 'case-type-owner' | 'journey-owner' | 'can-search-cases' | 'can-change-outcome'} AccessRoleId */
 
 /**
  * One role a person holds or may be given: a role id and, for a per-Case-Type role, the Case Type slug.
@@ -94,6 +94,22 @@ const SPECS = [
         roleCaseTypeEntry('journeyOwnerOf', caseType.slug),
         caseListWrite(caseType)
       ),
+  },
+  // Two things Controls can do, each grantable alone. A search reads every
+  // Case list; changing an Outcome writes to the Case it is on, which may be
+  // of any Case Type.
+  {
+    id: 'can-search-cases',
+    label: 'Search all Cases',
+    perCaseType: false,
+    parts: () => made(roleFlagEntry('canSearchCases'), allCaseListGroups.read),
+  },
+  {
+    id: 'can-change-outcome',
+    label: 'Change an Outcome',
+    perCaseType: false,
+    parts: () =>
+      made(roleFlagEntry('canChangeOutcome'), allCaseListGroups.write),
   },
 ];
 
@@ -345,6 +361,20 @@ export function describeChange(action, role, personName, caseTypes) {
       revoke: [
         `Remove ${who} as Journey Owner${forType}`,
         `Removed ${who} as Journey Owner${forType}`,
+      ],
+    },
+    'can-search-cases': {
+      grant: [`Let ${who} search all Cases`, `Let ${who} search all Cases`],
+      revoke: [
+        `Stop ${who} searching all Cases`,
+        `Stopped ${who} searching all Cases`,
+      ],
+    },
+    'can-change-outcome': {
+      grant: [`Let ${who} change an Outcome`, `Let ${who} change an Outcome`],
+      revoke: [
+        `Stop ${who} changing an Outcome`,
+        `Stopped ${who} changing an Outcome`,
       ],
     },
   };

@@ -544,7 +544,11 @@ test('landing: two rules at the same rank throw, naming both', () => {
 test('landing: a Controls user starts on the cross-Case-Type lookup', () => {
   assert.equal(
     resolveDefaultLandingPath(
-      makePermissions({ isReviewer: false, isControls: true })
+      makePermissions({
+        isReviewer: false,
+        isControls: true,
+        canSearchCases: true,
+      })
     ),
     '#/search'
   );
@@ -553,12 +557,25 @@ test('landing: a Controls user starts on the cross-Case-Type lookup', () => {
 test('landing: Controls yields to a user who also has a queue of their own', () => {
   // Ranked, not first-match: a Controls user who is also something else gets
   // the more specific answer, and which it is comes from defaultForOrder.
-  const controls = makePermissions({ isReviewer: false, isControls: true });
+  const controls = makePermissions({
+    isReviewer: false,
+    isControls: true,
+    canSearchCases: true,
+  });
   const ranks = APP_CONFIG.pagePlugins
     .filter((plugin) => plugin.defaultFor?.(controls))
     .map((plugin) => plugin.defaultForOrder);
 
   assert.deepEqual(ranks, [30], 'Controls is the last of the landing ranks');
+});
+
+test('landing: somebody given search on its own starts on the cross-Case-Type lookup', () => {
+  assert.equal(
+    resolveDefaultLandingPath(
+      makePermissions({ isReviewer: false, canSearchCases: true })
+    ),
+    '#/search'
+  );
 });
 
 // --- An unauthorised direct visit bounces before anything mounts ---
@@ -677,6 +694,7 @@ test('landing: an Adviser who is also Controls resolves by rank, not by list ord
     isReviewer: false,
     isAdviser: true,
     isControls: true,
+    canSearchCases: true,
   });
 
   assert.equal(resolveDefaultLandingPath(both), '#/my-cases');
@@ -729,6 +747,7 @@ test('landing: a Reviewer starts on the Dashboard, and outranks their other role
     isReviewer: true,
     isAdviser: true,
     isControls: true,
+    canSearchCases: true,
   });
   assert.equal(resolveDefaultLandingPath(everything), '#/dashboard');
   assert.deepEqual(

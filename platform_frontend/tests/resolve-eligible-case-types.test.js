@@ -632,6 +632,7 @@ test('resolveCaseSourcesFromCaseTypes: each broad role in the roles row spans ev
     'reviewerManager',
     'controls',
     'responsiblePartyManager',
+    'canSearchCases',
   ])) {
     assert.equal(
       resolveCaseSourcesFromCaseTypes([], caseTypes, {

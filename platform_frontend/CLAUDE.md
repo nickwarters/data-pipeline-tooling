@@ -636,8 +636,9 @@ src/
     save-queue.js
     section-access.js
     team-cases-fetcher.js
-    user-roles.js                 # THE shape of a CoraUserRoles row: its yes/no and per-Case-Type
-                                  #   columns, and the role entries a change is planned in
+    user-roles.js                 # THE shape of a CoraUserRoles row: its yes/no role and permission
+                                  #   columns, its per-Case-Type columns, and the role entries a change
+                                  #   is planned in
 
   evaluators/                   # pure logic: applicability, failure, and outcome
     case-lifecycle.js           # pure Case lifecycle predicates, imported downward by services and

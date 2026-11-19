@@ -201,6 +201,8 @@ One site-wide list, **not** environment-prefixed, for the same reason as
 | `ReviewerManager`         | Yes/No                                  |         | Default No.                                                                 |
 | `ResponsiblePartyManager` | Yes/No                                  |         | Default No.                                                                 |
 | `Reviewer`                | Yes/No                                  |         | A Reviewer who holds no Case Type. Default No.                              |
+| `CanSearchCases`          | Yes/No                                  |         | Permission: search every Case Type, without being Controls. Default No.     |
+| `CanChangeOutcome`        | Yes/No                                  |         | Permission: amend a reportable Outcome, without being Controls. Default No. |
 | `Reviews`                 | Choice, allow multiple, Case Type slugs |         | One choice per Case Type slug (`complaints`), not its display name.         |
 | `OwnsCaseTypes`           | Choice, allow multiple, Case Type slugs |         | As `Reviews`.                                                               |
 | `JourneyOwnerOf`          | Choice, allow multiple, Case Type slugs |         | As `Reviews`.                                                               |
@@ -239,6 +241,8 @@ The Access page gives a role its row entry plus the group it needs, if any:
 | Reviewer, Case Type Owner or Journey Owner of `X` | `Cases - X Write`      |
 | Reviewer Manager, RP Manager                      | `CORA All Cases Read`  |
 | Controls                                          | `CORA All Cases Write` |
+| Search all Cases (permission)                     | `CORA All Cases Read`  |
+| Change an Outcome (permission)                    | `CORA All Cases Write` |
 | Adviser, Reviewer of no Case Type                 | none                   |
 
 Removing a role keeps any group another of the person's roles needs, and an

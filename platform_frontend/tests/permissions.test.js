@@ -97,8 +97,9 @@ test('resolveCapabilities: a Case Type in the row that the application does not 
   assert.equal(caps.isVisitor, true);
 });
 
-test('resolveCapabilities: only Controls may search across every Case Type', () => {
+test('resolveCapabilities: only Controls or the Can Search Cases permission may search across every Case Type', () => {
   assert.equal(capsOf({ controls: true }).canSearchCases, true);
+  assert.equal(capsOf({ canSearchCases: true }).canSearchCases, true);
   for (const roles of [
     { reviewer: true },
     { adviser: true },
@@ -119,6 +120,22 @@ test('resolveCapabilities: only Controls may search across every Case Type', () 
     false,
     'a Maintainer must not reach cross-Case-Type search'
   );
+});
+
+test('resolveCapabilities: a permission column gives one thing Controls can do, and nothing else of Controls', () => {
+  for (const [flag, capability, other] of /** @type {const} */ ([
+    ['canSearchCases', 'canSearchCases', 'canChangeOutcome'],
+    ['canChangeOutcome', 'canChangeOutcome', 'canSearchCases'],
+  ])) {
+    const caps = capsOf({ [flag]: true });
+    assert.equal(caps[capability], true, flag);
+    assert.equal(caps[other], false, `${flag} does not bring ${other}`);
+    assert.equal(caps.isControls, false, `${flag} does not make Controls`);
+    assert.equal(caps.isVisitor, false, `${flag} is not a Visitor`);
+  }
+  const controls = capsOf({ controls: true });
+  assert.equal(controls.canSearchCases, true);
+  assert.equal(controls.canChangeOutcome, true);
 });
 
 test('resolveCapabilities: the Maintainer is the one role still held in a group', () => {

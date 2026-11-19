@@ -6,6 +6,9 @@
  * decides what the app lets them do there. A site-wide function is a yes/no
  * column, and a role held per Case Type is a multi-choice column of Case Type
  * slugs, so a new Case Type is a new choice value rather than a new column.
+ * Beside the roles sit **permissions**: a yes/no column for one thing a role
+ * can do, which a person may be given without the rest of that role. A
+ * permission only adds to what their roles allow.
  *
  * The row is also spelled as a list of **role entries** — one string per
  * yes/no column that is set and per slug a multi-choice column holds. The
@@ -25,13 +28,15 @@ export const USER_ROLES_LIST_NAME = 'CoraUserRoles';
  *   reviewerManager: boolean,
  *   responsiblePartyManager: boolean,
  *   reviewer: boolean,
+ *   canSearchCases: boolean,
+ *   canChangeOutcome: boolean,
  *   reviews: string[],
  *   ownsCaseTypes: string[],
  *   journeyOwnerOf: string[]
  * }} UserRoles
  */
 
-/** @typedef {'adviser' | 'controls' | 'reviewerManager' | 'responsiblePartyManager' | 'reviewer'} RoleFlag */
+/** @typedef {'adviser' | 'controls' | 'reviewerManager' | 'responsiblePartyManager' | 'reviewer' | 'canSearchCases' | 'canChangeOutcome'} RoleFlag */
 /** @typedef {'reviews' | 'ownsCaseTypes' | 'journeyOwnerOf'} RoleCaseTypeList */
 
 /**
@@ -45,6 +50,8 @@ export const ROLE_FLAG_COLUMNS = Object.freeze({
   reviewerManager: 'ReviewerManager',
   responsiblePartyManager: 'ResponsiblePartyManager',
   reviewer: 'Reviewer',
+  canSearchCases: 'CanSearchCases',
+  canChangeOutcome: 'CanChangeOutcome',
 });
 
 /**
@@ -85,6 +92,8 @@ export function noRoles() {
     reviewerManager: false,
     responsiblePartyManager: false,
     reviewer: false,
+    canSearchCases: false,
+    canChangeOutcome: false,
     reviews: [],
     ownsCaseTypes: [],
     journeyOwnerOf: [],

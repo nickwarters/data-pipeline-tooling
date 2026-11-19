@@ -41,6 +41,7 @@ import { noRoles } from './user-roles.js';
  * isResponsiblePartyManager: boolean,
  * isMaintainer: boolean,
  * canSearchCases: boolean,
+ * canChangeOutcome: boolean,
  * isVisitor: boolean
  * }} Capabilities
  */
@@ -123,10 +124,14 @@ export function resolveCapabilities(
   const isReviewerManager = userRoles.reviewerManager;
   const isResponsiblePartyManager = userRoles.responsiblePartyManager;
   const isMaintainer = userGroups.includes(config.maintainer);
-  // Widening search to a second role is this one line and no call site.
-  const canSearchCases = isControls;
+  // Controls can do both; the row's permission columns give one of them to
+  // somebody without the rest of Controls.
+  const canSearchCases = isControls || userRoles.canSearchCases;
+  const canChangeOutcome = isControls || userRoles.canChangeOutcome;
   const isVisitor =
     !isReviewer &&
+    !canSearchCases &&
+    !canChangeOutcome &&
     !isAdviser &&
     !isControls &&
     !isReviewerManager &&
@@ -146,6 +151,7 @@ export function resolveCapabilities(
     isResponsiblePartyManager,
     isMaintainer,
     canSearchCases,
+    canChangeOutcome,
     isVisitor,
   };
 }
