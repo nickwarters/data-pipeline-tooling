@@ -2,7 +2,7 @@
 import {
   planGrant,
   planRevoke,
-  roleHolders,
+  roleHolder,
   roleTitle,
 } from './access-roles.js';
 import {
@@ -46,29 +46,16 @@ export async function readHeldParts(client, account) {
 }
 
 /**
- * The people who hold a role, through its old group or their roles row alike,
- * each once however many of the two name them.
+ * The people who hold a role: those whose roles row holds its entry.
  *
- * @param {Pick<SharePointClient, 'listGroupMembers' | 'listRoleHolders'>} client
+ * @param {Pick<SharePointClient, 'listRoleHolders'>} client
  * @param {RoleRef} role
  * @param {readonly CaseTypeRef[]} caseTypes
  * @returns {Promise<PersonResult[]>}
  */
 export async function readRoleHolders(client, role, caseTypes) {
-  const reads = await Promise.all(
-    roleHolders(role, caseTypes).map((part) =>
-      isRoleEntry(part)
-        ? client.listRoleHolders(part)
-        : client.listGroupMembers(part)
-    )
-  );
-  /** @type {Map<string, PersonResult>} */
-  const byAccount = new Map();
-  for (const person of reads.flat()) {
-    const key = person.loginName.toLowerCase();
-    if (!byAccount.has(key)) byAccount.set(key, person);
-  }
-  return [...byAccount.values()];
+  const entry = roleHolder(role, caseTypes);
+  return entry ? client.listRoleHolders(entry) : [];
 }
 
 /**

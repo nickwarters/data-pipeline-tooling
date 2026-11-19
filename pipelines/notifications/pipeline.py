@@ -89,15 +89,10 @@ PRIVILEGES_COLUMNS = ("login_name", "groups")
 
 # Telling a frontline party about a Case is useless if they cannot open it, so
 # every notification owed to one is paired with the per-Case-Type groups that
-# grant them access to that Case Type's list. While the Case Review Platform
-# moves from its old per-role groups to one Read and one Write group per Case
-# list, both open it, so a frontline party is granted both and can open the
-# Case whichever one the tenant reads that day. The old one goes when the
-# platform stops reading it.
-FRONTLINE_GROUP_TEMPLATES = (
-    "Cases - {case_type_name} Write",
-    "Frontline - {case_type_name}",
-)
+# grant them access to that Case Type's list: the Case list's Write group, which
+# the Case Review Platform's frontline parties hold beside its Reviewers and
+# owners.
+FRONTLINE_GROUP_TEMPLATES = ("Cases - {case_type_name} Write",)
 
 # Case Type slug -> the name that appears in a group. Declared, not derived:
 # the slug is this project's identifier and the group name is the Case Review

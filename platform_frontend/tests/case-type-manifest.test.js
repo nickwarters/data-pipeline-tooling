@@ -97,7 +97,7 @@ test('case type manifest: registry entries are frozen, so the one copy of a disp
     assert.ok(
       Object.isFrozen(entry),
       `${entry.slug}'s registry entry must be frozen — the display name it ` +
-        'carries composes three SharePoint group names, and both the ' +
+        'carries composes its Case list group names, and both the ' +
         'capability and eligibility sides read it'
     );
     assert.throws(
@@ -295,8 +295,8 @@ test('case type manifest: registerCaseType rejects a duplicate slug', () => {
 });
 
 test('case type manifest: registerCaseType rejects an entry that cannot compose group names', () => {
-  // An unvalidated entry reaches `caseTypeGroupNames(undefined)` and provisions
-  // `Reviewers - undefined` — a group name that grants a real Case source and
+  // An unvalidated entry reaches `caseListGroupNames(undefined)` and provisions
+  // `Cases - undefined Write` — a group name that opens a real Case list and
   // that somebody could actually be put in.
   const before = CASE_TYPES.length;
   const importer = async () => ({ default: /** @type {any} */ ({}) });

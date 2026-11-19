@@ -29,7 +29,7 @@ ship inside the code folder, so each environment already has its own copy and
 reads it relative to where it was deployed.
 
 Security groups are **shared across environments** — there is no
-`training_Reviewers - X`. The app's role checks are UX only; the ACLs on each
+`training_Cases - X Write`. The app's role checks are UX only; the ACLs on each
 environment's own lists are the real boundary. Decide who should be able to
 reach the new environment's lists before you grant anything (see step 4).
 
@@ -106,7 +106,7 @@ because every write would land in production lists.
 
 Grant the environment's lists to the groups that should reach it, following the
 [persona matrix](testing.md#selective-security-assurance). Because groups are
-shared with prod, a member of `Reviewers - Complaints` who is granted
+shared with prod, a member of `Cases - Complaints Write` who is granted
 `training_Cases-Complaints` keeps their prod access too; if an environment's
 audience must _not_ see prod, that is a prod ACL question, not something the
 app can enforce.

@@ -11,9 +11,9 @@ const bank = await loadBank('./banks/complaints.txt');
 /**
  * The **Complaints** Case Type — a Complaints-style journey whose
  * appeals are raised by the **Journey Owner** and resolved by **Controls**. Its
- * per-Case-Type groups derive from the `Complaints` display name:
- * `Reviewers - Complaints`, `CaseTypeOwner - Complaints`,
- * `JourneyOwner - Complaints`.
+ * Case list groups derive from the `Complaints` display name:
+ * `Cases - Complaints Read` and `Cases - Complaints Write`. Who reviews or owns
+ * it is held in each person's `CoraUserRoles` row, by the `complaints` slug.
  *
  * Declares its own `listName` (`Cases-Complaints`) like every other Case Type,
  * so its Cases are read/written list-scoped rather than from a default store.
@@ -25,12 +25,6 @@ const bank = await loadBank('./banks/complaints.txt');
  */
 const config = {
   listName: 'Cases-Complaints',
-  // No `eligibleGroups`: `Reviewers - Complaints` is DERIVED from the registry
-  // display name, and restating it here made it a second, independent
-  // grant. Renaming the registry entry moved the three derived names but left
-  // this copy still granting, so anyone left in the decommissioned SharePoint
-  // group kept the access the rename was supposed to move. `eligibleGroups` is
-  // for genuinely extra groups only.
   // Case Type-specific Case Details fields. Values live in the
   // CaseRow.details JSON blob keyed by `key`.
   detailFields: [

@@ -30,16 +30,15 @@ function jsFilesUnder(dir) {
 }
 
 test('eligibility: Reviewer Managers resolve every manifest slug to a source with an explicit listName', async () => {
-  const sources = await caseSourcesFor(['Reviewer Managers']);
+  const sources = await caseSourcesFor(['CoraUserRoles: ReviewerManager']);
   const bySlug = new Map(sources.map((s) => [s.slug, s]));
 
   for (const slug of Object.keys(CASE_TYPE_IMPORTERS)) {
     const source = bySlug.get(slug);
     assert.ok(
       source,
-      `caseSourcesFor(['Reviewer Managers']) did not resolve manifest ` +
-        `slug "${slug}". Every Case Type must be group-derivable — a manager ` +
-        `holds every source.`
+      `A Reviewer Manager did not resolve manifest slug "${slug}". A ` +
+        `manager holds every source.`
     );
     assert.ok(
       typeof source.listName === 'string' && source.listName.length > 0,
@@ -50,13 +49,13 @@ test('eligibility: Reviewer Managers resolve every manifest slug to a source wit
   }
 });
 
-test('eligibility: a user holding no groups resolves no sources (purely group-derived, no slug allow-list)', async () => {
+test('eligibility: a user holding no roles resolves no sources (purely role-derived, no slug allow-list)', async () => {
   const sources = await caseSourcesFor([]);
   assert.deepEqual(
     sources,
     [],
-    'With no group membership, no Case source should be eligible. Eligibility ' +
-      'must be derived from groups alone, never from a slug gate.'
+    'With no roles, no Case source should be eligible. Eligibility must be ' +
+      'derived from roles alone, never from a slug gate.'
   );
 });
 
@@ -74,34 +73,33 @@ test('eligibility: no module references a removed slug-gate (DASHBOARD_ENABLED_S
   assert.deepEqual(
     offenders,
     [],
-    'Dashboard/eligibility visibility is now purely group-derived. The slug ' +
+    'Dashboard/eligibility visibility is now purely role-derived. The slug ' +
       'gate (DASHBOARD_ENABLED_SLUGS) and resolveEligibleCaseTypes were ' +
       'removed — no module may reference them.'
   );
 });
 
-test('permissions.caseTypes: names every manifest slug so its display name and derived groups resolve', () => {
+test('permissions.caseTypes: names every manifest slug so a role on any of them resolves', () => {
   const permissionSlugs = permissions.caseTypes.map((c) => c.slug).sort();
   assert.deepEqual(
     permissionSlugs,
     Object.keys(CASE_TYPE_IMPORTERS).sort(),
     'permissions.caseTypes is derived from CASE_TYPES (case-types/manifest.js), ' +
-      'so it must cover exactly the manifest slugs — per-Case-Type group names ' +
-      'and display names resolve for every Case Type.'
+      'so it must cover exactly the manifest slugs — a role held on any Case ' +
+      'Type, and its display name, resolve.'
   );
 });
 
 test('case types: no config module restates its display name — the registry is the one copy', async () => {
   // The permissions copy was hoisted into the registry and the config copy
   // deleted, so there is nothing left to drift. A config that restated the
-  // name would let the capability side and the eligibility side derive
-  // DIFFERENT SharePoint group names again.
+  // name would let two surfaces derive DIFFERENT Case list group names.
   for (const [slug, importer] of Object.entries(CASE_TYPE_IMPORTERS)) {
     const { default: config } = await importer();
     assert.ok(
       !Object.hasOwn(config, 'displayName'),
       `Case Type "${slug}" declares displayName on its config module. The ` +
-        `display name composes three provisioned SharePoint group names and ` +
+        `display name composes its provisioned Case list group names and ` +
         `lives ONLY on its CASE_TYPES entry (case-types/manifest.js).`
     );
   }
@@ -112,8 +110,8 @@ test('case types: the registry names every manifest slug, so displayNameFor neve
     const name = displayNameFor(slug);
     assert.ok(
       typeof name === 'string' && name.length > 0,
-      `Case Type "${slug}" resolved no display name; its Reviewers, Case Type ` +
-        `Owner and Journey Owner would silently lose their source.`
+      `Case Type "${slug}" resolved no display name; its Case list groups ` +
+        `could not be named.`
     );
   }
 });
@@ -128,14 +126,12 @@ test('case types: every manifest config explicitly declares its Case list', asyn
   }
 });
 
-test('mock responsible-party persona uses the current Adviser group', () => {
-  // The group provisioned in the tenant is `Frontline`; the capability it
-  // grants is still `isAdviser`. Asserting the group name here — rather than
-  // `permissions.adviser` — is deliberate: the point of this test is that the
-  // fixture tracks the *tenant*, so reading the constant would make it pass
-  // against any rename.
-  assert.ok(personas['responsible-party'].groups.includes('Frontline'));
-  for (const retired of ['Advisers', 'CR-ResponsibleParty']) {
-    assert.ok(!personas['responsible-party'].groups.includes(retired));
+test('mock responsible-party persona is an Adviser through their roles row', () => {
+  // The Adviser role is a column of the roles row now, not a group, so the
+  // fixture must not lean on the retired `Frontline` group to grant it.
+  const persona = personas['responsible-party'];
+  assert.equal(persona.roles?.adviser, true);
+  for (const retired of ['Frontline', 'Advisers', 'CR-ResponsibleParty']) {
+    assert.ok(!persona.groups.includes(retired), retired);
   }
 });

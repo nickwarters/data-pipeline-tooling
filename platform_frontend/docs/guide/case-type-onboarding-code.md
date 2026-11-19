@@ -240,10 +240,9 @@ import { loadBank } from './load-bank.js';
 const bank = await loadBank('./banks/widget-review.txt');
 
 /**
- * The **Widget Review** Case Type. Its per-Case-Type groups derive from the
+ * The **Widget Review** Case Type. Its Case list groups derive from the
  * `Widget Review` display name — which lives on the registry entry (Step 3),
- * not here: `Reviewers - Widget Review`, `CaseTypeOwner - Widget Review`,
- * `JourneyOwner - Widget Review`.
+ * not here: `Cases - Widget Review Read` and `Cases - Widget Review Write`.
  *
  * @type {CaseTypeConfig}
  */
@@ -303,13 +302,6 @@ What each field does, and how to choose its value:
   so a missing `listName` **throws at boot** as soon as a fixture Case carries
   your slug. The real list doesn't need to exist for any of the dev-loop work
   in this guide.
-- **`eligibleGroups`** — extra group names that grant access to this type's
-  Cases, **beyond** the three derived groups. Omit it unless you have a
-  genuinely extra group. Do not restate a derived name such as
-  `Reviewers - Widget Review`: it is already granted, and the restated copy does
-  not move when the registry display name is renamed, so a decommissioned group
-  would keep granting access (#527). A blanket group (e.g. plain `Reviewers`)
-  would open the type to every reviewer — almost never what you want.
 - **Allocation capacity** is app-wide, not Case Type configuration. Before
   claiming a Case, the framework totals this Reviewer's non-held
   `In-progress` Cases across every allocation source. At three Cases the
@@ -501,29 +493,20 @@ This is the entire integration surface with the rest of the app:
 caseTypes: CASE_TYPES.map(({ slug, displayName }) => ({ slug, displayName })),
 ```
 
-The registry entry's `displayName` is the only copy, and the group names derive
-from it via `caseTypeGroupNames()`:
+The registry entry's `displayName` is the only copy, and the Case list group
+names derive from it via `caseListGroupNames()`: `Cases - Widget Review Read`
+and `Cases - Widget Review Write`. They only open the list. A person's roles
+live in their `CoraUserRoles` row, which names your type by its **slug**
+(`widget-review`), so renaming the display name moves the groups and nobody's
+roles. Two rules worth internalising:
 
-| Derived group                   | Grants                                                        |
-| ------------------------------- | ------------------------------------------------------------- |
-| `Reviewers - Widget Review`     | List access as a Reviewer of this type                        |
-| `CaseTypeOwner - Widget Review` | Case Type Owner capability for this type (owner dashboards)   |
-| `JourneyOwner - Widget Review`  | Journey Owner capability (journey cases page, raises appeals) |
-
-Groups sit on two orthogonal axes: **functional capability** (what you can do
-anywhere — `Controls`, `Reviewer Managers`, `Frontline`,
-`ResponsibleParty-Managers`, `CORA Owner Delegates`) and **per-Case-Type list
-access** (which type's Cases you can open — the three derived groups above, plus
-`Frontline - Widget Review`, which no frontend code reads: it is the frontline
-side's SharePoint ACL on the list, so it is not in `caseTypeGroupNames()` and
-you do not declare it anywhere in code). Two rules worth internalising:
-
-- The five functional roles above span **every** Case source automatically —
-  a Controls user sees your new type with no extra group.
-- The bare `Reviewers` functional group does **not** grant per-type list
-  access. A reviewer sees your type only through `Reviewers - Widget Review`
-  (or a group you listed in `eligibleGroups`). This is why the default
-  `?asUser=reviewer` persona will _not_ see your Cases — Step 5 fixes that.
+- The five broad roles (Controls, Reviewer Manager, Adviser, RP Manager, and
+  the Maintainer) span **every** Case source automatically — a Controls user
+  sees your new type with no change.
+- A bare Reviewer (the row's `Reviewer` flag) reviews no Case Type. A
+  reviewer sees your type only when their row's `Reviews` names
+  `widget-review`. This is why the default `?asUser=reviewer` persona will
+  _not_ see your Cases — Step 5 fixes that.
 
 All of this is UX-only shaping; in production the real security boundary is
 SharePoint list ACLs (out of scope here, covered by the provisioning docs).
@@ -531,32 +514,36 @@ SharePoint list ACLs (out of scope here, covered by the provisioning docs).
 ## Step 5 — Add dev personas
 
 Edit [dev/fixtures/personas.js](../../dev/fixtures/personas.js) and add mock
-users holding the new groups, one per role you want to exercise:
+users holding the new roles, one per role you want to exercise:
 
 ```js
 'reviewer-widget-review': {
   userId: 'user-reviewer-widget-review',
   displayName: 'Alex Reviewer Widget Review',
-  groups: ['Reviewers - Widget Review'],
+  groups: ['Cases - Widget Review Write'],
+  roles: { reviews: ['widget-review'] },
 },
 'case-type-owner-widget-review': {
   userId: 'user-case-type-owner-widget-review',
   displayName: 'Cam Case Type Owner Widget Review',
-  groups: ['CaseTypeOwner - Widget Review'],
+  groups: ['Cases - Widget Review Write'],
+  roles: { ownsCaseTypes: ['widget-review'] },
 },
 'journey-owner-widget-review': {
   userId: 'user-journey-owner-widget-review',
   displayName: 'Jules Journey Owner Widget Review',
-  groups: ['JourneyOwner - Widget Review'],
+  groups: ['Cases - Widget Review Write'],
+  roles: { journeyOwnerOf: ['widget-review'] },
 },
 ```
 
-Personas are selected with `?asUser=<key>`; the persona's `groups` array is
-what `resolveCapabilities` and `resolveAppCaseSources` run against, and its
+Personas are selected with `?asUser=<key>`; the persona's `roles` are its
+`CoraUserRoles` row, which `resolveCapabilities` and `resolveAppCaseSources`
+run against, its `groups` open the Case lists as in the tenant, and its
 `userId` is what `assignedReviewer` on fixture Cases must match for "my
 cases" surfaces. Update the file's header comment listing the available keys.
 The existing cross-type personas (`controls`, `reviewer-manager`,
-`responsible-party`) need no changes — their functional groups already span
+`responsible-party`) need no changes — their broad roles already span
 your new type.
 
 ## Step 6 — Seed example Cases
@@ -804,10 +791,9 @@ When the tour passes, the code-side onboarding is done.
 - **Bank fails to load / JSON parse error** — the artifact must be valid JSON
   despite the `.txt` extension; a trailing comma is the usual culprit. Check
   the browser console for the `load-bank` fetch.
-- **Dashboard empty for your reviewer persona** — the persona's group must be
-  exactly `Reviewers - <displayName>` with the display name from the registry
-  entry (Step 3) — the single copy. Remember bare `Reviewers` grants nothing
-  per-type.
+- **Dashboard empty for your reviewer persona** — the persona's `roles` must
+  name your slug in `reviews`. Remember the bare `reviewer` flag grants
+  nothing per-type, and no group grants a role.
 - **Allocation says "No Cases available"** — no fixture Case for your slug is
   simultaneously `In-progress` **and** `assignedReviewer: ''`.
 - **A fixture Case won't open / behaves oddly** — its `answers` reference ids

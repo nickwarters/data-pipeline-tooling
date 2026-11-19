@@ -3,7 +3,6 @@ import { h } from '../../lib/html.js';
 import {
   ACCESS_ROLES,
   describeChange,
-  grantNote,
   planGrant,
   planRevoke,
 } from '../../services/access-roles.js';
@@ -134,8 +133,6 @@ export function changeFormView(
     ? describeChange(form.action, role, personName, caseTypes).imperative
     : null;
   const blocked = blockedReason(form, groups, caseTypes);
-  const note =
-    role && form.action === 'grant' ? grantNote(role, caseTypes) : null;
   const ready = formIsReady(form, groups, caseTypes) && !form.saving;
   // A fixed form already says what it does in its heading, so its button stays short.
   const submitLabel =
@@ -179,7 +176,6 @@ export function changeFormView(
         ],
         handlers.onCaseType
       ),
-    note && h('p', { className: 'cora-access-note' }, note),
     blocked && h('p', { className: 'cora-access-blocked' }, blocked),
     h(
       'label',

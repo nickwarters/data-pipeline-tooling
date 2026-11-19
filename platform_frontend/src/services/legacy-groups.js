@@ -1,11 +1,5 @@
 // @ts-check
-import {
-  allCaseListGroups,
-  caseListGroupNames,
-  caseTypeGroupNames,
-  frontlineListAccessGroupName,
-  permissions,
-} from './permissions.js';
+import { allCaseListGroups, caseListGroupNames } from './permissions.js';
 import { roleCaseTypeEntry, roleFlagEntry } from './user-roles.js';
 
 /**
@@ -24,6 +18,34 @@ import { roleCaseTypeEntry, roleFlagEntry } from './user-roles.js';
 /** @typedef {{ slug: string, displayName: string }} CaseTypeRef */
 
 /**
+ * The site-wide role groups. The frontline base group is named `Frontline` in
+ * the tenant while the role it held is **Adviser**.
+ */
+export const LEGACY_ROLE_GROUPS = Object.freeze({
+  reviewer: 'Reviewers',
+  adviser: 'Frontline',
+  controls: 'Controls',
+  reviewerManager: 'Reviewer Managers',
+  responsiblePartyManager: 'ResponsibleParty-Managers',
+});
+
+/**
+ * The four per-Case-Type groups, all composed from the Case Type's display
+ * name rather than its slug.
+ *
+ * @param {string} displayName
+ * @returns {{ listAccess: string, frontline: string, caseTypeOwner: string, journeyOwner: string }}
+ */
+export function legacyCaseTypeGroupNames(displayName) {
+  return {
+    listAccess: `Reviewers - ${displayName}`,
+    frontline: `Frontline - ${displayName}`,
+    caseTypeOwner: `CaseTypeOwner - ${displayName}`,
+    journeyOwner: `JourneyOwner - ${displayName}`,
+  };
+}
+
+/**
  * @typedef {{ group: string, entries: string[], accessGroups: string[] }} LegacyGroup
  */
 
@@ -37,32 +59,32 @@ import { roleCaseTypeEntry, roleFlagEntry } from './user-roles.js';
 export function legacyGroups(caseTypes) {
   return [
     {
-      group: permissions.reviewer,
+      group: LEGACY_ROLE_GROUPS.reviewer,
       entries: [roleFlagEntry('reviewer')],
       accessGroups: [],
     },
     {
-      group: permissions.adviser,
+      group: LEGACY_ROLE_GROUPS.adviser,
       entries: [roleFlagEntry('adviser')],
       accessGroups: [],
     },
     {
-      group: permissions.controls,
+      group: LEGACY_ROLE_GROUPS.controls,
       entries: [roleFlagEntry('controls')],
       accessGroups: [allCaseListGroups.write],
     },
     {
-      group: permissions.reviewerManager,
+      group: LEGACY_ROLE_GROUPS.reviewerManager,
       entries: [roleFlagEntry('reviewerManager')],
       accessGroups: [allCaseListGroups.read],
     },
     {
-      group: permissions.responsiblePartyManager,
+      group: LEGACY_ROLE_GROUPS.responsiblePartyManager,
       entries: [roleFlagEntry('responsiblePartyManager')],
       accessGroups: [allCaseListGroups.read],
     },
     ...caseTypes.flatMap(({ slug, displayName }) => {
-      const old = caseTypeGroupNames(displayName);
+      const old = legacyCaseTypeGroupNames(displayName);
       const write = caseListGroupNames(displayName).write;
       return [
         {
@@ -71,7 +93,7 @@ export function legacyGroups(caseTypes) {
           accessGroups: [write],
         },
         {
-          group: frontlineListAccessGroupName(displayName),
+          group: old.frontline,
           entries: [],
           accessGroups: [write],
         },
@@ -105,7 +127,7 @@ export function translateLegacyGroups(groups, caseTypes) {
     groups.includes(group)
   );
   const reviewsAType = caseTypes.some(({ displayName }) =>
-    groups.includes(caseTypeGroupNames(displayName).listAccess)
+    groups.includes(legacyCaseTypeGroupNames(displayName).listAccess)
   );
   const entries = held
     .flatMap(({ entries: becomes }) => becomes)

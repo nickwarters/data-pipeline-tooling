@@ -265,7 +265,6 @@ test('compileExport: preserves edited question order', async () => {
     label: 'L',
     slug: 's',
     version: 'v1',
-    eligibleGroups: [],
     questions: [
       {
         id: 'q-third',
@@ -562,7 +561,6 @@ test('compileExport: absent optional question fields are emitted as null', async
     label: 'L',
     slug: 's',
     version: 'v1',
-    eligibleGroups: [],
     questions: [
       {
         id: 'q1',
@@ -618,7 +616,6 @@ test('mintBankVersion: empty questions array mints deterministically', async () 
   const emptyBank = {
     label: 'L',
     slug: 'empty',
-    eligibleGroups: [],
     questions: [],
   };
   const [a, b] = await Promise.all([

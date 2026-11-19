@@ -597,12 +597,12 @@ src/
 
   services/                     # non-UI modules: data, state, auth
     abortable-client.js           # binds a mount-lifetime AbortSignal to a client's Case reads; writes untouched (#545)
-    access-roles.js               # THE definition of the internal roles Access can give: which groups
-                                  #   and roles-row entries make each one, which are shared with another
-                                  #   role, what a grant adds and a revoke removes, and the role-language copy
+    access-roles.js               # THE definition of the internal roles Access can give: the roles-row
+                                  #   entry and Case list group that make each one, what a grant adds and
+                                  #   a revoke removes, and the role-language copy
     access-change.js              # THE Access Log write order: check the groups can be changed, log
                                   #   the change, write the roles row, apply each group, then log how far
-                                  #   it got if one failed; also who holds a role, through either model
+                                  #   it got if one failed; also who holds a role, from the roles list
     account-name.js
     across-sources.js             # multi-list fan-out: one scoped request per Case source, merged (ADR-0022)
     case-search.js                # the bounded cross-list Case lookup: one over-fetched window per
@@ -624,9 +624,9 @@ src/
                                   #   then log not-applied if that change failed
     http-sharepoint-client.js
     journey-cases-fetcher.js
-    legacy-groups.js              # THE translation of each pre-roles-list group into role entries and
-                                  #   the new Case list groups; read by the backfill, gone with the
-                                  #   old groups
+    legacy-groups.js              # THE pre-roles-list group names, and their translation into role
+                                  #   entries and the new Case list groups; read only by the backfill,
+                                  #   gone with the old groups
     live-tail-fetcher.js          # the clamped read of the days the Report Feed cannot cover yet
                                   #   (LIVE_TAIL_MAX_DAYS); signal-unaware, the page binds the lifetime
     mock-sharepoint-client.js

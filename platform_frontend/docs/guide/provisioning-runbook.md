@@ -179,6 +179,11 @@ as-reviewed question catalogue.
 
 ## 6. Groups per Case Type
 
+> **Legacy from ADR-0059's phase 4.** The app no longer reads the groups in this
+> section for a role; it reads the `CoraUserRoles` row in §6a. They stay until
+> phase 5 retires them, so existing members keep list access, but a Case Type
+> onboarded from phase 4 is given only the §6a groups and choices.
+
 SharePoint groups fall on two orthogonal axes. For a Case Type whose
 display name is `X` (e.g. `Complaints`, **not** the slug `complaints`), provision:
 
@@ -203,7 +208,8 @@ composes the three groups the app _reads_.
 **Membership is maintained by hand today; the data pipeline now asks for it.**
 The `notifications` pipeline emits an `add_user_group_priviledges_<stamp>.json`
 Deliverable naming each frontline notification recipient's login and the
-`Frontline - X` groups they need, into the `cora_user_group_privileges` outbox —
+`Cases - X Write` groups they need (from ADR-0059's phase 4; `Frontline - X`
+before it), into the `cora_user_group_privileges` outbox —
 so a Responsible Party can be granted access to the Case in the same pass that
 tells them about it. **It is a request, not an application:** the pipeline
 writes the file to a local outbox and stops there, and the **Forwarder** that
@@ -229,9 +235,8 @@ Make `CORA Owner Delegates` the **owner** of every CORA group, the per-type and
 site-wide groups alike, except `CORA Owner Delegates` itself. A group's owner
 can always read and change its membership, so Maintainers can manage access
 without being site collection administrators, and Case Support can read the
-groups it needs. Its Reassign lists the members of `Reviewers - <type>` to
-choose the new Reviewer from. Add Reviewers to the group directly: members
-granted through a nested AD group are not listed.
+groups it needs. Its Reassign offers the people whose `CoraUserRoles` row
+reviews the Case Type, so a nested AD group no longer hides a Reviewer from it.
 
 ### Site-wide functional groups (provision once, not per type)
 
@@ -253,8 +258,8 @@ serve the Case itself, including from a notification's deep link.
 
 [ADR-0059](../adr/0059-roles-live-in-a-list-groups-only-open-lists.md) replaces
 the per-type groups above with a **Read** and a **Write** group per Case list
-and one `CoraUserRoles` row per person. Until that ADR's phase 4 the app reads
-the groups above, so keep provisioning them; provision these beside them.
+and one `CoraUserRoles` row per person. Before that ADR's phase 4 the app also
+read the groups above; from phase 4 it reads only these.
 
 ### `CoraUserRoles` list
 
@@ -321,6 +326,27 @@ pipeline names a frontline party in both `Frontline - X` and `Cases - X Write`.
 A Maintainer therefore needs ownership of the new groups and Contribute on
 `CoraUserRoles` before phase 3 is deployed, or every change from the Access page
 is refused or stops at the row.
+
+### Reading only the roles list
+
+From phase 4 a role comes from the person's `CoraUserRoles` row alone, and
+`CORA Owner Delegates` is the only group read for one. Run the backfill to
+`Nothing to do` before deploying it: a person missing from the list becomes a
+Visitor. A failed read of the list stops the app at its error panel. The Access
+page gives a role its row entry plus the group it needs, if any:
+
+| Role                                              | Group given            |
+| ------------------------------------------------- | ---------------------- |
+| Reviewer, Case Type Owner or Journey Owner of `X` | `Cases - X Write`      |
+| Reviewer Manager, RP Manager                      | `CORA All Cases Read`  |
+| Controls                                          | `CORA All Cases Write` |
+| Adviser, Reviewer of no Case Type                 | none                   |
+
+Removing a role keeps any group another of the person's roles needs, and an
+Adviser keeps every `Cases - X Write` group, because the notifications pipeline
+adds them there as Cases are assigned. The pipeline now names only
+`Cases - X Write`. The old groups stop being written, so leave them in place
+until phase 5.
 
 ---
 

@@ -703,7 +703,12 @@ test('case support log: an unknown Case Type asks for no log', async () => {
  */
 function live(setup = {}) {
   const client = new MockSharePointClient({
-    userRoles: setup.userRoles ?? {},
+    userRoles: setup.userRoles ?? {
+      zara: { reviews: ['complaints'] },
+      bea: { reviews: ['complaints'] },
+      amir: { reviews: ['complaints'] },
+      other: { reviews: ['example-review'] },
+    },
     personas: { maintainer: { groups: [], displayName: 'Robin Maintainer' } },
     persona: 'maintainer',
     lists: {
@@ -721,23 +726,23 @@ function live(setup = {}) {
       {
         loginName: 'zara',
         displayName: 'Zara',
-        groups: ['Reviewers - Complaints'],
+        groups: [],
       },
       {
         loginName: 'bea',
         displayName: 'Bea',
         manager: 'i:0#.w|CONTOSO\\Mo',
-        groups: ['Reviewers - Complaints'],
+        groups: [],
       },
       {
         loginName: 'amir',
         displayName: 'Amir',
-        groups: ['Reviewers - Complaints'],
+        groups: [],
       },
       {
         loginName: 'other',
         displayName: 'Other',
-        groups: ['Reviewers - Example Review'],
+        groups: [],
       },
     ],
     supportLog: setup.supportLog ?? [],
@@ -801,19 +806,18 @@ test('reassign: the candidates are the Case Type Reviewers, less the current Rev
   assert.match(page.view().textContent, /from the Complaints Reviewers/);
 });
 
-test('reassign: a Reviewer held through the roles row is a candidate, and one held both ways is offered once', async () => {
+test('reassign: only people whose roles row reviews the Case Type are candidates, whatever groups they hold', async () => {
   const page = live({
     people: [
       { loginName: 'zara', displayName: 'Zara', groups: [] },
       {
-        loginName: 'bea',
-        displayName: 'Bea',
-        groups: ['Reviewers - Complaints'],
+        loginName: 'old',
+        displayName: 'Old Group Only',
+        groups: ['Reviewers - Complaints', 'Cases - Complaints Write'],
       },
       { loginName: 'rowan', displayName: 'Rowan', groups: [] },
     ],
     userRoles: {
-      bea: { reviews: ['complaints'] },
       rowan: { reviews: ['complaints'] },
       zara: { reviews: ['complaints'] },
     },
@@ -823,7 +827,7 @@ test('reassign: a Reviewer held through the roles row is a candidate, and one he
   const offered = [
     ...page.view().querySelectorAll('.cora-case-support-candidate'),
   ].map((label) => label.textContent);
-  assert.deepEqual(offered, ['Bea', 'Rowan']);
+  assert.deepEqual(offered, ['Rowan']);
 });
 
 test('reassign: it cannot be submitted without both a Reviewer and a reason', async () => {
@@ -951,7 +955,7 @@ test('reassign: a support log that cannot be written leaves the Case untouched',
 
 test('reassign: Reviewers that cannot be read are reported in the form', async () => {
   const page = live();
-  page.client.listGroupMembers = async () => {
+  page.client.listRoleHolders = async () => {
     throw new Error('HTTP 404');
   };
   await openReassign(page);
@@ -964,11 +968,12 @@ test('reassign: Reviewers that cannot be read are reported in the form', async (
 
 test('reassign: a Case Type with no other Reviewer says so, and cancel returns to the actions', async () => {
   const page = live({
+    userRoles: { zara: { reviews: ['complaints'] } },
     people: [
       {
         loginName: 'zara',
         displayName: 'Zara',
-        groups: ['Reviewers - Complaints'],
+        groups: [],
       },
     ],
   });
