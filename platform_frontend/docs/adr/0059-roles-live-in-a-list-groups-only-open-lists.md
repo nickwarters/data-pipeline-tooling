@@ -99,7 +99,7 @@ the old groups are switched off, and each phase can be reversed on its own.
 2. **Build alongside.** Provision the list and groups, then
    `scripts/backfill_user_roles.js` fills them from the legacy groups.
    `src/services/legacy-groups.js` is the one translation, and goes with the old
-   groups.
+   groups (both deleted in phase 5).
 3. **Read both.** The app grants a role from either model, and the Access page
    and notifications pipeline write both. The Access page plans a role over the
    person's groups and role entries as one list: it gives the old group, the row
@@ -125,7 +125,16 @@ the old groups are switched off, and each phase can be reversed on its own.
    `src/services/legacy-groups.js`, for the backfill. The roles list must be
    landed by the pipelines (#1087) before this phase ships.
 5. **Retire.** Adviser reads narrow to the lists a person's groups open, the
-   `Frontline` blanket read goes, and then the legacy groups.
+   `Frontline` blanket read goes, and then the legacy groups. An Adviser's
+   Case sources are the lists their `Cases - <type> Read` or `Write` group
+   opens, or every list through either all-lists group; the other broad roles
+   still span every list. A Case list group grants no source by itself. The
+   backfill, `src/services/legacy-groups.js` and the clients' group-member
+   read, which only the backfill used, are deleted. The UAT ACL smoke example
+   now carries an Adviser in no Case list group, refused the list, which is the
+   proof that the blanket read is gone. The app reads only direct group
+   memberships, so an Adviser must be added to `Cases - <type> Write` directly,
+   as the notifications pipeline asks.
 
 ## Considered options
 
@@ -155,8 +164,9 @@ the old groups are switched off, and each phase can be reversed on its own.
   role and a change made in SharePoint directly leaves no log entry, so landing
   the list is follow-up work due before phase 4 (#1087).
 - Members granted through a nested AD group are still invisible to the app's
-  group reads, but per-type roles no longer depend on group reads, so an AD
-  group may sit inside a `Cases - <type>` group freely.
+  group reads. Per-type roles no longer depend on group reads, so an AD group
+  may sit inside a `Cases - <type>` group for everybody but an Adviser, whose
+  Case lists are read from their direct memberships from phase 5.
 
 [ADR-0010]: ./0010-auth-and-permissions.md
 [ADR-0022]: ./0022-two-axis-role-model.md

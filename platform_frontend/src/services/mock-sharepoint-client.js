@@ -461,24 +461,6 @@ export class MockSharePointClient {
   }
 
   /**
-   * The fixture directory's members of one group.
-   *
-   * @param {string} groupName
-   * @param {{ signal?: AbortSignal }} [opts]
-   * @returns {Promise<PersonResult[]>}
-   */
-  async listGroupMembers(groupName, opts = {}) {
-    const members = this._people
-      .filter((person) => person.groups?.includes(groupName))
-      .map(({ loginName, displayName, email }) =>
-        email === undefined
-          ? { loginName, displayName }
-          : { loginName, displayName, email }
-      );
-    return settle(opts.signal, members);
-  }
-
-  /**
    * The groups the fixture directory holds a person in; a person it does not know holds none.
    *
    * @param {string} account

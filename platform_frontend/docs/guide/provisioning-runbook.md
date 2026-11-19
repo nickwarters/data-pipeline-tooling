@@ -17,10 +17,11 @@ two copies of that table is exactly how one of them goes stale.
 
 One SharePoint list per Case Type holds its Cases, one Case per row.
 The list name is the Case Type's required `listName`; there is no default Case
-list. Before enabling the Case Type, grant read access on this list to the
-configured Controls, Reviewer-Manager, Adviser, Responsible-Party-Manager and
-Maintainer groups. The app fans broad-role reads across every Case Type list and
-treats a 403 as a provisioning fault rather than silently showing partial data.
+list. Before enabling the Case Type, grant its `Cases - X Read` and
+`Cases - X Write` groups (§6) on this list, along with `CORA All Cases Read`,
+`CORA All Cases Write` and `CORA Owner Delegates`. The app fans broad-role reads
+across every Case Type list and treats a 403 as a provisioning fault rather than
+silently showing partial data.
 
 For every non-production environment (`uat`, `training`, …), provision the
 matching `<name>_`-prefixed list and include it in the ACL persona matrix
@@ -177,89 +178,14 @@ as-reviewed question catalogue.
 
 ---
 
-## 6. Groups per Case Type
+## 6. Roles and Case list groups
 
-> **Legacy from ADR-0059's phase 4.** The app no longer reads the groups in this
-> section for a role; it reads the `CoraUserRoles` row in §6a. They stay until
-> phase 5 retires them, so existing members keep list access, but a Case Type
-> onboarded from phase 4 is given only the §6a groups and choices.
-
-SharePoint groups fall on two orthogonal axes. For a Case Type whose
-display name is `X` (e.g. `Complaints`, **not** the slug `complaints`), provision:
-
-### Per-type list-access groups (the real ACL boundary)
-
-Two, one per side of the review — the reviewing side and the frontline side.
-Both are SharePoint ACLs on the `Cases-{Slug}` list.
-
-| Group           | Grants                                                                                                                                                         |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Reviewers - X` | Access to the `Cases-{Slug}` list. Membership implies the `isReviewer` capability.                                                                             |
-| `Frontline - X` | Access to the `Cases-{Slug}` list for the **frontline** side — a **Responsible Party** or their **Manager** on a Case of this type. Implies **no** capability. |
-
-**`Frontline - X` grants list access and nothing else.** Unlike `Reviewers - X`
-it is not read by `permissions.js` and composes no capability: what a frontline
-user may see and do on a Case is decided by the per-Case roles in
-`section-access.js`, which resolve from the Case row's people fields, not from
-group membership. The group exists so those roles have a list to read the Case
-from at all. It is therefore not in `caseTypeGroupNames()` — that function
-composes the three groups the app _reads_.
-
-**Membership is maintained by hand today; the data pipeline now asks for it.**
-The `notifications` pipeline emits an `add_user_group_priviledges_<stamp>.json`
-Deliverable naming each frontline notification recipient's login and the
-`Cases - X Write` groups they need (from ADR-0059's phase 4; `Frontline - X`
-before it), into the `cora_user_group_privileges` outbox —
-so a Responsible Party can be granted access to the Case in the same pass that
-tells them about it. **It is a request, not an application:** the pipeline
-writes the file to a local outbox and stops there, and the **Forwarder** that
-would deliver it is designed but not yet built, so acting on the file is
-currently a manual step. See the data pipeline's
-[`docs/data-dictionary-notifications.md`](../../../docs/data-dictionary-notifications.md).
-Provisioning creates the empty group per Case Type either way.
-
-### Per-type elevated capability groups
-
-| Group               | Capability                                                                                                                      |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `CaseTypeOwner - X` | Elevated **reviewing** role — edits this type's Question Bank.                                                                  |
-| `JourneyOwner - X`  | Elevated **frontline** role — sees every Case's Summary and raises Appeals where the type configures it. Not a Case Type Owner. |
-
-Group **display names** use the Case Type display name; code composes them from
-`slug → displayName` (declared on the Case Type module), so a new type needs one
-name, not three hand-written strings.
-
-### Group owner: `CORA Owner Delegates`
-
-Make `CORA Owner Delegates` the **owner** of every CORA group, the per-type and
-site-wide groups alike, except `CORA Owner Delegates` itself. A group's owner
-can always read and change its membership, so Maintainers can manage access
-without being site collection administrators, and Case Support can read the
-groups it needs. Its Reassign offers the people whose `CoraUserRoles` row
-reviews the Case Type, so a nested AD group no longer hides a Reviewer from it.
-
-### Site-wide functional groups (provision once, not per type)
-
-`Reviewers` (base reviewing), `Frontline` (base frontline — eligible Responsible
-Party; the capability it grants is `isAdviser` and the domain term is still
-**Adviser**), `Controls` (resolves Appeals, authors Amended Outcomes — replaces
-the retired QA Reviewer).
-
-`Frontline` and the per-type `Frontline - X` above are **different groups on
-different axes** — site-wide capability vs one list's ACL. Every group match in
-`permissions.js` is exact equality, so neither grants the other; a user who is a
-Responsible Party on a Complaints Case needs **both**. `Frontline` is what puts
-their Cases on `#/my-cases`; `Frontline - Complaints` is what lets SharePoint
-serve the Case itself, including from a notification's deep link.
-
----
-
-## 6a. Moving to the roles list (being rolled out)
-
-[ADR-0059](../adr/0059-roles-live-in-a-list-groups-only-open-lists.md) replaces
-the per-type groups above with a **Read** and a **Write** group per Case list
-and one `CoraUserRoles` row per person. Before that ADR's phase 4 the app also
-read the groups above; from phase 4 it reads only these.
+Groups say who can open a Case list; one `CoraUserRoles` row per person says
+what they may do in CORA
+([ADR-0059](../adr/0059-roles-live-in-a-list-groups-only-open-lists.md)). The
+one role still held in a group is the Maintainer, `CORA Owner Delegates`. For a
+Case Type whose display name is `X` (e.g. `Complaints`, **not** the slug
+`complaints`), provision the following.
 
 ### `CoraUserRoles` list
 
@@ -297,43 +223,16 @@ Once, granted on every Case list in every environment: `CORA All Cases Read`
 (Read) and `CORA All Cases Write` (`CORA Contribute (no delete)`). Make `CORA
 Owner Delegates` the owner of each, as for every other CORA group.
 
-### Backfill
+### Group owner: `CORA Owner Delegates`
 
-`scripts/backfill_user_roles.js` fills the list and the new groups from the
-groups above. It only adds, and a run without `--apply` changes nothing:
+Make `CORA Owner Delegates` the **owner** of every CORA group except itself. A
+group's owner can always read and change its membership, so Maintainers can
+manage access from the Access page without being site collection
+administrators.
 
-```sh
-node scripts/backfill_user_roles.js /secure/path/backfill.json          # print the plan
-node scripts/backfill_user_roles.js /secure/path/backfill.json --apply  # make it
-```
+### The group each role needs
 
-The config is `{ "siteUrl": "https://…/sites/cora", "headersFileEnv":
-"CORA_BACKFILL_HEADERS_FILE" }`, and that variable names a JSON headers file for
-a `CORA Owner Delegates` account, kept outside the repository like the ACL
-smoke's. The backfill is complete when a run after `--apply` prints `Nothing to
-do`. Members granted through a nested AD group are not visible to it, so add
-those AD groups to the new groups by hand.
-
-### While both are read
-
-From the ADR's phase 3 the app grants a role from either the groups above or
-the person's `CoraUserRoles` row, so nobody gains or loses a role by being
-moved before or after the other. The Access page gives each role through both:
-the old group, the row entry and the new Case list group, row first. Removing a
-role takes away the same three, except a Case list's Write group stays while the
-person still holds that type's `Frontline - X` group. The notifications
-pipeline names a frontline party in both `Frontline - X` and `Cases - X Write`.
-A Maintainer therefore needs ownership of the new groups and Contribute on
-`CoraUserRoles` before phase 3 is deployed, or every change from the Access page
-is refused or stops at the row.
-
-### Reading only the roles list
-
-From phase 4 a role comes from the person's `CoraUserRoles` row alone, and
-`CORA Owner Delegates` is the only group read for one. Run the backfill to
-`Nothing to do` before deploying it: a person missing from the list becomes a
-Visitor. A failed read of the list stops the app at its error panel. The Access
-page gives a role its row entry plus the group it needs, if any:
+The Access page gives a role its row entry plus the group it needs, if any:
 
 | Role                                              | Group given            |
 | ------------------------------------------------- | ---------------------- |
@@ -343,10 +242,45 @@ page gives a role its row entry plus the group it needs, if any:
 | Adviser, Reviewer of no Case Type                 | none                   |
 
 Removing a role keeps any group another of the person's roles needs, and an
-Adviser keeps every `Cases - X Write` group, because the notifications pipeline
-adds them there as Cases are assigned. The pipeline now names only
-`Cases - X Write`. The old groups stop being written, so leave them in place
-until phase 5.
+Adviser keeps every `Cases - X Write` group. A failed read of `CoraUserRoles`
+stops the app at its error panel.
+
+### Advisers open only the lists they are added to
+
+An Adviser's `#/my-cases` reads only the Case lists their groups open:
+`Cases - X Read` or `Cases - X Write`, or either all-lists group. They are added
+to `Cases - X Write` as they are named on a Case of that type. The
+`notifications` pipeline asks for it: it emits an
+`add_user_group_priviledges_<stamp>.json` Deliverable naming each frontline
+notification recipient's login and the `Cases - X Write` groups they need, into
+the `cora_user_group_privileges` outbox, so a Responsible Party can be granted
+access to the Case in the same pass that tells them about it. **It is a request,
+not an application:** the pipeline writes the file to a local outbox and stops
+there, and the **Forwarder** that would deliver it is designed but not yet
+built, so acting on the file is currently a manual step. See the data
+pipeline's
+[`docs/data-dictionary-notifications.md`](../../../docs/data-dictionary-notifications.md).
+
+Add Advisers to the group **directly**. The app reads only a person's direct
+SharePoint group memberships, so an Adviser reached through an AD group nested
+inside `Cases - X Write` can open the list but sees none of its Cases on
+`#/my-cases`. Every other role is read from the row and is unaffected.
+
+### Retiring the old groups
+
+ADR-0059's phase 5 removes the groups the app read before the roles list. Once
+it is deployed and the UAT ACL smoke passes with the
+[persona matrix](testing.md#selective-security-assurance):
+
+1. Remove the site-wide `Frontline` group's Read from every Case list, in every
+   environment. Until this step any Adviser can read every Case of every type
+   through REST.
+2. Remove each remaining old group's permissions from every Case list, then
+   delete the group: `Reviewers`, `Frontline`, `Controls`, `Reviewer Managers`,
+   `ResponsibleParty-Managers`, and per Case Type `Reviewers - X`,
+   `Frontline - X`, `CaseTypeOwner - X` and `JourneyOwner - X`.
+3. Run the UAT ACL smoke again. Somebody who loses access here was never moved:
+   give them their role from the Access page.
 
 ---
 

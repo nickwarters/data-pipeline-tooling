@@ -385,7 +385,7 @@ test('resolveCaseSourcesFromCaseTypes: Controls get every Case Type source', () 
   );
 });
 
-test('resolveCaseSourcesFromCaseTypes: Advisers get every Case Type source', () => {
+test('resolveCaseSourcesFromCaseTypes: an Adviser reaches only the Case lists their groups open', () => {
   const caseTypes = [
     {
       slug: 'complaints',
@@ -400,12 +400,42 @@ test('resolveCaseSourcesFromCaseTypes: Advisers get every Case Type source', () 
       config: minimalConfig(),
     },
   ];
-
-  assert.deepEqual(
-    sourcesFor(['CoraUserRoles: Adviser'], caseTypes).map(
+  const slugsFor = (/** @type {string[]} */ held) =>
+    sourcesFor(['CoraUserRoles: Adviser', ...held], caseTypes).map(
       (source) => source.slug
-    ),
-    ['complaints', 'example-review']
+    );
+
+  assert.deepEqual(slugsFor([]), [], 'no group, no list');
+  assert.deepEqual(slugsFor(['Cases - Complaints Write']), ['complaints']);
+  assert.deepEqual(slugsFor(['Cases - Example Review Read']), [
+    'example-review',
+  ]);
+  for (const everyList of ['CORA All Cases Read', 'CORA All Cases Write']) {
+    assert.deepEqual(
+      slugsFor([everyList]),
+      ['complaints', 'example-review'],
+      everyList
+    );
+  }
+  assert.deepEqual(
+    slugsFor(['Frontline', 'Frontline - Complaints']),
+    [],
+    'the retired frontline groups open nothing'
+  );
+});
+
+test('resolveCaseSourcesFromCaseTypes: a Case list group opens no source without the Adviser role', () => {
+  const caseTypes = [
+    {
+      slug: 'complaints',
+      listName: 'Cases-Complaints',
+      displayName: 'Complaints',
+      config: minimalConfig(),
+    },
+  ];
+  assert.deepEqual(
+    sourcesFor(['Cases - Complaints Write', 'CORA All Cases Read'], caseTypes),
+    []
   );
 });
 
@@ -601,7 +631,6 @@ test('resolveCaseSourcesFromCaseTypes: each broad role in the roles row spans ev
   for (const flag of /** @type {const} */ ([
     'reviewerManager',
     'controls',
-    'adviser',
     'responsiblePartyManager',
   ])) {
     assert.equal(

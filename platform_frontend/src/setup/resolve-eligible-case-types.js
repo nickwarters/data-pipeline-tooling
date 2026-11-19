@@ -1,5 +1,9 @@
 // @ts-check
-import { permissions } from '../services/permissions.js';
+import {
+  allCaseListGroups,
+  caseListGroupNames,
+  permissions,
+} from '../services/permissions.js';
 import { noRoles } from '../services/user-roles.js';
 import {
   CASE_TYPE_IMPORTERS,
@@ -207,15 +211,35 @@ async function loadCaseTypeSources(slugs, importers) {
 }
 
 /**
+ * Whether the user's groups open a Case Type's list: its own Read or Write
+ * group, or one of the two groups that open every Case list.
+ *
+ * @param {string[]} userGroups
+ * @param {string} displayName
+ * @returns {boolean}
+ */
+function opensList(userGroups, displayName) {
+  const own = caseListGroupNames(displayName);
+  return [
+    own.read,
+    own.write,
+    allCaseListGroups.read,
+    allCaseListGroups.write,
+  ].some((group) => userGroups.includes(group));
+}
+
+/**
  * Pure core of `resolveAppCaseSources`: which of the given Case Types the user
  * may read from or write to. This is THE app-wide eligibility rule, read off
  * the user's `CoraUserRoles` row. A Case Type held in any of its per-type
  * columns (Reviews, OwnsCaseTypes, JourneyOwnerOf) grants only that source;
- * the Controls, Reviewer Manager, Adviser and Responsible Party Manager flags
- * span every source, as does the Maintainer group, the one role still held in
- * a group. Adviser and manager consumers must still apply their assignment
- * filter to each per-list query. No other group grants a source: groups only
- * open lists.
+ * the Controls, Reviewer Manager and Responsible Party Manager flags span
+ * every source, as does the Maintainer group, the one role still held in a
+ * group. An Adviser reaches only the Case lists their groups open, which the
+ * notifications pipeline adds them to as they are named on a Case, so My Cases
+ * never asks a list SharePoint will refuse. Adviser and manager consumers must
+ * still apply their assignment filter to each per-list query. No other group
+ * grants a source.
  *
  * @param {string[]} userGroups
  * @param {CaseTypeSource[]} caseTypes
@@ -230,7 +254,6 @@ export function resolveCaseSourcesFromCaseTypes(
   const broad =
     userRoles.reviewerManager ||
     userRoles.controls ||
-    userRoles.adviser ||
     userRoles.responsiblePartyManager ||
     userGroups.includes(permissions.maintainer);
   const held = new Set([
@@ -240,7 +263,11 @@ export function resolveCaseSourcesFromCaseTypes(
   ]);
   const eligible = broad
     ? caseTypes
-    : caseTypes.filter(({ slug }) => held.has(slug));
+    : caseTypes.filter(
+        ({ slug, displayName }) =>
+          held.has(slug) ||
+          (userRoles.adviser && opensList(userGroups, displayName))
+      );
 
   return eligible.map(({ slug, listName, displayName, config }) =>
     toCaseSource({

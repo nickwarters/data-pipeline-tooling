@@ -442,7 +442,7 @@ test('MockSharePointClient: groups are read per person, case-insensitively, and 
   assert.deepEqual(await client.listUserGroups('nobody'), []);
 });
 
-test('MockSharePointClient: adding is idempotent and shows in the group’s members', async () => {
+test('MockSharePointClient: adding is idempotent and shows in the person’s groups', async () => {
   const client = mock();
 
   assert.deepEqual(await client.addGroupMember('Reviewers', 'bea'), {
@@ -453,10 +453,6 @@ test('MockSharePointClient: adding is idempotent and shows in the group’s memb
   });
 
   assert.deepEqual(await client.listUserGroups('bea'), ['Reviewers']);
-  assert.deepEqual(
-    (await client.listGroupMembers('Reviewers')).map((p) => p.loginName),
-    ['bea']
-  );
 });
 
 test('MockSharePointClient: removing someone who is not in the group fails, as the tenant does', async () => {

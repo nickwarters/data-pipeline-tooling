@@ -91,6 +91,14 @@ the real list-items endpoint and write denial through the list's
 `EffectiveBasePermissions`; it never creates, updates, or deletes UAT data. It
 also refuses list names without the configured `uat_` prefix.
 
+The example matrix follows the Case list groups of
+[ADR-0059](../adr/0059-roles-live-in-a-list-groups-only-open-lists.md): a
+Reviewer in `Cases - X Write` and Controls in `CORA All Cases Write` write
+without delete, a Reviewer Manager in `CORA All Cases Read` reads only, and an
+Adviser in no Case list group is refused the list outright. That last persona
+is what proves the old `Frontline` group's Read on every Case list is gone, so
+keep one in every matrix.
+
 ## Deterministic Async Tests
 
 Tests should await the operation promise returned by the API they called or use
