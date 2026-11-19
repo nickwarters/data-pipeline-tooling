@@ -414,10 +414,10 @@ was `Frontline`; the capability is `isAdviser` and the term stays **Adviser**.
 
 **Being an Adviser and opening a Case list are two different things.** The `Adviser`
 flag says _what you are_; the `Cases - <type> Write` group says _which `Cases-{Slug}`
-list you may write_. A Responsible Party on a Complaints Case needs **both**: the flag is
-what puts their Cases on `#/my-cases` (it spans every Case Type in
-`resolveCaseSourcesFromCaseTypes`), and the group is what lets SharePoint serve the Case
-at all — including from a Notification's deep link, which has no route guard and
+list you may write_. A Responsible Party on a Complaints Case needs **both**, and from
+ADR-0059's phase 5 the group decides both halves: `#/my-cases` reads only the Case lists
+an Adviser's direct groups open (`resolveCaseSourcesFromCaseTypes`), and the same group is
+what lets SharePoint serve the Case at all — including from a Notification's deep link, which has no route guard and
 resolves its list from the Case Type manifest rather than from the user's sources. The
 group implies **no** capability: what a frontline user may do on a Case is decided
 per-Case by `section-access.js` off the Case row's people fields. Its membership is what
@@ -426,7 +426,7 @@ pipeline's CONTEXT.md](../CONTEXT.md), whose `notifications` pass emits the
 `Cases - <type> Write` grants its frontline recipients need alongside the notifications
 themselves (`Frontline - <type>` before ADR-0059's phase 4), which is why removing the
 Reviewer role from an Adviser on the **Access** page keeps every such group.
-_Avoid_: Responsible Party (that is the per-Case role, not the group), Agent (call-centre-specific), Advisers (the retired group name — the group is `Frontline`)
+_Avoid_: Responsible Party (that is the per-Case role, not the group), Agent (call-centre-specific), Frontline (the retired group), Advisers (the group's name before that)
 
 **Journey Owner**:
 The **elevated frontline role** for a **Case Type** — a SharePoint user whose **User

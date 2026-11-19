@@ -79,20 +79,19 @@ test('a Case read remembers the domain of every person it expanded', async () =>
   assert.equal(single.lookups() + listed.lookups(), 0);
 });
 
-test('the signed-in user and a group’s members are named in their own domains', async () => {
+test('the signed-in user and a role holder are named in their own domains', async () => {
   const sp = fakeSharePoint({
     routes: [
       ['/currentUser', () => json({ Id: 0, Title: 'Bob', LoginName: BOB })],
       [
-        '/users?',
+        'CoraUserRoles',
         () =>
           json({
             value: [
               {
-                Id: 0,
-                Title: 'Cy',
-                LoginName: 'i:0#.w|THIRD\\3003',
-                PrincipalType: 1,
+                Title: '3003',
+                Person: { Title: 'Cy', Name: 'i:0#.w|THIRD\\3003' },
+                Controls: true,
               },
             ],
           }),
@@ -101,7 +100,7 @@ test('the signed-in user and a group’s members are named in their own domains'
   });
 
   await sp.client.getCurrentUser();
-  await sp.client.listGroupMembers('Controls');
+  await sp.client.listRoleHolders('CoraUserRoles: Controls');
   await sp.client.listUserGroups('2002');
   await sp.client.addGroupMember('Controls', '3003');
   await sp.client.removeGroupMember('Controls', '3003');

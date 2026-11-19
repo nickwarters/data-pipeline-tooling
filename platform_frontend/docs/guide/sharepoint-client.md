@@ -20,7 +20,6 @@ just the function and the `client` it was handed.
 // resolveManagers(accountNames) → Promise<Record<string, string | null>>
 // listSupportLog({ caseType, caseId }) → Promise<SupportLogEntry[]>
 // addSupportLogEntry(entry) → Promise<string>
-// listGroupMembers(groupName) → Promise<PersonResult[]>
 
 // Switch to mock mode: ?mock=1 in the URL
 // Add a new method: typedef → HttpSharePointClient → MockSharePointClient → fixture
@@ -93,7 +92,7 @@ Access page. Most people are in the farm's default domain (`AD_DOMAIN` in
 in the person's own domain:
 
 1. It remembers the domain of every full login SharePoint hands it: a
-   `searchPeople` result, `getCurrentUser`, a `listGroupMembers` member, each
+   `searchPeople` result, `getCurrentUser`, a `listRoleHolders` holder, each
    expanded Person column on a Case read, and a profile's `Manager` value.
 2. An account it has not seen is looked up once, by its bare name, through the
    people-picker endpoint. Exactly one match in one domain is used and
@@ -105,16 +104,6 @@ in the person's own domain:
 
 The memory lasts for the client's lifetime, which is one page load. The mock
 directory has no domains and never looks anyone up.
-
-### `listGroupMembers(groupName)`
-
-The user members of one SharePoint group, as `PersonResult`s with bare account
-names. The roles backfill reads the legacy role groups with it. Members that
-are themselves groups (an AD security group, say) are skipped rather than
-expanded. Each member's site user id is
-cached, so writing them into a Person column afterwards needs no `ensureuser`
-call. In mock mode a directory person in `dev/fixtures/people.js` is a member of
-the groups listed in their private `groups` field.
 
 ### `listUserGroups(account)` and `getGroupEditability(groupNames)`
 

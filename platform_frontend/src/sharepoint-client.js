@@ -562,7 +562,6 @@
  * listSupportLog: (subject: { caseType: string, caseId: string }, opts?: { signal?: AbortSignal }) => Promise<SupportLogEntry[]>,
  * addSupportLogEntry: (entry: NewSupportLogEntry) => Promise<string>,
  * searchPeople: (query: string) => Promise<PersonResult[]>,
- * listGroupMembers: (groupName: string, opts?: { signal?: AbortSignal }) => Promise<PersonResult[]>,
  * listUserGroups: (account: string, opts?: { signal?: AbortSignal }) => Promise<string[]>,
  * getGroupEditability: (groupNames: string[], opts?: { signal?: AbortSignal }) => Promise<Record<string, GroupEditability>>,
  * addGroupMember: (groupName: string, account: string) => Promise<GroupMemberWrite>,
