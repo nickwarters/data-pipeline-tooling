@@ -10,6 +10,10 @@ Accepted. Settled with the owner on
 Makes one deliberate exception to the list-prefix rule of
 [ADR-0033](./0033-uat-environment.md) and changes nothing else in it.
 
+**Amended by [ADR-0059](./0059-roles-live-in-a-list-groups-only-open-lists.md)
+(Nov 2026):** `CoraUserRoles` is a second shared list, on the test below — the
+roles it holds apply in every environment, as the groups did.
+
 ## Context
 
 The **Access** page lets a **Maintainer** give or remove an internal CORA role

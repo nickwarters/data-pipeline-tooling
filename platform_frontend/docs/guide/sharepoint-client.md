@@ -170,6 +170,27 @@ Each entry's `Changes` cell is JSON and is read the same forgiving way, and any
 `Outcome` other than `not-applied` or `partly-applied` reads as `recorded`. The
 mock keeps the log in memory, seeded from `dev/fixtures/access-log.js`.
 
+### `getUserRoles(account)`, `listRoleHolders(entry)` and `updateUserRoles(account, change)`
+
+One person's row of the shared, unprefixed `CoraUserRoles` list
+([ADR-0059](../adr/0059-roles-live-in-a-list-groups-only-open-lists.md)), in the
+`UserRoles` shape `src/services/user-roles.js` declares. `getUserRoles` filters
+on the indexed `Title` column, which holds the bare account, and answers no
+roles for somebody with no row rather than failing. `listRoleHolders` answers
+everybody whose row holds one role entry, as `PersonResult`s named from the
+`Person` column; it reads the list whole and narrows in the browser, because a
+multi-choice column cannot be indexed and a filter on it would stop working past
+the List View Threshold. Both reads are bound to the page's abort signal.
+
+`updateUserRoles` sets and clears role entries (`{ add, remove }`) and, like the
+membership writes, answers `{ ok: true }` or `{ ok: false, status }` without
+throwing for an HTTP error. A person with no row gets one, keyed by account and
+by their `Person` id; an existing row is read and written back against its own
+ETag, so a change made in between fails with 412 instead of being overwritten.
+Each multi-choice column is sent with its `Collection(Edm.String)` type, which a
+JSON-light write needs to accept an array. The mock keeps rows in memory, seeded
+from its `userRoles` option, and `userRolesReadOnly` makes every write answer 403.
+
 ---
 
 ## Running in mock mode

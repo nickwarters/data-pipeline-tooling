@@ -6,6 +6,12 @@ Date: 2026-07-01
 
 Accepted (amends [ADR-0010], [ADR-0011]; supersedes the QA Reviewer role — see [ADR-0026])
 
+**Being superseded by [ADR-0059](./0059-roles-live-in-a-list-groups-only-open-lists.md)
+(Nov 2026).** The two axes survive, but neither stays in per-type groups:
+capabilities move to one `CoraUserRoles` row per person, and list access to a
+Read and a Write group per Case list. The groups below remain what the app reads
+until that ADR's migration reaches its phase 4.
+
 **Amended 2026-08-21, on tenant evidence.** Two corrections, both to Axis 1's
 frontline row. The provisioned site-wide frontline group is **`Frontline`**, not
 `Advisers` — `permissions.adviser` now reads `'Frontline'`, while the capability
