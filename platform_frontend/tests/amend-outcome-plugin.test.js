@@ -8,6 +8,7 @@ import { AmendOutcomePlugin } from '../src/sections/amend-outcome/amend-outcome-
 import { getSectionPlugin } from '../src/sections/registry.js';
 import { CASE_STATUS } from '../src/lib/case-statuses.js';
 import { configureAppSections } from './helpers/configure-sections.js';
+import { makePermissions } from './helpers/fixtures.js';
 
 configureAppSections();
 installDom();
@@ -161,4 +162,28 @@ test('AmendOutcomePlugin view renders section and handles amend submission', asy
   assert.equal(amends[0].outcome, 'pass');
   assert.equal(amends[0].reason, 'qa-review');
   assert.equal(amends[0].justification, 'Discovered critical issue.');
+});
+
+test('somebody given the Change an Outcome permission amends a reportable Outcome without being Controls', () => {
+  const capabilities = makePermissions({
+    isReviewer: false,
+    canChangeOutcome: true,
+  });
+  assert.equal(
+    AmendOutcomePlugin.evaluateAccess({
+      caseRow: /** @type {any} */ ({ status: CASE_STATUS.COMPLETED }),
+      roles: ['none'],
+      capabilities,
+    }),
+    'edit'
+  );
+  assert.equal(
+    AmendOutcomePlugin.evaluateAccess({
+      caseRow: /** @type {any} */ ({ status: CASE_STATUS.IN_PROGRESS }),
+      roles: ['none'],
+      capabilities,
+    }),
+    'hidden',
+    'the permission is no way round the Case being reportable first'
+  );
 });

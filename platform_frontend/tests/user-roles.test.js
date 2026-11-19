@@ -154,6 +154,34 @@ test('HttpSharePointClient: a row is found by indexed Title on the unprefixed li
   );
 });
 
+test('HttpSharePointClient: the permission columns are selected and read beside the roles', async () => {
+  const { client, calls } = http([
+    {
+      when: () => true,
+      respond: () =>
+        json({
+          value: [
+            item({
+              Controls: false,
+              CanSearchCases: true,
+              CanChangeOutcome: true,
+            }),
+          ],
+        }),
+    },
+  ]);
+
+  const roles = await client.getUserRoles('zara');
+
+  assert.equal(roles.canSearchCases, true);
+  assert.equal(roles.canChangeOutcome, true);
+  assert.equal(roles.controls, false);
+  const select = decodeURIComponent(calls[0].url);
+  for (const column of ['CanSearchCases', 'CanChangeOutcome']) {
+    assert.ok(select.includes(column), `${column} is selected`);
+  }
+});
+
 test('HttpSharePointClient: somebody with no row holds no roles, and other failures still throw', async () => {
   const none = http([{ when: () => true, respond: () => json({ value: [] }) }]);
   assert.deepEqual(await none.client.getUserRoles('nobody'), noRoles());
@@ -233,6 +261,8 @@ test('HttpSharePointClient: a person with no row gets one, keyed by account and 
     ReviewerManager: false,
     ResponsiblePartyManager: false,
     Reviewer: false,
+    CanSearchCases: false,
+    CanChangeOutcome: false,
     'Reviews@odata.type': 'Collection(Edm.String)',
     Reviews: ['complaints'],
     'OwnsCaseTypes@odata.type': 'Collection(Edm.String)',

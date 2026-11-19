@@ -89,6 +89,8 @@ test('granting any role to a person with nothing shows the matching capability, 
       controls: caps.isControls,
       'case-type-owner': caps.ownedCaseTypes.includes(slug),
       'journey-owner': caps.ownedJourneyCaseTypes.includes(slug),
+      'can-search-cases': caps.canSearchCases && !caps.isControls,
+      'can-change-outcome': caps.canChangeOutcome && !caps.isControls,
     }[/** @type {'reviewer'} */ (ref.id)];
     assert.equal(shown, true, `${ref.id} ${slug}`);
     assert.equal(
@@ -109,6 +111,8 @@ test('granting any role to a person with nothing shows the matching capability, 
 test('the roles on offer are the internal ones, and none gives the Maintainer or a frontline role', () => {
   const offered = ACCESS_ROLES.map((entry) => entry.id).sort();
   assert.deepEqual(offered, [
+    'can-change-outcome',
+    'can-search-cases',
     'case-type-owner',
     'controls',
     'journey-owner',
@@ -350,5 +354,18 @@ test('the copy speaks of roles and Case Types, never of groups or row entries', 
     describeChange('grant', role('mystery'), 'Alex', CASE_TYPES).imperative,
     'grant mystery for Alex',
     'an unknown role from the log still reads as something'
+  );
+});
+
+test('taking a permission away from somebody who is also Controls keeps the all-lists group Controls needs', () => {
+  const held = [
+    roleFlagEntry('controls'),
+    roleFlagEntry('canChangeOutcome'),
+    'CORA All Cases Write',
+  ];
+  assert.deepEqual(
+    planRevoke({ id: 'can-change-outcome', caseType: null }, held, CASE_TYPES)
+      .groups,
+    [roleFlagEntry('canChangeOutcome')]
   );
 });

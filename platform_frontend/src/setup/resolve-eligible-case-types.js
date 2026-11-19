@@ -234,8 +234,9 @@ function opensList(userGroups, displayName) {
  * the user's `CoraUserRoles` row. A Case Type held in any of its per-type
  * columns (Reviews, OwnsCaseTypes, JourneyOwnerOf) grants only that source;
  * the Controls, Reviewer Manager and Responsible Party Manager flags span
- * every source, as does the Maintainer group, the one role still held in a
- * group. An Adviser reaches only the Case lists their groups open, which the
+ * every source, as do the Can Search Cases permission, since a search reaches
+ * across every Case Type, and the Maintainer group, the one role still held in
+ * a group. An Adviser reaches only the Case lists their groups open, which the
  * notifications pipeline adds them to as they are named on a Case, so My Cases
  * never asks a list SharePoint will refuse. Adviser and manager consumers must
  * still apply their assignment filter to each per-list query. No other group
@@ -255,6 +256,7 @@ export function resolveCaseSourcesFromCaseTypes(
     userRoles.reviewerManager ||
     userRoles.controls ||
     userRoles.responsiblePartyManager ||
+    userRoles.canSearchCases ||
     userGroups.includes(permissions.maintainer);
   const held = new Set([
     ...userRoles.reviews,

@@ -262,11 +262,12 @@ export const APP_CONFIG = {
       // groups to it lives in one place, so widening it never touches a route.
       guard: (caps) => caps.canSearchCases,
       nav: { label: 'Search', order: 70 },
-      // Controls read across Case Types rather than working a queue of their
-      // own, so the cross-Case-Type lookup is where their day starts. Ranked
-      // last of the three: someone who is Controls *and* a Reviewer or an
-      // Adviser has a queue, and that is the more specific answer.
-      defaultFor: (caps) => caps.isControls,
+      // Controls, and anyone given search on its own, read across Case Types
+      // rather than working a queue of their own, so the cross-Case-Type
+      // lookup is where their day starts. Ranked last of the three: someone
+      // who also reviews or is an Adviser has a queue, and that is the more
+      // specific answer.
+      defaultFor: (caps) => caps.canSearchCases,
       defaultForOrder: 30,
     },
     {

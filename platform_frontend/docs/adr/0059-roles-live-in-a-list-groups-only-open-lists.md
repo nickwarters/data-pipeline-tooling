@@ -136,6 +136,28 @@ the old groups are switched off, and each phase can be reversed on its own.
    memberships, so an Adviser must be added to `Cases - <type> Write` directly,
    as the notifications pipeline asks.
 
+## Amendment (Nov 2026) — permissions beside the roles
+
+A role is a bundle of capabilities the code defines. Some of those are worth
+giving on their own, so the row also carries **permission** columns: a yes/no
+column for one thing a role can do. Two exist, both things Controls can do:
+
+| Column             | Gives                                                  | Group given            |
+| ------------------ | ------------------------------------------------------ | ---------------------- |
+| `CanSearchCases`   | `#/search` across every Case Type, and lands there     | `CORA All Cases Read`  |
+| `CanChangeOutcome` | the Amend Outcome tab on a reportable Case of any type | `CORA All Cases Write` |
+
+A capability is "a role that includes it, or its permission column". A
+permission only adds: it never takes part of a role away, so a person's row
+still answers what they can do. It opens no list by itself either, which is
+why the Access page gives each one the all-lists group it needs, as it does a
+role. `CanChangeOutcome` does not resolve Appeals; that stays with Controls.
+Further permissions are added one at a time, as a need appears: a column, a
+line in `resolveCapabilities`, and an entry on the Access page.
+
+The two columns are new platform data, so they travel with the roles list in
+the pipeline landing (#1087).
+
 ## Considered options
 
 - **Keep four groups per type.** The count is a manageability cost, not a
