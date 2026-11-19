@@ -138,7 +138,7 @@ the old groups are switched off, and each phase can be reversed on its own.
   already lands every change the Access page makes, row entries included. That
   stops being enough at phase 4, when the row is the only record of who holds a
   role and a change made in SharePoint directly leaves no log entry, so landing
-  the list is follow-up work due before phase 4.
+  the list is follow-up work due before phase 4 (#1087).
 - Members granted through a nested AD group are still invisible to the app's
   group reads, but per-type roles no longer depend on group reads, so an AD
   group may sit inside a `Cases - <type>` group freely.
