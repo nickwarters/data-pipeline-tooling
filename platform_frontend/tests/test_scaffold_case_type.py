@@ -23,6 +23,7 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
             (root / directory).mkdir(parents=True, exist_ok=True)
         for file_path in [
             "case-types/manifest.js",
+            "case-types/entries.js",
             "src/services/permissions.js",
             "src/services/section-access.js",
             "dev/fixtures/personas.js",
@@ -102,7 +103,7 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
         # The CASE_TYPES entry carries the slug, the
         # display name the SharePoint group names derive from, and the lazy
         # importer. permissions.caseTypes is derived from it.
-        manifest_path = root / "case-types" / "manifest.js"
+        manifest_path = root / "case-types" / "entries.js"
         manifest = manifest_path.read_text(encoding="utf-8")
         self.assert_js_parses(manifest_path)
         self.assertIn("slug: 'widget-review',", manifest)
@@ -258,11 +259,11 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
         module_path = root / "case-types" / "obrien-review.js"
         self.assert_js_parses(module_path)
         self.assert_js_parses(root / "tests" / "obrien-review.test.js")
-        self.assert_js_parses(root / "case-types" / "manifest.js")
+        self.assert_js_parses(root / "case-types" / "entries.js")
         self.assert_js_parses(root / "dev" / "fixtures" / "personas.js")
         self.assert_js_parses(root / "dev" / "fixtures" / "cases.js")
 
-        manifest = (root / "case-types" / "manifest.js").read_text(encoding="utf-8")
+        manifest = (root / "case-types" / "entries.js").read_text(encoding="utf-8")
         self.assertIn(r"displayName: 'O\'Brien Review',", manifest)
         personas = (root / "dev" / "fixtures" / "personas.js").read_text(
             encoding="utf-8"

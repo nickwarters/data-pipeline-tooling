@@ -460,7 +460,7 @@ caught up with the application configuration.
 
 Case Type provisioning starts with `python3 scripts/scaffold_case_type.py --slug <slug> --display "<Display Name>" [--list-name <Cases-List>]`.
 The scaffold creates a plain-data Case Type module for `{opts.display_name}` and
-registers it with a single entry in `CASE_TYPES` (`case-types/manifest.js`) — the
+registers it with a single entry in `CASE_TYPE_ENTRIES` (`case-types/entries.js`) — the
 one registry, carrying the display name from which the three per-Case-Type
 SharePoint group names derive. `permissions.caseTypes` is derived from it, so no
 permissions edit is needed. The scaffold also adds mock personas,
@@ -569,12 +569,12 @@ def scaffold(opts: ScaffoldOptions) -> None:
     # Add one frozen CASE_TYPES entry; importers and permissions derive from it.
     # No Question Bank artifact or bank thunk is generated.
     js_display = js_escape(opts.display_name)
-    manifest_path = opts.root / "case-types" / "manifest.js"
+    manifest_path = opts.root / "case-types" / "entries.js"
     manifest = manifest_path.read_text(encoding="utf-8")
     if not re.search(rf"slug:\s*['\"]{escape_regexp(opts.slug)}['\"]", manifest):
         manifest = insert_after_match(
             manifest,
-            r"const registry = \[\n",
+            r"export const CASE_TYPE_ENTRIES = Object\.freeze\(\[\n",
             # Frozen like every other registry entry.
             f"  Object.freeze({{\n"
             f"    slug: '{opts.slug}',\n"
