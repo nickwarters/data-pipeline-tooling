@@ -127,7 +127,7 @@ Held by construction — the step builds its frame with
 | Key | Type | Description | Example |
 |-----|------|-------------|---------|
 | `login_name` | `str` | The recipient's **bare** account name, as `shared.account_names.to_bare_account` normalises it — the claims prefix and AD domain stripped. Never blank. | `b.okafor` |
-| `groups` | `list[str]` | A JSON array of SharePoint group names, sorted and de-duplicated. Today always the two groups that open a Case Type's list for each Case Type the login is a frontline party on: the Case list's `Cases - <Case Type display name> Write` and the older `Frontline - <Case Type display name>`, which the platform still reads while it moves to the first ([frontend ADR-0059](../platform_frontend/docs/adr/0059-roles-live-in-a-list-groups-only-open-lists.md)); the second goes when it stops. Never empty — a login with no group is never produced. | `["Cases - Complaints Write", "Frontline - Complaints"]` |
+| `groups` | `list[str]` | A JSON array of SharePoint group names, sorted and de-duplicated. Today always the group that opens a Case Type's list for each Case Type the login is a frontline party on, the Case list's `Cases - <Case Type display name> Write` ([frontend ADR-0059](../platform_frontend/docs/adr/0059-roles-live-in-a-list-groups-only-open-lists.md)); the older `Frontline - <Case Type display name>` is no longer named. Never empty — a login with no group is never produced. | `["Cases - Complaints Write"]` |
 
 ### Part C — who appears, and who does not
 

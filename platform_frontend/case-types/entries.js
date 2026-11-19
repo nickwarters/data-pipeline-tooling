@@ -10,8 +10,8 @@ import { loadBank } from './load-bank.js';
  *
  * **Everything here is a thunk, and that is load-bearing rather than stylistic.**
  * `slug` and `displayName` must be readable without evaluating a Case Type
- * module, because the boot-critical *synchronous* permissions config composes
- * each type's three SharePoint group names from its display name. Static
+ * module, because the boot-critical *synchronous* permissions config lists
+ * every type by them, and the display name composes its Case list group names. Static
  * imports would drag every Case Type config into boot and break that.
  *
  * So this list is deliberately unlike `APP_CONFIG.sectionPlugins` and

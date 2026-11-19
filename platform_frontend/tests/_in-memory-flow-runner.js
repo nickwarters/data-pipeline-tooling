@@ -7,7 +7,10 @@
 
 import { CaseLoader } from '../src/lib/case-loader.js';
 import { MockSharePointClient } from '../src/services/mock-sharepoint-client.js';
-import { resolveCapabilities } from '../src/services/permissions.js';
+import {
+  permissions,
+  resolveCapabilities,
+} from '../src/services/permissions.js';
 import { SaveQueue } from '../src/services/save-queue.js';
 import {
   completeCase,
@@ -35,7 +38,7 @@ configureAppSections();
 /**
  * @typedef {{
  * lists?: Record<string, CaseRow[]>,
- * personas?: Record<string, { groups: string[], userId?: string, displayName?: string }>,
+ * personas?: Record<string, import('../src/services/mock-sharepoint-client.js').Persona>,
  * people?: PersonResult[],
  * bankVersions?: Record<string, string>,
  * versionedExports?: Record<string, VersionedExport>
@@ -126,7 +129,8 @@ const DEFAULT_PERSONAS = {
   reviewer: {
     userId: 'user-reviewer',
     displayName: 'Reviewer',
-    groups: ['Reviewers'],
+    groups: [],
+    roles: { reviewer: true },
   },
 };
 
@@ -381,7 +385,11 @@ export function createInMemoryFlowRunner(state, opts = {}) {
       currentUserId: action.currentUserId ?? currentUser.id,
       capabilities:
         action.capabilities === undefined
-          ? resolveCapabilities(userGroups)
+          ? resolveCapabilities(
+              userGroups,
+              permissions,
+              await client.getUserRoles(currentUser.id)
+            )
           : action.capabilities,
       caseType: action.caseType ?? null,
     });

@@ -71,26 +71,17 @@ test('a grant is checked, then logged, then applied to the roles row and group b
 
   assert.deepEqual(result, {
     ok: true,
-    applied: [
-      REVIEWS_COMPLAINTS,
-      'Reviewers - Complaints',
-      'Reviewers',
-      'Cases - Complaints Write',
-    ],
+    applied: [REVIEWS_COMPLAINTS, 'Cases - Complaints Write'],
   });
   assert.deepEqual(calls, [
     'listUserGroups:zara',
     'getUserRoles:zara',
-    'getGroupEditability:Reviewers - Complaints+Reviewers+Cases - Complaints Write',
+    'getGroupEditability:Cases - Complaints Write',
     'log:recorded',
     'updateUserRoles:zara',
-    'addGroupMember:Reviewers - Complaints',
-    'addGroupMember:Reviewers',
     'addGroupMember:Cases - Complaints Write',
   ]);
   assert.deepEqual(await client.listUserGroups('zara'), [
-    'Reviewers - Complaints',
-    'Reviewers',
     'Cases - Complaints Write',
   ]);
   assert.deepEqual((await client.getUserRoles('zara')).reviews, ['complaints']);
@@ -107,8 +98,6 @@ test('a grant is checked, then logged, then applied to the roles row and group b
       reason: 'Joins the team.',
       changes: [
         { field: REVIEWS_COMPLAINTS, before: false, after: true },
-        { field: 'Reviewers - Complaints', before: false, after: true },
-        { field: 'Reviewers', before: false, after: true },
         { field: 'Cases - Complaints Write', before: false, after: true },
       ],
       outcome: 'recorded',
@@ -133,10 +122,8 @@ test('a role with no Case Type is logged with an empty Case Type', async () => {
   assert.equal(entry.role, 'controls');
 });
 
-test('a revoke removes only groups the person holds, working from a fresh read', async () => {
-  const { client, calls } = tenant({
-    groups: ['Reviewers - Complaints', 'Reviewers'],
-  });
+test('a revoke removes only what the person holds, working from a fresh read', async () => {
+  const { client, calls } = tenant({ roles: { reviews: ['complaints'] } });
 
   const result = await runAccessChange(
     client,
@@ -144,20 +131,16 @@ test('a revoke removes only groups the person holds, working from a fresh read',
     CASE_TYPES
   );
 
-  assert.equal(result.ok, true);
-  assert.deepEqual(
-    calls.filter((call) => call.startsWith('removeGroupMember')),
-    ['removeGroupMember:Reviewers - Complaints', 'removeGroupMember:Reviewers']
-  );
+  assert.deepEqual(result, { ok: true, applied: [REVIEWS_COMPLAINTS] });
   assert.ok(
-    !calls.some((call) => call.startsWith('updateUserRoles')),
-    'a row that holds nothing of the role is not written'
+    !calls.some((call) => call.startsWith('removeGroupMember')),
+    'a Case list the person cannot open is not closed again'
   );
   assert.equal(calls[0], 'listUserGroups:zara', 'the read comes first');
-  assert.deepEqual(await client.listUserGroups('zara'), []);
+  assert.deepEqual((await client.getUserRoles('zara')).reviews, []);
 });
 
-test('a revoke of a role held only through the roles row clears the row and leaves the groups alone', async () => {
+test('a revoke clears the row entry first, then closes the Case list', async () => {
   const { client, calls } = tenant({
     groups: ['Cases - Complaints Write'],
     roles: { reviews: ['complaints'] },
@@ -178,6 +161,7 @@ test('a revoke of a role held only through the roles row clears the row and leav
     'removeGroupMember:Cases - Complaints Write',
   ]);
   assert.deepEqual((await client.getUserRoles('zara')).reviews, []);
+  assert.deepEqual(await client.listUserGroups('zara'), []);
 });
 
 test('a revoke for access the person lost since the page was read changes and logs nothing', async () => {
@@ -197,13 +181,10 @@ test('a revoke for access the person lost since the page was read changes and lo
   assert.deepEqual(calls, ['listUserGroups:zara', 'getUserRoles:zara']);
 });
 
-test('a revoke is refused while another held role needs the access, with nothing written', async () => {
+test('a revoke keeps the Case list open while another held role still works on it', async () => {
   const { client, calls } = tenant({
-    groups: [
-      'Reviewers - Complaints',
-      'Reviewers',
-      'CaseTypeOwner - Complaints',
-    ],
+    groups: ['Cases - Complaints Write'],
+    roles: { reviews: ['complaints'], ownsCaseTypes: ['complaints'] },
   });
 
   const result = await runAccessChange(
@@ -212,21 +193,23 @@ test('a revoke is refused while another held role needs the access, with nothing
     CASE_TYPES
   );
 
-  assert.equal(result.ok, false);
-  assert.match(
-    /** @type {any} */ (result).message,
-    /Remove Case Type Owner for Complaints first/
-  );
-  assert.deepEqual(calls, ['listUserGroups:zara', 'getUserRoles:zara']);
+  assert.deepEqual(result, { ok: true, applied: [REVIEWS_COMPLAINTS] });
+  assert.ok(!calls.some((call) => call.startsWith('removeGroupMember')));
+  assert.deepEqual(await client.listUserGroups('zara'), [
+    'Cases - Complaints Write',
+  ]);
 });
 
 test('a group that cannot be changed refuses the whole change, naming the role and the group', async () => {
   for (const [setup, wording] of /** @type {const} */ ([
     [
-      { readOnlyGroups: ['Reviewers'] },
-      /you cannot change who is in Reviewers\b/,
+      { readOnlyGroups: ['Cases - Complaints Write'] },
+      /you cannot change who is in Cases - Complaints Write/,
     ],
-    [{ missingGroups: ['Reviewers'] }, /Reviewers does not exist/],
+    [
+      { missingGroups: ['Cases - Complaints Write'] },
+      /Cases - Complaints Write does not exist/,
+    ],
   ])) {
     const { client, calls } = tenant(/** @type {any} */ (setup));
 
@@ -285,12 +268,10 @@ test('a roles row that cannot be written is logged as not applied, naming the en
   assert.deepEqual(followUp.changes, []);
 });
 
-test('a later group that fails is logged as partly applied with what did land', async () => {
+test('a group that fails after the row was written is logged as partly applied with what did land', async () => {
   const { client } = tenant();
-  const add = client.addGroupMember.bind(client);
-  client.addGroupMember = async (group, account) => {
-    if (group === 'Reviewers') throw new Error('network down');
-    return add(group, account);
+  client.addGroupMember = async () => {
+    throw new Error('network down');
   };
 
   const result = await runAccessChange(client, GRANT, CASE_TYPES);
@@ -302,15 +283,16 @@ test('a later group that fails is logged as partly applied with what did land', 
   assert.equal(followUp.outcome, 'partly-applied');
   assert.deepEqual(followUp.changes, [
     { field: REVIEWS_COMPLAINTS, before: false, after: true },
-    { field: 'Reviewers - Complaints', before: false, after: true },
   ]);
-  assert.deepEqual(await client.listUserGroups('zara'), [
-    'Reviewers - Complaints',
-  ]);
+  assert.deepEqual(await client.listUserGroups('zara'), []);
+  assert.deepEqual((await client.getUserRoles('zara')).reviews, ['complaints']);
 });
 
-test('a remove that fails is a failed change, never a success', async () => {
-  const { client } = tenant({ groups: ['Controls'] });
+test('a group remove that fails is a failed change, never a success', async () => {
+  const { client } = tenant({
+    groups: ['CORA All Cases Write'],
+    roles: { controls: true },
+  });
   const remove = client.removeGroupMember.bind(client);
   client.removeGroupMember = async (group, account) => {
     await remove(group, account);
@@ -324,7 +306,7 @@ test('a remove that fails is a failed change, never a success', async () => {
   );
 
   assert.equal(result.ok, false);
-  assert.equal(/** @type {any} */ (result).outcome, 'not-applied');
+  assert.equal(/** @type {any} */ (result).outcome, 'partly-applied');
   assert.match(/** @type {any} */ (result).message, /status 400/);
 });
 

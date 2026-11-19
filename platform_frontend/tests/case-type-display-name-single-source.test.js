@@ -1,17 +1,19 @@
 // @ts-check
-// One display name, two consumers.
+// One display name, and roles that do not hang on it.
 //
-// A Case Type's display name composes the three provisioned SharePoint group
-// names (`Reviewers - X`, `CaseTypeOwner - X`, `JourneyOwner - X`). Two
-// independent consumers derive them:
+// A Case Type's display name composes the SharePoint groups that open its Case
+// list (`Cases - X Read`, `Cases - X Write`). A person's roles on it are held in
+// their `CoraUserRoles` row by the Case Type's slug. Two independent consumers
+// read those roles:
 //
 //   1. `permissions.caseTypes` / `resolveCapabilities()` — the capability side
 //   2. `resolveAppCaseSources()` — the Case-source eligibility side
 //
-// Each used to read a DIFFERENT copy of the name (the registry entry vs the
-// Case Type config module), so drift made a user resolve the capability but not
-// the source, or the reverse. This test proves there is now exactly ONE copy:
-// it renames the registry entry and asserts BOTH consumers move with it.
+// They used to derive group names from different copies of the display name,
+// so drift made a user resolve the capability but not the source, or the
+// reverse. This test renames the registry entry and asserts that the display
+// name moves everywhere it is read, and that neither consumer's answer about a
+// person moves with it, because both key the person's roles by slug.
 //
 // Every import below is static. `permissions.caseTypes` is derived ON READ from
 // the live registry, so no ordering workaround is needed: a rename (or a late
@@ -24,9 +26,9 @@ import { CASE_TYPES, registerCaseType } from '../case-types/manifest.js';
 import {
   permissions,
   resolveCapabilities,
-  caseTypeGroupNames,
 } from '../src/services/permissions.js';
-import { caseSourcesFor } from './_case-sources-for.js';
+import { planGrant } from '../src/services/access-roles.js';
+import { caseSourcesFor, holding } from './_case-sources-for.js';
 
 /** @typedef {import('../case-types/manifest.js').CaseTypeEntry} CaseTypeEntry */
 
@@ -44,8 +46,9 @@ after(() => {
   registry[index] = ORIGINAL;
 });
 
-const renamedGroups = caseTypeGroupNames(RENAMED);
-const staleGroups = caseTypeGroupNames(ORIGINAL.displayName);
+const REVIEWS = 'CoraUserRoles: Reviews = complaints';
+const OWNS = 'CoraUserRoles: OwnsCaseTypes = complaints';
+const JOURNEY = 'CoraUserRoles: JourneyOwnerOf = complaints';
 
 test('registry rename: permissions.caseTypes moves with the registry display name', () => {
   assert.deepEqual(
@@ -56,61 +59,37 @@ test('registry rename: permissions.caseTypes moves with the registry display nam
   );
 });
 
-test('registry rename: resolveCapabilities derives its group names from the renamed registry entry', () => {
-  const renamed = resolveCapabilities([
-    renamedGroups.listAccess,
-    renamedGroups.caseTypeOwner,
-    renamedGroups.journeyOwner,
-  ]);
-  assert.deepEqual(renamed.listAccessCaseTypes, ['complaints']);
-  assert.deepEqual(renamed.ownedCaseTypes, ['complaints']);
-  assert.deepEqual(renamed.ownedJourneyCaseTypes, ['complaints']);
+test('registry rename: the roles a person holds do not move, because the row names the slug', async () => {
+  const { groups, roles } = holding([REVIEWS, OWNS, JOURNEY]);
+  const capabilities = resolveCapabilities(groups, permissions, roles);
+  assert.deepEqual(capabilities.listAccessCaseTypes, ['complaints']);
+  assert.deepEqual(capabilities.ownedCaseTypes, ['complaints']);
+  assert.deepEqual(capabilities.ownedJourneyCaseTypes, ['complaints']);
 
-  const stale = resolveCapabilities([
-    staleGroups.listAccess,
-    staleGroups.caseTypeOwner,
-    staleGroups.journeyOwner,
-  ]);
-  assert.deepEqual(stale.listAccessCaseTypes, []);
-  assert.deepEqual(stale.ownedCaseTypes, []);
-  assert.deepEqual(stale.ownedJourneyCaseTypes, []);
+  for (const entry of [REVIEWS, OWNS, JOURNEY]) {
+    assert.deepEqual(
+      (await caseSourcesFor([entry])).map((s) => s.slug),
+      ['complaints'],
+      `${entry} must resolve the complaints source however it is displayed`
+    );
+  }
 });
 
-test('registry rename: Case source eligibility moves with the registry display name too', async () => {
-  const viaListAccess = await caseSourcesFor([renamedGroups.listAccess]);
-  assert.deepEqual(
-    viaListAccess.map((s) => s.slug),
-    ['complaints'],
-    'resolveAppCaseSources() must derive `Reviewers - <name>` from the SAME ' +
-      'registry entry the capability side reads.'
+test('registry rename: the Case list group a role is given moves with the display name', () => {
+  const { groups } = planGrant(
+    { id: 'reviewer', caseType: 'complaints' },
+    [],
+    permissions.caseTypes
   );
-
-  for (const group of [renamedGroups.caseTypeOwner, renamedGroups.journeyOwner])
-    assert.deepEqual(
-      (await caseSourcesFor([group])).map((s) => s.slug),
-      ['complaints'],
-      `${group} must resolve the complaints source from the registry name`
-    );
-
-  // All THREE stale names, list access included. A rename must move the access
-  // it granted, or someone left in the decommissioned SharePoint group keeps
-  // reaching the Cases. `listAccess` used to be excluded here because the
-  // complaints config restated `Reviewers - Complaints` in `eligibleGroups` — a
-  // live third copy that kept granting after the rename. That copy is gone.
-  for (const group of [
-    staleGroups.listAccess,
-    staleGroups.caseTypeOwner,
-    staleGroups.journeyOwner,
-  ])
-    assert.deepEqual(
-      await caseSourcesFor([group]),
-      [],
-      `${group} names the OLD display name — nothing may still derive from it`
-    );
+  assert.ok(groups.includes(`Cases - ${RENAMED} Write`), String(groups));
+  assert.ok(
+    !groups.includes(`Cases - ${ORIGINAL.displayName} Write`),
+    'nothing may still derive a group from the old display name'
+  );
 });
 
 test('registry rename: the resolved Case source reports the registry display name', async () => {
-  const [source] = await caseSourcesFor([renamedGroups.listAccess]);
+  const [source] = await caseSourcesFor([REVIEWS]);
   assert.equal(
     source?.displayName,
     RENAMED,
@@ -137,8 +116,9 @@ test('a Case Type registered AFTER permissions.js was evaluated reaches BOTH con
     }),
   });
 
-  const groups = caseTypeGroupNames('Late Single Source');
-  const capabilities = resolveCapabilities([groups.listAccess]);
+  const late = 'CoraUserRoles: Reviews = late-single-source';
+  const { groups, roles } = holding([late]);
+  const capabilities = resolveCapabilities(groups, permissions, roles);
   assert.deepEqual(
     capabilities.listAccessCaseTypes,
     ['late-single-source'],
@@ -151,7 +131,7 @@ test('a Case Type registered AFTER permissions.js was evaluated reaches BOTH con
     'a user granted a Case source is never simultaneously a Visitor'
   );
 
-  const sources = await caseSourcesFor([groups.listAccess]);
+  const sources = await caseSourcesFor([late]);
   assert.deepEqual(
     sources.map((s) => s.slug),
     ['late-single-source'],

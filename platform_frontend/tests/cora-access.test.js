@@ -19,39 +19,25 @@ const { MockSharePointClient } =
 const { APP_CONFIG } = await import('../src/app-config.js');
 const { permissions } = await import('../src/services/permissions.js');
 
-const REVIEWERS_COMPLAINTS = 'Reviewers - Complaints';
 const COMPLAINTS_WRITE = 'Cases - Complaints Write';
 
 /**
- * The people every page test shares: a half-provisioned Reviewer, an owner
- * held through both the groups and the roles row, a Reviewer held through the
- * row alone, someone with nothing, and a Reviewer of no Case Type.
+ * The people every page test shares: a Reviewer whose Case list was never
+ * opened, a fully provisioned owner, someone with nothing, and a Reviewer of
+ * no Case Type.
  */
 const PEOPLE = () => [
-  {
-    loginName: 'zara',
-    displayName: 'Zara Fields',
-    groups: [REVIEWERS_COMPLAINTS],
-  },
-  {
-    loginName: 'owen',
-    displayName: 'Owen Owner',
-    groups: [
-      REVIEWERS_COMPLAINTS,
-      'Reviewers',
-      'CaseTypeOwner - Complaints',
-      COMPLAINTS_WRITE,
-    ],
-  },
-  { loginName: 'rowan', displayName: 'Rowan Row', groups: [COMPLAINTS_WRITE] },
+  { loginName: 'zara', displayName: 'Zara Fields', groups: [] },
+  { loginName: 'owen', displayName: 'Owen Owner', groups: [COMPLAINTS_WRITE] },
   { loginName: 'bea', displayName: 'Bea Newcomer', groups: [] },
-  { loginName: 'lone', displayName: 'Lone Reader', groups: ['Reviewers'] },
+  { loginName: 'lone', displayName: 'Lone Reader', groups: [] },
 ];
 
 /** The roles rows those people hold. */
 const ROLES = () => ({
+  zara: { reviews: ['complaints'] },
   owen: { reviews: ['complaints'], ownsCaseTypes: ['complaints'] },
-  rowan: { reviews: ['complaints'] },
+  lone: { reviewer: true },
 });
 
 /**
@@ -160,11 +146,7 @@ test('access: with nobody chosen it warns that roles are shared, offers a picker
   const holders = [...view.querySelectorAll('.cora-access-holder')].map(
     (item) => item.querySelector('summary')?.textContent
   );
-  assert.ok(
-    holders.includes('Reviewer, Complaints (3)'),
-    'held through the old group, the row, or both, each person counted once: ' +
-      String(holders)
-  );
+  assert.ok(holders.includes('Reviewer, Complaints (2)'), String(holders));
   assert.ok(holders.includes('Case Type Owner, Complaints (1)'));
   assert.ok(holders.includes('Reviewer Manager (0)'));
   const [link] = view.querySelectorAll('a');
@@ -187,7 +169,7 @@ test('access: the picker finds a person in the directory and choosing one opens 
   page.leave();
 });
 
-test('access: a person’s roles are read off their groups, in role and Case Type language', async () => {
+test('access: a person’s roles are read off their roles row, in role and Case Type language', async () => {
   const page = live({ account: 'owen' });
   await flush();
 
@@ -203,10 +185,14 @@ test('access: a person’s roles are read off their groups, in role and Case Typ
     null,
     'a fully provisioned person has nothing flagged'
   );
-  for (const group of [REVIEWERS_COMPLAINTS, 'CaseTypeOwner - Complaints']) {
+  for (const part of [
+    COMPLAINTS_WRITE,
+    'CoraUserRoles: Reviews = complaints',
+    'CoraUserRoles: OwnsCaseTypes = complaints',
+  ]) {
     assert.ok(
-      !view.textContent.includes(group),
-      `${group} never appears in the page`
+      !view.textContent.includes(part),
+      `${part} never appears in the page`
     );
   }
 });
@@ -223,15 +209,13 @@ test('access: a half-provisioned role is flagged and completed in one click, sti
   );
   const submit = () => button(page, 'Give access');
   assert.equal(submit().disabled, true, 'no reason, no change');
-  giveReason(page, 'Their site-wide access was never added.');
+  giveReason(page, 'Their Case list was never opened.');
   assert.equal(submit().disabled, false);
 
   fireEvent(submit(), 'click');
   await flush();
 
   assert.deepEqual(await page.client.listUserGroups('zara'), [
-    REVIEWERS_COMPLAINTS,
-    'Reviewers',
     COMPLAINTS_WRITE,
   ]);
   assert.deepEqual((await page.client.getUserRoles('zara')).reviews, [
@@ -244,32 +228,6 @@ test('access: a half-provisioned role is flagged and completed in one click, sti
   assert.equal(
     getByRole(page.view(), 'status').textContent,
     'Gave Zara Fields Reviewer access to Complaints.'
-  );
-});
-
-test('access: a role held only through the roles row is shown, and completing it adds the old groups', async () => {
-  const page = live({ account: 'rowan' });
-  await flush();
-
-  const [row] = page.view().querySelectorAll('.cora-access-role');
-  assert.match(row.textContent, /Reviewer, Complaints/);
-  assert.match(row.textContent, /Incomplete/);
-  fireEvent(
-    button(page, 'Give Rowan Row Reviewer access to Complaints'),
-    'click'
-  );
-  giveReason(page, 'Still read through the old groups.');
-  fireEvent(button(page, 'Give access'), 'click');
-  await flush();
-
-  assert.deepEqual(await page.client.listUserGroups('rowan'), [
-    COMPLAINTS_WRITE,
-    REVIEWERS_COMPLAINTS,
-    'Reviewers',
-  ]);
-  assert.equal(
-    page.view().querySelector('.cora-access-role--incomplete'),
-    null
   );
 });
 
@@ -291,7 +249,7 @@ test('access: a Reviewer with no Case Type is flagged and can only be removed', 
   fireEvent(button(page, 'Remove access'), 'click');
   await flush();
 
-  assert.deepEqual(await page.client.listUserGroups('lone'), []);
+  assert.equal((await page.client.getUserRoles('lone')).reviewer, false);
 });
 
 test('access: giving a role needs a role, a Case Type where it has one, and a reason, and the button says what it will do', async () => {
@@ -307,10 +265,6 @@ test('access: giving a role needs a role, a Case Type where it has one, and a re
   assert.equal(
     submit().textContent,
     'Make Bea Newcomer Case Type Owner for Complaints'
-  );
-  assert.match(
-    page.view().textContent,
-    /Also gives Reviewer access to Complaints when that is missing\./
   );
   assert.equal(submit().disabled, true, 'a reason is still to give');
   giveReason(page, '   ');
@@ -379,8 +333,6 @@ test('access: a grant logs first, adds every group, then shows the role, the not
   assert.deepEqual(order, [
     'log:recorded',
     'row:CoraUserRoles: JourneyOwnerOf = complaints',
-    'add:Frontline - Complaints',
-    'add:JourneyOwner - Complaints',
     `add:${COMPLAINTS_WRITE}`,
   ]);
   const view = page.view();
@@ -444,11 +396,11 @@ test('access: removing a role asks for a reason and takes the groups away', asyn
   fireEvent(submit(), 'click');
   await flush();
 
-  assert.deepEqual(await page.client.listUserGroups('owen'), [
-    REVIEWERS_COMPLAINTS,
-    'Reviewers',
-    COMPLAINTS_WRITE,
-  ]);
+  assert.deepEqual(
+    await page.client.listUserGroups('owen'),
+    [COMPLAINTS_WRITE],
+    'their Reviewer role still works on the list'
+  );
   assert.deepEqual(await page.client.getUserRoles('owen'), {
     ...(await page.client.getUserRoles('nobody')),
     reviews: ['complaints'],
@@ -462,7 +414,7 @@ test('access: removing a role asks for a reason and takes the groups away', asyn
   assert.equal(entry.reason, 'Handed the bank over.');
 });
 
-test('access: Remove is disabled with the reason while another held role needs the access', async () => {
+test('access: a Reviewer who also owns the Case Type can still be removed as a Reviewer', async () => {
   const page = live({ account: 'owen' });
   await flush();
 
@@ -472,11 +424,10 @@ test('access: Remove is disabled with the reason while another held role needs t
     .find((/** @type {any} */ row) =>
       row.textContent.startsWith('Reviewer, Complaints')
     );
-  assert.match(
-    reviewerRow.textContent,
-    /Remove Case Type Owner for Complaints first\./
+  assert.equal(
+    reviewerRow.querySelector('.cora-access-remove').disabled,
+    false
   );
-  assert.equal(reviewerRow.querySelector('.cora-access-remove').disabled, true);
 });
 
 test('access: a Cancel closes the form without changing anything', async () => {
@@ -491,15 +442,18 @@ test('access: a Cancel closes the form without changing anything', async () => {
 
   assert.equal(page.state().routes.access.form.fixed, false);
   assert.deepEqual(await page.client.listUserGroups('owen'), [
-    REVIEWERS_COMPLAINTS,
-    'Reviewers',
-    'CaseTypeOwner - Complaints',
     COMPLAINTS_WRITE,
+  ]);
+  assert.deepEqual((await page.client.getUserRoles('owen')).ownsCaseTypes, [
+    'complaints',
   ]);
 });
 
 test('access: a group the Maintainer cannot change refuses the change and names it as the detail', async () => {
-  const page = live({ account: 'bea', readOnlyGroups: ['Controls'] });
+  const page = live({
+    account: 'bea',
+    readOnlyGroups: ['CORA All Cases Write'],
+  });
   await flush();
 
   choose(page, 'Role', 'controls');
@@ -509,7 +463,7 @@ test('access: a group the Maintainer cannot change refuses the change and names 
 
   const alert = getByRole(page.view(), 'alert').textContent;
   assert.match(alert, /Nothing was changed/);
-  assert.match(alert, /you cannot change who is in Controls/);
+  assert.match(alert, /you cannot change who is in CORA All Cases Write/);
   assert.deepEqual(await page.client.listUserGroups('bea'), []);
   assert.deepEqual(await page.client.listAccessLog({ account: 'bea' }), []);
   assert.ok(page.view().querySelector('textarea'), 'the form stays open');
@@ -523,7 +477,9 @@ test('access: a change that fails part way is logged as partly applied and the p
     /** @type {string} */ group,
     /** @type {string} */ account
   ) =>
-    group === 'Reviewers' ? { ok: false, status: 500 } : add(group, account);
+    group === COMPLAINTS_WRITE
+      ? { ok: false, status: 500 }
+      : add(group, account);
 
   choose(page, 'Role', 'reviewer');
   choose(page, 'Case Type', 'complaints');
@@ -613,7 +569,7 @@ test('access: reads that fail are reported where they would have appeared', asyn
   client.listAccessLog = async () => {
     throw new Error('HTTP 500');
   };
-  client.listGroupMembers = async () => {
+  client.listRoleHolders = async () => {
     throw new Error('HTTP 500');
   };
   const page = live({ account: 'zara', client });

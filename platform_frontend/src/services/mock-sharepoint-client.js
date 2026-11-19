@@ -28,12 +28,18 @@ import { noRoles, roleEntries, withRoleEntries } from './user-roles.js';
 
 /** @typedef {import('../sharepoint-client.js').VersionedExport} VersionedExport */
 /** @typedef {import('./user-roles.js').UserRoles} UserRoles */
-/** @typedef {PersonResult & { manager?: string, groups?: string[] }} DirectoryPerson */
+/** @typedef {PersonResult & { manager?: string, groups?: string[], roles?: Partial<UserRoles> }} DirectoryPerson */
+
+/**
+ * A `?asUser=` persona: who they are, the groups they hold, and their roles row.
+ *
+ * @typedef {{ groups: string[], userId?: string, displayName?: string, roles?: Partial<UserRoles> }} Persona
+ */
 
 export class MockSharePointClient {
   /**
    * @param {{
-   * personas: Record<string, { groups: string[], userId?: string, displayName?: string }>,
+   * personas: Record<string, Persona>,
    * persona?: string,
    * people?: DirectoryPerson[],
    * bankVersions?: Record<string, string>,
@@ -91,12 +97,27 @@ export class MockSharePointClient {
     this._accessLog = accessLog.map((entry) => structuredClone(entry));
     this._accessLogCounter = 7000;
     // Keyed by lower-cased account, as the real list's Title filter is case-insensitive.
+    // A directory person's `roles` seed their row, then the signed-in
+    // persona's own row is seeded under the account it signs in as, and an
+    // explicit `userRoles` entry for the same account wins. Only that
+    // persona's: two personas may share an account to see the same Cases.
+    /** @type {Array<[string, Partial<UserRoles>]>} */
+    const directoryRoles = people.flatMap((person) =>
+      person.roles ? [[person.loginName, person.roles]] : []
+    );
+    const signedIn = personas[persona];
+    /** @type {Array<[string, Partial<UserRoles>]>} */
+    const personaRoles = signedIn?.roles
+      ? [[signedIn.userId ?? persona, signedIn.roles]]
+      : [];
     /** @type {Map<string, UserRoles>} */
     this._userRoles = new Map(
-      Object.entries(userRoles).map(([account, roles]) => [
-        account.toLowerCase(),
-        { ...noRoles(), ...structuredClone(roles) },
-      ])
+      [...directoryRoles, ...personaRoles, ...Object.entries(userRoles)].map(
+        ([account, roles]) => [
+          String(account).toLowerCase(),
+          { ...noRoles(), ...structuredClone(roles) },
+        ]
+      )
     );
     this._userRolesReadOnly = userRolesReadOnly;
     this._etagCounter = 1000;

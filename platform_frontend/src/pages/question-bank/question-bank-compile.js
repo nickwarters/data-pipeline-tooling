@@ -123,7 +123,7 @@ export function highlight(code) {
  * Returns the function-free projection of the bank: slug, label, generatedAt,
  * its version identity, the projected questions, case-type
  * outcomeOptions/defaultOutcomeId, and a labels table. Excluded:
- * computeOutcome, disallowFreeFormRemediation, eligibleGroups.
+ * computeOutcome, disallowFreeFormRemediation.
  *
  * The version is **read off the bank**, never computed here: the bank declares
  * what version it is, and the envelope — and the filename composed from it —

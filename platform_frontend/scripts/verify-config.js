@@ -205,7 +205,7 @@ export async function checkCaseTypes(options = {}) {
     }
     if (!isNonEmptyString(entry.displayName)) {
       fail(
-        'has no registry `displayName`, which composes its three SharePoint group names'
+        'has no registry `displayName`, which composes its Case list group names'
       );
     }
 

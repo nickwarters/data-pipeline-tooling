@@ -12,7 +12,7 @@ import { permissions } from '../src/services/permissions.js';
 import { noRoles } from '../src/services/user-roles.js';
 import { CASE_TYPE_IMPORTERS } from '../case-types/manifest.js';
 import { captureConsoleError } from './_console.js';
-import { caseSourcesFor } from './_case-sources-for.js';
+import { caseSourcesFor, holding } from './_case-sources-for.js';
 
 /** @param {Partial<import('../src/sharepoint-client.js').CaseTypeConfig>} overrides */
 function minimalConfig(overrides = {}) {
@@ -25,11 +25,22 @@ function minimalConfig(overrides = {}) {
   };
 }
 
+/**
+ * The pure rule for someone holding `held` — groups and role entries alike.
+ *
+ * @param {readonly string[]} held
+ * @param {Parameters<typeof resolveCaseSourcesFromCaseTypes>[1]} caseTypes
+ */
+function sourcesFor(held, caseTypes) {
+  const { groups, roles } = holding(held);
+  return resolveCaseSourcesFromCaseTypes(groups, caseTypes, roles);
+}
+
 // ===== resolveCaseSourcesFromCaseTypes (pure core, the app-wide rule) =====
 
-test('resolveCaseSourcesFromCaseTypes: grants via the list-access group derived from the registry displayName', () => {
-  const sources = resolveCaseSourcesFromCaseTypes(
-    ['Reviewers - Product Sale Review'],
+test('resolveCaseSourcesFromCaseTypes: reviewing a Case Type grants its source', () => {
+  const sources = sourcesFor(
+    ['CoraUserRoles: Reviews = product-sale-review'],
     [
       {
         slug: 'product-sale-review',
@@ -50,8 +61,8 @@ test('resolveCaseSourcesFromCaseTypes: grants via the list-access group derived 
 });
 
 test('resolveCaseSourcesFromCaseTypes: allocation policy is not carried per Case Type', () => {
-  const sources = resolveCaseSourcesFromCaseTypes(
-    ['Reviewers - Complaints'],
+  const sources = sourcesFor(
+    ['CoraUserRoles: Reviews = complaints'],
     [
       {
         slug: 'complaints',
@@ -72,8 +83,8 @@ test('resolveCaseSourcesFromCaseTypes: allocation policy is not carried per Case
 });
 
 test('resolveCaseSourcesFromCaseTypes: projects the three dashboard cadence thresholds', () => {
-  const sources = resolveCaseSourcesFromCaseTypes(
-    ['Reviewers - Complaints'],
+  const sources = sourcesFor(
+    ['CoraUserRoles: Reviews = complaints'],
     [
       {
         slug: 'complaints',
@@ -104,8 +115,8 @@ test('resolveCaseSourcesFromCaseTypes: projects the three dashboard cadence thre
 });
 
 test('resolveCaseSourcesFromCaseTypes: a Case Type declaring no threshold carries no threshold key', () => {
-  const [source] = resolveCaseSourcesFromCaseTypes(
-    ['Reviewers - Complaints'],
+  const [source] = sourcesFor(
+    ['CoraUserRoles: Reviews = complaints'],
     [
       {
         slug: 'complaints',
@@ -129,8 +140,8 @@ test('resolveCaseSourcesFromCaseTypes: a Case Type declaring no threshold carrie
 });
 
 test('allocationSourcesFromCaseSources: projects only allocation list identity', () => {
-  const caseSources = resolveCaseSourcesFromCaseTypes(
-    ['Reviewer Managers'],
+  const caseSources = sourcesFor(
+    ['CoraUserRoles: ReviewerManager'],
     [
       {
         slug: 'complaints',
@@ -158,9 +169,9 @@ test('allocationSourcesFromCaseSources: projects only allocation list identity',
   ]);
 });
 
-test('allocationSourcesFromCaseSources: a Maintainer in one reviewer group draws only from that Case Type', () => {
-  const caseSources = resolveCaseSourcesFromCaseTypes(
-    ['CORA Owner Delegates', 'Reviewers - Complaints'],
+test('allocationSourcesFromCaseSources: a Maintainer who reviews one Case Type draws only from that Case Type', () => {
+  const caseSources = sourcesFor(
+    ['CORA Owner Delegates', 'CoraUserRoles: Reviews = complaints'],
     [
       {
         slug: 'complaints',
@@ -185,8 +196,8 @@ test('allocationSourcesFromCaseSources: a Maintainer in one reviewer group draws
 });
 
 test('allocationSourcesFromCaseSources: owning a Case Type without reviewing it gives no allocation source', () => {
-  const caseSources = resolveCaseSourcesFromCaseTypes(
-    ['CaseTypeOwner - Complaints'],
+  const caseSources = sourcesFor(
+    ['CoraUserRoles: OwnsCaseTypes = complaints'],
     [
       {
         slug: 'complaints',
@@ -202,8 +213,8 @@ test('allocationSourcesFromCaseSources: owning a Case Type without reviewing it 
 });
 
 test('resolveCaseSourcesFromCaseTypes: a Case Type Owner gets only their Case Type source', () => {
-  const sources = resolveCaseSourcesFromCaseTypes(
-    ['CaseTypeOwner - Complaints'],
+  const sources = sourcesFor(
+    ['CoraUserRoles: OwnsCaseTypes = complaints'],
     [
       {
         slug: 'complaints',
@@ -246,10 +257,7 @@ test('resolveCaseSourcesFromCaseTypes: a Journey Owner gets only their Case Type
   ];
 
   assert.deepEqual(
-    resolveCaseSourcesFromCaseTypes(
-      ['JourneyOwner - Example Review'],
-      caseTypes
-    ),
+    sourcesFor(['CoraUserRoles: JourneyOwnerOf = example-review'], caseTypes),
     [
       {
         slug: 'example-review',
@@ -260,59 +268,13 @@ test('resolveCaseSourcesFromCaseTypes: a Journey Owner gets only their Case Type
   );
 });
 
-test('resolveCaseSourcesFromCaseTypes: grants via a blanket eligibleGroups entry', () => {
-  const sources = resolveCaseSourcesFromCaseTypes(
-    ['Reviewers'],
-    [
-      {
-        slug: 'example-review',
-        listName: 'Cases-ExampleReview',
-        displayName: 'Example Review',
-        config: minimalConfig({ eligibleGroups: ['Reviewers'] }),
-      },
-    ]
-  );
-
-  assert.deepEqual(sources, [
-    {
-      slug: 'example-review',
-      listName: 'Cases-ExampleReview',
-      displayName: 'Example Review',
-    },
-  ]);
-});
-
-test('resolveCaseSourcesFromCaseTypes: grants via reviewerGroup', () => {
-  const sources = resolveCaseSourcesFromCaseTypes(
-    ['Reviewers - Complaints'],
+test('resolveCaseSourcesFromCaseTypes: the bare Reviewer flag does not imply a per-type list', () => {
+  const sources = sourcesFor(
+    ['CoraUserRoles: Reviewer'],
     [
       {
         slug: 'complaints',
         listName: 'Cases-Complaints',
-        reviewerGroup: 'Reviewers - Complaints',
-        displayName: 'Complaints',
-        config: minimalConfig(),
-      },
-    ]
-  );
-
-  assert.deepEqual(sources, [
-    {
-      slug: 'complaints',
-      listName: 'Cases-Complaints',
-      displayName: 'Complaints',
-    },
-  ]);
-});
-
-test('resolveCaseSourcesFromCaseTypes: base Reviewers group does not imply a per-type list', () => {
-  const sources = resolveCaseSourcesFromCaseTypes(
-    ['Reviewers'],
-    [
-      {
-        slug: 'complaints',
-        listName: 'Cases-Complaints',
-        reviewerGroup: 'Reviewers - Complaints',
         displayName: 'Complaints',
         config: minimalConfig(),
       },
@@ -322,14 +284,13 @@ test('resolveCaseSourcesFromCaseTypes: base Reviewers group does not imply a per
   assert.deepEqual(sources, []);
 });
 
-test('resolveCaseSourcesFromCaseTypes: excludes a Case Type when the user holds none of its groups', () => {
-  const sources = resolveCaseSourcesFromCaseTypes(
+test('resolveCaseSourcesFromCaseTypes: excludes a Case Type the user holds no role on', () => {
+  const sources = sourcesFor(
     ['SomeOtherGroup'],
     [
       {
         slug: 'complaints',
         listName: 'Cases-Complaints',
-        reviewerGroup: 'Reviewers - Complaints',
         displayName: 'Complaints',
         config: minimalConfig(),
       },
@@ -339,12 +300,7 @@ test('resolveCaseSourcesFromCaseTypes: excludes a Case Type when the user holds 
   assert.deepEqual(sources, []);
 });
 
-// There is no "Case Type without a display name" case left to test: every
-// `CaseTypeSource` carries the registry's required `displayName`, so a
-// nameless Case Type is a type error rather than a silently short source list.
-// Its three derived group names are therefore ALWAYS contributed — the case
-// below holds neither `eligibleGroups` nor `reviewerGroup`.
-test('resolveCaseSourcesFromCaseTypes: the three derived group names are contributed with no config aliases at all', () => {
+test('resolveCaseSourcesFromCaseTypes: each per-type role grants the source it names', () => {
   const caseTypes = [
     {
       slug: 'stress-review',
@@ -354,13 +310,13 @@ test('resolveCaseSourcesFromCaseTypes: the three derived group names are contrib
     },
   ];
 
-  for (const group of [
-    'Reviewers - Stress Review',
-    'CaseTypeOwner - Stress Review',
-    'JourneyOwner - Stress Review',
+  for (const entry of [
+    'CoraUserRoles: Reviews = stress-review',
+    'CoraUserRoles: OwnsCaseTypes = stress-review',
+    'CoraUserRoles: JourneyOwnerOf = stress-review',
   ]) {
     assert.deepEqual(
-      resolveCaseSourcesFromCaseTypes([group], caseTypes),
+      sourcesFor([entry], caseTypes),
       [
         {
           slug: 'stress-review',
@@ -368,7 +324,7 @@ test('resolveCaseSourcesFromCaseTypes: the three derived group names are contrib
           displayName: 'Stress Review',
         },
       ],
-      `${group} must grant the source it names`
+      `${entry} must grant the source it names`
     );
   }
 });
@@ -378,7 +334,6 @@ test('resolveCaseSourcesFromCaseTypes: Reviewer Managers get every source', () =
     {
       slug: 'complaints',
       listName: 'Cases-Complaints',
-      reviewerGroup: 'Reviewers - Complaints',
       displayName: 'Complaints',
       config: minimalConfig(),
     },
@@ -390,10 +345,7 @@ test('resolveCaseSourcesFromCaseTypes: Reviewer Managers get every source', () =
     },
   ];
 
-  const sources = resolveCaseSourcesFromCaseTypes(
-    ['Reviewer Managers'],
-    caseTypes
-  );
+  const sources = sourcesFor(['CoraUserRoles: ReviewerManager'], caseTypes);
 
   assert.deepEqual(sources, [
     {
@@ -426,14 +378,14 @@ test('resolveCaseSourcesFromCaseTypes: Controls get every Case Type source', () 
   ];
 
   assert.deepEqual(
-    resolveCaseSourcesFromCaseTypes(['Controls'], caseTypes).map(
+    sourcesFor(['CoraUserRoles: Controls'], caseTypes).map(
       (source) => source.slug
     ),
     ['complaints', 'example-review']
   );
 });
 
-test('resolveCaseSourcesFromCaseTypes: Frontline get every Case Type source', () => {
+test('resolveCaseSourcesFromCaseTypes: Advisers get every Case Type source', () => {
   const caseTypes = [
     {
       slug: 'complaints',
@@ -450,7 +402,7 @@ test('resolveCaseSourcesFromCaseTypes: Frontline get every Case Type source', ()
   ];
 
   assert.deepEqual(
-    resolveCaseSourcesFromCaseTypes(['Frontline'], caseTypes).map(
+    sourcesFor(['CoraUserRoles: Adviser'], caseTypes).map(
       (source) => source.slug
     ),
     ['complaints', 'example-review']
@@ -474,34 +426,32 @@ test('resolveCaseSourcesFromCaseTypes: Responsible Party Managers get every Case
   ];
 
   assert.deepEqual(
-    resolveCaseSourcesFromCaseTypes(
-      ['ResponsibleParty-Managers'],
-      caseTypes
-    ).map((source) => source.slug),
+    sourcesFor(['CoraUserRoles: ResponsiblePartyManager'], caseTypes).map(
+      (source) => source.slug
+    ),
     ['complaints', 'example-review']
   );
 });
 
 // ===== the caseSources half of resolveAppCaseSources =====
 
-test('resolveAppCaseSources: the org-wide Reviewers group alone grants no Case source', async () => {
-  // The bare `Reviewers` functional group is axis 1 (what you can do); reading
-  // a Case Type's list is axis 2 (which list you can open), and only a
-  // per-Case-Type group crosses it. This used to resolve `example-review`,
-  // because the fixture declared the org-wide `Reviewers` in its
-  // `eligibleGroups` — a pattern since removed from the scaffold as an
-  // accident. Asserting the grant was therefore pinning the accident in place;
-  // what is worth pinning is that no Case Type opens itself to every Reviewer.
-  const sources = await caseSourcesFor(['Reviewers']);
+test('resolveAppCaseSources: the bare Reviewer flag alone grants no Case source', async () => {
+  // Being a Reviewer is what you can do; which Case Types you review is which
+  // lists you work, and only a Case Type in the row's Reviews column crosses
+  // from one to the other. What is worth pinning is that no Case Type opens
+  // itself to every Reviewer.
+  const sources = await caseSourcesFor(['CoraUserRoles: Reviewer']);
   assert.deepEqual(
     sources.map((s) => s.slug),
     [],
-    'no registered Case Type may grant itself to the whole Reviewers group'
+    'no registered Case Type may grant itself to every Reviewer'
   );
 });
 
 test('resolveAppCaseSources: example-review source carries its declared listName and displayName', async () => {
-  const sources = await caseSourcesFor(['Reviewers - Example Review']);
+  const sources = await caseSourcesFor([
+    'CoraUserRoles: Reviews = example-review',
+  ]);
   const exampleReview = sources.find((s) => s.slug === 'example-review');
   assert.deepEqual(exampleReview, {
     slug: 'example-review',
@@ -515,8 +465,8 @@ test('resolveAppCaseSources: example-review source carries its declared listName
   });
 });
 
-test('resolveAppCaseSources: a Reviewers - Complaints user is granted the complaints source via its derived list-access group', async () => {
-  const sources = await caseSourcesFor(['Reviewers - Complaints']);
+test('resolveAppCaseSources: a Reviewer of Complaints is granted the complaints source', async () => {
+  const sources = await caseSourcesFor(['CoraUserRoles: Reviews = complaints']);
   assert.deepEqual(sources, [
     {
       slug: 'complaints',
@@ -527,7 +477,7 @@ test('resolveAppCaseSources: a Reviewers - Complaints user is granted the compla
 });
 
 test('resolveAppCaseSources: Reviewer Managers are granted every manifest Case Type as a source', async () => {
-  const sources = await caseSourcesFor(['Reviewer Managers']);
+  const sources = await caseSourcesFor(['CoraUserRoles: ReviewerManager']);
   assert.deepEqual(
     sources.map((s) => s.slug).sort(),
     Object.keys(CASE_TYPE_IMPORTERS).sort()
@@ -542,38 +492,52 @@ test('resolveAppCaseSources: Maintainers can sample Cases from every Question Ba
   );
 });
 
-test('resolveCaseSourcesFromCaseTypes: broad roles come from the permissions config', () => {
+test('resolveCaseSourcesFromCaseTypes: the Maintainer group spans every source, and no other group grants one', () => {
   const source = {
     slug: 'example-review',
     listName: 'Cases-ExampleReview',
     displayName: 'Example Review',
     config: minimalConfig(),
   };
+  assert.equal(
+    resolveCaseSourcesFromCaseTypes([permissions.maintainer], [source]).length,
+    1
+  );
+  // The groups that used to hold a role, and the ones that open its list now:
+  // groups only open lists, so none of them grants a source on its own.
   for (const group of [
-    permissions.reviewerManager,
-    permissions.controls,
-    permissions.adviser,
-    permissions.responsiblePartyManager,
-    permissions.maintainer,
+    'Reviewers - Example Review',
+    'CaseTypeOwner - Example Review',
+    'JourneyOwner - Example Review',
+    'Frontline - Example Review',
+    'Reviewer Managers',
+    'Controls',
+    'Frontline',
+    'ResponsibleParty-Managers',
+    'Cases - Example Review Write',
+    'CORA All Cases Write',
   ]) {
-    assert.equal(resolveCaseSourcesFromCaseTypes([group], [source]).length, 1);
+    assert.deepEqual(
+      resolveCaseSourcesFromCaseTypes([group], [source]),
+      [],
+      group
+    );
   }
 });
-
 test('resolveAppCaseSources: complaints carries its explicit Case list', async () => {
-  const sources = await caseSourcesFor(['Reviewer Managers']);
+  const sources = await caseSourcesFor(['CoraUserRoles: ReviewerManager']);
   const complaints = sources.find((s) => s.slug === 'complaints');
   assert.equal(complaints?.listName, 'Cases-Complaints');
 });
 
-test('resolveAppCaseSources: returns no sources when the user holds no matching group', async () => {
+test('resolveAppCaseSources: returns no sources when the user holds no role', async () => {
   const sources = await caseSourcesFor(['SomeOtherGroup']);
   assert.deepEqual(sources, []);
 });
 
 test('resolveAppCaseSources: threads only a Case Type Owner eligible source to app surfaces', async () => {
   const context = await quietlyResolveAppCaseSources(
-    ['CaseTypeOwner - Complaints'],
+    ['CoraUserRoles: OwnsCaseTypes = complaints'],
     []
   );
 
@@ -585,7 +549,7 @@ test('resolveAppCaseSources: threads only a Case Type Owner eligible source to a
   assert.deepEqual(context.unavailableCaseTypes, []);
 });
 
-// ===== the CoraUserRoles row grants sources alongside the groups =====
+// ===== each column of the CoraUserRoles row =====
 
 test('resolveCaseSourcesFromCaseTypes: a Case Type in any per-type column of the roles row grants its source', () => {
   const caseTypes = [
@@ -712,8 +676,12 @@ async function quietlyResolveAppCaseSources(
   ownedJourneyCaseTypes,
   options
 ) {
+  const { groups, roles } = holding(userGroups);
   const { result } = await captureConsoleError(() =>
-    resolveAppCaseSources(userGroups, ownedJourneyCaseTypes, options)
+    resolveAppCaseSources(groups, ownedJourneyCaseTypes, {
+      userRoles: roles,
+      ...options,
+    })
   );
   return result;
 }
@@ -740,7 +708,8 @@ function importersWithBrokenExampleReview(overrides = {}) {
 
 test('containment: drops the Case Type whose module throws and keeps the rest', async () => {
   const { result, logged } = await captureConsoleError(() =>
-    resolveAppCaseSources(['Reviewer Managers'], [], {
+    resolveAppCaseSources([], [], {
+      userRoles: holding(['CoraUserRoles: ReviewerManager']).roles,
       importers: importersWithBrokenExampleReview(),
     })
   );
@@ -804,7 +773,7 @@ test('containment: falls back to the slug when the failure has no registered dis
 
 test('containment: an unregistered slug is dropped, never resolved namelessly', async () => {
   const { caseSources, unavailableCaseTypes } =
-    await quietlyResolveAppCaseSources(['Reviewer Managers'], [], {
+    await quietlyResolveAppCaseSources(['CoraUserRoles: ReviewerManager'], [], {
       importers: /** @type {any} */ ({
         'not-registered': async () => ({
           default: minimalConfig({ listName: 'Cases-NotRegistered' }),
@@ -828,13 +797,17 @@ test('containment: a config that loads but declares no listName is contained and
   // built a request against `undefined`.
   for (const listName of [undefined, '', '   ']) {
     const { caseSources, unavailableCaseTypes } =
-      await quietlyResolveAppCaseSources(['Reviewer Managers'], [], {
-        importers: /** @type {any} */ ({
-          'example-review': async () => ({
-            default: minimalConfig({ listName }),
+      await quietlyResolveAppCaseSources(
+        ['CoraUserRoles: ReviewerManager'],
+        [],
+        {
+          importers: /** @type {any} */ ({
+            'example-review': async () => ({
+              default: minimalConfig({ listName }),
+            }),
           }),
-        }),
-      });
+        }
+      );
 
     assert.deepEqual(
       caseSources,
@@ -863,7 +836,7 @@ test('containment: an invalid outcome config is contained and named', async () =
   // `caseSources` and detonated later on the Case Review page. Routing through
   // `loadCaseTypeConfig` makes the documented claim true.
   const { caseSources, unavailableCaseTypes } =
-    await quietlyResolveAppCaseSources(['Reviewer Managers'], [], {
+    await quietlyResolveAppCaseSources(['CoraUserRoles: ReviewerManager'], [], {
       importers: /** @type {any} */ ({
         'example-review': async () => ({
           default: minimalConfig({
@@ -885,28 +858,6 @@ test('containment: an invalid outcome config is contained and named', async () =
   );
 });
 
-test('resolveCaseSourcesFromCaseTypes: a nameless Case Type contributes no derived group names', () => {
-  // Defence in depth. No production caller can reach this — `displayNameFor()`
-  // throws before a nameless source is built — but the function is exported and
-  // its typedef now REQUIRES `displayName`, so an undefined name must not
-  // compose `Reviewers - undefined` and grant a real source under it.
-  const nameless = /** @type {any} */ ([
-    { slug: 'nameless', listName: 'Cases-Nameless', config: minimalConfig() },
-  ]);
-
-  for (const group of [
-    'Reviewers - undefined',
-    'CaseTypeOwner - undefined',
-    'JourneyOwner - undefined',
-  ]) {
-    assert.deepEqual(
-      resolveCaseSourcesFromCaseTypes([group], nameless),
-      [],
-      `${group} must grant nothing`
-    );
-  }
-});
-
 test('loadCaseTypeSources is not exported: options.importers is the one seam', async () => {
   const module = await import('../src/setup/resolve-eligible-case-types.js');
   assert.equal(
@@ -919,7 +870,10 @@ test('loadCaseTypeSources is not exported: options.importers is the one seam', a
 
 test('resolveAppCaseSources: a broken Case Type cannot leak into any resolved source set', async () => {
   const context = await quietlyResolveAppCaseSources(
-    ['Reviewer Managers', 'Reviewers - Example Review'],
+    [
+      'CoraUserRoles: ReviewerManager',
+      'CoraUserRoles: Reviews = example-review',
+    ],
     ['example-review', 'complaints'],
     {
       importers: importersWithBrokenExampleReview(),
@@ -962,7 +916,7 @@ test('resolveAppCaseSources: a broken Case Type cannot leak into any resolved so
 
 test('resolveAppCaseSources: a user whose only Case Type is broken gets an empty list, not a crash', async () => {
   const sources = await quietlyResolveCaseSources(
-    ['Reviewers - Example Review'],
+    ['CoraUserRoles: Reviews = example-review'],
     {
       importers: importersWithBrokenExampleReview(),
     }

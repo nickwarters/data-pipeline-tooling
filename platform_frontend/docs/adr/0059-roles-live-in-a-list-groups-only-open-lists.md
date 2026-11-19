@@ -108,7 +108,22 @@ the old groups are switched off, and each phase can be reversed on its own.
    on a revoke while the person holds that type's `Frontline - <type>` group,
    because the pipeline, not the page, put them in it. Case Support's Reassign
    offers the Case Type's Reviewers from both too.
-4. **New only.** The app, the Access page and the pipeline use only the new model.
+4. **New only.** The app, the Access page and the pipeline use only the new
+   model. A role comes from the person's `CoraUserRoles` row alone; the one
+   group still read for a role is `CORA Owner Delegates`. Because the row is now
+   the only answer, a failed read of it stops boot with the error panel rather
+   than quietly showing a Visitor. Giving a role writes its row entry and, for a
+   role that needs one, its Case list group: `Cases - <type> Write` for a
+   Reviewer or an Owner, `CORA All Cases Read` for a Reviewer Manager or RP
+   Manager, `CORA All Cases Write` for Controls. Removing a role keeps a group
+   another held role still needs, and an Adviser keeps every Case list Write
+   group, because the notifications pipeline adds them as Cases are assigned.
+   Roles no longer depend on one another, so nothing has to be removed first.
+   The pipeline adds an Adviser to `Cases - <type> Write`. A Case Type config's
+   `eligibleGroups` and `reviewerGroup` aliases go, since a group no longer
+   grants a Case source. The legacy group names live only in
+   `src/services/legacy-groups.js`, for the backfill. The roles list must be
+   landed by the pipelines (#1087) before this phase ships.
 5. **Retire.** Adviser reads narrow to the lists a person's groups open, the
    `Frontline` blanket read goes, and then the legacy groups.
 

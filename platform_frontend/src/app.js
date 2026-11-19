@@ -18,11 +18,7 @@ import { configureSections } from './sections/registry.js';
 import { resolveEnvironment } from './config/environment.js';
 import { createSharePointClient } from './services/create-sharepoint-client.js';
 import { SaveQueue } from './services/save-queue.js';
-import {
-  permissions,
-  readUserRoles,
-  resolveCapabilities,
-} from './services/permissions.js';
+import { permissions, resolveCapabilities } from './services/permissions.js';
 import { createChromeState } from './core/chrome-state.js';
 import { Router } from './lib/router.js';
 import { renderBootError } from './lib/boot-error-panel.js';
@@ -56,7 +52,10 @@ async function boot() {
     client.getCurrentUser(),
     client.getCurrentUserGroups(),
   ]);
-  const userRoles = await readUserRoles(client, currentUser.id);
+  // The row is now the only record of a person's roles, so a row that cannot
+  // be read stops boot with the error panel rather than quietly treating every
+  // user as a Visitor. A person with no row at all is a Visitor, correctly.
+  const userRoles = await client.getUserRoles(currentUser.id);
   const capabilities = resolveCapabilities(userGroups, permissions, userRoles);
   const chrome = createChromeState({
     currentUser,
@@ -64,9 +63,9 @@ async function boot() {
   });
 
   // Every route receives only sources the current user's roles may span.
-  // Type-scoped owners get their own types; broad roles (Controls,
-  // Reviewer Managers, Frontline, ResponsibleParty-Managers and Maintainers) get the full
-  // manifest. RP surfaces retain their assigned-party query filters.
+  // Type-scoped owners get their own types; broad roles (Controls, Reviewer
+  // Managers, Advisers, Responsible Party Managers and Maintainers) get the
+  // full manifest. RP surfaces retain their assigned-party query filters.
   // A Case Type module that throws is contained the same way a broken page is:
   // that Case Type is dropped and named in a banner; the app boots.
   const { caseSources, journeyCaseSources, unavailableCaseTypes } =

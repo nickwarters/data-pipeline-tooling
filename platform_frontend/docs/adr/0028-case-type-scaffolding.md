@@ -59,7 +59,9 @@ app-writes-it provenance).
 - The generated module includes TODO markers for the Question Bank, Outcome
   vocabulary, appeal raiser, Case Details fields, and SLA hours.
 - The generated mock personas exercise the derived `Reviewers - X`,
-  `CaseTypeOwner - X`, and `JourneyOwner - X` groups from ADR-0022.
+  `CaseTypeOwner - X`, and `JourneyOwner - X` groups from ADR-0022. Since
+  ADR-0059's phase 4 they hold `CoraUserRoles` entries by slug and the
+  `Cases - X Write` group instead.
 - Re-running with an existing slug is a hard error to avoid overwriting operator
   edits.
 

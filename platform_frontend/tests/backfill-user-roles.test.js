@@ -11,6 +11,8 @@ import {
   planBackfill,
 } from '../scripts/backfill_user_roles.js';
 import {
+  LEGACY_ROLE_GROUPS,
+  legacyCaseTypeGroupNames,
   legacyGroups,
   translateLegacyGroups,
 } from '../src/services/legacy-groups.js';
@@ -18,8 +20,6 @@ import { MockSharePointClient } from '../src/services/mock-sharepoint-client.js'
 import {
   allCaseListGroups,
   caseListGroupNames,
-  caseTypeGroupNames,
-  frontlineListAccessGroupName,
   permissions,
 } from '../src/services/permissions.js';
 import {
@@ -35,7 +35,7 @@ const CASE_TYPES = [
   { slug: 'complaints', displayName: 'Complaints' },
   { slug: 'sales-calls', displayName: 'Sales Calls' },
 ];
-const COMPLAINTS = caseTypeGroupNames('Complaints');
+const COMPLAINTS = legacyCaseTypeGroupNames('Complaints');
 const COMPLAINTS_WRITE = caseListGroupNames('Complaints').write;
 
 test('every legacy group becomes something, and only role entries and new groups', () => {
@@ -49,12 +49,12 @@ test('every legacy group becomes something, and only role entries and new groups
     'the Maintainer group stays a group'
   );
   for (const { slug, displayName } of CASE_TYPES) {
-    const old = caseTypeGroupNames(displayName);
+    const old = legacyCaseTypeGroupNames(displayName);
     for (const group of [
       old.listAccess,
       old.caseTypeOwner,
       old.journeyOwner,
-      frontlineListAccessGroupName(displayName),
+      legacyCaseTypeGroupNames(displayName).frontline,
     ]) {
       const translated = legacy.find((entry) => entry.group === group);
       assert.deepEqual(
@@ -76,7 +76,7 @@ test('every legacy group becomes something, and only role entries and new groups
 test('a per-type Reviewer is not also given the no-Case-Type Reviewer flag', () => {
   assert.deepEqual(
     translateLegacyGroups(
-      [permissions.reviewer, COMPLAINTS.listAccess],
+      [LEGACY_ROLE_GROUPS.reviewer, COMPLAINTS.listAccess],
       CASE_TYPES
     ),
     {
@@ -85,7 +85,7 @@ test('a per-type Reviewer is not also given the no-Case-Type Reviewer flag', () 
     }
   );
   assert.deepEqual(
-    translateLegacyGroups([permissions.reviewer], CASE_TYPES).entries,
+    translateLegacyGroups([LEGACY_ROLE_GROUPS.reviewer], CASE_TYPES).entries,
     [roleFlagEntry('reviewer')]
   );
 });
@@ -94,10 +94,10 @@ test('the broad roles get their flag and the group that opens every list', () =>
   assert.deepEqual(
     translateLegacyGroups(
       [
-        permissions.controls,
-        permissions.reviewerManager,
-        permissions.responsiblePartyManager,
-        permissions.adviser,
+        LEGACY_ROLE_GROUPS.controls,
+        LEGACY_ROLE_GROUPS.reviewerManager,
+        LEGACY_ROLE_GROUPS.responsiblePartyManager,
+        LEGACY_ROLE_GROUPS.adviser,
         'Somebody Else’s Group',
       ],
       CASE_TYPES
@@ -122,7 +122,7 @@ function mock() {
         loginName: 'ana',
         displayName: 'Ana',
         groups: [
-          permissions.reviewer,
+          LEGACY_ROLE_GROUPS.reviewer,
           COMPLAINTS.listAccess,
           COMPLAINTS.caseTypeOwner,
         ],
@@ -130,9 +130,16 @@ function mock() {
       {
         loginName: 'ben',
         displayName: 'Ben',
-        groups: [frontlineListAccessGroupName('Complaints'), COMPLAINTS_WRITE],
+        groups: [
+          legacyCaseTypeGroupNames('Complaints').frontline,
+          COMPLAINTS_WRITE,
+        ],
       },
-      { loginName: 'cy', displayName: 'Cy', groups: [permissions.controls] },
+      {
+        loginName: 'cy',
+        displayName: 'Cy',
+        groups: [LEGACY_ROLE_GROUPS.controls],
+      },
       {
         loginName: 'dee',
         displayName: 'Dee',
@@ -192,7 +199,11 @@ test('a write that fails is reported with its status and the rest still run', as
   const client = new MockSharePointClient({
     personas: {},
     people: [
-      { loginName: 'cy', displayName: 'Cy', groups: [permissions.controls] },
+      {
+        loginName: 'cy',
+        displayName: 'Cy',
+        groups: [LEGACY_ROLE_GROUPS.controls],
+      },
     ],
     userRolesReadOnly: true,
   });

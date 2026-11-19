@@ -77,10 +77,15 @@ edit does, and a full dev-harness verification tour — see
 
 ### 3. Provision groups and permissions
 
-- [ ] Create the per-Case-Type SharePoint groups derived from the permissions
-      entry (`Reviewers - {display}`, `CaseTypeOwner - {display}`,
-      `JourneyOwner - {display}`) and set the list ACLs — list permissions are
+- [ ] Create the Case list groups derived from the registry display name
+      (`Cases - {display} Read`, `Cases - {display} Write`), owned by
+      `CORA Owner Delegates`, and set the list ACLs: Read and
+      `CORA Contribute (no delete)` for those two, and the same for
+      `CORA All Cases Read` and `CORA All Cases Write`. List permissions are
       the real security boundary.
+- [ ] Add the slug as a choice on the `CoraUserRoles` list's `Reviews`,
+      `OwnsCaseTypes` and `JourneyOwnerOf` columns, so the Access page can give
+      its roles.
 
 ## `Cases-{slug}` column schema
 

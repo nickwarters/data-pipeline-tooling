@@ -103,7 +103,7 @@ for (const entry of registry) deriveImporters(entry);
  *
  * Validated, because an entry that reaches the registry is immediately
  * load-bearing for ACCESS. A missing display name composes the SharePoint group
- * name `Reviewers - undefined`; a duplicate slug splits the registry against
+ * name `Cases - undefined Write`; a duplicate slug splits the registry against
  * itself, since `displayNameFor()` reads the first matching row while
  * `deriveImporters()` overwrites with the last and `permissions.caseTypes`
  * carries both.
@@ -123,7 +123,7 @@ export function registerCaseType(entry) {
   if (!nonEmpty(entry.displayName))
     throw new TypeError(
       `registerCaseType: Case Type "${entry.slug}" must declare a non-empty ` +
-        "`displayName` — it composes this type's three SharePoint group names."
+        "`displayName` — it composes this type's Case list group names."
     );
   if (typeof entry.importer !== 'function')
     throw new TypeError(

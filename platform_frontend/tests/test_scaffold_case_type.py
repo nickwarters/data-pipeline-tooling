@@ -23,6 +23,7 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
             (root / directory).mkdir(parents=True, exist_ok=True)
         for file_path in [
             "case-types/manifest.js",
+            "case-types/entries.js",
             "src/services/permissions.js",
             "src/services/section-access.js",
             "dev/fixtures/personas.js",
@@ -85,13 +86,10 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
         # whose Case Type declares no listName throws and takes ?mock=1 down for
         # every other Case Type.
         self.assertIn("listName: 'Cases-WidgetReview',", module_source)
-        # No eligibleGroups: the org-wide 'Reviewers' would
-        # open the type to every reviewer, and the derived
-        # 'Reviewers - Widget Review' is already granted by the registry display
-        # name — restating it makes a second grant that a later rename of the
-        # registry entry does NOT move, silently keeping the decommissioned
-        # group's access alive.
+        # No group grants a Case Type: who reviews it is held in the roles
+        # row by slug, so the module names no group at all.
         self.assertNotIn("eligibleGroups:", module_source)
+        self.assertIn("`Cases - Widget Review Read`", module_source)
         # The display name lives only on the CASE_TYPES registry entry.
         self.assertNotIn("displayName:", module_source)
         # Case tables are framework-owned: every Case Type is listed under the
@@ -102,13 +100,13 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
         # The CASE_TYPES entry carries the slug, the
         # display name the SharePoint group names derive from, and the lazy
         # importer. permissions.caseTypes is derived from it.
-        manifest_path = root / "case-types" / "manifest.js"
+        manifest_path = root / "case-types" / "entries.js"
         manifest = manifest_path.read_text(encoding="utf-8")
         self.assert_js_parses(manifest_path)
         self.assertIn("slug: 'widget-review',", manifest)
         self.assertIn("displayName: 'Widget Review',", manifest)
         # Frozen like every other entry, so the one copy of the display
-        # name that composes three SharePoint group names stays one copy.
+        # name that composes its Case list group names stays one copy.
         self.assertIn("Object.freeze({", manifest)
         self.assertIn("importer: () => import('./widget-review.js'),", manifest)
         # The scaffold writes no Question Bank artifact, so it declares no bank
@@ -123,8 +121,10 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
 
         personas = (root / "dev/fixtures/personas.js").read_text(encoding="utf-8")
         self.assertIn("'reviewer-widget-review'", personas)
-        self.assertIn("'CaseTypeOwner - Widget Review'", personas)
-        self.assertIn("'JourneyOwner - Widget Review'", personas)
+        self.assertIn("roles: { reviews: ['widget-review'] },", personas)
+        self.assertIn("roles: { ownsCaseTypes: ['widget-review'] },", personas)
+        self.assertIn("roles: { journeyOwnerOf: ['widget-review'] },", personas)
+        self.assertIn("groups: ['Cases - Widget Review Write'],", personas)
 
         cases = (root / "dev/fixtures/cases.js").read_text(encoding="utf-8")
         self.assertIn("widget-review-case-1", cases)
@@ -247,9 +247,9 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
                 self.assertIn(f"Invalid {flag}", context.exception.stderr)
 
     def test_escapes_an_apostrophe_in_a_legitimate_display_name(self) -> None:
-        # "O'Brien Review" is a perfectly ordinary Case Type name, and it used
-        # to emit `eligibleGroups: ['Reviewers - O'Brien Review']` — a module
-        # that does not parse. It must be escaped, not rejected.
+        # "O'Brien Review" is a perfectly ordinary Case Type name, and an
+        # unescaped `groups: ['Cases - O'Brien Review Write']` would be a
+        # module that does not parse. It must be escaped, not rejected.
         root = self.make_fixture_root()
         self.run_scaffold(
             root, "--slug", "obrien-review", "--display", "O'Brien Review"
@@ -258,16 +258,16 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
         module_path = root / "case-types" / "obrien-review.js"
         self.assert_js_parses(module_path)
         self.assert_js_parses(root / "tests" / "obrien-review.test.js")
-        self.assert_js_parses(root / "case-types" / "manifest.js")
+        self.assert_js_parses(root / "case-types" / "entries.js")
         self.assert_js_parses(root / "dev" / "fixtures" / "personas.js")
         self.assert_js_parses(root / "dev" / "fixtures" / "cases.js")
 
-        manifest = (root / "case-types" / "manifest.js").read_text(encoding="utf-8")
+        manifest = (root / "case-types" / "entries.js").read_text(encoding="utf-8")
         self.assertIn(r"displayName: 'O\'Brien Review',", manifest)
         personas = (root / "dev" / "fixtures" / "personas.js").read_text(
             encoding="utf-8"
         )
-        self.assertIn(r"groups: ['Reviewers - O\'Brien Review'],", personas)
+        self.assertIn(r"groups: ['Cases - O\'Brien Review Write'],", personas)
 
     def test_refuses_to_overwrite_an_existing_slug(self) -> None:
         root = self.make_fixture_root()

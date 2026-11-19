@@ -1,5 +1,5 @@
 // @ts-check
-import { caseTypeGroupNames, permissions } from '../services/permissions.js';
+import { permissions } from '../services/permissions.js';
 import { noRoles } from '../services/user-roles.js';
 import {
   CASE_TYPE_IMPORTERS,
@@ -10,14 +10,13 @@ import {
 /**
  * `displayName` is required and comes from THE Case Type registry
  * (`CASE_TYPES`), never from the Case Type config module — one string
- * composes this type's three SharePoint group names, and the capability side
+ * composes this type's Case list group names, and the capability side
  * (`permissions.caseTypes`) reads the same copy.
  *
  * @typedef {{
  * slug: string,
  * listName: string,
  * displayName: string,
- * reviewerGroup?: string,
  * config: import('../sharepoint-client.js').CaseTypeConfig
  * }} CaseTypeSource
  */
@@ -90,7 +89,7 @@ export function allocationSourcesFromCaseSources(
   caseSources,
   reviewerCaseTypes
 ) {
-  // Broad roles such as Maintainer span every list, so only `Reviewers - <type>` membership decides where a Reviewer may draw from.
+  // Broad roles such as Maintainer span every list, so only the Case Types a person reviews decide where they may draw from.
   return caseSources
     .filter(({ slug }) => reviewerCaseTypes.includes(slug))
     .map(({ slug, listName }) => ({ slug, listName }));
@@ -176,10 +175,9 @@ async function loadCaseTypeSources(slugs, importers) {
           source: /** @type {CaseTypeSource} */ ({
             slug,
             listName,
-            // From THE registry, not from the config module: the capability
-            // side derives its group names from the same string.
+            // From THE registry, not from the config module, so every surface
+            // names a Case Type with the same string.
             displayName: displayNameFor(slug),
-            reviewerGroup: config.reviewerGroup,
             config,
           }),
         };
@@ -210,27 +208,14 @@ async function loadCaseTypeSources(slugs, importers) {
 
 /**
  * Pure core of `resolveAppCaseSources`: which of the given Case Types the user
- * may read from or write to. This is THE app-wide eligibility rule.
- * Type-scoped roles grant only their matching source:
- *
- * - `config.reviewerGroup`, if declared
- * - any of `config.eligibleGroups`, if declared
- * - `Reviewers - <displayName>`
- * - `CaseTypeOwner - <displayName>`
- * - `JourneyOwner - <displayName>`
- *
- * where `displayName` is the registry's, and a registered Case Type always has
- * one — so the three derived group names are always contributed.
- *
- * Controls, Reviewer Managers, Frontline, ResponsibleParty-Managers and
- * Maintainers span
- * every source. Adviser and manager consumers must still apply their
- * assignment filter to each per-list query. Configured `eligibleGroups` and
- * `reviewerGroup` remain aliases for a type's access groups.
- *
- * The `CoraUserRoles` row grants the same sources as the groups it is
- * replacing: a broad role's flag spans every source, and a slug in any of its
- * per-type columns grants that type. Either the groups or the row is enough.
+ * may read from or write to. This is THE app-wide eligibility rule, read off
+ * the user's `CoraUserRoles` row. A Case Type held in any of its per-type
+ * columns (Reviews, OwnsCaseTypes, JourneyOwnerOf) grants only that source;
+ * the Controls, Reviewer Manager, Adviser and Responsible Party Manager flags
+ * span every source, as does the Maintainer group, the one role still held in
+ * a group. Adviser and manager consumers must still apply their assignment
+ * filter to each per-list query. No other group grants a source: groups only
+ * open lists.
  *
  * @param {string[]} userGroups
  * @param {CaseTypeSource[]} caseTypes
@@ -247,43 +232,15 @@ export function resolveCaseSourcesFromCaseTypes(
     userRoles.controls ||
     userRoles.adviser ||
     userRoles.responsiblePartyManager ||
-    userGroups.some((group) =>
-      [
-        permissions.reviewerManager,
-        permissions.controls,
-        permissions.adviser,
-        permissions.responsiblePartyManager,
-        permissions.maintainer,
-      ].includes(group)
-    );
-  const rowTypes = new Set([
+    userGroups.includes(permissions.maintainer);
+  const held = new Set([
     ...userRoles.reviews,
     ...userRoles.ownsCaseTypes,
     ...userRoles.journeyOwnerOf,
   ]);
   const eligible = broad
     ? caseTypes
-    : caseTypes.filter(({ slug, config, reviewerGroup, displayName }) => {
-        if (rowTypes.has(slug)) return true;
-        // A nameless Case Type contributes NO derived names. `displayName` is
-        // required by the typedef and `displayNameFor()` throws before a
-        // nameless source can be built, so no production caller reaches this —
-        // but this function is exported, and `caseTypeGroupNames(undefined)`
-        // would otherwise compose `Reviewers - undefined` and grant a real
-        // source to anyone holding that literal group name.
-        const derived =
-          typeof displayName === 'string' && displayName.trim() !== ''
-            ? caseTypeGroupNames(displayName)
-            : null;
-        const groups = [
-          ...(config.eligibleGroups ?? []),
-          ...(reviewerGroup ? [reviewerGroup] : []),
-          ...(derived
-            ? [derived.listAccess, derived.caseTypeOwner, derived.journeyOwner]
-            : []),
-        ];
-        return groups.some((g) => userGroups.includes(g));
-      });
+    : caseTypes.filter(({ slug }) => held.has(slug));
 
   return eligible.map(({ slug, listName, displayName, config }) =>
     toCaseSource({

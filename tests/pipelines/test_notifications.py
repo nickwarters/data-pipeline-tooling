@@ -45,8 +45,8 @@ PARTY_EMAIL = "b.okafor@example.invalid"
 MANAGER_EMAIL = "e.novak@example.invalid"
 
 # What a frontline party of a Complaints Case must end up holding: the Case
-# list's Write group, and the old per-type group the platform still reads.
-FRONTLINE_COMPLAINTS = ["Cases - Complaints Write", "Frontline - Complaints"]
+# list's Write group.
+FRONTLINE_COMPLAINTS = ["Cases - Complaints Write"]
 
 # The producing subject, named here because these tests stand in for the Sync
 # pipeline when they seed its gold. The pipeline under test does not know it.

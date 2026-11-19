@@ -171,10 +171,11 @@ def case_type_module(opts: ScaffoldOptions) -> str:
 import {{ computeConfiguredOutcome }} from '../src/evaluators/configured-outcome.js';
 
 /**
- * The **{opts.display_name}** Case Type scaffold. Its per-Case-Type groups derive
+ * The **{opts.display_name}** Case Type scaffold. Its Case list groups derive
  * from the `{opts.display_name}` display name:
- * `Reviewers - {opts.display_name}`, `CaseTypeOwner - {opts.display_name}`,
- * `JourneyOwner - {opts.display_name}`.
+ * `Cases - {opts.display_name} Read` and `Cases - {opts.display_name} Write`.
+ * Who reviews or owns it is held in each person's `CoraUserRoles` row, by the
+ * `{opts.slug}` slug.
  *
  * Declares its own `listName` (`{opts.list_name}`) like every other Case Type.
  * It is load-bearing in both environments: the mock store partitions the fixture
@@ -186,16 +187,10 @@ import {{ computeConfiguredOutcome }} from '../src/evaluators/configured-outcome
  * @type {{CaseTypeConfig}}
  */
 const config = {{
-  // The display name lives ONLY on this slug's CASE_TYPES entry in
-  // case-types/manifest.js — the three SharePoint group names derive
+  // The display name lives ONLY on this slug's registry entry in
+  // case-types/entries.js — the two Case list group names derive
   // from that one copy.
   listName: '{js_list}',
-  // No `eligibleGroups`. Access comes from the three group names DERIVED from
-  // the registry display name — `Reviewers - {opts.display_name}` and its two
-  // siblings — so restating the derived name here would make it a second,
-  // independent grant that a later rename would not move. Add
-  // `eligibleGroups` only for a genuinely EXTRA group, never the org-wide
-  // `Reviewers`: a brand-new Case Type must not be visible to every Reviewer.
   // TODO(case-type): Replace starter Case Details fields with this Case Type's source fields.
   detailFields: [
     {{ key: 'reference', label: '{js_display} reference' }},
@@ -460,9 +455,9 @@ caught up with the application configuration.
 
 Case Type provisioning starts with `python3 scripts/scaffold_case_type.py --slug <slug> --display "<Display Name>" [--list-name <Cases-List>]`.
 The scaffold creates a plain-data Case Type module for `{opts.display_name}` and
-registers it with a single entry in `CASE_TYPES` (`case-types/manifest.js`) — the
-one registry, carrying the display name from which the three per-Case-Type
-SharePoint group names derive. `permissions.caseTypes` is derived from it, so no
+registers it with a single entry in `CASE_TYPE_ENTRIES` (`case-types/entries.js`) — the
+one registry, carrying the display name from which the Case Type's two Case list
+group names derive. `permissions.caseTypes` is derived from it, so no
 permissions edit is needed. The scaffold also adds mock personas,
 one outstanding and one Completed mock Case, and a focused test file for the
 generated contract.
@@ -539,8 +534,8 @@ def closing_message(opts: ScaffoldOptions) -> str:
         "",
         "  Then work through the TODO(case-type) markers in "
         f"case-types/{opts.slug}.js,",
-        f"  and provision the SharePoint list '{opts.list_name}' and the three",
-        f"  '<role> - {opts.display_name}' groups per "
+        f"  and provision the SharePoint list '{opts.list_name}' and its",
+        f"  'Cases - {opts.display_name} Read' and 'Write' groups per "
         "docs/case-type-onboarding.md.",
     ]
     return "\n".join(lines)
@@ -569,12 +564,12 @@ def scaffold(opts: ScaffoldOptions) -> None:
     # Add one frozen CASE_TYPES entry; importers and permissions derive from it.
     # No Question Bank artifact or bank thunk is generated.
     js_display = js_escape(opts.display_name)
-    manifest_path = opts.root / "case-types" / "manifest.js"
+    manifest_path = opts.root / "case-types" / "entries.js"
     manifest = manifest_path.read_text(encoding="utf-8")
     if not re.search(rf"slug:\s*['\"]{escape_regexp(opts.slug)}['\"]", manifest):
         manifest = insert_after_match(
             manifest,
-            r"const registry = \[\n",
+            r"export const CASE_TYPE_ENTRIES = Object\.freeze\(\[\n",
             # Frozen like every other registry entry.
             f"  Object.freeze({{\n"
             f"    slug: '{opts.slug}',\n"
@@ -592,17 +587,20 @@ def scaffold(opts: ScaffoldOptions) -> None:
         insertion = f"""  'reviewer-{opts.slug}': {{
     userId: 'user-reviewer-{opts.slug}',
     displayName: 'Alex Reviewer {display_slug}',
-    groups: ['Reviewers - {js_display}'],
+    groups: ['Cases - {js_display} Write'],
+    roles: {{ reviews: ['{opts.slug}'] }},
   }},
   'case-type-owner-{opts.slug}': {{
     userId: 'user-case-type-owner-{opts.slug}',
     displayName: 'Cam Case Type Owner {display_slug}',
-    groups: ['CaseTypeOwner - {js_display}'],
+    groups: ['Cases - {js_display} Write'],
+    roles: {{ ownsCaseTypes: ['{opts.slug}'] }},
   }},
   'journey-owner-{opts.slug}': {{
     userId: 'user-journey-owner-{opts.slug}',
     displayName: 'Jules Journey Owner {display_slug}',
-    groups: ['JourneyOwner - {js_display}'],
+    groups: ['Cases - {js_display} Write'],
+    roles: {{ journeyOwnerOf: ['{opts.slug}'] }},
   }},
 """
         personas = insert_before(personas, "};\n", insertion, personas_path)

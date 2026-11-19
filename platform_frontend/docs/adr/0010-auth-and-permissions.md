@@ -3,7 +3,9 @@
 ## Status
 
 Accepted. Still current; [ADR-0022](./0022-two-axis-role-model.md) extends the
-capability model without changing SharePoint ACLs as the security boundary.
+capability model without changing SharePoint ACLs as the security boundary, and
+[ADR-0059](./0059-roles-live-in-a-list-groups-only-open-lists.md) moves roles
+out of groups into the `CoraUserRoles` list, leaving groups to open Case lists.
 
 > **Amended by [ADR-0022] (Jul 2026, itself amended Aug 2026).** The group→capability
 > model is reworked onto two axes — **functional** groups (`Reviewers`, `Frontline`,

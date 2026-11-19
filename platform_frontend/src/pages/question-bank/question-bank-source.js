@@ -61,7 +61,6 @@ import { QUESTION_BANK_IMPORTERS } from '../../../case-types/manifest.js';
  *   slug: string,
  *   version?: string,
  *   history?: BankHistoryEntry[],
- *   eligibleGroups?: string[],
  *   labels?: Label[],
  *   outcomeOptions?: OutcomeOption[],
  *   defaultOutcomeId?: string,
