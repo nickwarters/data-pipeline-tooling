@@ -30,6 +30,21 @@ The pre-release smoke gate must demonstrate that the list exists for an allowed
 reader, is hidden from an unrelated persona, and denies write permissions to a
 read-only persona.
 
+### Permission level: `CORA Contribute (no delete)`
+
+Every group that writes to a `Cases-{Slug}` list holds the custom permission
+level **`CORA Contribute (no delete)`**, never plain **Contribute**. Create it
+once at the site by copying Contribute and clearing **Delete Items** and
+**Delete Versions**; keep **View Items**, **Add Items**, **Edit Items** and
+**Open Items**. Nothing the app does deletes a Case — a Case leaves the work by
+being voided, which is a status — so Delete Items is access no user needs, and
+a Case deleted through the REST API takes its Answers, Conversation and history
+with it. Grant the same level on every environment's copy of the list.
+
+The ACL smoke gate checks it: state `"delete": "deny"` on every persona that
+writes, and a writer holding plain Contribute fails with `expected write without
+delete`.
+
 ### Columns
 
 **The column schema is the [`Cases-{slug}` column
