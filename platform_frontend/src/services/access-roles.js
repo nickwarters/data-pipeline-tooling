@@ -1,9 +1,12 @@
 // @ts-check
 import {
+  allCaseListGroups,
+  caseListGroupNames,
   caseTypeGroupNames,
   frontlineListAccessGroupName,
   permissions,
 } from './permissions.js';
+import { roleCaseTypeEntry, roleFlagEntry } from './user-roles.js';
 
 /** @typedef {{ slug: string, displayName: string }} CaseTypeRef */
 /** @typedef {'reviewer' | 'reviewer-manager' | 'controls' | 'case-type-owner' | 'journey-owner'} AccessRoleId */
@@ -15,15 +18,18 @@ import {
  */
 
 /**
- * A role the person holds; `missing` counts the groups that would complete it, and a per-Case-Type role with no Case Type is an orphan.
+ * A role the person holds; `missing` counts the parts that would complete it, and a per-Case-Type role with no Case Type is an orphan.
  *
  * @typedef {RoleRef & { complete: boolean, missing: string[] }} HeldRole
  */
 
 /**
- * The groups a role is made of: `groups` are added on a grant and removed on a revoke, `requires` are only ever added.
+ * What a role is made of. Each part is a group or a role entry of the person's
+ * `CoraUserRoles` row, and the two are planned together as one list: `parts`
+ * are added on a grant and removed on a revoke, `requires` are only ever
+ * added, and holding any one of `holders` is what holding the role means.
  *
- * @typedef {{ groups: string[], requires: string[] }} RoleGroups
+ * @typedef {{ parts: string[], requires: string[], holders: string[] }} RoleParts
  */
 
 /**
@@ -31,17 +37,25 @@ import {
  *   id: AccessRoleId,
  *   label: string,
  *   perCaseType: boolean,
- *   groups: (caseType: CaseTypeRef) => string[],
- *   requires: (caseType: CaseTypeRef) => string[],
+ *   parts: (caseType: CaseTypeRef) => RoleParts,
  *   grantNote?: (caseType: string) => string,
  * }} RoleSpec
  */
 
+// While the roles move from groups to the roles row, a role is held through
+// either and given through both, so each part list leads with the old group
+// and its row entry — the two ways a person can be found to hold it — and then
+// names the new Case list group that opens what the role works on.
+
 /** @param {CaseTypeRef} caseType */
-const reviewerGroups = (caseType) => [
+const legacyReviewerGroups = (caseType) => [
   caseTypeGroupNames(caseType.displayName).listAccess,
   permissions.reviewer,
 ];
+
+/** @param {CaseTypeRef} caseType */
+const caseListWrite = (caseType) =>
+  caseListGroupNames(caseType.displayName).write;
 
 // The internal roles a Maintainer may grant; the Maintainer and frontline roles are deliberately absent.
 /** @type {readonly RoleSpec[]} */
@@ -50,32 +64,52 @@ const SPECS = [
     id: 'reviewer',
     label: 'Reviewer',
     perCaseType: true,
-    groups: reviewerGroups,
-    requires: () => [],
+    parts: (caseType) => {
+      const entry = roleCaseTypeEntry('reviews', caseType.slug);
+      return {
+        parts: [
+          ...legacyReviewerGroups(caseType),
+          entry,
+          caseListWrite(caseType),
+        ],
+        requires: [],
+        holders: [caseTypeGroupNames(caseType.displayName).listAccess, entry],
+      };
+    },
   },
   {
     id: 'reviewer-manager',
     label: 'Reviewer Manager',
     perCaseType: false,
-    groups: () => [permissions.reviewerManager],
-    requires: () => [],
+    parts: () =>
+      siteWide(
+        permissions.reviewerManager,
+        'reviewerManager',
+        allCaseListGroups.read
+      ),
   },
   {
     id: 'controls',
     label: 'Controls',
     perCaseType: false,
-    groups: () => [permissions.controls],
-    requires: () => [],
+    parts: () =>
+      siteWide(permissions.controls, 'controls', allCaseListGroups.write),
   },
   {
     id: 'case-type-owner',
     label: 'Case Type Owner',
     perCaseType: true,
-    groups: (caseType) => [
-      caseTypeGroupNames(caseType.displayName).caseTypeOwner,
-    ],
-    // The owner group is not a list ACL, so reading the list needs Reviewer access as well.
-    requires: reviewerGroups,
+    parts: (caseType) => {
+      const group = caseTypeGroupNames(caseType.displayName).caseTypeOwner;
+      const entry = roleCaseTypeEntry('ownsCaseTypes', caseType.slug);
+      return {
+        parts: [group, entry, caseListWrite(caseType)],
+        // The old owner group opens no list, so reading it through the old
+        // groups needs Reviewer access as well.
+        requires: legacyReviewerGroups(caseType),
+        holders: [group, entry],
+      };
+    },
     grantNote: (caseType) =>
       `Also gives Reviewer access to ${caseType} when that is missing.`,
   },
@@ -83,17 +117,37 @@ const SPECS = [
     id: 'journey-owner',
     label: 'Journey Owner',
     perCaseType: true,
-    groups: (caseType) => [
-      caseTypeGroupNames(caseType.displayName).journeyOwner,
-    ],
-    // Frontline provisioning owns this group, so a revoke never takes it away.
-    requires: (caseType) => [
-      frontlineListAccessGroupName(caseType.displayName),
-    ],
+    parts: (caseType) => {
+      const group = caseTypeGroupNames(caseType.displayName).journeyOwner;
+      const entry = roleCaseTypeEntry('journeyOwnerOf', caseType.slug);
+      return {
+        parts: [group, entry, caseListWrite(caseType)],
+        // Frontline provisioning owns this group, so a revoke never takes it away.
+        requires: [frontlineListAccessGroupName(caseType.displayName)],
+        holders: [group, entry],
+      };
+    },
     grantNote: (caseType) =>
       `Also gives frontline access to ${caseType} Cases when that is missing.`,
   },
 ];
+
+/**
+ * A site-wide role: its old group, its yes/no column, and the group opening every Case list it reads.
+ *
+ * @param {string} group
+ * @param {import('./user-roles.js').RoleFlag} flag
+ * @param {string} allCasesGroup
+ * @returns {RoleParts}
+ */
+function siteWide(group, flag, allCasesGroup) {
+  const entry = roleFlagEntry(flag);
+  return {
+    parts: [group, entry, allCasesGroup],
+    requires: [],
+    holders: [group, entry],
+  };
+}
 
 /** @type {readonly { id: AccessRoleId, label: string, perCaseType: boolean }[]} */
 export const ACCESS_ROLES = SPECS.map(({ id, label, perCaseType }) => ({
@@ -121,27 +175,28 @@ function caseTypeOf(role, caseTypes) {
 }
 
 /**
- * The groups a role is made of, or `null` when the role is not one this page can manage.
+ * What a role is made of, or `null` when the role is not one this page can manage.
  *
  * @param {RoleRef} role
  * @param {readonly CaseTypeRef[]} caseTypes
- * @returns {RoleGroups | null}
+ * @returns {RoleParts | null}
  */
-export function roleGroups(role, caseTypes) {
+export function roleParts(role, caseTypes) {
   const spec = specFor(role.id);
   const caseType = caseTypeOf(role, caseTypes);
   if (!spec || caseType === undefined) return null;
-  // A Reviewer with no Case Type is only the site-wide group, which opens no list.
+  // A Reviewer with no Case Type is only the site-wide group or flag, which opens no list.
   if (caseType === null && role.id === 'reviewer') {
-    return { groups: [permissions.reviewer], requires: [] };
+    const entry = roleFlagEntry('reviewer');
+    return {
+      parts: [permissions.reviewer, entry],
+      requires: [],
+      holders: [permissions.reviewer, entry],
+    };
   }
   // A role must name a Case Type exactly when it is per Case Type.
   if ((caseType === null) === spec.perCaseType) return null;
-  const forCaseType = /** @type {CaseTypeRef} */ (caseType);
-  return {
-    groups: spec.groups(forCaseType),
-    requires: spec.requires(forCaseType),
-  };
+  return spec.parts(/** @type {CaseTypeRef} */ (caseType));
 }
 
 /**
@@ -165,25 +220,25 @@ export function allRoles(caseTypes) {
 }
 
 /**
- * The group whose members hold a role, which is also how a person is found to hold it.
+ * The groups and role entries whose holders hold a role, which is also how a person is found to hold it.
  *
  * @param {RoleRef} role
  * @param {readonly CaseTypeRef[]} caseTypes
- * @returns {string | null}
+ * @returns {string[]}
  */
-export function holderGroup(role, caseTypes) {
-  return roleGroups(role, caseTypes)?.groups[0] ?? null;
+export function roleHolders(role, caseTypes) {
+  return roleParts(role, caseTypes)?.holders ?? [];
 }
 
 /**
- * The groups of a role `heldRoles` found, which is always one `roleGroups` can describe.
+ * The parts of a role `heldRoles` found, which is always one `roleParts` can describe.
  *
  * @param {RoleRef} held
  * @param {readonly CaseTypeRef[]} caseTypes
- * @returns {RoleGroups}
+ * @returns {RoleParts}
  */
 function heldParts(held, caseTypes) {
-  return /** @type {RoleGroups} */ (roleGroups(held, caseTypes));
+  return /** @type {RoleParts} */ (roleParts(held, caseTypes));
 }
 
 /**
@@ -193,7 +248,7 @@ function heldParts(held, caseTypes) {
 const sameRole = (a, b) => a.id === b.id && a.caseType === b.caseType;
 
 /**
- * The roles a person holds, read off their groups, each flagged when it is only half provisioned.
+ * The roles a person holds, read off their groups and role entries, each flagged when it is only half provisioned.
  *
  * @param {readonly string[]} personGroups
  * @param {readonly CaseTypeRef[]} caseTypes
@@ -204,9 +259,9 @@ export function heldRoles(personGroups, caseTypes) {
   /** @type {HeldRole[]} */
   const held = [];
   for (const role of allRoles(caseTypes)) {
-    const parts = roleGroups(role, caseTypes);
-    if (!parts || !has(parts.groups[0])) continue;
-    const missing = [...parts.requires, ...parts.groups].filter(
+    const parts = roleParts(role, caseTypes);
+    if (!parts || !parts.holders.some(has)) continue;
+    const missing = [...parts.requires, ...parts.parts].filter(
       (group) => !has(group)
     );
     held.push({ ...role, complete: missing.length === 0, missing });
@@ -214,7 +269,10 @@ export function heldRoles(personGroups, caseTypes) {
   const hasCaseTypeReviewer = held.some(
     (role) => role.id === 'reviewer' && role.caseType !== null
   );
-  if (has(permissions.reviewer) && !hasCaseTypeReviewer) {
+  const orphanReviewer = /** @type {RoleParts} */ (
+    roleParts({ id: 'reviewer', caseType: null }, caseTypes)
+  );
+  if (orphanReviewer.holders.some(has) && !hasCaseTypeReviewer) {
     held.push({ id: 'reviewer', caseType: null, complete: false, missing: [] });
   }
   return held;
@@ -238,11 +296,11 @@ function caseTypeNameOf(role, caseTypes) {
  * @returns {{ groups: string[], refusal: string | null }}
  */
 export function planGrant(role, personGroups, caseTypes) {
-  const parts = roleGroups(role, caseTypes);
+  const parts = roleParts(role, caseTypes);
   if (!parts || (specFor(role.id)?.perCaseType && role.caseType === null)) {
     return { groups: [], refusal: 'Choose a Case Type.' };
   }
-  const groups = [...parts.requires, ...parts.groups].filter(
+  const groups = [...parts.requires, ...parts.parts].filter(
     (group) => !personGroups.includes(group)
   );
   return groups.length === 0
@@ -251,7 +309,10 @@ export function planGrant(role, personGroups, caseTypes) {
 }
 
 /**
- * What taking a role away would remove, keeping any group another held role still needs.
+ * What taking a role away would remove, keeping any part another held role
+ * still needs. A frontline party of a Case Type is given its Case list's Write
+ * group by the notifications pipeline, not by this page, so a person who holds
+ * that type's frontline group keeps the Write group too.
  *
  * @param {RoleRef} role
  * @param {readonly string[]} personGroups
@@ -259,17 +320,17 @@ export function planGrant(role, personGroups, caseTypes) {
  * @returns {{ groups: string[], refusal: string | null }}
  */
 export function planRevoke(role, personGroups, caseTypes) {
-  const parts = roleGroups(role, caseTypes);
+  const parts = roleParts(role, caseTypes);
   const others = heldRoles(personGroups, caseTypes).filter(
     (held) => !sameRole(held, role)
   );
-  if (!parts || !personGroups.includes(parts.groups[0])) {
+  if (!parts || !parts.holders.some((part) => personGroups.includes(part))) {
     return { groups: [], refusal: 'They do not hold this access.' };
   }
   const dependent = others.find((held) => {
     if (held.caseType !== role.caseType) return false;
     const theirs = heldParts(held, caseTypes);
-    return theirs.requires.some((group) => parts.groups.includes(group));
+    return theirs.requires.some((group) => parts.parts.includes(group));
   });
   if (dependent) {
     const spec = specFor(dependent.id);
@@ -279,14 +340,21 @@ export function planRevoke(role, personGroups, caseTypes) {
       refusal: `Remove ${spec?.label} for ${caseTypeName} first.`,
     };
   }
-  const neededElsewhere = new Set(
-    others.flatMap((held) => {
+  const neededElsewhere = new Set([
+    ...others.flatMap((held) => {
       const theirs = heldParts(held, caseTypes);
-      return [...theirs.groups, ...theirs.requires];
-    })
-  );
+      return [...theirs.parts, ...theirs.requires];
+    }),
+    ...caseTypes
+      .filter((caseType) =>
+        personGroups.includes(
+          frontlineListAccessGroupName(caseType.displayName)
+        )
+      )
+      .map(caseListWrite),
+  ]);
   return {
-    groups: parts.groups.filter(
+    groups: parts.parts.filter(
       (group) => personGroups.includes(group) && !neededElsewhere.has(group)
     ),
     refusal: null,

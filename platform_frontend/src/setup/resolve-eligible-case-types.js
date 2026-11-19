@@ -1,5 +1,6 @@
 // @ts-check
 import { caseTypeGroupNames, permissions } from '../services/permissions.js';
+import { noRoles } from '../services/user-roles.js';
 import {
   CASE_TYPE_IMPORTERS,
   displayNameFor,
@@ -227,22 +228,43 @@ async function loadCaseTypeSources(slugs, importers) {
  * assignment filter to each per-list query. Configured `eligibleGroups` and
  * `reviewerGroup` remain aliases for a type's access groups.
  *
+ * The `CoraUserRoles` row grants the same sources as the groups it is
+ * replacing: a broad role's flag spans every source, and a slug in any of its
+ * per-type columns grants that type. Either the groups or the row is enough.
+ *
  * @param {string[]} userGroups
  * @param {CaseTypeSource[]} caseTypes
+ * @param {import('../services/user-roles.js').UserRoles} [userRoles]
  * @returns {CaseSource[]}
  */
-export function resolveCaseSourcesFromCaseTypes(userGroups, caseTypes) {
-  const eligible = userGroups.some((group) =>
-    [
-      permissions.reviewerManager,
-      permissions.controls,
-      permissions.adviser,
-      permissions.responsiblePartyManager,
-      permissions.maintainer,
-    ].includes(group)
-  )
+export function resolveCaseSourcesFromCaseTypes(
+  userGroups,
+  caseTypes,
+  userRoles = noRoles()
+) {
+  const broad =
+    userRoles.reviewerManager ||
+    userRoles.controls ||
+    userRoles.adviser ||
+    userRoles.responsiblePartyManager ||
+    userGroups.some((group) =>
+      [
+        permissions.reviewerManager,
+        permissions.controls,
+        permissions.adviser,
+        permissions.responsiblePartyManager,
+        permissions.maintainer,
+      ].includes(group)
+    );
+  const rowTypes = new Set([
+    ...userRoles.reviews,
+    ...userRoles.ownsCaseTypes,
+    ...userRoles.journeyOwnerOf,
+  ]);
+  const eligible = broad
     ? caseTypes
-    : caseTypes.filter(({ config, reviewerGroup, displayName }) => {
+    : caseTypes.filter(({ slug, config, reviewerGroup, displayName }) => {
+        if (rowTypes.has(slug)) return true;
         // A nameless Case Type contributes NO derived names. `displayName` is
         // required by the typedef and `displayNameFor()` throws before a
         // nameless source can be built, so no production caller reaches this —
@@ -284,8 +306,12 @@ export function resolveCaseSourcesFromCaseTypes(userGroups, caseTypes) {
  * widened the production API with a second way in for no behaviour the
  * `importers` option does not already reach.
  *
+ * `userRoles` is the current user's `CoraUserRoles` row; omitted, the user
+ * holds no row and only their groups count.
+ *
  * @typedef {{
- *   importers?: Record<string, import('../../case-types/manifest.js').CaseTypeImporter>
+ *   importers?: Record<string, import('../../case-types/manifest.js').CaseTypeImporter>,
+ *   userRoles?: import('../services/user-roles.js').UserRoles
  * }} ResolveOptions
  */
 
@@ -306,7 +332,11 @@ async function resolveAvailableCaseSources(userGroups, options) {
   );
 
   return {
-    caseSources: resolveCaseSourcesFromCaseTypes(userGroups, sources),
+    caseSources: resolveCaseSourcesFromCaseTypes(
+      userGroups,
+      sources,
+      options.userRoles
+    ),
     unavailableCaseTypes: unavailable,
   };
 }

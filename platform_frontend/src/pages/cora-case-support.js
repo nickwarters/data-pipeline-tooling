@@ -20,7 +20,7 @@ import {
   standardCaseColumns,
 } from '../views/case-columns.js';
 import { dataTableView } from '../views/data-table.js';
-import { caseTypeGroupNames } from '../services/permissions.js';
+import { readRoleHolders } from '../services/access-change.js';
 import { reopenedDueDate } from '../evaluators/case-transitions.js';
 import {
   EMPTY_REASSIGN_FORM,
@@ -502,7 +502,7 @@ function reassignView(route, row, form, tools) {
   const displayName =
     route.caseTypes.find((type) => type.slug === row.caseType)?.displayName ??
     row.caseType;
-  return reassignFormView(form, caseTypeGroupNames(displayName).listAccess, {
+  return reassignFormView(form, `the ${displayName} Reviewers`, {
     onReviewer: (reviewer) =>
       tools.dispatch({ type: 'case-support/reassign-reviewer', reviewer }),
     onReason: (reason) =>
@@ -993,25 +993,25 @@ export function createRouteSlice(
         supportActions = {
           openReassign(row) {
             tools.dispatch({ type: 'case-support/reassign-opened' });
-            void readClient
-              .listGroupMembers(
-                caseTypeGroupNames(source.displayName).listAccess
-              )
-              .then(
-                (members) => {
-                  if (!tools.isActive()) return;
-                  tools.dispatch({
-                    type: 'case-support/reassign-candidates-loaded',
-                    candidates: reviewerCandidates(members, row),
-                  });
-                },
-                (error) =>
-                  fail(
-                    error,
-                    'case-support/reassign-candidates-failed',
-                    'The reviewer group could not be read.'
-                  )
-              );
+            void readRoleHolders(
+              readClient,
+              { id: 'reviewer', caseType: source.slug },
+              [source]
+            ).then(
+              (members) => {
+                if (!tools.isActive()) return;
+                tools.dispatch({
+                  type: 'case-support/reassign-candidates-loaded',
+                  candidates: reviewerCandidates(members, row),
+                });
+              },
+              (error) =>
+                fail(
+                  error,
+                  'case-support/reassign-candidates-failed',
+                  'The Reviewers could not be read.'
+                )
+            );
           },
           submitReassign(row, form) {
             tools.dispatch({ type: 'case-support/reassign-saving' });

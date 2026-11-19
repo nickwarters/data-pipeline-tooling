@@ -19,19 +19,20 @@ Four things to know:
   entry arrives in exactly one window, and the overlap between windows re-reads
   it as a no-op.
 - **A change that did not finish is two entries, not one.** The platform writes
-  the entry *before* it changes any group. If a group write then fails it
-  appends a second entry whose `outcome` is `not-applied` (nothing was changed)
-  or `partly-applied` (some groups were), and whose `relates_to` names the
-  first. The follow-up's `reason` is the platform's own message naming the group
-  that failed, not the Maintainer's, and its `changes` lists only the groups that
-  did change (none for `not-applied`). The access that actually took effect is
+  the entry *before* it changes anything. It then writes the person's
+  `CoraUserRoles` row, if the change touches it, and each group in turn. If one
+  of those writes fails it appends a second entry whose `outcome` is
+  `not-applied` (nothing was changed) or `partly-applied` (some of it was), and
+  whose `relates_to` names the first. The follow-up's `reason` is the platform's
+  own message naming the group or row that failed, not the Maintainer's, and its
+  `changes` lists only what did change (none for `not-applied`). The access that actually took effect is
   the `recorded` entries minus those a `not-applied` entry relates to, and for a
   `partly-applied` one the first entry's `changes` over-states what happened.
 - **It holds personal data.** `target_login`, `target_name`, `author_name` and
   `author_title` identify people, and `reason` is free text a Maintainer typed,
   which can say anything about why someone needed access. Treat the raw and
   silver tables as personal data wherever they are copied. `changes` names SharePoint
-  groups, not people.
+  groups and role entries, not people.
 
 The site and list GUID are placeholders. `SITE` and `LIST_ID` in
 `pipelines/cora_access_log/schema.py` must come from the tenant, and the
@@ -77,7 +78,7 @@ One row per observation of one list item, in the list's own column names
 | `access_role` | `AccessRole` | str | No | | The role's id, e.g. `reviewer`, `reviewer-manager`, `controls`, `case-type-owner`, `journey-owner`. Not constrained: the platform adds roles over time. |
 | `case_type` | `CaseType` | str | Yes | | The Case Type slug for a per-Case-Type role; null for a site-wide one (the platform writes an empty string). |
 | `reason` | `Reason` | str | No | | The Maintainer's reason, required by the page; on a `not-applied` or `partly-applied` entry, the platform's message naming the group that failed. Free text. **PII risk.** |
-| `changes` | `Changes` | str | Yes | | JSON list of `{field, before, after}`, one per SharePoint group, where `field` is the group's name and `before`/`after` say whether the person was a member. Kept as text. |
+| `changes` | `Changes` | str | Yes | | JSON list of `{field, before, after}`, one per SharePoint group or role entry the change touched, where `field` is the group's name or the role entry and `before`/`after` say whether the person held it. A role entry is a column of the person's `CoraUserRoles` row, spelled `CoraUserRoles: Controls` for a yes/no column or `CoraUserRoles: Reviews = complaints` for a Case Type in a multi-choice one; it carries a colon, which a group name never does. Entries appear from the frontend's ADR-0059 phase 3 on. Kept as text. |
 | `outcome` | `Outcome` | str | No | `OneOf("recorded", "not-applied", "partly-applied")` | Whether this entry records the change or how it fell short. Anything else is quarantined. |
 | `relates_to` | `RelatesTo` | str | Yes | | On a `not-applied` or `partly-applied` entry, the `id` of the entry it follows; null otherwise (the platform writes an empty string). |
 | `created` | `Created` | datetime | No | | When the entry was written, stamped by SharePoint. |

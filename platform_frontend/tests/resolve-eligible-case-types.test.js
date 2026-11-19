@@ -9,6 +9,7 @@ import {
   resolveAppCaseSources,
 } from '../src/setup/resolve-eligible-case-types.js';
 import { permissions } from '../src/services/permissions.js';
+import { noRoles } from '../src/services/user-roles.js';
 import { CASE_TYPE_IMPORTERS } from '../case-types/manifest.js';
 import { captureConsoleError } from './_console.js';
 import { caseSourcesFor } from './_case-sources-for.js';
@@ -582,6 +583,102 @@ test('resolveAppCaseSources: threads only a Case Type Owner eligible source to a
   );
   assert.deepEqual(context.journeyCaseSources, []);
   assert.deepEqual(context.unavailableCaseTypes, []);
+});
+
+// ===== the CoraUserRoles row grants sources alongside the groups =====
+
+test('resolveCaseSourcesFromCaseTypes: a Case Type in any per-type column of the roles row grants its source', () => {
+  const caseTypes = [
+    {
+      slug: 'stress-review',
+      listName: 'Cases-StressReview',
+      displayName: 'Stress Review',
+      config: minimalConfig(),
+    },
+    {
+      slug: 'complaints',
+      listName: 'Cases-Complaints',
+      displayName: 'Complaints',
+      config: minimalConfig(),
+    },
+  ];
+  for (const column of /** @type {const} */ ([
+    'reviews',
+    'ownsCaseTypes',
+    'journeyOwnerOf',
+  ])) {
+    const sources = resolveCaseSourcesFromCaseTypes([], caseTypes, {
+      ...noRoles(),
+      [column]: ['stress-review'],
+    });
+    assert.deepEqual(
+      sources.map((source) => source.slug),
+      ['stress-review'],
+      column
+    );
+  }
+});
+
+test('resolveCaseSourcesFromCaseTypes: each broad role in the roles row spans every source', () => {
+  const caseTypes = [
+    {
+      slug: 'stress-review',
+      listName: 'Cases-StressReview',
+      displayName: 'Stress Review',
+      config: minimalConfig(),
+    },
+    {
+      slug: 'complaints',
+      listName: 'Cases-Complaints',
+      displayName: 'Complaints',
+      config: minimalConfig(),
+    },
+  ];
+  for (const flag of /** @type {const} */ ([
+    'reviewerManager',
+    'controls',
+    'adviser',
+    'responsiblePartyManager',
+  ])) {
+    assert.equal(
+      resolveCaseSourcesFromCaseTypes([], caseTypes, {
+        ...noRoles(),
+        [flag]: true,
+      }).length,
+      2,
+      flag
+    );
+  }
+});
+
+test('resolveCaseSourcesFromCaseTypes: the bare Reviewer column grants no Case source', () => {
+  const sources = resolveCaseSourcesFromCaseTypes(
+    [],
+    [
+      {
+        slug: 'complaints',
+        listName: 'Cases-Complaints',
+        displayName: 'Complaints',
+        config: minimalConfig(),
+      },
+    ],
+    { ...noRoles(), reviewer: true }
+  );
+  assert.deepEqual(sources, []);
+});
+
+test('resolveAppCaseSources: the roles row reaches the sources handed to app surfaces', async () => {
+  const context = await quietlyResolveAppCaseSources([], ['complaints'], {
+    userRoles: { ...noRoles(), journeyOwnerOf: ['complaints'] },
+  });
+  assert.deepEqual(
+    context.caseSources.map((source) => source.slug),
+    ['complaints']
+  );
+  assert.deepEqual(
+    context.journeyCaseSources.map((source) => source.slug),
+    ['complaints']
+  );
 });
 
 // ===== per-Case-Type containment at boot =====

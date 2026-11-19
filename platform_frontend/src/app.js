@@ -18,7 +18,11 @@ import { configureSections } from './sections/registry.js';
 import { resolveEnvironment } from './config/environment.js';
 import { createSharePointClient } from './services/create-sharepoint-client.js';
 import { SaveQueue } from './services/save-queue.js';
-import { resolveCapabilities } from './services/permissions.js';
+import {
+  permissions,
+  readUserRoles,
+  resolveCapabilities,
+} from './services/permissions.js';
 import { createChromeState } from './core/chrome-state.js';
 import { Router } from './lib/router.js';
 import { renderBootError } from './lib/boot-error-panel.js';
@@ -52,7 +56,8 @@ async function boot() {
     client.getCurrentUser(),
     client.getCurrentUserGroups(),
   ]);
-  const capabilities = resolveCapabilities(userGroups);
+  const userRoles = await readUserRoles(client, currentUser.id);
+  const capabilities = resolveCapabilities(userGroups, permissions, userRoles);
   const chrome = createChromeState({
     currentUser,
     permissions: capabilities,
@@ -65,7 +70,13 @@ async function boot() {
   // A Case Type module that throws is contained the same way a broken page is:
   // that Case Type is dropped and named in a banner; the app boots.
   const { caseSources, journeyCaseSources, unavailableCaseTypes } =
-    await resolveAppCaseSources(userGroups, capabilities.ownedJourneyCaseTypes);
+    await resolveAppCaseSources(
+      userGroups,
+      capabilities.ownedJourneyCaseTypes,
+      {
+        userRoles,
+      }
+    );
   const allocationSources = allocationSourcesFromCaseSources(
     caseSources,
     capabilities.listAccessCaseTypes

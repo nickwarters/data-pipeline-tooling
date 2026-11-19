@@ -127,7 +127,7 @@ Held by construction — the step builds its frame with
 | Key | Type | Description | Example |
 |-----|------|-------------|---------|
 | `login_name` | `str` | The recipient's **bare** account name, as `shared.account_names.to_bare_account` normalises it — the claims prefix and AD domain stripped. Never blank. | `b.okafor` |
-| `groups` | `list[str]` | A JSON array of SharePoint group names, sorted and de-duplicated. Today always frontline per-Case-Type groups, `Frontline - <Case Type display name>`. Never empty — a login with no group is never produced. | `["Frontline - Complaints"]` |
+| `groups` | `list[str]` | A JSON array of SharePoint group names, sorted and de-duplicated. Today always the two groups that open a Case Type's list for each Case Type the login is a frontline party on: the Case list's `Cases - <Case Type display name> Write` and the older `Frontline - <Case Type display name>`, which the platform still reads while it moves to the first ([frontend ADR-0059](../platform_frontend/docs/adr/0059-roles-live-in-a-list-groups-only-open-lists.md)); the second goes when it stops. Never empty — a login with no group is never produced. | `["Cases - Complaints Write", "Frontline - Complaints"]` |
 
 ### Part C — who appears, and who does not
 
@@ -141,7 +141,7 @@ Frontline is decided by the **role a recipient was selected for**, not by who
 they turned out to be. That matters because one person holding both the Reviewer
 and the Responsible Party role on a Case collapses to a single recipient before
 the file is built: the flag is taken while the roles are still distinguishable,
-so such a person still gets their frontline group.
+so such a person still gets their frontline groups.
 
 The file says what a login must **end up** holding, not what must be *added*.
 Nothing here can see current group membership, and granting a group twice is a

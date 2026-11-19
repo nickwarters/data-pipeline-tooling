@@ -598,10 +598,11 @@ src/
   services/                     # non-UI modules: data, state, auth
     abortable-client.js           # binds a mount-lifetime AbortSignal to a client's Case reads; writes untouched (#545)
     access-roles.js               # THE definition of the internal roles Access can give: which groups
-                                  #   make each one, which are shared with another role, what a grant
-                                  #   adds and a revoke removes, and the role-language copy
+                                  #   and roles-row entries make each one, which are shared with another
+                                  #   role, what a grant adds and a revoke removes, and the role-language copy
     access-change.js              # THE Access Log write order: check the groups can be changed, log
-                                  #   the change, apply each group, then log how far it got if one failed
+                                  #   the change, write the roles row, apply each group, then log how far
+                                  #   it got if one failed; also who holds a role, through either model
     account-name.js
     across-sources.js             # multi-list fan-out: one scoped request per Case source, merged (ADR-0022)
     case-search.js                # the bounded cross-list Case lookup: one over-fetched window per

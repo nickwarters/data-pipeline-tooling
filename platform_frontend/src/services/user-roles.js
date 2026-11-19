@@ -64,6 +64,16 @@ const CASE_TYPE_LISTS = /** @type {RoleCaseTypeList[]} */ (
 );
 
 /**
+ * Whether a part of a role is a role entry rather than a group.
+ *
+ * @param {string} part
+ * @returns {boolean}
+ */
+export function isRoleEntry(part) {
+  return part.startsWith(`${USER_ROLES_LIST_NAME}: `);
+}
+
+/**
  * The roles of somebody with no row: nothing at all.
  *
  * @returns {UserRoles}
