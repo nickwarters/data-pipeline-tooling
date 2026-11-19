@@ -9,8 +9,8 @@ Before doing any non-trivial work in this repo, read:
 1. **[CONTEXT.md](./CONTEXT.md)** — domain language. Use these terms exactly when discussing or coding (`Case Type`, `Question Definition`, `Applicable Question`, `Answer`, `Remediation Action`, `Reviewer`, `Responsible Party`, `Case Type Owner`, `Conversation`, `Outcome`).
 2. **[docs/guide/add-a-page.md](./docs/guide/add-a-page.md)** — the one-page
    authoring path: state → `h()`/`svg()`, actions, effects, route entry, and tests.
-3. **[docs/adr/](./docs/adr/)** — 58 architecture decisions, numbered
-   (`0001`–`0058`). Read the status before relying on an older decision, and do
+3. **[docs/adr/](./docs/adr/)** — 59 architecture decisions, numbered
+   (`0001`–`0059`). Read the status before relying on an older decision, and do
    not deviate from an accepted ADR without surfacing the deviation explicitly.
 
 ## Project overview
@@ -623,6 +623,9 @@ src/
                                   #   then log not-applied if that change failed
     http-sharepoint-client.js
     journey-cases-fetcher.js
+    legacy-groups.js              # THE translation of each pre-roles-list group into role entries and
+                                  #   the new Case list groups; read by the backfill, gone with the
+                                  #   old groups
     live-tail-fetcher.js          # the clamped read of the days the Report Feed cannot cover yet
                                   #   (LIVE_TAIL_MAX_DAYS); signal-unaware, the page binds the lifetime
     mock-sharepoint-client.js
@@ -635,6 +638,8 @@ src/
     save-queue.js
     section-access.js
     team-cases-fetcher.js
+    user-roles.js                 # THE shape of a CoraUserRoles row: its yes/no and per-Case-Type
+                                  #   columns, and the role entries a change is planned in
 
   evaluators/                   # pure logic: applicability, failure, and outcome
     case-lifecycle.js           # pure Case lifecycle predicates, imported downward by services and

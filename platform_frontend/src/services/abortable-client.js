@@ -33,6 +33,8 @@ const SIGNALLED_READS = new Set([
   'listUserGroups',
   'getGroupEditability',
   'listAccessLog',
+  'getUserRoles',
+  'listRoleHolders',
 ]);
 
 /**

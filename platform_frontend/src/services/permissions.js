@@ -76,6 +76,31 @@ export function frontlineListAccessGroupName(displayName) {
   return `Frontline - ${displayName}`;
 }
 
+/**
+ * The two groups that open one Case Type's list: `read` holds Read, and
+ * `write` holds `CORA Contribute (no delete)`. They are access only — what a
+ * member may do there is their `CoraUserRoles` row.
+ *
+ * @param {string} displayName
+ * @returns {{ read: string, write: string }}
+ */
+export function caseListGroupNames(displayName) {
+  return {
+    read: `Cases - ${displayName} Read`,
+    write: `Cases - ${displayName} Write`,
+  };
+}
+
+/**
+ * The two groups that open every Case list at once, for the roles that work
+ * across all Case Types: `read` holds Read and `write` holds `CORA Contribute
+ * (no delete)` on each list.
+ */
+export const allCaseListGroups = Object.freeze({
+  read: 'CORA All Cases Read',
+  write: 'CORA All Cases Write',
+});
+
 /** @type {PermissionsConfig} */
 export const permissions = {
   reviewer: 'Reviewers',

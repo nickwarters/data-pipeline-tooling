@@ -12,6 +12,7 @@ import { declaredBankVersion } from '../lib/bank-version.js';
 import { loadBank } from '../../case-types/load-bank.js';
 import { failureOf } from './save-failure.js';
 import { toStorableText } from '../lib/storable-text.js';
+import { noRoles, roleEntries, withRoleEntries } from './user-roles.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').ListCasesFilter} ListCasesFilter */
@@ -26,6 +27,7 @@ import { toStorableText } from '../lib/storable-text.js';
 /** @typedef {import('../sharepoint-client.js').NewAccessLogEntry} NewAccessLogEntry */
 
 /** @typedef {import('../sharepoint-client.js').VersionedExport} VersionedExport */
+/** @typedef {import('./user-roles.js').UserRoles} UserRoles */
 /** @typedef {PersonResult & { manager?: string, groups?: string[] }} DirectoryPerson */
 
 export class MockSharePointClient {
@@ -40,6 +42,8 @@ export class MockSharePointClient {
    * roadmapItems?: RoadmapItem[],
    * supportLog?: SupportLogEntry[],
    * accessLog?: AccessLogEntry[],
+   * userRoles?: Record<string, Partial<UserRoles>>,
+   * userRolesReadOnly?: boolean,
    * readOnlyGroups?: string[],
    * missingGroups?: string[],
    * now?: () => Date
@@ -55,6 +59,8 @@ export class MockSharePointClient {
     roadmapItems = [],
     supportLog = [],
     accessLog = [],
+    userRoles = {},
+    userRolesReadOnly = false,
     readOnlyGroups = [],
     missingGroups = [],
     now = () => new Date(),
@@ -84,6 +90,15 @@ export class MockSharePointClient {
     this._supportLogCounter = 5000;
     this._accessLog = accessLog.map((entry) => structuredClone(entry));
     this._accessLogCounter = 7000;
+    // Keyed by lower-cased account, as the real list's Title filter is case-insensitive.
+    /** @type {Map<string, UserRoles>} */
+    this._userRoles = new Map(
+      Object.entries(userRoles).map(([account, roles]) => [
+        account.toLowerCase(),
+        { ...noRoles(), ...structuredClone(roles) },
+      ])
+    );
+    this._userRolesReadOnly = userRolesReadOnly;
     this._etagCounter = 1000;
     this._injectNext412 = false;
     /** @type {PatchResult | null} */
@@ -531,6 +546,60 @@ export class MockSharePointClient {
     return this._people.find(
       (person) => person.loginName.toLowerCase() === wanted
     );
+  }
+
+  /**
+   * The fixture row for one person, or no roles for somebody without one.
+   *
+   * @param {string} account
+   * @param {{ signal?: AbortSignal }} [opts]
+   * @returns {Promise<UserRoles>}
+   */
+  async getUserRoles(account, opts = {}) {
+    const roles = this._userRoles.get(account.toLowerCase());
+    return settle(opts.signal, roles ? structuredClone(roles) : noRoles());
+  }
+
+  /**
+   * Everybody whose fixture row holds the entry, named from the directory when it knows them.
+   *
+   * @param {string} entry
+   * @param {{ signal?: AbortSignal }} [opts]
+   * @returns {Promise<PersonResult[]>}
+   */
+  async listRoleHolders(entry, opts = {}) {
+    const holders = [...this._userRoles]
+      .filter(([, roles]) => roleEntries(roles).includes(entry))
+      .map(([account]) => {
+        const person = this._person(account);
+        if (!person) return { loginName: account, displayName: account };
+        const { loginName, displayName, email } = person;
+        return email === undefined
+          ? { loginName, displayName }
+          : { loginName, displayName, email };
+      });
+    return settle(opts.signal, holders);
+  }
+
+  /**
+   * Set and clear entries on a fixture row, creating it when there is none; a read-only list refuses with 403.
+   *
+   * @param {string} account
+   * @param {{ add?: string[], remove?: string[] }} change
+   * @returns {Promise<import('../sharepoint-client.js').GroupMemberWrite>}
+   */
+  async updateUserRoles(account, change) {
+    if (this._userRolesReadOnly) return { ok: false, status: 403 };
+    const key = account.toLowerCase();
+    try {
+      this._userRoles.set(
+        key,
+        withRoleEntries(this._userRoles.get(key) ?? noRoles(), change)
+      );
+    } catch {
+      return { ok: false, status: 400 };
+    }
+    return { ok: true };
   }
 
   /**

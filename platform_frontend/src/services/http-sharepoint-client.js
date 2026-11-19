@@ -1,5 +1,13 @@
 // @ts-check
 import {
+  ROLE_CASE_TYPE_COLUMNS,
+  ROLE_FLAG_COLUMNS,
+  USER_ROLES_LIST_NAME,
+  noRoles,
+  roleEntries,
+  withRoleEntries,
+} from './user-roles.js';
+import {
   toAccountDomain,
   toBareAccount,
   toClaimsLogin,
@@ -59,8 +67,16 @@ const USER_PRINCIPAL = 1;
 const SUPPORT_LOG_LIST_NAME = 'CaseSupportLog';
 const ACCESS_LOG_LIST_NAME = 'CoraAccessLog';
 
-// Lists that are one list for every environment, because the records are about shared groups.
-const UNPREFIXED_LISTS = new Set([ACCESS_LOG_LIST_NAME]);
+// Lists that are one list for every environment, because the records are about shared groups and roles.
+const UNPREFIXED_LISTS = new Set([ACCESS_LOG_LIST_NAME, USER_ROLES_LIST_NAME]);
+
+const USER_ROLES_SELECT =
+  '$select=Id,Title,' +
+  [
+    ...Object.values(ROLE_FLAG_COLUMNS),
+    ...Object.values(ROLE_CASE_TYPE_COLUMNS),
+  ].join(',') +
+  ',Person/Title,Person/Name,Person/EMail&$expand=Person';
 
 const ACCESS_LOG_SELECT =
   '$select=Id,Title,TargetName,AccessAction,AccessRole,CaseType,Reason,' +
@@ -739,6 +755,108 @@ export class HttpSharePointClient {
       throw new Error('The Access Log did not return an id for the new entry');
     }
     return String(id);
+  }
+
+  /**
+   * The roles one person's `CoraUserRoles` row holds; somebody with no row holds none.
+   *
+   * @param {string} account
+   * @param {{ signal?: AbortSignal }} [opts]
+   * @returns {Promise<import('./user-roles.js').UserRoles>}
+   */
+  async getUserRoles(account, opts = {}) {
+    const item = await this._findUserRolesItem(account, opts.signal);
+    return item ? rolesFromItem(item) : noRoles();
+  }
+
+  /**
+   * Everybody whose row holds one role entry, as people.
+   *
+   * The row is read whole and narrowed here: a multi-choice column cannot be
+   * indexed, so a filter on it would stop working once the list passes the
+   * List View Threshold, and this list holds a row for every frontline person.
+   *
+   * @param {string} entry
+   * @param {{ signal?: AbortSignal }} [opts]
+   * @returns {Promise<PersonResult[]>}
+   */
+  async listRoleHolders(entry, opts = {}) {
+    const items = await this._getAllPages(
+      `${this._listItemsUrl(USER_ROLES_LIST_NAME)}?${USER_ROLES_SELECT}&$top=5000`,
+      opts.signal
+    );
+    return items.flatMap((raw) => {
+      const item = /** @type {Record<string, unknown>} */ (raw);
+      if (!roleEntries(rolesFromItem(item)).includes(entry)) return [];
+      const person = /** @type {Record<string, unknown> | null} */ (
+        item.Person && typeof item.Person === 'object' ? item.Person : null
+      );
+      this._learnLogin(person?.Name);
+      const loginName = String(item.Title ?? '');
+      if (!loginName) return [];
+      const displayName = String(person?.Title ?? loginName);
+      return typeof person?.EMail === 'string' && person.EMail !== ''
+        ? [{ loginName, displayName, email: person.EMail }]
+        : [{ loginName, displayName }];
+    });
+  }
+
+  /**
+   * Set and clear entries on one person's row, creating it when they have none; a failure comes back as a status.
+   *
+   * The row is read and written back against its own ETag, so a change made by
+   * somebody else in between fails with 412 rather than being overwritten.
+   *
+   * @param {string} account
+   * @param {{ add?: string[], remove?: string[] }} change
+   * @returns {Promise<import('../sharepoint-client.js').GroupMemberWrite>}
+   */
+  async updateUserRoles(account, change) {
+    try {
+      const found = await this._findUserRolesItem(account);
+      if (!found) {
+        await this._write(
+          this._listItemsUrl(USER_ROLES_LIST_NAME),
+          'POST',
+          {},
+          JSON.stringify({
+            Title: account,
+            PersonId: await this._resolveUserId(account),
+            ...itemFromRoles(withRoleEntries(noRoles(), change)),
+          })
+        );
+        return { ok: true };
+      }
+      const url = this._listItemUrl(USER_ROLES_LIST_NAME, String(found.Id));
+      const current = await this._read(`${url}?${USER_ROLES_SELECT}`);
+      await this._write(
+        url,
+        'PATCH',
+        { 'If-Match': readEtag(current) || '*' },
+        JSON.stringify(
+          itemFromRoles(withRoleEntries(rolesFromItem(current), change))
+        )
+      );
+      return { ok: true };
+    } catch (err) {
+      return membershipWriteFailure(err);
+    }
+  }
+
+  /**
+   * One person's row, found on the indexed Title column that holds their bare account.
+   *
+   * @param {string} account
+   * @param {AbortSignal} [signal]
+   * @returns {Promise<Record<string, unknown> | null>}
+   */
+  async _findUserRolesItem(account, signal) {
+    const filter = `Title eq '${escapeOData(account)}'`;
+    const [item] = await this._readPage(
+      `${this._listItemsUrl(USER_ROLES_LIST_NAME)}?$filter=${encodeURIComponent(filter)}&${USER_ROLES_SELECT}&$top=1`,
+      signal
+    );
+    return item ? /** @type {Record<string, unknown>} */ (item) : null;
   }
 
   /**
@@ -1922,6 +2040,56 @@ function accessLogEntryFromItem(item) {
         : 'recorded',
     ...logStampFromItem(item),
   };
+}
+
+/**
+ * One `CoraUserRoles` item as roles; a yes/no column is set only by `true`, and
+ * a multi-choice column arrives as an array, or under `results` from an older
+ * response shape.
+ *
+ * @param {Record<string, unknown>} item
+ * @returns {import('./user-roles.js').UserRoles}
+ */
+function rolesFromItem(item) {
+  const roles = noRoles();
+  for (const [flag, column] of Object.entries(ROLE_FLAG_COLUMNS)) {
+    roles[/** @type {import('./user-roles.js').RoleFlag} */ (flag)] =
+      item?.[column] === true;
+  }
+  for (const [list, column] of Object.entries(ROLE_CASE_TYPE_COLUMNS)) {
+    const raw = /** @type {any} */ (item?.[column]);
+    const values = Array.isArray(raw)
+      ? raw
+      : Array.isArray(raw?.results)
+        ? raw.results
+        : [];
+    roles[/** @type {import('./user-roles.js').RoleCaseTypeList} */ (list)] =
+      values.map(String);
+  }
+  return roles;
+}
+
+/**
+ * Roles as the columns a `CoraUserRoles` write sends. Each multi-choice column
+ * carries its collection type, which a JSON-light write needs to accept an
+ * array for it.
+ *
+ * @param {import('./user-roles.js').UserRoles} roles
+ * @returns {Record<string, unknown>}
+ */
+function itemFromRoles(roles) {
+  /** @type {Record<string, unknown>} */
+  const item = {};
+  for (const [flag, column] of Object.entries(ROLE_FLAG_COLUMNS)) {
+    item[column] =
+      roles[/** @type {import('./user-roles.js').RoleFlag} */ (flag)];
+  }
+  for (const [list, column] of Object.entries(ROLE_CASE_TYPE_COLUMNS)) {
+    item[`${column}@odata.type`] = 'Collection(Edm.String)';
+    item[column] =
+      roles[/** @type {import('./user-roles.js').RoleCaseTypeList} */ (list)];
+  }
+  return item;
 }
 
 /**

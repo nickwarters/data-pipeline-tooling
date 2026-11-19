@@ -249,6 +249,68 @@ serve the Case itself, including from a notification's deep link.
 
 ---
 
+## 6a. Moving to the roles list (being rolled out)
+
+[ADR-0059](../adr/0059-roles-live-in-a-list-groups-only-open-lists.md) replaces
+the per-type groups above with a **Read** and a **Write** group per Case list
+and one `CoraUserRoles` row per person. Until that ADR's phase 4 the app reads
+the groups above, so keep provisioning them; provision these beside them.
+
+### `CoraUserRoles` list
+
+One site-wide list, **not** environment-prefixed, for the same reason as
+`CoraAccessLog`.
+
+| Column (internal name)    | Type                                    | Indexed | Notes                                                                       |
+| ------------------------- | --------------------------------------- | :-----: | --------------------------------------------------------------------------- |
+| `Title`                   | Single line of text                     |  **✓**  | The person's bare account; every read filters on it. Enforce unique values. |
+| `Person`                  | Person, single value                    |  **✓**  | The same person, for the SharePoint UI. Enforce unique values.              |
+| `Adviser`                 | Yes/No                                  |         | Default No.                                                                 |
+| `Controls`                | Yes/No                                  |         | Default No.                                                                 |
+| `ReviewerManager`         | Yes/No                                  |         | Default No.                                                                 |
+| `ResponsiblePartyManager` | Yes/No                                  |         | Default No.                                                                 |
+| `Reviewer`                | Yes/No                                  |         | A Reviewer who holds no Case Type. Default No.                              |
+| `Reviews`                 | Choice, allow multiple, Case Type slugs |         | One choice per Case Type slug (`complaints`), not its display name.         |
+| `OwnsCaseTypes`           | Choice, allow multiple, Case Type slugs |         | As `Reviews`.                                                               |
+| `JourneyOwnerOf`          | Choice, allow multiple, Case Type slugs |         | As `Reviews`.                                                               |
+
+Create both indexes **while the list is empty**. Break permission inheritance:
+`CORA Owner Delegates` get Contribute, every CORA user gets Read, and versioning
+stays on so each change to a row has a history. Onboarding a Case Type adds its
+slug as a choice on the three multi-choice columns.
+
+### Case list groups
+
+Per Case Type, granted on its `Cases-{Slug}` list in **every** environment:
+
+| Group             | Permission level              |
+| ----------------- | ----------------------------- |
+| `Cases - X Read`  | Read                          |
+| `Cases - X Write` | `CORA Contribute (no delete)` |
+
+Once, granted on every Case list in every environment: `CORA All Cases Read`
+(Read) and `CORA All Cases Write` (`CORA Contribute (no delete)`). Make `CORA
+Owner Delegates` the owner of each, as for every other CORA group.
+
+### Backfill
+
+`scripts/backfill_user_roles.js` fills the list and the new groups from the
+groups above. It only adds, and a run without `--apply` changes nothing:
+
+```sh
+node scripts/backfill_user_roles.js /secure/path/backfill.json          # print the plan
+node scripts/backfill_user_roles.js /secure/path/backfill.json --apply  # make it
+```
+
+The config is `{ "siteUrl": "https://…/sites/cora", "headersFileEnv":
+"CORA_BACKFILL_HEADERS_FILE" }`, and that variable names a JSON headers file for
+a `CORA Owner Delegates` account, kept outside the repository like the ACL
+smoke's. The backfill is complete when a run after `--apply` prints `Nothing to
+do`. Members granted through a nested AD group are not visible to it, so add
+those AD groups to the new groups by hand.
+
+---
+
 ## 7. Recurring maintenance — the working-day holiday list
 
 The remediation SLA is **10 working days** after Send Actions, which excludes
