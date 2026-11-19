@@ -16,7 +16,11 @@ import {
 
 const LIST = 'uat_Cases-Complaints';
 
-/** @param {'allow' | 'deny'} read @param {'allow' | 'deny'} write */
+/**
+ * @param {'allow' | 'deny'} read
+ * @param {'allow' | 'deny'} write
+ * @returns {import('../scripts/uat_acl_smoke.js').ListExpectation}
+ */
 function expectation(read, write) {
   return { listName: LIST, read, write };
 }
@@ -171,4 +175,103 @@ test('runAclSmoke: fails if a read-only persona has any write permission', async
   assert.equal(results[0].ok, false);
   assert.match(results[0].message, /granted: add/);
   assert.equal(results[1].ok, true);
+});
+
+/** @param {string} low */
+function writerConfig(low) {
+  const raw = config();
+  raw.personas.push({
+    name: 'writer',
+    headersFileEnv: 'WRITER_HEADERS',
+    expectations: [{ ...expectation('allow', 'allow'), delete: 'deny' }],
+  });
+  return {
+    raw,
+    fetchImpl: /** @type {import('../scripts/uat_acl_smoke.js').FetchImpl} */ (
+      async (input, init) => {
+        const authorization = new Headers(init?.headers).get('Authorization');
+        if (authorization === 'Bearer outsider') return response(403);
+        if (!String(input).includes('EffectiveBasePermissions')) {
+          return response(200, { value: [] });
+        }
+        return response(200, {
+          EffectiveBasePermissions: {
+            Low: authorization === 'Bearer writer' ? low : '1',
+          },
+        });
+      }
+    ),
+  };
+}
+
+async function writerEnvironment() {
+  const env = await headersEnvironment();
+  const writer = join(await mkdtemp(join(tmpdir(), 'cora-uat-acl-')), 'w.json');
+  await writeFile(writer, JSON.stringify({ Authorization: 'Bearer writer' }));
+  return { ...env, WRITER_HEADERS: writer };
+}
+
+test('runAclSmoke: a writer held to no delete passes on add and edit alone', async () => {
+  const { raw, fetchImpl } = writerConfig('7');
+  const results = await runAclSmoke(raw, {
+    env: await writerEnvironment(),
+    fetchImpl,
+  });
+
+  assert.ok(results.every(({ ok }) => ok));
+  assert.match(results[2].message, /delete deny confirmed/);
+});
+
+test('runAclSmoke: a writer held to no delete fails while plain Contribute is granted', async () => {
+  const { raw, fetchImpl } = writerConfig('15');
+  const results = await runAclSmoke(raw, {
+    env: await writerEnvironment(),
+    fetchImpl,
+  });
+
+  assert.equal(results[2].ok, false);
+  assert.match(results[2].message, /expected write without delete/);
+});
+
+test('runAclSmoke: a writer expected to delete fails without the permission', async () => {
+  const { raw, fetchImpl } = writerConfig('7');
+  raw.personas[2].expectations[0].delete = 'allow';
+  const results = await runAclSmoke(raw, {
+    env: await writerEnvironment(),
+    fetchImpl,
+  });
+
+  assert.equal(results[2].ok, false);
+  assert.match(results[2].message, /expected delete permission/);
+});
+
+test('runAclSmoke: a writer with no delete expectation is not judged on delete', async () => {
+  const { raw, fetchImpl } = writerConfig('15');
+  delete raw.personas[2].expectations[0].delete;
+  const results = await runAclSmoke(raw, {
+    env: await writerEnvironment(),
+    fetchImpl,
+  });
+
+  assert.equal(results[2].ok, true);
+  assert.match(results[2].message, /write allow confirmed/);
+});
+
+test('validateConfig: refuses a delete expectation that is not allow or deny, or that outruns write', () => {
+  const bad = config();
+  bad.personas[0].expectations[0] = {
+    ...expectation('allow', 'deny'),
+    delete: /** @type {any} */ ('maybe'),
+  };
+  assert.throws(() => validateConfig(bad), /must be allow or deny/);
+
+  const outrun = config();
+  outrun.personas[0].expectations[0] = {
+    ...expectation('allow', 'deny'),
+    delete: 'allow',
+  };
+  assert.throws(
+    () => validateConfig(outrun),
+    /cannot allow delete while denying write/
+  );
 });

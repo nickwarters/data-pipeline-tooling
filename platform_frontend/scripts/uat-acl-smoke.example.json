@@ -31,7 +31,8 @@
         {
           "listName": "uat_Cases-Complaints",
           "read": "allow",
-          "write": "allow"
+          "write": "allow",
+          "delete": "deny"
         }
       ]
     },
@@ -42,7 +43,8 @@
         {
           "listName": "uat_Cases-Complaints",
           "read": "allow",
-          "write": "allow"
+          "write": "allow",
+          "delete": "deny"
         }
       ]
     }

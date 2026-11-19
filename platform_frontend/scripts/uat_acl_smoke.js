@@ -18,10 +18,16 @@ const WRITE_PERMISSION_MASKS = {
 
 /** @typedef {'allow' | 'deny'} AccessExpectation */
 /**
+ * `delete` is checked only when it is stated. A writer on a Case list holds a
+ * permission level without Delete Items, because nothing the app does deletes a
+ * Case, so stating `delete: 'deny'` on a writer proves that level is the one
+ * granted rather than plain Contribute.
+ *
  * @typedef {{
  *   listName: string,
  *   read: AccessExpectation,
- *   write: AccessExpectation
+ *   write: AccessExpectation,
+ *   delete?: AccessExpectation
  * }} ListExpectation
  */
 /**
@@ -141,6 +147,16 @@ export function validateConfig(raw) {
       requireCondition(
         expectation.read === 'allow' || expectation.write === 'deny',
         `list "${expectation.listName}" cannot allow write while denying read.`
+      );
+      requireCondition(
+        expectation.delete === undefined ||
+          expectation.delete === 'allow' ||
+          expectation.delete === 'deny',
+        `delete expectation for "${expectation.listName}" must be allow or deny.`
+      );
+      requireCondition(
+        expectation.delete !== 'allow' || expectation.write === 'allow',
+        `list "${expectation.listName}" cannot allow delete while denying write.`
       );
       const listExpectations = byList.get(expectation.listName) ?? [];
       listExpectations.push(expectation);
@@ -314,9 +330,6 @@ async function checkExpectation(
   const permissions = writePermissions(
     effectivePermissions(await permissionResponse.json())
   );
-  const anyWrite = permissions.add || permissions.edit || permissions.delete;
-  const expectedWrite = expectation.write === 'allow';
-  const ok = expectedWrite ? permissions.add && permissions.edit : !anyWrite;
   const granted = Object.entries(permissions)
     .filter(([, allowed]) => allowed)
     .map(([name]) => name)
@@ -325,12 +338,47 @@ async function checkExpectation(
   return {
     persona: persona.name,
     listName: expectation.listName,
-    ok,
-    message: ok
-      ? `read allowed; write ${expectation.write} confirmed`
-      : expectedWrite
-        ? `expected add and edit permissions; granted: ${granted || 'none'}`
-        : `expected no write permissions; granted: ${granted}`,
+    ...writeVerdict(expectation, permissions, granted),
+  };
+}
+
+/**
+ * @param {ListExpectation} expectation
+ * @param {ReturnType<typeof writePermissions>} permissions
+ * @param {string} granted
+ * @returns {{ ok: boolean, message: string }}
+ */
+function writeVerdict(expectation, permissions, granted) {
+  if (expectation.write === 'deny') {
+    const anyWrite = permissions.add || permissions.edit || permissions.delete;
+    return anyWrite
+      ? {
+          ok: false,
+          message: `expected no write permissions; granted: ${granted}`,
+        }
+      : { ok: true, message: 'read allowed; write deny confirmed' };
+  }
+  if (!permissions.add || !permissions.edit) {
+    return {
+      ok: false,
+      message: `expected add and edit permissions; granted: ${granted || 'none'}`,
+    };
+  }
+  if (expectation.delete === undefined) {
+    return { ok: true, message: 'read allowed; write allow confirmed' };
+  }
+  if (permissions.delete !== (expectation.delete === 'allow')) {
+    return {
+      ok: false,
+      message:
+        expectation.delete === 'deny'
+          ? `expected write without delete; granted: ${granted}`
+          : `expected delete permission; granted: ${granted}`,
+    };
+  }
+  return {
+    ok: true,
+    message: `read allowed; write allow and delete ${expectation.delete} confirmed`,
   };
 }
 

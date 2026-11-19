@@ -91,6 +91,13 @@ the real list-items endpoint and write denial through the list's
 `EffectiveBasePermissions`; it never creates, updates, or deletes UAT data. It
 also refuses list names without the configured `uat_` prefix.
 
+An expectation may also state `delete` (`allow` or `deny`). It is judged only
+when stated, and only on a writer: `"write": "allow", "delete": "deny"` passes
+on Add and Edit Items without Delete Items, which is the `CORA Contribute (no
+delete)` level every Case list writer holds (see the
+[provisioning runbook](provisioning-runbook.md#permission-level-cora-contribute-no-delete)).
+The example config states it on every writer.
+
 ## Deterministic Async Tests
 
 Tests should await the operation promise returned by the API they called or use
