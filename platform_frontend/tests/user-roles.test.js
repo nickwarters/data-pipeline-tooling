@@ -380,6 +380,19 @@ test('MockSharePointClient: holders are named from the directory, or by account 
   ]);
 });
 
+test('MockSharePointClient: a directory person’s roles seed their row, and an explicit row wins', async () => {
+  const client = mock({
+    people: [
+      { loginName: 'zara', displayName: 'Zara', roles: { controls: true } },
+      { loginName: 'kai', displayName: 'Kai', roles: { adviser: true } },
+    ],
+  });
+
+  assert.equal((await client.getUserRoles('kai')).adviser, true);
+  assert.deepEqual((await client.getUserRoles('zara')).reviews, ['complaints']);
+  assert.equal((await client.getUserRoles('zara')).controls, false);
+});
+
 test('MockSharePointClient: a change does not reach the roles it was built from or handed out', async () => {
   const userRoles = { zara: { reviews: ['complaints'] } };
   const client = mock({ userRoles });

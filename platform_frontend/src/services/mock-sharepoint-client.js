@@ -28,7 +28,7 @@ import { noRoles, roleEntries, withRoleEntries } from './user-roles.js';
 
 /** @typedef {import('../sharepoint-client.js').VersionedExport} VersionedExport */
 /** @typedef {import('./user-roles.js').UserRoles} UserRoles */
-/** @typedef {PersonResult & { manager?: string, groups?: string[] }} DirectoryPerson */
+/** @typedef {PersonResult & { manager?: string, groups?: string[], roles?: Partial<UserRoles> }} DirectoryPerson */
 
 /**
  * A `?asUser=` persona: who they are, the groups they hold, and their roles row.
@@ -97,9 +97,14 @@ export class MockSharePointClient {
     this._accessLog = accessLog.map((entry) => structuredClone(entry));
     this._accessLogCounter = 7000;
     // Keyed by lower-cased account, as the real list's Title filter is case-insensitive.
-    // The signed-in persona's own row is seeded under the account it signs in
-    // as, and an explicit `userRoles` entry for the same account wins. Only
-    // that persona's: two personas may share an account to see the same Cases.
+    // A directory person's `roles` seed their row, then the signed-in
+    // persona's own row is seeded under the account it signs in as, and an
+    // explicit `userRoles` entry for the same account wins. Only that
+    // persona's: two personas may share an account to see the same Cases.
+    /** @type {Array<[string, Partial<UserRoles>]>} */
+    const directoryRoles = people.flatMap((person) =>
+      person.roles ? [[person.loginName, person.roles]] : []
+    );
     const signedIn = personas[persona];
     /** @type {Array<[string, Partial<UserRoles>]>} */
     const personaRoles = signedIn?.roles
@@ -107,7 +112,7 @@ export class MockSharePointClient {
       : [];
     /** @type {Map<string, UserRoles>} */
     this._userRoles = new Map(
-      [...personaRoles, ...Object.entries(userRoles)].map(
+      [...directoryRoles, ...personaRoles, ...Object.entries(userRoles)].map(
         ([account, roles]) => [
           String(account).toLowerCase(),
           { ...noRoles(), ...structuredClone(roles) },

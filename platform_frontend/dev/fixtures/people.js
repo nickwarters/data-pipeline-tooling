@@ -9,7 +9,11 @@
  * the picker can find them and a mock write resolves to the same display name a
  * real read would carry back on the row.
  *
- * @type {Array<{ loginName: string, displayName: string, email?: string, manager?: string, groups?: string[] }>}
+ * A person's `roles` is their `CoraUserRoles` row, which is where Case
+ * Support's Reassign and the Access page find who holds a role; their `groups`
+ * only open Case lists.
+ *
+ * @type {import('../../src/services/mock-sharepoint-client.js').DirectoryPerson[]}
  */
 export const people = [
   {
@@ -17,14 +21,16 @@ export const people = [
     displayName: 'Alex Reviewer',
     email: 'alex.reviewer@contoso.com',
     manager: 'user-rm',
-    groups: ['Reviewers - Complaints'],
+    groups: ['Cases - Complaints Write'],
+    roles: { reviews: ['complaints'] },
   },
   {
     loginName: 'user-reviewer-2',
     displayName: 'Zara Reviewer',
     email: 'zara.reviewer@contoso.com',
     manager: 'user-rm',
-    groups: ['Reviewers - Complaints'],
+    groups: ['Cases - Complaints Write'],
+    roles: { reviews: ['complaints'] },
   },
   // Fully provisioned: a Reviewer and Case Type Owner for Complaints, so Access shows a role with nothing missing.
   {
@@ -32,11 +38,8 @@ export const people = [
     displayName: 'Pat Grant',
     email: 'pat.grant@contoso.com',
     manager: 'user-rm',
-    groups: [
-      'Reviewers',
-      'Reviewers - Complaints',
-      'CaseTypeOwner - Complaints',
-    ],
+    groups: ['Cases - Complaints Write'],
+    roles: { reviews: ['complaints'], ownsCaseTypes: ['complaints'] },
   },
   {
     loginName: 'areviewer',
@@ -88,7 +91,8 @@ export const people = [
     loginName: 'jsmith',
     displayName: 'John Smith',
     email: 'john.smith@contoso.com',
-    groups: ['Reviewers - Complaints'],
+    groups: ['Cases - Complaints Write'],
+    roles: { reviews: ['complaints'] },
   },
   {
     loginName: 'asmith',
