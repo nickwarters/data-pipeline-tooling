@@ -20,6 +20,7 @@
  */
 
 import { CASE_TYPES } from '../../case-types/manifest.js';
+import { noRoles } from './user-roles.js';
 
 /**
  * Resolved capabilities for the current user, derived from group membership.
@@ -137,14 +138,24 @@ export const permissions = {
 };
 
 /**
- * Resolve a user's group membership against the permissions config into
- * concrete capabilities. UX-only — SharePoint list ACLs are the real boundary.
+ * Resolve a user's group membership and `CoraUserRoles` row against the
+ * permissions config into concrete capabilities. UX-only — SharePoint list
+ * ACLs are the real boundary.
+ *
+ * While the roles move from groups to the row, either one grants a role, so
+ * nobody loses one by being moved before or after the other. A slug in the row
+ * that names no Case Type this application has grants nothing.
  *
  * @param {string[]} userGroups
  * @param {PermissionsConfig} [config]
+ * @param {import('./user-roles.js').UserRoles} [userRoles]
  * @returns {Capabilities}
  */
-export function resolveCapabilities(userGroups, config = permissions) {
+export function resolveCapabilities(
+  userGroups,
+  config = permissions,
+  userRoles = noRoles()
+) {
   const has = (/** @type {string} */ group) => userGroups.includes(group);
 
   /** @type {string[]} */
@@ -155,17 +166,25 @@ export function resolveCapabilities(userGroups, config = permissions) {
   const ownedJourneyCaseTypes = [];
   for (const { slug, displayName } of config.caseTypes) {
     const names = caseTypeGroupNames(displayName);
-    if (has(names.listAccess)) listAccessCaseTypes.push(slug);
-    if (has(names.caseTypeOwner)) ownedCaseTypes.push(slug);
-    if (has(names.journeyOwner)) ownedJourneyCaseTypes.push(slug);
+    if (has(names.listAccess) || userRoles.reviews.includes(slug))
+      listAccessCaseTypes.push(slug);
+    if (has(names.caseTypeOwner) || userRoles.ownsCaseTypes.includes(slug))
+      ownedCaseTypes.push(slug);
+    if (has(names.journeyOwner) || userRoles.journeyOwnerOf.includes(slug))
+      ownedJourneyCaseTypes.push(slug);
   }
 
   // Axis 2 (list access) implies the reviewing function.
-  const isReviewer = has(config.reviewer) || listAccessCaseTypes.length > 0;
-  const isAdviser = has(config.adviser);
-  const isControls = has(config.controls);
-  const isReviewerManager = has(config.reviewerManager);
-  const isResponsiblePartyManager = has(config.responsiblePartyManager);
+  const isReviewer =
+    has(config.reviewer) ||
+    userRoles.reviewer ||
+    listAccessCaseTypes.length > 0;
+  const isAdviser = has(config.adviser) || userRoles.adviser;
+  const isControls = has(config.controls) || userRoles.controls;
+  const isReviewerManager =
+    has(config.reviewerManager) || userRoles.reviewerManager;
+  const isResponsiblePartyManager =
+    has(config.responsiblePartyManager) || userRoles.responsiblePartyManager;
   const isMaintainer = has(config.maintainer);
   // Widening search to a second role is this one line and no call site.
   const canSearchCases = isControls;
@@ -192,4 +211,23 @@ export function resolveCapabilities(userGroups, config = permissions) {
     canSearchCases,
     isVisitor,
   };
+}
+
+/**
+ * The current user's `CoraUserRoles` row for capability resolution. While the
+ * groups still grant every role, a row that cannot be read grants nothing
+ * rather than stopping the app: it can only narrow access, never widen it, and
+ * the groups carry on granting what they always did.
+ *
+ * @param {Pick<import('../sharepoint-client.js').SharePointClient, 'getUserRoles'>} client
+ * @param {string} account
+ * @returns {Promise<import('./user-roles.js').UserRoles>}
+ */
+export async function readUserRoles(client, account) {
+  try {
+    return await client.getUserRoles(account);
+  } catch (error) {
+    console.warn('[CORA] Roles could not be read; using groups only:', error);
+    return noRoles();
+  }
 }

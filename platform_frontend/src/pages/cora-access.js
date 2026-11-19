@@ -5,12 +5,12 @@ import { isAbortError } from '../lib/abort.js';
 import { navigateTo } from '../lib/navigate.js';
 import { createDebouncedPeopleSearch } from '../lib/people-search.js';
 import { withAbortSignal } from '../services/abortable-client.js';
-import { runAccessChange } from '../services/access-change.js';
 import {
-  allRoles,
-  describeChange,
-  holderGroup,
-} from '../services/access-roles.js';
+  readHeldParts,
+  readRoleHolders,
+  runAccessChange,
+} from '../services/access-change.js';
+import { allRoles, describeChange } from '../services/access-roles.js';
 import { permissions } from '../services/permissions.js';
 import {
   accessLogView,
@@ -299,8 +299,7 @@ export function createRouteSlice(params, context) {
 
       const loadHolders = () => {
         for (const role of allRoles(caseTypes)) {
-          const group = /** @type {string} */ (holderGroup(role, caseTypes));
-          void readClient.listGroupMembers(group).then(
+          void readRoleHolders(readClient, role, caseTypes).then(
             (members) => {
               if (tools.isActive()) {
                 tools.dispatch({
@@ -327,7 +326,7 @@ export function createRouteSlice(params, context) {
       const person = account;
 
       const loadGroups = () =>
-        void readClient.listUserGroups(person).then(
+        void readHeldParts(readClient, person).then(
           (groups) => {
             if (tools.isActive()) {
               tools.dispatch({ type: 'access/groups-loaded', groups });

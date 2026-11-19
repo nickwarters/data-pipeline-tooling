@@ -5,7 +5,9 @@ import {
   resolveCapabilities,
   caseTypeGroupNames,
   permissions,
+  readUserRoles,
 } from '../src/services/permissions.js';
+import { noRoles } from '../src/services/user-roles.js';
 import { CASE_TYPES } from '../case-types/manifest.js';
 
 /** @type {import('../src/services/permissions.js').PermissionsConfig} */
@@ -260,4 +262,112 @@ test('permissions.caseTypes: group names still derive from the registry display 
     caseTypeOwner: 'CaseTypeOwner - Complaints',
     journeyOwner: 'JourneyOwner - Complaints',
   });
+});
+
+// ===== the CoraUserRoles row grants alongside the groups =====
+
+/** @param {Partial<import('../src/services/user-roles.js').UserRoles>} roles */
+const row = (roles) => ({ ...noRoles(), ...roles });
+
+test('resolveCapabilities: each yes/no column of the roles row grants its role with no group', () => {
+  for (const [flag, capability] of /** @type {const} */ ([
+    ['adviser', 'isAdviser'],
+    ['controls', 'isControls'],
+    ['reviewerManager', 'isReviewerManager'],
+    ['responsiblePartyManager', 'isResponsiblePartyManager'],
+    ['reviewer', 'isReviewer'],
+  ])) {
+    const caps = resolveCapabilities([], sampleConfig, row({ [flag]: true }));
+    assert.equal(caps[capability], true, flag);
+    assert.equal(caps.isVisitor, false, flag);
+  }
+});
+
+test('resolveCapabilities: a Case Type held in the roles row grants the same as its group', () => {
+  const caps = resolveCapabilities(
+    [],
+    sampleConfig,
+    row({
+      reviews: ['complaints'],
+      ownsCaseTypes: ['example-review'],
+      journeyOwnerOf: ['complaints'],
+    })
+  );
+  assert.deepEqual(caps.listAccessCaseTypes, ['complaints']);
+  assert.equal(caps.isReviewer, true);
+  assert.deepEqual(caps.ownedCaseTypes, ['example-review']);
+  assert.deepEqual(caps.ownedJourneyCaseTypes, ['complaints']);
+});
+
+test('resolveCapabilities: the groups and the roles row together grant each role once', () => {
+  const caps = resolveCapabilities(
+    ['Reviewers - Complaints', 'Controls'],
+    sampleConfig,
+    row({ reviews: ['complaints', 'example-review'], controls: true })
+  );
+  assert.deepEqual(caps.listAccessCaseTypes, ['example-review', 'complaints']);
+  assert.equal(caps.isControls, true);
+});
+
+test('resolveCapabilities: a Case Type in the roles row that the application does not have grants nothing', () => {
+  const caps = resolveCapabilities(
+    [],
+    sampleConfig,
+    row({
+      reviews: ['retired-type'],
+      ownsCaseTypes: ['retired-type'],
+      journeyOwnerOf: ['retired-type'],
+    })
+  );
+  assert.deepEqual(caps.listAccessCaseTypes, []);
+  assert.deepEqual(caps.ownedCaseTypes, []);
+  assert.deepEqual(caps.ownedJourneyCaseTypes, []);
+  assert.equal(caps.isVisitor, true);
+});
+
+test('resolveCapabilities: a Maintainer is still granted by its group alone', () => {
+  // The group that owns every other group, and may edit the roles list, cannot
+  // live in that list: nothing in the row makes someone a Maintainer.
+  assert.equal(
+    resolveCapabilities(['CORA Owner Delegates'], sampleConfig, noRoles())
+      .isMaintainer,
+    true
+  );
+});
+
+test("readUserRoles: returns the person's roles row", async () => {
+  const roles = row({ controls: true, reviews: ['complaints'] });
+  /** @type {string[]} */
+  const asked = [];
+  const client = {
+    getUserRoles: async (/** @type {string} */ account) => {
+      asked.push(account);
+      return roles;
+    },
+  };
+  assert.deepEqual(await readUserRoles(client, 'DOMAIN\\alice'), roles);
+  assert.deepEqual(asked, ['DOMAIN\\alice']);
+});
+
+test('readUserRoles: a roles row that cannot be read grants nothing and is reported', async () => {
+  const original = console.warn;
+  /** @type {any[][]} */
+  const warned = [];
+  console.warn = (...args) => warned.push(args);
+  try {
+    const failure = new Error('list not found');
+    const roles = await readUserRoles(
+      {
+        getUserRoles: async () => {
+          throw failure;
+        },
+      },
+      'DOMAIN\\alice'
+    );
+    assert.deepEqual(roles, noRoles());
+    assert.equal(warned.length, 1);
+    assert.equal(warned[0][1], failure);
+  } finally {
+    console.warn = original;
+  }
 });

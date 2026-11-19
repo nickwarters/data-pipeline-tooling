@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from framework.core import ValidationError
 from framework.io import AppendOnly, Refresh
 from framework.run import RunContext, active_context
 from pipelines.notifications import pipeline as notifications
@@ -42,6 +43,10 @@ MANAGER_LOGIN = "e.novak"
 REVIEWER_EMAIL = "a.khan@example.invalid"
 PARTY_EMAIL = "b.okafor@example.invalid"
 MANAGER_EMAIL = "e.novak@example.invalid"
+
+# What a frontline party of a Complaints Case must end up holding: the Case
+# list's Write group, and the old per-type group the platform still reads.
+FRONTLINE_COMPLAINTS = ["Cases - Complaints Write", "Frontline - Complaints"]
 
 # The producing subject, named here because these tests stand in for the Sync
 # pipeline when they seed its gold. The pipeline under test does not know it.
@@ -858,9 +863,14 @@ def test_the_privileges_file_names_the_frontline_parties_and_their_group(
     _run(base_dir)
 
     assert _privileges(base_dir) == [
-        {"login_name": "b.okafor", "groups": ["Frontline - Complaints"]},
-        {"login_name": "e.novak", "groups": ["Frontline - Complaints"]},
+        {"login_name": "b.okafor", "groups": FRONTLINE_COMPLAINTS},
+        {"login_name": "e.novak", "groups": FRONTLINE_COMPLAINTS},
     ]
+
+
+def test_a_case_type_with_no_declared_name_names_no_group():
+    with pytest.raises(ValidationError, match="no group name is declared"):
+        notifications.frontline_groups_of("not-a-case-type")
 
 
 def test_the_reviewer_is_notified_but_gets_no_group(base_dir, users_csv):
@@ -887,8 +897,8 @@ def test_a_login_owed_notifications_on_two_cases_is_one_object(base_dir, users_c
     _run(base_dir)
 
     assert _privileges(base_dir) == [
-        {"login_name": "b.okafor", "groups": ["Frontline - Complaints"]},
-        {"login_name": "e.novak", "groups": ["Frontline - Complaints"]},
+        {"login_name": "b.okafor", "groups": FRONTLINE_COMPLAINTS},
+        {"login_name": "e.novak", "groups": FRONTLINE_COMPLAINTS},
     ]
 
 
@@ -898,8 +908,8 @@ def test_the_reportable_trigger_grants_the_group_too(base_dir, users_csv):
     _run(base_dir)
 
     assert _privileges(base_dir) == [
-        {"login_name": "b.okafor", "groups": ["Frontline - Complaints"]},
-        {"login_name": "e.novak", "groups": ["Frontline - Complaints"]},
+        {"login_name": "b.okafor", "groups": FRONTLINE_COMPLAINTS},
+        {"login_name": "e.novak", "groups": FRONTLINE_COMPLAINTS},
     ]
 
 

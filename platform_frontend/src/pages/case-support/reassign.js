@@ -12,7 +12,7 @@ import { formFooterView, reasonFieldView } from './form-parts.js';
 /** @typedef {import('../../services/support-action.js').SupportActionResult} SupportActionResult */
 
 /**
- * The open Reassign form; `candidates` is `undefined` while the reviewer group is read.
+ * The open Reassign form; `candidates` is `undefined` while the Case Type's Reviewers are read.
  *
  * @typedef {{
  *   candidates: PersonResult[] | undefined,
@@ -51,7 +51,7 @@ export function reassignBlockedReason(row) {
 }
 
 /**
- * The reviewer group's members a Case can move to: everyone but its current Reviewer, by name.
+ * The Case Type's Reviewers a Case can move to: everyone but its current Reviewer, by name.
  *
  * @param {PersonResult[]} members
  * @param {CaseRow} row
@@ -107,11 +107,11 @@ export async function reassignCase(
 
 /**
  * @param {ReassignForm} form
- * @param {string} groupName
+ * @param {string} rosterName
  * @param {{ onReviewer: (reviewer: string) => void }} handlers
  * @returns {HTMLElement}
  */
-function candidatesView(form, groupName, handlers) {
+function candidatesView(form, rosterName, handlers) {
   if (form.candidatesError) {
     return h(
       'p',
@@ -119,14 +119,14 @@ function candidatesView(form, groupName, handlers) {
       form.candidatesError
     );
   }
-  if (!form.candidates) return LoadingState(`Loading ${groupName}`);
+  if (!form.candidates) return LoadingState(`Loading ${rosterName}`);
   if (form.candidates.length === 0) {
-    return EmptyState(`Nobody else is in ${groupName}.`);
+    return EmptyState(`Nobody else is among ${rosterName}.`);
   }
   return h(
     'fieldset',
     { className: 'cora-case-support-candidates' },
-    h('legend', {}, `New Assigned Reviewer, from ${groupName}`),
+    h('legend', {}, `New Assigned Reviewer, from ${rosterName}`),
     ...form.candidates.map((person) =>
       h(
         'label',
@@ -147,7 +147,7 @@ function candidatesView(form, groupName, handlers) {
 
 /**
  * @param {ReassignForm} form
- * @param {string} groupName
+ * @param {string} rosterName
  * @param {{
  *   onReviewer: (reviewer: string) => void,
  *   onReason: (reason: string) => void,
@@ -156,7 +156,7 @@ function candidatesView(form, groupName, handlers) {
  * }} handlers
  * @returns {HTMLElement}
  */
-export function reassignFormView(form, groupName, handlers) {
+export function reassignFormView(form, rosterName, handlers) {
   const ready = form.reviewer !== '' && form.reason.trim() !== '';
   return h(
     'section',
@@ -170,7 +170,7 @@ export function reassignFormView(form, groupName, handlers) {
       { className: 'cora-case-support-note' },
       'The assignment time and Reviewer Manager are restamped; the Due Date and status are unchanged.'
     ),
-    candidatesView(form, groupName, handlers),
+    candidatesView(form, rosterName, handlers),
     reasonFieldView(form, handlers.onReason),
     ...formFooterView(
       form,

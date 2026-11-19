@@ -101,7 +101,13 @@ the old groups are switched off, and each phase can be reversed on its own.
    `src/services/legacy-groups.js` is the one translation, and goes with the old
    groups.
 3. **Read both.** The app grants a role from either model, and the Access page
-   and notifications pipeline write both.
+   and notifications pipeline write both. The Access page plans a role over the
+   person's groups and role entries as one list: it gives the old group, the row
+   entry and the new Case list group, writing the row first, and finds a holder
+   through either the old group or the entry. A Case list's Write group is kept
+   on a revoke while the person holds that type's `Frontline - <type>` group,
+   because the pipeline, not the page, put them in it. Case Support's Reassign
+   offers the Case Type's Reviewers from both too.
 4. **New only.** The app, the Access page and the pipeline use only the new model.
 5. **Retire.** Adviser reads narrow to the lists a person's groups open, the
    `Frontline` blanket read goes, and then the legacy groups.
@@ -127,7 +133,12 @@ the old groups are switched off, and each phase can be reversed on its own.
 - Nobody can delete a Case item, and once phase 5 lands an Adviser reaches only
   the types they have been granted.
 - The roles list is new platform data, so the data pipelines must land it or
-  record why not; that is decided with the phase that first reads it.
+  record why not. Decided with phase 3, the first that reads it: **not landed
+  yet**. Nothing downstream reads a role today, and the `cora_access_log` feed
+  already lands every change the Access page makes, row entries included. That
+  stops being enough at phase 4, when the row is the only record of who holds a
+  role and a change made in SharePoint directly leaves no log entry, so landing
+  the list is follow-up work due before phase 4 (#1087).
 - Members granted through a nested AD group are still invisible to the app's
   group reads, but per-type roles no longer depend on group reads, so an AD
   group may sit inside a `Cases - <type>` group freely.

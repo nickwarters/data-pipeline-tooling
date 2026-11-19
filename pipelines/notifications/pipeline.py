@@ -88,9 +88,16 @@ OUTBOX_COLUMNS = ("recipients", "subject", "body")
 PRIVILEGES_COLUMNS = ("login_name", "groups")
 
 # Telling a frontline party about a Case is useless if they cannot open it, so
-# every notification owed to one is paired with the per-Case-Type group that
-# grants them access to that Case Type's list.
-FRONTLINE_GROUP_TEMPLATE = "Frontline - {case_type_name}"
+# every notification owed to one is paired with the per-Case-Type groups that
+# grant them access to that Case Type's list. While the Case Review Platform
+# moves from its old per-role groups to one Read and one Write group per Case
+# list, both open it, so a frontline party is granted both and can open the
+# Case whichever one the tenant reads that day. The old one goes when the
+# platform stops reading it.
+FRONTLINE_GROUP_TEMPLATES = (
+    "Cases - {case_type_name} Write",
+    "Frontline - {case_type_name}",
+)
 
 # Case Type slug -> the name that appears in a group. Declared, not derived:
 # the slug is this project's identifier and the group name is the Case Review
@@ -351,16 +358,19 @@ def responsible_party_and_manager_of(cases: Dataset, users: Dataset) -> Dataset:
     )
 
 
-def frontline_group_of(case_type: str) -> str:
-    """The group that grants a frontline party access to a Case Type's Cases."""
+def frontline_groups_of(case_type: str) -> tuple[str, ...]:
+    """The groups that grant a frontline party access to a Case Type's Cases."""
     display_name = CASE_TYPE_NAMES.get(case_type)
     if display_name is None:
         raise ValidationError(
             f"no group name is declared for Case Type {case_type!r}, so the "
-            "frontline group it needs cannot be named; add it to "
+            "frontline groups it needs cannot be named; add it to "
             f"CASE_TYPE_NAMES (declared: {', '.join(sorted(CASE_TYPE_NAMES))})"
         )
-    return FRONTLINE_GROUP_TEMPLATE.format(case_type_name=display_name)
+    return tuple(
+        template.format(case_type_name=display_name)
+        for template in FRONTLINE_GROUP_TEMPLATES
+    )
 
 
 def group_privileges(pending: Dataset, pending_reportable: Dataset) -> Dataset:
@@ -378,8 +388,8 @@ def group_privileges(pending: Dataset, pending_reportable: Dataset) -> Dataset:
         for record in dataset.to_pandas().to_dict("records"):
             if not record["is_frontline"]:
                 continue
-            groups_of.setdefault(record["recipient_login"], set()).add(
-                frontline_group_of(record["case_type"])
+            groups_of.setdefault(record["recipient_login"], set()).update(
+                frontline_groups_of(record["case_type"])
             )
     rows = [
         {"login_name": login, "groups": sorted(groups)}

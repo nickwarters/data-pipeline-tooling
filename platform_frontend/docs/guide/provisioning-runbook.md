@@ -135,17 +135,17 @@ every environment, so there is one log, and the Access page in every environment
 writes to it (see ADR-0057). One entry is appended per change; no entry is ever
 edited.
 
-| Internal name  | SharePoint type            | Indexed | Notes                                                                                |
-| -------------- | -------------------------- | ------- | ------------------------------------------------------------------------------------ |
-| `Title`        | Single line of text        | Yes     | The login name of the person whose access changed.                                   |
-| `TargetName`   | Single line of text        |         | Their display name when the change was made.                                         |
-| `AccessAction` | Single line of text        |         | Exactly `grant` or `revoke`.                                                         |
-| `AccessRole`   | Single line of text        |         | The role's id, e.g. `reviewer` or `case-type-owner`.                                 |
-| `CaseType`     | Single line of text        |         | The Case Type slug for a per-Case-Type role; empty for a site-wide one.              |
-| `Reason`       | Multiple lines, plain text |         | The Maintainer's reason. Required by the app.                                        |
-| `Changes`      | Multiple lines, plain text |         | JSON list of `{ field, before, after }`, one per group, naming the SharePoint group. |
-| `Outcome`      | Single line of text        |         | Exactly `recorded`, `not-applied` or `partly-applied`.                               |
-| `RelatesTo`    | Single line of text        |         | On a `not-applied` or `partly-applied` entry, the id of the entry it follows.        |
+| Internal name  | SharePoint type            | Indexed | Notes                                                                            |
+| -------------- | -------------------------- | ------- | -------------------------------------------------------------------------------- |
+| `Title`        | Single line of text        | Yes     | The login name of the person whose access changed.                               |
+| `TargetName`   | Single line of text        |         | Their display name when the change was made.                                     |
+| `AccessAction` | Single line of text        |         | Exactly `grant` or `revoke`.                                                     |
+| `AccessRole`   | Single line of text        |         | The role's id, e.g. `reviewer` or `case-type-owner`.                             |
+| `CaseType`     | Single line of text        |         | The Case Type slug for a per-Case-Type role; empty for a site-wide one.          |
+| `Reason`       | Multiple lines, plain text |         | The Maintainer's reason. Required by the app.                                    |
+| `Changes`      | Multiple lines, plain text |         | JSON list of `{ field, before, after }`, one per group or role entry it changed. |
+| `Outcome`      | Single line of text        |         | Exactly `recorded`, `not-applied` or `partly-applied`.                           |
+| `RelatesTo`    | Single line of text        |         | On a `not-applied` or `partly-applied` entry, the id of the entry it follows.    |
 
 `Created` and `Author` are SharePoint's own and are what the page shows as when
 and who. Create the `Title` index **while the list is empty**: every read filters
@@ -308,6 +308,19 @@ a `CORA Owner Delegates` account, kept outside the repository like the ACL
 smoke's. The backfill is complete when a run after `--apply` prints `Nothing to
 do`. Members granted through a nested AD group are not visible to it, so add
 those AD groups to the new groups by hand.
+
+### While both are read
+
+From the ADR's phase 3 the app grants a role from either the groups above or
+the person's `CoraUserRoles` row, so nobody gains or loses a role by being
+moved before or after the other. The Access page gives each role through both:
+the old group, the row entry and the new Case list group, row first. Removing a
+role takes away the same three, except a Case list's Write group stays while the
+person still holds that type's `Frontline - X` group. The notifications
+pipeline names a frontline party in both `Frontline - X` and `Cases - X Write`.
+A Maintainer therefore needs ownership of the new groups and Contribute on
+`CoraUserRoles` before phase 3 is deployed, or every change from the Access page
+is refused or stops at the row.
 
 ---
 
