@@ -357,6 +357,8 @@ state and keeps `eq 0`.
 
 `capture` is what the Reviewer records against a failed Answer on the Issues tab; `rcaCapture` is what the Responsible Party Manager records against it on the Root Cause tab (ADR-0059). One engine writes both, and neither reads the other's keys.
 
+One key in `answers` is not an Answer to a Question: `case:rootCause` is `{ value: '', rcaCapture: { … } }`, the Case Root Cause Fields the Responsible Party Manager records once for the whole Case. Like a `general:` key it carries a `:`, which no Question Definition id may, so nothing that walks the catalogue reaches it.
+
 A **Remediation Action** the Reviewer selected on a failed Answer is `{ id, text }` in `answer.remediationActions`; how that Answer's remediation ended up is `answer.remediationStatus` (ADR-0037). The `{ id, text, status, cancelReason? }` shape in an `actions`-typed Issue Capture Field value is ADR-0024's retired store: no Case Type declares one and nothing reads it any more (#497).
 
 `value` is a plain string for `yes-no-na` and `single-choice` questions; a `string[]` for `multi-choice`. An empty array means unanswered.

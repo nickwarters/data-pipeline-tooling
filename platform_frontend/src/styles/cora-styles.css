@@ -1334,7 +1334,14 @@
   gap: var(--cora-space-3);
 }
 
+/* The Case Root Cause sits above the Issues as one card of the same kind, with
+   room below it so it reads as about the Case rather than the first Issue. */
+.cora-root-cause-case {
+  margin-bottom: var(--cora-space-4);
+}
+
 .cora-remediation-item,
+.cora-root-cause-case,
 .cora-root-cause-item {
   background: var(--cora-color-surface);
   border: 1px solid var(--cora-color-border);

@@ -439,7 +439,10 @@ per-failure capture; `rootCauseGroups` declares the Root Cause Fields the
 Responsible Party Manager records per Issue once the Case is reportable, in the
 same shape as `captureGroups`, `person` fields included, and must be paired
 with a `rootCause` entry in `sections` (the verify gate refuses one without the
-other), see [ADR-0059](../adr/0059-root-cause-is-a-frontline-capture-section-over-the-failed-answer-lifecycle.md); `remediationStatuses` narrows which Remediation
+other); `rootCauseCaseGroups` declares Case Root Cause Fields in the same shape,
+asked once for the whole Case above the Issues and stored in the Answers blob's
+`case:rootCause` entry, either key alone switching the tab on and no key
+declared in both, see [ADR-0059](../adr/0059-root-cause-is-a-frontline-capture-section-over-the-failed-answer-lifecycle.md); `remediationStatuses` narrows which Remediation
 Resolutions a Reviewer is offered (`['complete', 'cancelled']`), see
 [ADR-0037](../adr/0037-question-level-remediation-resolution.md);
 `extraAmendmentReasons` **adds** to the shared Amendment Reasons offered on the

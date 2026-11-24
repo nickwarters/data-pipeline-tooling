@@ -273,6 +273,15 @@ Each entry in `answers`, keyed by question `id`:
   reportable, including after it is Completed, so it can change on a row whose
   Outcome is already frozen. Its keys are the Case Type's `rootCauseGroups`
   keys and may coincide with `capture` keys without meaning the same thing.
+- **Not every key in `answers` is a Question.** A key containing `:` is
+  namespaced and never a Question Definition id: `general:<key>` is a General
+  Question answer, and `case:rootCause` is the Case Root Cause, shaped
+  `{ "value": "", "rcaCapture": { … } }`, the Case Root Cause Fields the
+  Responsible Party Manager records once for the whole Case (keys from the Case
+  Type's `rootCauseCaseGroups`). Skip every namespaced key when you count
+  Answers or join them to the export; `case:rootCause` is present only once
+  something has been recorded, and is never stripped when an Issue stops
+  failing.
 - `remediationRequired` is the Reviewer's explicit `"yes"` / `"no"` decision on
   a failed Answer. It is absent on Answers that never failed, and on Cases
   completed before the decision existed; treat absent as "not recorded" rather

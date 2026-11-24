@@ -468,7 +468,8 @@ src/
       void-actions.js          # pure Case Details Void control and the patch behind it
       remediation-view.js      # CASE-5 pure Issues and Remediation Actions view
       remediation-tracking-view.js # pure question-level Remediation tab, reviewer + responsible-party renderings (#499)
-      root-cause-view.js       # pure Root Cause tab: the Root Cause Fields per Issue, over each Answer's rcaCapture
+      root-cause-view.js       # pure Root Cause tab: the Case Root Cause Fields once, then the Root
+                               #   Cause Fields per Issue, over each Answer's rcaCapture
       appeal-actions.js        # CASE-6 immutable Appeal/resolution/amendment state transitions
       appeal-effects.js        # the persistence half of those transitions: injected clock + id, SaveQueue writes (#511)
       appeal-view.js           # CASE-6 pure Appeal request form and history view
@@ -574,7 +575,8 @@ src/
       remediation-plugin.js     # Remediation tracking section plugin
     root-cause/
       root-cause-plugin.js      # Root Cause section plugin: the Responsible Party Manager's per-Issue
-                                #   root-cause capture, switched on by a Case Type's rootCauseGroups
+                                #   and per-Case root-cause capture, switched on by a Case Type's
+                                #   rootCauseGroups or rootCauseCaseGroups
     notes/
       notes-plugin.js           # Notes section plugin
     conversation/
@@ -643,6 +645,8 @@ src/
     team-cases-fetcher.js
 
   evaluators/                   # pure logic: applicability, failure, and outcome
+    case-root-cause.js          # the Case Root Cause: the case:rootCause Answers key the Case
+                                #   Root Cause Fields are stored under, and the reader of what it holds
     case-lifecycle.js           # pure Case lifecycle predicates, imported downward by services and
                                 #   Sections — plus what a viewer may DO to a Case, which takes the
                                 #   resolved access map as data rather than reaching for it

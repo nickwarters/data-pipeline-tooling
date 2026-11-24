@@ -12,6 +12,7 @@ import { materializeRemediationActions } from '../../evaluators/failure-evaluato
 import { groupOutcomeTargets } from './group-outcome-view.js';
 import { reviewerResponseOptions } from '../../lib/response-options.js';
 import { applyCapture } from '../../evaluators/issue-capture.js';
+import { CASE_ROOT_CAUSE_KEY } from '../../evaluators/case-root-cause.js';
 import {
   answerRemediation,
   setRemediationStatus,
@@ -210,6 +211,48 @@ export function rootCauseCaptured({
   );
   if (!next) return null;
   return { ...answers, [questionId]: next };
+}
+
+/**
+ * Capture one Case Root Cause Field: a Root Cause Field recorded once for the
+ * Case rather than against one Issue, written to the `rcaCapture` slot of the
+ * Case's own entry in the Answers blob.
+ *
+ * Unlike `rootCauseCaptured` there is no Answer to wait for: the first write
+ * creates the entry, and a write that leaves it holding nothing removes it, so
+ * an empty one is never stored.
+ *
+ * @param {{
+ *   answers: Answers,
+ *   rootCauseCaseGroups: import('../../sharepoint-client.js').CaptureGroup[],
+ *   fieldKey: string,
+ *   value: import('../../evaluators/issue-capture.js').CaptureValue | null,
+ *   canEditRootCause: boolean,
+ * }} input
+ * @returns {Answers | null}
+ */
+export function caseRootCauseCaptured({
+  answers,
+  rootCauseCaseGroups,
+  fieldKey,
+  value,
+  canEditRootCause,
+}) {
+  if (!canEditRootCause) return null;
+  const existing = answers[CASE_ROOT_CAUSE_KEY] ?? { value: '' };
+  const next = applyCapture(
+    existing,
+    rootCauseCaseGroups,
+    fieldKey,
+    value,
+    'rcaCapture'
+  );
+  if (!next) return null;
+  if (Object.keys(next).every((key) => key === 'value')) {
+    const { [CASE_ROOT_CAUSE_KEY]: _drop, ...rest } = answers;
+    return rest;
+  }
+  return { ...answers, [CASE_ROOT_CAUSE_KEY]: next };
 }
 
 /**

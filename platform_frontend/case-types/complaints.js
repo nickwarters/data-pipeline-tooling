@@ -201,6 +201,40 @@ const config = {
     },
   ],
 
+  // Case Root Cause Groups — what the Responsible Party Manager records once
+  // about the whole Case on the same tab, above the Issues. Stored in the
+  // Case's own entry in the Answers blob, apart from any one Issue, so their
+  // keys must not repeat the Root Cause Group keys above.
+  rootCauseCaseGroups: [
+    {
+      key: 'caseChecks',
+      label: 'Case checks',
+      fields: [
+        {
+          key: 'supervisorChecked',
+          label: 'Has a supervisor checked this case?',
+          type: 'radio',
+          options: ['Yes', 'No'],
+          required: true,
+        },
+        {
+          key: 'noFaultRequested',
+          label: 'Has No Fault been requested?',
+          type: 'radio',
+          options: ['Yes', 'No'],
+          required: true,
+        },
+        {
+          key: 'developmentPlanCreated',
+          label: 'Has a development plan been created?',
+          type: 'radio',
+          options: ['Yes', 'No'],
+          required: true,
+        },
+      ],
+    },
+  ],
+
   // General Questions — arbitrary fields a Reviewer answers below the Question
   // Groups on the Review tab. They use the Issue Capture Group field types but
   // are never outcome-driving: nothing here reaches computeOutcome,

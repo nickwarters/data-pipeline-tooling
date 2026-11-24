@@ -21,6 +21,7 @@ import {
   unfilledRequiredGeneralQuestion,
   GENERAL_ANSWER_PREFIX,
 } from '../src/evaluators/general-questions.js';
+import { CASE_ROOT_CAUSE_KEY } from '../src/evaluators/case-root-cause.js';
 import { SHARED_GENERAL_QUESTIONS } from '../case-types/general-questions.js';
 import { resolveCompiledOptions } from '../src/pages/question-bank/question-bank-compile.js';
 import { cases } from '../dev/fixtures/cases.js';
@@ -239,6 +240,7 @@ test('complaints fixtures: every Answer key names a Question the catalogue still
   for (const row of liveBankComplaintsCases()) {
     for (const key of Object.keys(row.answers)) {
       if (key.startsWith(GENERAL_ANSWER_PREFIX)) continue;
+      if (key === CASE_ROOT_CAUSE_KEY) continue;
       assert.ok(
         ids.has(key),
         `${row.id} answers ${key}, which is not in the catalogue`
@@ -256,6 +258,7 @@ test('complaints fixtures: no Answer is stored against a Question the Case hides
     const applicable = evaluate(config.questions, row.answers);
     for (const key of Object.keys(row.answers)) {
       if (key.startsWith(GENERAL_ANSWER_PREFIX)) continue;
+      if (key === CASE_ROOT_CAUSE_KEY) continue;
       assert.ok(
         applicable.has(key),
         `${row.id} answers ${key}, which its own Answers hide`

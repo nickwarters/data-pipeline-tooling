@@ -215,6 +215,10 @@ export async function checkCaseTypes(options = {}) {
     failures.push(
       ...checkCaptureGroups(entry.slug, file, config, ROOT_CAUSE_CAPTURE)
     );
+    failures.push(
+      ...checkCaptureGroups(entry.slug, file, config, CASE_ROOT_CAUSE_CAPTURE)
+    );
+    failures.push(...checkRootCauseKeys(entry.slug, file, config));
     failures.push(...checkRootCauseSwitch(entry.slug, file, config));
     failures.push(...checkQuestions(entry.slug, file, config));
     failures.push(...checkSections(entry.slug, file, config));
@@ -292,8 +296,49 @@ const ROOT_CAUSE_CAPTURE = {
 };
 
 /**
+ * The Case Root Cause Fields, declared as `rootCauseCaseGroups`: the same
+ * shape and types as `rootCauseGroups`, filled in once for the Case.
+ *
+ * @type {CaptureGroupsSpec}
+ */
+const CASE_ROOT_CAUSE_CAPTURE = {
+  property: 'rootCauseCaseGroups',
+  fieldNoun: 'Case Root Cause Field',
+  groupNoun: 'Case Root Cause Group',
+  recorder: 'the Responsible Party Manager',
+};
+
+/**
+ * The two Root Cause families share one tab and one author, so a field key may
+ * mean only one thing across them. Each family's own duplicates are reported
+ * by its shape check; this reports only a key the two families both declare.
+ *
+ * @param {string} slug
+ * @param {string} file
+ * @param {any} config
+ * @returns {Failure[]}
+ */
+function checkRootCauseKeys(slug, file, config) {
+  /** @param {unknown} groups @returns {string[]} */
+  const keysOf = (groups) =>
+    Array.isArray(groups)
+      ? groups.flatMap((group) =>
+          (group?.fields ?? []).map((/** @type {any} */ field) => field?.key)
+        )
+      : [];
+  const perIssue = new Set(keysOf(config?.rootCauseGroups));
+  return [...new Set(keysOf(config?.rootCauseCaseGroups))]
+    .filter((key) => perIssue.has(key))
+    .map((key) => ({
+      kind: 'case-type',
+      file,
+      message: `Case Type "${slug}": Root Cause Field key "${key}" is declared in both \`rootCauseGroups\` and \`rootCauseCaseGroups\`, so the Root Cause tab would ask two questions under one name`,
+    }));
+}
+
+/**
  * The Root Cause Section is switched on by two keys, and they must agree:
- * `rootCauseGroups` says what to record, `sections.rootCause` puts the tab in
+ * `rootCauseGroups` or `rootCauseCaseGroups` says what to record, `sections.rootCause` puts the tab in
  * the Case Type's Section set. Groups without the Section would never be shown;
  * the Section without groups would be a tab with nothing in it, which the
  * Section refuses to show.
@@ -304,8 +349,10 @@ const ROOT_CAUSE_CAPTURE = {
  * @returns {Failure[]}
  */
 function checkRootCauseSwitch(slug, file, config) {
-  const groups = config?.rootCauseGroups;
-  const declaresGroups = Array.isArray(groups) && groups.length > 0;
+  /** @param {unknown} groups */
+  const declares = (groups) => Array.isArray(groups) && groups.length > 0;
+  const declaresGroups =
+    declares(config?.rootCauseGroups) || declares(config?.rootCauseCaseGroups);
   const sections = config?.sections;
   // An absent `sections` is every Section, so only an explicit set can leave
   // the Root Cause Section out.
@@ -320,12 +367,12 @@ function checkRootCauseSwitch(slug, file, config) {
   ];
   if (declaresGroups && explicit && !listsSection) {
     return fail(
-      'declares `rootCauseGroups` but its `sections` leave out `rootCause`, so the Root Cause tab never shows them'
+      'declares `rootCauseGroups` or `rootCauseCaseGroups` but its `sections` leave out `rootCause`, so the Root Cause tab never shows them'
     );
   }
   if (listsSection && !declaresGroups) {
     return fail(
-      'lists `sections.rootCause` but declares no `rootCauseGroups`, so the Root Cause tab has nothing to record'
+      'lists `sections.rootCause` but declares no `rootCauseGroups` or `rootCauseCaseGroups`, so the Root Cause tab has nothing to record'
     );
   }
   return [];

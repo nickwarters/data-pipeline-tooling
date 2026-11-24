@@ -312,8 +312,10 @@ carries at least one Issue. The manager edits it while the Case is `Actions In P
 _or_ `Completed`, so a cause can be written after the Reviewer has closed the Case; the
 reviewer side (**Assigned Reviewer**, other Reviewers, **Reviewer Manager**, **Case Type
 Owner**, **Journey Owner**, **Controls**) reads it; the **Responsible Party** never sees it.
-Switched on per Case Type by declaring `rootCauseGroups` and listing `rootCause` in
-`sections`; the verify gate refuses one without the other. A `required` Root Cause Field
+Above the Issues it also asks the Case Type's **Case Root Cause Field**s, once for the
+whole Case. Switched on per Case Type by declaring `rootCauseGroups`, `rootCauseCaseGroups`
+or both, and listing `rootCause` in `sections`; the verify gate refuses one without the
+other. A `required` Root Cause Field
 is marked as still to record, on the tab and in its Summary block, and holds nothing: no
 transition waits on it ([ADR-0059](./docs/adr/0059-root-cause-is-a-frontline-capture-section-over-the-failed-answer-lifecycle.md)).
 _Avoid_: Root cause for the Complaints **Issue Capture Group** `root-cause` and its
@@ -337,6 +339,24 @@ are unique within the Case Type's `rootCauseGroups` only, and a Root Cause Field
 a key with an Issue Capture Field. Shares the failed-Answer lifecycle: **stripped** when
 the Answer stops failing, kept through a **Reopen**.
 _Avoid_: Issue Capture Field (that is the Reviewer's, in `capture`), RCA field
+
+**Case Root Cause Field**:
+A typed input the **Responsible Party Manager** records once about the whole **Case** on
+the **Root Cause Section**, above its **Issues**, rather than against any one of them
+(Complaints asks whether a supervisor has checked the Case, whether No Fault has been
+requested, and whether a development plan has been created). Declared per **Case Type**
+as `rootCauseCaseGroups`, in the same group and field shape and type set as
+`rootCauseGroups`, under one key namespace with them: a key may not mean two things on
+the one tab, and a `showWhen` reaches only fields of its own group. Stored in the
+`rcaCapture` of one reserved entry in the Answers blob, `case:rootCause`, whose `value` is
+always empty: the `:` keeps it out of every catalogue-driven evaluator, as the `general:`
+namespace does for **General Question**s, so it never counts towards applicability,
+progress or the **Outcome**. It is not a failed Answer, so nothing strips it: it outlives
+an **Issue** that stops failing, and a **Reopen** keeps it. A `required` one is marked as
+still to record and holds no transition, like a **Root Cause Field**
+([ADR-0059](./docs/adr/0059-root-cause-is-a-frontline-capture-section-over-the-failed-answer-lifecycle.md)).
+_Avoid_: General Question (that is the Reviewer's, under `general:`), Case Detail (read-only
+source data in `Details`)
 
 **Remediation Detail** _(superseded)_:
 Former name for a single configurable extra capture field on a failed **Answer**. Replaced by **Issue Capture Field** / **Issue Capture Group** once attribution and actions were unified into one typed, grouped, conditional capture engine. Kept here only to redirect old references.
@@ -728,6 +748,7 @@ _Avoid_: Overridden Outcome, Amended Outcome (that is the _record_; Current Outc
 - An **Answer** has zero-to-many **Remediation Actions**.
 - A _failed_ **Answer** has zero-or-one **Attributed Party**.
 - A _failed_ **Answer** carries the Reviewer's **Issue Capture Field** values and, apart from them, the **Responsible Party Manager**'s **Root Cause Field** values.
+- A **Case** carries zero-or-one set of **Case Root Cause Field** values, in its `case:rootCause` entry.
 - A **Case** has one **Conversation** (= many **Messages**).
 - A **Case** has one **Assigned Reviewer** and one **Responsible Party**.
 
