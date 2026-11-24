@@ -566,11 +566,27 @@ test('pure editor variants', async (t) => {
   const optionCases = [
     ['authored response options keep their order', current.questions[0], ['Yes', 'No']],
     ['fixed yes-no options ignore authored mappings', { responseType: 'yes-no-na', optionOutcomes: { No: 'fail' } }, ['Yes', 'No']],
-    ['outcome questions use configured wording', { responseType: 'outcome' }, ['Pass', 'Fail']],
+    ['outcome questions answer in the configured Outcome ids', { responseType: 'outcome' }, ['pass', 'fail']],
   ];
   for (const [name, question, expected] of optionCases) {
     await t.test(name, () => assert.deepEqual(optionsFor(question), expected));
   }
+
+  await t.test('an outcome question shows each Outcome by its wording', () => {
+    const view = /** @type {HTMLElement} */ (
+      OptionsEditor({
+        question: { id: 'q-outcome', responseType: 'outcome' },
+        outcomeOptions: current.outcomeOptions,
+        onRemoveOption: NOOP,
+        onAddOption: NOOP,
+        onSetOptionOutcome: NOOP,
+      })
+    );
+    assert.deepEqual(
+      [...view.querySelectorAll('.opt-label')].map((el) => el.textContent),
+      current.outcomeOptions.map((/** @type {any} */ o) => o.wording)
+    );
+  });
 
   await t.test('an empty single-choice editor explains the N/A option', () => {
     const view = /** @type {HTMLElement} */ (

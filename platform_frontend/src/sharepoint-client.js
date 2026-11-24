@@ -48,6 +48,13 @@
  * unknown key round-trips harmlessly through the JSON blob, so a blob written
  * under an older shape needs no migration.
  *
+ * `value` holds the **id** of each selected response, never the wording it is
+ * shown with. For an `outcome`-type question that is the Outcome id
+ * (`OutcomeOption.id`), the same id a Case's Outcome snapshot stores, so an
+ * Outcome can be reworded without moving what an Answer recorded. Every other
+ * response type's option text is its own id. An Answer recorded before this
+ * held the Outcome wording; `withResponseIds` upgrades it on load.
+ *
  * `remediationRequired` is the Reviewer's explicit decision on a *failed*
  * Answer. It is deliberately `'yes' | 'no'` rather than a boolean because
  * absence has to stay distinguishable from "no" once the Answers map is
@@ -301,16 +308,22 @@
 /**
  * `responseType` is one of `yes-no-na` | `single-choice` | `multi-choice` |
  * `outcome`. `yes-no-na` is single-choice with the fixed options `Yes`/`No`;
- * `outcome` is single-choice whose options are the Case Type's configured
- * Outcomes (read-only). Every response type additionally offers the universal
+ * `outcome` is single-choice whose options are the ids of the Case Type's
+ * configured Outcomes (read-only). Every response type additionally offers the universal
  * `NA` option to the Reviewer (`src/lib/response-options.js`); it is never
- * authorable and never maps to an Outcome. `optionOutcomes` maps each response option label to a
+ * authorable and never maps to an Outcome. `optionOutcomes` maps each response option to a
  * configured Outcome id (`OutcomeOption.id`); it is what drives the Outcome —
  * the highest-scoring applicable mapped Outcome wins. The same mapping drives
  * the Issues/Remediation flow: every option mapped to a non-default Outcome is
  * a failure. `failureValues` is that derived list — stamped at load by
  * `withDerivedFailureValues` (evaluators/failure-evaluator.js), never authored
  * or stored. The universal N/A never fails.
+ *
+ * `optionLabels` is the wording each option is shown with when the option is
+ * an id rather than its own text — an `outcome`-type question's Outcome ids,
+ * labelled with their wording. Like `failureValues` it is stamped where a
+ * catalogue is materialised (`withResponseLabels`), never authored or stored,
+ * so rewording an Outcome moves only what is displayed.
  *
  * `labelIds` references the owning Case Type's `labels` by id. It is
  * reporting metadata only and does not affect how a question is presented.
@@ -332,6 +345,7 @@
  * responseType: 'yes-no-na' | 'single-choice' | 'multi-choice' | 'outcome',
  * options?: string[],
  * optionOutcomes?: Record<string, string>,
+ * optionLabels?: Record<string, string>,
  * showWhen?: Record<string, unknown>,
  * failureValues?: string[],
  * remediationActions?: Array<string | RemediationActionDefinition>,

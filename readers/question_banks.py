@@ -68,8 +68,11 @@ _QUESTION_FIELDS = {
     "remediationActions": "remediation_actions",
 }
 
-#: Outcome option field -> column. ``wording`` is the key side of a question's
-#: ``option_outcomes`` map, ``id`` the value side, ``severity`` the score.
+#: Outcome option field -> column. ``id`` is the value side of a question's
+#: ``option_outcomes`` map -- and, for an ``outcome`` question published since
+#: Answers stored the outcome id, the key side too -- ``wording`` what a Reviewer
+#: reads, ``severity`` the score. An older snapshot keys an ``outcome``
+#: question's map by ``wording``, as its Answers do.
 _OUTCOME_FIELDS = {
     "id": "id",
     "wording": "wording",

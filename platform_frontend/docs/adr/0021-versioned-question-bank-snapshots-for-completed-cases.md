@@ -6,6 +6,12 @@ Date: 2026-06-25
 
 Accepted (amended by [ADR-0023], Jul 2026)
 
+> **Amendment (2026-10-18, Answers store the response id).** Since
+> [ADR-0059](./0059-answers-store-the-response-id.md), a version publishes an
+> `outcome` question's options as the Outcome ids rather than their wordings.
+> Versions published before it keep the wordings, and so do the Answers frozen
+> against them; each version maps its own kind of value.
+
 > **Amendment (2026-08-23, the version is declared, not derived).** The
 > stamping path used to _recompute_ the identity: `getExportHash` hashed the
 > current bank artifact at the moment a Case became reportable. That reintroduced

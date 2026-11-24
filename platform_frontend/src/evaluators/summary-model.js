@@ -2,6 +2,7 @@
 import { evaluate } from './applicability-evaluator.js';
 import { isFailure } from './failure-evaluator.js';
 import { answerRemediation } from './answer-remediation.js';
+import { answerLabel } from '../lib/response-options.js';
 
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
@@ -85,7 +86,7 @@ export function buildSummaryModel(catalogue, answers) {
       category: q.category || undefined,
       questionGroup: q.questionGroup,
       text: q.text,
-      answer: Array.isArray(v) ? v.join(', ') : v,
+      answer: answerLabel(q, v),
       actions,
     };
   });

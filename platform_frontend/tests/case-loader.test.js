@@ -1106,3 +1106,121 @@ test('CaseLoader.load(): a Case Type without a selection loads its whole bank', 
   );
   assert.deepEqual(Object.keys(loader.answers), ['q-mortgage']);
 });
+
+// --- Outcome Questions answer in the Outcome id ---
+
+const OUTCOME_VOCABULARY = [
+  { id: 'good', wording: 'Good', severity: 0 },
+  { id: 'poor', wording: 'Poor', severity: 100 },
+];
+
+/**
+ * Registers a Case Type with one Outcome Question compiled the way the bank
+ * compiles it: its options are the Outcome ids.
+ *
+ * @param {import('node:test').TestContext} t
+ * @param {typeof OUTCOME_VOCABULARY} [outcomeOptions]
+ */
+function registerOutcomeCaseType(t, outcomeOptions = OUTCOME_VOCABULARY) {
+  return registerFixtureCaseType(t, 'outcome-ids', async () => ({
+    default: /** @type {any} */ ({
+      displayName: 'Outcome Ids Fixture',
+      listName: 'Cases-OutcomeIdsFixture',
+      questions: [
+        {
+          id: 'q-outcome',
+          text: 'How was it handled?',
+          responseType: 'outcome',
+          options: ['good', 'poor'],
+          optionOutcomes: { good: 'good', poor: 'poor' },
+          deprecated: false,
+        },
+      ],
+      computeOutcome: () => ({ outcome: 'good' }),
+      outcomeOptions,
+      defaultOutcomeId: 'good',
+    }),
+  }));
+}
+
+test('CaseLoader.load(): an Outcome Question is shown with the wording of each Outcome id', async (t) => {
+  const reworded = [
+    OUTCOME_VOCABULARY[0],
+    { ...OUTCOME_VOCABULARY[1], wording: 'Below standard' },
+  ];
+  const slug = registerOutcomeCaseType(t, reworded);
+  const loader = makeLoader({
+    row: { caseType: slug, answers: { 'q-outcome': { value: 'poor' } } },
+  });
+
+  await loader.load();
+
+  assert.deepEqual(loader.catalogue[0].optionLabels, {
+    good: 'Good',
+    poor: 'Below standard',
+  });
+  assert.deepEqual(
+    loader.toStoreSnapshot().answers['q-outcome'],
+    { value: 'poor' },
+    'a reworded Outcome leaves the recorded Answer where it was'
+  );
+});
+
+test('CaseLoader.load(): an Answer recorded as an Outcome wording is read as its id', async (t) => {
+  const slug = registerOutcomeCaseType(t);
+  const loader = makeLoader({
+    row: {
+      caseType: slug,
+      answers: { 'q-outcome': { value: 'Poor', justification: 'Late.' } },
+    },
+  });
+
+  await loader.load();
+
+  assert.deepEqual(loader.toStoreSnapshot().answers['q-outcome'], {
+    value: 'poor',
+    justification: 'Late.',
+  });
+  assert.deepEqual(loader.catalogue[0].failureValues, ['poor']);
+});
+
+test('CaseLoader.load(): a Case frozen on a version listing the wordings keeps the wordings', async () => {
+  const loader = makeLoader({
+    row: {
+      status: 'Completed',
+      completedAt: '2026-01-01T00:00:00Z',
+      questionBankVersion: 'v-wordings',
+      answers: { 'q-outcome': { value: 'Poor' } },
+    },
+    client: {
+      getVersionedExport: async () => ({
+        slug: 'example-review',
+        questions: [
+          {
+            id: 'q-outcome',
+            text: 'How was it handled?',
+            category: null,
+            responseType: 'outcome',
+            options: ['Good', 'Poor'],
+            optionOutcomes: { Good: 'good', Poor: 'poor' },
+            showWhen: null,
+            deprecated: false,
+          },
+        ],
+        outcomeOptions: OUTCOME_VOCABULARY,
+        defaultOutcomeId: 'good',
+      }),
+    },
+  });
+
+  await loader.load();
+
+  assert.deepEqual(loader.toStoreSnapshot().answers['q-outcome'], {
+    value: 'Poor',
+  });
+  assert.equal(
+    loader.catalogue[0].optionLabels,
+    undefined,
+    'its options already read as the Reviewer saw them'
+  );
+});

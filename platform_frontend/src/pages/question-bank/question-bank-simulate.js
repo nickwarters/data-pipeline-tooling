@@ -29,7 +29,10 @@ import {
   isFailure,
   withDerivedFailureValues,
 } from '../../evaluators/failure-evaluator.js';
-import { computeConfiguredOutcome } from '../../evaluators/configured-outcome.js';
+import {
+  computeConfiguredOutcome,
+  withResponseIds,
+} from '../../evaluators/configured-outcome.js';
 import { resolveCompiledOptions } from './question-bank-compile.js';
 
 /**
@@ -318,7 +321,14 @@ export function simulateBankImpact(baselineBank, draftBank, sampleCases) {
   };
 
   const cases = sampleCases.map((sample) => {
-    const answers = sample.answers ?? {};
+    // A sampled historical Case may hold Outcome wordings from before Answers
+    // stored the Outcome id. It was answered against the published bank, so
+    // that bank's vocabulary reads them — the draft may have reworded them.
+    const answers = withResponseIds(
+      baseQuestions,
+      sample.answers ?? {},
+      baselineBank.outcomeOptions
+    );
     const { applicable: baseApplicable, prunedAnswers: baseAnswers } =
       stableApplicability(baseQuestions, answers);
     const { applicable: draftApplicable, prunedAnswers: draftAnswers } =

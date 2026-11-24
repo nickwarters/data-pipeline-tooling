@@ -129,8 +129,9 @@ class ImportBankFromExcelTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         new = self.read_bank()["questions"][0]
         self.assertEqual(new["responseType"], "outcome")
-        self.assertEqual(new["options"], [o["wording"] for o in OUTCOMES])
-        self.assertEqual(new["optionOutcomes"], {o["wording"]: o["id"] for o in OUTCOMES})
+        # Options are the Outcome ids an Answer stores, not the wordings shown.
+        self.assertEqual(new["options"], [o["id"] for o in OUTCOMES])
+        self.assertEqual(new["optionOutcomes"], {o["id"]: o["id"] for o in OUTCOMES})
 
     def test_a_minted_id_never_takes_one_a_later_row_spells_out(self) -> None:
         self.write_bank(existing_bank())
@@ -143,9 +144,9 @@ class ImportBankFromExcelTest(unittest.TestCase):
         self.assertEqual(len(ids), len(set(ids)))
         self.assertEqual(ids[:2], ["q-wr-0004", "q-wr-0003"])
 
-    def test_a_question_moved_off_outcome_does_not_keep_the_outcome_wordings_as_options(self) -> None:
+    def test_a_question_moved_off_outcome_does_not_keep_the_outcomes_as_options(self) -> None:
         bank = existing_bank()
-        bank["questions"][1]["options"] = [o["wording"] for o in OUTCOMES]
+        bank["questions"][1]["options"] = [o["id"] for o in OUTCOMES]
         self.write_bank(bank)
         path = self.workbook([["id", "text", "responseType"], ["q-wr-0002", "Was it tested?", "yes-no-na"]])
 

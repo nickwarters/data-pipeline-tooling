@@ -1,12 +1,13 @@
 // @ts-check
 /**
  * The Group Outcome control — one selection that records the same Outcome
- * wording across a Question Group — and the two pure helpers that say what it
+ * across a Question Group — and the two pure helpers that say what it
  * targets and what it displays. Nothing group-level is stored on the Case, so
  * both are derived from the Answers on every render.
  */
 
 import { h } from '../../lib/html.js';
+import { responseLabel } from '../../lib/response-options.js';
 
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
@@ -67,9 +68,13 @@ export function groupOutcomeValue(targets, answers) {
 }
 
 /**
+ * `options` are the stored response values (Outcome ids) the control writes;
+ * `optionLabels` is the wording each is shown with.
+ *
  * @param {{
  *   questionGroup: string,
  *   options: string[],
+ *   optionLabels?: Record<string, string>,
  *   value: string,
  *   onGroupOutcome: (questionGroup: string, value: string) => void,
  * }} props
@@ -77,6 +82,7 @@ export function groupOutcomeValue(targets, answers) {
 export function GroupOutcomeControl({
   questionGroup,
   options,
+  optionLabels = {},
   value,
   onGroupOutcome,
 }) {
@@ -103,7 +109,9 @@ export function GroupOutcomeControl({
       // value alone while the authored one is unchanged — the control would sit
       // blank over a group that still holds the wording.
       h('option', { value: '', disabled: true }, 'Set group outcome…'),
-      ...options.map((option) => h('option', { value: option }, option))
+      ...options.map((option) =>
+        h('option', { value: option }, responseLabel({ optionLabels }, option))
+      )
     )
   );
 }

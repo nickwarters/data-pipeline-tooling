@@ -52,6 +52,27 @@ test('the control labels itself and offers a placeholder before every wording', 
   assert.match(select._children[0].textContent, /Set group outcome/);
 });
 
+test('the control writes each Outcome id and shows it by its wording', () => {
+  const select = findByClass(
+    control({
+      options: ['good', 'poor', NA_VALUE],
+      optionLabels: { good: 'Good', poor: 'Below standard' },
+    }),
+    'cora-group-outcome'
+  );
+
+  assert.deepEqual(
+    select._children
+      .slice(1)
+      .map((/** @type {any} */ option) => [option.value, option.textContent]),
+    [
+      ['good', 'Good'],
+      ['poor', 'Below standard'],
+      [NA_VALUE, NA_VALUE],
+    ]
+  );
+});
+
 test('choosing a wording reports it once for the group', () => {
   /** @type {any[]} */
   const calls = [];

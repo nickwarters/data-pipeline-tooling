@@ -48,7 +48,7 @@ const COMPLAINTS_QUESTIONS = 49;
 // against a hidden Question still scores, so answering it where the deadline
 // was met would move the Outcome from a Question the Reviewer never saw.
 const REFERRAL_RIGHTS = 'q-cmp-0046';
-const CLOSURE_DEADLINE_MET = 'Good';
+const CLOSURE_DEADLINE_MET = 'good';
 
 /**
  * Answers the whole catalogue with one response, skipping any Question that
@@ -58,7 +58,8 @@ const CLOSURE_DEADLINE_MET = 'Good';
  * a fixture built from the bank would make any test comparing the two assert
  * the bank against itself.
  *
- * @param {string} value the response given to every applicable Question
+ * @param {string} value the response given to every applicable Question — an
+ *   Outcome id, which is what an Answer to an Outcome Question stores
  * @returns {Record<string, Answer>}
  */
 function outcomeAnswers(value) {
@@ -106,7 +107,9 @@ function outcomeAnswers(value) {
  * The two frozen Cases stamp a `questionBankVersion`, so they resolve their
  * questions from that published version rather than from today's bank. Their
  * Answers therefore name only the ids their own version carries;
- * `outcomeAnswers()` would answer 46 questions neither version asks.
+ * `outcomeAnswers()` would answer 46 questions neither version asks. They also
+ * hold the Outcome *wording* rather than its id: both versions were published
+ * before Answers stored the id, and list the wordings as their options.
  *
  * My Team workload (read by ?asUser=reviewer-manager):
  *   complaints-team-1 — In-progress and on hold, under the first staff member
@@ -162,9 +165,9 @@ export const cases = [
     responsibleParty: 'user-agent-b',
     responsiblePartyDisplayName: 'Rowan Agent',
     answers: {
-      ...outcomeAnswers('Good'),
+      ...outcomeAnswers('good'),
       'q-cmp-0016': {
-        value: 'Poor',
+        value: 'poor',
         remediationRequired: 'yes',
         justification:
           'The upheld complaint was closed without the redress offer being checked.',
@@ -211,13 +214,13 @@ export const cases = [
       // its Remediation Actions entirely, while `q-cmp-0003` is left undecided,
       // which is what keeps the completion button disabled with its reason once
       // the rest of the Case is answered.
-      'q-cmp-0001': { value: 'Good' },
-      'q-cmp-0002': { value: 'Poor', remediationRequired: 'no' },
-      'q-cmp-0003': { value: 'Poor' },
-      'q-cmp-0004': { value: 'Good' },
-      'q-cmp-0005': { value: 'Good' },
-      'q-cmp-0006': { value: 'Good' },
-      'q-cmp-0007': { value: 'Good' },
+      'q-cmp-0001': { value: 'good' },
+      'q-cmp-0002': { value: 'poor', remediationRequired: 'no' },
+      'q-cmp-0003': { value: 'poor' },
+      'q-cmp-0004': { value: 'good' },
+      'q-cmp-0005': { value: 'good' },
+      'q-cmp-0006': { value: 'good' },
+      'q-cmp-0007': { value: 'good' },
     },
     conversation: [],
     details: {
@@ -246,9 +249,9 @@ export const cases = [
     responsibleParty: 'user-agent-b',
     responsiblePartyDisplayName: 'Rowan Agent',
     answers: {
-      ...outcomeAnswers('Good'),
+      ...outcomeAnswers('good'),
       'q-cmp-0016': {
-        value: 'Poor',
+        value: 'poor',
         justification: 'Upheld complaint closed without offering redress.',
       },
     },
@@ -281,7 +284,7 @@ export const cases = [
     responsibleParty: 'user-agent-a',
     responsiblePartyDisplayName: 'Frankie Agent',
     answers: {
-      ...outcomeAnswers('Poor with harm'),
+      ...outcomeAnswers('poor-with-harm'),
     },
     conversation: [],
     details: {
@@ -314,9 +317,9 @@ export const cases = [
       // All-Good across the rest of the catalogue, so the Case keeps exactly the
       // two remediated failures the appeal's citedAnswerKeys point at and the
       // Controls resolve demo stays legible.
-      ...outcomeAnswers('Good'),
+      ...outcomeAnswers('good'),
       'q-cmp-0001': {
-        value: 'Poor with harm',
+        value: 'poor-with-harm',
         remediationRequired: 'yes',
         justification:
           'The complaint was logged four working days after it was received.',
@@ -328,7 +331,7 @@ export const cases = [
         ],
       },
       'q-cmp-0016': {
-        value: 'Poor with harm',
+        value: 'poor-with-harm',
         remediationRequired: 'yes',
         justification:
           'Redress was not checked against the methodology after the upheld decision.',
@@ -398,9 +401,9 @@ export const cases = [
     answers: {
       // All-Good across the rest of the catalogue adds no failures, so the
       // one-resolved/one-unresolved Remediation demo below is unchanged.
-      ...outcomeAnswers('Good'),
+      ...outcomeAnswers('good'),
       'q-cmp-0001': {
-        value: 'Poor with harm',
+        value: 'poor-with-harm',
         remediationRequired: 'yes',
         justification:
           'The complaint was logged six working days after it was received.',
@@ -425,7 +428,7 @@ export const cases = [
         },
       },
       'q-cmp-0016': {
-        value: 'Poor with harm',
+        value: 'poor-with-harm',
         remediationRequired: 'yes',
         justification:
           'The upheld complaint was closed before the redress calculation was checked.',
@@ -678,9 +681,9 @@ export const cases = [
     responsibleParty: 'user-agent-c',
     responsiblePartyDisplayName: 'Noor Agent',
     answers: {
-      ...outcomeAnswers('Good'),
+      ...outcomeAnswers('good'),
       'q-cmp-0016': {
-        value: 'Poor',
+        value: 'poor',
         justification: 'Upheld complaint closed without offering redress.',
       },
     },
@@ -719,8 +722,8 @@ export const cases = [
     responsibleParty: 'user-agent-a',
     responsiblePartyDisplayName: 'Frankie Agent',
     answers: {
-      'q-cmp-0001': { value: 'Good' },
-      'q-cmp-0002': { value: 'Good' },
+      'q-cmp-0001': { value: 'good' },
+      'q-cmp-0002': { value: 'good' },
     },
     conversation: [],
     notes: 'Same complaint as CR-2001; closing this one.',
@@ -749,9 +752,9 @@ export const cases = [
     responsibleParty: 'user-agent-b',
     responsiblePartyDisplayName: 'Rowan Agent',
     answers: {
-      ...outcomeAnswers('Good'),
+      ...outcomeAnswers('good'),
       'q-cmp-0016': {
-        value: 'Poor',
+        value: 'poor',
         remediationRequired: 'yes',
         justification: 'The redress offer could not be checked.',
         freeFormRemediation:
@@ -805,7 +808,7 @@ export const cases = [
         responsiblePartyDisplayName: 'Frankie Agent',
         // Past the reportable milestone, so the catalogue is answered and the
         // Outcome frozen, as it is on every other reportable fixture row.
-        answers: outcomeAnswers('Good'),
+        answers: outcomeAnswers('good'),
         conversation: [],
         notes: '',
         completedAt: null,

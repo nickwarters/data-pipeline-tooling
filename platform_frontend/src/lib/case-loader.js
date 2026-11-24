@@ -12,6 +12,10 @@ import {
   evaluate,
 } from '../evaluators/applicability-evaluator.js';
 import { withDerivedFailureValues } from '../evaluators/failure-evaluator.js';
+import {
+  withResponseIds,
+  withResponseLabels,
+} from '../evaluators/configured-outcome.js';
 import { validateCaptureGroups } from '../evaluators/issue-capture.js';
 import {
   validateGeneralQuestions,
@@ -359,14 +363,25 @@ export class CaseLoader {
         : config.defaultOutcomeId) ?? ''
     );
 
+    // An Outcome question's options are Outcome ids and are shown with their
+    // wording. A frozen Case reads both from the vocabulary it was published
+    // with, so a later rewording cannot change what its Reviewer chose from.
+    const outcomeOptions =
+      (stampedVersion && versionedExport
+        ? versionedExport.outcomeOptions
+        : undefined) ??
+      config.outcomeOptions ??
+      [];
+    this.catalogue = withResponseLabels(this.catalogue, outcomeOptions);
+
     // The `general:` answer-key namespace only isolates General Questions from
     // the catalogue while no Question Definition id can be mistaken for one.
     validateAnswerKeyNamespace(this.catalogue);
 
-    this.answers = withoutDeselectedAnswers(
-      caseRow.answers,
-      bankQuestions,
-      this.catalogue
+    this.answers = withResponseIds(
+      this.catalogue,
+      withoutDeselectedAnswers(caseRow.answers, bankQuestions, this.catalogue),
+      outcomeOptions
     );
 
     const actualUserId = this.currentUserId || currentUser.id;

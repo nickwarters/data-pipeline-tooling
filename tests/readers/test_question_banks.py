@@ -21,7 +21,9 @@ from tests.framework_testing import rows_of
 BANKS = (
     Path(__file__).resolve().parents[2] / "platform_frontend" / "case-types" / "banks"
 )
-CURRENT_VERSION = "49fee46ee894ffc9f98557f181d8575cadf07d3c58ca072c9b6a1ea38fe69ec4"
+CURRENT_VERSION = "02d3770be53b8824a13e2a8c7992515f3bbdbcf8f3c1cdc3000f77d9b03b17f0"
+# The last version published while an outcome question's options were wordings.
+WORDING_VERSION = "49fee46ee894ffc9f98557f181d8575cadf07d3c58ca072c9b6a1ea38fe69ec4"
 EARLIER_VERSION = "943c9dade830929aa91da20a91d34ddd4cf2ccec81b9b9c479a38a8e0ea98d4b"
 
 
@@ -81,7 +83,8 @@ def test_every_row_carries_the_envelope_the_failure_test_needs():
         for value, outcome in mapping.items()
         if value != "NA" and outcome != row["default_outcome_id"]
     }
-    assert failing == {"Good with process enhancement", "Poor", "Poor with harm"}
+    # The outcome ids an Answer stores, not the wordings a Reviewer reads.
+    assert failing == {"good-with-process-enhancement", "poor", "poor-with-harm"}
 
 
 def test_the_declared_order_of_the_questions_survives_as_a_column():
@@ -267,10 +270,12 @@ def test_the_two_readers_join_on_what_a_question_maps_its_answers_to():
     outcomes = rows_of(store.outcomes_reader("complaints").read())
 
     declared = {row["id"] for row in outcomes}
-    wordings = {row["wording"] for row in outcomes}
     for question in questions:
         mapping = json.loads(question["option_outcomes"])
-        assert set(mapping) <= wordings
+        # An outcome question's options are the outcome ids an Answer stores,
+        # each mapped to itself; the wording lives only on the outcome row.
+        if question["response_type"] == "outcome":
+            assert set(mapping) <= declared
         assert set(mapping.values()) <= declared
 
 
@@ -417,6 +422,7 @@ def test_the_versions_sweep_stacks_every_published_snapshot():
         per_version.setdefault(row["version"], []).append(row["id"])
     assert {version: len(ids) for version, ids in per_version.items()} == {
         CURRENT_VERSION: 49,
+        WORDING_VERSION: 49,
         "5b4be525cff4b0321856f70662112ee6bf57d4af8399d9d0a1ae8db8d8a024cd": 3,
         EARLIER_VERSION: 2,
     }
@@ -428,7 +434,7 @@ def test_the_versions_sweep_gives_the_severities_of_each_publication():
     per_version = {}
     for row in rows:
         per_version.setdefault(row["version"], {})[row["id"]] = row["severity"]
-    assert len(per_version) == 3
+    assert len(per_version) == 4
     assert all(scores["poor-with-harm"] == 100 for scores in per_version.values())
 
 
@@ -503,6 +509,7 @@ def test_a_chronological_order_is_the_consumers_and_every_snapshot_carries_it():
     assert [version for _, version in ordered] == [
         "5b4be525cff4b0321856f70662112ee6bf57d4af8399d9d0a1ae8db8d8a024cd",
         EARLIER_VERSION,
+        WORDING_VERSION,
         CURRENT_VERSION,
     ]
 
