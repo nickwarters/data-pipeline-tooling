@@ -134,6 +134,7 @@ export const cases = [
     status: 'In-progress',
     assignedReviewer: 'user-reviewer',
     assignedReviewerManager: 'user-rm',
+    currentReviewerManager: 'user-rm',
     responsibleParty: 'user-agent-a',
     responsiblePartyDisplayName: 'Frankie Agent',
     answers: {},
@@ -159,6 +160,7 @@ export const cases = [
     status: 'Actions In Progress',
     assignedReviewer: 'user-reviewer-2',
     assignedReviewerManager: 'user-rm',
+    currentReviewerManager: 'user-rm',
     responsibleParty: 'user-agent-b',
     responsiblePartyDisplayName: 'Rowan Agent',
     answers: {
@@ -390,11 +392,13 @@ export const cases = [
     // row rather than group membership, so naming them here is what makes the
     // Remediation tab's two renderings demoable from every angle.
     assignedReviewerManager: 'user-rm',
+    currentReviewerManager: 'user-rm',
     responsibleParty: 'user-rp',
     responsiblePartyDisplayName: 'Jordan RP',
     // Their line manager, so the Remediation tab's responsible-party rendering
     // and the Conversation it points at are demoable from both sides.
     responsiblePartyManager: 'user-rp-manager',
+    currentResponsiblePartyManager: 'user-rp-manager',
     answers: {
       // All-Good across the rest of the catalogue adds no failures, so the
       // one-resolved/one-unresolved Remediation demo below is unchanged.
@@ -716,6 +720,7 @@ export const cases = [
     status: 'Void',
     assignedReviewer: 'user-reviewer',
     assignedReviewerManager: 'user-rm',
+    currentReviewerManager: 'user-rm',
     responsibleParty: 'user-agent-a',
     responsiblePartyDisplayName: 'Frankie Agent',
     answers: {
@@ -746,6 +751,7 @@ export const cases = [
     status: 'Void',
     assignedReviewer: 'user-reviewer-2',
     assignedReviewerManager: 'user-rm',
+    currentReviewerManager: 'user-rm',
     responsibleParty: 'user-agent-b',
     responsiblePartyDisplayName: 'Rowan Agent',
     answers: {

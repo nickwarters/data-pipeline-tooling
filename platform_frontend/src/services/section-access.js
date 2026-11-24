@@ -51,9 +51,9 @@ import {
  *
  * - `assignedReviewer`: Current user is the assigned reviewer on the case.
  * - `otherReviewer`: Current user is in the Reviewers group but not assigned.
- * - `reviewerManager`: Current user is the manager of the assigned reviewer.
+ * - `reviewerManager`: Current user is the current manager of the assigned reviewer.
  * - `responsibleParty`: Current user is the person who carried out the work.
- * - `responsiblePartyManager`: Current user is the manager of the responsible party.
+ * - `responsiblePartyManager`: Current user is the current manager of the responsible party.
  * - `caseTypeOwner`: Current user is an owner of this case type.
  * - `journeyOwner`: Current user is the owner of the end-to-end journey.
  * - `controls`: Current user is in the Controls group (QA/compliance).
@@ -97,6 +97,12 @@ export { summaryBlockIds };
  * Given a viewer's permissions context, compute the list of roles they hold on
  * this Case.
  *
+ * The two manager Roles come from the current manager fields, never from the
+ * recorded ones: the recorded managers say who managed the person when they
+ * were set on the Case, and someone who has since stopped managing them must
+ * not keep a Role, or the posting right on the Conversation that comes with
+ * one of them.
+ *
  * @param {import('../sharepoint-client.js').CaseRow} caseRow
  * @param {string} userId
  * @param {import('./permissions.js').Capabilities} capabilities
@@ -110,13 +116,13 @@ export function resolveRoles(caseRow, userId, capabilities) {
   } else if (capabilities?.isReviewer) {
     roles.push('otherReviewer');
   }
-  if (caseRow.assignedReviewerManager === userId) {
+  if (caseRow.currentReviewerManager === userId) {
     roles.push('reviewerManager');
   }
   if (caseRow.responsibleParty === userId) {
     roles.push('responsibleParty');
   }
-  if (caseRow.responsiblePartyManager === userId) {
+  if (caseRow.currentResponsiblePartyManager === userId) {
     roles.push('responsiblePartyManager');
   }
   if (capabilities?.ownedCaseTypes?.includes(caseRow.caseType)) {

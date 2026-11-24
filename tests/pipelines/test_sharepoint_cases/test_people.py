@@ -24,6 +24,7 @@ from pipelines.sharepoint_cases.gold import PERSON_CURRENT_TABLE
 from pipelines.sharepoint_cases.pipeline import (
     FEED_NAME,
     PERSON_NAME_COLUMNS,
+    PERSON_SUBFIELDS,
     PERSON_TABLE,
     SIGHTING_ONLY_COLUMNS,
     to_silver,
@@ -41,6 +42,7 @@ from tests._sharepoint_cases_fixtures import (
     landed,
     later_item,
     person,
+    quarantine_rows,
     run,
 )
 from tests.framework_testing import (
@@ -76,11 +78,132 @@ def test_silver_holds_each_person_as_the_lower_cased_bare_account():
         "responsible_party_name": "b.okafor",
         "assigned_reviewer_manager_name": "d.reid",
         "responsible_party_manager_name": "e.novak",
+        "current_reviewer_manager_name": "d.reid",
+        "current_responsible_party_manager_name": "e.novak",
         # Nobody is a null, not an empty string.
         "voided_by_name": None,
     }
     # The details beside each login are the sighting table's, not the Case's.
     assert not set(SIGHTING_ONLY_COLUMNS) & set(row)
+
+
+# --- the current managers ----------------------------------------------------
+
+# A Case whose people have moved on since the Reviewer and the Responsible
+# Party were set: the at-the-time record still names who managed them then,
+# and the current pair, kept up to date outside the platform, who does now.
+MOVED_ON = {
+    "CurrentReviewerManager": person("CONTOSO\\K.Adeyemi", "Kemi Adeyemi"),
+    "CurrentResponsiblePartyManager": person("OTHERDOM\\m.osei", "Mo Osei"),
+}
+
+
+def test_the_read_asks_for_both_current_managers_beside_the_at_the_time_pair():
+    client = FakeListClient()
+
+    landed(client)
+
+    [call] = client.calls
+    for manager in (
+        "AssignedReviewerManager",
+        "ResponsiblePartyManager",
+        "CurrentReviewerManager",
+        "CurrentResponsiblePartyManager",
+    ):
+        assert manager in call["expand_fields"]
+        assert {f"{manager}/{sub}" for sub in ("Name", "Title", "EMail")} <= set(
+            call["select_fields"]
+        )
+
+
+def test_silver_keeps_the_current_managers_apart_from_the_at_the_time_record():
+    raw = landed(FakeListClient(items(item(**MOVED_ON))))
+    writer = RecordingWriter()
+
+    to_silver(given_rows(raw), writer, COMPLAINTS)
+
+    [row] = rows_of(writer)
+    # Raw keeps the logins the list gave, in the list's own names.
+    assert raw[0]["CurrentReviewerManager/Name"] == "i:0#.w|CONTOSO\\K.Adeyemi"
+    assert raw[0]["CurrentResponsiblePartyManager/EMail"] == "M.Osei@contoso.com"
+    # Silver reduces both to the bare account, and the record is untouched.
+    assert (
+        row["current_reviewer_manager_name"],
+        row["current_responsible_party_manager_name"],
+    ) == ("k.adeyemi", "m.osei")
+    assert (
+        row["assigned_reviewer_manager_name"],
+        row["responsible_party_manager_name"],
+    ) == ("d.reid", "e.novak")
+
+
+def test_a_case_nobody_currently_manages_holds_null_current_managers():
+    raw = landed(
+        FakeListClient(
+            items(
+                item(CurrentReviewerManager=None, CurrentResponsiblePartyManager=None)
+            )
+        )
+    )
+    writer = RecordingWriter()
+
+    to_silver(given_rows(raw), writer, COMPLAINTS)
+
+    [row] = rows_of(writer)
+    assert row["current_reviewer_manager_name"] is None
+    assert row["current_responsible_party_manager_name"] is None
+    # The record of who managed them then is a separate fact, and still held.
+    assert row["assigned_reviewer_manager_name"] == "d.reid"
+
+
+def test_both_manager_pairs_reach_gold_and_the_current_managers_are_people(
+    base_dir,
+):
+    run(
+        RunContext(base_dir=base_dir, pipeline=FEED_NAME),
+        client=FakeListClient(items(item(**MOVED_ON))),
+    )
+
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
+    [case] = read_rows(med.gold, "case_current")
+    assert {
+        column: case[column]
+        for column in (
+            "assigned_reviewer_manager_name",
+            "responsible_party_manager_name",
+            "current_reviewer_manager_name",
+            "current_responsible_party_manager_name",
+        )
+    } == {
+        "assigned_reviewer_manager_name": "d.reid",
+        "responsible_party_manager_name": "e.novak",
+        "current_reviewer_manager_name": "k.adeyemi",
+        "current_responsible_party_manager_name": "m.osei",
+    }
+    people = {row["account"]: row for row in read_rows(med.gold, PERSON_CURRENT_TABLE)}
+    assert (
+        people["k.adeyemi"]["domain"],
+        people["k.adeyemi"]["display_name"],
+        people["k.adeyemi"]["email"],
+    ) == ("CONTOSO", "Kemi Adeyemi", "k.adeyemi@contoso.com")
+    assert people["m.osei"]["domain"] == "OTHERDOM"
+    # The at-the-time managers are still people this feed has seen named.
+    assert {"d.reid", "e.novak"} <= set(people)
+
+
+def test_a_quarantined_case_keeps_both_manager_pairs(base_dir):
+    run(
+        RunContext(base_dir=base_dir, pipeline=FEED_NAME),
+        client=FakeListClient(items(item(Status="Closed", **MOVED_ON))),
+    )
+
+    [reject] = quarantine_rows(base_dir)["case_version"]
+    assert "status" in reject["failed_rule"]
+    assert (
+        reject["assigned_reviewer_manager_name"],
+        reject["current_reviewer_manager_name"],
+        reject["current_responsible_party_manager_name"],
+    ) == ("d.reid", "k.adeyemi", "m.osei")
 
 
 # --- silver: person ---------------------------------------------------------
@@ -126,6 +249,7 @@ def known(account: str, at: str, **details: object) -> dict[str, object]:
 
 
 EVERY_BLOB = {
+    **MOVED_ON,
     "VoidedBy": person("OTHERDOM\\V.Grey", "Val Grey"),
     "Answers": json.dumps(
         {
@@ -157,11 +281,13 @@ def test_a_sighting_is_recorded_for_everyone_an_observation_names():
     people = sighted(**EVERY_BLOB)
 
     assert set(people) == {
-        # The five Person columns ...
+        # The seven Person columns ...
         "a.khan",
         "b.okafor",
         "d.reid",
         "e.novak",
+        "k.adeyemi",
+        "m.osei",
         "v.grey",
         # ... and everyone the JSON blobs name.
         "c.ito",
@@ -219,14 +345,7 @@ def test_a_person_named_twice_in_one_observation_takes_each_detail_first_given()
 
 
 def test_an_observation_naming_nobody_records_no_sighting():
-    nobody = dict.fromkeys(
-        (
-            "AssignedReviewer",
-            "ResponsibleParty",
-            "AssignedReviewerManager",
-            "ResponsiblePartyManager",
-        )
-    )
+    nobody = dict.fromkeys(PERSON_SUBFIELDS)
 
     assert sighted(**nobody, Answers="not json") == {}
 
@@ -337,6 +456,17 @@ def test_polls_keep_one_row_per_person_and_the_case_row_holds_the_account(base_d
 
 # --- the backfill ------------------------------------------------------------
 
+# The Person columns a deployment held before the reduction existed -- the ones
+# the silver and gold 0003 migrations reduce. The current managers came later,
+# and only ever landed as bare accounts.
+BACKFILLED_COLUMNS = (
+    "assigned_reviewer_name",
+    "responsible_party_name",
+    "assigned_reviewer_manager_name",
+    "responsible_party_manager_name",
+    "voided_by_name",
+)
+
 CLAIMS_LOGINS = [
     ("i:0#.w|CONTOSO\\A.Khan", "a.khan"),
     ("i:0#.w|OTHERDOM\\b.okafor", "b.okafor"),
@@ -365,11 +495,12 @@ def test_the_migration_reduces_every_stored_person_to_the_bare_account(
         shutil.copy(path, before)
     db_path = tmp_path / f"{database}.db"
     MigrationRunner(db_path, before).apply()
-    columns = ", ".join(f'"{column}"' for column in PERSON_NAME_COLUMNS)
+    columns = ", ".join(f'"{column}"' for column in BACKFILLED_COLUMNS)
+    placeholders = ", ".join("?" for _ in BACKFILLED_COLUMNS)
     with sqlite3.connect(db_path) as con:
         con.executemany(
-            f'INSERT INTO "{table}" ({columns}) VALUES (?, ?, ?, ?, ?)',
-            [(login,) * len(PERSON_NAME_COLUMNS) for login, _ in CLAIMS_LOGINS],
+            f'INSERT INTO "{table}" ({columns}) VALUES ({placeholders})',
+            [(login,) * len(BACKFILLED_COLUMNS) for login, _ in CLAIMS_LOGINS],
         )
     con.close()
 

@@ -130,6 +130,12 @@ class CaseVersion:
     responsible_party_title: str
     assigned_reviewer_manager_name: str
     responsible_party_manager_name: str
+    # The two above are a record: who managed the Reviewer / Responsible Party
+    # when they were set on the Case. These two start as the same value and are
+    # then kept current by a process outside the platform, so they may name
+    # someone else by now; the platform decides manager access from them.
+    current_reviewer_manager_name: str
+    current_responsible_party_manager_name: str
 
     due_date: datetime
     completed_at: datetime
@@ -406,7 +412,7 @@ PERSON_TABLE = "person"
 class PersonRow:
     """One row per person this feed has seen named: user details only.
 
-    A person is named by the five Person columns and inside the JSON blobs: a
+    A person is named by the seven Person columns and inside the JSON blobs: a
     person picked in an Issue Capture Field, a Conversation author, an
     Appellant or resolver, whoever amended the Outcome. Each poll merges the
     people its batch names into this table and upserts them on ``account``,

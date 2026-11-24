@@ -46,6 +46,20 @@ export const PERSON_COLUMNS = [
     emptyValue: undefined,
   },
   {
+    field: 'currentReviewerManager',
+    column: 'CurrentReviewerManager',
+    idColumn: 'CurrentReviewerManagerId',
+    clearValues: [null, ''],
+    emptyValue: undefined,
+  },
+  {
+    field: 'currentResponsiblePartyManager',
+    column: 'CurrentResponsiblePartyManager',
+    idColumn: 'CurrentResponsiblePartyManagerId',
+    clearValues: [null, ''],
+    emptyValue: undefined,
+  },
+  {
     field: 'voidedBy',
     column: 'VoidedBy',
     idColumn: 'VoidedById',

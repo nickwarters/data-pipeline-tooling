@@ -32,6 +32,48 @@ of follow-up 4, which is still open: `resolveRoles` still reads the column, so a
 manager change after the Responsible Party was picked is not seen until the
 Responsible Party is saved again.
 
+Amended (2026-10-18, #1072): **access is decided by two new current-manager
+columns, and the existing two become records.** This supersedes the live
+directory resolution decided below for `responsiblePartyManager`, and with it
+follow-up 4, which is closed rather than built. It also moves the team queries
+off `assignedReviewerManager`.
+
+- `assignedReviewerManager` and `responsiblePartyManager` are written exactly as
+  before and now mean only **who the person's manager was when they were set on
+  the Case**. Nothing in the app reads either one to decide access or to scope a
+  query.
+- `currentReviewerManager` (`CurrentReviewerManager`) and
+  `currentResponsiblePartyManager` (`CurrentResponsiblePartyManager`) are new
+  Person columns holding **who manages the person now**. `resolveRoles` grants
+  the `reviewerManager` and `responsiblePartyManager` Roles from them, and
+  `#/team-cases` and both `#/my-team` reads filter on `currentReviewerManager`,
+  so the Cases a manager is listed and the Cases they can open agree.
+- The app writes a current column **only when it writes the matching record**:
+  the same person, in the same PATCH, paired by both clients
+  (`src/services/current-managers.js`) as the Responsible Party is paired with
+  their manager. Allocation, Case Support's Reassign and Un-assign, and saving a
+  Responsible Party all go through it. After that the app never touches the
+  current columns. **A process outside the app keeps them up to date**, so a
+  reorg reaches access without anyone opening the Case.
+- An empty current column grants nobody the Role. Rows written before the
+  columns existed carry nothing until that process fills them, so the deploy
+  order is: provision the columns, backfill them, then deploy the app.
+
+Why this rather than the live lookup: the lookup only ever helped the Case page.
+The team queries need a column to filter on, which is the thing the directory
+cannot provide cheaply (Option 2 below), and the Case page and the team list
+would then have answered "who manages this Reviewer" from two different
+sources. One column per relationship, kept current outside the app, answers it
+once for both. It is option 1's off-platform writer, accepted for the current
+columns only. Its costs stand as listed below, and the interval it runs at is
+now the interval in which a former manager can still post. What it no longer
+does is rewrite the record, which is why the record is safe to report from.
+
+The Decision section below is kept as the reasoning of its time. Where it says
+`responsiblePartyManager` is resolved live, read `currentResponsiblePartyManager`
+is read from the row; where it says `assignedReviewerManager` resolves the
+`reviewerManager` Role or is the query key, read `currentReviewerManager`.
+
 ## Context
 
 Two manager relationships are denormalised onto every Case row

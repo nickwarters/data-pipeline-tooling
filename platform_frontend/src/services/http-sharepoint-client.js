@@ -6,6 +6,7 @@ import {
 } from './account-name.js';
 import { withAssignmentStamp } from './assignment-stamp.js';
 import { withResponsiblePartyManager } from './responsible-party-manager.js';
+import { withCurrentManagers } from './current-managers.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
 import {
   isOverdue,
@@ -106,17 +107,17 @@ const ORDER_BY_COLUMNS = {
 /**
  * The projection every Case row read carries.
  *
- * All five people on a row — `AssignedReviewer`, `ResponsibleParty`, their two
- * manager columns, and `VoidedBy` — are Person columns, and SharePoint answers
- * one with the numeric User Information List id (the `…Id` twin) unless the
- * lookup is expanded. That number is a transport detail of a single site
+ * All seven people on a row — `AssignedReviewer`, `ResponsibleParty`, their
+ * recorded and current manager columns, and `VoidedBy` — are Person columns,
+ * and SharePoint answers one with the numeric User Information List id (the
+ * `…Id` twin) unless the lookup is expanded. That number is a transport detail of a single site
  * collection — it is allocated on first use, re-allocated if the entry or the
  * AD account is removed, and means nothing anywhere else — while the whole
  * application keys identity on the bare account name, right down to which
  * Sections a viewer may open. So the read expands every person and takes the
  * claims login off each.
  *
- * Only the Responsible Party's `Title` is asked for: it is the one of the five
+ * Only the Responsible Party's `Title` is asked for: it is the one of the seven
  * a view names a person by. The others are matched, never displayed from the
  * row, so widening the projection for them would buy nothing.
  *
@@ -125,9 +126,11 @@ const ORDER_BY_COLUMNS = {
  */
 const CASE_SELECT =
   '$select=*,AssignedReviewer/Name,ResponsibleParty/Name,ResponsibleParty/Title,' +
-  'AssignedReviewerManager/Name,ResponsiblePartyManager/Name,VoidedBy/Name';
+  'AssignedReviewerManager/Name,ResponsiblePartyManager/Name,' +
+  'CurrentReviewerManager/Name,CurrentResponsiblePartyManager/Name,VoidedBy/Name';
 const CASE_EXPAND =
-  '$expand=AssignedReviewer,ResponsibleParty,AssignedReviewerManager,ResponsiblePartyManager,VoidedBy';
+  '$expand=AssignedReviewer,ResponsibleParty,AssignedReviewerManager,ResponsiblePartyManager,' +
+  'CurrentReviewerManager,CurrentResponsiblePartyManager,VoidedBy';
 
 /** The Case row's Person columns, each expanded with its claims login `Name`. */
 const PERSON_COLUMNS = [
@@ -135,6 +138,8 @@ const PERSON_COLUMNS = [
   'ResponsibleParty',
   'AssignedReviewerManager',
   'ResponsiblePartyManager',
+  'CurrentReviewerManager',
+  'CurrentResponsiblePartyManager',
   'VoidedBy',
 ];
 
@@ -265,11 +270,12 @@ export class HttpSharePointClient {
   async patchCase(id, fields, etag, opts = {}) {
     const url = this._listItemUrl(this._requireListName(opts), id);
     try {
-      // The Assigned Reviewer's clock is paired with the Reviewer, and the
-      // Responsible Party with their manager, before the row is serialised, so
-      // a caller that names either person cannot forget what goes with them.
+      // The Assigned Reviewer's clock is paired with the Reviewer, the
+      // Responsible Party with their manager, and each recorded manager with
+      // its current one, before the row is serialised, so a caller that names
+      // any of them cannot forget what goes with it.
       const stamped = withAssignmentStamp(
-        await withResponsiblePartyManager(fields, this),
+        withCurrentManagers(await withResponsiblePartyManager(fields, this)),
         this._now
       );
       const item = itemFromRow(stamped);
@@ -290,14 +296,39 @@ export class HttpSharePointClient {
           fields.responsibleParty
         );
       }
+      // A current manager is usually the person just recorded beside it, so
+      // each manager account is resolved once per save rather than once per
+      // column.
+      /** @type {Map<string, Promise<number | null>>} */
+      const managerIds = new Map();
+      /** @param {string | null | undefined} account */
+      const managerId = (account) => {
+        const key = account ?? '';
+        let id = managerIds.get(key);
+        if (id === undefined) {
+          id = this._ensureManagerId(key);
+          managerIds.set(key, id);
+        }
+        return id;
+      };
       if (fields.assignedReviewerManager !== undefined) {
-        item.AssignedReviewerManagerId = await this._ensureManagerId(
-          fields.assignedReviewerManager ?? ''
+        item.AssignedReviewerManagerId = await managerId(
+          fields.assignedReviewerManager
         );
       }
       if (stamped.responsiblePartyManager !== undefined) {
-        item.ResponsiblePartyManagerId = await this._ensureManagerId(
-          stamped.responsiblePartyManager ?? ''
+        item.ResponsiblePartyManagerId = await managerId(
+          stamped.responsiblePartyManager
+        );
+      }
+      if (stamped.currentReviewerManager !== undefined) {
+        item.CurrentReviewerManagerId = await managerId(
+          stamped.currentReviewerManager
+        );
+      }
+      if (stamped.currentResponsiblePartyManager !== undefined) {
+        item.CurrentResponsiblePartyManagerId = await managerId(
+          stamped.currentResponsiblePartyManager
         );
       }
       if (fields.voidedBy !== undefined) {
@@ -1207,7 +1238,7 @@ export class HttpSharePointClient {
     const {
       assignedReviewer,
       responsibleParty,
-      assignedReviewerManager,
+      currentReviewerManager,
       anyOf,
       ...rest
     } = filter;
@@ -1219,9 +1250,9 @@ export class HttpSharePointClient {
     if (responsibleParty) {
       out.responsibleParty = await this._resolveUserId(responsibleParty);
     }
-    if (assignedReviewerManager) {
-      out.assignedReviewerManager = await this._resolveUserId(
-        assignedReviewerManager
+    if (currentReviewerManager) {
+      out.currentReviewerManager = await this._resolveUserId(
+        currentReviewerManager
       );
     }
     if (anyOf !== undefined) {
@@ -1485,10 +1516,10 @@ function orderByColumn(key) {
  * client used to get wrong, and a filter that reached the query builder still
  * carrying account names is the bug, not a variation.
  *
- * @typedef {Omit<ListCasesFilter, 'assignedReviewer' | 'responsibleParty' | 'assignedReviewerManager' | 'anyOf'> & {
+ * @typedef {Omit<ListCasesFilter, 'assignedReviewer' | 'responsibleParty' | 'currentReviewerManager' | 'anyOf'> & {
  *   assignedReviewer?: number,
  *   responsibleParty?: number,
- *   assignedReviewerManager?: number,
+ *   currentReviewerManager?: number,
  *   anyOf?: ResolvedFilter[],
  * }} ResolvedFilter
  */
@@ -1586,10 +1617,8 @@ function buildFilterExpr(filter) {
   if (filter.responsibleParty) {
     conds.push(`ResponsiblePartyId eq ${filter.responsibleParty}`);
   }
-  if (filter.assignedReviewerManager) {
-    conds.push(
-      `AssignedReviewerManagerId eq ${filter.assignedReviewerManager}`
-    );
+  if (filter.currentReviewerManager) {
+    conds.push(`CurrentReviewerManagerId eq ${filter.currentReviewerManager}`);
   }
   if (filter.overdue === true) {
     // The indexed, selective date column leads; the statuses the review clock
@@ -1729,6 +1758,12 @@ function rowFromItem(item, etag) {
   const partyManager = /** @type {any} */ (
     item?.ResponsiblePartyManager ?? null
   );
+  const currentReviewerManager = /** @type {any} */ (
+    item?.CurrentReviewerManager ?? null
+  );
+  const currentPartyManager = /** @type {any} */ (
+    item?.CurrentResponsiblePartyManager ?? null
+  );
   const voidedByPerson = /** @type {any} */ (item?.VoidedBy ?? null);
   /** @type {CaseRow} */
   const row = {
@@ -1747,6 +1782,12 @@ function rowFromItem(item, etag) {
       : undefined,
     responsiblePartyManager: partyManager?.Name
       ? toBareAccount(String(partyManager.Name))
+      : undefined,
+    currentReviewerManager: currentReviewerManager?.Name
+      ? toBareAccount(String(currentReviewerManager.Name))
+      : undefined,
+    currentResponsiblePartyManager: currentPartyManager?.Name
+      ? toBareAccount(String(currentPartyManager.Name))
       : undefined,
     answers: /** @type {Record<string, Answer>} */ (
       parseJsonField(item?.Answers, {})
@@ -1998,10 +2039,10 @@ function itemFromRow(fields) {
     out.Appeals = JSON.stringify(fields.appeals);
   if (fields.dueDate !== undefined) out.DueDate = fields.dueDate;
   if (fields.relatedDate !== undefined) out.RelatedDate = fields.relatedDate;
-  // The four people — `assignedReviewer`, `responsibleParty` and their two
-  // managers — are deliberately absent: they are Person columns, written by a
-  // numeric id that only a round trip to the directory can supply, and this
-  // function is pure. `patchCase` resolves them and sets the columns there, so
+  // The six people — `assignedReviewer`, `responsibleParty` and their
+  // recorded and current managers — are deliberately absent: they are Person
+  // columns, written by a numeric id that only a round trip to the directory
+  // can supply, and this function is pure. `patchCase` resolves them and sets the columns there, so
   // there is one writer rather than a plausible-looking wrong one here.
   // Action Centre state reason flags + paired clocks.
   // Plain app-written columns — the write counterpart to their reads in

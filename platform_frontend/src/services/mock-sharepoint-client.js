@@ -3,6 +3,7 @@ import { isOverdue } from '../evaluators/overdue-evaluator.js';
 import { toBareAccount } from './account-name.js';
 import { withAssignmentStamp } from './assignment-stamp.js';
 import { withResponsiblePartyManager } from './responsible-party-manager.js';
+import { withCurrentManagers } from './current-managers.js';
 import {
   BANKS_DIR,
   bankArtifactName as bankName,
@@ -166,10 +167,13 @@ export class MockSharePointClient {
     const newEtag = String(++this._etagCounter);
     // The same write-path rule the real client applies, applied here for the
     // same reason: the mock-first loop must show what production stores, so the
-    // two clients cannot drift on when a Case's assignment time is written, or
-    // on whose manager is recorded beside the Responsible Party, or on which
-    // pasted characters survive into a text field.
-    const stamped = storableFields(withAssignmentStamp(withManager, this._now));
+    // two clients cannot drift on when a Case's assignment time is written, on
+    // whose manager is recorded beside the Responsible Party, on when a current
+    // manager is written, or on which pasted characters survive into a text
+    // field.
+    const stamped = storableFields(
+      withAssignmentStamp(withCurrentManagers(withManager), this._now)
+    );
     const next = /** @type {CaseRow} */ ({
       ...cases[idx],
       ...stamped,
@@ -235,8 +239,8 @@ export class MockSharePointClient {
       )
         return false;
       if (
-        filter.assignedReviewerManager !== undefined &&
-        c.assignedReviewerManager !== filter.assignedReviewerManager
+        filter.currentReviewerManager !== undefined &&
+        c.currentReviewerManager !== filter.currentReviewerManager
       )
         return false;
       if (

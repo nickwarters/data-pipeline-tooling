@@ -47,9 +47,9 @@ Three things about that schema are provisioning-critical enough to repeat here:
   the schema must be created and indexed **while the list is still empty** —
   see "The one irreversible step" in the
   [onboarding checklist](../case-type-onboarding.md).
-- **All four people are Person columns** — `AssignedReviewer`,
-  `ResponsibleParty`, `AssignedReviewerManager` and `ResponsiblePartyManager`
-  alike. The read expands each and takes the claims login off it, and the write
+- **All six people are Person columns** — `AssignedReviewer`,
+  `ResponsibleParty`, `AssignedReviewerManager`, `ResponsiblePartyManager`,
+  `CurrentReviewerManager` and `CurrentResponsiblePartyManager` alike. The read expands each and takes the claims login off it, and the write
   path resolves the account to the numeric id the `…Id` twin holds. A manager
   column provisioned as text will fail both. Rows speak bare account names;
   columns are Person.

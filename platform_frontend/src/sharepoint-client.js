@@ -178,16 +178,16 @@
  * at reportable, despite the `Completion` name) and are re-fed from a case-level
  * **Amended Outcome**, not from per-Answer overrides.
  *
- * The four people on a row — `assignedReviewer`, `responsibleParty` and the
- * two manager fields below — are all **bare account login names**, the same
+ * The six people on a row — `assignedReviewer`, `responsibleParty` and the
+ * four manager fields below — are all **bare account login names**, the same
  * identity key `CurrentUser.id` carries, because Section access resolves every
- * person-derived Role by matching them against the signed-in user. All four
+ * person-derived Role by matching them against the signed-in user. All six
  * are stored in SharePoint as Person columns, so the numeric id such a column
  * really holds is the client's business and never reaches a row: whichever way
  * a row is read, these fields speak accounts. `responsiblePartyDisplayName` is
  * the directory name that goes with the Responsible Party, carried on the row
  * so a view can name a person without a second round trip; there is
- * deliberately no counterpart for the other three, which nothing displays off
+ * deliberately no counterpart for the other five, which nothing displays off
  * the row. Read-side only: nothing writes it, and it is absent on a Case with
  * no Responsible Party.
  *
@@ -198,15 +198,17 @@
  * stale assignment time. The Action Centre queries for its presence, orders on
  * it server-side and uses it as the current Reviewer's in-progress clock.
  *
- * `assignedReviewerManager` and `responsiblePartyManager` denormalise two
- * org-chart edges onto the row and are **not** equivalent:
- * `assignedReviewerManager` is an allocation-time operational cache and query
- * input behind `#/team-cases` and `#/my-team`; it is not frozen into a
- * Reportable or planned reporting snapshot. Settled history remains Staff
- * Hierarchy authoritative. `responsiblePartyManager` is a written record,
- * stamped by both clients whenever `responsibleParty` is written, whose Section
- * access Role is to be resolved live from the directory, since that Role carries
- * `edit` on the Conversation.
+ * The managers are held twice, as a record and as the current value.
+ * `assignedReviewerManager` and `responsiblePartyManager` record who managed
+ * the Reviewer and the Responsible Party when each was set on the Case: the
+ * directory's answer at allocation or reassignment, and whenever the
+ * Responsible Party is saved. They decide nothing. `currentReviewerManager` and
+ * `currentResponsiblePartyManager` are who manages them now, and they are what
+ * the manager Section access Roles and the `#/team-cases` / `#/my-team` queries
+ * read. Both clients write each current field with the same person, in the same
+ * write, whenever its recorded field is written; after that only a process
+ * outside this application changes it, so a manager who moves on loses the
+ * Role once that process catches up, without the Case being touched here.
  *
  * `reviewRequired` is read and written on the row but no longer drives any
  * app behaviour: nothing sets it and nothing filters on it. It stays on the
@@ -245,6 +247,7 @@
  * amendedOutcome?: AmendedOutcome | null,
  * appeals?: Appeal[],
  * responsiblePartyManager?: string | null,
+ * currentResponsiblePartyManager?: string | null,
  * dueDate?: string | null,
  * relatedDate?: string | null,
  * created?: string,
@@ -257,6 +260,7 @@
  * hasOpenAppeal?: boolean,
  * appealRaisedAt?: string | null,
  * assignedReviewerManager?: string | null,
+ * currentReviewerManager?: string | null,
  * etag: string
  * }} CaseRow
  */
@@ -379,7 +383,7 @@
  * to its internal column before emitting `$orderby`. Only a key that client maps
  * is sortable — an unmapped one throws there rather than reaching SharePoint.
  *
- * @typedef {{ status?: string, assignedReviewer?: string, assignedAtPresent?: boolean, responsibleParty?: string, overdue?: boolean, awaitingResponsibleParty?: boolean, onHold?: boolean, hasOpenAppeal?: boolean, assignedReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean, completedAfter?: string, completedBefore?: string, reportableAfter?: string, reportableBefore?: string, voidedAfter?: string, voidedBefore?: string, titlePrefix?: string, anyOf?: ListCasesFilter[] }} ListCasesFilter
+ * @typedef {{ status?: string, assignedReviewer?: string, assignedAtPresent?: boolean, responsibleParty?: string, overdue?: boolean, awaitingResponsibleParty?: boolean, onHold?: boolean, hasOpenAppeal?: boolean, currentReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean, completedAfter?: string, completedBefore?: string, reportableAfter?: string, reportableBefore?: string, voidedAfter?: string, voidedBefore?: string, titlePrefix?: string, anyOf?: ListCasesFilter[] }} ListCasesFilter
  * @typedef {{ listName?: string, top?: number, skip?: number, orderBy?: string, orderDir?: 'asc' | 'desc' }} CaseListOptions
  */
 

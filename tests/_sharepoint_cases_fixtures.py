@@ -164,6 +164,11 @@ def item(**overrides: object) -> dict[str, object]:
         "ResponsibleParty": person("CONTOSO\\b.okafor", "Bola Okafor"),
         "AssignedReviewerManager": person("CONTOSO\\d.reid", "Dana Reid"),
         "ResponsiblePartyManager": person("CONTOSO\\e.novak", "Eva Novak"),
+        # The platform writes the current managers with the same value, at the
+        # same moment, as the at-the-time pair above; only a process outside it
+        # moves them on afterwards.
+        "CurrentReviewerManager": person("CONTOSO\\d.reid", "Dana Reid"),
+        "CurrentResponsiblePartyManager": person("CONTOSO\\e.novak", "Eva Novak"),
         "VoidedBy": None,
         "DueDate": "2026-08-14T00:00:00Z",
         "Created": "2026-07-01T09:14:00Z",
@@ -251,6 +256,7 @@ def version(**overrides: object) -> dict[str, object]:
             "status": "In-progress",
             "assigned_reviewer_name": "p.shah",
             "assigned_reviewer_manager_name": "d.reid",
+            "current_reviewer_manager_name": "d.reid",
             "case_type": COMPLAINTS.case_type,
             "created": "2026-07-01 09:14:00+00:00",
             "source_list_name": COMPLAINTS.list_name,

@@ -26,6 +26,16 @@ test('HttpSharePointClient: Person-column metadata includes every required uniqu
       'ResponsiblePartyManager',
       'ResponsiblePartyManagerId',
     ],
+    [
+      'currentReviewerManager',
+      'CurrentReviewerManager',
+      'CurrentReviewerManagerId',
+    ],
+    [
+      'currentResponsiblePartyManager',
+      'CurrentResponsiblePartyManager',
+      'CurrentResponsiblePartyManagerId',
+    ],
     ['voidedBy', 'VoidedBy', 'VoidedById'],
   ];
   assert.ok(PERSON_COLUMNS.length >= requiredMappings.length);
@@ -216,6 +226,12 @@ test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async (
       },
       ResponsibleParty: { Name: 'i:0#.w|CONTOSO\\rp-1' },
       ResponsiblePartyManager: { Name: 'i:0#.w|CONTOSO\\rp-manager' },
+      CurrentReviewerManager: {
+        Name: 'i:0#.w|CONTOSO\\new-reviewer-manager',
+      },
+      CurrentResponsiblePartyManager: {
+        Name: 'i:0#.w|CONTOSO\\new-rp-manager',
+      },
       Answers: '{}',
       Conversation: '[]',
       Notes: 'note',
@@ -255,6 +271,8 @@ test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async (
   assert.equal(row?.assignedReviewerManager, 'reviewer-manager');
   assert.equal(row?.responsibleParty, 'rp-1');
   assert.equal(row?.responsiblePartyManager, 'rp-manager');
+  assert.equal(row?.currentReviewerManager, 'new-reviewer-manager');
+  assert.equal(row?.currentResponsiblePartyManager, 'new-rp-manager');
   assert.equal(row?.caseJustification, 'documented rationale');
   assert.equal(row?.reportableAt, '2026-06-02T10:00:00.000Z');
   assert.equal(row?.remediationDueDate, '2026-06-16');

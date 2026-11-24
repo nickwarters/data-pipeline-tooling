@@ -135,7 +135,10 @@ observation names, so a reassigned Case's holds follow the Case.
 
 Reduced from `case_current` over `status = Completed` with a `completed_at`.
 Grain: `sla_kind` × `completed_month` × `brand` × `case_type` ×
-`assigned_reviewer_manager_name`.
+`assigned_reviewer_manager_name`. That is deliberately the at-the-time record —
+the Reviewer's manager when the Reviewer was set on the Case — and not
+`case_current.current_reviewer_manager_name`, so a Case stays attributed to the
+manager it was reviewed under after a reorg.
 
 Two row families. `review` judges `completed_at` against `due_date`.
 `remediation` judges it against `remediation_due_date`, over only the Cases
@@ -203,7 +206,9 @@ Reduced from the `answer` Detail Table inner-joined to `case_current` on
 `answer_remediation_current` has the same decision and status dimensions with
 no people on them; this is the cut by who answers for the remediation. An
 Answer whose Case is not in `case_current` cannot name a manager and is
-dropped.
+dropped. The manager is deliberately the at-the-time record, not
+`case_current.current_responsible_party_manager_name`, for the same reason as
+`case_sla_attainment_monthly`'s.
 
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|

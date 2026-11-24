@@ -106,6 +106,12 @@ def synthetic_silver(*, lists: int, cases: int, versions: int) -> pd.DataFrame:
                         "responsible_party_manager_name": MANAGERS[
                             case_index % len(MANAGERS)
                         ],
+                        "current_reviewer_manager_name": MANAGERS[
+                            (case_index + 1) % len(MANAGERS)
+                        ],
+                        "current_responsible_party_manager_name": MANAGERS[
+                            case_index % len(MANAGERS)
+                        ],
                         "due_date": created + dt.timedelta(days=30),
                         "completed_at": ended if status == "Completed" else pd.NaT,
                         "reportable_at": pd.NaT,
