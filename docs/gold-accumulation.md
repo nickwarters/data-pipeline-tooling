@@ -305,7 +305,8 @@ key — `answer` on `(source_observation_id, question_id)`, `answer_capture` on
 `(source_observation_id, seq)`, `appeal` on
 `(source_observation_id, appeal_id)`, `case_detail` on
 `(source_observation_id, field_key)`, `answer_root_cause` on
-`(source_observation_id, question_id, field_key)` — because the observation
+`(source_observation_id, question_id, field_key)`, `case_root_cause` on
+`(source_observation_id, field_key)` — because the observation
 alone is not its grain: one observation yields many child rows, one per
 question, catalogue key, message, Appeal or Case Details field (and, for the
 three field-level answer tables, one per field or action within that

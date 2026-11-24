@@ -9,10 +9,10 @@ published once, over every list's accumulated history.
 - ``to_silver`` snake_cases those names, settles ``case_type`` to the
   polled list's declared one, then ``enforce``s ``CaseVersion`` -- coerce,
   quarantine value-rule breaches, validate, in that order.
-- The eight ``to_silver_*`` Detail Table steps (``answer``,
+- The nine ``to_silver_*`` Detail Table steps (``answer``,
   ``answer_capture``, ``answer_action``, ``general_answer``,
   ``conversation_message``, ``appeal``, ``case_detail``,
-  ``answer_root_cause``) each explode one
+  ``answer_root_cause``, ``case_root_cause``) each explode one
   blob -- or one level further into one -- of that same silver batch into
   one row per child structure; see each builder's own docstring.
 - ``gold.publish_gold`` rebuilds the current Case, the Detail Tables and six
@@ -102,9 +102,13 @@ from tools.store import StoreRegistry
 
 from .gold import publish_gold
 from .schema import (
+    CASE_ENTRY_PREFIX,
     CASE_LISTS,
+    CASE_ROOT_CAUSE_KEY,
     DETAIL_ID_VARS,
     FEED_NAME,
+    GENERAL_ANSWER_PREFIX,
+    NAMESPACED_ANSWER_PREFIXES,
     OPTIONS_VALUE_KIND,
     PERSON_TABLE,
     PERSON_VALUE_KIND,
@@ -117,6 +121,7 @@ from .schema import (
     AppealRow,
     CaseDetailRow,
     CaseList,
+    CaseRootCauseRow,
     CaseVersion,
     ConversationMessageRow,
     GeneralAnswerRow,
@@ -651,7 +656,7 @@ def to_silver_answer(
             column="answers",
             key_into="question_id",
             id_vars=list(DETAIL_ID_VARS),
-            exclude_key_prefix="general:",
+            exclude_key_prefix=NAMESPACED_ANSWER_PREFIXES,
             fields={
                 "value": "value_json",
                 "justification": "justification",
@@ -690,7 +695,7 @@ def to_silver_answer_capture(
             column="answers",
             key_into="question_id",
             id_vars=list(DETAIL_ID_VARS),
-            exclude_key_prefix="general:",
+            exclude_key_prefix=NAMESPACED_ANSWER_PREFIXES,
             fields={"capture": "capture_json"},
         ),
         data,
@@ -740,7 +745,7 @@ def to_silver_answer_root_cause(
             column="answers",
             key_into="question_id",
             id_vars=list(DETAIL_ID_VARS),
-            exclude_key_prefix="general:",
+            exclude_key_prefix=NAMESPACED_ANSWER_PREFIXES,
             fields={"rcaCapture": "rca_capture_json"},
         ),
         data,
@@ -770,6 +775,66 @@ def to_silver_answer_root_cause(
     return write(writer, data, name=f"{at}:write")
 
 
+def _only_case_root_cause(dataset: Dataset) -> Dataset:
+    """Keep the ``case:rootCause`` entry's row, dropping any other ``case:``
+    entry: each one the application comes to write is its own Detail Table,
+    not more rows in this one."""
+    frame = dataset.to_pandas()
+    kept = frame.loc[frame["case_entry"].eq(CASE_ROOT_CAUSE_KEY)]
+    return Dataset.from_pandas(kept.drop(columns=["case_entry"]))
+
+
+def to_silver_case_root_cause(
+    reader: Reader, writer: Writer, case_list: CaseList, reject_writer: Writer
+) -> Dataset:
+    """One list's case-root-cause table: the ``answers`` map's
+    ``case:rootCause`` entry, then its flat ``rcaCapture`` map, one row per
+    Case Root Cause Field.
+
+    ``to_silver_answer_root_cause`` over the one entry that is about the Case
+    rather than an Issue: the same two-level explode, value discriminator and
+    quarantine-then-drop of ``raw_value``, keyed by field alone. The per-question
+    explodes exclude ``case:``; this one includes only it. A Case with nothing
+    recorded has no entry and contributes no rows.
+    """
+    at = f"silver:{case_list.case_type}:case_root_cause"
+    data = read(reader, name=f"{at}:read")
+    data = transform(
+        ExplodeJsonMap(
+            column="answers",
+            key_into="case_entry",
+            id_vars=list(DETAIL_ID_VARS),
+            include_key_prefix=CASE_ENTRY_PREFIX,
+            fields={"rcaCapture": "rca_capture_json"},
+        ),
+        data,
+        name=f"{at}:explode-answers",
+    )
+    data = transform(_only_case_root_cause, data, name=f"{at}:select-entry")
+    data = transform(
+        ExplodeJsonMap(
+            column="rca_capture_json",
+            key_into="field_key",
+            id_vars=list(DETAIL_ID_VARS),
+            value_into="raw_value",
+        ),
+        data,
+        name=f"{at}:explode-rca-capture",
+    )
+    data = transform(discriminate_capture_value, data, name=f"{at}:discriminate")
+    data = transform(SchemaCoercion(CaseRootCauseRow), data, name=f"{at}:coerce")
+    data = quarantine(
+        SchemaValueRulePartitioner(CaseRootCauseRow),
+        reject_writer,
+        data,
+        name=f"{at}:quarantine",
+    )
+    # Dropped after quarantine, not before, as to_silver_answer_capture does.
+    data = transform(DropColumns(["raw_value"]), data, name=f"{at}:drop-raw-value")
+    validate(SchemaValidator(CaseRootCauseRow), data, name=f"{at}:schema_validator")
+    return write(writer, data, name=f"{at}:write")
+
+
 def to_silver_answer_action(
     reader: Reader, writer: Writer, case_list: CaseList, reject_writer: Writer
 ) -> Dataset:
@@ -786,7 +851,7 @@ def to_silver_answer_action(
             column="answers",
             key_into="question_id",
             id_vars=list(DETAIL_ID_VARS),
-            exclude_key_prefix="general:",
+            exclude_key_prefix=NAMESPACED_ANSWER_PREFIXES,
             fields={"remediationActions": "actions_json"},
         ),
         data,
@@ -825,7 +890,7 @@ def to_silver_general_answer(
             column="answers",
             key_into="general_key",
             id_vars=list(DETAIL_ID_VARS),
-            include_key_prefix="general:",
+            include_key_prefix=GENERAL_ANSWER_PREFIX,
             strip_key_prefix=True,
             fields={"value": "value_json"},
         ),
@@ -974,6 +1039,11 @@ _DETAIL_TABLES = (
         to_silver_answer_root_cause,
         ("source_observation_id", "question_id", "field_key"),
     ),
+    (
+        "case_root_cause",
+        to_silver_case_root_cause,
+        ("source_observation_id", "field_key"),
+    ),
 )
 
 
@@ -1011,7 +1081,9 @@ def _people_named_in(row: Mapping[str, object]):
 
     answers = _json(row.get("Answers"))
     # The Reviewer's Issue capture, then the Responsible Party Manager's Root
-    # Cause capture: one value shape, so a person in either is named alike.
+    # Cause capture: one value shape, so a person in either is named alike. The
+    # Case Root Cause entry is walked with the Answers, its rcaCapture the same
+    # shape again.
     for answer in answers.values() if isinstance(answers, dict) else ():
         for blob in ("capture", "rcaCapture"):
             capture = answer.get(blob) if isinstance(answer, dict) else None

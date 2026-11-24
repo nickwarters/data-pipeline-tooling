@@ -214,6 +214,28 @@ def test_a_root_cause_person_reaches_person_current(base_dir):
     assert root_cause["value_kind"] == "person"
 
 
+def test_a_case_root_cause_person_reaches_person_current(base_dir):
+    answers = {
+        "q-1": {"value": "x"},
+        "case:rootCause": {
+            "value": "",
+            "rcaCapture": {
+                "checkedBy": {"loginName": "C.Lee", "displayName": "Chris Lee"}
+            },
+        },
+    }
+    run(
+        RunContext(base_dir=base_dir, pipeline=FEED_NAME),
+        client=FakeListClient(items(item(Answers=json.dumps(answers)))),
+    )
+
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
+    people = {row["account"]: row for row in read_rows(med.gold, PERSON_CURRENT_TABLE)}
+    assert people["c.lee"]["display_name"] == "Chris Lee"
+    [case_root_cause] = read_rows(med.gold, "case_root_cause")
+    assert case_root_cause["value_kind"] == "person"
+
+
 def test_a_quarantined_case_keeps_both_manager_pairs(base_dir):
     run(
         RunContext(base_dir=base_dir, pipeline=FEED_NAME),

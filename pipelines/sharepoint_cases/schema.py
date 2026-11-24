@@ -3,7 +3,8 @@
 ``CaseVersion`` is one row per observation of a Case: the source's column
 names mechanically snake_cased and the columns typed, with nothing derived or
 reshaped. ``AnswerRow``, ``AnswerCaptureRow``, ``AnswerRootCauseRow``,
-``AnswerActionRow`` and ``GeneralAnswerRow`` explode ``CaseVersion.answers``;
+``AnswerActionRow``, ``GeneralAnswerRow`` and ``CaseRootCauseRow`` explode
+``CaseVersion.answers``;
 ``ConversationMessageRow`` and ``AppealRow`` explode ``conversation`` and
 ``appeals``; ``CaseDetailRow`` explodes ``details``. See
 ``docs/data-dictionary-sharepoint-cases.md`` for the full field-level contract
@@ -24,7 +25,7 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from framework.core import NonNull, OneOf
+from framework.core import NonNull, OneOf, Pattern
 
 FEED_NAME = "sharepoint_cases"
 
@@ -79,6 +80,23 @@ DETAIL_ID_VARS = (
     "source_version",
     "source_observation_id",
 )
+
+# The ``answers`` map holds more than Answers to Question Definitions. A key
+# carrying one of these prefixes is namespaced -- the review application
+# refuses a ``:`` in a Question Definition id, so the two can never collide --
+# and belongs to its own Detail Table: ``general:`` to ``general_answer``,
+# ``case:`` to ``case_root_cause``. Every per-question explode excludes all of
+# them; ``QUESTION_ID_PATTERN`` quarantines a namespaced key one of them misses.
+GENERAL_ANSWER_PREFIX = "general:"
+CASE_ENTRY_PREFIX = "case:"
+NAMESPACED_ANSWER_PREFIXES = (GENERAL_ANSWER_PREFIX, CASE_ENTRY_PREFIX)
+# The one ``case:`` entry the application writes today: the Responsible Party
+# Manager's Case Root Cause Fields, in its ``rcaCapture``.
+CASE_ROOT_CAUSE_KEY = "case:rootCause"
+# A Question Definition id, as the per-question tables hold it: anything without
+# a colon. A namespaced key a new explode forgets to exclude fails this and
+# quarantines, rather than landing as an Answer no Question Definition has.
+QUESTION_ID_PATTERN = r"[^:]+"
 
 # The remediation vocabulary.
 REMEDIATION_STATUSES = ("complete", "partial", "cancelled")
@@ -209,7 +227,7 @@ class AnswerRow:
     source_version: Annotated[str, NonNull()]
     source_observation_id: Annotated[str, NonNull()]
 
-    question_id: Annotated[str, NonNull()]
+    question_id: Annotated[str, NonNull(), Pattern(QUESTION_ID_PATTERN)]
 
     value_json: str
     value_text: str
@@ -242,7 +260,7 @@ class AnswerCaptureRow:
     source_version: Annotated[str, NonNull()]
     source_observation_id: Annotated[str, NonNull()]
 
-    question_id: Annotated[str, NonNull()]
+    question_id: Annotated[str, NonNull(), Pattern(QUESTION_ID_PATTERN)]
     field_key: Annotated[str, NonNull()]
 
     # value_kind's reject label (UNSUPPORTED_CAPTURE_VALUE_KIND) must stay
@@ -279,7 +297,7 @@ class AnswerRootCauseRow:
     source_version: Annotated[str, NonNull()]
     source_observation_id: Annotated[str, NonNull()]
 
-    question_id: Annotated[str, NonNull()]
+    question_id: Annotated[str, NonNull(), Pattern(QUESTION_ID_PATTERN)]
     field_key: Annotated[str, NonNull()]
 
     # As AnswerCaptureRow: the reject label stays outside the OneOf.
@@ -288,6 +306,36 @@ class AnswerRootCauseRow:
 
     # The person arm: the login as the frontend stamped it, the same spelling
     # AnswerCaptureRow.person_login holds.
+    person_login: str
+    person_display: str
+
+
+@dataclass
+class CaseRootCauseRow:
+    """One row per observation x Case Root Cause Field, exploded from the
+    ``rcaCapture`` map of the ``answers`` map's ``case:rootCause`` entry.
+
+    What the Responsible Party Manager records once about the whole Case --
+    not against one Issue, which is ``AnswerRootCauseRow``. The same value
+    shape, discriminator and columns, less ``question_id``: the entry is not an
+    Answer to any Question Definition, so a Case has at most one row per field.
+    ``field_key`` is the Case Type's ``rootCauseCaseGroups`` key, unvalidated
+    here for the same reason ``AnswerRootCauseRow``'s is.
+    """
+
+    case_type: Annotated[str, NonNull()]
+    source_item_id: Annotated[str, NonNull()]
+    # datetime, not str -- see AnswerRow's own field for why.
+    source_modified_at: Annotated[datetime, NonNull()]
+    source_version: Annotated[str, NonNull()]
+    source_observation_id: Annotated[str, NonNull()]
+
+    field_key: Annotated[str, NonNull()]
+
+    # As AnswerCaptureRow: the reject label stays outside the OneOf.
+    value_kind: Annotated[str, NonNull(), OneOf(*CAPTURE_VALUE_KINDS)]
+    value_text: str
+
     person_login: str
     person_display: str
 
@@ -309,7 +357,7 @@ class AnswerActionRow:
     source_version: Annotated[str, NonNull()]
     source_observation_id: Annotated[str, NonNull()]
 
-    question_id: Annotated[str, NonNull()]
+    question_id: Annotated[str, NonNull(), Pattern(QUESTION_ID_PATTERN)]
     # action_seq is positional and descriptive only; action_id, from the
     # bank's own definitions, is the grain.
     action_seq: Annotated[int, NonNull()]

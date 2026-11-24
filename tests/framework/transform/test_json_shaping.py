@@ -115,6 +115,28 @@ def test_explode_json_map_excludes_keys_carrying_a_prefix():
     assert list(result["question_id"]) == ["q1"]
 
 
+def test_explode_json_map_excludes_keys_carrying_any_of_several_prefixes():
+    dataset = Dataset.from_pandas(
+        pd.DataFrame(
+            {
+                "case_ref": ["c1"],
+                "answers": [
+                    '{"q1": {"value": "Poor"}, "general:tone": {"value": "Yes"},'
+                    ' "case:rootCause": {"value": ""}}'
+                ],
+            }
+        )
+    )
+    result = ExplodeJsonMap(
+        column="answers",
+        key_into="question_id",
+        id_vars=["case_ref"],
+        fields={"value": "answer_value"},
+        exclude_key_prefix=("general:", "case:"),
+    )(dataset).to_pandas()
+    assert list(result["question_id"]) == ["q1"]
+
+
 def test_explode_json_map_includes_only_keys_carrying_a_prefix():
     result = ExplodeJsonMap(
         column="answers",
