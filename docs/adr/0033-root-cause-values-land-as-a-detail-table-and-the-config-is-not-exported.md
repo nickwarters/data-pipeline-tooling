@@ -78,6 +78,32 @@ Type modules and is not exported to the pipeline.**
 - Raw and `case_version` are unchanged: the values arrive inside a blob they
   already land.
 
+## Amendment: Case Root Cause Fields (2026-11-24)
+
+Some of what the Responsible Party Manager records is about the whole Case
+rather than one failed Answer — for Complaints, whether a supervisor has
+checked the Case, whether No Fault has been requested and whether a
+development plan has been created. The frontend stores these, still with no
+new SharePoint column, as one more entry in the `Answers` blob under the
+namespaced key `case:rootCause`, shaped like an Answer (`value: ''`) with the
+fields in its `rcaCapture` map.
+
+**They land in a sibling Detail Table, `case_root_cause`** — silver grain
+observation × `field_key`, gold grain `case_id` × `field_key` — built by the
+same explode and discriminator as `answer_root_cause` over that one entry.
+Not rows in `answer_root_cause` with a sentinel `question_id`: that table's
+grain says every row belongs to a Question Definition, and a report joining
+`question_id` to the catalogue would meet a key that is none.
+
+Because the `Answers` map now holds two namespaces, the per-question explodes
+(`answer`, `answer_capture`, `answer_action`, `answer_root_cause`) exclude every
+prefix in `NAMESPACED_ANSWER_PREFIXES` (`general:`, `case:`), and their
+`question_id` carries `Pattern([^:]+)`. The frontend refuses a `:` in a
+Question Definition id, so the pattern diverts no real Answer; a namespace
+added later that this feed has not been taught quarantines instead of landing
+silently as an Answer nobody declared — which is what `case:rootCause` would
+have done before this amendment.
+
 ## What would reopen it
 
 - A report that needs Root Cause fields labelled, typed or limited to declared

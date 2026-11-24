@@ -75,6 +75,7 @@ GOLD_TABLES = (
     "appeal",
     "case_detail",
     "answer_root_cause",
+    "case_root_cause",
     "case_counts_current",
     "case_age_buckets_current",
     "case_age_from_assigned_buckets_current",
@@ -96,6 +97,7 @@ DETAIL_GRAIN: dict[str, tuple[str, ...]] = {
     "appeal": (CASE_ID_COLUMN, "appeal_id"),
     "case_detail": (CASE_ID_COLUMN, "field_key"),
     "answer_root_cause": (CASE_ID_COLUMN, "question_id", "field_key"),
+    "case_root_cause": (CASE_ID_COLUMN, "field_key"),
 }
 
 # The Detail Tables that actually publish today, derived from GOLD_TABLES so

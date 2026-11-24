@@ -791,8 +791,9 @@ read back as a frame rather than a column.
 
 `include_key_prefix` / `exclude_key_prefix` partition one blob between sibling
 pipelines by a key convention (`general:*`), so each writes only the rows it
-owns; `strip_key_prefix=True` stores the included key without its prefix. A
-non-text key — only reachable from pre-decoded input, since JSON keys are text —
+owns; `strip_key_prefix=True` stores the included key without its prefix.
+`exclude_key_prefix` also takes a tuple, to exclude several namespaces at once
+(`("general:", "case:")`). A non-text key — only reachable from pre-decoded input, since JSON keys are text —
 carries no prefix, so an include filter drops it and an exclude filter keeps it.
 
 ### `ExplodeJsonList` — one row per element of a JSON array

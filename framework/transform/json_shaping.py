@@ -197,7 +197,10 @@ class ExplodeJsonMap:
 
     ``include_key_prefix`` / ``exclude_key_prefix`` partition one blob between
     sibling pipelines by a key convention (``general:*``), and
-    ``strip_key_prefix`` stores the included key without it. A non-text key —
+    ``strip_key_prefix`` stores the included key without it.
+    ``exclude_key_prefix`` may name several prefixes as a tuple, for a blob
+    carrying more than one namespace beside the keys a pipeline wants. A
+    non-text key —
     only reachable from pre-decoded input, since JSON keys are text — carries no
     prefix, so an include filter drops it and an exclude filter keeps it.
 
@@ -215,7 +218,7 @@ class ExplodeJsonMap:
         fields: Mapping[str, str] | None = None,
         value_into: str | None = None,
         include_key_prefix: str | None = None,
-        exclude_key_prefix: str | None = None,
+        exclude_key_prefix: str | tuple[str, ...] | None = None,
         strip_key_prefix: bool = False,
     ) -> None:
         if (fields is None) == (value_into is None):

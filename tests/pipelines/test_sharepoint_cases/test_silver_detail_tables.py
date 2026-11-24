@@ -1,7 +1,7 @@
 """The Detail Table explodes: one silver observation's JSON blobs fanned out
 into one row per question / capture field / message / appeal / detail.
 
-Eight tables, one shape of test: drive the builder over a single ``version()``
+Nine tables, one shape of test: drive the builder over a single ``version()``
 whose blob a test names, and read what it would have written. ``exploded()``
 owns the wiring so each test is its blob and its claim, and
 ``assert_carries_the_five_stamps`` owns the rule every one of them shares —
@@ -23,10 +23,12 @@ from framework.transform import JsonShapeError
 from pipelines.sharepoint_cases.pipeline import (
     FEED_NAME,
     to_silver_answer,
+    to_silver_answer_action,
     to_silver_answer_capture,
     to_silver_answer_root_cause,
     to_silver_appeal,
     to_silver_case_detail,
+    to_silver_case_root_cause,
     to_silver_conversation_message,
     to_silver_general_answer,
 )
@@ -38,6 +40,7 @@ from pipelines.sharepoint_cases.schema import (
     AppealRow,
     CaseDetailRow,
     CaseList,
+    CaseRootCauseRow,
     ConversationMessageRow,
     GeneralAnswerRow,
 )
@@ -85,6 +88,7 @@ silver_answers = partial(exploded, to_silver_answer, "answers")
 silver_captures = partial(exploded, to_silver_answer_capture, "answers")
 silver_root_causes = partial(exploded, to_silver_answer_root_cause, "answers")
 silver_general_answers = partial(exploded, to_silver_general_answer, "answers")
+silver_case_root_causes = partial(exploded, to_silver_case_root_cause, "answers")
 silver_conversation_messages = partial(
     exploded, to_silver_conversation_message, "conversation"
 )
@@ -473,13 +477,152 @@ def test_a_root_cause_value_is_discriminated_as_a_capture_value_is(
         assert target["person_display"] == display
 
 
+# --- case_root_cause ---------------------------------------------------------
+
+
+def test_the_case_root_cause_entry_becomes_one_row_per_field_carrying_the_five_stamps():
+    # Keyed by field alone: the entry is about the Case, so no question_id, and
+    # the per-Issue Root Cause beside it must not leak in.
+    rows = silver_case_root_causes(
+        json.dumps(
+            {
+                "q1": {"value": "A", "rcaCapture": {"rca-category": "Process gap"}},
+                "case:rootCause": {
+                    "value": "",
+                    "rcaCapture": {
+                        "supervisorChecked": "Yes",
+                        "checkedBy": {
+                            "loginName": "c.lee",
+                            "displayName": "Chris Lee",
+                        },
+                    },
+                },
+            }
+        )
+    )
+
+    by_field = {row["field_key"]: row for row in rows}
+    assert set(by_field) == {"supervisorChecked", "checkedBy"}
+    assert (
+        by_field["supervisorChecked"]["value_kind"],
+        by_field["supervisorChecked"]["value_text"],
+    ) == ("text", "Yes")
+    person = by_field["checkedBy"]
+    assert (person["value_kind"], person["person_login"], person["person_display"]) == (
+        "person",
+        "c.lee",
+        "Chris Lee",
+    )
+    assert_carries_the_five_stamps(rows, CaseRootCauseRow)
+
+
+@pytest.mark.parametrize(
+    "answers",
+    [
+        pytest.param({"q1": {"value": "A"}}, id="no-entry"),
+        pytest.param({"case:rootCause": {"value": ""}}, id="no-capture"),
+        pytest.param(
+            {"case:rootCause": {"value": "", "rcaCapture": {}}}, id="empty-capture"
+        ),
+        pytest.param(
+            {"case:somethingElse": {"value": "", "rcaCapture": {"f": "x"}}},
+            id="another-case-entry",
+        ),
+    ],
+)
+def test_a_case_with_no_case_root_cause_values_lands_no_rows(answers):
+    # Another case: entry is its own future Detail Table, not rows in this one.
+    assert silver_case_root_causes(json.dumps(answers)) == []
+
+
+def test_an_unmodelled_case_root_cause_value_quarantines_with_its_raw_value():
+    rejects = RecordingWriter()
+    rows = silver_case_root_causes(
+        json.dumps(
+            {
+                "case:rootCause": {
+                    "value": "",
+                    "rcaCapture": {
+                        "supervisorChecked": "Yes",
+                        "checkedBy": {"loginName": "c.lee"},
+                    },
+                }
+            }
+        ),
+        rejects=rejects,
+    )
+
+    assert [row["field_key"] for row in rows] == ["supervisorChecked"]
+    [rejected] = rows_of(rejects)
+    assert rejected["field_key"] == "checkedBy"
+    assert "value_kind" in rejected["failed_rule"]
+    assert json.loads(rejected["raw_value"]) == {"loginName": "c.lee"}
+
+
+@pytest.mark.parametrize(
+    "builder",
+    [
+        pytest.param(to_silver_answer, id="answer"),
+        pytest.param(to_silver_answer_capture, id="answer_capture"),
+        pytest.param(to_silver_answer_root_cause, id="answer_root_cause"),
+    ],
+)
+def test_no_per_question_table_takes_a_row_from_the_case_entry(builder):
+    blob = {
+        "case:rootCause": {
+            "value": "",
+            "capture": {"field-note": "x"},
+            "rcaCapture": {"supervisorChecked": "Yes"},
+        }
+    }
+    rejects = RecordingWriter()
+
+    assert exploded(builder, "answers", json.dumps(blob), rejects=rejects) == []
+    assert rejects.writes == []
+
+
+@pytest.mark.parametrize(
+    "builder",
+    [
+        pytest.param(to_silver_answer, id="answer"),
+        pytest.param(to_silver_answer_capture, id="answer_capture"),
+        pytest.param(to_silver_answer_root_cause, id="answer_root_cause"),
+        pytest.param(to_silver_answer_action, id="answer_action"),
+    ],
+)
+def test_a_namespaced_key_nothing_excludes_quarantines_rather_than_landing(builder):
+    # The guard behind the exclusion list: a namespace the application adds and
+    # this feed has not been taught is refused by question_id's pattern, not
+    # silently landed as a Question Definition nobody declared.
+    entry = {
+        "value": "A",
+        "capture": {"field-note": "x"},
+        "rcaCapture": {"rca-category": "y"},
+        "remediationActions": [{"id": "ra-0", "text": "Do it."}],
+    }
+    rejects = RecordingWriter()
+    rows = exploded(
+        builder,
+        "answers",
+        json.dumps({"q1": entry, "future:thing": entry}),
+        rejects=rejects,
+    )
+
+    assert {row["question_id"] for row in rows} == {"q1"}
+    rejected = rows_of(rejects)
+    assert rejected
+    assert {row["question_id"] for row in rejected} == {"future:thing"}
+    assert all("question_id" in row["failed_rule"] for row in rejected)
+
+
 # --- general_answer ----------------------------------------------------------
 
 
-def test_the_answer_and_general_answer_tables_tile_one_blob_with_no_loss_or_overlap():
-    # Driving one blob through both builders must partition its keys exactly.
-    # A plain "general" key (no colon) belongs to the catch-all (answer); the
-    # edge case "general:" (empty key) is included, landing as general_key == "".
+def test_the_answer_general_and_case_tables_tile_one_blob_with_no_loss_or_overlap():
+    # Driving one blob through the three builders must partition its keys
+    # exactly. A plain "general" key (no colon) belongs to the catch-all
+    # (answer); the edge case "general:" (empty key) is included, landing as
+    # general_key == "".
     blob = {
         "q1": {"value": "A"},
         "q2": {"value": "B"},
@@ -487,6 +630,7 @@ def test_the_answer_and_general_answer_tables_tile_one_blob_with_no_loss_or_over
         "general:complaint-channel": {"value": "Phone"},
         "general:relationship": {"value": "Customer"},
         "general:": {"value": "empty key"},
+        "case:rootCause": {"value": "", "rcaCapture": {"supervisorChecked": "No"}},
     }
     answers_json = json.dumps(blob)
 
@@ -496,10 +640,11 @@ def test_the_answer_and_general_answer_tables_tile_one_blob_with_no_loss_or_over
     # Re-prefixed, to compare in the blob's own vocabulary rather than the
     # stripped one the general_answer table stores.
     general_keys = {f"general:{row['general_key']}" for row in general_rows}
+    case_keys = {"case:rootCause"} if silver_case_root_causes(answers_json) else set()
 
     assert "general" in question_ids
     assert question_ids & general_keys == set()
-    assert question_ids | general_keys == set(blob)
+    assert question_ids | general_keys | case_keys == set(blob)
 
 
 def test_an_array_general_answer_is_canonicalised_rather_than_refused():

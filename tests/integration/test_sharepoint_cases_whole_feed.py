@@ -61,6 +61,13 @@ ANSWERS_1 = {
         },
     },
     "general:complaint-channel": {"value": "Phone"},
+    "case:rootCause": {
+        "value": "",
+        "rcaCapture": {
+            "supervisorChecked": "No",
+            "checkedBy": {"loginName": "c.lee", "displayName": "Chris Lee"},
+        },
+    },
 }
 MESSAGE_1 = {
     "author": {"loginName": "a.khan", "displayName": "Amira Khan"},
@@ -123,6 +130,10 @@ ANSWERS_2 = {
     },
     "q-timeliness": {"value": "Yes"},
     "general:complaint-channel": {"value": "Email"},
+    "case:rootCause": {
+        "value": "",
+        "rcaCapture": {"supervisorChecked": "Yes", "noFaultRequested": "No"},
+    },
 }
 MESSAGE_3 = {
     "author": {"loginName": "a.khan", "displayName": "Amira Khan"},
@@ -147,7 +158,7 @@ LATER = later_item(
 
 
 def _question_ids(answers: dict) -> list[str]:
-    return [key for key in answers if not key.startswith("general:")]
+    return [key for key in answers if ":" not in key]
 
 
 def _general_keys(answers: dict) -> list[str]:
@@ -166,6 +177,8 @@ SILVER_COUNTS = {
     "case_detail": len(DETAILS_1) + len(DETAILS_2),
     "answer_root_cause": len(ANSWERS_1["q-root-cause"]["rcaCapture"])
     + len(ANSWERS_2["q-root-cause"]["rcaCapture"]),
+    "case_root_cause": len(ANSWERS_1["case:rootCause"]["rcaCapture"])
+    + len(ANSWERS_2["case:rootCause"]["rcaCapture"]),
 }
 GOLD_COUNTS = {
     "answer": len(_question_ids(ANSWERS_2)),
@@ -176,6 +189,7 @@ GOLD_COUNTS = {
     "appeal": len(APPEALS_2),
     "case_detail": len(DETAILS_2),
     "answer_root_cause": len(ANSWERS_2["q-root-cause"]["rcaCapture"]),
+    "case_root_cause": len(ANSWERS_2["case:rootCause"]["rcaCapture"]),
 }
 assert set(SILVER_COUNTS) == set(GOLD_COUNTS) == set(DETAIL_GRAIN), (
     "the fixture must cover every declared Detail Table, no more and no less"
@@ -239,6 +253,16 @@ def test_the_whole_feed_refines_one_full_nest_case_to_gold_across_two_polls(tmp_
 
     [general] = read_rows(med.gold, "general_answer")
     assert general["value_text"] == "Email"
+
+    # The Case Root Cause lands at Case grain and nowhere per question.
+    assert {
+        (row["field_key"], row["value_text"])
+        for row in read_rows(med.gold, "case_root_cause")
+    } == {("supervisorChecked", "Yes"), ("noFaultRequested", "No")}
+    for table in ("answer", "answer_capture", "answer_action", "answer_root_cause"):
+        assert all(
+            ":" not in row["question_id"] for row in read_rows(med.silver, table)
+        ), table
 
     assert "amended_outcome" not in DETAIL_GRAIN
     assert "amended_outcome" not in GOLD_TABLES

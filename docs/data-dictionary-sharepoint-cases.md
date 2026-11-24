@@ -1,13 +1,13 @@
 # Data dictionary — `sharepoint_cases`
 
 The filled-in entry for the `sharepoint_cases` feed, following
-[`data-dictionary-template.md`](data-dictionary-template.md). Twenty-seven
+[`data-dictionary-template.md`](data-dictionary-template.md). Twenty-nine
 tables: the faithful raw observation, the typed Case version and its silver
 `answer`, `answer_capture`, `answer_action`, `general_answer`,
-`conversation_message`, `appeal`, `case_detail` and `answer_root_cause` Detail
-Tables, the silver `person` table of everyone the feed has seen named, and the
-sixteen gold tables — the current Case, the current details of every person,
-those same eight Detail Tables, and six aggregates, two of which reduce from a
+`conversation_message`, `appeal`, `case_detail`, `answer_root_cause` and
+`case_root_cause` Detail Tables, the silver `person` table of everyone the feed
+has seen named, and the seventeen gold tables — the current Case, the current
+details of every person, those same nine Detail Tables, and six aggregates, two of which reduce from a
 Detail Table rather than from the current Case. Every declared Case list
 lands in the same tables and is told apart by
 `case_type`. The
@@ -76,12 +76,12 @@ dropped by `to_raw`'s `observation` transform for the same reason.
 
 Every silver step here is handed a quarantine Writer of its own, so a
 value-rule breach in *any* of the silver tables — `case_version`, `person` and
-the eight Detail Tables — is routed aside rather than aborting the poll. A reject lands in
+the nine Detail Tables — is routed aside rather than aborting the poll. A reject lands in
 `<base>/sharepoint_cases/quarantine.db`, in a table of the **same name as the
 silver table it was headed for**, carrying the row as it stood at the
 quarantine step plus `failed_rule` (every rule it breached), `logical_run_id`,
-`load_date` and `pipeline_run_id`. `answer_capture`'s and
-`answer_root_cause`'s rejects keep `raw_value`, which their silver steps drop
+`load_date` and `pipeline_run_id`. `answer_capture`'s, `answer_root_cause`'s
+and `case_root_cause`'s rejects keep `raw_value`, which their silver steps drop
 only *after* quarantining, so the offending value sits beside the reason.
 
 **Every one is declared in `migrations/sharepoint_cases/quarantine/`, including
@@ -368,9 +368,12 @@ guessed at here would quarantine real data.
 ## `answer` — silver layer (Detail Table)
 
 One row per observation × Question Definition, exploded from `case_version`'s
-`answers` JSON map. `general:`-prefixed keys belong to the
-[`general_answer`](#general_answer--silver-layer-detail-table) table and are
-excluded before this table ever sees them; `remediationActions`, `capture` and
+`answers` JSON map. Namespaced keys are excluded before this table ever sees
+them: `general:`-prefixed keys belong to the
+[`general_answer`](#general_answer--silver-layer-detail-table) table and the
+`case:`-prefixed entry to
+[`case_root_cause`](#case_root_cause--silver-layer-detail-table) (the same
+exclusion holds for `answer_capture`, `answer_action` and `answer_root_cause`); `remediationActions`, `capture` and
 `rcaCapture` are separate Detail Tables of their own.
 
 ### Why this table reads silver, not raw
@@ -414,7 +417,7 @@ win an observation.
 | `source_version` | *(from `case_version`)* | `str` | No | `NonNull` | The version observed. | `"3"` | None |
 | `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
 | `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema — the Writer adds it after validation — so it appears in no schema and in no grain. | *(32-char hex)* | None |
-| `question_id` | the `answers` map's key | `str` | No | `NonNull` | The Question Definition this row answers. No `Pattern`: a question id has no documented format, so a pattern would divert real answers into quarantine to guard a namespace nobody has proposed. | `q-root-cause` | None |
+| `question_id` | the `answers` map's key | `str` | No | `NonNull`, `Pattern([^:]+)` | The Question Definition this row answers. The pattern says only *no colon*: the review application refuses a `:` in a Question Definition id, so it diverts no real answer, and a namespaced key a future explode forgets to exclude quarantines rather than landing as an Answer no Question Definition has. | `q-root-cause` | None |
 | `value_json` | `answers[question_id].value` | `str` | Yes | — | The value exactly as the source stored it — a scalar as itself, a list as JSON text. Not always parseable as a single JSON value; it is the lossless copy. | `["Process","Training"]` | Internal |
 | `value_text` | *(derived)* | `str` | Yes | — | The canonical, groupable rendering of `value_json`: a multi-select's elements joined on `\|`; anything else stringified. Not display copy — see `derive_value_text`. | `Process\|Training` | Internal |
 | `justification` | `answers[question_id].justification` | `str` | Yes | — | Free text. | | Internal |
@@ -481,7 +484,7 @@ feed does not join — Groups are presentation-only.
 | `source_version` | *(from `case_version`)* | `str` | No | `NonNull` | The version observed. | `"3"` | None |
 | `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
 | `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema — the Writer adds it after validation — so it appears in no schema and in no grain. | *(32-char hex)* | None |
-| `question_id` | the `answers` map's key | `str` | No | `NonNull` | The Question Definition this capture value belongs to. | `q-root-cause` | None |
+| `question_id` | the `answers` map's key | `str` | No | `NonNull`, `Pattern([^:]+)` | The Question Definition this capture value belongs to. As `answer.question_id`. | `q-root-cause` | None |
 | `field_key` | the `capture` map's key | `str` | No | `NonNull` | The Issue Capture Field key — unique within a Case Type by app contract, not enforced here. | `field-owner` | None |
 | `value_kind` | *(derived)* | `str` | No | `NonNull`, `OneOf(text, person, options)` | Which arm the value discriminated to; see `discriminate_capture_value`. `options` is a multiselect field's non-empty list of chosen options, every element a string. A legacy `Action[]` value (a list of objects), an empty list, a half-filled person, or any other unrecognised shape is stamped `unsupported` and quarantines on this rule, rather than earning a label of its own. | `person` | None |
 | `value_text` | the `capture` map's value | `str` | Yes | — | Filled for the `text` and `options` arms. A `person`-typed field holding a bare string still lands here, as `text` — discrimination is on the value, never on a declared type this feed does not see, matching the review application's own reader. An `options` value lands as its options joined on `\|`, in the order the review application stored them (the field's declared order) — the same rendering `answer.value_text` gives a multi-choice answer, so grouping on it counts combinations, not single options, and an option label containing `\|` cannot be told apart. | `Called back within SLA.` / `Process\|System` | Internal |
@@ -562,7 +565,7 @@ the declared grain, not an ordinary bad value.
 | `source_version` | *(from `case_version`)* | `str` | No | `NonNull` | The version observed. | `"3"` | None |
 | `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
 | `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema — the Writer adds it after validation — so it appears in no schema and in no grain. | *(32-char hex)* | None |
-| `question_id` | the `answers` map's key | `str` | No | `NonNull` | The Question Definition this action belongs to. | `q-root-cause` | None |
+| `question_id` | the `answers` map's key | `str` | No | `NonNull`, `Pattern([^:]+)` | The Question Definition this action belongs to. As `answer.question_id`. | `q-root-cause` | None |
 | `action_seq` | the `remediationActions` list's 0-based position | `int` | No | `NonNull` | Declared (not dropped) because `ExplodeJsonList`'s `ordinal_into` is mandatory, so the column exists either way, and only a declared column is typed. Descriptive only — `action_id` is the grain. | `0` | None |
 | `action_id` | `remediationActions[].id` | `str` | No | `NonNull` | From the Remediation Action bank's own definitions. | `q-root-cause-ra-0` | None |
 | `action_text` | `remediationActions[].text` | `str` | Yes | — | Denormalised from the bank at selection time — a **snapshot**. A later rename in the bank does not reach a row already written here. | `Retrain the branch team on call handling.` | Internal |
@@ -584,12 +587,14 @@ None.
 
 ## `general_answer` — silver layer (Detail Table)
 
-**Why two tables tile one blob.** General Question answers live in the *same*
+**Why three tables tile one blob.** General Question answers live in the *same*
 `answers` JSON map as real answers, under keys prefixed `general:` — but they
 come from a shared catalogue rather than a Question Definition id, are plain
 strings by app contract, are never outcome-driving, and never fail. `answer`
-above excludes the `general:` prefix; this table includes it and strips it, so
-the two tables partition one blob with no key landing in both and none lost.
+above excludes the `general:` prefix; this table includes it and strips it.
+The `case:` entry is the third part, read only by
+[`case_root_cause`](#case_root_cause--silver-layer-detail-table), so the three
+tables partition one blob with no key landing in two and none lost.
 
 One row per observation × General Question catalogue key, exploded from
 `case_version`'s `answers` JSON map — from the other side of the same explode
@@ -939,7 +944,7 @@ configuration*, below.
 | `source_version` | *(from `case_version`)* | `str` | No | `NonNull` | The version observed. | `"3"` | None |
 | `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
 | `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema. | *(32-char hex)* | None |
-| `question_id` | the `answers` map's key | `str` | No | `NonNull` | The failed Question Definition this root cause belongs to. | `q-root-cause` | None |
+| `question_id` | the `answers` map's key | `str` | No | `NonNull`, `Pattern([^:]+)` | The failed Question Definition this root cause belongs to. As `answer.question_id`. | `q-root-cause` | None |
 | `field_key` | the `rcaCapture` map's key | `str` | No | `NonNull` | The Root Cause Field key, as the Case Type's frontend config declares it — not validated here. | `rca-category` | None |
 | `value_kind` | *(derived)* | `str` | No | `NonNull`, `OneOf(text, person, options)` | Which arm the value discriminated to, by `answer_capture`'s own `discriminate_capture_value`; anything else is stamped `unsupported` and quarantines. | `text` | None |
 | `value_text` | the `rcaCapture` map's value | `str` | Yes | — | Filled for the `text` arm (a select's chosen option lands here as its text) and the `options` arm (a multiselect's chosen options joined on `\|`, exactly as in `answer_capture`). | `Process gap` | Internal |
@@ -964,6 +969,89 @@ None.
 - A structural breach — a missing column, a wrong dtype, a null provenance
   column — still aborts the run.
 
+## `case_root_cause` — silver layer (Detail Table)
+
+One row per observation × Case Root Cause Field: what the **Responsible Party
+Manager** records once about the whole Case on the Root Cause tab — for
+Complaints, *has a supervisor checked this Case*, *has No Fault been
+requested* and *has a development plan been created* — rather than against
+one failed Issue, which is
+[`answer_root_cause`](#answer_root_cause--silver-layer-detail-table).
+
+No SharePoint column carries it. The review application stores it as one more
+entry in the existing `Answers` blob, under the namespaced key
+`case:rootCause`, shaped like an Answer with an empty `value` and the fields in
+its `rcaCapture` map:
+
+```json
+"case:rootCause": {"value": "", "rcaCapture": {"supervisorChecked": "Yes", "noFaultRequested": "No"}}
+```
+
+So raw and `case_version` are unchanged by it, and the per-question tables
+exclude the `case:` prefix exactly as they exclude `general:`. The builder
+(`to_silver_case_root_cause`) is `to_silver_answer_root_cause` over that one
+entry: explode the `answers` map keeping only `case:` keys, keep the
+`case:rootCause` entry (any other `case:` entry the application comes to write
+is its own Detail Table, not more rows here), explode its `rcaCapture`, then
+`discriminate_capture_value`. A Case with nothing recorded has no entry and
+contributes zero rows.
+
+**Which fields a Case Type declares is not visible here**, as for
+`answer_root_cause`: they are the frontend's `rootCauseCaseGroups`, not
+exported, and `field_key` lands unvalidated.
+
+### Part A — Table / Feed overview
+
+| Attribute | Value |
+|-----------|-------|
+| **Table / Feed name** | `case_root_cause` |
+| **Subject / Case Type** | `sharepoint_cases` |
+| **Medallion layer** | silver |
+| **Grain** | one row per observation × Case Root Cause Field |
+| **Is this a Case Type?** | No — a Detail Table hanging off `case_version` |
+| **Natural key → `case_id`** | `schema.NATURAL_KEY`, via `DETAIL_ID_VARS` — applied at gold, not here |
+| **Source system** | the settled `case_version` batch just fetched (not the whole silver history) |
+| **Reader** | `DatasetReader` over that batch |
+| **Load strategy** | `AppendOnly(("source_observation_id", "field_key"))` |
+| **Upstream dependencies** | none declared — the batch is in memory, not reread from silver |
+| **Schedule / freshness** | with the poll, the last of the Detail Tables |
+| **Owner / data steward** | *<team>* |
+| **Source of truth doc** | `pipelines/sharepoint_cases/schema.py` (`CaseRootCauseRow`) |
+| **Last reviewed** | 2026-11-24 |
+
+### Part B — Field dictionary
+
+`answer_root_cause`'s columns, less `question_id`.
+
+| Field | Source path | Type | Nullable | Value rules | Description | Example | Sensitivity |
+|-------|--------------|------|----------|-------------|-------------|---------|-------------|
+| `case_type` | *(from `case_version`)* | `str` | No | `NonNull` | The settled Case Type. | `complaints` | None |
+| `source_item_id` | *(from `case_version`)* | `str` | No | `NonNull` | The list item observed. | `101` | Internal |
+| `source_modified_at` | *(from `case_version`)* | `datetime` | No | `NonNull` | When the observation was made. | `2026-08-05T08:10:00+00:00` | None |
+| `source_version` | *(from `case_version`)* | `str` | No | `NonNull` | The version observed. | `"3"` | None |
+| `source_observation_id` | *(from `case_version`)* | `str` | No | `NonNull` | The observation's identity. | *(64-char sha256)* | None |
+| `pipeline_run_id` | *(stamped by the Writer)* | `str` | No | — | The run that wrote the row. Not declared by the schema. | *(32-char hex)* | None |
+| `field_key` | `answers["case:rootCause"].rcaCapture`'s key | `str` | No | `NonNull` | The Case Root Cause Field key, as the Case Type's `rootCauseCaseGroups` declares it — not validated here. | `supervisorChecked` | None |
+| `value_kind` | *(derived)* | `str` | No | `NonNull`, `OneOf(text, person, options)` | As `answer_root_cause.value_kind`. | `text` | None |
+| `value_text` | the `rcaCapture` map's value | `str` | Yes | — | As `answer_root_cause.value_text`. The Complaints fields are Yes/No radios, so `Yes` or `No`. | `Yes` | Internal |
+| `person_login` | `rcaCapture[field_key].loginName` | `str` | Yes | — | Filled for the `person` arm only. | `c.lee` | PII |
+| `person_display` | `rcaCapture[field_key].displayName` | `str` | Yes | — | Filled for the `person` arm only. | `Chris Lee` | PII |
+
+### Part C — Row checks
+
+None.
+
+### Part D — Quarantine & data quality
+
+- Exactly as `answer_root_cause`: `value_kind` is the only value rule that can
+  quarantine a row, and the reject row in `quarantine.db`'s `case_root_cause`
+  keeps `raw_value` beside the reason.
+- A malformed `answers` or `rcaCapture` blob is a feed defect and aborts the
+  run, as for every explode of `answers`.
+- An absent field means *not yet answered*, not `No`: the frontend writes a
+  field only once the Manager picks a value, so a report counting "No" must not
+  count a missing row as one.
+
 ## `person` — silver layer
 
 One row per person this feed has seen named: **user details only** — the bare
@@ -984,6 +1072,7 @@ Person columns are reduced and their display names and emails dropped.
 | the seven Person columns | `…/Name`, reduced | from the claims login | `…/Title` | `…/EMail` |
 | `Answers` — a captured person | `capture[field_key].loginName` | `capture[field_key].domain` | `capture[field_key].displayName` | `capture[field_key].email` |
 | `Answers` — a Root Cause person | `rcaCapture[field_key].loginName` | `rcaCapture[field_key].domain` | `rcaCapture[field_key].displayName` | `rcaCapture[field_key].email` |
+| `Answers` — a Case Root Cause person | `case:rootCause.rcaCapture[field_key].loginName` | `….domain` | `….displayName` | `….email` |
 | `Conversation` | `author.loginName` | — | `author.displayName` | — |
 | `Appeals` | `appellant`, `resolution.resolver` | — | — | — |
 | `AmendedOutcome` | `amendedBy` | — | — | — |
@@ -1102,6 +1191,7 @@ everything.
 | `appeal` | `case_id` × `appeal_id` | the winning observation's Appeals |
 | `case_detail` | `case_id` × `field_key` | the winning observation's Case Details fields |
 | `answer_root_cause` | `case_id` × `question_id` × `field_key` | the winning observation's Root Cause rows |
+| `case_root_cause` | `case_id` × `field_key` | the winning observation's Case Root Cause rows |
 | `case_counts_current` | brand × `case_type` × `assigned_reviewer_name` × `status` | `case_count` |
 | `case_age_buckets_current` | brand × `case_type` × `assigned_reviewer_name` × `age_bucket` × `status` | `case_count` |
 | `case_age_from_assigned_buckets_current` | brand × `case_type` × `assigned_reviewer_name` × `age_bucket` × `status` | `case_count` |

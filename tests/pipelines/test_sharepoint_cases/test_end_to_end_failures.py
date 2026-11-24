@@ -227,3 +227,38 @@ def test_an_unmodelled_root_cause_value_is_routed_aside_with_its_raw_value(
     assert rejected["field_key"] == "rca-accountable"
     assert "value_kind" in rejected["failed_rule"]
     assert json.loads(rejected["raw_value"]) == {"loginName": "b.okafor"}
+
+
+def test_an_unmodelled_case_root_cause_value_is_routed_aside_with_its_raw_value(
+    base_dir,
+):
+    # case_root_cause is now the last Detail Table the poll writes, so its
+    # reject table missing from the migrations would abort the poll here.
+    answers = json.dumps(
+        {
+            "q1": {"value": "A"},
+            "case:rootCause": {
+                "value": "",
+                "rcaCapture": {
+                    "supervisorChecked": "Yes",
+                    "checkedBy": {"loginName": "c.lee"},
+                },
+            },
+        }
+    )
+    client = FakeListClient(items(item(Answers=answers)))
+
+    [poll] = run(RunContext(base_dir=base_dir, pipeline=FEED_NAME), client=client)
+
+    assert poll.detail_rows["case_root_cause"] == 1
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
+    for layer in (med.silver, med.gold):
+        assert [row["field_key"] for row in read_rows(layer, "case_root_cause")] == [
+            "supervisorChecked"
+        ]
+    quarantined = quarantine_rows(base_dir)
+    assert set(quarantined) == {"case_root_cause"}
+    [rejected] = quarantined["case_root_cause"]
+    assert rejected["field_key"] == "checkedBy"
+    assert "value_kind" in rejected["failed_rule"]
+    assert json.loads(rejected["raw_value"]) == {"loginName": "c.lee"}

@@ -253,6 +253,44 @@ def test_the_winning_observation_settles_gold_answer_root_cause(base_dir):
     assert read_rows(med.gold, "answer_capture") == []
 
 
+def test_the_winning_observation_settles_gold_case_root_cause(base_dir):
+    # Item 101's Manager clears the Case Root Cause on poll 2; item 102's
+    # changes one field and adds another. Gold holds only the winners' rows.
+    def case_entry(**fields):
+        return json.dumps(
+            {
+                "q1": {"value": "A"},
+                "case:rootCause": {"value": "", "rcaCapture": fields},
+            }
+        )
+
+    cleared_early = item(Id=101, Answers=case_entry(supervisorChecked="No"))
+    cleared_later = later_item(
+        Id=101, Answers=json.dumps({"q1": {"value": "A"}}), Status="Completed"
+    )
+    changed_early = item(Id=102, Answers=case_entry(supervisorChecked="No"))
+    changed_later = later_item(
+        Id=102,
+        Answers=case_entry(supervisorChecked="Yes", noFaultRequested="No"),
+        Status="Completed",
+    )
+
+    two_polls(base_dir, [cleared_early, changed_early], [cleared_later, changed_later])
+
+    med = medallion(StoreRegistry(base_dir), FEED_NAME)
+    assert len(read_rows(med.silver, "case_root_cause")) == 4
+    gold = read_rows(med.gold, "case_root_cause")
+    assert {
+        (row["source_item_id"], row["field_key"], row["value_text"]) for row in gold
+    } == {
+        ("102", "supervisorChecked", "Yes"),
+        ("102", "noFaultRequested", "No"),
+    }
+    # The Case entry is never mistaken for an Issue.
+    assert {row["question_id"] for row in read_rows(med.gold, "answer")} == {"q1"}
+    assert read_rows(med.gold, "answer_root_cause") == []
+
+
 def test_the_winning_observation_settles_gold_conversation_message_and_appeal(
     base_dir,
 ):
