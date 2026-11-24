@@ -441,6 +441,12 @@ export const cases = [
           fixOwner: { loginName: 'sowner', displayName: 'Sam Owner' },
         },
       },
+      // The Case Root Cause, recorded once for the Case: two of the three
+      // checks answered, so the manager's view shows the third still to do.
+      'case:rootCause': {
+        value: '',
+        rcaCapture: { supervisorChecked: 'Yes', noFaultRequested: 'No' },
+      },
       'q-cmp-0016': {
         value: 'Poor with harm',
         remediationRequired: 'yes',

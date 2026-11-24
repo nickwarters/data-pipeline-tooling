@@ -297,7 +297,15 @@ export class CaseLoader {
         : bankVersion;
 
     validateCaptureGroups(config.captureGroups);
-    validateCaptureGroups(config.rootCauseGroups, 'Root Cause Field');
+    // One namespace across both Root Cause families: the manager fills both
+    // in on one tab, so one key must not mean two things there.
+    validateCaptureGroups(
+      [
+        ...(config.rootCauseGroups ?? []),
+        ...(config.rootCauseCaseGroups ?? []),
+      ],
+      'Root Cause Field'
+    );
     validateGeneralQuestions(config.generalQuestions);
 
     if (stampedVersion && versionedExport) {
@@ -476,6 +484,8 @@ export class CaseLoader {
   /**
    * The field keys this Case Type declares as people, per capture slot: the
    * Issue Capture Fields in `capture`, the Root Cause Fields in `rcaCapture`.
+   * The Case Root Cause Fields share that slot on the Case's own entry, and
+   * their keys are unique across both Root Cause families, so one list serves.
    * A key the config does not name a person is left alone whatever it holds —
    * the config is the only authority on which values are accounts.
    *
@@ -489,7 +499,13 @@ export class CaseLoader {
       );
     return [
       ['capture', people(this.config?.captureGroups)],
-      ['rcaCapture', people(this.config?.rootCauseGroups)],
+      [
+        'rcaCapture',
+        people([
+          ...(this.config?.rootCauseGroups ?? []),
+          ...(this.config?.rootCauseCaseGroups ?? []),
+        ]),
+      ],
     ];
   }
 }

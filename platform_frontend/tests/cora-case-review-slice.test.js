@@ -512,10 +512,11 @@ test('state: capture person search is held per failed Question and per field', (
  *
  * With `tab: 'rootCause'` the Case Type also declares a `person` Root Cause
  * Field under the same key, and the Root Cause tab is opened for a viewer who
- * may edit it, so the two pickers can be told apart.
+ * may edit it, so the two pickers can be told apart. `caseLevel` declares it as
+ * a Case Root Cause Field instead.
  *
  * @param {(query: string) => Promise<any[]>} searchPeople
- * @param {{ tab?: 'issues' | 'rootCause' }} [options]
+ * @param {{ tab?: 'issues' | 'rootCause', caseLevel?: boolean }} [options]
  */
 function renderCaptureSearchRoute(searchPeople, options = {}) {
   const tab = options.tab ?? 'issues';
@@ -534,7 +535,9 @@ function renderCaptureSearchRoute(searchPeople, options = {}) {
     },
   ];
   if (tab === 'rootCause') {
-    failedSnapshot.config.rootCauseGroups = failedSnapshot.config.captureGroups;
+    failedSnapshot.config[
+      options.caseLevel ? 'rootCauseCaseGroups' : 'rootCauseGroups'
+    ] = failedSnapshot.config.captureGroups;
     failedSnapshot.access = { ...failedSnapshot.access, rootCause: 'edit' };
   }
   failedSnapshot.machine = {
@@ -686,6 +689,48 @@ test('route: a person Root Cause Field searches apart from the Issue capture, an
     undefined,
     'choosing someone closes the search that found them'
   );
+  route.dispose();
+});
+
+test('route: a person Case Root Cause Field searches and records into the Case entry', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const route = renderCaptureSearchRoute(
+    async () => [{ loginName: 'jsmith', displayName: 'Jane Smith' }],
+    { tab: 'rootCause', caseLevel: true }
+  );
+  /** @returns {HTMLElement} */
+  const panel = () => {
+    const found = queryAllByRole(route.container, 'tabpanel').find(
+      (candidate) => candidate.id === 'case-panel-rootCause'
+    );
+    assert.ok(found);
+    return found;
+  };
+
+  const input = getByRole(panel(), 'combobox', {
+    name: 'Search people for Attributed to',
+  });
+  input.value = 'Jane';
+  fireEvent(input, 'input');
+  t.mock.timers.tick(200);
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(
+    route.state.routes.caseReview.rcaCaptureSearch['case:rootCause']
+      .attributedTo.status,
+    'success',
+    "the results find their way back to the Case's own field"
+  );
+
+  fireEvent(getByRole(panel(), 'option', { name: /Jane Smith/ }), 'click');
+  const answers = route.state.routes.caseReview.snapshot?.answers;
+  assert.deepEqual(answers?.['case:rootCause'], {
+    value: '',
+    rcaCapture: {
+      attributedTo: { loginName: 'jsmith', displayName: 'Jane Smith' },
+    },
+  });
+  assert.deepEqual(answers?.q1, { value: 'No' }, 'the Issue is untouched');
   route.dispose();
 });
 

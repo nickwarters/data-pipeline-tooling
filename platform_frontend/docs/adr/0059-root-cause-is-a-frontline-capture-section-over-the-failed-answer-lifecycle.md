@@ -88,10 +88,63 @@ field alone would let one picker show, or close, the other's matches. The
 loader refreshes a stored person's display name in both slots in the one
 directory call it already makes.
 
+## Amendment: Case Root Cause Fields (2026-11-24)
+
+Some of what the manager records is about the Case, not about one Issue:
+whether a supervisor has checked it, whether No Fault has been requested,
+whether a development plan has been created. Every Root Cause value above lives
+on a failed Answer, so there was nowhere to put one, and adding a SharePoint
+column was ruled out: it would mean provisioning every Case Type list in every
+environment. The options are compared in the project exploration
+`root-cause-case-level/exploration.md`.
+
+**Decision.** A Case Type may declare `rootCauseCaseGroups`, in the same group
+and field shape as `rootCauseGroups`. Their values are stored in the
+`rcaCapture` of one reserved entry in the Answers blob, `case:rootCause`, shaped
+like an Answer with an empty `value`.
+
+- **Why the Answers blob.** It is the same column and the same ETag the per-Issue
+  values already use, so there is no new conflict surface and no provisioning.
+- **Why a namespaced key.** A Question Definition id may not contain `:`, so the
+  key cannot collide with one, and every catalogue-driven evaluator
+  (applicability, failure, progress, the Outcome) passes it by. This is how
+  `general:` keeps General Question answers apart today.
+- **Why the Answer shape.** `applyCapture(…, 'rcaCapture')` and
+  `unfilledRequiredFields` work on it unchanged: validation, `showWhen` pruning,
+  `required` and person-name refresh all come for free.
+
+The entry is created by the first write and removed when its last value is
+cleared, so an empty one is never stored. It is not a failed Answer, so the
+failure lifetime never strips it, and a Reopen keeps it.
+
+**On the tab.** The Case Root Cause Fields are drawn once, under "About this
+Case", above the Issues. The Summary block shows them too. Access and the
+live-tab gate are unchanged: reportable, with at least one Issue. The owner
+confirmed that the case-level questions only matter when something failed.
+Either key alone switches the Section on.
+
+**One namespace across both families.** The manager fills both in on one tab,
+so a field key may not be declared in both. The loader refuses a collision, and
+so does the verify gate, naming the key. A `showWhen` still reaches only fields
+of its own group, so a Case Root Cause Field cannot depend on one Issue's
+answer.
+
+**The people-search key.** The search map joined the Question id and field key
+with `:`, which the namespaced key now contains. It now joins them with a
+character no key holds.
+
+**Complaints** asks three required Yes/No questions this way.
+
+**Pipeline.** The pipeline's per-Question Detail Tables excluded only
+`general:`, so `case:rootCause` must be excluded beside it and land in a Detail
+Table of its own. That is the data pipeline's change, made beside this one, and
+this one must not ship ahead of it.
+
 ## Consequences
 
 - A Case Type turns the tab on with two keys and the field declarations; the
-  scaffold leaves it off.
+  scaffold leaves it off. Either `rootCauseGroups` or `rootCauseCaseGroups`
+  counts as the first key.
 - The Responsible Party Manager's Role now writes Answers. The SharePoint ACL
   already lets that group edit the item, because it posts in the Conversation;
   there is no column-level permission to add.

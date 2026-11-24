@@ -59,6 +59,11 @@
  * Manager records about its root cause. Each is a **capture slot**: one engine
  * writes both, and neither ever reads the other's keys.
  *
+ * One entry in the Answers blob is not an Answer to a Question: `case:rootCause`
+ * holds the Case Root Cause Fields in its `rcaCapture`, with an empty `value`,
+ * so it has the Answer shape every reader expects while no catalogue-driven
+ * evaluator ever reaches it.
+ *
  * @typedef {{ value: string | string[], justification?: string, remediationRequired?: 'yes' | 'no', remediationActions?: Array<{id: string, text: string}>, freeFormRemediation?: string, remediationStatus?: RemediationStatus, capture?: Record<string, string | { loginName: string, displayName: string, domain?: string, email?: string } | Array<string | RemediationAction>>, rcaCapture?: Record<string, string | { loginName: string, displayName: string, domain?: string, email?: string }> }} Answer
  */
 
@@ -707,6 +712,12 @@
  * for the Case Type, and the verify gate holds it in step with
  * `sections.rootCause`.
  *
+ * `rootCauseCaseGroups` declares the **Case Root Cause Fields**: the same
+ * shape, filled in once for the whole Case rather than per Issue, and stored in
+ * the `rcaCapture` of the Case's own `case:rootCause` entry in the Answers blob.
+ * Either key alone switches the Root Cause Section on, and field keys are
+ * unique across the two.
+ *
  * `selectQuestions` optionally narrows the bank for one Case by its `details`,
  * returning the questions to keep.
  *
@@ -735,6 +746,7 @@
  * extraAmendmentReasons?: import('./lib/amendment-reasons.js').AmendmentReason[],
  * captureGroups?: CaptureGroup[],
  * rootCauseGroups?: CaptureGroup[],
+ * rootCauseCaseGroups?: CaptureGroup[],
  * generalQuestions?: GeneralQuestionField[],
  * generalQuestionsPlacement?: 'before' | 'after',
  * detailFields?: CaseDetailField[]

@@ -4,7 +4,11 @@ import {
   isReportable,
   rootCauseTabIsLive,
 } from '../../evaluators/case-lifecycle.js';
-import { rootCauseCaptured } from '../../pages/cora-case-review/answer-actions.js';
+import {
+  caseRootCauseCaptured,
+  rootCauseCaptured,
+} from '../../pages/cora-case-review/answer-actions.js';
+import { CASE_ROOT_CAUSE_KEY } from '../../evaluators/case-root-cause.js';
 import { RootCauseSection } from '../../pages/cora-case-review/root-cause-view.js';
 import { rootCauseSummaryView } from '../../pages/cora-case-review/root-cause-summary-view.js';
 
@@ -26,11 +30,12 @@ const READING_ROLES = [
 
 /**
  * The frontline twin of the Issues Section: the Responsible Party Manager
- * records, per Issue, the Root Cause Fields the Case Type declares.
+ * records, per Issue, the Root Cause Fields the Case Type declares, and once
+ * for the Case the Case Root Cause Fields it declares.
  *
- * The Section switches itself off for a Case Type that declares no
- * `rootCauseGroups`, rather than relying on the `sections` allow-list alone,
- * so the tab cannot appear with nothing in it.
+ * The Section switches itself off for a Case Type that declares neither
+ * `rootCauseGroups` nor `rootCauseCaseGroups`, rather than relying on the
+ * `sections` allow-list alone, so the tab cannot appear with nothing in it.
  *
  * Collapse state is this Section's own slice of `route.sections`, so a group
  * key it shares with an Issue Capture Group never toggles the Issues tab.
@@ -47,7 +52,12 @@ export const RootCausePlugin = /** @type {const} */ ({
   defaultLabels: { tab: 'Root Cause', heading: 'Root Cause' },
 
   evaluateAccess({ caseRow, roles, catalogue, config }) {
-    if (!config?.rootCauseGroups?.length) return 'hidden';
+    if (
+      !config?.rootCauseGroups?.length &&
+      !config?.rootCauseCaseGroups?.length
+    ) {
+      return 'hidden';
+    }
     if (!rootCauseTabIsLive(caseRow, catalogue ?? [])) return 'hidden';
 
     if (roles.includes('responsiblePartyManager')) {
@@ -79,11 +89,13 @@ export const RootCausePlugin = /** @type {const} */ ({
   view({ snapshot, config, route, dispatch, actions, sectionState }) {
     const canEdit = snapshot?.access?.rootCause === 'edit';
     const groups = config?.rootCauseGroups ?? [];
+    const caseGroups = config?.rootCauseCaseGroups ?? [];
     return RootCauseSection({
       heading: snapshot?.sectionLabels?.rootCause?.heading ?? 'Root Cause',
       catalogue: snapshot?.catalogue ?? [],
       answers: snapshot?.answers ?? {},
       groups,
+      caseGroups,
       collapsed: sectionState?.collapsed ?? {},
       peopleSearch: route?.rcaCaptureSearch ?? {},
       canEdit,
@@ -101,6 +113,22 @@ export const RootCausePlugin = /** @type {const} */ ({
           })
         );
         actions?.clearCaptureSearch?.(questionId, fieldKey, 'rcaCapture');
+      },
+      dispatchCaseCapture: (fieldKey, value) => {
+        actions?.editAnswers?.(
+          caseRootCauseCaptured({
+            answers: actions.currentAnswers(),
+            rootCauseCaseGroups: caseGroups,
+            fieldKey,
+            value,
+            canEditRootCause: canEdit,
+          })
+        );
+        actions?.clearCaptureSearch?.(
+          CASE_ROOT_CAUSE_KEY,
+          fieldKey,
+          'rcaCapture'
+        );
       },
       dispatchPersonQuery: (questionId, fieldKey, query) =>
         actions?.requestCaptureSearch?.(

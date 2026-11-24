@@ -968,14 +968,18 @@ export function createRouteSlice(params, context) {
    * }} */
   let shell = null;
 
+  // The two halves are joined by a character no key holds. Not `:`, because
+  // the Case's own Root Cause entry is keyed under a namespace that has one.
+  const CAPTURE_SEARCH_KEY_SEPARATOR = '\u001f';
+
   /** @param {string} questionId @param {string} fieldKey */
   function captureSearchKey(questionId, fieldKey) {
-    return `${questionId}:${fieldKey}`;
+    return `${questionId}${CAPTURE_SEARCH_KEY_SEPARATOR}${fieldKey}`;
   }
 
   /** @param {string} key @returns {{ questionId: string, fieldKey: string }} */
   function splitCaptureSearchKey(key) {
-    const separator = key.indexOf(':');
+    const separator = key.indexOf(CAPTURE_SEARCH_KEY_SEPARATOR);
     return {
       questionId: key.slice(0, separator),
       fieldKey: key.slice(separator + 1),

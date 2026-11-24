@@ -4,6 +4,10 @@ import { EmptyState } from '../../lib/empty-state.js';
 import { failedIssues } from '../../evaluators/remediation-status.js';
 import { unfilledRequiredFields } from '../../evaluators/issue-capture.js';
 import { CaptureGroups } from '../../components/sections/cora-capture-groups.js';
+import {
+  CASE_ROOT_CAUSE_KEY,
+  caseRootCauseCapture,
+} from '../../evaluators/case-root-cause.js';
 
 /** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
@@ -17,19 +21,25 @@ import { CaptureGroups } from '../../components/sections/cora-capture-groups.js'
  * @property {QuestionDefinition[]} catalogue
  * @property {Record<string, Answer>} answers
  * @property {CaptureGroup[]} groups The Case Type's `rootCauseGroups`.
+ * @property {CaptureGroup[]} caseGroups The Case Type's `rootCauseCaseGroups`.
  * @property {Record<string, Map<string, boolean>>} collapsed
- *   Per Issue, the groups the viewer has opened or shut.
+ *   Per Issue, and for the Case under its own key, the groups the viewer has
+ *   opened or shut.
  * @property {Record<string, Record<string, PeopleSearchState>>} peopleSearch
- *   Per Issue, per `person` Root Cause Field: the open people search.
+ *   Per Issue, and for the Case under its own key, per `person` field: the
+ *   open people search.
  * @property {boolean} canEdit Whether the viewer may write the Root Cause.
  * @property {(questionId: string, fieldKey: string, value: CaptureValue | null) => void} dispatchCapture
+ * @property {(fieldKey: string, value: CaptureValue | null) => void} dispatchCaseCapture
  * @property {(questionId: string, fieldKey: string, query: string) => void} dispatchPersonQuery
  * @property {(questionId: string, groupKey: string, collapsed: boolean) => void} dispatchToggle
  */
 
 /**
- * The Root Cause tab: one item per Issue, in catalogue order, each carrying the
- * Case Type's Root Cause Fields over that Answer's `rcaCapture`.
+ * The Root Cause tab: the Case Root Cause Fields recorded once for the Case,
+ * then one item per Issue, in catalogue order, each carrying the Case Type's
+ * Root Cause Fields over that Answer's `rcaCapture`. A Case Type may declare
+ * either family without the other, and the tab draws only what it declares.
  *
  * A required field still empty is named under its Issue for every viewer, so a
  * Reviewer reading the tab can see what the manager has yet to record. It holds
@@ -48,11 +58,69 @@ export function RootCauseSection(props) {
     ];
   }
 
-  const list = h('ul', { className: 'cora-root-cause-list' });
-  for (const { question, answer } of issues) {
-    list.appendChild(renderIssue(props, question, answer));
+  /** @type {Node[]} */
+  const nodes = [heading];
+  if (props.caseGroups.length > 0) nodes.push(renderCase(props));
+  if (props.groups.length > 0) {
+    const list = h('ul', { className: 'cora-root-cause-list' });
+    for (const { question, answer } of issues) {
+      list.appendChild(renderIssue(props, question, answer));
+    }
+    nodes.push(list);
   }
-  return [heading, list];
+  return nodes;
+}
+
+/**
+ * The Case Root Cause Fields, above the Issues: what the manager records once
+ * about the Case as a whole.
+ *
+ * @param {RootCauseSectionProps} props
+ * @returns {HTMLElement}
+ */
+function renderCase(props) {
+  const capture = caseRootCauseCapture(props.answers);
+  const block = h(
+    'section',
+    { className: 'cora-root-cause-case', key: CASE_ROOT_CAUSE_KEY },
+    h('h3', {}, 'About this Case')
+  );
+
+  const outstanding = unfilledRequiredFields(props.caseGroups, capture);
+  if (outstanding.length > 0) {
+    block.appendChild(
+      h(
+        'p',
+        { className: 'cora-root-cause-outstanding' },
+        `Still to record: ${outstanding.map((f) => f.label).join(', ')}`
+      )
+    );
+  }
+
+  const fields = CaptureGroups({
+    groups: props.caseGroups,
+    capture,
+    canCapture: props.canEdit,
+    namePrefix: 'rc-case-',
+    collapsed: props.collapsed[CASE_ROOT_CAUSE_KEY] ?? new Map(),
+    onToggle: (groupKey, next) =>
+      props.dispatchToggle(CASE_ROOT_CAUSE_KEY, groupKey, next),
+    peopleSearch: props.peopleSearch[CASE_ROOT_CAUSE_KEY] ?? {},
+    onCapture: (fieldKey, value) => props.dispatchCaseCapture(fieldKey, value),
+    onPersonQuery: (fieldKey, query) =>
+      props.dispatchPersonQuery(CASE_ROOT_CAUSE_KEY, fieldKey, query),
+  });
+  if (fields.length === 0) {
+    block.appendChild(
+      h(
+        'p',
+        { className: 'cora-root-cause-none' },
+        'Nothing recorded about this Case.'
+      )
+    );
+  }
+  block.append(...fields);
+  return block;
 }
 
 /**
